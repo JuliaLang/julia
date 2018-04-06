@@ -1658,6 +1658,7 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
         abort();
     }
     li->inInference = 0;
+    li->isspecsig = 0;
     li->specptr.fptr = NULL;
     if (read_int8(s->s) == 2)
         li->invoke = jl_fptr_const_return;

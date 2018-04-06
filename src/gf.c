@@ -419,6 +419,8 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
     // changing rettype changes the llvm signature,
     // so clear all of the llvm state at the same time
     li->invoke = jl_fptr_trampoline;
+    li->isspecsig = 0;
+    li->specptr.fptr = NULL;
     li->rettype = rettype;
     jl_gc_wb(li, rettype);
     li->inferred = inferred;
@@ -431,7 +433,6 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
         assert(const_flags & 2);
         li->invoke = jl_fptr_const_return;
     }
-    li->specptr.fptr = NULL;
     JL_GC_POP();
     return li;
 }
@@ -1773,6 +1774,7 @@ jl_callptr_t jl_compile_method_internal(jl_method_instance_t **pli, size_t world
         if (jl_is_method(def) && def->unspecialized) {
             jl_method_instance_t *unspec = def->unspecialized;
             if (unspec->invoke != jl_fptr_trampoline) {
+                li->isspecsig = 0;
                 li->specptr = unspec->specptr;
                 li->inferred = unspec->inferred;
                 if (li->inferred)
@@ -1817,6 +1819,7 @@ JL_DLLEXPORT jl_value_t *jl_fptr_trampoline(jl_method_instance_t *m, jl_value_t 
             (void)jl_generate_fptr_for_unspecialized(unspec);
             if (unspec->invoke) {
                 // use unspec pointers
+                m->isspecsig = 0;
                 m->specptr = unspec->specptr;
                 m->inferred = unspec->inferred;
                 if (m->inferred)

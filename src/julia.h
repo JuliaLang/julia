@@ -308,6 +308,7 @@ typedef struct _jl_method_instance_t {
     size_t max_world;
     uint8_t inInference; // flags to tell if inference is running on this function
     uint8_t compile_traced; // if set will notify callback if this linfo is compiled
+    uint8_t isspecsig; // if specptr is specsig for specTypes->rettype
     jl_callptr_t invoke; // jlcall entry point
     jl_generic_specptr_t specptr;
 } jl_method_instance_t;

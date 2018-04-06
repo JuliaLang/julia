@@ -648,6 +648,7 @@ static void jl_write_values(jl_serializer_state *s)
                 jl_method_instance_t *newm = (jl_method_instance_t*)&s->s->buf[reloc_offset];
 
                 newm->invoke = NULL;
+                newm->isspecsig = 0;
                 newm->specptr.fptr = NULL;
                 int8_t fptr_id = JL_API_TRAMPOLINE;
                 int8_t builtin_id = 0;
@@ -1004,10 +1005,13 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
                 break;
             }
             void *fptr = (void*)(base + offset);
-            if (specfunc)
+            if (specfunc) {
                 li->specptr.fptr = fptr;
-            else
+                li->isspecsig = 1; // TODO: set only if actually true
+            }
+            else {
                 li->invoke = (jl_callptr_t)fptr;
+            }
             jl_fptr_to_llvm(fptr, li, specfunc);
         }
     }

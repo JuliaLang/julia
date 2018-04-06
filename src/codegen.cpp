@@ -2608,7 +2608,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
                 // optimization: emit the correct name immediately, if we know it
                 // TODO: use `emitted` map here too to try to consolidate names?
                 if (li->specptr.fptr) {
-                    if (specsig ? 1/*TODO*/ : li->invoke == jl_fptr_args) {
+                    if (specsig ? li->isspecsig : li->invoke == jl_fptr_args) {
                         protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)li->specptr.fptr, li);
                         need_to_emit = false;
                     }
@@ -3818,7 +3818,7 @@ static Function* gen_cfun_wrapper(
             callptr = (void*)lam->inferred_const;
             calltype = 2;
         }
-        else if (lam->invoke != jl_fptr_sparam) {
+        else if (lam->isspecsig) {
             callptr = lam->specptr.fptr;
             calltype = 3;
         }
@@ -6387,7 +6387,7 @@ void jl_compile_workqueue(
             else if (li->invoke == &jl_fptr_args) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)li->specptr.fptr, li);
             }
-            else if (li->invoke != &jl_fptr_sparam) {
+            else if (li->isspecsig) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)li->specptr.fptr, li);
                 preal_specsig = true;
             }

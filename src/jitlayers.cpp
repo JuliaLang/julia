@@ -96,19 +96,26 @@ static jl_callptr_t _jl_compile_linfo(
         jl_llvm_functions_t decls = std::get<1>(def.second);
         jl_value_t *rettype = std::get<2>(def.second);
         jl_callptr_t addr;
-        if (decls.functionObject == "jl_fptr_args")
+        bool isspecsig = false;
+        if (decls.functionObject == "jl_fptr_args") {
             addr = &jl_fptr_args;
-        else if (decls.functionObject == "jl_fptr_sparam")
+        }
+        else if (decls.functionObject == "jl_fptr_sparam") {
             addr = &jl_fptr_sparam;
-        else
+        }
+        else {
             addr = (jl_callptr_t)getAddressForFunction(decls.functionObject);
+            isspecsig = jl_egal(rettype, this_li->rettype);
+        }
         if (this_li->compile_traced)
             triggered_linfos.push_back(this_li);
         if (this_li->invoke == jl_fptr_trampoline) {
             // once set, don't change invoke-ptr, as that leads to race conditions
             // with the (not) simultaneous updates to invoke and specptr
-            if (!decls.specFunctionObject.empty() && jl_egal(rettype, this_li->rettype))
+            if (!decls.specFunctionObject.empty()) {
                 this_li->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
+                this_li->isspecsig = isspecsig;
+            }
             this_li->invoke = addr;
         }
         else if (this_li->invoke == jl_fptr_const_return && !decls.specFunctionObject.empty()) {
@@ -725,7 +732,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_method_instance_t *l
         std::stringstream stream_fname;
         // try to pick an appropriate name that describes it
         if (Addr == (uintptr_t)li->invoke) {
-            stream_fname << "jlsysw_";
+            stream_fname << "jsysw_";
         }
         else if (li->invoke == &jl_fptr_args) {
             stream_fname << "jsys1_";
@@ -733,7 +740,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_method_instance_t *l
         else if (li->invoke == &jl_fptr_sparam) {
             stream_fname << "jsys3_";
         }
-        else if (li->invoke == &jl_fptr_sparam) {
+        else {
             stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(li->def.method->name);

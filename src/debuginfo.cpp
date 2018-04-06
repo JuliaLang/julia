@@ -326,8 +326,6 @@ public:
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
-        std::vector<std::pair<jl_method_instance_t*, uintptr_t>> def_spec;
-        std::vector<std::pair<jl_method_instance_t*, uintptr_t>> def_invoke;
         auto symbols = object::computeSymbolSizes(debugObj);
         bool first = true;
         for (const auto &sym_size : symbols) {
@@ -384,11 +382,6 @@ public:
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
            }
-           // now process these in order, so we ensure the closure values are updated before removing the trampoline
-           for (auto &def : def_spec)
-               def.first->specptr.fptr = (void*)def.second;
-           for (auto &def : def_invoke)
-               def.first->invoke = (jl_callptr_t)def.second;
         }
         uv_rwlock_wrunlock(&threadsafe);
         jl_gc_safe_leave(ptls, gc_state);
