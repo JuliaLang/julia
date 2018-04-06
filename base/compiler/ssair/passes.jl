@@ -140,8 +140,8 @@ function walk_to_def(compact, def, intermediaries = IdSet{Int}(), allow_phinode=
             end
             continue
         elseif isa(def, FastForward)
-            def = def.to
             append!(phi_locs, def.phi_locs)
+            def = def.to
         elseif isa(def, PhiNode)
             # For now, we don't track setfields structs through phi nodes
             allow_phinode || break
@@ -196,8 +196,8 @@ function process_immutable_preserve(new_preserves, compact, def)
 end
 
 struct FastForward
-    to
-    phi_locs
+    to::SSAValue
+    phi_locs::Vector{Tuple{Int64, Int64}}
 end
 
 function getfield_elim_pass!(ir::IRCode, domtree)
@@ -410,7 +410,8 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         # For non-dominating load-store forward, we may have to insert extra phi nodes
         # TODO: Can use the domtree to eliminate unnecessary phis, but ok for now
         ff = ir.stmts[idx]
-        @assert isa(ff, FastForward)
+        ff === nothing && continue # May have been DCE'd if there were no more uses
+        ff = ff::FastForward
         forwarded = ff.to
         if isa(forwarded, SSAValue)
             forwarded_typ = ir.types[forwarded.id]
@@ -429,7 +430,7 @@ end
 function type_lift_pass!(ir::IRCode)
     type_ctx_uses = Vector{Vector{Int}}[]
     has_non_type_ctx_uses = IdSet{Int}()
-    lifted_undef = IdDict{Int, SSAValue}()
+    lifted_undef = IdDict{Int, Any}()
     for (idx, stmt) in pairs(ir.stmts)
         if stmt isa Expr && (stmt.head === :isdefined || stmt.head === :undefcheck)
             val = (stmt.head === :isdefined) ? stmt.args[1] : stmt.args[2]
