@@ -757,6 +757,16 @@ Deprecated or removed
     necessary, consider `fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))})`.
     For an algebraic multiplicative identity, consider `one(A)` ([#24656]).
 
+  * The `similar(dims->f(..., dims...), [T], axes...)` method to add offset array support
+    to a function `f` that would otherwise create a non-offset array has been deprecated.
+    Instead, call `f(..., axes...)` directly and, if needed, the offset array implementation
+    should add offset axis support to the function `f` directly ([#26733]).
+
+  * The functions `ones` and `zeros` used to accept any objects as dimensional arguments,
+    implicitly converting them to `Int`s.  This is now deprecated; only `Integer`s or
+    `AbstractUnitRange`s are accepted as arguments.  Instead, convert the arguments before
+    calling `ones` or `zeros` ([#26733]).
+
   * The `Operators` module is deprecated. Instead, import required operators explicitly
     from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
 
