@@ -471,6 +471,7 @@ $(eval $(call LLVM_PATCH,llvm-D39297-musl-dynamiclibrary-pre5)) # Remove for 6.0
 $(eval $(call LLVM_PATCH,llvm-D28476-musl-targetlibraryinfo_3.9)) # Remove for 5.0
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,clang-D28477)) # Remove for 5.0
 endif
 else ifeq ($(LLVM_VER_SHORT),4.0)
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
@@ -504,6 +505,7 @@ $(eval $(call LLVM_PATCH,llvm-D39297-musl-dynamiclibrary-pre5)) # Remove for 6.0
 $(eval $(call LLVM_PATCH,llvm-D28476-musl-targetlibraryinfo_4.0)) # Remove for 5.0
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,clang-D28477)) # Remove for 5.0
 endif
 else ifeq ($(LLVM_VER_SHORT),5.0)
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
