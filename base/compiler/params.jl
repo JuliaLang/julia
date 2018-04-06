@@ -26,8 +26,9 @@ struct Params
     # when inferring a call to _apply
     MAX_APPLY_UNION_ENUM::Int
 
-    # parameters limiting large types
+    # parameters limiting large (tuple) types
     MAX_TUPLETYPE_LEN::Int
+    TUPLE_COMPLEXITY_LIMIT_DEPTH::Int
 
     # when attempting to inlining _apply, abort the optimization if the tuple
     # contains more than this many elements
@@ -41,12 +42,13 @@ struct Params
                     inline_tupleret_bonus::Int = 400,
                     max_methods::Int = 4,
                     tupletype_len::Int = 15,
+                    tupletype_depth::Int = 3,
                     tuple_splat::Int = 16,
                     union_splitting::Int = 4,
                     apply_union_enum::Int = 8)
         return new(Vector{InferenceResult}(),
                    world, inlining, true, false, inline_cost_threshold, inline_nonleaf_penalty,
                    inline_tupleret_bonus, max_methods, union_splitting, apply_union_enum,
-                   tupletype_len, tuple_splat)
+                   tupletype_len, tupletype_depth, tuple_splat)
     end
 end

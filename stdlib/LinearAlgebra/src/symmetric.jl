@@ -42,7 +42,7 @@ Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric 
 """
 function Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
     checksquare(A)
-    symmetric_type(typeof(A))(A, char_uplo(uplo))
+    return symmetric_type(typeof(A))(A, char_uplo(uplo))
 end
 
 """
@@ -66,8 +66,8 @@ The type of the object returned by `symmetric(::T, ::Symbol)`. For matrices, thi
 appropriately typed `Symmetric`, for `Number`s, it is the original type. If `symmetric` is
 implemented for a custom type, so should be `symmetric_type`, and vice versa.
 """
-function symmetric_type(::Type{T}) where {S,T<:AbstractMatrix{S}}
-    Symmetric{Union{S,promote_op(transpose, S),symmetric_type(S)},T}
+function symmetric_type(::Type{T}) where {S, T<:AbstractMatrix{S}}
+    return Symmetric{Union{S, promote_op(transpose, S), symmetric_type(S)}, T}
 end
 symmetric_type(::Type{T}) where {T<:Number} = T
 
@@ -112,7 +112,7 @@ Hermitian(fill(complex(1,1), 1, 1)) == fill(1, 1, 1)
 """
 function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     n = checksquare(A)
-    hermitian_type(typeof(A))(A, char_uplo(uplo))
+    return hermitian_type(typeof(A))(A, char_uplo(uplo))
 end
 
 """
@@ -138,7 +138,7 @@ appropriately typed `Hermitian`, for `Number`s, it is the original type. If `her
 implemented for a custom type, so should be `hermitian_type`, and vice versa.
 """
 function hermitian_type(::Type{T}) where {S,T<:AbstractMatrix{S}}
-    Hermitian{Union{S,promote_op(adjoint, S),hermitian_type(S)},T}
+    return Hermitian{Union{S, promote_op(adjoint, S), hermitian_type(S)}, T}
 end
 hermitian_type(::Type{T}) where {T<:Number} = T
 

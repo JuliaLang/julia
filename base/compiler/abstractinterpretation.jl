@@ -249,7 +249,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             comparison = method.sig
         end
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, spec_len)
+        newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, sv.params.TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
