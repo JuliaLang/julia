@@ -306,25 +306,6 @@ end
 end
 @test functionloc(f14346)[2] == @__LINE__() - 4
 
-# test jl_get_llvm_fptr. We test functions both in and definitely not in the system image
-definitely_not_in_sysimg() = nothing
-for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
-                  (Base.:+, Tuple{Int, Int})]
-    meth = which(f, t)
-    tt = Tuple{typeof(f), t.parameters...}
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::Core.SimpleVector
-    @test ti === tt # intersection should be a subtype
-    world = Core.Compiler.get_world_counter()
-    linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
-    params = Base.CodegenParams()
-    llvmf1 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
-    @test llvmf1 != C_NULL
-    llvmf2 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, false, params)
-    @test llvmf2 != C_NULL
-    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf1) != C_NULL
-    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf2) != C_NULL
-end
-
 # issue #15714
 # show variable names for slots and suppress spurious type warnings
 function f15714(array_var15714)
@@ -882,7 +863,7 @@ _test_at_locals2(1,1,0.5f0)
 
     @noinline f31687_child(i) = f31687_nonexistent(i)
     f31687_parent() = f31687_child(0)
-    params = Base.CodegenParams(cached=false)
+    params = Base.CodegenParams()
     _dump_function(f31687_parent, Tuple{},
                    #=native=#false, #=wrapper=#false, #=strip=#false,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
