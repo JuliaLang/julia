@@ -707,28 +707,37 @@ with a code of 0). An exception is raised if the process cannot be started.
 """
 success(cmd::AbstractCmd) = success(_spawn(cmd))
 
+struct PipelineError{P} <: Exception
+    pipe::P
+end
+
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
-        error("failed process: ", proc, " [", proc.exitcode, "]")
+        throw(PipelineError(proc))
     end
     nothing
 end
+function show(io::IO, perr::PipelineError{Process})
+    println(io, "PipelineError: failed process ", perr.pipe, " [", perr.pipe.exitcode, "]")
+end
 
 function pipeline_error(procs::ProcessChain)
-    failed = Process[]
-    for p = procs.processes
+    for p in procs.processes
         if !test_success(p) && !p.cmd.ignorestatus
-            push!(failed, p)
+            throw(PipelineError(procs))
         end
     end
-    isempty(failed) && return nothing
-    length(failed) == 1 && pipeline_error(failed[1])
-    msg = "failed processes:"
-    for proc in failed
-        msg = string(msg, "\n  ", proc, " [", proc.exitcode, "]")
-    end
-    error(msg)
+    nothing
 end
+function show(io::IO, perr::PipelineError{ProcessChain})
+    println(io, "PipelineError: failed processes:")
+    for p in perr.pipe.processes
+        if !test_success(p) && !p.cmd.ignorestatus
+            println(io, "  ", p, " [", p.exitcode, "]")
+        end
+    end
+end
+
 
 """
     kill(p::Process, signum=SIGTERM)
