@@ -460,48 +460,41 @@ call will fail, just as it would if too many arguments were given explicitly.
 ## Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore might not need to
-be passed explicitly in every call. For example, the library function [`base(b, n, pad)`](@ref)
-converts an integer `n` to a string in the given base `b`, optionally specifying a number of
-digits `pad` to pad to. The `pad` argument defaults to `1`.
+be passed explicitly in every call. For example, the function [`Date(y, [m, d])`](@ref)
+from `Dates` module constructs a `Date` type for a given year `y`, month `m` and day `d`.
+However, `m` and `d` arguments are optional and their default value is `1`.
 This behavior can be expressed concisely as:
 
 ```julia
-base(b::Integer, n::Integer, pad::Integer=1) =
-    base(Int(b), b > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (b>0) & (n<0))
+function Date(y::Int64, m::Int64=1, d::Int64=1)
+    err = validargs(Date, y, m, d)
+    err === nothing || throw(err)
+    return Date(UTD(totaldays(y, m, d)))
+end
 ```
 
-Observe, that this definition calls another method of `base` function that takes four arguments.
+Observe, that this definition calls another method of `Date` function that takes one argument
+of `UTInstant{Day}` type.
 
-With this definition, the function can be called with either two or three arguments, and `1`
-is automatically passed when a third argument is not specified:
+With this definition, the function can be called with either one, two or three arguments, and
+`1` is automatically passed when any of the arguments is not specified:
 
 ```jldoctest
-julia> base(3, 10, 10)
-"0000000101"
+julia> using Dates
 
-julia> base(3, 10, 1)
-"101"
+julia> Date(2000, 12, 12)
+2000-12-12
 
-julia> base(3, 10)
-"101"
+julia> Date(2000, 12)
+2000-12-01
+
+julia> Date(2000)
+2000-01-01
 ```
 
 Optional arguments are actually just a convenient syntax for writing multiple method definitions
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
-This can be checked for our `base` function example by calling `methods` function:
-
-```jldoctest
-julia> methods(base)
-# 5 methods for generic function "base":
-[1] base(b::Int64, x::Integer, pad::Int64, neg::Bool) in Base at intfuncs.jl:616
-[2] base(b::Integer, n::BigInt) in Base.GMP at gmp.jl:610
-[3] base(b::Integer, n::BigInt, pad::Integer) in Base.GMP at gmp.jl:610
-[4] base(b::Integer, n::Integer) in Base at intfuncs.jl:649
-[5] base(b::Integer, n::Integer, pad::Integer) in Base at intfuncs.jl:649
-```
-
-We can see that line 649 of *intfuncs.jl* file defines two methods we have discussed here.
-There are additionally three other methods associated with this function defined elsewhere.
+This can be checked for our `Date` function example by calling `methods` function.
 
 ## Keyword Arguments
 
