@@ -14,8 +14,12 @@ form representation, but the lack of such a representation ultimately proved pro
 
 ## New IR nodes
 
-With the new IR representation, the compiler learned to handle two new IR nodes, Phi nodes and Pi
-nodes. Phi nodes are part of generic SSA abstraction (see the link above if you're not familar with
+With the new IR representation, the compiler learned to handle four new IR nodes, Phi nodes, Pi
+nodes as well as PhiC nodes and Upsilon nodes (the latter two are only used for exception handling).
+
+### Phi nodes and Pi nodes
+
+Phi nodes are part of generic SSA abstraction (see the link above if you're not familar with
 the concept). In the Julia IR, these nodes are represented as:
 ```
 struct PhiNode
@@ -34,7 +38,7 @@ for the mapping to be incomplete, i.e. for a phi node to have missing incoming e
 be dynamically guaranteed that the corresponding value will not be used.
 
 PiNodes encode statically proven information that may be implicitly assumed in basic blocks dominated by a given
-phi node. They are conceptually equivalent to the technique introduced in the paper
+pi node. They are conceptually equivalent to the technique introduced in the paper
 "ABCD: Eliminating Array Bounds Checks on Demand" or the predicate info nodes in LLVM. To see how they work, consider,
 e.g.
 
@@ -65,6 +69,87 @@ but they may sometimes lead to code generation in the compiler (e.g. to change f
 union split representation to a plain unboxed representation). The main usefulness of PiNodes stems
 from the fact that path conditions of the values can be accumulated simply by def-use chain walking
 that is generally done for most optimizations that care about these conditions anyway.
+
+### PhiC nodes and Upsilon nodes
+
+Exception handling complicates the SSA story moderately, because exception handling
+introduces additional control flow edges into the IR across which values must be tracked.
+One approach to do so, which is followed by LLVM is to make calls which may throw exceptions
+into basic block terminators and add an explicit control flow edge to the catch handler:
+
+```
+invoke @function_that_may_throw() to label %regular unwind to %catch
+
+regular:
+# Control flow continues here
+
+catch:
+# Exceptions go here
+```
+
+However, this is problematic in a language like julia where at the start of the optimization
+pipeline, we do not now which calls throw. We would have to conservatively assume that every
+call (which in julia is every statement) throws. This would have several negative effects.
+On the one hand, it would essentially recuce the scope of every basic block to a single call,
+defeating the purpose of having operations be performed at the basic block level. On the other
+hand, every catch basic block would have `n*m` phi node arguments (`n`, the number of statements
+in the critical region, `m` the number of live values through the catch block). To work around
+this, we use a combination of `Upsilon` and `PhiC` (the C standing for `catch`,
+written `φᶜ` in the IR pretty printer, because
+unicode subscript c is not available) nodes. There is several ways to think of these nodes, but
+perhaps the easiest is to think of each `PhiC` as a load from a unique store-many, read-once slot,
+with `Upsilon` being the corresponding store operation. The `PhiC` has an operand list of all the
+upsilon nodes that store to its implicit slot. The `Upsilon` nodes however, do not record which `PhiC`
+node they store to. This is done for more natural integration with the rest of the SSA IR. E.g.
+if there are no more uses of a `PhiC` node, it is safe to delete is and the same is true of an
+`Upsilon` node. In most IR passes, `PhiC` nodes can be treated similar to `Phi` nodes. One can follow
+use-def chains through them, and they can be lifted to new `PhiC` nodes and new Upsilon nodes (in the
+same places as the original `Upsilon` nodes). The result of this scheme is that the number of
+Upsilon nodes (and `PhiC` arguments) is proportional to the number of assigned values to a particular
+variable (before SSA conversion), rather than the number of statements in the critical region.
+
+To see this scheme in action, consider the function
+
+```julia
+function foo()
+    x = 1
+    try
+        y = 2
+        error()
+    catch
+    end
+    (x, y)
+end
+```
+
+The corresponding IR (with irrelevant types stripped) is:
+
+```
+ir = Code
+1 ─       nothing
+2 ─       $(Expr(:enter, 5))
+3 ─ %3  = ϒ (#undef)
+│   %4  = ϒ (1)
+│   %5  = ϒ (2)
+│         Main.bar()
+│   %7  = ϒ (3)
+└──       $(Expr(:leave, 1))
+4 ─       goto 6
+5 ─ %10 = φᶜ (%3, %5)
+│   %11 = φᶜ (%4, %7)
+└──       $(Expr(:leave, 1))
+6 ┄ %13 = φ (4 => 2, 5 => %10)::NotInferenceDontLookHere.MaybeUndef(NotInferenceDontLookHere.Const(2, false))
+│   %14 = φ (4 => 3, 5 => %11)::Int64
+│         $(Expr(:undefcheck, :y, Core.SSAValue(13)))
+│   %16 = Core.tuple(%14, %13)
+└──       return %17
+```
+
+Note in particular that every value live into the critical region gets
+an upsilon node at the top of the critical region. This is because
+catch blocks are considered to have an invisible control flow edge
+from outside the function. As a result, no SSA value dominates the
+catch blocks, and all incoming values have to come through a `φᶜ` node.
 
 # Main SSA data structure
 

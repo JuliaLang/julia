@@ -234,9 +234,11 @@ typedef struct _jl_llvm_functions_t {
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     jl_array_t *code;  // Any array of statements
+    jl_value_t *codelocs; // Int array of indicies into the line table
     jl_value_t *signature_for_inference_heuristics; // optional method used during inference
     jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
+    jl_value_t *linetable; // Table of locations
     jl_array_t *slotflags;  // local var bit flags
     jl_array_t *slotnames; // names of local variables
     uint8_t inferred;
@@ -597,6 +599,8 @@ extern JL_DLLEXPORT jl_datatype_t *jl_labelnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_phinode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_pinode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_phicnode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_upsilonnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_quotenode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_newvarnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_intrinsic_type JL_GLOBALLY_ROOTED;
@@ -941,6 +945,8 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_pinode(v)      jl_typeis(v,jl_pinode_type)
 #define jl_is_phinode(v)     jl_typeis(v,jl_phinode_type)
+#define jl_is_phicnode(v)    jl_typeis(v,jl_phicnode_type)
+#define jl_is_upsilonnode(v) jl_typeis(v,jl_upsilonnode_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)
 #define jl_is_newvarnode(v)  jl_typeis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)

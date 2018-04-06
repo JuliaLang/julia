@@ -176,6 +176,8 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     tree.inferred = true
                     tree.pure = true
                     tree.inlineable = true
+                    tree.codelocs = nothing
+                    tree.linetable = nothing
                     i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                     return svec(linfo, tree, linfo.rettype)
                 elseif isa(inf, CodeInfo)
@@ -226,7 +228,7 @@ function typeinf_type(method::Method, @nospecialize(atypes), sparams::SimpleVect
     return widenconst(frame.bestguess)
 end
 
-function typeinf_ext(linfo::MethodInstance, world::UInt)
+@timeit function typeinf_ext(linfo::MethodInstance, world::UInt)
     if isa(linfo.def, Method)
         # method lambda - infer this specialization via the method cache
         return typeinf_code(linfo, true, true, Params(world))

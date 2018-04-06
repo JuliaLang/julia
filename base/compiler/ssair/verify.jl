@@ -1,3 +1,13 @@
+if !isdefined(@__MODULE__, Symbol("@verify_error"))
+    macro verify_error(arg)
+        arg isa String && return esc(:(println($arg)))
+        arg isa Expr && arg.head === :string || error()
+        pushfirst!(arg.args, :println)
+        arg.head = :call
+        return esc(arg)
+    end
+end
+
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
@@ -13,13 +23,14 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             end
         else
             if !dominates(domtree, def_bb, use_bb)
-                #@Base.show ir
-                #@Base.show ir.cfg
-                #@Base.error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
+                enable_new_optimizer[] = false
+                @show ir
+                @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
                 error()
             end
         end
     elseif isa(op, Union{SlotNumber, TypedSlot})
+        enable_new_optimizer[] = false
         #@error "Left over slot detected in converted IR"
         error()
     end
@@ -32,17 +43,28 @@ function verify_ir(ir::IRCode)
     last_end = 0
     for (idx, block) in pairs(ir.cfg.blocks)
         if first(block.stmts) != last_end + 1
+            enable_new_optimizer[] = false
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
-            #@Base.show ranges
-            #@Base.show (first(block.stmts), last_end)
+            @show ranges
+            @show (first(block.stmts), last_end)
+            @verify_error "First statement of BB $idx ($(first(block.stmts))) does not match end of previous ($last_end)"
             error()
         end
         last_end = last(block.stmts)
         for p in block.preds
-            idx in ir.cfg.blocks[p].succs || error()
+            if !(idx in ir.cfg.blocks[p].succs)
+                @verify_error "Predeccsor $p of block $idx not in successor list"
+                error()
+            end
         end
         for s in block.succs
-            idx in ir.cfg.blocks[s].preds || error()
+            if !(idx in ir.cfg.blocks[s].preds)
+                @show ir.cfg
+                @show ir
+                @show ir.argtypes
+                @verify_error "Successor $s of block $idx not in predecessor list"
+                error()
+            end
         end
     end
     # Verify statements
@@ -52,17 +74,20 @@ function verify_ir(ir::IRCode)
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)
                 edge = stmt.edges[i]
-                if !(edge in ir.cfg.blocks[bb].preds)
-                    #@Base.show ir
-                    #@Base.show (idx, edge, bb, ir.cfg.blocks[bb].preds)
+                if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
+                    enable_new_optimizer[] = false
+                    @show ir.argtypes
+                    @show ir
+                    @verify_error "Edge $edge of φ node $idx not in predecessor list"
                     error()
                 end
+                edge == 0 && continue
                 isassigned(stmt.values, i) || continue
                 val = stmt.values[i]
                 phiT = ir.types[idx]
                 if isa(val, SSAValue)
                     if !(types(ir)[val] ⊑ phiT)
-                        #@error """
+                        #@verify_error """
                         #    PhiNode $idx, has operand $(val.id), whose type is not a sub lattice element.
                         #    PhiNode type was $phiT
                         #    Value type was $(ir.types[val.id])
@@ -71,6 +96,18 @@ function verify_ir(ir::IRCode)
                     end
                 end
                 check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1)
+            end
+        elseif isa(stmt, PhiCNode)
+            for i = 1:length(stmt.values)
+                val = stmt.values[i]
+                if !isa(val, SSAValue)
+                    @verify_error "Operand $i of PhiC node $idx must be an SSA Value."
+                    error()
+                end
+                if !isa(ir[val], UpsilonNode)
+                    @verify_error "Operand $i of PhiC node $idx must reference an Upsilon node."
+                    error()
+                end
             end
         else
             for op in userefs(stmt)
