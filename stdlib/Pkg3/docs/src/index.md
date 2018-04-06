@@ -86,7 +86,7 @@ identify the package in projects that depend on it.
 !!! note
     For legacy reasons it is possible to load a package without a project file or
     UUID from the REPL or the top-level of a script. It is not possible, however,
-    to load a package with a project file or UUID from a project with them. Once
+    to load a package without a project file or UUID from a project with them. Once
     you've loaded from a project file, everything needs a project file and UUID.
 
 **Application:** a project which provides standalone functionality not intended
