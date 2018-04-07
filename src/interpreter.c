@@ -358,11 +358,24 @@ SECT_INTERP static int jl_source_nssavalues(jl_code_info_t *src)
     return jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
 }
 
+SECT_INTERP static int jl_is_newstyle_ir(jl_code_info_t *src) {
+    return src->codelocs != jl_nothing;
+}
+
+SECT_INTERP static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
+{
+    jl_value_t *res = eval_value(stmt, s);
+    if (jl_is_newstyle_ir(s->src))
+        s->locals[jl_source_nslots(s->src) + s->ip] = res;
+}
+
 SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
     if (jl_is_ssavalue(e)) {
         ssize_t id = ((jl_ssavalue_t*)e)->id;
+        if (jl_is_newstyle_ir(src))
+            id -= 1;
         if (src == NULL || id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
             jl_error("access to invalid SSAValue");
         else
@@ -385,6 +398,13 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         return jl_eval_global_var(s->module, (jl_sym_t*)e);
+    }
+    if (jl_is_pinode(e)) {
+        jl_value_t *val = eval_value(jl_fieldref_noalloc(e, 0), s);
+#ifndef JL_NDEBUG
+        jl_typeassert(val, jl_fieldref_noalloc(e, 1));
+#endif
+        return val;
     }
     if (!jl_is_expr(e))
         return e;
@@ -509,13 +529,6 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             s->ip = jl_gotonode_label(stmt) - 1;
             continue;
         }
-        else if (jl_is_pinode(stmt)) {
-            jl_value_t *val = eval_value(jl_fieldref_noalloc(stmt, 0), s);
-#ifndef JL_NDEBUG
-            jl_typeassert(val, jl_fieldref_noalloc(stmt, 1));
-#endif
-            return val;
-        }
         else if (jl_is_expr(stmt)) {
             // Most exprs are allowed to end a BB by fall through
             s->last_branch = s->ip;
@@ -546,10 +559,12 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     rhs = eval_value(jl_exprarg(stmt, 1), s);
                 }
                 if (jl_is_ssavalue(sym)) {
-                    ssize_t genid = ((jl_ssavalue_t*)sym)->id;
-                    if (genid >= jl_source_nssavalues(s->src) || genid < 0)
-                        jl_error("assignment to invalid GenSym location");
-                    s->locals[jl_source_nslots(s->src) + genid] = rhs;
+                    ssize_t id = ((jl_ssavalue_t*)sym)->id;
+                    if (jl_is_newstyle_ir(s->src))
+                        id -= 1;
+                    if (id >= jl_source_nssavalues(s->src) || id < 0)
+                        jl_error("assignment to invalid SSAValue location");
+                    s->locals[jl_source_nslots(s->src) + id] = rhs;
                 }
                 else if (jl_is_slot(sym)) {
                     ssize_t n = jl_slot_number(sym);
@@ -596,6 +611,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     jl_value_t *phicnode = jl_array_ptr_ref(stmts, catch_ip);
                     if (!jl_is_phicnode(phicnode))
                         break;
+                    assert(jl_is_newstyle_ir(s->src));
                     jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
                     for (size_t i = 0; i < jl_array_len(values); ++i) {
                         jl_value_t *val = jl_array_ptr_ref(values, i);
@@ -662,11 +678,11 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     jl_toplevel_eval(s->module, stmt);
                 }
                 else {
-                    eval_value(stmt, s);
+                    eval_stmt_value(stmt, s);
                 }
             }
             else {
-                eval_value(stmt, s);
+                eval_stmt_value(stmt, s);
             }
         }
         else if (jl_is_newvarnode(stmt)) {
@@ -681,7 +697,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             jl_lineno = jl_linenode_line(stmt);
         }
         else {
-            eval_value(stmt, s);
+            eval_stmt_value(stmt, s);
         }
         s->ip++;
     }

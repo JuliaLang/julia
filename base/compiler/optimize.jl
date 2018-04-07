@@ -279,13 +279,13 @@ function optimize(me::InferenceState)
         me.linfo.inInference = false
     elseif me.optimize
         opt = OptimizationState(me)
-        if enable_new_optimizer[] && isa(def, Method)
+        if enable_new_optimizer[]
             reindex_labels!(opt)
             nargs = Int(opt.nargs) - 1
             if def isa Method
                 topline = LineInfoNode(opt.mod, def.name, def.file, Int(def.line), Int(0))
             else
-                topline = LineInfoNode(opt.mod, NullLineInfo.name, NullLineInfo.file, 0, 0)
+                topline = LineInfoNode(opt.mod, NullLineInfo.method, NullLineInfo.file, 0, 0)
             end
             linetable = [topline]
             @timeit "optimizer" ir = run_passes(opt.src, nargs, linetable, opt)
