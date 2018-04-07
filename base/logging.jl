@@ -114,15 +114,16 @@ const Warn          = LogLevel(    1000)
 const Error         = LogLevel(    2000)
 const AboveMaxLevel = LogLevel( 1000001)
 
+const LogLevelNames = Dict(
+    BelowMinLevel  => "BelowMinLevel",
+    Debug          => "Debug",
+    Info           => "Info",
+    Warn           => "Warn",
+    Error          => "Error",
+    AboveMaxLevel  => "AboveMaxLevel")
+
 function show(io::IO, level::LogLevel)
-    if     level == BelowMinLevel  print(io, "BelowMinLevel")
-    elseif level == Debug          print(io, "Debug")
-    elseif level == Info           print(io, "Info")
-    elseif level == Warn           print(io, "Warn")
-    elseif level == Error          print(io, "Error")
-    elseif level == AboveMaxLevel  print(io, "AboveMaxLevel")
-    else                           print(io, "LogLevel($(level.level))")
-    end
+    print(io, get(LogLevelNames, level, "LogLevel($(level.level))"))
 end
 
 
@@ -297,8 +298,8 @@ function logmsg_code(_module, file, line, level, message, exs...)
     quote
         level = $level
         std_level = convert(LogLevel, level)
-        if std_level >= getindex(_min_enabled_level)
-            logstate = current_logstate()
+        if std_level >= getindex($_min_enabled_level)
+            logstate = $current_logstate()
             if std_level >= logstate.min_enabled_level
                 logger = logstate.logger
                 _module = $_module
@@ -306,17 +307,17 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 group = $group
                 # Second chance at an early bail-out, based on arbitrary
                 # logger-specific logic.
-                if shouldlog(logger, level, _module, group, id)
+                if $shouldlog(logger, level, _module, group, id)
                     file = $file
                     line = $line
                     try
                         msg = $(esc(message))
-                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
+                        $handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
                     catch err
-                        if !catch_exceptions(logger)
+                        if !$catch_exceptions(logger)
                             rethrow(err)
                         end
-                        logging_error(logger, level, _module, group, id, file, line, err)
+                        $logging_error(logger, level, _module, group, id, file, line, err)
                     end
                 end
             end
