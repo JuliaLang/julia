@@ -6037,3 +6037,8 @@ g1_23206(::Tuple{Type{Int}, T}) where T = 0
 g2_23206(::Tuple{Type{Int}}) = 1
 @test_throws MethodError g1_23206(tuple(Int, 2))
 @test_throws MethodError g2_23206(tuple(Int, 2))
+
+# issue #26739
+let x26739 = Int[1]
+    @test eval(:(identity.($x26739))) == x26739
+end
