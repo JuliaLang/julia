@@ -638,9 +638,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     if (ex->head == dot_sym) {
         if (jl_expr_nargs(ex) != 2)
             jl_error("syntax: malformed \".\" expression");
-        return jl_eval_dot_expr(m, jl_exprarg(ex, 0), jl_exprarg(ex, 1), fast);
+        jl_value_t *lhs = jl_exprarg(ex, 0);
+        jl_value_t *rhs = jl_exprarg(ex, 1);
+        // ('.' f (tuple args...)) is a broadcast instead, which doesn't
+        // go through this fast path.
+        if (!jl_is_expr(rhs) || ((jl_expr_t*)rhs)->head != tuple_sym)
+            return jl_eval_dot_expr(m, lhs, rhs, fast);
     }
-    else if (ptls->in_pure_callback) {
+    if (ptls->in_pure_callback) {
         jl_error("eval cannot be used in a generated function");
     }
     else if (ex->head == module_sym) {
