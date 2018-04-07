@@ -392,7 +392,6 @@ export
     isperm,
     issorted,
     last,
-    linearindices,
     mapslices,
     max,
     maximum!,

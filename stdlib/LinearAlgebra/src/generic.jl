@@ -1167,9 +1167,9 @@ end
 function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
     if _length(rx) != _length(ry)
         throw(DimensionMismatch("rx has length $(_length(rx)), but ry has length $(_length(ry))"))
-    elseif !checkindex(Bool, linearindices(x), rx)
+    elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
         throw(BoundsError(x, rx))
-    elseif !checkindex(Bool, linearindices(y), ry)
+    elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
         throw(BoundsError(y, ry))
     end
     for (IY, IX) in zip(eachindex(ry), eachindex(rx))

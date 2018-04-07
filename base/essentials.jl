@@ -547,7 +547,6 @@ eltype(::Type{SimpleVector}) = Any
 keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
 axes(v::SimpleVector) = (OneTo(length(v)),)
-linearindices(v::SimpleVector) = axes(v, 1)
 axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)

@@ -644,7 +644,7 @@ function show(io::IO, src::CodeInfo)
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
-                          delim_one, i1=first(linearindices(itr)), l=last(linearindices(itr)))
+                          delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)

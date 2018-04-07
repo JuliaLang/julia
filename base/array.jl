@@ -573,7 +573,7 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
 end
 
 function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
-    i1 = first(linearindices(dest))
+    i1 = first(LinearIndices(dest))
     dest[i1] = v1
     return collect_to!(dest, itr, i1+1, st)
 end
@@ -1380,15 +1380,15 @@ julia> reverse(A, 3, 5)
  3
 ```
 """
-function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
+function reverse(A::AbstractVector, s=first(LinearIndices(A)), n=last(LinearIndices(A)))
     B = similar(A)
-    for i = first(linearindices(A)):s-1
+    for i = first(LinearIndices(A)):s-1
         B[i] = A[i]
     end
     for i = s:n
         B[i] = A[n+s-i]
     end
-    for i = n+1:last(linearindices(A))
+    for i = n+1:last(LinearIndices(A))
         B[i] = A[i]
     end
     return B
@@ -1398,7 +1398,7 @@ end
 reverse(A::Vector) = invoke(reverse, Tuple{AbstractVector}, A)
 
 function reverseind(a::AbstractVector, i::Integer)
-    li = linearindices(a)
+    li = LinearIndices(a)
     first(li) + last(li) - i
 end
 
@@ -1428,8 +1428,8 @@ julia> A
  1
 ```
 """
-function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
-    liv = linearindices(v)
+function reverse!(v::AbstractVector, s=first(LinearIndices(v)), n=last(LinearIndices(v)))
+    liv = LinearIndices(v)
     if n <= s  # empty case; ok
     elseif !(first(liv) ≤ s ≤ last(liv))
         throw(BoundsError(v, s))

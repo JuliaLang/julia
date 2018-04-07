@@ -5,7 +5,7 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length, (:),
+using .Base: copymutable, LinearIndices, IndexStyle, viewindexing, IndexLinear, _length, (:),
     eachindex, axes, first, last, similar, start, next, done, zip, @views, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
@@ -902,7 +902,7 @@ function sort(A::AbstractArray;
 end
 
 @noinline function sort_chunks!(Av, n, alg, order)
-    inds = linearindices(Av)
+    inds = LinearIndices(Av)
     for s = first(inds):n:last(inds)
         sort!(Av, s, s+n-1, alg, order)
     end

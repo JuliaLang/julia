@@ -1635,6 +1635,8 @@ function search(buf::IOBuffer, delim::UInt8)
     return Int(q-p+1)
 end
 
+@deprecate linearindices(x::AbstractArray) LinearIndices(x)
+
 # PR #26647
 # The `keep` argument in `split` and `rpslit` has been renamed to `keepempty`.
 # To remove this deprecation, remove the `keep` argument from the function signatures as well as

@@ -210,7 +210,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     if has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
         nslices = div(_length(A), lsiz)
-        ibase = first(linearindices(A))-1
+        ibase = first(LinearIndices(A))-1
         for i = 1:nslices
             @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
             ibase += lsiz
@@ -669,7 +669,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(Rval))
     keep, Idefault = Broadcast.shapeindexer(indsRt)
     ks = keys(A)
-    k, kss = next(ks, start(ks))
+    kss = start(ks)
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
         i1 = first(indices1(Rval))
@@ -678,12 +678,12 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             tmpRv = Rval[i1,IR]
             tmpRi = Rind[i1,IR]
             for i in axes(A,1)
+                k, kss = next(ks, kss)
                 tmpAv = A[i,IA]
                 if tmpRi == zi || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
                     tmpRv = tmpAv
                     tmpRi = k
                 end
-                k, kss = next(ks, kss)
             end
             Rval[i1,IR] = tmpRv
             Rind[i1,IR] = tmpRi
@@ -692,6 +692,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             for i in axes(A, 1)
+                k, kss = next(ks, kss)
                 tmpAv = A[i,IA]
                 tmpRv = Rval[i,IR]
                 tmpRi = Rind[i,IR]
@@ -699,7 +700,6 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
-                k, kss = next(ks, kss)
             end
         end
     end
