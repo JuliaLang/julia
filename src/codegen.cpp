@@ -6166,6 +6166,12 @@ static std::unique_ptr<Module> emit_function(
                 } else if (((jl_expr_t*)stmt)->head == unreachable_sym) {
                     if (i + 2 <= stmtslen)
                         branch_targets.insert(i + 2);
+                } else if (((jl_expr_t*)stmt)->head == enter_sym) {
+                    branch_targets.insert(i + 1);
+                    if (i + 2 <= stmtslen)
+                        branch_targets.insert(i + 2);
+                    int dest = jl_unbox_long(jl_array_ptr_ref(((jl_expr_t*)stmt)->args, 0));
+                    branch_targets.insert(dest);
                 }
             } else if (jl_is_gotonode(stmt)) {
                 int dest = jl_gotonode_label(stmt);

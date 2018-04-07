@@ -82,6 +82,8 @@ function compute_basic_blocks(stmts::Vector{Any})
             # :enter starts/ends a BB
             push!(jump_dests, idx)
             push!(jump_dests, idx+1)
+            # The catch block is a jump dest
+            push!(jump_dests, stmt.args[1])
         end
     end
     bb_starts = sort(collect(jump_dests))
