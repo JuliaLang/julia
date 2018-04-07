@@ -46,7 +46,8 @@ An `Char` value represents a single character: it is just a 32-bit primitive typ
 representation and appropriate arithmetic behaviors, and which can be converted
 to a numeric value representing a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
-  other subtypes of `AbstractChar`, e.g. to optimize operations for other [text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
+other subtypes of `AbstractChar`, e.g. to optimize operations for other
+[text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
 input and shown:
 
 ```jldoctest
@@ -849,7 +850,8 @@ julia> isvalid("DATA\xff\u2200")
 false
 ```
 
-As it was mentioned `CodeUnits{UInt8,String}` type behaves like read only array of `UInt8` and if you need a standard vector you can convert it using `Vector{UInt8}`:
+As it was mentioned `CodeUnits{UInt8,String}` type behaves like read only array of `UInt8` and
+if you need a standard vector you can convert it using `Vector{UInt8}`:
 
 ```jldoctest
 julia> x = b"123"
