@@ -1087,7 +1087,7 @@ timesofar("datamove")
 
         @check_bit_operation findfirst(!iszero, b1)    Union{Int,Nothing}
         @check_bit_operation findfirst(iszero, b1)     Union{Int,Nothing}
-        @check_bit_operation findfirst(equalto(3), b1) Union{Int,Nothing}
+        @check_bit_operation findfirst(isequal(3), b1) Union{Int,Nothing}
 
         @check_bit_operation findfirst(x->x, b1)     Union{Int,Nothing}
         @check_bit_operation findfirst(x->!x, b1)    Union{Int,Nothing}
@@ -1120,7 +1120,7 @@ timesofar("find")
     b1 = trues(v1)
     b2 = falses(v1)
     for i = 1:v1
-        @test findprev(b1, i) == findprev(equalto(true), b1, i) == findprev(identity, b1, i)
+        @test findprev(b1, i) == findprev(isequal(true), b1, i) == findprev(identity, b1, i)
         @test findprevnot(b2, i) == findprev(!, b2, i) == i
     end
 

@@ -26,4 +26,12 @@ function temp_pkg_dir(fn::Function)
     end
 end
 
+function cd_tempdir(f)
+    mktempdir() do tmp
+        cd(tmp) do
+            f(tmp)
+        end
+    end
+end
+
 isinstalled(pkg) = Base.locate_package(Base.PkgId(pkg.uuid, pkg.name)) !== nothing

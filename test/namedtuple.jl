@@ -209,18 +209,18 @@ abstr_nt_22194_3()
 @test typeof(Base.structdiff(NamedTuple{(:a, :b), Tuple{Int32, Union{Int32, Nothing}}}((1, Int32(2))),
                              (a=0,))) === NamedTuple{(:b,), Tuple{Union{Int32, Nothing}}}
 
-@test findall(equalto(1), (a=1, b=2)) == [:a]
-@test findall(equalto(1), (a=1, b=1)) == [:a, :b]
-@test isempty(findall(equalto(1), NamedTuple()))
-@test isempty(findall(equalto(1), (a=2, b=3)))
-@test findfirst(equalto(1), (a=1, b=2)) == :a
-@test findlast(equalto(1), (a=1, b=2)) == :a
-@test findfirst(equalto(1), (a=1, b=1)) == :a
-@test findlast(equalto(1), (a=1, b=1)) == :b
-@test findfirst(equalto(1), ()) === nothing
-@test findlast(equalto(1), ()) === nothing
-@test findfirst(equalto(1), (a=2, b=3)) === nothing
-@test findlast(equalto(1), (a=2, b=3)) === nothing
+@test findall(isequal(1), (a=1, b=2)) == [:a]
+@test findall(isequal(1), (a=1, b=1)) == [:a, :b]
+@test isempty(findall(isequal(1), NamedTuple()))
+@test isempty(findall(isequal(1), (a=2, b=3)))
+@test findfirst(isequal(1), (a=1, b=2)) == :a
+@test findlast(isequal(1), (a=1, b=2)) == :a
+@test findfirst(isequal(1), (a=1, b=1)) == :a
+@test findlast(isequal(1), (a=1, b=1)) == :b
+@test findfirst(isequal(1), ()) === nothing
+@test findlast(isequal(1), ()) === nothing
+@test findfirst(isequal(1), (a=2, b=3)) === nothing
+@test findlast(isequal(1), (a=2, b=3)) === nothing
 
 # Test map with Nothing and Missing
 for T in (Nothing, Missing)

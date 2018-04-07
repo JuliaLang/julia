@@ -4,7 +4,7 @@ __precompile__(true)
 
 module REPL
 
-using Base.Meta
+using Base.Meta, Sockets
 import InteractiveUtils
 
 export
@@ -747,11 +747,18 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
-function setup_interface(
+setup_interface(
     repl::LineEditREPL;
     # those keyword arguments may be deprecated eventually in favor of the Options mechanism
     hascolor::Bool = repl.options.hascolor,
     extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
+) = setup_interface(repl, hascolor, extra_repl_keymap)
+
+# This non keyword method can be precompiled which is important
+function setup_interface(
+    repl::LineEditREPL,
+    hascolor::Bool,
+    extra_repl_keymap::Union{Dict,Vector{<:Dict}},
 )
     ###
     #
@@ -886,7 +893,7 @@ function setup_interface(
             sbuffer = LineEdit.buffer(s)
             curspos = position(sbuffer)
             seek(sbuffer, 0)
-            shouldeval = (bytesavailable(sbuffer) == curspos && findfirst(equalto(UInt8('\n')), sbuffer) === nothing)
+            shouldeval = (bytesavailable(sbuffer) == curspos && findfirst(isequal(UInt8('\n')), sbuffer) === nothing)
             seek(sbuffer, curspos)
             if curspos == 0
                 # if pasting at the beginning, strip leading whitespace
@@ -1048,7 +1055,7 @@ input_color(r::StreamREPL) = r.input_color
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
 function ends_with_semicolon(line::AbstractString)
-    match = findlast(equalto(';'), line)
+    match = findlast(isequal(';'), line)
     if match !== nothing
         # state for comment parser, assuming that the `;` isn't in a string or comment
         # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer

@@ -127,6 +127,20 @@ end
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
 
+# issue #26321
+struct T26321{N,S<:NTuple{N}}
+    t::S
+end
+let mi = T26321{3,NTuple{3,Int}}((1,2,3)), mf = T26321{3,NTuple{3,Float64}}((1.0,2.0,3.0))
+    J = T26321{3,S} where S<:(Tuple{T,T,T} where T)
+    @test typejoin(typeof(mi),typeof(mf)) == J
+    a = [mi, mf]
+    @test a[1] === mi
+    @test a[2] === mf
+    @test eltype(a) == J
+    @test a isa Vector{<:T26321{3}}
+end
+
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, Float64) === Real
@@ -1205,9 +1219,9 @@ let
     @test_throws InexactError unsafe_wrap(Array, pointer(a), -3)
     # Misaligned pointer
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, length(a))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
 end
 
 struct FooBar2515
@@ -4760,7 +4774,7 @@ ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
 @eval @noinline f18236(ptr) = ccall(ptr, VecElement{Float64},
                                     (VecElement{Float64},), $v18236)
 @test f18236(ptr18236) === v18236
-@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}), "double undef")
+@test !occursin("double undef", sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}))
 # VecElement of struct, not necessarily useful but does have special
 # ABI so should be handled correctly
 # This struct should be small enough to be passed by value in C ABI
@@ -5980,6 +5994,9 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+# issue #26518
+function f26518((a,b)) end
+@test f26518((1,2)) === nothing
 
 # issue 22098
 macro m22098 end
@@ -6010,3 +6027,6 @@ g25907a(x) = x[1]::Integer
 @test g25907a(Union{Int, UInt, Nothing}[1]) === 1
 g25907b(x) = x[1]::Complex
 @test g25907b(Union{Complex{Int}, Complex{UInt}, Nothing}[1im]) === 1im
+
+#issue #26363
+@test eltype(Ref(Float64(1))) === Float64

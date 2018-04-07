@@ -1,7 +1,7 @@
 # The Julia Manual
 
   * [Introduction](@ref man-introduction)
-  * [Getting Started](@ref)
+  * [Getting Started](@ref man-getting-started)
   * [Variables](@ref)
   * [Integers and Floating-Point Numbers](@ref)
   * [Mathematical Operations and Elementary Functions](@ref)

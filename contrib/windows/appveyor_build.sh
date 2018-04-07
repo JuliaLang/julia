@@ -100,6 +100,9 @@ for i in bin/*.dll; do
 done
 for i in share/julia/base/pcre_h.jl; do
   $SEVENZIP e -y julia-installer.exe "$i" -obase >> get-deps.log
+  # Touch the file to adjust the modification time, thereby (hopefully) avoiding
+  # issues with clock skew during the build
+  touch "base/$(basename $i)"
 done
 echo "override PCRE_INCL_PATH =" >> Make.user
 # Remove libjulia.dll if it was copied from downloaded binary
@@ -110,6 +113,8 @@ rm -f usr/bin/libgfortran-3.dll
 rm -f usr/bin/libquadmath-0.dll
 rm -f usr/bin/libssp-0.dll
 rm -f usr/bin/libstdc++-6.dll
+rm -f usr/bin/libccalltest.dll
+rm -f usr/bin/libpthread.dll
 
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then

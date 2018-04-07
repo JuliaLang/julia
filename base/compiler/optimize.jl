@@ -924,7 +924,9 @@ function effect_free(@nospecialize(e), src, mod::Module, allow_volatile::Bool)
             end
             fieldcount(typ) >= length(ea) - 1 || return false
             for fld_idx in 1:(length(ea) - 1)
-                exprtype(ea[fld_idx + 1], src, mod) ⊑ fieldtype(typ, fld_idx) || return false
+                eT = exprtype(ea[fld_idx + 1], src, mod)
+                fT = fieldtype(typ, fld_idx)
+                eT ⊑ fT || return false
             end
             # fall-through
         elseif head === :return

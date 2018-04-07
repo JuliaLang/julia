@@ -1240,7 +1240,10 @@
                     ((eqv? (peek-token s) ':)
                      (begin
                        (take-token s)
-                       `(|.| ,ex (quote ,(parse-atom s)))))
+                       (if (or (eqv? (peek-token s) #\newline)
+                               (ts:space? s)) ;; uses side effect of previous peek-token
+                           (error "space not allowed after \":\" used for quoting"))
+                       `(|.| ,ex (quote ,(parse-atom s #f)))))
                     ((eq? (peek-token s) '$)
                      (take-token s)
                      (let ((dollarex (parse-atom s)))
@@ -1561,6 +1564,8 @@
         (let* ((name (parse-unary-prefix s))
                (loc  (line-number-node s))
                (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
+          (if (reserved-word? name)
+              (error (string "invalid module name \"" name "\"")))
           (expect-end s word)
           (list 'module (if (eq? word 'module) 'true 'false) name
                 `(block ,loc ,@(cdr body)))))
@@ -1874,13 +1879,6 @@
                                 "\"; got \""
                                 (deparse (car vec)) t "\"")))
              (loop (cons (parse-eq* s) vec) outer))))))))
-
-(define (peek-non-newline-token s)
-  (let loop ((t (peek-token s)))
-    (if (newline? t)
-        (begin (take-token s)
-               (loop (peek-token s)))
-        t)))
 
 (define (expect-space-before s t)
   (if (not (ts:space? s))

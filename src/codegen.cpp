@@ -165,7 +165,6 @@ extern void _chkstk(void);
 
 // llvm state
 JL_DLLEXPORT LLVMContext jl_LLVMContext;
-static bool nested_compile = false;
 TargetMachine *jl_TargetMachine;
 
 extern JITEventListener *CreateJuliaJITEventListener();
@@ -1036,8 +1035,9 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
 }
 
 // Snooping on which functions are being compiled, and how long it takes
-JL_STREAM *dump_compiles_stream = NULL;
-uint64_t last_time = 0;
+static JL_STREAM *dump_compiles_stream = NULL;
+static bool nested_compile = false;
+static uint64_t last_time = 0;
 extern "C" JL_DLLEXPORT
 void jl_dump_compiles(void *s)
 {
@@ -1418,7 +1418,20 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, const char *F, size
     return fptr;
 }
 
-static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt);
+static Function *jl_cfunction_cache(jl_value_t *ft, jl_value_t *declrt, jl_tupletype_t *argt);
+
+// Get a pointer to the cache for the C-callable entry point for the given argument types.
+// here argt does not include the leading function type argument
+static Function *jl_cfunction_object(jl_value_t *f, jl_value_t *declrt, jl_tupletype_t *argt)
+{
+    jl_value_t *ft;
+    if (jl_is_type(f))
+        ft = (jl_value_t*)jl_wrap_Type(f);
+    else
+        ft = jl_typeof(f);
+    return jl_cfunction_cache(ft, declrt, argt);
+}
+
 // get the address of a C-callable entry point for a function
 extern "C" JL_DLLEXPORT
 void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
@@ -1447,7 +1460,6 @@ void *jl_function_ptr_by_llvm_name(char *name) {
 extern "C" JL_DLLEXPORT
 void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 {
-    assert(jl_is_tuple_type(argt));
     JL_LOCK(&codegen_lock);
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
     // force eager emission of the function (llvm 3.3 gets confused otherwise and tries to do recursive compilation)
@@ -1499,8 +1511,6 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     // Backup the info for the nested compile
     JL_LOCK(&codegen_lock);
 
-    bool last_n_c = nested_compile;
-    nested_compile = true;
     // emit this function into a new module
     jl_llvm_functions_t declarations;
     std::unique_ptr<Module> m;
@@ -1509,13 +1519,11 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     }
     JL_CATCH {
         // something failed!
-        nested_compile = last_n_c;
+        m.reset();
         JL_UNLOCK(&codegen_lock); // Might GC
         const char *mname = name_from_method_instance(linfo);
         jl_rethrow_with_add("error compiling %s", mname);
     }
-    // Restore the previous compile context
-    nested_compile = last_n_c;
 
     if (optimize)
         jl_globalPM->run(*m.get());
@@ -2014,8 +2022,8 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
 
 static void jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val)
 {
-    if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) ||
-            val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type)
+    if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) || val == jl_nothing ||
+            val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type || val == (jl_value_t*)jl_core_module)
         return;
     JL_GC_PUSH1(&val);
     if (ctx.roots == NULL) {
@@ -4176,24 +4184,12 @@ static void emit_cfunc_invalidate(
     }
 }
 
-static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt,
-                                  jl_typemap_entry_t *sf, jl_value_t *declrt, jl_tupletype_t *sigt)
+static Function*
+gen_cfun_wrapper(const function_sig_t &sig, jl_value_t *ff,
+    jl_typemap_entry_t *sf, jl_value_t *declrt, jl_tupletype_t *sigt)
 {
     // Generate a c-callable wrapper
-    bool toboxed;
-    Type *crt = julia_struct_to_llvm(jlrettype, NULL, &toboxed);
-    if (crt == NULL)
-        jl_error("cfunction: return type doesn't correspond to a C type");
-    else if (toboxed)
-        crt = T_prjlvalue;
-
-    size_t nargs = jl_nparams(argt);
-    function_sig_t sig(crt, jlrettype, toboxed, argt->parameters, NULL, nargs, false, CallingConv::C, false);
-    if (!sig.err_msg.empty())
-        jl_error(sig.err_msg.c_str());
-    if (sig.fargt.size() + sig.sret != sig.fargt_sig.size())
-        jl_error("va_arg syntax not allowed for cfunction argument list");
-
+    size_t nargs = sig.nargs;
     const char *name = "cfunction";
     size_t world = jl_world_counter;
     // try to look up this function for direct invoking
@@ -4230,7 +4226,8 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     Module *M = new Module(name, jl_LLVMContext);
     jl_setup_module(M);
-    Function *cw = Function::Create(sig.functype,
+    FunctionType *functype = sig.functype();
+    Function *cw = Function::Create(functype,
             GlobalVariable::ExternalLinkage,
             funcName.str(), M);
     jl_init_function(cw);
@@ -4239,6 +4236,20 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     cw->addFnAttr("no-frame-pointer-elim", "true");
 #endif
     Function *cw_proto = function_proto(cw);
+    // Save the Function object reference
+    {
+        jl_value_t *oldsf = sf->func.value;
+        size_t i, oldlen = jl_svec_len(oldsf);
+        jl_value_t *newsf = (jl_value_t*)jl_alloc_svec(oldlen + 2);
+        JL_GC_PUSH1(&newsf);
+        jl_svecset(newsf, 0, sig.rt);
+        jl_svecset(newsf, 1, jl_box_voidpointer((void*)cw_proto));
+        for (i = 0; i < oldlen; i++)
+            jl_svecset(newsf, i + 2, jl_svecref(oldsf, i));
+        sf->func.value = newsf;
+        jl_gc_wb(sf, sf->func.value);
+        JL_GC_POP();
+    }
 
     jl_codectx_t ctx(jl_LLVMContext);
     ctx.f = cw;
@@ -4277,18 +4288,16 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         age_ok = ctx.builder.CreateOr(ctx.builder.CreateNot(have_tls), age_ok);
     }
     ctx.builder.CreateStore(world_v, ctx.world_age_field);
-    // Save the Function object reference
-    sf->func.value = jl_box_voidpointer((void*)cw_proto);
-    jl_gc_wb(sf, sf->func.value);
 
     // first emit code to record the arguments
     Function::arg_iterator AI = cw->arg_begin();
     Value *sretPtr = sig.sret ? &*AI++ : NULL;
     jl_cgval_t *inputargs = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * (nargs + 1));
-    inputargs[0] = mark_julia_const(ff); // we need to pass the function object even if (even though) it is a ghost
+    // we need to pass the function object even if (even though) it is a singleton
+    inputargs[0] = mark_julia_const(ff);
     for (size_t i = 0; i < nargs; ++i, ++AI) {
         Value *val = &*AI;
-        jl_value_t *jargty = jl_nth_slot_type((jl_value_t*)argt, i);
+        jl_value_t *jargty = jl_svecref(sig.at, i);
         // figure out how to unpack this type
         jl_cgval_t &inputarg = inputargs[i + 1];
         if (jl_is_abstract_ref_type(jargty)) {
@@ -4501,7 +4510,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     // Prepare the return value
     Value *r;
-    if (toboxed) {
+    if (sig.retboxed) {
         assert(!sig.sret);
         // return a jl_value_t*
         r = boxed(ctx, retval);
@@ -4515,7 +4524,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         if (sig.sret)
             prt = sig.fargt_sig[0]->getContainedType(0); // sret is a PointerType
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type);
-        Value *v = julia_to_native(ctx, sig.lrt, toboxed, declrt, NULL, retval,
+        Value *v = julia_to_native(ctx, sig.lrt, sig.retboxed, declrt, NULL, retval,
                                    false, 0, NULL);
         r = llvm_type_rewrite(ctx, v, prt, issigned);
         if (sig.sret) {
@@ -4525,7 +4534,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     }
     else {
         assert(type_is_ghost(sig.lrt));
-        sig.sret = true;
         r = NULL;
     }
 
@@ -4541,100 +4549,131 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 }
 
 const struct jl_typemap_info cfunction_cache = {
-    1, &jl_voidpointer_type
+    1, (jl_datatype_t**)&jl_array_any_type
 };
 
-// Get the LLVM Function* for the C-callable entry point for a certain function
-// and argument types.
-// here argt does not include the leading function type argument
-static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_tupletype_t *argt)
+jl_array_t *jl_cfunction_list;
+
+static Function *jl_cfunction_cache(jl_value_t *ft, jl_value_t *declrt, jl_tupletype_t *argt)
 {
     // Assumes the codegen lock is acquired. The caller is responsible for that.
+    jl_value_t *sigt = NULL; // dispatch sig: type signature (argt) with Ref{} annotations removed and ft added
+    JL_GC_PUSH2(&sigt, &ft);
 
     // validate and unpack the arguments
+    JL_TYPECHK(cfunction, type, (jl_value_t*)ft);
     JL_TYPECHK(cfunction, type, declrt);
-    JL_TYPECHK(cfunction, type, (jl_value_t*)argt);
-    if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(ff)))
-        jl_error("closures are not yet c-callable");
+    if (!jl_is_tuple_type(argt))
+        jl_type_error("cfunction", (jl_value_t*)jl_anytuple_type_type, (jl_value_t*)argt);
 
-    size_t i, nargs = jl_nparams(argt);
-    jl_value_t *sigt = NULL; // type signature with Ref{} annotations removed
-    jl_value_t *cfunc_sig = NULL; // type signature of the call to cfunction (for caching)
-    JL_GC_PUSH2(&sigt, &cfunc_sig);
-    sigt = (jl_value_t*)jl_alloc_svec(nargs + 1);
-    cfunc_sig = (jl_value_t*)jl_alloc_svec(nargs + 2);
-
-    jl_value_t *crt = declrt;
-    jl_svecset(cfunc_sig, nargs + 1, declrt);
-    if (jl_is_abstract_ref_type(declrt)) {
-        declrt = jl_tparam0(declrt);
-        if (jl_is_typevar(declrt))
-            jl_error("cfunction: return type Ref should have an element type, not Ref{T}");
-        if (declrt == (jl_value_t*)jl_any_type)
-            jl_error("cfunction: return type Ref{Any} is invalid. Use Any or Ptr{Any} instead.");
-        if (!jl_is_concrete_type(declrt))
-            jl_svecset(cfunc_sig, nargs + 1, declrt); // Ref{Abstract} is the same calling convention as Abstract
-        crt = (jl_value_t*)jl_any_type;
+    // check the cache structure
+    // this has three levels (for the 3 parameters above)
+    // first split on `ft` using a simple eqtable
+    // then use the typemap to split on argt
+    // and finally, pick declrt from the pair-list
+    union jl_typemap_t cache_l2 = { NULL };
+    // cache_l2.unknown = NULL;
+    jl_typemap_entry_t *cache_l3 = NULL;
+    if (!jl_cfunction_list) {
+        jl_cfunction_list = jl_alloc_vec_any(16);
     }
-
-    if (jl_is_type(ff))
-        jl_svecset(sigt, 0, jl_wrap_Type(ff));
-    else
-        jl_svecset(sigt, 0, jl_typeof(ff));
-    jl_svecset(cfunc_sig, 0, jl_svecref(sigt, 0));
-    for (i = 0; i < nargs; i++) {
-        jl_value_t *ati = jl_tparam(argt, i);
-        jl_svecset(cfunc_sig, i + 1, ati);
-        if (jl_is_abstract_ref_type(ati)) {
-            ati = jl_tparam0(ati);
-            if (jl_is_typevar(ati))
-                jl_error("cfunction: argument type Ref should have an element type, not Ref{T}");
-            if (ati != (jl_value_t*)jl_any_type && !jl_is_concrete_type(ati))
-                jl_svecset(cfunc_sig, i + 1, ati); // Ref{Abstract} is the same calling convention as Abstract
-        }
-        if (jl_is_pointer(ati) && jl_is_typevar(jl_tparam0(ati)))
-            jl_error("cfunction: argument type Ptr should have an element type, Ptr{T}");
-        jl_svecset(sigt, i + 1, ati);
-    }
-    sigt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)sigt);
-    cfunc_sig = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)cfunc_sig);
-
-    // check the cache
-    jl_typemap_entry_t *sf = NULL;
-    if (jl_cfunction_list.unknown != jl_nothing) {
-        sf = jl_typemap_assoc_by_type(jl_cfunction_list, cfunc_sig, NULL, /*subtype*/0, /*offs*/0, /*world*/1, /*max_world_mask*/0);
-        if (sf) {
-            jl_value_t *v = sf->func.value;
-            if (v) {
-                if (jl_is_svec(v))
-                    v = jl_svecref(v, 0);
-                Function *f = (Function*)jl_unbox_voidpointer(v);
-                JL_GC_POP();
-                return f;
+    else {
+        cache_l2.unknown = jl_eqtable_get(jl_cfunction_list, ft, NULL);
+        if (cache_l2.unknown) {
+            cache_l3 = jl_typemap_assoc_by_type(cache_l2, (jl_value_t*)argt, NULL,
+                /*subtype*/0, /*offs*/0, /*world*/1, /*max_world_mask*/0);
+            if (cache_l3) {
+                jl_svec_t *sf = (jl_svec_t*)cache_l3->func.value;
+                size_t i, l = jl_svec_len(sf);
+                for (i = 0; i < l; i += 2) {
+                    jl_value_t *ti = jl_svecref(sf, i);
+                    if (jl_egal(ti, declrt)) {
+                        JL_GC_POP();
+                        return (Function*)jl_unbox_voidpointer(jl_svecref(sf, i + 1));
+                    }
+                }
             }
         }
     }
-    if (sf == NULL) {
-        sf = jl_typemap_insert(&jl_cfunction_list, (jl_value_t*)jl_cfunction_list.unknown, (jl_tupletype_t*)cfunc_sig,
-            NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
+
+    if (cache_l3 == NULL) {
+        union jl_typemap_t insert = cache_l2;
+        if (!insert.unknown)
+            insert.unknown = jl_nothing;
+        cache_l3 = jl_typemap_insert(&insert, (jl_value_t*)insert.unknown, (jl_tupletype_t*)argt,
+            NULL, jl_emptysvec, (jl_value_t*)jl_emptysvec, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
+        if (insert.unknown != cache_l2.unknown)
+            jl_cfunction_list = jl_eqtable_put(jl_cfunction_list, ft, insert.unknown, NULL);
     }
 
-    // Backup the info for the nested compile
-    bool last_n_c = nested_compile;
-    nested_compile = true;
-    Function *f;
-    JL_TRY {
-        f = gen_cfun_wrapper(ff, crt, (jl_tupletype_t*)argt, sf, declrt, (jl_tupletype_t*)sigt);
+    // try to avoid needing a trampoline,
+    // if we know that `ft` is some sort of
+    // guaranteed singleton type
+    jl_value_t *ff = NULL;
+    if (jl_is_datatype(ft))
+        ff = ((jl_datatype_t*)ft)->instance;
+    if (jl_is_type_type(ft)) {
+        jl_value_t *tp0 = jl_tparam0(ft);
+        if (jl_is_concrete_type(tp0))
+            ff = tp0;
     }
-    JL_CATCH {
-        f = NULL;
+    if (!ff)
+        jl_error("cfunction: function closures not yet supported");
+
+    // compute / validate return type
+    jl_value_t *crt = declrt;
+    if (jl_is_abstract_ref_type(declrt)) {
+        declrt = jl_tparam0(declrt);
+        if (jl_is_typevar(declrt))
+            jl_error("cfunction: return type Ref should have an element type, not Ref{<:T}");
+        if (declrt == (jl_value_t*)jl_any_type)
+            jl_error("cfunction: return type Ref{Any} is invalid. Use Any or Ptr{Any} instead.");
+        crt = (jl_value_t*)jl_any_type;
     }
-    // Restore the previous compile context
-    nested_compile = last_n_c;
-    JL_GC_POP();
-    if (f == NULL)
-        jl_rethrow();
-    return f;
+    bool toboxed;
+    Type *lcrt = julia_struct_to_llvm(crt, NULL, &toboxed);
+    if (lcrt == NULL)
+        jl_error("cfunction: return type doesn't correspond to a C type");
+    else if (toboxed)
+        lcrt = T_prjlvalue;
+
+    // compute / validate method signature
+    size_t i, nargs = jl_nparams(argt);
+    sigt = (jl_value_t*)jl_alloc_svec(nargs + 1);
+    jl_svecset(sigt, 0, ft);
+    for (i = 0; i < nargs; i++) {
+        jl_value_t *ati = jl_tparam(argt, i);
+        if (jl_is_abstract_ref_type(ati)) {
+            ati = jl_tparam0(ati);
+            if (jl_is_typevar(ati))
+                jl_error("cfunction: argument type Ref should have an element type, not Ref{<:T}");
+        }
+        if (jl_is_pointer(ati) && jl_is_typevar(jl_tparam0(ati)))
+            jl_error("cfunction: argument type Ptr should have an element type, Ptr{<:T}");
+        jl_svecset(sigt, i + 1, ati);
+    }
+    sigt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)sigt);
+
+    // emit cfunction (trampoline)
+    jl_value_t *err;
+    { // scope block for sig
+        function_sig_t sig("cfunction", lcrt, crt, toboxed,
+                           argt->parameters, NULL, nargs, false, CallingConv::C, false);
+        if (!sig.err_msg.empty()) {
+            err = jl_get_exceptionf(jl_errorexception_type, "%s", sig.err_msg.c_str());
+        }
+        else if (sig.isVa || sig.fargt.size() + sig.sret != sig.fargt_sig.size()) {
+            err = NULL;
+        }
+        else {
+            auto f = gen_cfun_wrapper(sig, ff, cache_l3, declrt, (jl_tupletype_t*)sigt);
+            JL_GC_POP();
+            return f;
+        }
+    }
+    if (err)
+        jl_throw(err);
+    jl_error("cfunction: Vararg syntax not allowed for cfunction argument list");
 }
 
 // generate a julia-callable function that calls f (AKA lam)
@@ -6025,7 +6064,7 @@ static std::unique_ptr<Module> emit_function(
                             VN->getType());
                 }
                 else {
-                    V = emit_unbox(ctx, VN->getType(), val, val.typ);
+                    V = emit_unbox(ctx, VN->getType(), val, phiType);
                 }
                 VN->addIncoming(V, ctx.builder.GetInsertBlock());
                 assert(!TindexN);

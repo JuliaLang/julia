@@ -1258,3 +1258,5 @@ end
 @deprecate scale!(a::AbstractVector, B::AbstractMatrix)                    lmul!(Diagonal(a), B)
 @deprecate scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector) mul!(C, A, Diagonal(b))
 @deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(C, Diagonal(a), B)
+
+Base.@deprecate_binding trace tr

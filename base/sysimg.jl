@@ -232,8 +232,9 @@ include("strings/basic.jl")
 include("strings/string.jl")
 
 # Definition of StridedArray
-StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
-StridedReinterpretArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
+StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
+StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReshapedArray{T,N,A}
+StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
 StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
 StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
@@ -324,27 +325,6 @@ include("weakkeydict.jl")
 # Logging
 include("logging.jl")
 using .CoreLogging
-
-# To limit dependency on rand functionality (implemented in the Random
-# module), Crand is used in file.jl, and could be used in error.jl
-# (but it breaks a test)
-"""
-    Crand([T::Type])
-
-Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
-by composing two calls to `Crand()`. `T` can be `UInt32` or `Float64`.
-"""
-Crand() = ccall(:rand, Cuint, ())
-# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
-Crand(::Type{UInt32}) = ((Crand() % UInt32) << 16) ⊻ (Crand() % UInt32)
-Crand(::Type{Float64}) = Crand(UInt32) / 2^32
-
-"""
-    Csrand([seed])
-
-Interface with the C `srand(seed)` function.
-"""
-Csrand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 # functions defined in Random
 function rand end
@@ -496,8 +476,8 @@ function __init__()
             ENV["OPENBLAS_NUM_THREADS"] = cpu_cores
         end # otherwise, trust that openblas will pick CPU_CORES anyways, without any intervention
     end
-    # for the few uses of Crand in Base:
-    Csrand()
+    # for the few uses of Libc.rand in Base:
+    Libc.srand()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
@@ -803,7 +783,7 @@ end
     @deprecate_stdlib svdvals!    LinearAlgebra true
     @deprecate_stdlib svdvals     LinearAlgebra true
     @deprecate_stdlib sylvester   LinearAlgebra true
-    @deprecate_stdlib trace       LinearAlgebra true
+    @deprecate_stdlib trace       LinearAlgebra true tr
     @deprecate_stdlib transpose!  LinearAlgebra true
     # @deprecate_stdlib transpose   LinearAlgebra true
     @deprecate_stdlib tril!       LinearAlgebra true

@@ -399,7 +399,7 @@ of dealing with daylight savings, leap seconds, etc.).
 As a bonus, all period arithmetic objects work directly with ranges:
 
 ```jldoctest
-julia> dr = Date(2014,1,29):Date(2014,2,3)
+julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
 2014-01-29:1 day:2014-02-03
 
 julia> collect(dr)
@@ -484,7 +484,7 @@ range:
 ```jldoctest
 # Pittsburgh street cleaning; Every 2nd Tuesday from April to November
 # Date range from January 1st, 2014 to January 1st, 2015
-julia> dr = Dates.Date(2014):Dates.Date(2015);
+julia> dr = Dates.Date(2014):Day(1):Dates.Date(2015);
 
 julia> filter(dr) do x
            Dates.dayofweek(x) == Dates.Tue &&

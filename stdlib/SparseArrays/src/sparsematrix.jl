@@ -51,6 +51,7 @@ getrowval(S::SparseMatrixCSC)     = S.rowval
 getrowval(S::SparseMatrixCSCView) = S.parent.rowval
 getnzval( S::SparseMatrixCSC)     = S.nzval
 getnzval( S::SparseMatrixCSCView) = S.parent.nzval
+nzvalview(S::SparseMatrixCSC)     = view(S.nzval, 1:nnz(S))
 
 """
     nnz(A)
@@ -71,7 +72,7 @@ julia> nnz(A)
 """
 nnz(S::SparseMatrixCSC)         = Int(S.colptr[S.n + 1] - 1)
 nnz(S::ReshapedArray{T,1,<:SparseMatrixCSC}) where T = nnz(parent(S))
-count(pred, S::SparseMatrixCSC) = count(pred, view(S.nzval, 1:nnz(S))) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
+count(pred, S::SparseMatrixCSC) = count(pred, nzvalview(S)) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
 
 """
     nonzeros(A)
@@ -613,19 +614,19 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         csccolptr::Vector{Ti}, cscrowval::Vector{Ti}, cscnzval::Vector{Tv}) where {Tv,Ti<:Integer}
 
     # Compute the CSR form's row counts and store them shifted forward by one in csrrowptr
-    fill!(csrrowptr, 0)
+    fill!(csrrowptr, Ti(0))
     coolen = length(I)
     @inbounds for k in 1:coolen
         Ik = I[k]
         if 1 > Ik || m < Ik
             throw(ArgumentError("row indices I[k] must satisfy 1 <= I[k] <= m"))
         end
-        csrrowptr[Ik+1] += 1
+        csrrowptr[Ik+1] += Ti(1)
     end
 
     # Compute the CSR form's rowptrs and store them shifted forward by one in csrrowptr
-    countsum = 1
-    csrrowptr[1] = 1
+    countsum = Ti(1)
+    csrrowptr[1] = Ti(1)
     @inbounds for i in 2:(m+1)
         overwritten = csrrowptr[i]
         csrrowptr[i] = countsum
@@ -636,11 +637,11 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     # Tracking write positions in csrrowptr corrects the row pointers
     @inbounds for k in 1:coolen
         Ik, Jk = I[k], J[k]
-        if 1 > Jk || n < Jk
+        if Ti(1) > Jk || Ti(n) < Jk
             throw(ArgumentError("column indices J[k] must satisfy 1 <= J[k] <= n"))
         end
         csrk = csrrowptr[Ik+1]
-        csrrowptr[Ik+1] = csrk+1
+        csrrowptr[Ik+1] = csrk + Ti(1)
         csrcolval[csrk] = Jk
         csrnzval[csrk] = V[k]
     end
@@ -652,14 +653,14 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     #
     # Minimizing extraneous communication and nonlocality of reference, primarily by using
     # only a single auxiliary array in this step, is the key to this method's performance.
-    fill!(csccolptr, 0)
-    fill!(klasttouch, 0)
-    writek = 1
-    newcsrrowptri = 1
-    origcsrrowptri = 1
+    fill!(csccolptr, Ti(0))
+    fill!(klasttouch, Ti(0))
+    writek = Ti(1)
+    newcsrrowptri = Ti(1)
+    origcsrrowptri = Ti(1)
     origcsrrowptrip1 = csrrowptr[2]
     @inbounds for i in 1:m
-        for readk in origcsrrowptri:(origcsrrowptrip1-1)
+        for readk in origcsrrowptri:(origcsrrowptrip1-Ti(1))
             j = csrcolval[readk]
             if klasttouch[j] < newcsrrowptri
                 klasttouch[j] = writek
@@ -667,8 +668,8 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                     csrcolval[writek] = j
                     csrnzval[writek] = csrnzval[readk]
                 end
-                writek += 1
-                csccolptr[j+1] += 1
+                writek += Ti(1)
+                csccolptr[j+1] += Ti(1)
             else
                 klt = klasttouch[j]
                 csrnzval[klt] = combine(csrnzval[klt], csrnzval[readk])
@@ -681,8 +682,8 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     end
 
     # Compute the CSC form's colptrs and store them shifted forward by one in csccolptr
-    countsum = 1
-    csccolptr[1] = 1
+    countsum = Ti(1)
+    csccolptr[1] = Ti(1)
     @inbounds for j in 2:(n+1)
         overwritten = csccolptr[j]
         csccolptr[j] = countsum
@@ -690,18 +691,18 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     end
 
     # Now knowing the CSC form's entry count, resize cscrowval and cscnzval if necessary
-    cscnnz = countsum - 1
+    cscnnz = countsum - Ti(1)
     length(cscrowval) < cscnnz && resize!(cscrowval, cscnnz)
     length(cscnzval) < cscnnz && resize!(cscnzval, cscnnz)
 
     # Finally counting-sort the row and nonzero values from the CSR form into cscrowval and
     # cscnzval. Tracking write positions in csccolptr corrects the column pointers.
     @inbounds for i in 1:m
-        for csrk in csrrowptr[i]:(csrrowptr[i+1]-1)
+        for csrk in csrrowptr[i]:(csrrowptr[i+1]-Ti(1))
             j = csrcolval[csrk]
             x = csrnzval[csrk]
             csck = csccolptr[j+1]
-            csccolptr[j+1] = csck+1
+            csccolptr[j+1] = csck + Ti(1)
             cscrowval[csck] = i
             cscnzval[csck] = x
         end
@@ -1306,18 +1307,20 @@ function findall(p::Function, S::SparseMatrixCSC)
     numnz = nnz(S)
     inds = Vector{CartesianIndex{2}}(undef, numnz)
 
-    count = 1
+    count = 0
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if p(S.nzval[k])
-            inds[count] = CartesianIndex(S.rowval[k], col)
             count += 1
+            inds[count] = CartesianIndex(S.rowval[k], col)
         end
     end
 
+    resize!(inds, count)
+
     return inds
 end
-findall(p::Base.OccursIn, x::SparseMatrixCSC) =
-    invoke(findall, Tuple{Base.OccursIn, AbstractArray}, p, x)
+findall(p::Base.Fix2{typeof(in)}, x::SparseMatrixCSC) =
+    invoke(findall, Tuple{Base.Fix2{typeof(in)}, AbstractArray}, p, x)
 
 function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
@@ -1475,7 +1478,7 @@ julia> sprandn(2, 2, 0.75)
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
 
-LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(view(S.nzval, 1:(S.colptr[S.n + 1] - 1)), x); S)
+LinearAlgebra.fillstored!(S::SparseMatrixCSC, x) = (fill!(nzvalview(S), x); S)
 
 """
     spzeros([type,]m[,n])
@@ -1528,7 +1531,7 @@ function SparseMatrixCSC{Tv,Ti}(s::UniformScaling, dims::Dims{2}) where {Tv,Ti}
     SparseMatrixCSC{Tv,Ti}(dims..., colptr, rowval, nzval)
 end
 
-Base.iszero(A::SparseMatrixCSC) = iszero(view(A.nzval, 1:(A.colptr[size(A, 2) + 1] - 1)))
+Base.iszero(A::SparseMatrixCSC) = iszero(nzvalview(A))
 
 function Base.isone(A::SparseMatrixCSC)
     m, n = size(A)
@@ -1638,7 +1641,7 @@ function Base._mapreduce(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T}) wh
             _mapreducezeros(f, op, T, n-z-1, f(zero(T)))
         end
     else
-        _mapreducezeros(f, op, T, n-z, Base._mapreduce(f, op, A.nzval))
+        _mapreducezeros(f, op, T, n-z, Base._mapreduce(f, op, nzvalview(A)))
     end
 end
 
@@ -1652,11 +1655,11 @@ function Base._mapreduce(f, op::typeof(*), A::SparseMatrixCSC{T}) where T
     nzeros = length(A)-nnz(A)
     if nzeros == 0
         # No zeros, so don't compute f(0) since it might throw
-        Base._mapreduce(f, op, A.nzval)
+        Base._mapreduce(f, op, nzvalview(A))
     else
         v = f(zero(T))^(nzeros)
         # Bail out early if initial reduction value is zero
-        v == zero(T) ? v : v*Base._mapreduce(f, op, A.nzval)
+        v == zero(T) ? v : v*Base._mapreduce(f, op, nzvalview(A))
     end
 end
 
@@ -3362,7 +3365,7 @@ function diag(A::SparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
     return SparseVector{Tv,Ti}(l, ind, val)
 end
 
-function trace(A::SparseMatrixCSC{Tv}) where Tv
+function tr(A::SparseMatrixCSC{Tv}) where Tv
     n = checksquare(A)
     s = zero(Tv)
     for i in 1:n

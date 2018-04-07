@@ -203,7 +203,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !contains(fmt, r"([^%]|^)%(a|A|j|w|Ow)")
+        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -350,5 +350,27 @@ calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize
 
 free(p::Cstring) = free(convert(Ptr{UInt8}, p))
 free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
+
+## Random numbers ##
+
+# To limit dependency on rand functionality implemented in the Random module,
+# Libc.rand is used in file.jl, and could be used in error.jl (but it breaks a test)
+"""
+    rand([T::Type])
+
+Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
+by composing two calls to `rand()`. `T` can be `UInt32` or `Float64`.
+"""
+rand() = ccall(:rand, Cint, ())
+# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
+rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
+rand(::Type{Float64}) = rand(UInt32) / 2^32
+
+"""
+    srand([seed])
+
+Interface to the C `srand(seed)` function.
+"""
+srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 end # module

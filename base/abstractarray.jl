@@ -128,7 +128,7 @@ prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
 eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
-elsize(::AbstractArray{T}) where {T} = sizeof(T)
+elsize(A::AbstractArray) = elsize(typeof(A))
 
 """
     ndims(A::AbstractArray) -> Integer
@@ -399,16 +399,14 @@ StridedLayout
 
 """
     MemoryLayout(A)
-    MemoryLayout(typeof(A))
 
-`MemoryLayout` specifies the layout in memory for an array `A`. When
-you define a new `AbstractArray` type, you can choose to implement
-memory layout to indicate that an array is strided in memory. If you decide to
-implement memory layout, then you must set this trait for your array
-type. For example, if your matrix is column major with `stride(A,2) == size(A,1)`,
+specifies the layout in memory for an array `A`. When
+you define a new `AbstractArray` type, you can choose to override
+`MemoryLayout` to indicate how an array is stored in memory.
+For example, if your matrix is column major with `stride(A,2) == size(A,1)`,
 then override as follows:
 
-    Base.MemoryLayout(::Type{M}) where M <: MyMatrix = Base.DenseColumnMajor()
+    Base.MemoryLayout(::MyMatrix) = Base.DenseColumnMajor()
 
 The default is `Base.UnknownLayout()` to indicate that the layout
 in memory is unknown.
@@ -417,7 +415,6 @@ Julia's internal linear algebra machinery will automatically (and invisibly)
 dispatch to BLAS and LAPACK routines if the memory layout is compatible.
 """
 MemoryLayout(A::AbstractArray{T}) where T = UnknownLayout()
-
 MemoryLayout(A::DenseArray{T}) where T = DenseColumnMajor()
 
 
@@ -1315,7 +1312,7 @@ get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] :
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
-    ind = findall(occursin(indices1(A)), I)
+    ind = findall(in(indices1(A)), I)
     X[ind] = A[I[ind]]
     Xind = indices1(X)
     X[first(Xind):first(ind)-1] = default
@@ -1324,7 +1321,7 @@ function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,Ab
 end
 function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # Linear indexing
-    ind = findall(occursin(1:length(A)), I)
+    ind = findall(in(1:length(A)), I)
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default
     X[last(ind)+1:length(X)] = default
@@ -1497,7 +1494,7 @@ _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
 dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
-dims2cat(dims) = ntuple(occursin(dims), maximum(dims))
+dims2cat(dims) = ntuple(in(dims), maximum(dims))
 
 cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
 

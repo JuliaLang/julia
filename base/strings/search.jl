@@ -2,7 +2,8 @@
 
 nothing_sentinel(i) = i == 0 ? nothing : i
 
-function findnext(pred::EqualTo{<:AbstractChar}, s::String, i::Integer)
+function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+                  s::String, i::Integer)
     if i < 1 || i > sizeof(s)
         i == sizeof(s) + 1 && return nothing
         throw(BoundsError(s, i))
@@ -13,14 +14,15 @@ function findnext(pred::EqualTo{<:AbstractChar}, s::String, i::Integer)
     while true
         i = _search(s, first_utf8_byte(c), i)
         i == 0 && return nothing
-        s[i] == c && return i
+        pred(s[i]) && return i
         i = nextind(s, i)
     end
 end
 
-findfirst(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = nothing_sentinel(_search(a, pred.x))
+findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
+    nothing_sentinel(_search(a, pred.x))
 
-findnext(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
+findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_search(a, pred.x, i))
 
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
@@ -44,21 +46,23 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
     end
 end
 
-function findprev(pred::EqualTo{<:AbstractChar}, s::String, i::Integer)
+function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+                  s::String, i::Integer)
     c = pred.x
     c ≤ '\x7f' && return nothing_sentinel(_rsearch(s, c % UInt8, i))
     b = first_utf8_byte(c)
     while true
         i = _rsearch(s, b, i)
         i == 0 && return nothing
-        s[i] == c && return i
+        pred(s[i]) && return i
         i = prevind(s, i)
     end
 end
 
-findlast(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray) = nothing_sentinel(_rsearch(a, pred.x))
+findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
+    nothing_sentinel(_rsearch(a, pred.x))
 
-findprev(pred::EqualTo{<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
+findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_rsearch(a, pred.x, i))
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
@@ -91,8 +95,7 @@ Find the first occurrence of `pattern` in `string`. Equivalent to
 
 # Examples
 ```jldoctest
-julia> findfirst("z", "Hello to the world")
-0:-1
+julia> findfirst("z", "Hello to the world") # returns nothing, but not printed in the REPL
 
 julia> findfirst("Julia", "JuliaLang")
 1:5
@@ -114,7 +117,7 @@ function findnext(testf::Function, s::AbstractString, i::Integer)
     return nothing
 end
 
-in(c::AbstractChar, s::AbstractString) = (findfirst(equalto(c),s)!==nothing)
+in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 
 function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
@@ -125,7 +128,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
     end
     t1, trest = Iterators.peel(t)
     while true
-        i = findnext(equalto(t1),s,i)
+        i = findnext(isequal(t1),s,i)
         if i === nothing return 0 end
         ii = nextind(s, i)
         a = Iterators.Stateful(trest)
@@ -135,7 +138,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
     end
 end
 
-_searchindex(s::AbstractString, t::AbstractChar, i::Integer) = coalesce(findnext(equalto(t), s, i), 0)
+_searchindex(s::AbstractString, t::AbstractChar, i::Integer) = coalesce(findnext(isequal(t), s, i), 0)
 
 function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
@@ -146,7 +149,7 @@ _nthbyte(a::Union{AbstractVector{UInt8},AbstractVector{Int8}}, i) = a[i]
 
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
-    lastindex(t) == 1 && return coalesce(findnext(equalto(t[1]), s, i), 0)
+    lastindex(t) == 1 && return coalesce(findnext(isequal(t[1]), s, i), 0)
     _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
 end
 
@@ -159,7 +162,7 @@ function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
     elseif m == 0
         return 0
     elseif n == 1
-        return coalesce(findnext(equalto(_nthbyte(t,1)), s, i), 0)
+        return coalesce(findnext(isequal(_nthbyte(t,1)), s, i), 0)
     end
 
     w = m - n
@@ -296,7 +299,7 @@ function _rsearchindex(s::AbstractString,
     end
     t1, trest = Iterators.peel(Iterators.reverse(t))
     while true
-        i = findprev(equalto(t1), s, i)
+        i = findprev(isequal(t1), s, i)
         i === nothing && return 0
         ii = prevind(s, i)
         a = Iterators.Stateful(trest)
@@ -314,7 +317,7 @@ end
 function _rsearchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
     if lastindex(t) == 1
-        return coalesce(findprev(equalto(t[1]), s, i), 0)
+        return coalesce(findprev(isequal(t[1]), s, i), 0)
     elseif lastindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
         return _rsearchindex(unsafe_wrap(Vector{UInt8}, s), unsafe_wrap(Vector{UInt8}, t), j)
@@ -336,7 +339,7 @@ function _rsearchindex(s::ByteArray, t::ByteArray, k::Integer)
     elseif m == 0
         return 0
     elseif n == 1
-        return coalesce(findprev(equalto(_nthbyte(t,1)), s, k), 0)
+        return coalesce(findprev(isequal(_nthbyte(t,1)), s, k), 0)
     end
 
     w = m - n
@@ -430,29 +433,27 @@ julia> findprev("Julia", "JuliaLang", 6)
 findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
 
 """
-    contains(haystack::AbstractString, needle::Union{AbstractString,Regex,AbstractChar})
+    occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
 
 Determine whether the second argument is a substring of the first. If `needle`
 is a regular expression, checks whether `haystack` contains a match.
 
 # Examples
 ```jldoctest
-julia> contains("JuliaLang is pretty cool!", "Julia")
+julia> occursin("Julia", "JuliaLang is pretty cool!")
 true
 
-julia> contains("JuliaLang is pretty cool!", 'a')
+julia> occursin('a', "JuliaLang is pretty cool!")
 true
 
-julia> contains("aba", r"a.a")
+julia> occursin(r"a.a", "aba")
 true
 
-julia> contains("abba", r"a.a")
+julia> occursin(r"a.a", "abba")
 false
 ```
 """
-function contains end
-
-contains(haystack::AbstractString, needle::Union{AbstractString,AbstractChar}) =
+occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
     _searchindex(haystack, needle, firstindex(haystack)) != 0
 
-in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")
+in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")

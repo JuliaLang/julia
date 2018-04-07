@@ -28,7 +28,7 @@ let
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
-                @test findall(occursin(dr), dr) == Int64[]
+                @test findall(in(dr), dr) == Int64[]
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
@@ -60,7 +60,7 @@ let
                     if len < 10000
                         dr1 = [i for i in dr]
                         @test length(dr1) == len
-                        @test findall(occursin(dr), dr) == [1:len;]
+                        @test findall(in(dr), dr) == [1:len;]
                         @test length([dr;]) == len
                         @test dr == dr1
                         @test hash(dr) == hash(dr1)
@@ -86,7 +86,7 @@ let
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
-                @test findall(occursin(dr), dr) == Int64[]
+                @test findall(in(dr), dr) == Int64[]
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
@@ -118,7 +118,7 @@ let
                     if len < 10000
                         dr1 = [i for i in dr]
                         @test length(dr1) == len
-                        @test findall(occursin(dr), dr) == [1:len;]
+                        @test findall(in(dr), dr) == [1:len;]
                         @test length([dr;]) == len
                         @test dr == dr1
                         @test hash(dr) == hash(dr1)
@@ -146,7 +146,7 @@ let
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
-                    @test findall(occursin(dr), dr) == Int64[]
+                    @test findall(in(dr), dr) == Int64[]
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
@@ -178,7 +178,7 @@ let
                         if len < 10000
                             dr1 = [i for i in dr]
                             @test length(dr1) == len
-                            @test findall(occursin(dr), dr) == [1:len;]
+                            @test findall(in(dr), dr) == [1:len;]
                             @test length([dr;]) == len
                             @test dr == dr1
                             @test hash(dr) == hash(dr1)
@@ -204,7 +204,7 @@ let
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
-                    @test findall(occursin(dr), dr) == Int64[]
+                    @test findall(in(dr), dr) == Int64[]
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
@@ -236,7 +236,7 @@ let
                         if len < 10000
                             dr1 = [i for i in dr]
                             @test length(dr1) == len
-                            @test findall(occursin(dr), dr) == [1:len;]
+                            @test findall(in(dr), dr) == [1:len;]
                             @test length([dr;]) == len
                             @test dr == dr1
                             @test hash(dr) == hash(dr1)
@@ -295,7 +295,7 @@ drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)), drs)
 @test map(length, drs) == map(x->size(x)[1], drs)
 @test map(length, drs) == map(x->length(Dates.Date(first(x)):step(x):Dates.Date(last(x))), drs)
 @test map(length, drs) == map(x->length(reverse(x)), drs)
-@test all(x->findall(occursin(x), x)==[1:length(x);], drs[1:4])
+@test all(x->findall(in(x), x)==[1:length(x);], drs[1:4])
 @test isempty(dr2)
 @test all(x->reverse(x) == range(last(x), step=-step(x), length=length(x)), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
@@ -373,7 +373,7 @@ drs = Any[dr, dr1, dr2, dr3, dr4, dr5, dr6, dr7, dr8, dr9, dr10,
           dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
 
 @test map(length, drs) == map(x->size(x)[1], drs)
-@test all(x->findall(occursin(x), x) == [1:length(x);], drs[1:4])
+@test all(x->findall(in(x), x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
 @test all(x->reverse(x) == last(x): - step(x):first(x), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
@@ -559,7 +559,7 @@ drs = Any[dr, dr1, dr2, dr3, dr8, dr9, dr10,
           dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
 
 @test map(length, drs) == map(x->size(x)[1], drs)
-@test all(x->findall(occursin(x), x) == [1:length(x);], drs[1:4])
+@test all(x->findall(in(x), x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
 @test all(x->reverse(x) == last(x): - step(x):first(x), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])

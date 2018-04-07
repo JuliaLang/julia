@@ -20,7 +20,7 @@ representable in a given `AbstractChar` type.
 Internally, an `AbstractChar` type may use a variety of encodings.  Conversion
 via `codepoint(char)` will not reveal this encoding because it always returns the
 Unicode value of the character. `print(io, c)` of any `c::AbstractChar`
-produces an encoding determined by `io` (UTF-8 for all built-in [`IO`](@ref)
+produces an encoding determined by `io` (UTF-8 for all built-in `IO`
 types), via conversion to `Char` if necessary.
 
 `write(io, c)`, in contrast, may emit an encoding depending on

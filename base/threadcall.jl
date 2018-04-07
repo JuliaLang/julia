@@ -80,7 +80,7 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
 
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)
-    idx = findfirst(equalto(nothing), thread_notifiers)::Int
+    idx = findfirst(isequal(nothing), thread_notifiers)::Int
     thread_notifiers[idx] = Condition()
 
     # queue up the work to be done

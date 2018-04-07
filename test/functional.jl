@@ -144,6 +144,30 @@ end
 
 @test [(i,j) for i=1:3 for j=1:i if j>1] == [(2,2), (3,2), (3,3)]
 
+# issue #330
+@test [(t=(i,j); i=nothing; t) for i = 1:3 for j = 1:i] ==
+    [(1, 1), (2, 1), (2, 2), (3, 1), (3, 2), (3, 3)]
+
+@test map(collect, (((t=(i,j); i=nothing; t) for j = 1:i) for i = 1:3)) ==
+    [[(1, 1)],
+     [(2, 1), (nothing, 2)],
+     [(3, 1), (nothing, 2), (nothing, 3)]]
+
+let a = []
+    for x = 1:3, y = 1:3
+        push!(a, x)
+        x = 0
+    end
+    @test a == [1,1,1,2,2,2,3,3,3]
+end
+
+let i, j
+    for outer i = 1:2, j = 1:0
+    end
+    @test i == 2
+    @test !@isdefined(j)
+end
+
 # issue #18707
 @test [(q,d,n,p) for q = 0:25:100
                  for d = 0:10:100-q

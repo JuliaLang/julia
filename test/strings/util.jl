@@ -273,7 +273,7 @@ end
     @test replace("a", "a" => typeof) == "SubString{String}"
     @test replace("a", r"a" => typeof) == "SubString{String}"
     @test replace("a", 'a' => typeof) == "Char"
-    @test replace("a", occursin("a") => typeof) == "Char"
+    @test replace("a", in("a") => typeof) == "Char"
     @test replace("a", ['a'] => typeof) == "Char"
 
 end

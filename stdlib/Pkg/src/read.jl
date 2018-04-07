@@ -20,7 +20,7 @@ function available(names=readdir("METADATA"))
         versdir = joinpath("METADATA", pkg, "versions")
         isdir(versdir) || continue
         for ver in readdir(versdir)
-            contains(ver, Base.VERSION_REGEX) || continue
+            occursin(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
             haskey(pkgs,pkg) || (pkgs[pkg] = Dict{VersionNumber,Available}())
             pkgs[pkg][VersionNumber(ver)] = Available(
@@ -41,7 +41,7 @@ function latest(names=readdir("METADATA"))
         isdir(versdir) || continue
         pkgversions = VersionNumber[]
         for ver in readdir(versdir)
-            contains(ver, Base.VERSION_REGEX) || continue
+            occursin(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
             push!(pkgversions, VersionNumber(ver))
         end
@@ -116,7 +116,7 @@ function ispinned(prepo::LibGit2.GitRepo)
     LibGit2.isattached(prepo) || return false
     br = LibGit2.branch(prepo)
     # note: regex is based on the naming scheme used in Entry.pin()
-    return contains(br, r"^pinned\.[0-9a-f]{8}\.tmp$")
+    return occursin(r"^pinned\.[0-9a-f]{8}\.tmp$", br)
 end
 
 function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))

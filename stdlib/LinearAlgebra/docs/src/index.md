@@ -5,7 +5,7 @@ DocTestSetup = :(using LinearAlgebra)
 ```
 
 In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations
-of many common and useful linear algebra operations. Basic operations, such as [`trace`](@ref), [`det`](@ref),
+of many common and useful linear algebra operations. Basic operations, such as [`tr`](@ref), [`det`](@ref),
 and [`inv`](@ref) are all supported:
 
 ```jldoctest
@@ -15,7 +15,7 @@ julia> A = [1 2 3; 4 1 6; 7 8 1]
  4  1  6
  7  8  1
 
-julia> trace(A)
+julia> tr(A)
 3
 
 julia> det(A)
@@ -371,7 +371,7 @@ LinearAlgebra.normalize!
 LinearAlgebra.normalize
 LinearAlgebra.cond
 LinearAlgebra.condskeel
-LinearAlgebra.trace
+LinearAlgebra.tr
 LinearAlgebra.det
 LinearAlgebra.logdet
 LinearAlgebra.logabsdet

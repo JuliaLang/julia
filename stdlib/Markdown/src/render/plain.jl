@@ -72,7 +72,7 @@ end
 
 function plain(io::IO, md::Admonition)
     s = sprint(plain, md.content)
-    title = md.title == ucfirst(md.category) ? "" : " \"$(md.title)\""
+    title = md.title == uppercasefirst(md.category) ? "" : " \"$(md.title)\""
     println(io, "!!! ", md.category, title)
     for line in split(rstrip(s), "\n")
         println(io, isempty(line) ? "" : "    ", line)
@@ -120,7 +120,7 @@ plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
 plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
 
 function plaininline(io::IO, md::Code)
-    if contains(md.code, "`")
+    if occursin("`", md.code)
         n = maximum(length(m.match) for m in eachmatch(r"(`+)", md.code))
         s = "`"^((iseven(n) ? 1 : 2) + n)
         print(io, s, Base.startswith(md.code, "`") ? " " : "")

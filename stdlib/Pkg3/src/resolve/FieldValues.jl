@@ -105,4 +105,7 @@ function secondmax(f::Field, msk::BitVector = trues(length(f)))
     return m2 - m
 end
 
+# Support broadcasting like a scalar by default
+Base.Broadcast.broadcastable(a::FieldValue) = Ref(a)
+
 end
