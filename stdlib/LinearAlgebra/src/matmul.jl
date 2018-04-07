@@ -8,18 +8,6 @@ matprod(x, y) = x*y + x*y
 
 for (typ, bdot) in ((:BlasReal, :(BLAS.dot)), (:BlasComplex, :(BLAS.dotc)))
     @eval begin
-        _vecdot(x::AbstractArray{T},        y::AbstractArray{T},
-                 ::DenseColumnMajor,         ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
-        _vecdot(x::AbstractVector{T},        y::AbstractVector{T},
-                 ::DenseColumnMajor,         ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
-        _vecdot(x::AbstractVector{T},        y::AbstractArray{T},
-                 ::DenseColumnMajor,         ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
-        _vecdot(x::AbstractArray{T},        y::AbstractVector{T},
-                 ::DenseColumnMajor,         ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
-        _vecdot(x::AbstractVector{T},       y::AbstractArray{T},
-                 ::AbstractStridedLayout,    ::DenseColumnMajor) where T<:$typ = $bdot(x, y)
-        _vecdot(x::AbstractArray{T},        y::AbstractVector{T},
-                 ::DenseColumnMajor,         ::AbstractStridedLayout) where T<:$typ = $bdot(x, y)
         _vecdot(x::AbstractVector{T},       y::AbstractVector{T},
                  ::AbstractStridedLayout,    ::AbstractStridedLayout) where T<:$typ = $bdot(x, y)
      end

@@ -590,9 +590,10 @@ norm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(conj
 norm(v::AdjointAbsVec) = norm(conj(v.parent))
 norm(v::TransposeAbsVec) = norm(v.parent)
 
-vecdot(x::AbstractArray, y::AbstractArray) = _vecdot(x, y, MemoryLayout(x), MemoryLayout(y))
+vecdot(x::AbstractArray, y::AbstractArray) = vecdot(vec(x), vec(y))
+vecdot(x::AbstractVector, y::AbstractVector) = _vecdot(x, y, MemoryLayout(x), MemoryLayout(y))
 
-function _vecdot(x::AbstractArray, y::AbstractArray, _1, _2)
+function _vecdot(x::AbstractVector, y::AbstractVector, _1, _2)
     lx = _length(x)
     if lx != _length(y)
         throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(_length(y))."))

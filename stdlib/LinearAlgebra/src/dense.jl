@@ -116,7 +116,7 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 # a tuple containing 1 and a cumulative product of the first N-1 sizes
 # this definition is also used for StridedReshapedArray and StridedReinterpretedArray
 # which have the same memory storage as Array
-function stride(a::Union{Array,StridedReshapedArray,StridedReinterpretArray}, i::Int)
+function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
     if i > ndims(a)
         return length(a)
     end
@@ -126,8 +126,7 @@ function stride(a::Union{Array,StridedReshapedArray,StridedReinterpretArray}, i:
     end
     return s
 end
-strides(a::Array) = size_to_strides(1, size(a)...)
-strides(a::BitArray) = size_to_strides(1, size(a)...) #TODO: This is needed for permutedims!, but its not clear what stride means here
+strides(a::DenseArray) = size_to_strides(1, size(a)...)
 strides(a::ReshapedArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
 strides(a::ReinterpretArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
 _dense_strides(sz, ::DenseColumnMajor) = size_to_strides(1, sz...)

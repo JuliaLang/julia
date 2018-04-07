@@ -796,7 +796,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 end
 
 ## Generic triangular multiplication
-function _lmul!(A::AbstractMatrix, B::AbstractVecOrMat, ::UpperTriangularLayout{<:AbstractColumnMajor}, _) where T
+function _lmul!(A::AbstractMatrix, B::AbstractVecOrMat, ::UpperTriangularLayout{<:AbstractColumnMajor}, _)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
