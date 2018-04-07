@@ -4,10 +4,8 @@
 # limitation parameters #
 #########################
 
-const MAX_TYPEUNION_LEN = 3
-const MAX_TYPE_DEPTH = 8
+const MAX_TYPEUNION_LEN = 4
 const MAX_INLINE_CONST_SIZE = 256
-const TUPLE_COMPLEXITY_LIMIT_DEPTH = 3
 
 #########################
 # limitation heuristics #
@@ -31,10 +29,10 @@ end
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
 # the outermost tuple type is permitted to have up to `allowed_tuplelen` parameters
-function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tuplelen::Int)
+function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tupledepth::Int, allowed_tuplelen::Int)
     source = svec(unwrap_unionall(compare), unwrap_unionall(source))
     source[1] === source[2] && (source = svec(source[1]))
-    type_more_complex(t, compare, source, 1, TUPLE_COMPLEXITY_LIMIT_DEPTH, allowed_tuplelen) || return t
+    type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
     r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
     @assert t <: r
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
@@ -304,21 +302,118 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     return true
 end
 
-function type_too_complex(@nospecialize(t), d::Int)
-    if d < 0
-        return true
-    elseif isa(t, Union)
-        return type_too_complex(t.a, d - 1) || type_too_complex(t.b, d - 1)
-    elseif isa(t, TypeVar)
-        return type_too_complex(t.lb, d - 1) || type_too_complex(t.ub, d - 1)
-    elseif isa(t, UnionAll)
-        return type_too_complex(t.var, d) || type_too_complex(t.body, d)
-    elseif isa(t, DataType)
-        for x in (t.parameters)::SimpleVector
-            if type_too_complex(x, d - 1)
-                return true
+function tmerge(@nospecialize(typea), @nospecialize(typeb))
+    typea ⊑ typeb && return typeb
+    typeb ⊑ typea && return typea
+    if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
+        return MaybeUndef(tmerge(
+            isa(typea, MaybeUndef) ? typea.typ : typea,
+            isa(typeb, MaybeUndef) ? typeb.typ : typeb))
+    end
+    if isa(typea, Conditional) && isa(typeb, Conditional)
+        if typea.var === typeb.var
+            vtype = tmerge(typea.vtype, typeb.vtype)
+            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            if vtype != elsetype
+                return Conditional(typea.var, vtype, elsetype)
+            end
+        end
+        return Bool
+    end
+    typea, typeb = widenconst(typea), widenconst(typeb)
+    typea === typeb && return typea
+    if !(isa(typea, Type) || isa(typea, TypeVar)) ||
+       !(isa(typeb, Type) || isa(typeb, TypeVar))
+        # XXX: this should never happen
+        return Any
+    end
+    # if we didn't start with any unions, then always OK to form one now
+    if !(typea isa Union || typeb isa Union)
+        # except if we might have switched Union and Tuple below, or would do so
+        if (isconcretetype(typea) && isconcretetype(typeb)) || !(typea <: Tuple && typeb <: Tuple)
+            return Union{typea, typeb}
+        end
+    end
+    # collect the list of types from past tmerge calls returning Union
+    # and then reduce over that list
+    types = Any[]
+    _uniontypes(typea, types)
+    _uniontypes(typeb, types)
+    typenames = Vector{Core.TypeName}(undef, length(types))
+    for i in 1:length(types)
+        # check that we will be able to analyze (and simplify) everything
+        # bail if everything isn't a well-formed DataType
+        ti = types[i]
+        uw = unwrap_unionall(ti)
+        (uw isa DataType && ti <: uw.name.wrapper) || return Any
+        typenames[i] = uw.name
+    end
+    # see if any of the union elements have the same TypeName
+    # in which case, simplify this tmerge by replacing it with
+    # the widest possible version of itself (the wrapper)
+    for i in 1:length(types)
+        ti = types[i]
+        for j in (i + 1):length(types)
+            if typenames[i] === typenames[j]
+                tj = types[j]
+                if ti <: tj
+                    types[i] = Union{}
+                    break
+                elseif tj <: ti
+                    types[j] = Union{}
+                    typenames[j] = Any.name
+                else
+                    widen = typenames[i].wrapper
+                    if typenames[i] === Tuple.name
+                        # try to widen Tuple slower: make a single non-concrete Tuple containing both
+                        # converge the Tuple element-wise if they are the same length
+                        # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
+                        if nothing !== tuplelen(ti) === tuplelen(tj)
+                            widen = tuplemerge(ti, tj)
+                        end
+                        # TODO: else, try to merge them into a single Tuple{Vararg{T}} instead (#22120)?
+                    end
+                    types[i] = Union{}
+                    types[j] = widen
+                    break
+                end
             end
         end
     end
-    return false
+    u = Union{types...}
+    if unionlen(u) <= MAX_TYPEUNION_LEN
+        # don't let type unions get too big, if the above didn't reduce it enough
+        return u
+    end
+    # finally, just return the widest possible type
+    return Any
+end
+
+# the inverse of switchtupleunion, with limits on max element union size
+function tuplemerge(@nospecialize(a), @nospecialize(b))
+    if isa(a, UnionAll)
+        return UnionAll(a.var, tuplemerge(a.body, b))
+    elseif isa(b, UnionAll)
+        return UnionAll(b.var, tuplemerge(a, b.body))
+    elseif isa(a, Union)
+        return tuplemerge(tuplemerge(a.a, a.b), b)
+    elseif isa(b, Union)
+        return tuplemerge(a, tuplemerge(b.a, b.b))
+    end
+    a = a::DataType
+    b = b::DataType
+    ap, bp = a.parameters, b.parameters
+    lar = length(ap)::Int
+    lbr = length(bp)::Int
+    @assert lar === lbr && a.name === b.name === Tuple.name "assertion failure"
+    p = Vector{Any}(undef, lar)
+    for i = 1:lar
+        ui = Union{ap[i], bp[i]}
+        if unionlen(ui) < MAX_TYPEUNION_LEN
+            p[i] = ui
+        else
+            p[i] = Any
+        end
+    end
+    return Tuple{p...}
 end

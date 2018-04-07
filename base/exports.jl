@@ -324,7 +324,6 @@ export
     sign,
     signbit,
     signed,
-    signif,
     significand,
     sin,
     sinc,
@@ -924,7 +923,7 @@ export
     withenv,
 
 # C interface
-    cfunction,
+    @cfunction,
     cglobal,
     disable_sigint,
     pointer,

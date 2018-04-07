@@ -1066,8 +1066,12 @@ let text =
     end
 end
 
-# different output depending on whether color is requested:
+# issue 20225, check this can print
+@test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
+
+# different output depending on whether color is requested:	+# issue 20225, check this can print
 let buf = IOBuffer()
+    @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
     show(buf, "text/plain", md"*emph*")
     @test String(take!(buf)) == "  emph\n"
     show(buf, "text/markdown", md"*emph*")

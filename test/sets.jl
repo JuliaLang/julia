@@ -221,6 +221,13 @@ end
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
     @test intersect([1, 2, 1], [2, 2]) == intersect!([1, 2, 1], [2, 2]) == [2]
+
+    # issue #25801
+    x = () ∩ (:something,)
+    y = () ∩ (42,)
+    @test isempty(x)
+    @test isempty(y)
+    @test eltype(x) == eltype(y) == Union{}
 end
 
 @testset "setdiff" begin

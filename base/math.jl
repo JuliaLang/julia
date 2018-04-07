@@ -929,9 +929,10 @@ mod2pi(x) = rem2pi(x,RoundDown)
 """
     muladd(x, y, z)
 
-Combined multiply-add, computes `x*y+z` allowing the add and multiply to be contracted with
-each other or ones from other `muladd` and `@fastmath` to form `fma`
-if the transformation can improve performance.
+Combined multiply-add: computes `x*y+z`, but allowing the add and multiply to be merged
+with each other or with surrounding operations for performance.
+For example, this may be implemented as an [`fma`](@ref) if the hardware supports it
+efficiently.
 The result can be different on different machines and can also be different on the same machine
 due to constant propagation or other optimizations.
 See [`fma`](@ref).
@@ -967,12 +968,12 @@ cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 # More special functions
-include(joinpath("special", "exp.jl"))
-include(joinpath("special", "exp10.jl"))
-include(joinpath("special", "hyperbolic.jl"))
-include(joinpath("special", "trig.jl"))
-include(joinpath("special", "gamma.jl"))
-include(joinpath("special", "rem_pio2.jl"))
-include(joinpath("special", "log.jl"))
+include("special/exp.jl")
+include("special/exp10.jl")
+include("special/hyperbolic.jl")
+include("special/trig.jl")
+include("special/gamma.jl")
+include("special/rem_pio2.jl")
+include("special/log.jl")
 
 end # module

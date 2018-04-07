@@ -176,10 +176,15 @@ end
             @test LinearIndices((1:4,1:3,1:2))[l] == l
             @test CartesianIndices((1:4,1:3,1:2))[i,j,k] == CartesianIndex(i,j,k)
             @test CartesianIndices((1:4,1:3,1:2))[l] == CartesianIndex(i,j,k)
-            @test LinearIndices((0:3,3:5,-101:-100))[i-1,j+2,k-102] == l
+        end
+
+        l = 0
+        for k = -101:-100, j = 3:5, i = 0:3
+            l += 1
+            @test LinearIndices((0:3,3:5,-101:-100))[i,j,k] == l
             @test LinearIndices((0:3,3:5,-101:-100))[l] == l
-            @test CartesianIndices((0:3,3:5,-101:-100))[i,j,k] == CartesianIndex(i-1, j+2, k-102)
-            @test CartesianIndices((0:3,3:5,-101:-100))[l] == CartesianIndex(i-1, j+2, k-102)
+            @test CartesianIndices((0:3,3:5,-101:-100))[i,j,k] == CartesianIndex(i,j,k)
+            @test CartesianIndices((0:3,3:5,-101:-100))[l] == CartesianIndex(i,j,k)
         end
 
         local A = reshape(Vector(1:9), (3,3))
@@ -862,10 +867,8 @@ end
     yrng = 1:5
     CR = CartesianIndices((xrng,yrng))
 
-    for (i,i_idx) in enumerate(xrng)
-        for (j,j_idx) in enumerate(yrng)
-            @test CR[i,j] == CartesianIndex(i_idx,j_idx)
-        end
+    for i in xrng, j in yrng
+        @test CR[i,j] == CartesianIndex(i,j)
     end
 
     for i_lin in linearindices(CR)

@@ -7,7 +7,7 @@ import Dates
 import LibGit2
 
 import ..depots, ..logdir, ..devdir, ..print_first_command_header
-import ..Operations, ..Display
+import ..Operations, ..Display, ..GitTools
 using ..Types, ..TOML
 
 
@@ -86,7 +86,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
                         return
                     end
                     branch = LibGit2.headname(repo)
-                    LibGit2.fetch(repo)
+                    GitTools.fetch(repo)
                     ff_succeeded = try
                         LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
                     catch e

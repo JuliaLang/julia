@@ -80,7 +80,6 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
             Base.sigatomic_end()
             if iserr
                 put!(backend.response_channel, lasterr)
-                iserr, lasterr = false, ()
             else
                 backend.in_eval = true
                 value = eval(Main, ast)
@@ -893,7 +892,7 @@ function setup_interface(
             sbuffer = LineEdit.buffer(s)
             curspos = position(sbuffer)
             seek(sbuffer, 0)
-            shouldeval = (bytesavailable(sbuffer) == curspos && findfirst(isequal(UInt8('\n')), sbuffer) === nothing)
+            shouldeval = (bytesavailable(sbuffer) == curspos && !occursin(UInt8('\n'), sbuffer))
             seek(sbuffer, curspos)
             if curspos == 0
                 # if pasting at the beginning, strip leading whitespace

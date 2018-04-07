@@ -237,16 +237,17 @@ end
     @test vec(b) == vec(a)
 
     a = rand(1, 1, 8, 8, 1)
-    @test @inferred(squeeze(a, 1)) == @inferred(squeeze(a, (1,))) == reshape(a, (1, 8, 8, 1))
-    @test @inferred(squeeze(a, (1, 5))) == squeeze(a, (5, 1)) == reshape(a, (1, 8, 8))
-    @test @inferred(squeeze(a, (1, 2, 5))) == squeeze(a, (5, 2, 1)) == reshape(a, (8, 8))
-    @test_throws ArgumentError squeeze(a, 0)
-    @test_throws ArgumentError squeeze(a, (1, 1))
-    @test_throws ArgumentError squeeze(a, (1, 2, 1))
-    @test_throws ArgumentError squeeze(a, (1, 1, 2))
-    @test_throws ArgumentError squeeze(a, 3)
-    @test_throws ArgumentError squeeze(a, 4)
-    @test_throws ArgumentError squeeze(a, 6)
+    @test @inferred(squeeze(a, dims=1)) == @inferred(squeeze(a, dims=(1,))) == reshape(a, (1, 8, 8, 1))
+    @test @inferred(squeeze(a, dims=(1, 5))) == squeeze(a, dims=(5, 1)) == reshape(a, (1, 8, 8))
+    @test @inferred(squeeze(a, dims=(1, 2, 5))) == squeeze(a, dims=(5, 2, 1)) == reshape(a, (8, 8))
+    @test_throws UndefKeywordError squeeze(a)
+    @test_throws ArgumentError squeeze(a, dims=0)
+    @test_throws ArgumentError squeeze(a, dims=(1, 1))
+    @test_throws ArgumentError squeeze(a, dims=(1, 2, 1))
+    @test_throws ArgumentError squeeze(a, dims=(1, 1, 2))
+    @test_throws ArgumentError squeeze(a, dims=3)
+    @test_throws ArgumentError squeeze(a, dims=4)
+    @test_throws ArgumentError squeeze(a, dims=6)
 
     sz = (5,8,7)
     A = reshape(1:prod(sz),sz...)
@@ -1680,7 +1681,7 @@ end
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
-    indices = Array(R)
+    indices = collect(R)
     @test indices[1] == CartesianIndex{2}(2,3)
     @test indices[2] == CartesianIndex{2}(3,3)
     @test indices[4] == CartesianIndex{2}(5,3)
@@ -1701,8 +1702,8 @@ end
     @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
     @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
 
-    @test CartesianIndices((3:5,-7:7)) == CartesianIndex.(3:5, reshape(-7:7, 1, :))
-    @test CartesianIndices((3,-7:7)) == CartesianIndex.(3, reshape(-7:7, 1, :))
+    @test collect(CartesianIndices((3:5,-7:7))) == CartesianIndex.(3:5, reshape(-7:7, 1, :))
+    @test collect(CartesianIndices((3,-7:7))) == CartesianIndex.(3, reshape(-7:7, 1, :))
 end
 
 # All we really care about is that we have an optimized
@@ -1871,6 +1872,10 @@ end
         @test @inferred(f26009(A, 2:2)) == reshape(2:4:20, 1, :)
         @test @inferred(f26009(A, 2)) == 2:4:20
     end
+    A = reshape(1:24, 4, 3, 2)
+    @test IndexStyle(selectdim(A, 1, 1)) == IndexStyle(view(A, 1, :, :)) == IndexLinear()
+    @test IndexStyle(selectdim(A, 2, 1)) == IndexStyle(view(A, :, 1, :)) == IndexCartesian()
+    @test IndexStyle(selectdim(A, 3, 1)) == IndexStyle(view(A, :, :, 1)) == IndexLinear()
 end
 
 ###

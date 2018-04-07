@@ -239,17 +239,22 @@ function rpad(
 end
 
 """
-    split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
+    split(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
+    split(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
 character delimiters, which may be specified in any of the formats allowed by
 [`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
 or as a single character or collection of characters.
 
-If `chars` is omitted, it defaults to the set of all space characters, and
-`keep` is taken to be `false`. The two keyword arguments are optional: they are a
-maximum size for the result and a flag determining whether empty fields should be kept in
-the result.
+If `chars` is omitted, it defaults to the set of all space characters.
+
+The optional keyword arguments are:
+ - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
+ - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
+   a `chars` argument, `true` with a `chars` argument.
+
+See also [`rsplit`](@ref).
 
 # Examples
 ```jldoctest
@@ -264,17 +269,32 @@ julia> split(a,".")
 """
 function split end
 
-split(str::T, splitter;
-      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
-split(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
-      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, in(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
-split(str::T, splitter::AbstractChar;
-      limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _split(str, isequal(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+function split(str::T, splitter;
+               limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
+    if keep !== nothing
+        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :split)
+        keepempty = keep
+    end
+    _split(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
+end
+function split(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+               limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
+    if keep !== nothing
+        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :split)
+        keepempty = keep
+    end
+    _split(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
+end
+function split(str::T, splitter::AbstractChar;
+               limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
+    if keep !== nothing
+        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :split)
+        keepempty = keep
+    end
+    _split(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
+end
 
-function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
+function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     i = 1 # firstindex(str)
     n = lastindex(str)
     r = coalesce(findfirst(splitter,str), 0)
@@ -282,7 +302,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
             if i < k
-                if keep_empty || i < j
+                if keepempty || i < j
                     push!(strs, SubString(str,i,prevind(str,j)))
                 end
                 i = k
@@ -293,17 +313,20 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
             j, k = first(r), nextind(str,last(r))
         end
     end
-    if keep_empty || !done(str,i)
+    if keepempty || !done(str,i)
         push!(strs, SubString(str,i))
     end
     return strs
 end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
-split(str::AbstractString) = split(str, _default_delims; limit=0, keep=false)
+split(str::AbstractString;
+      limit::Integer=0, keepempty::Bool=false) =
+    split(str, _default_delims; limit=limit, keepempty=keepempty)
 
 """
-    rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
+    rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
+    rsplit(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
 
 Similar to [`split`](@ref), but starting from the end of the string.
 
@@ -332,29 +355,47 @@ julia> rsplit(a,".";limit=2)
 """
 function rsplit end
 
-rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-    _rsplit(str, splitter, limit, keep, T <: SubString ? T[] : SubString{T}[])
-rsplit(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
-       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-  _rsplit(str, in(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
-rsplit(str::T, splitter::AbstractChar;
-       limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
-  _rsplit(str, isequal(splitter), limit, keep, T <: SubString ? T[] : SubString{T}[])
+function rsplit(str::T, splitter;
+                limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
+    if keep !== nothing
+        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :rsplit)
+        keepempty = keep
+    end
+    _rsplit(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
+end
+function rsplit(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+                limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
+    if keep !== nothing
+        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :rsplit)
+        keepempty = keep
+    end
+    _rsplit(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
+end
+function rsplit(str::T, splitter::AbstractChar;
+                limit::Integer=0, keepempty::Bool=true, keep::Union{Nothing,Bool}=nothing) where {T<:AbstractString}
+    if keep !== nothing
+        Base.depwarn("The `keep` keyword argument is deprecated; use `keepempty` instead", :rsplit)
+        keepempty = keep
+    end
+    _rsplit(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
+end
 
-function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
+function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     n = lastindex(str)
     r = coalesce(findlast(splitter, str), 0)
     j, k = first(r), last(r)
     while j > 0 && k > 0 && length(strs) != limit-1
-        (keep_empty || k < n) && pushfirst!(strs, SubString(str,nextind(str,k),n))
+        (keepempty || k < n) && pushfirst!(strs, SubString(str,nextind(str,k),n))
         n = prevind(str, j)
         r = coalesce(findprev(splitter,str,n), 0)
         j, k = first(r), last(r)
     end
-    (keep_empty || n > 0) && pushfirst!(strs, SubString(str,1,n))
+    (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))
     return strs
 end
-#rsplit(str::AbstractString) = rsplit(str, _default_delims, 0, false)
+rsplit(str::AbstractString;
+      limit::Integer=0, keepempty::Bool=false) =
+    rsplit(str, _default_delims; limit=limit, keepempty=keepempty)
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =

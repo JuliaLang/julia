@@ -390,7 +390,7 @@ end
     Zulu = String
 
     function Dates.tryparsenext(d::Dates.DatePart{'Z'}, str, i, len)
-        Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
+        return Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
     end
 
     str = "2015-07-24T05:38:19.591Z"

@@ -16,12 +16,29 @@ respectively.
 """
 cglobal
 
-"""
-    cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Cvoid}
+struct CFunction
+    ptr::Ptr{Cvoid}
+    f::Any
+    _1::Ptr{Cvoid}
+    _2::Ptr{Cvoid}
+    let construtor = false end
+end
+unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
 
-Generate C-callable function pointer from the Julia function `f`. Type annotation of the return
-value in the callback function is a must for situations where Julia cannot infer the return
-type automatically.
+"""
+    @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
+    @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
+
+Generate a C-callable function pointer from the Julia function `closure`
+for the given type signature.
+
+Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression
+(although it can include a splat expression). And that these arguments will be evaluated in global scope
+during compile-time (not deferred until runtime).
+Adding a `\$` in front of the function argument changes this to instead create a runtime closure
+over the local variable `callable`.
+
+See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
 
 # Examples
 ```julia-repl
@@ -29,11 +46,26 @@ julia> function foo(x::Int, y::Int)
            return x + y
        end
 
-julia> cfunction(foo, Int, Tuple{Int,Int})
+julia> @cfunction(foo, Int, (Int, Int))
 Ptr{Cvoid} @0x000000001b82fcd0
 ```
 """
-cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any), f, r, a)
+macro cfunction(f, at, rt)
+    if !(isa(rt, Expr) && rt.head === :tuple)
+        throw(ArgumentError("@cfunction argument types must be a literal tuple"))
+    end
+    rt.head = :call
+    pushfirst!(rt.args, GlobalRef(Core, :svec))
+    if isa(f, Expr) && f.head === :$
+        fptr = f.args[1]
+        typ = CFunction
+    else
+        fptr = QuoteNode(f)
+        typ = Ptr{Cvoid}
+    end
+    cfun = Expr(:cfunction, typ, fptr, at, rt, QuoteNode(:ccall))
+    return esc(cfun)
+end
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
     const Cchar = Int8

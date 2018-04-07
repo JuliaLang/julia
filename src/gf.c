@@ -37,8 +37,9 @@ JL_DLLEXPORT size_t jl_get_tls_world_age(void)
 
 JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs)
 {
-    if (meth->jlcall_api) {
-        return jl_call_method_internal(meth, args, nargs);
+    jl_callptr_t fptr = meth->invoke;
+    if (fptr != jl_fptr_trampoline) {
+        return fptr(meth, args, nargs);
     }
     else {
         // if this hasn't been inferred (compiled) yet,
@@ -202,7 +203,7 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *typ
 // ----- MethodInstance specialization instantiation ----- //
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void);
-void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
+void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr)
 {
     jl_sym_t *sname = jl_symbol(name);
     if (dt == NULL) {
@@ -211,8 +212,8 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
         dt = (jl_datatype_t*)jl_typeof(f);
     }
     jl_method_instance_t *li = jl_new_method_instance_uninit();
-    li->fptr = fptr;
-    li->jlcall_api = JL_API_GENERIC;
+    li->invoke = jl_fptr_args;
+    li->specptr.fptr1 = fptr;
     li->specTypes = (jl_value_t*)jl_anytuple_type;
     li->min_world = 1;
     li->max_world = ~(size_t)0;
@@ -414,20 +415,22 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
 
     // changing rettype changes the llvm signature,
     // so clear all of the llvm state at the same time
+    li->invoke = jl_fptr_trampoline;
     li->functionObjectsDecls.functionObject = NULL;
     li->functionObjectsDecls.specFunctionObject = NULL;
     li->rettype = rettype;
     jl_gc_wb(li, rettype);
     li->inferred = inferred;
     jl_gc_wb(li, inferred);
-    if (const_flags & 1) {
-        assert(const_flags & 2);
-        li->jlcall_api = JL_API_CONST;
-    }
     if (const_flags & 2) {
         li->inferred_const = inferred_const;
         jl_gc_wb(li, inferred_const);
     }
+    if (const_flags & 1) {
+        assert(const_flags & 2);
+        li->invoke = jl_fptr_const_return;
+    }
+    li->specptr.fptr = NULL;
     JL_GC_POP();
     return li;
 }
@@ -463,7 +466,7 @@ static void foreach_mtable_in_module(
                     jl_typename_t *tn = ((jl_datatype_t*)v)->name;
                     if (tn->module == m && tn->name == b->name) {
                         jl_methtable_t *mt = tn->mt;
-                        if (mt != NULL && (jl_value_t*)mt != jl_nothing) {
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt) {
                             visit(mt, env);
                         }
                     }
@@ -487,6 +490,7 @@ void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), v
     jl_array_t *mod_array = NULL;
     JL_GC_PUSH2(&visited, &mod_array);
     mod_array = jl_get_loaded_modules();
+    visit(jl_type_type_mt, env);
     if (mod_array) {
         int i;
         for (i = 0; i < jl_array_len(mod_array); i++) {
@@ -1735,66 +1739,135 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous, world, min_valid, max_valid);
 }
 
-jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t world)
+jl_callptr_t jl_compile_method_internal(jl_method_instance_t **pli, size_t world)
 {
     jl_method_instance_t *li = *pli;
-    if (li->jlcall_api == JL_API_CONST)
-        return li->functionObjectsDecls;
-    if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF ||
-        jl_options.compile_enabled == JL_OPTIONS_COMPILE_MIN) {
+    jl_callptr_t fptr = li->invoke;
+    if (fptr != jl_fptr_trampoline)
+        return fptr;
+
+   if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF ||
+            jl_options.compile_enabled == JL_OPTIONS_COMPILE_MIN) {
         // copy fptr from the template method definition
         jl_method_t *def = li->def.method;
         if (jl_is_method(def) && def->unspecialized) {
-            if (def->unspecialized->jlcall_api == JL_API_CONST) {
+            jl_method_instance_t *unspec = def->unspecialized;
+            if (unspec->invoke != jl_fptr_trampoline) {
                 li->functionObjectsDecls.functionObject = NULL;
                 li->functionObjectsDecls.specFunctionObject = NULL;
-                li->inferred = def->unspecialized->inferred;
-                jl_gc_wb(li, li->inferred);
-                li->inferred_const = def->unspecialized->inferred_const;
+                li->specptr = unspec->specptr;
+                li->inferred = unspec->inferred;
+                if (li->inferred)
+                    jl_gc_wb(li, li->inferred);
+                li->inferred_const = unspec->inferred_const;
                 if (li->inferred_const)
                     jl_gc_wb(li, li->inferred_const);
-                li->jlcall_api = JL_API_CONST;
-                return li->functionObjectsDecls;
-            }
-            if (def->unspecialized->fptr) {
-                li->functionObjectsDecls.functionObject = NULL;
-                li->functionObjectsDecls.specFunctionObject = NULL;
-                li->jlcall_api = def->unspecialized->jlcall_api;
-                li->fptr = def->unspecialized->fptr;
-                return li->functionObjectsDecls;
+                li->invoke = unspec->invoke;
+                return fptr;
             }
         }
-        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF &&
-            jl_is_method(li->def.method)) {
-            jl_code_info_t *src = jl_code_for_interpreter(li);
-            if (!jl_code_requires_compiler(src)) {
-                li->inferred = (jl_value_t*)src;
-                jl_gc_wb(li, src);
-                li->functionObjectsDecls.functionObject = NULL;
-                li->functionObjectsDecls.specFunctionObject = NULL;
-                li->fptr = (jl_fptr_t)&jl_interpret_call;
-                li->jlcall_api = JL_API_INTERPRETED;
-                return li->functionObjectsDecls;
-            }
+        jl_code_info_t *src = jl_code_for_interpreter(li);
+        if (!jl_code_requires_compiler(src)) {
+            li->inferred = (jl_value_t*)src;
+            jl_gc_wb(li, src);
+            li->functionObjectsDecls.functionObject = NULL;
+            li->functionObjectsDecls.specFunctionObject = NULL;
+            li->invoke = jl_fptr_interpret_call;
+            return jl_fptr_interpret_call;
+        }
+        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
+            jl_printf(JL_STDERR, "code missing for ");
+            jl_static_show(JL_STDERR, (jl_value_t*)li);
+            jl_printf(JL_STDERR, " : sysimg may not have been built with --compile=all\n");
         }
     }
-    jl_llvm_functions_t decls = li->functionObjectsDecls;
-    if (decls.functionObject != NULL || li->jlcall_api == JL_API_CONST)
-        return decls;
 
-    jl_code_info_t *src = NULL;
-    if (jl_is_method(li->def.method) && !jl_is_rettype_inferred(li) &&
-             jl_symbol_name(li->def.method->name)[0] != '@') {
-        // don't bother with typeinf on macros or toplevel thunks
-        // but try to infer everything else
-        src = jl_type_infer(pli, world, 0);
-        li = *pli;
+    jl_llvm_functions_t decls = li->functionObjectsDecls;
+    if (decls.functionObject == NULL) {
+        // if we don't have decls already, try to generate it now
+        jl_code_info_t *src = NULL;
+        if (jl_is_method(li->def.method) && !jl_is_rettype_inferred(li) &&
+                 jl_symbol_name(li->def.method->name)[0] != '@') {
+            // don't bother with typeinf on macros or toplevel thunks
+            // but try to infer everything else
+            src = jl_type_infer(pli, world, 0);
+            li = *pli;
+        }
+
+        // check again, because jl_type_infer may have changed li or compiled it
+        fptr = li->invoke;
+        if (fptr != jl_fptr_trampoline)
+            return fptr;
+        decls = li->functionObjectsDecls;
+        if (decls.functionObject == NULL) {
+            decls = jl_compile_linfo(pli, src, world, &jl_default_cgparams);
+            li = *pli;
+        }
+
+        // check again, of course
+        fptr = li->invoke;
+        if (fptr != jl_fptr_trampoline)
+            return fptr;
+
+        // if it's not inferred (inference failed / disabled), try to just use the unspecialized fptr
+        if (!li->inferred) {
+            if (jl_is_method(li->def.method) && li->def.method->unspecialized) {
+                jl_method_instance_t *unspec = li->def.method->unspecialized;
+                fptr = unspec->invoke;
+                if (fptr != jl_fptr_trampoline) {
+                    li->specptr = unspec->specptr;
+                    li->inferred_const = unspec->inferred_const;
+                    if (li->inferred_const)
+                        jl_gc_wb(li, li->inferred_const);
+                    li->invoke = fptr;
+                    return fptr;
+                }
+            }
+        }
     }
-    // check again, because jl_type_infer may have changed li or compiled it
-    decls = li->functionObjectsDecls;
-    if (decls.functionObject != NULL || li->jlcall_api == JL_API_CONST)
-        return decls;
-    return jl_compile_linfo(&li, src, world, &jl_default_cgparams);
+
+    // ask codegen to make the fptr
+    fptr = jl_generate_fptr(pli, decls, world);
+    return fptr;
+}
+
+JL_DLLEXPORT jl_value_t *jl_fptr_trampoline(jl_method_instance_t *m, jl_value_t **args, uint32_t nargs)
+{
+    size_t world = jl_get_ptls_states()->world_age;
+    jl_callptr_t fptr = jl_compile_method_internal(&m, world);
+    return fptr(m, args, nargs);
+}
+
+JL_DLLEXPORT jl_value_t *jl_fptr_const_return(jl_method_instance_t *m, jl_value_t **args, uint32_t nargs)
+{
+    return m->inferred_const;
+}
+
+JL_DLLEXPORT jl_value_t *jl_fptr_args(jl_method_instance_t *m, jl_value_t **args, uint32_t nargs)
+{
+    return m->specptr.fptr1(args[0], &args[1], nargs - 1);
+}
+
+JL_DLLEXPORT jl_value_t *jl_fptr_sparam(jl_method_instance_t *m, jl_value_t **args, uint32_t nargs)
+{
+    return m->specptr.fptr3(m->sparam_vals, args[0], &args[1], nargs - 1);
+}
+
+// Return the index of the invoke api, if known
+JL_DLLEXPORT int32_t jl_invoke_api(jl_method_instance_t *mi)
+{
+    jl_callptr_t f = mi->invoke;
+    if (f == &jl_fptr_trampoline)
+        return 0;
+    if (f == &jl_fptr_args)
+        return 1;
+    if (f == &jl_fptr_const_return)
+        return 2;
+    if (f == &jl_fptr_sparam)
+        return 3;
+    if (f == &jl_fptr_interpret_call)
+        return 4;
+    return -1;
 }
 
 // compile-time method lookup
@@ -1858,7 +1931,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     jl_code_info_t *src = NULL;
     if (!jl_is_rettype_inferred(li))
         src = jl_type_infer(&li, world, 0);
-    if (li->jlcall_api != JL_API_CONST) {
+    if (li->invoke != jl_fptr_const_return) {
         if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc) {
             // If we are saving LLVM or native code, generate the LLVM IR so that it'll
             // be included in the saved LLVM module.
@@ -1869,12 +1942,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
             // don't bother generating anything since it won't be saved.
             // Otherwise (this branch), assuming we are at runtime (normal JIT) and
             // we should generate the native code.
-            jl_ptls_t ptls = jl_get_ptls_states();
-            size_t last_age = ptls->world_age;
-            ptls->world_age = world;
-            jl_generic_fptr_t fptr;
-            jl_compile_method_internal(&fptr, li);
-            ptls->world_age = last_age;
+            (void)jl_compile_method_internal(&li, world);
         }
     }
     return 1;
@@ -2096,7 +2164,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     jl_method_instance_t *mfunc = jl_lookup_generic_(args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
                                                      jl_get_ptls_states()->world_age);
-    jl_value_t *res = jl_call_method_internal(mfunc, args, nargs);
+    jl_value_t *res = mfunc->invoke(mfunc, args, nargs);
     return verify_type(res);
 }
 
@@ -2177,7 +2245,7 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t **args, size_t nargs)
         JL_UNLOCK(&method->writelock);
     }
     JL_GC_POP();
-    return jl_call_method_internal(mfunc, args, nargs);
+    return mfunc->invoke(mfunc, args, nargs);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,

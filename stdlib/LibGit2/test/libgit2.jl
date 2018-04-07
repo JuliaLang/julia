@@ -4,7 +4,7 @@ module LibGit2Tests
 
 import LibGit2
 using Test
-using Random, Serialization
+using Random, Serialization, Sockets
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
@@ -726,6 +726,11 @@ mktempdir() do dir
                 @test repo_str == "LibGit2.GitRepo($(sprint(show,LibGit2.path(repo))))"
             end
         end
+        @testset "credentials callback conflict" begin
+            callbacks = LibGit2.Callbacks(:credentials => (C_NULL, 0))
+            cred_payload = LibGit2.CredentialPayload()
+            @test_throws ArgumentError LibGit2.clone(cache_repo, test_repo, callbacks=callbacks, credentials=cred_payload)
+        end
     end
 
     @testset "Update cache repository" begin
@@ -1258,6 +1263,15 @@ mktempdir() do dir
             close(our_repo)
             close(up_repo)
         end
+
+        @testset "credentials callback conflict" begin
+            callbacks = LibGit2.Callbacks(:credentials => (C_NULL, 0))
+            cred_payload = LibGit2.CredentialPayload()
+
+            LibGit2.with(LibGit2.GitRepo(joinpath(dir, "Example.Push"))) do repo
+                @test_throws ArgumentError LibGit2.push(repo, callbacks=callbacks, credentials=cred_payload)
+            end
+        end
     end
 
     @testset "Fetch from cache repository" begin
@@ -1317,6 +1331,15 @@ mktempdir() do dir
                 @test fh_strs[2] == "Name: $(fh.name)"
                 @test fh_strs[3] == "URL: $(fh.url)"
                 @test fh_strs[5] == "Merged: $(fh.ismerge)"
+            end
+        end
+
+        @testset "credentials callback conflict" begin
+            callbacks = LibGit2.Callbacks(:credentials => (C_NULL, 0))
+            cred_payload = LibGit2.CredentialPayload()
+
+            LibGit2.with(LibGit2.GitRepo(test_repo)) do repo
+                @test_throws ArgumentError LibGit2.fetch(repo, callbacks=callbacks, credentials=cred_payload)
             end
         end
     end

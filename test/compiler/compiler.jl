@@ -1,21 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑
+import Core.Compiler: Const, Conditional, ⊑, isdispatchelem
 
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
 # demonstrate some of the type-size limits
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 0) == Ref{Complex{T} where T}
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
-    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 10) == comparison
-    @test Core.Compiler.limit_type_size(sig, ref, comparison,  10) == ref
-    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{ref}
-    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison},  10) == sig
+    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 100, 10) == comparison
+    @test Core.Compiler.limit_type_size(sig, ref, comparison, 100, 10) == ref
+    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 10) == Tuple{ref}
+    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  10) == sig
 end
 
 
@@ -210,8 +210,8 @@ end
 end
 let
     ast12474 = code_typed(f12474, Tuple{Float64})
-    @test isconcretetype(ast12474[1][2])
-    @test all(isconcretetype, ast12474[1][1].slottypes)
+    @test isdispatchelem(ast12474[1][2])
+    @test all(isdispatchelem, ast12474[1][1].slottypes)
 end
 
 
@@ -437,10 +437,10 @@ function is_typed_expr(e::Expr)
     return false
 end
 test_inferred_static(@nospecialize(other)) = true
-test_inferred_static(slot::TypedSlot) = @test isconcretetype(slot.typ)
+test_inferred_static(slot::TypedSlot) = @test isdispatchelem(slot.typ)
 function test_inferred_static(expr::Expr)
     if is_typed_expr(expr)
-        @test isconcretetype(expr.typ)
+        @test isdispatchelem(expr.typ)
     end
     for a in expr.args
         test_inferred_static(a)
@@ -448,10 +448,10 @@ function test_inferred_static(expr::Expr)
 end
 function test_inferred_static(arrow::Pair)
     code, rt = arrow
-    @test isconcretetype(rt)
+    @test isdispatchelem(rt)
     @test code.inferred
-    @test all(isconcretetype, code.slottypes)
-    @test all(isconcretetype, code.ssavaluetypes)
+    @test all(isdispatchelem, code.slottypes)
+    @test all(isdispatchelem, code.ssavaluetypes)
     for e in code.code
         test_inferred_static(e)
     end
@@ -1031,9 +1031,9 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
-        @test linfo.jlcall_api == 2
+        @test Core.Compiler.invoke_api(linfo) == 2
     end
-    if linfo.jlcall_api == 2
+    if Core.Compiler.invoke_api(linfo) == 2
         @test linfo.inferred_const == val
         return
     end

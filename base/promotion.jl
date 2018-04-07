@@ -18,26 +18,25 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return b
     elseif b <: a
         return a
-    elseif isa(a,UnionAll)
+    elseif isa(a, UnionAll)
         return UnionAll(a.var, typejoin(a.body, b))
-    elseif isa(b,UnionAll)
+    elseif isa(b, UnionAll)
         return UnionAll(b.var, typejoin(a, b.body))
-    elseif isa(a,TypeVar)
+    elseif isa(a, TypeVar)
         return typejoin(a.ub, b)
-    elseif isa(b,TypeVar)
+    elseif isa(b, TypeVar)
         return typejoin(a, b.ub)
-    elseif isa(a,Union)
-        a′ = typejoin(a.a, a.b)
-        return a′ === a ? typejoin(a, b) : typejoin(a′, b)
-    elseif isa(b,Union)
-        b′ = typejoin(b.a, b.b)
-        return b′ === b ? typejoin(a, b) : typejoin(a, b′)
+    elseif isa(a, Union)
+        return typejoin(typejoin(a.a, a.b), b)
+    elseif isa(b, Union)
+        return typejoin(a, typejoin(b.a, b.b))
     elseif a <: Tuple
         if !(b <: Tuple)
             return Any
         end
         ap, bp = a.parameters, b.parameters
-        lar = length(ap)::Int; lbr = length(bp)::Int
+        lar = length(ap)::Int
+        lbr = length(bp)::Int
         if lar == 0
             return Tuple{Vararg{tailjoin(bp, 1)}}
         end
@@ -102,7 +101,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             vars = []
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
-                if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
+                if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
                     aprimary = aprimary{ai}
                 else
                     pushfirst!(vars, aprimary.var)
@@ -289,9 +288,9 @@ end
 # promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
 # for example this makes promote_type(Integer,Real) == Real without
 # promoting arbitrary pairs of numeric types to Number.
-promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = (@_inline_meta; T)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = (@_inline_meta; T)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = (@_inline_meta; S)
+promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = T
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = T
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = S
 promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
     error("no promotion exists for ", T, " and ", S)
 
@@ -386,7 +385,7 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # "Promotion" that takes a function into account and tries to preserve
 # non-concrete types. These are meant to be used mainly by elementwise
 # operations, so it is advised against overriding them
-_default_type(T::Type) = (@_inline_meta; T)
+_default_type(T::Type) = T
 
 if isdefined(Core, :Compiler)
     const _return_type = Core.Compiler.return_type
@@ -410,16 +409,14 @@ Guess what an appropriate container eltype would be for storing results of
     the container eltype on the type of the actual elements. Only in the absence of any
     elements (for an empty result container), it may be unavoidable to call `promote_op`.
 """
-promote_op(::Any...) = (@_inline_meta; Any)
+promote_op(::Any...) = Any
 function promote_op(f, ::Type{S}) where S
-    @_inline_meta
     TT = Tuple{_default_type(S)}
     T = _return_type(f, TT)
     isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
     return typejoin(S, T)
 end
 function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
-    @_inline_meta
     TT = Tuple{_default_type(R), _default_type(S)}
     T = _return_type(f, TT)
     isdispatchtuple(Tuple{R}) && isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any

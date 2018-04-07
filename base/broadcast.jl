@@ -7,7 +7,7 @@ using .Base: Indices, OneTo, linearindices, tail, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             isoperator, promote_typejoin, unalias
 import .Base: broadcast, broadcast!
-export BroadcastStyle, broadcast_indices, broadcast_similar,
+export BroadcastStyle, broadcast_indices, broadcast_similar, broadcastable,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
@@ -48,7 +48,6 @@ BroadcastStyle(::Type{<:Tuple}) = Style{Tuple}()
 
 struct Unknown <: BroadcastStyle end
 BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
-BroadcastStyle(::Type) = Unknown()
 
 """
 `Broadcast.AbstractArrayStyle{N} <: BroadcastStyle` is the abstract supertype for any style
@@ -101,7 +100,8 @@ struct DefaultArrayStyle{N} <: AbstractArrayStyle{N} end
 const DefaultVectorStyle = DefaultArrayStyle{1}
 const DefaultMatrixStyle = DefaultArrayStyle{2}
 BroadcastStyle(::Type{<:AbstractArray{T,N}}) where {T,N} = DefaultArrayStyle{N}()
-BroadcastStyle(::Type{<:Union{Ref,Number}}) = DefaultArrayStyle{0}()
+BroadcastStyle(::Type{<:Ref}) = DefaultArrayStyle{0}()
+BroadcastStyle(::Type{T}) where {T} = DefaultArrayStyle{ndims(T)}()
 
 # `ArrayConflict` is an internal type signaling that two or more different `AbstractArrayStyle`
 # objects were supplied as arguments, and that no rule was defined for resolving the
@@ -385,9 +385,15 @@ end
 """
     broadcastable(x)
 
-Return either `x` or an object like `x` such that it supports `axes` and indexing.
+Return either `x` or an object like `x` such that it supports `axes`, indexing, and its type supports `ndims`.
 
-If `x` supports iteration, the returned value should have the same `axes` and indexing behaviors as [`collect(x)`](@ref).
+If `x` supports iteration, the returned value should have the same `axes` and indexing
+behaviors as [`collect(x)`](@ref).
+
+If `x` is not an `AbstractArray` but it supports `axes`, indexing, and its type supports
+`ndims`, then `broadcastable(::typeof(x))` may be implemented to just return itself.
+Further, if `x` defines its own [`BroadcastStyle`](@ref), then it must define its
+`broadcastable` method to return itself for the custom style to have any effect.
 
 # Examples
 ```jldoctest
@@ -407,9 +413,9 @@ Base.RefValue{String}("hello")
 broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing}) = Ref(x)
 broadcastable(x::Ptr) = Ref{Ptr}(x) # Cannot use Ref(::Ptr) until ambiguous deprecation goes through
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
-broadcastable(x::AbstractArray) = x
+broadcastable(x::Union{AbstractArray,Number,Ref,Tuple}) = x
 # In the future, default to collecting arguments. TODO: uncomment once deprecations are removed
-# broadcastable(x) = BroadcastStyle(typeof(x)) isa Unknown ? collect(x) : x
+# broadcastable(x) = collect(x)
 # broadcastable(::Union{AbstractDict, NamedTuple}) = error("intentionally unimplemented to allow development in 1.x")
 
 """
@@ -589,11 +595,6 @@ julia> abs.((1, -2))
 
 julia> broadcast(+, 1.0, (0, -2.0))
 (1.0, -1.0)
-
-julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
-2-element Array{Float64,1}:
- 2.0
- 0.0
 
 julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
 2-element Array{Array{Int64,1},1}:

@@ -769,9 +769,9 @@ function complete_option(s, i1, i2)
 end
 
 function complete_package(s, i1, i2, lastcommand, project_opt)
-    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP]
+    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT]
         return complete_installed_package(s, i1, i2, project_opt)
-    elseif lastcommand in [CMD_ADD]
+    elseif lastcommand in [CMD_ADD, CMD_DEVELOP]
         return complete_remote_package(s, i1, i2)
     end
     return String[], 0:-1, false
@@ -802,7 +802,7 @@ end
 function completions(full, index)
     pre = full[1:index]
 
-    pre_words = split(pre, ' ', keep=true)
+    pre_words = split(pre, ' ', keepempty=true)
 
     # first word should always be a command
     if isempty(pre_words)
@@ -849,9 +849,23 @@ function completions(full, index)
     end
 end
 
+function promptf()
+    env = EnvCache()
+    proj_dir = dirname(env.project_file)
+    if startswith(pwd(), proj_dir) && env.pkg != nothing && !isempty(env.pkg.name)
+        name = env.pkg.name
+    else
+        name = basename(proj_dir)
+    end
+    prefix = string("(", name, ") ")
+    return prefix * "pkg> "
+end
+
 # Set up the repl Pkg REPLMode
 function create_mode(repl, main)
-    pkg_mode = LineEdit.Prompt("pkg> ";
+
+
+    pkg_mode = LineEdit.Prompt(promptf;
         prompt_prefix = Base.text_colors[:blue],
         prompt_suffix = "",
         complete = PkgCompletionProvider(),

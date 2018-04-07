@@ -1,22 +1,34 @@
-struct LineInfoNode
-    mod::Module
-    method::Symbol
-    file::Symbol
-    line::Int
-    inlined_at::Int
-end
+using Core: LineInfoNode
 const NullLineInfo = LineInfoNode(@__MODULE__, Symbol(""), Symbol(""), 0, 0)
+
+if false
+    import Base: Base, @show
+else
+    macro show(s)
+        return :(println(stdout, $(QuoteNode(s)), " = ", $(esc(s))))
+    end
+end
 
 include("compiler/ssair/ir.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/slot2ssa.jl")
 include("compiler/ssair/queries.jl")
 include("compiler/ssair/passes.jl")
+include("compiler/ssair/inlining2.jl")
 include("compiler/ssair/verify.jl")
 include("compiler/ssair/legacy.jl")
+@isdefined(Base) && include("compiler/ssair/show.jl")
 
-macro show(s)
-    # return :(println($(QuoteNode(s)), " = ", $(esc(s))))
+function normalize_expr(stmt::Expr)
+    if stmt.head === :gotoifnot
+        return GotoIfNot(stmt.args...)
+    elseif stmt.head === :return
+        return ReturnNode((length(stmt.args) == 0 ? (nothing,) : stmt.args)...)
+    elseif stmt.head === :unreachable
+        return ReturnNode()
+    else
+        return stmt
+    end
 end
 
 function normalize(@nospecialize(stmt), meta::Vector{Any}, table::Vector{LineInfoNode}, loc::RefValue{Int})
@@ -62,12 +74,8 @@ function normalize(@nospecialize(stmt), meta::Vector{Any}, table::Vector{LineInf
             return nothing
         elseif stmt.head === :line
             return nothing # deprecated - we shouldn't encounter this
-        elseif stmt.head === :gotoifnot
-            return GotoIfNot(stmt.args...)
-        elseif stmt.head === :return
-            return ReturnNode((length(stmt.args) == 0 ? (nothing,) : stmt.args)...)
-        elseif stmt.head === :unreachable
-            return ReturnNode()
+        else
+            return normalize_expr(stmt)
         end
     elseif isa(stmt, LabelNode)
         return nothing
@@ -88,55 +96,61 @@ function normalize(@nospecialize(stmt), meta::Vector{Any}, table::Vector{LineInf
     return stmt
 end
 
-function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode})
+function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, linetable::Vector{LineInfoNode})
     mod = linetable[1].mod
-    ci.code = copy(ci.code)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
-    while idx <= length(ci.code)
-        stmt = ci.code[idx]
+    while idx <= length(code)
+        stmt = code[idx]
         if isexpr(stmt, :(=))
             stmt = stmt.args[2]
         end
         if isa(stmt, Expr) && stmt.typ === Union{}
-            if !(idx < length(ci.code) && isexpr(ci.code[idx+1], :unreachable))
-                insert!(ci.code, idx + 1, ReturnNode())
+            if !(idx < length(code) && isexpr(code[idx+1], :unreachable))
+                insert!(code, idx + 1, ReturnNode())
                 idx += 1
             end
         end
         idx += 1
     end
-    reindex_labels!(ci.code)
+    reindex_labels!(code)
     meta = Any[]
-    lines = fill(0, length(ci.code))
+    lines = fill(0, length(code))
     let loc = RefValue(1)
-        for i = 1:length(ci.code)
-            stmt = ci.code[i]
+        for i = 1:length(code)
+            stmt = code[i]
             stmt = normalize(stmt, meta, linetable, loc)
-            ci.code[i] = stmt
+            code[i] = stmt
             if !(stmt === nothing)
                 lines[i] = loc[]
             end
         end
     end
-    ci.code = strip_trailing_junk!(ci.code, lines)
-    cfg = compute_basic_blocks(ci.code)
-    defuse_insts = scan_slot_def_use(nargs, ci)
-    domtree = construct_domtree(cfg)
-    ir = let code = Any[nothing for _ = 1:length(ci.code)]
+    code = strip_trailing_junk!(code, lines)
+    cfg = compute_basic_blocks(code)
+    defuse_insts = scan_slot_def_use(nargs, ci, code)
+    @timeit "domtree 1" domtree = construct_domtree(cfg)
+    ir = let code = Any[nothing for _ = 1:length(code)]
              argtypes = ci.slottypes[1:(nargs+1)]
-            IRCode(code, lines, cfg, argtypes, mod, meta)
+            IRCode(code, Any[], lines, cfg, argtypes, mod, meta)
         end
-    ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs)
+    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs)
+    return ir
+end
+
+function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode}, sv::OptimizationState)
+    ir = just_construct_ssa(ci, copy(ci.code), nargs, linetable)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    domtree = construct_domtree(ir.cfg)
-    ir = compact!(ir)
-    verify_ir(ir)
-    ir = getfield_elim_pass!(ir, domtree)
-    ir = compact!(ir)
-    ir = type_lift_pass!(ir)
-    ir = compact!(ir)
-    verify_ir(ir)
+    @timeit "compact 1" ir = compact!(ir)
+    #@timeit "verify 1" verify_ir(ir)
+    @timeit "Inlining" ir = ssa_inlining_pass!(ir, nothing, linetable, sv)
+    #@timeit "verify 2" verify_ir(ir)
+    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
+    @timeit "SROA" ir = getfield_elim_pass!(ir, domtree)
+    @timeit "compact 2" ir = compact!(ir)
+    @timeit "type lift" ir = type_lift_pass!(ir)
+    @timeit "compact 3" ir = compact!(ir)
+    #@timeit "verify 3" verify_ir(ir)
     return ir
 end

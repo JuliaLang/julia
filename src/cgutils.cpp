@@ -1135,15 +1135,20 @@ static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *t
     }
 }
 
-static void emit_concretecheck(jl_codectx_t &ctx, Value *typ, const std::string &msg)
+static Value *emit_isconcrete(jl_codectx_t &ctx, Value *typ)
 {
-    assert(typ->getType() == T_prjlvalue);
-    emit_typecheck(ctx, mark_julia_type(ctx, typ, true, jl_any_type), (jl_value_t*)jl_datatype_type, msg);
     Value *isconcrete;
     isconcrete = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(ctx, decay_derived(typ), T_pint8), offsetof(jl_datatype_t, isconcretetype));
     isconcrete = ctx.builder.CreateLoad(isconcrete, tbaa_const);
     isconcrete = ctx.builder.CreateTrunc(isconcrete, T_int1);
-    error_unless(ctx, isconcrete, msg);
+    return isconcrete;
+}
+
+static void emit_concretecheck(jl_codectx_t &ctx, Value *typ, const std::string &msg)
+{
+    assert(typ->getType() == T_prjlvalue);
+    emit_typecheck(ctx, mark_julia_type(ctx, typ, true, jl_any_type), (jl_value_t*)jl_datatype_type, msg);
+    error_unless(ctx, emit_isconcrete(ctx, typ), msg);
 }
 
 #define CHECK_BOUNDS 1
@@ -2069,10 +2074,11 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
         return UndefValue::get(T_int8);
     if (val.constant)
         return ConstantInt::get(T_int8, get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
-    if (val.isboxed)
-        return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
+
     if (val.TIndex)
         return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
+    if (val.isboxed)
+        return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
     return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
 }
 
@@ -2338,6 +2344,15 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
     return call;
 }
 
+// allocation for unknown object from an untracked pointer
+static Value *emit_new_bits(jl_codectx_t &ctx, Value *jt, Value *pval)
+{
+    pval = ctx.builder.CreateBitCast(pval, T_pint8);
+    auto call = ctx.builder.CreateCall(prepare_call(jl_newbits_func), { jt, pval });
+    call->setAttributes(jl_newbits_func->getAttributes());
+    return call;
+}
+
 // if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *ptr)
 {
@@ -2496,8 +2511,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             if (jl_field_isptr(sty, i)) {
                 tbaa_decorate(strctinfo.tbaa, ctx.builder.CreateStore(
                         ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)),
-                            ctx.builder.CreateGEP(T_prjlvalue, emit_bitcast(ctx, strct, T_pprjlvalue),
-                                ConstantInt::get(T_size, jl_field_offset(sty, i) / sizeof(void*)))));
+                        ctx.builder.CreateGEP(T_prjlvalue, emit_bitcast(ctx, strct, T_pprjlvalue),
+                            ConstantInt::get(T_size, jl_field_offset(sty, i) / sizeof(void*)))));
             }
         }
         for (size_t i = nargs; i < nf; i++) {

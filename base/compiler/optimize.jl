@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-include("compiler/ssair/driver.jl")
-
 #####################
 # OptimizationState #
 #####################
@@ -70,6 +68,8 @@ function OptimizationState(linfo::MethodInstance, params::Params)
     src === nothing && return nothing
     return OptimizationState(linfo, src, params)
 end
+
+include("compiler/ssair/driver.jl")
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
@@ -279,37 +279,33 @@ function optimize(me::InferenceState)
         me.linfo.inInference = false
     elseif me.optimize
         opt = OptimizationState(me)
-        # This pass is required for the AST to be valid in codegen
-        # if any `SSAValue` is created by type inference. Ref issue #6068
-        # This (and `reindex_labels!`) needs to be run for `!me.optimize`
-        # if we start to create `SSAValue` in type inference when not
-        # optimizing and use unoptimized IR in codegen.
-        gotoifnot_elim_pass!(opt)
-        inlining_pass!(opt, opt.src.propagate_inbounds)
-        any_enter = any_phi = false
-        if enable_new_optimizer[]
-            any_enter = any(x->isa(x, Expr) && x.head == :enter, opt.src.code)
-            any_phi = any(x->isa(x, PhiNode) || (isa(x, Expr) && x.head == :(=) && isa(x.args[2], PhiNode)), opt.src.code)
-        end
-        if enable_new_optimizer[] && !any_enter && isa(def, Method)
+        if enable_new_optimizer[] && isa(def, Method)
             reindex_labels!(opt)
             nargs = Int(opt.nargs) - 1
             if def isa Method
-                topline = LineInfoNode(opt.mod, def.name, def.file, def.line, 0)
+                topline = LineInfoNode(opt.mod, def.name, def.file, Int(def.line), Int(0))
             else
                 topline = LineInfoNode(opt.mod, NullLineInfo.name, NullLineInfo.file, 0, 0)
             end
             linetable = [topline]
-            ir = run_passes(opt.src, nargs, linetable)
-            replace_code!(opt.src, ir, nargs, linetable)
-            push!(opt.src.code, LabelNode(length(opt.src.code) + 1))
-            any_phi = true
-        elseif !any_phi
+            @timeit "optimizer" ir = run_passes(opt.src, nargs, linetable, opt)
+            force_noinline = any(x->isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
+            #@timeit "legacy conversion" replace_code!(opt.src, ir, nargs, linetable)
+            replace_code_newstyle!(opt.src, ir, nargs, linetable)
+        else
+            # This pass is required for the AST to be valid in codegen
+            # if any `SSAValue` is created by type inference. Ref issue #6068
+            # This (and `reindex_labels!`) needs to be run for `!me.optimize`
+            # if we start to create `SSAValue` in type inference when not
+            # optimizing and use unoptimized IR in codegen.
+            gotoifnot_elim_pass!(opt)
+            inlining_pass!(opt, opt.src.propagate_inbounds)
             # Clean up after inlining
             gotoifnot_elim_pass!(opt)
             basic_dce_pass!(opt)
             void_use_elim_pass!(opt)
-            if !enable_new_optimizer[]
+            any_phi = any(x->isa(x, PhiNode) || (isa(x, Expr) && x.head == :(=) && isa(x.args[2], PhiNode)), opt.src.code)
+            if !any_phi && !enable_new_optimizer[]
                 copy_duplicated_expr_pass!(opt)
                 split_undef_flag_pass!(opt)
                 fold_constant_getfield_pass!(opt)
@@ -321,13 +317,13 @@ function optimize(me::InferenceState)
                 basic_dce_pass!(opt)
                 void_use_elim_pass!(opt)
             end
-        end
-        # Pop metadata before label reindexing
-        let code = opt.src.code::Array{Any,1}
-            meta_elim_pass!(code, coverage_enabled())
-            filter!(x -> x !== nothing, code)
-            force_noinline = peekmeta(code, :noinline)[1]
-            reindex_labels!(opt)
+            # Pop metadata before label reindexing
+            let code = opt.src.code::Array{Any,1}
+                meta_elim_pass!(code, coverage_enabled())
+                filter!(x -> x !== nothing, code)
+                force_noinline = peekmeta(code, :noinline)[1]
+                reindex_labels!(opt)
+            end
         end
         me.min_valid = opt.min_valid
         me.max_valid = opt.max_valid
@@ -367,7 +363,7 @@ function optimize(me::InferenceState)
 
         if proven_pure && !coverage_enabled()
             # use constant calling convention
-            # Do not emit `jlcall_api == 2` if coverage is enabled
+            # Do not emit `jl_fptr_const_return` if coverage is enabled
             # so that we don't need to add coverage support
             # to the `jl_call_method_internal` fast path
             # Still set pure flag to make sure `inference` tests pass
@@ -438,7 +434,7 @@ function finish(me::InferenceState)
         end
 
         # don't store inferred code if we've decided to interpret this function
-        if !already_inferred && me.linfo.jlcall_api != 4
+        if !already_inferred && invoke_api(me.linfo) != 4
             const_flags = (me.const_ret) << 1 | me.const_api
             if me.const_ret
                 if isa(me.bestguess, Const)
@@ -769,17 +765,26 @@ function substitute!(
         head = e.head
         if head === :static_parameter
             return quoted(spvals[e.args[1]])
+        elseif head === :cfunction
+            @assert !isa(spsig, UnionAll) || !isempty(spvals)
+            if !(e.args[2] isa QuoteNode) # very common no-op
+                e.args[2] = substitute!(e.args[2], na, argexprs, spsig, spvals, offset, boundscheck)
+            end
+            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
+            e.args[4] = svec(Any[
+                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                for argt
+                in e.args[4] ]...)
         elseif head === :foreigncall
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
                 if i == 2
                     e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
                 elseif i == 3
-                    argtuple = Any[
+                    e.args[3] = svec(Any[
                         ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
                         for argt
-                        in e.args[3] ]
-                    e.args[3] = svec(argtuple...)
+                        in e.args[3] ]...)
                 elseif i == 4
                     @assert isa((e.args[4]::QuoteNode).value, Symbol)
                 elseif i == 5
@@ -883,7 +888,7 @@ function effect_free(@nospecialize(e), src, mod::Module, allow_volatile::Bool)
                         return false
                     elseif is_known_call(e, getfield, src, mod)
                         nargs = length(ea)
-                        (3 < nargs < 4) || return false
+                        (3 <= nargs <= 4) || return false
                         et = exprtype(e, src, mod)
                         # TODO: check ninitialized
                         if !isa(et, Const) && !isconstType(et)
@@ -916,8 +921,7 @@ function effect_free(@nospecialize(e), src, mod::Module, allow_volatile::Bool)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
-            isconcretetype(typ) || return false
-            !iskindtype(typ) || return false
+            isconcretedispatch(typ) || return false
             typ = typ::DataType
             if !allow_volatile && typ.mutable
                 return false
@@ -1168,7 +1172,9 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         invoke_tt = widenconst(atypes[3])
         if !(isconcretetype(ft) || ft <: Type) || !isType(invoke_tt) ||
                 has_free_typevars(invoke_tt) || has_free_typevars(ft) || (ft <: Builtin)
-            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+            # TODO: this can be rather aggressive at preventing inlining of closures
+            # XXX: this is wrong for `ft <: Type`, since we are failing to check that
+            #      the result doesn't have subtypes, or to do an intersection lookup
             return NOT_FOUND
         end
         if !(isa(invoke_tt.parameters[1], Type) &&
@@ -1320,7 +1326,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     isa(linfo, MethodInstance) || return invoke_NF(argexprs0, e.typ, atypes0, sv,
                                                    atype_unlimited, invoke_data)
     linfo = linfo::MethodInstance
-    if linfo.jlcall_api == 2
+    if invoke_api(linfo) == 2
         # in this case function can be inlined to a constant
         add_backedge!(linfo, sv)
         return inline_as_constant(linfo.inferred_const, argexprs, sv, invoke_data)
@@ -1500,7 +1506,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                     end
                 end
                 edges = Any[newlabels[edge::Int + 1] - 1 for edge in edges]
-                a.args[2] = PhiNode(edges, a.args[2].values)
+                a.args[2] = PhiNode(edges, copy_exprargs(a.args[2].values))
             elseif a.head === :meta && length(a.args) > 0
                 a1 = a.args[1]
                 if a1 === :push_loc
@@ -1881,8 +1887,7 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
         ft = Bool
     else
         f = nothing
-        if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
-            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+        if has_free_typevars(ft)
             return e
         end
     end
@@ -2039,8 +2044,7 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
                 ft = Bool
             else
                 f = nothing
-                if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
-                    # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+                if has_free_typevars(ft)
                     return e
                 end
             end
@@ -2457,7 +2461,11 @@ end
 
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new def(s) if any.
-check_valid(def::ValueDef, changes::IdDict) = !haskey(changes, def.stmts=>def.stmtidx)
+function check_valid(def::ValueDef, changes::IdDict)
+    haskey(changes, def.stmts=>def.stmtidx) && return false
+    isdefined(def, :assign) && haskey(changes, def.assign) && return false
+    return true
+end
 
 
 function remove_invalid!(info::ValueInfo, changes::IdDict)
@@ -4222,6 +4230,7 @@ function reindex_labels!(body::Vector{Any})
             elseif el.head === :(=)
                 if isa(el.args[2], PhiNode)
                     edges = Any[mapping[edge::Int + 1] - 1 for edge in el.args[2].edges]
+                    @assert all(x->x >= 0, edges)
                     el.args[2] = PhiNode(convert(Vector{Any}, edges), el.args[2].values)
                 end
             end

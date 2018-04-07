@@ -42,6 +42,51 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         }
         else {
             size_t i = 0, nargs = jl_array_len(e->args);
+            if (e->head == cfunction_sym) {
+                JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
+                jl_value_t *typ = jl_exprarg(e, 0);
+                if (!jl_is_type(typ))
+                    jl_error("first parameter to :cfunction must be a type");
+                if (typ == (jl_value_t*)jl_voidpointer_type) {
+                    jl_value_t *a = jl_exprarg(e, 1);
+                    JL_TYPECHK(cfunction method definition, quotenode, a);
+                    *(jl_value_t**)a = jl_toplevel_eval(module, *(jl_value_t**)a);
+                    jl_gc_wb(a, *(jl_value_t**)a);
+                }
+                jl_value_t *rt = jl_exprarg(e, 2);
+                jl_value_t *at = jl_exprarg(e, 3);
+                if (!jl_is_type(rt)) {
+                    JL_TRY {
+                        rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+                    }
+                    JL_CATCH {
+                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                            jl_error("could not evaluate cfunction return type (it might depend on a local variable)");
+                        else
+                            jl_rethrow();
+                    }
+                    jl_exprargset(e, 2, rt);
+                }
+                if (!jl_is_svec(at)) {
+                    JL_TRY {
+                        at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+                    }
+                    JL_CATCH {
+                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                            jl_error("could not evaluate cfunction argument type (it might depend on a local variable)");
+                        else
+                            jl_rethrow();
+                    }
+                    jl_exprargset(e, 3, at);
+                }
+                if (jl_is_svec(rt))
+                    jl_error("cfunction: missing return type");
+                JL_TYPECHK(cfunction method definition, type, rt);
+                JL_TYPECHK(cfunction method definition, simplevector, at);
+                JL_TYPECHK(cfunction method definition, quotenode, jl_exprarg(e, 4));
+                JL_TYPECHK(cfunction method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
+                return expr;
+            }
             if (e->head == foreigncall_sym) {
                 JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, cc, narg)
                 jl_value_t *rt = jl_exprarg(e, 1);
@@ -79,7 +124,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 4));
             }
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == structtype_sym ||
-                e->head == primtype_sym || e->head == module_sym) {
+                     e->head == primtype_sym || e->head == module_sym) {
                 i++;
             }
             for (; i < nargs; i++) {
@@ -201,6 +246,9 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
     jl_gc_wb(li, li->slotflags);
     li->ssavaluetypes = jl_box_long(nssavalue);
     jl_gc_wb(li, li->ssavaluetypes);
+    li->linetable = jl_nothing;
+    li->codelocs = jl_nothing;
+
     // Flags that need to be copied to slotflags
     const uint8_t vinfo_mask = 16 | 32 | 64;
     int i;
@@ -235,9 +283,8 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->rettype = (jl_value_t*)jl_any_type;
     li->sparam_vals = jl_emptysvec;
     li->backedges = NULL;
-    li->fptr = NULL;
-    li->unspecialized_ducttape = NULL;
-    li->jlcall_api = 0;
+    li->invoke = jl_fptr_trampoline;
+    li->specptr.fptr = NULL;
     li->compile_traced = 0;
     li->functionObjectsDecls.functionObject = NULL;
     li->functionObjectsDecls.specFunctionObject = NULL;
@@ -261,6 +308,8 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->slotflags = NULL;
     src->slottypes = NULL;
     src->ssavaluetypes = NULL;
+    src->codelocs = jl_nothing;
+    src->linetable = jl_nothing;
     src->inferred = 0;
     src->pure = 0;
     src->inlineable = 0;
@@ -527,11 +576,10 @@ static jl_method_t *jl_new_method(
     JL_GC_PUSH1(&root);
 
     m = jl_new_method_uninit(inmodule);
-    m->sparam_syms = sparam_syms;
     root = (jl_value_t*)m;
-    m->min_world = ++jl_world_counter;
-    m->name = name;
     m->sig = (jl_value_t*)sig;
+    m->sparam_syms = sparam_syms;
+    m->name = name;
     m->isva = isva;
     m->nargs = nargs;
     jl_method_set_source(m, definition);
@@ -547,6 +595,7 @@ static jl_method_t *jl_new_method(
     }
 
     JL_GC_POP();
+    m->min_world = ++jl_world_counter;
     return m;
 }
 

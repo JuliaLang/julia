@@ -86,7 +86,7 @@ identify the package in projects that depend on it.
 !!! note
     For legacy reasons it is possible to load a package without a project file or
     UUID from the REPL or the top-level of a script. It is not possible, however,
-    to load a package with a project file or UUID from a project with them. Once
+    to load a package without a project file or UUID from a project with them. Once
     you've loaded from a project file, everything needs a project file and UUID.
 
 **Application:** a project which provides standalone functionality not intended
@@ -133,36 +133,36 @@ which versions of packages are compatible or incompatible with each other. A
 registry is indexed by package name and UUID, and has a directory for each
 registered package providing the following metadata about it:
 
-  - name – e.g. `DataFrames`
-  - UUID – e.g. `a93c6f00-e57d-5684-b7b6-d8193f3e46c0`
-  - authors – e.g. `Jane Q. Developer <jane@example.com>`
-  - license – e.g. MIT, BSD3, or GPLv2
-  - repository – e.g. `https://github.com/JuliaData/DataFrames.jl.git`
-  - description – a block of text summarizing the functionality of a package
-  - keywords – e.g. `data`, `tabular`, `analysis`, `statistics`
-  - versions – a list of all registered version tags
+- name – e.g. `DataFrames`
+- UUID – e.g. `a93c6f00-e57d-5684-b7b6-d8193f3e46c0`
+- authors – e.g. `Jane Q. Developer <jane@example.com>`
+- license – e.g. MIT, BSD3, or GPLv2
+- repository – e.g. `https://github.com/JuliaData/DataFrames.jl.git`
+- description – a block of text summarizing the functionality of a package
+- keywords – e.g. `data`, `tabular`, `analysis`, `statistics`
+- versions – a list of all registered version tags
 
 For each registered version of a package, the following information is provided:
 
-  - its semantic version number – e.g. `v1.2.3`
-  - its git tree SHA-1 hash – e.g. `7ffb18ea3245ef98e368b02b81e8a86543a11103`
-  - a map from names to UUIDs of dependencies
-  - which versions of other packages it is compatible/incompatible with
+- its semantic version number – e.g. `v1.2.3`
+- its git tree SHA-1 hash – e.g. `7ffb18ea3245ef98e368b02b81e8a86543a11103`
+- a map from names to UUIDs of dependencies
+- which versions of other packages it is compatible/incompatible with
 
-Dependencies and compatiblity are stored in a compressed but human-readable
-format using ranges of package verions.
+Dependencies and compatibility are stored in a compressed but human-readable
+format using ranges of package versions.
 
 **Depot:** a directory on a system where various package-related resources live,
 including:
 
-  - `environments`: shared named environments (e.g. `v0.7`, `devtools`)
-  - `clones`: bare clones of package repositories
-  - `compiled`: cached compiled package images (`.ji` files)
-  - `config`: global configuration files (e.g. `startup.jl`)
-  - `dev`: default directory for package development
-  - `logs`: log files (e.g. `manifest_usage.toml`, `repl_history.jl`)
-  - `packages`: installed package versions
-  - `registries`: clones of registries (e.g. `Uncurated`)
+- `environments`: shared named environments (e.g. `v0.7`, `devtools`)
+- `clones`: bare clones of package repositories
+- `compiled`: cached compiled package images (`.ji` files)
+- `config`: global configuration files (e.g. `startup.jl`)
+- `dev`: default directory for package development
+- `logs`: log files (e.g. `manifest_usage.toml`, `repl_history.jl`)
+- `packages`: installed package versions
+- `registries`: clones of registries (e.g. `Uncurated`)
 
 **Load path:** a stack of environments where package identities, their
 dependencies, and entry-points are searched for. The load path is controlled in
@@ -185,17 +185,25 @@ global configuration data is saved. Later entries in the depot path are treated
 as read-only and are appropriate for registries, packages, etc. installed and
 managed by system administrators.
 
-
 ## Getting Started
 
-The Pkg REPL-mode is entered using from the Julia REPL using the key `]`.
+The Pkg REPL-mode is entered from the Julia REPL using the key `]`.
+
+```
+(v0.7) pkg>
+```
+
+The part inside the parenthesis of the prompt shows the name of the current project.
+Since we haven't created our own project yet, we are in the default project, located at `~/.julia/environments/v0.7`
+(or whatever version of Julia you happen to run).
+
 To return to the `julia>` prompt, either press backspace when the input line is empty or press Ctrl+C.
 Help is available by calling `pkg> help`.
 
 To generate files for a new project, use `pkg> generate`.
 
 ```
-pkg> generate HelloWorld
+(v0.7) pkg> generate HelloWorld
 ```
 
 This creates a new project `HelloWorld` with the following files (visualized with the external [`tree` command](https://linux.die.net/man/1/tree)):
@@ -244,10 +252,11 @@ Hello World!
 ### Adding packages to the project
 
 Let’s say we want to use the standard library package `Random` and the registered package `JSON` in our project.
-We simply `add` these packages:
+We simply `add` these packages (note how the prompt now shows the name of the newly generated project,
+since we are inside the `HelloWorld` project directory):
 
 ```
-pkg> add Random JSON
+(HelloWorld) pkg> add Random JSON
  Resolving package versions...
   Updating "~/Documents/HelloWorld/Project.toml"
  [682c06a0] + JSON v0.17.1
@@ -287,7 +296,7 @@ Sometimes we might want to use the very latest, unreleased version of a package,
 git repository. We can use e.g. the `master` branch of `JSON` by specifying the branch after a `#` when adding the package:
 
 ```
-pkg> add JSON#master
+(HelloWorld) pkg> add JSON#master
    Cloning package from https://github.com/JuliaIO/JSON.jl.git
  Resolving package versions...
   Updating "~/Documents/HelloWorld/Project.toml"
@@ -299,7 +308,7 @@ pkg> add JSON#master
 If we want to use a package that has not been registered in a registry, we can `add` its git repository url:
 
 ```
-pkg> add https://github.com/fredrikekre/ImportMacros.jl
+(HelloWorld) pkg> add https://github.com/fredrikekre/ImportMacros.jl
   Cloning package from https://github.com/fredrikekre/ImportMacros.jl
  Resolving package versions...
 Downloaded MacroTools ─ v0.4.0
@@ -315,10 +324,10 @@ For unregistered packages we could have given a branch (or commit SHA) to track 
 
 ## Developing packages
 
-Let’s say we found a bug in `JSON` that we want to fix. We can get the full git-repo using the `develop` command
+Let’s say we found a bug in one of our dependencies, e.g. `JSON` that we want to fix. We can get the full git-repo using the `develop` command
 
 ```
-pkg> develop JSON
+(HelloWorld) pkg> develop JSON
     Cloning package from https://github.com/JuliaIO/JSON.jl.git
   Resolving package versions...
    Updating "~/Documents/HelloWorld/Project.toml"
@@ -327,11 +336,11 @@ pkg> develop JSON
 ```
 
 By default, the package get cloned to the `~/.julia/dev` folder but can also be set by the `JULIA_PKG_DEVDIR` environment variable.
-When we have fixed the bug and checked that `JSON` now works correctly with out project, we can make a PR to the `JSON` repository.
-When a new release of `JSON` is made, we can go back to using the versioned `JSON` using the command `free` and `update` (see next section):
+When we have fixed the bug and checked that `JSON` now works correctly with our project, we can make a PR to the `JSON` repository.
+When the PR has been merged we can go over to track the master branch and finally, when a new release of `JSON` is made, we can go back to using the versioned `JSON` using the command `free` and `update` (see next section):
 
 ```
-pkg> free JSON
+(HelloWorld) pkg> free JSON
  Resolving package versions...
   Updating "~/Documents/HelloWorld/Project.toml"
  [682c06a0] ~ JSON v0.17.1+ #master ⇒ v0.17.1
@@ -341,20 +350,20 @@ pkg> free JSON
 
 It is also possible to give a local path as the argument to `develop` which will not clone anything but simply use that directory for the package.
 
-Developing a non registered package is done by giving the git-repo url as an argument to `develop`.
+Overriding the dependency path for a non registered package is done by giving the git-repo url as an argument to `develop`.
 
 ### Updating dependencies
 
 When new versions of packages the project is using  are released, it is a good idea to update. Simply calling `up` will try to update *all* the dependencies of the project. Sometimes this is not what you want. You can specify a subset of the dependencies to upgrade by giving them as arguments to `up`, e.g:
 
 ```
-pkg> up JSON
+(HelloWorld) pkg> up JSON
 ```
 
-The version of all other dependencies will stay the same. If you only want to update the minor version of packages, to reduce the risk that your project breaks, you can give the `--minor` flag, e.g:
+The version of all other direct dependencies will stay the same. If you only want to update the minor version of packages, to reduce the risk that your project breaks, you can give the `--minor` flag, e.g:
 
 ```
-pkg> up --minor JSON
+(HelloWorld) pkg> up --minor JSON
 ```
 
 Packages that track a branch are not updated when a minor upgrade is done.
@@ -363,7 +372,7 @@ Developed packages are never touched by the package manager.
 If you just want install the packages that are given by the current `Manifest.toml` use
 
 ```
-pkg> up --manifest --fixed
+(HelloWorld) pkg> up --manifest --fixed
 ```
 
 ### Preview mode
@@ -372,25 +381,24 @@ If you just want to see the effects of running a command, but not change your st
 For example:
 
 ```
-pkg> preview add Plot
+(HelloWorld) pkg> preview add Plots
 ```
 
 or
 
 ```
-pkg> preview up
+(HelloWorld) pkg> preview up
 ```
 
 will show you the effects adding `Plots`, or doing a full upgrade, respectively, would have on your project.
 However, nothing would be installed and your `Project.toml` and `Manfiest.toml` are untouched.
 
-
-### Using someone elses project.
+### Using someone elses project
 
 Simple clone their project using e.g. `git clone`, `cd` to the project directory and call
 
 ```
-pkg> up --manifest --fixed
+(SomeProject) pkg> up --manifest --fixed
 ```
 
 This will install the packages at the same state that the project you cloned was using.

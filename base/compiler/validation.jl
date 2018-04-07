@@ -22,6 +22,7 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :meta => 0:typemax(Int),
     :global => 1:1,
     :foreigncall => 3:typemax(Int),
+    :cfunction => 6:6,
     :isdefined => 1:1,
     :simdloop => 0:0,
     :gc_preserve_begin => 0:typemax(Int),
@@ -55,7 +56,7 @@ end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
 function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind::String)
-    if JLOptions().debug_level == 2
+    #=if JLOptions().debug_level == 2
         # this is a debug build of julia, so let's validate linfo
         errors = validate_code(linfo, src)
         if !isempty(errors)
@@ -69,7 +70,7 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
                 end
             end
         end
-    end
+    end=#
 end
 
 """
@@ -139,9 +140,11 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 end
                 validate_val!(x.args[1])
             elseif head === :call || head === :invoke || head == :gc_preserve_end || head === :meta ||
-                head === :inbounds || head === :foreigncall || head === :const || head === :enter ||
-                head === :leave || head === :method || head === :global || head === :static_parameter ||
-                head === :new || head === :thunk || head === :simdloop || head === :throw_undef_if_not || head === :unreachable
+                head === :inbounds || head === :foreigncall || head === :cfunction ||
+                head === :const || head === :enter || head === :leave ||
+                head === :method || head === :global || head === :static_parameter ||
+                head === :new || head === :thunk || head === :simdloop ||
+                head === :throw_undef_if_not || head === :unreachable
                 validate_val!(x)
             else
                 push!(errors, InvalidCodeError("invalid statement", x))
@@ -221,7 +224,7 @@ end
 
 function is_valid_rvalue(lhs, x)
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :gc_preserve_begin)
+    if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin)
         return true
         # TODO: disallow `globalref = call` when .typ field is removed
         #return isa(lhs, SSAValue) || isa(lhs, Slot)

@@ -274,6 +274,7 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
     abspath(path::AbstractString) -> AbstractString
 
 Convert a path to an absolute path by adding the current directory if necessary.
+Also normalizes the path as in [`normpath`](@ref).
 """
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 

@@ -436,13 +436,10 @@ end
 getfield_tfunc(@nospecialize(s00), @nospecialize(name), @nospecialize(inbounds)) =
     getfield_tfunc(s00, name)
 function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
-    if isa(s00, TypeVar)
-        s00 = s00.ub
-    end
     s = unwrap_unionall(s00)
     if isa(s, Union)
-        return tmerge(rewrap(getfield_tfunc(s.a, name),s00),
-                      rewrap(getfield_tfunc(s.b, name),s00))
+        return tmerge(getfield_tfunc(rewrap(s.a,s00), name),
+                      getfield_tfunc(rewrap(s.b,s00), name))
     elseif isa(s, Conditional)
         return Bottom # Bool has no fields
     elseif isa(s, Const) || isconstType(s)
@@ -715,9 +712,6 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     if isvarargtype(headtype)
         return Type
     end
-    if uncertain && type_too_complex(appl, MAX_TYPE_DEPTH)
-        return Type{<:headtype}
-    end
     if istuple
         return Type{<:appl}
     end
@@ -917,3 +911,10 @@ function return_type_tfunc(argtypes::Vector{Any}, vtypes::VarTable, sv::Inferenc
     end
     return NOT_FOUND
 end
+
+# N.B.: typename maps type equivalence classes to a single value
+function typename_static(@nospecialize(t))
+    t = unwrap_unionall(t)
+    return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
+end
+typename_static(t::Const) = _typename(t.val)

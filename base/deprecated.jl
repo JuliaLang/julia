@@ -495,6 +495,12 @@ end
 
 # PR #23066
 @deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
+@noinline function cfunction(f, r, a)
+    @nospecialize(f, r, a)
+    depwarn("The function `cfunction` is now written as a macro `@cfunction`.", :cfunction)
+    return ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any), f, r, a)
+end
+export cfunction
 
 # PR 23341
 @eval GMP @deprecate gmp_version() version() false
@@ -689,15 +695,11 @@ end
 
 # Broadcast no longer defaults to treating its arguments as scalar (#)
 @noinline function Broadcast.broadcastable(x)
-    if Base.Broadcast.BroadcastStyle(typeof(x)) isa Broadcast.Unknown
-        depwarn("""
-            broadcast will default to iterating over its arguments in the future. Wrap arguments of
-            type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
-            """, (:broadcast, :broadcast!))
-        return Ref{typeof(x)}(x)
-    else
-        return x
-    end
+    depwarn("""
+        broadcast will default to iterating over its arguments in the future. Wrap arguments of
+        type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
+        """, (:broadcast, :broadcast!))
+    return Ref{typeof(x)}(x)
 end
 @eval Base.Broadcast Base.@deprecate_binding Scalar DefaultArrayStyle{0} false
 # After deprecation is removed, enable the fallback broadcastable definitions in base/broadcast.jl
@@ -1227,9 +1229,6 @@ end
 @deprecate search(s::AbstractString, t::AbstractString, i::Integer) coalesce(findnext(t, s, i), 0:-1)
 @deprecate search(s::AbstractString, t::AbstractString) coalesce(findfirst(t, s), 0:-1)
 
-@deprecate search(buf::IOBuffer, delim::UInt8) coalesce(findfirst(isequal(delim), buf), 0)
-@deprecate search(buf::Base.GenericIOBuffer, delim::UInt8) coalesce(findfirst(isequal(delim), buf), 0)
-
 @deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) coalesce(findprev(in(c), s, i), 0)
 @deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) coalesce(findlast(in(c), s), 0)
 @deprecate rsearch(s::AbstractString, t::AbstractString, i::Integer) coalesce(findprev(t, s, i), 0:-1)
@@ -1367,6 +1366,8 @@ export readandwrite
 
 @deprecate flipdim(A, d) reverse(A, dims=d)
 
+@deprecate squeeze(A, dims) squeeze(A, dims=dims)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
@@ -1503,11 +1504,17 @@ end
            false)
 
 # PR 26156
-@deprecate trunc(x, digits, base) trunc(x, digits, base = base)
-@deprecate floor(x, digits, base) floor(x, digits, base = base)
-@deprecate ceil(x, digits, base) ceil(x, digits, base = base)
-@deprecate round(x, digits, base) round(x, digits, base = base)
-@deprecate signif(x, digits, base) signif(x, digits, base = base)
+@deprecate trunc(x::Number, digits) trunc(x; digits=digits)
+@deprecate floor(x::Number, digits) floor(x; digits=digits)
+@deprecate ceil(x::Number, digits) ceil(x; digits=digits)
+@deprecate round(x::Number, digits) round(x; digits=digits)
+@deprecate signif(x::Number, digits) round(x; sigdigits=digits, base = base)
+
+@deprecate trunc(x::Number, digits, base) trunc(x; digits=digits, base = base)
+@deprecate floor(x::Number, digits, base) floor(x; digits=digits, base = base)
+@deprecate ceil(x::Number, digits, base) ceil(x; digits=digits, base = base)
+@deprecate round(x::Number, digits, base) round(x; digits=digits, base = base)
+@deprecate signif(x::Number, digits, base) round(x; sigdigits=digits, base = base)
 
 # issue #25965
 @deprecate spawn(cmds::AbstractCmd) run(cmds, wait = false)
@@ -1564,6 +1571,19 @@ end
 @deprecate islower islowercase
 @deprecate ucfirst uppercasefirst
 @deprecate lcfirst lowercasefirst
+
+function search(buf::IOBuffer, delim::UInt8)
+    Base.depwarn("search(buf::IOBuffer, delim::UInt8) is deprecated: use occursin(delim, buf) or readuntil(buf, delim) instead", :search)
+    p = pointer(buf.data, buf.ptr)
+    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,bytesavailable(buf))
+    q == C_NULL && return nothing
+    return Int(q-p+1)
+end
+
+# PR #26647
+# The `keep` argument in `split` and `rpslit` has been renamed to `keepempty`.
+# To remove this deprecation, remove the `keep` argument from the function signatures as well as
+# the internal logic that deals with the renaming. These live in base/strings/util.jl.
 
 # END 0.7 deprecations
 
