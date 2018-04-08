@@ -295,6 +295,7 @@ Core.TypeError
 Core.UndefKeywordError
 Core.UndefRefError
 Core.UndefVarError
+Base.StringIndexError
 Base.InitError
 Base.retry
 Base.ExponentialBackOff

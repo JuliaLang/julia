@@ -230,7 +230,7 @@ This section lists changes that do not have deprecation warnings.
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
-  * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
+  * `getindex(s::String, r::UnitRange{Int})` now throws `StringIndexError` if `last(r)`
     is not a valid index into `s` ([#22572]).
 
   * `ntuple(f, n::Integer)` throws `ArgumentError` if `n` is negative.
