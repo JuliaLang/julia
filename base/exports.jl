@@ -394,6 +394,7 @@ export
     last,
     linearindices,
     mapslices,
+    matrix,
     max,
     maximum!,
     maximum,

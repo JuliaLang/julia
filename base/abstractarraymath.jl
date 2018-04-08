@@ -10,7 +10,7 @@ all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 ## Constructors ##
 
 """
-    vec(a::AbstractArray) -> Vector
+    vec(a::AbstractArray) -> AbstractVector
 
 Reshape the array `a` as a one-dimensional column vector. The resulting array
 shares the same underlying data as `a`, so modifying one will also modify the
@@ -33,10 +33,44 @@ julia> vec(a)
  6
 ```
 
-See also [`reshape`](@ref).
+See also [`reshape`](@ref), [`matrix`](@ref).
 """
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
+
+
+"""
+    matrix(a::AbstractArray) -> AbstractMatrix
+
+Reshape the array `a` as a two-dimensional matrix.
+The matrix will have the same size in the first dimension,
+and all other dimensions (if any) will be combined.
+If applied to a vector, this results in a matrix with a single column.
+The resulting array shares the same underlying data as `a`,
+so modifying one will also modify the other.
+
+# Examples
+```jldoctest
+
+julia> a = [1,2,3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> matrix(a)
+3×1 Array{Int64,2}:
+ 1
+ 2
+ 3
+```
+
+See also [`reshape`](@ref), [`vec`](@ref).
+"""
+matrix(a::AbstractArray) = reshape(a,Val(2))
+matrix(a::AbstractMatrix) = a
+
+
 
 _sub(::Tuple{}, ::Tuple{}) = ()
 _sub(t::Tuple, ::Tuple{}) = t
