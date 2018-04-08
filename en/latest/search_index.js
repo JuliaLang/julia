@@ -3133,7 +3133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Environment Variables",
     "title": "JULIA_LLVM_ARGS",
     "category": "section",
-    "text": "Arguments to be passed to the LLVM backend.note: Note\nThis environment variable has an effect only if Julia was compiled with JL_DEBUG_BUILD set — in particular, the julia-debug executable is always compiled with this build variable."
+    "text": "Arguments to be passed to the LLVM backend."
 },
 
 {
@@ -7493,7 +7493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -18141,7 +18141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
@@ -19629,7 +19629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Working with LLVM",
     "title": "Building Julia with a different version of LLVM",
     "category": "section",
-    "text": "The default version of LLVM is specified in deps/Versions.make. You can override it by creating a file called Make.user in the top-level directory and adding a line to it such as:LLVM_VER = 3.5.0Besides the LLVM release numerals, you can also use LLVM_VER = svn to bulid against the latest development version of LLVM."
+    "text": "The default version of LLVM is specified in deps/Versions.make. You can override it by creating a file called Make.user in the top-level directory and adding a line to it such as:LLVM_VER = 3.5.0Besides the LLVM release numerals, you can also use LLVM_VER = svn to bulid against the latest development version of LLVM.You can also specify to build a debug version of LLVM, by setting either LLVM_DEBUG = 1 or LLVM_DEBUG = Release in your Make.user file. The former will be a fully unoptimized build of LLVM and the latter will produce an optimized build of LLVM. Depending on your needs the latter will suffice and it quite a bit faster. If you use LLVM_DEBUG = Release you will also want to set LLVM_ASSERTIONS = 1 to enable diagonstics for different passes. Only LLVM_DEBUG = 1 implies that option by default."
 },
 
 {
@@ -19637,7 +19637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Working with LLVM",
     "title": "Passing options to LLVM",
     "category": "section",
-    "text": "You can pass options to LLVM using debug builds of Julia. To create a debug build, run make debug. The resulting executable is usr/bin/julia-debug. You can pass LLVM options to this executable via the environment variable JULIA_LLVM_ARGS. Here are example settings using bash syntax:export JULIA_LLVM_ARGS = -print-after-all dumps IR after each pass.\nexport JULIA_LLVM_ARGS = -debug-only=loop-vectorize dumps LLVM DEBUG(...) diagnostics for loop vectorizer if you built Julia with LLVM_ASSERTIONS=1. Otherwise you will get warnings about \"Unknown command line argument\". Counter-intuitively, building Julia with LLVM_DEBUG=1 is not enough to dump DEBUG diagnostics from a pass."
+    "text": "You can pass options to LLVM via the environment variable JULIA_LLVM_ARGS. Here are example settings using bash syntax:export JULIA_LLVM_ARGS = -print-after-all dumps IR after each pass.\nexport JULIA_LLVM_ARGS = -debug-only=loop-vectorize dumps LLVM DEBUG(...) diagnostics for loop vectorizer. If you get warnings about \"Unknown command line argument\", rebuild LLVM with LLVM_ASSERTIONS = 1."
 },
 
 {
