@@ -431,9 +431,9 @@ function getindex(view::TypesView, v::OldSSAValue)
     return view.ir.ir.types[v.id]
 end
 
-function setindex!(compact::IncrementalCompact, v, idx)
+function setindex!(compact::IncrementalCompact, @nospecialize(v), idx)
     if idx < compact.result_idx
-        (compact.result[idx] == v) && return
+        (compact.result[idx] === v) && return
         # Kill count for current uses
         for ops in userefs(compact.result[idx])
             val = ops[]
