@@ -550,3 +550,24 @@ WARNING: redefining constant a
 1-element Array{Int64,1}:
  1
 ```
+
+Note that although possible, changing the value of a variable that is declared as constant
+is strongly discouraged. For instance, if a method references a constant and is already
+compiled before the constant is changed then it might keep using the old value:
+```jldoctest
+julia> const x = 1
+1
+
+julia> f() = x
+f (generic function with 1 method)
+
+julia> f()
+1
+
+julia> x = 2
+WARNING: redefining constant x
+2
+
+julia> f()
+1
+```
