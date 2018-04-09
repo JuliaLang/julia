@@ -64,9 +64,12 @@ function set_maximum_version_registry!(env::EnvCache, pkg::PackageSpec)
         pathvers = keys(load_versions(path))
         union!(pkgversions, pathvers)
     end
-    length(pkgversions) == 0 && return VersionNumber(0)
-    max_version = maximum(pkgversions)
-    pkg.version = VersionNumber(max_version.major, max_version.minor, max_version.patch, max_version.prerelease, ("",))
+    if length(pkgversions) == 0
+        pkg.version = VersionNumber(0)
+    else
+        max_version = maximum(pkgversions)
+        pkg.version = VersionNumber(max_version.major, max_version.minor, max_version.patch, max_version.prerelease, ("",))
+    end
 end
 
 # This also sets the .path field for fixed packages in `pkgs`
@@ -126,8 +129,8 @@ end
 
 function collect_project!(pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
     project_file = joinpath(path, "Project.toml")
-    !isfile(project_file) && return false
     fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
+    !isfile(project_file) && return false
     project = read_project(project_file)
     for (deppkg_name, uuid) in project["deps"]
         vspec = VersionSpec() # TODO: Update with compatibility from Project
