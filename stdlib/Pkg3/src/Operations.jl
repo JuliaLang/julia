@@ -71,7 +71,6 @@ end
 
 # This also sets the .path field for fixed packages in `pkgs`
 function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::Dict{UUID, String})
-    fix_deps = PackageSpec[]
     fixed_pkgs = PackageSpec[]
     fix_deps_map = Dict{UUID,Vector{PackageSpec}}()
     uuid_to_pkg = Dict{UUID,PackageSpec}()
@@ -102,36 +101,14 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
             cmderror("path $(path) for package $(pkg.name) no longer exists. Remove the package or `develop` it at a new path")
         end
 
-        # Checked out package has by definition a version higher than all registered.
-        # TODO: Remove hardcoded names
-        if path !== nothing && !(isfile(path, "Project.toml") || isfile(path, "JuliaProject.toml"))
-            set_maximum_version_registry!(ctx.env, pkg)
-        end
-
         uuid_to_pkg[pkg.uuid] = pkg
         uuid_to_name[pkg.uuid] = pkg.name
-        # Backwards compatability with Pkg2 REQUIRE format
-        reqfile = joinpath(path, "REQUIRE")
-        fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
-        !isfile(reqfile) && continue
-        for r in Pkg2.Reqs.read(reqfile)
-            r isa Pkg2.Reqs.Requirement || continue
-            pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
-            if pkg_name == "julia"
-                if !(VERSION in vspec)
-                    error("julia version requirement for package $pkg not satisfied")
-                end
-            else
-                deppkg = PackageSpec(pkg_name, vspec)
-                push!(fix_deps_map[pkg.uuid], deppkg)
-                push!(fix_deps, deppkg)
-            end
+        found_project = collect_project!(pkg, path, fix_deps_map)
+        if !found_project
+            collect_require!(ctx, pkg, path, fix_deps_map)
         end
     end
 
-    # Look up the UUIDS for all the fixed dependencies in the registry in one shot
-    registry_resolve!(ctx.env, fix_deps)
-    ensure_resolved(ctx.env, fix_deps; registry=true)
     fixed = Dict{UUID,Fixed}()
     # Collect the dependencies for the fixed packages
     for (uuid, fixed_pkgs) in fix_deps_map
@@ -145,6 +122,47 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
         fixed[uuid] = Fixed(fix_pkg.version, q)
     end
     return fixed
+end
+
+function collect_project!(pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
+    project_file = joinpath(path, "Project.toml")
+    !isfile(project_file) && return false
+    fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
+    project = read_project(project_file)
+    for (deppkg_name, uuid) in project["deps"]
+        vspec = VersionSpec() # TODO: Update with compatibility from Project
+        deppkg = PackageSpec(deppkg_name, UUID(uuid), vspec)
+        push!(fix_deps_map[pkg.uuid], deppkg)
+    end
+    pkg.version = VersionNumber(get(project, "version", "0.0"))
+    return true
+end
+
+# Backwards compatibility with Pkg2 REQUIRE format
+function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
+    fix_deps = PackageSpec[]
+    reqfile = joinpath(path, "REQUIRE")
+    # Checked out "old-school" packages have by definition a version higher than all registered.
+    set_maximum_version_registry!(ctx.env, pkg)
+    !haskey(fix_deps_map, pkg.uuid) && (fix_deps_map[pkg.uuid] = valtype(fix_deps_map)())
+    if isfile(reqfile)
+        for r in Pkg2.Reqs.read(reqfile)
+            r isa Pkg2.Reqs.Requirement || continue
+            pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
+            if pkg_name == "julia"
+                if !(VERSION in vspec)
+                    error("julia version requirement for package $pkg not satisfied")
+                end
+            else
+                deppkg = PackageSpec(pkg_name, vspec)
+                push!(fix_deps_map[pkg.uuid], deppkg)
+                push!(fix_deps, deppkg)
+            end
+        end
+        # Packages from REQUIRE files need to get their UUID from the registry
+        registry_resolve!(ctx.env, fix_deps)
+        ensure_resolved(ctx.env, fix_deps; registry=true)
+    end
 end
 
 
