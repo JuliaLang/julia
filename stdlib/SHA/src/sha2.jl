@@ -14,14 +14,10 @@ macro R1_16(j, T)
     if T == 512
         Sigma0 = :Sigma0_512
         Sigma1 = :Sigma1_512
-        sigma0 = :sigma0_512
-        sigma1 = :sigma1_512
         K = :K512
     elseif T == 256
         Sigma0 = :Sigma0_256
         Sigma1 = :Sigma1_256
-        sigma0 = :sigma0_256
-        sigma1 = :sigma1_256
         K = :K256
     end
 
