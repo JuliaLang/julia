@@ -170,17 +170,17 @@ function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
 end
 
 hidigit(x::Integer, base) = ndigits0z(x, base)
-function hidigit(x::Real, base)
+function hidigit(x::AbstractFloat, base)
     iszero(x) && return 0
-    fx = float(x)
     if base == 10
-        return 1 + floor(Int, log10(abs(fx)))
+        return 1 + floor(Int, log10(abs(x)))
     elseif base == 2
         return 1 + exponent(x)
     else
-        return 1 + floor(Int, log(base, abs(fx)))
+        return 1 + floor(Int, log(base, abs(x)))
     end
 end
+hidigit(x::Real, base) = hidigit(float(x), base)
 
 function _round(x, r::RoundingMode, digits::Nothing, sigdigits::Integer, base)
     h = hidigit(x, base)
