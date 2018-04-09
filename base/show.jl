@@ -1213,10 +1213,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # unary operator (i.e. "!z")
         elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
             show_unquoted(io, func, indent)
-            if isa(func_args[1], Expr) || isoperator(func_args[1])
+            arg1 = func_args[1]
+            if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
                 show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
-                show_unquoted(io, func_args[1], indent, func_prec)
+                show_unquoted(io, arg1, indent, func_prec)
             end
 
         # binary operator (i.e. "x + y")

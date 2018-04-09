@@ -86,6 +86,8 @@ end
 @test_repr "x = ~y"
 @test_repr ":(:x, :y)"
 @test_repr ":(:(:(x)))"
+@test_repr "-\"\""
+@test_repr "-(<=)"
 
 # order of operations
 @test_repr "x + y * z"
