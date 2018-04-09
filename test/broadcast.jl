@@ -274,6 +274,12 @@ let x = [1,2,3]
     @test f(x) == [1,4,9]
 end
 
+# Issue #23622: @. with chained comparisons
+let x = [1,2,3]
+    @test (1 .< x .< 3) == @.(1 < x < 3) == (@. 1 .< x .< 3) == [false, true, false]
+    @test (x .=== 1:3 .=== [1,2,3]) == @.(x === 1:3 === [1,2,3]) == [true, true, true]
+end
+
 # PR #17510: Fused in-place assignment
 let x = [1:4;], y = x
     y .= 2:5
