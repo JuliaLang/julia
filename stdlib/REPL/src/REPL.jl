@@ -266,6 +266,7 @@ mutable struct Options
     backspace_align::Bool
     backspace_adjust::Bool
     confirm_exit::Bool # ^D must be repeated to confirm exit
+    auto_indent::Bool # indent a newline like line above
 end
 
 Options(;
@@ -278,12 +279,13 @@ Options(;
         beep_colors = ["\e[90m"], # gray (text_colors not yet available)
         beep_use_current = true,
         backspace_align = true, backspace_adjust = backspace_align,
-        confirm_exit = false) =
+        confirm_exit = false,
+        auto_indent = true) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,
-                    backspace_align, backspace_adjust, confirm_exit)
+                    backspace_align, backspace_adjust, confirm_exit, auto_indent)
 
 # for use by REPLs not having an options field
 const GlobalOptions = Options()
