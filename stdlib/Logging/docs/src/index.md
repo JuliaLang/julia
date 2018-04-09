@@ -146,6 +146,7 @@ messages that will be discarded:
    setting.
 2. The current logger state is looked up and the message level checked against the
    logger's cached minimum level, as found by calling [`min_enabled_level`](@ref).
+   This behavior can be overridden via environment variables (more on this later).
 3. The [`shouldlog`](@ref) function is called with the current logger, taking
    some minimal information (level, module, group, id) which can be computed
    statically.  Most usefully, `shouldlog` is passed an event `id` which can be
@@ -168,6 +169,27 @@ Log events are a side effect of running normal code, but you might find
 yourself wanting to test particular informational messages and warnings. The
 `Test` module provides a [`@test_logs`](@ref) macro that can be used to
 pattern match against the log event stream.
+
+## Environment variables
+
+Message filtering can be influenced through the `JULIA_DEBUG` environment
+variable, and serves as an easy way to enable debug logging for a file or
+module. For example, loading julia with `JULIA_DEBUG=loading` will activate
+`@debug` log messages in `loading.jl`:
+
+```
+$ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
+┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji due to it containing an invalid cache header
+└ @ Base loading.jl:1328
+[ Info: Recompiling stale cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji for module OhMyREPL
+┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/Tokenize.ji due to it containing an invalid cache header
+└ @ Base loading.jl:1328
+...
+```
+
+Similarly, the environment variable can be used to enable debug logging of
+modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To
+enable all debug logging, use the special value `all`.
 
 
 ## Reference
