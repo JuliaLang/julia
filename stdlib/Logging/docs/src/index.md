@@ -65,8 +65,10 @@ automatically extracted. Let's examine the user-defined data first:
   - Use `Error` to report errors where the code has enough context to recover
     and continue.  (When the code doesn't have enough context, an exception or
     early return is more appropriate.)
-* The *message* is a human readable string describing the event in markdown
-  format.
+* The *message*  is an object describing the event. By convention
+  `AbstractString`s passed as messages are assumed to be in markdown format.
+  Other types will be displayed using `show(io,mime,obj)` according to the
+  display capabilities of the installed logger.
 * Optional *key--value pairs* allow arbitrary data to be attached to each event.
   Some keys have conventional meaning that can affect the way an event is
   interpreted (see [`@logmsg`](@ref)).
