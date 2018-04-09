@@ -6439,6 +6439,47 @@ static std::unique_ptr<Module> emit_function(
     ctx.builder.SetInsertPoint(ctx.ptlsStates);
     ctx.builder.CreateLifetimeEnd(UndefAlloca);
 
+    auto undef_value_for_type = [&](jl_value_t *phiType, Type *UndefType) {
+        // While we're guaranteed that this value will not be looked at dynamically,
+        // we're not guaranteed that it won't be moved around. For things allocated on the
+        // stack, that generally involves memcpying them from one stack slot to another,
+        // so we need to make sure that such values are legal to be copied from.
+        Value *VNUndef;
+        if (UndefType == T_prjlvalue) {
+            VNUndef =  (llvm::Value*)ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+        } else if (UndefType->isPointerTy()) {
+            size_t nbytes, align, min_align;
+            if (jl_is_uniontype(phiType)) {
+                bool allunbox;
+                union_alloca_type((jl_uniontype_t *)phiType, allunbox, nbytes, align, min_align);
+            } else {
+                bool isboxed;
+                Type *vtype = julia_type_to_llvm(phiType, &isboxed);
+                assert(vtype->isAggregateType());
+                nbytes = jl_data_layout.getTypeStoreSize(vtype);
+                align = jl_data_layout.getABITypeAlignment(vtype);
+            }
+            if (nbytes > undef_alloca_bytes)
+                undef_alloca_bytes = nbytes;
+            if (align > undef_alloca_align)
+                undef_alloca_align = align;
+            VNUndef = UndefAlloca;
+            // It's legal to decay our addrspace(0) alloca to any of our addrspaces
+            ctx.builder.SetInsertPoint(ctx.ptlsStates);
+            if (UndefType->getPointerAddressSpace() !=
+                VNUndef->getType()->getPointerAddressSpace()) {
+                VNUndef = new AddrSpaceCastInst(VNUndef,
+                    cast<PointerType>(VNUndef->getType())->getElementType()->getPointerTo(
+                        UndefType->getPointerAddressSpace()), "",
+                    /*InsertBefore=*/ ctx.ptlsStates);
+            }
+            VNUndef = maybe_bitcast(ctx, VNUndef, UndefType);
+        } else {
+            VNUndef = (llvm::Value*)UndefValue::get(UndefType);
+        }
+        return VNUndef;
+    };
+
     // Codegen Phi nodes
     std::map<BasicBlock *, BasicBlock*> BB_rewrite_map;
     for (auto &tup : ctx.PhiNodes) {
@@ -6499,7 +6540,7 @@ static std::unique_ptr<Module> emit_function(
                             }
                         }
                         else {
-                            undef = UndefValue::get(VN->getType());
+                            undef = undef_value_for_type(phiType, VN->getType());
                         }
                         VN->addIncoming(undef, FromBB);
                     }
@@ -6539,7 +6580,7 @@ static std::unique_ptr<Module> emit_function(
             }
             if (!jl_is_uniontype(phiType)) {
                 if (val.typ == (jl_value_t*)jl_bottom_type) {
-                    V = UndefValue::get(VN->getType());
+                    V = undef_value_for_type(phiType, VN->getType());
                 }
                 else if (VN->getType() == T_prjlvalue) {
                     V = boxed(ctx, val);
@@ -6561,7 +6602,7 @@ static std::unique_ptr<Module> emit_function(
             else {
                 Value *RTindex = NULL;
                 if (val.typ == (jl_value_t*)jl_bottom_type) {
-                    V = UndefValue::get(VN->getType());
+                    V = undef_value_for_type(phiType, VN->getType());
                     RTindex = UndefValue::get(T_int8);
                 }
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
@@ -6633,42 +6674,7 @@ static std::unique_ptr<Module> emit_function(
             if (!found) {
                 if (VN) {
                     if (!VNUndef) {
-                        // While we're guaranteed that this value will not be looked at dynamically,
-                        // we're not guaranteed that it won't be moved around. For things allocated on the
-                        // stack, that generally involves memcpying them from one stack slot to another,
-                        // so we need to make sure that such values are legal to be copied from.
-                        if (VN->getType() == T_prjlvalue) {
-                            VNUndef =  (llvm::Value*)ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
-                        } else if (VN->getType()->isPointerTy()) {
-                            size_t nbytes, align, min_align;
-                            if (jl_is_uniontype(phiType)) {
-                                bool allunbox;
-                                union_alloca_type((jl_uniontype_t *)phiType, allunbox, nbytes, align, min_align);
-                            } else {
-                                bool isboxed;
-                                Type *vtype = julia_type_to_llvm(phiType, &isboxed);
-                                assert(vtype->isAggregateType());
-                                nbytes = jl_data_layout.getTypeStoreSize(vtype);
-                                align = jl_data_layout.getABITypeAlignment(vtype);
-                            }
-                            if (nbytes > undef_alloca_bytes)
-                                undef_alloca_bytes = nbytes;
-                            if (align > undef_alloca_align)
-                                undef_alloca_align = align;
-                            VNUndef = UndefAlloca;
-                            // It's legal to decay our addrspace(0) alloca to any of our addrspaces
-                            ctx.builder.SetInsertPoint(ctx.ptlsStates);
-                            if (VN->getType()->getPointerAddressSpace() !=
-                                VNUndef->getType()->getPointerAddressSpace()) {
-                                VNUndef = new AddrSpaceCastInst(VNUndef,
-                                    cast<PointerType>(VNUndef->getType())->getElementType()->getPointerTo(
-                                        VN->getType()->getPointerAddressSpace()), "",
-                                    /*InsertBefore=*/ ctx.ptlsStates);
-                            }
-                            VNUndef = maybe_bitcast(ctx, VNUndef, VN->getType());
-                        } else {
-                            VNUndef = (llvm::Value*)UndefValue::get(VN->getType());
-                        }
+                        VNUndef = undef_value_for_type(phiType, VN->getType());
                     }
                     VN->addIncoming(VNUndef, pred);
                 }
