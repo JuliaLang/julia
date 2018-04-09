@@ -587,28 +587,37 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
     delete!(info, "deps")
     if path != nothing
         path = joinpath(dirname(ctx.env.project_file), path)
-        # Remove when packages uses Project files properly
-        dep_pkgs = PackageSpec[]
-        stdlib_deps = find_stdlib_deps(ctx, path)
-        for (stdlib_uuid, stdlib) in stdlib_deps
-            push!(dep_pkgs, PackageSpec(stdlib, stdlib_uuid))
+        deps = Dict{String,String}()
+
+        # Check for deps in project file
+        project_file = joinpath(path, "Project.toml")
+        if isfile(project_file)
+            project = read_project(project_file)
+            deps = project["deps"]
+        else
+            # Check in REQUIRE file
+            # Remove when packages uses Project files properly
+            dep_pkgs = PackageSpec[]
+            stdlib_deps = find_stdlib_deps(ctx, path)
+            for (stdlib_uuid, stdlib) in stdlib_deps
+                push!(dep_pkgs, PackageSpec(stdlib, stdlib_uuid))
+            end
+            reqfile = joinpath(path, "REQUIRE")
+            if isfile(reqfile)
+                for r in Pkg2.Reqs.read(reqfile)
+                    r isa Pkg2.Reqs.Requirement || continue
+                    push!(dep_pkgs, PackageSpec(r.package))
+                end
+                registry_resolve!(env, dep_pkgs)
+                ensure_resolved(env, dep_pkgs; registry=true)
+                for dep_pkg in dep_pkgs
+                    dep_pkg.name == "julia" && continue
+                    deps[dep_pkg.name] = string(dep_pkg.uuid)
+                end
+            end
         end
-        reqfile = joinpath(path, "REQUIRE")
-        if isfile(reqfile)
-            for r in Pkg2.Reqs.read(reqfile)
-                r isa Pkg2.Reqs.Requirement || continue
-                push!(dep_pkgs, PackageSpec(r.package))
-            end
-            registry_resolve!(env, dep_pkgs)
-            ensure_resolved(env, dep_pkgs; registry=true)
-            deps = Dict{String,String}()
-            for dep_pkg in dep_pkgs
-                dep_pkg.name == "julia" && continue
-                deps[dep_pkg.name] = string(dep_pkg.uuid)
-            end
-            if !isempty(deps)
-                info["deps"] = deps
-            end
+        if !isempty(deps)
+            info["deps"] = deps
         end
     else
         for path in registered_paths(env, uuid)
