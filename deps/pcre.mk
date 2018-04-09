@@ -5,7 +5,7 @@ PCRE_CFLAGS := -O3
 PCRE_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
 $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2: | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ https://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre2-$(PCRE_VER).tar.bz2
+	$(JLDOWNLOAD) $@ https://ftp.pcre.org/pub/pcre/pcre2-$(PCRE_VER).tar.bz2
 
 $(SRCDIR)/srccache/pcre2-$(PCRE_VER)/source-extracted: $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
