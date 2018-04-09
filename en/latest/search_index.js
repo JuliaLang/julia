@@ -37,7 +37,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Standard Library",
     "category": "section",
-    "text": "The Julia REPL\nBase64\nCRC32c\nSHA\nDates\nDelimited Files\nDistributed Computing\nFile Events\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nRandom Numbers\nShared Arrays\nLinear Algebra\nSparse Arrays\nUnicode\nUnit Testing"
+    "text": "The Julia REPL\nBase64\nCRC32c\nSHA\nDates\nDelimited Files\nDistributed Computing\nFile Events\nIterative Eigensolvers\nMemory-mapped I/O\nPrintf\nProfiling\nRandom Numbers\nShared Arrays\nLinear Algebra\nLogging\nSparse Arrays\nUnicode\nUnit Testing"
 },
 
 {
@@ -7197,7 +7197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
 },
 
 {
@@ -7493,7 +7493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -17145,6 +17145,214 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/Logging/#",
+    "page": "Logging",
+    "title": "Logging",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/Logging/#Logging-1",
+    "page": "Logging",
+    "title": "Logging",
+    "category": "section",
+    "text": "The Logging module provides a way to record the history and progress of a computation as a log of events.  Events are created by inserting a logging statement into the source code, for example:@warn \"Abandon printf debugging, all ye who enter here!\"\n┌ Warning: Abandon printf debugging, all ye who enter here!\n└ @ Main REPL[1]:1The system provides several advantages over peppering your source code with calls to println().  First, it allows you to control the visibility and presentation of messages without editing the source code.  For example, in contrast to the @warn above@debug \"The sum of some values $(sum(rand(100)))\"will produce no output by default.  Furthermore, it\'s very cheap to leave debug statements like this in the source code because the system avoids evaluating the message if it would later be ignored.  In this case sum(rand(100)) and the associated string processing will never be executed unless debug logging is enabled.Second, the logging tools allow you to attach arbitrary data to each event as a set of key–value pairs. This allows you to capture local variables and other program state for later analysis. For example, to attach the local array variable A and the sum of a vector v as the key s you can useA = ones(Int, 4, 4)\nv = ones(100)\n@info \"Some variables\"  A  s=sum(v)\n\n# Output\n┌ Info: Some variables\n│   A =\n│    4×4 Array{Int64,2}:\n│     1  1  1  1\n│     1  1  1  1\n│     1  1  1  1\n│     1  1  1  1\n└   s = 100.0All of the logging macros @debug, @info, @warn and @error share common features that are described in detail in the documentation for the more general macro @logmsg."
+},
+
+{
+    "location": "stdlib/Logging/#Log-event-structure-1",
+    "page": "Logging",
+    "title": "Log event structure",
+    "category": "section",
+    "text": "Each event generates several pieces of data, some provided by the user and some automatically extracted. Let\'s examine the user-defined data first:The log level is a broad category for the message that is used for early filtering. There are several standard levels of type LogLevel; user-defined levels are also possible.\nUse Debug for verbose information that could be useful when debugging an application or module. These events are disabled by default.\nUse Info to inform the user about the normal operation of the program.\nUse Warn when a potential problem is detected.\nUse Error to report errors where the code has enough context to recover and continue.  (When the code doesn\'t have enough context, an exception or early return is more appropriate.)\nThe message  is an object describing the event. By convention AbstractStrings passed as messages are assumed to be in markdown format. Other types will be displayed using show(io,mime,obj) according to the display capabilities of the installed logger.\nOptional key–value pairs allow arbitrary data to be attached to each event. Some keys have conventional meaning that can affect the way an event is interpreted (see @logmsg).The system also generates some standard information for each event:The module in which the logging macro was expanded.\nThe file and line where the logging macro occurs in the source code.\nA message id that is unique for each logging macro invocation. This is very useful as a key for caching information or actions associated with an event. For instance, it can be used to limit the number of times a message is presented to the user.\nA group for the event, which is set to the base name of the file by default, without extension.  This can be used to group messages into categories more finely than the log level (for example, all deprecation warnings have group :depwarn), or into logical groupings across or within modules.Notice that some useful information such as the event time is not included by default. This is because such information can be expensive to extract and is also dynamically available to the current logger. It\'s simple to define a custom logger to augment event data with the time, backtrace, values of global variables and other useful information as required."
+},
+
+{
+    "location": "stdlib/Logging/#Processing-log-events-1",
+    "page": "Logging",
+    "title": "Processing log events",
+    "category": "section",
+    "text": "As you can see in the examples, logging statements make no mention of where log events go or how they are processed. This is a key design feature that makes the system composable and natural for concurrent use. It does this by separating two different concerns:Creating log events is the concern of the module author who needs to decide where events are triggered and which information to include.\nProcessing of log events — that is, display, filtering, aggregation and recording — is the concern of the application author who needs to bring multiple modules together into a cooperating application."
+},
+
+{
+    "location": "stdlib/Logging/#Loggers-1",
+    "page": "Logging",
+    "title": "Loggers",
+    "category": "section",
+    "text": "Processing of events is performed by a logger, which is the first piece of user configurable code to see the event. All loggers must be subtypes of AbstractLogger.When an event is triggered, the appropriate logger is found by looking for a task-local logger with the global logger as fallback.  The idea here is that the application code knows how log events should be processed and exists somewhere at the top of the call stack. So we should look up through the call stack to discover the logger — that is, the logger should be dynamically scoped. (This is a point of contrast with logging frameworks where the logger is lexically scoped; provided explicitly by the module author or as a simple global variable. In such a system it\'s awkward to control logging while composing functionality from multiple modules.)The global logger may be set with global_logger, and task-local loggers controlled using with_logger.  Newly spawned tasks inherit the logger of the parent task.There are three logger types provided by the library.  ConsoleLogger is the default logger you see when starting the REPL.  It displays events in a readable text format and tries to give simple but user friendly control over formatting and filtering.  NullLogger is a convenient way to drop all messages where necessary; it is the logging equivalent of the DevNull stream.  SimpleLogger is a very simplistic text formatting logger, mainly useful for debugging the logging system itself.Custom loggers should come with overloads for the functions described in the reference section."
+},
+
+{
+    "location": "stdlib/Logging/#Early-filtering-and-message-handling-1",
+    "page": "Logging",
+    "title": "Early filtering and message handling",
+    "category": "section",
+    "text": "When an event occurs, a few steps of early filtering occur to avoid generating messages that will be discarded:The message log level is checked against a global minimum level (set via disable_logging).  This is a crude but extremely cheap global setting.\nThe current logger state is looked up and the message level checked against the logger\'s cached minimum level, as found by calling min_enabled_level. This behavior can be overridden via environment variables (more on this later).\nThe shouldlog function is called with the current logger, taking some minimal information (level, module, group, id) which can be computed statically.  Most usefully, shouldlog is passed an event id which can be used to discard events early based on a cached predicate.If all these checks pass, the message and key–value pairs are evaluated in full and passed to the current logger via the handle_message function. handle_message() may perform additional filtering as required and display the event to the screen, save it to a file, etc.Exceptions that occur while generating the log event are captured and logged by default.  This prevents individual broken events from crashing the application, which is helpful when enabling little-used debug events in a production system.  This behavior can be customized per logger type by extending catch_exceptions."
+},
+
+{
+    "location": "stdlib/Logging/#Testing-log-events-1",
+    "page": "Logging",
+    "title": "Testing log events",
+    "category": "section",
+    "text": "Log events are a side effect of running normal code, but you might find yourself wanting to test particular informational messages and warnings. The Test module provides a @test_logs macro that can be used to pattern match against the log event stream."
+},
+
+{
+    "location": "stdlib/Logging/#Environment-variables-1",
+    "page": "Logging",
+    "title": "Environment variables",
+    "category": "section",
+    "text": "Message filtering can be influenced through the JULIA_DEBUG environment variable, and serves as an easy way to enable debug logging for a file or module. For example, loading julia with JULIA_DEBUG=loading will activate @debug log messages in loading.jl:$ JULIA_DEBUG=loading julia -e \'using OhMyREPL\'\n┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji due to it containing an invalid cache header\n└ @ Base loading.jl:1328\n[ Info: Recompiling stale cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji for module OhMyREPL\n┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/Tokenize.ji due to it containing an invalid cache header\n└ @ Base loading.jl:1328\n...Similarly, the environment variable can be used to enable debug logging of modules, such as Pkg, or module roots (see Base.moduleroot). To enable all debug logging, use the special value all."
+},
+
+{
+    "location": "stdlib/Logging/#Reference-1",
+    "page": "Logging",
+    "title": "Reference",
+    "category": "section",
+    "text": ""
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.@logmsg",
+    "page": "Logging",
+    "title": "Base.CoreLogging.@logmsg",
+    "category": "macro",
+    "text": "@debug message  [key=value | value ...]\n@info  message  [key=value | value ...]\n@warn  message  [key=value | value ...]\n@error message  [key=value | value ...]\n\n@logmsg level message [key=value | value ...]\n\nCreate a log record with an informational message.  For convenience, four logging macros @debug, @info, @warn and @error are defined which log at the standard severity levels Debug, Info, Warn and Error.  @logmsg allows level to be set programmatically to any LogLevel or custom log level types.\n\nmessage should be an expression which evaluates to a string which is a human readable description of the log event.  By convention, this string will be formatted as markdown when presented.\n\nThe optional list of key=value pairs supports arbitrary user defined metadata which will be passed through to the logging backend as part of the log record.  If only a value expression is supplied, a key representing the expression will be generated using Symbol. For example, x becomes x=x, and foo(10) becomes Symbol(\"foo(10)\")=foo(10).  For splatting a list of key value pairs, use the normal splatting syntax, @info \"blah\" kws....\n\nThere are some keys which allow automatically generated log data to be overridden:\n\n_module=mod can be used to specify a different originating module from the source location of the message.\n_group=symbol can be used to override the message group (this is normally derived from the base name of the source file).\n_id=symbol can be used to override the automatically generated unique message identifier.  This is useful if you need to very closely associate messages generated on different source lines.\n_file=string and _line=integer can be used to override the apparent source location of a log message.\n\nThere\'s also some key value pairs which have conventional meaning:\n\nmaxlog=integer should be used as a hint to the backend that the message should be displayed no more than maxlog times.\nexception=ex should be used to transport an exception with a log message, often used with @error. An associated backtrace bt may be attached using the tuple exception=(ex,bt).\n\nExamples\n\n@debug \"Verbose debugging information.  Invisible by default\"\n@info  \"An informational message\"\n@warn  \"Something was odd.  You should pay attention\"\n@error \"A non fatal error occurred\"\n\nx = 10\n@info \"Some variables attached to the message\" x a=42.0\n\n@debug begin\n    sA = sum(A)\n    \"sum(A) = $sA is an expensive operation, evaluated only when `shouldlog` returns true\"\nend\n\nfor i=1:10000\n    @info \"With the default backend, you will only see (i = $i) ten times\"  maxlog=10\n    @debug \"Algorithm1\" i progress=i/10000\nend\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.LogLevel",
+    "page": "Logging",
+    "title": "Base.CoreLogging.LogLevel",
+    "category": "type",
+    "text": "LogLevel(level)\n\nSeverity/verbosity of a log record.\n\nThe log level provides a key against which potential log records may be filtered, before any other work is done to construct the log record data structure itself.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Creating-events-1",
+    "page": "Logging",
+    "title": "Creating events",
+    "category": "section",
+    "text": "Logging.@logmsg\nLogging.LogLevel"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.AbstractLogger",
+    "page": "Logging",
+    "title": "Base.CoreLogging.AbstractLogger",
+    "category": "type",
+    "text": "A logger controls how log records are filtered and dispatched.  When a log record is generated, the logger is the first piece of user configurable code which gets to inspect the record and decide what to do with it.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.handle_message",
+    "page": "Logging",
+    "title": "Base.CoreLogging.handle_message",
+    "category": "function",
+    "text": "handle_message(logger, level, message, _module, group, id, file, line; key1=val1, ...)\n\nLog a message to logger at level.  The logical location at which the message was generated is given by module _module and group; the source location by file and line. id is an arbitrary unique Symbol to be used as a key to identify the log statement when filtering.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.shouldlog",
+    "page": "Logging",
+    "title": "Base.CoreLogging.shouldlog",
+    "category": "function",
+    "text": "shouldlog(logger, level, _module, group, id)\n\nReturn true when logger accepts a message at level, generated for _module, group and with unique log identifier id.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.min_enabled_level",
+    "page": "Logging",
+    "title": "Base.CoreLogging.min_enabled_level",
+    "category": "function",
+    "text": "min_enabled_level(logger)\n\nReturn the maximum disabled level for logger for early filtering.  That is, the log level below or equal to which all messages are filtered.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.catch_exceptions",
+    "page": "Logging",
+    "title": "Base.CoreLogging.catch_exceptions",
+    "category": "function",
+    "text": "catch_exceptions(logger)\n\nReturn true if the logger should catch exceptions which happen during log record construction.  By default, messages are caught\n\nBy default all exceptions are caught to prevent log message generation from crashing the program.  This lets users confidently toggle little-used functionality - such as debug logging - in a production system.\n\nIf you want to use logging as an audit trail you should disable this for your logger type.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.disable_logging",
+    "page": "Logging",
+    "title": "Base.CoreLogging.disable_logging",
+    "category": "function",
+    "text": "disable_logging(level)\n\nDisable all log messages at log levels equal to or less than level.  This is a global setting, intended to make debug logging extremely cheap when disabled.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#AbstractLogger-interface-1",
+    "page": "Logging",
+    "title": "Processing events with AbstractLogger",
+    "category": "section",
+    "text": "Event processing is controlled by overriding functions associated with AbstractLogger:Methods to implement   Brief description\nhandle_message  Handle a log event\nshouldlog  Early filtering of events\nmin_enabled_level  Lower bound for log level of accepted events\nOptional methods Default definition Brief description\ncatch_exceptions true Catch exceptions during event evaluationLogging.AbstractLogger\nLogging.handle_message\nLogging.shouldlog\nLogging.min_enabled_level\nLogging.catch_exceptions\nLogging.disable_logging"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.global_logger",
+    "page": "Logging",
+    "title": "Base.CoreLogging.global_logger",
+    "category": "function",
+    "text": "global_logger()\n\nReturn the global logger, used to receive messages when no specific logger exists for the current task.\n\nglobal_logger(logger)\n\nSet the global logger to logger, and return the previous global logger.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.with_logger",
+    "page": "Logging",
+    "title": "Base.CoreLogging.with_logger",
+    "category": "function",
+    "text": "with_logger(function, logger)\n\nExecute function, directing all log messages to logger.\n\nExample\n\nfunction test(x)\n    @info \"x = $x\"\nend\n\nwith_logger(logger) do\n    test(1)\n    test([1,2])\nend\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.current_logger",
+    "page": "Logging",
+    "title": "Base.CoreLogging.current_logger",
+    "category": "function",
+    "text": "current_logger()\n\nReturn the logger for the current task, or the global logger if none is is attached to the task.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.NullLogger",
+    "page": "Logging",
+    "title": "Base.CoreLogging.NullLogger",
+    "category": "type",
+    "text": "NullLogger()\n\nLogger which disables all messages and produces no output - the logger equivalent of /dev/null.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Logging.ConsoleLogger",
+    "page": "Logging",
+    "title": "Logging.ConsoleLogger",
+    "category": "type",
+    "text": "ConsoleLogger(stream=stderr, min_level=Info; meta_formatter=default_metafmt,\n              show_limited=true, right_justify=0)\n\nLogger with formatting optimized for readability in a text console, for example interactive work with the Julia REPL.\n\nLog levels less than min_level are filtered out.\n\nMessage formatting can be controlled by setting keyword arguments:\n\nmeta_formatter is a function which takes the log event metadata (level, _module, group, id, file, line) and returns a color (as would be passed to printstyled), prefix and suffix for the log message.  The default is to prefix with the log level and a suffix containing the module, file and line location.\nshow_limited limits the printing of large data structures to something which can fit on the screen by setting the :limit IOContext key during formatting.\nright_justify is the integer column which log metadata is right justified at. The default is zero (metadata goes on its own line).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Base.CoreLogging.SimpleLogger",
+    "page": "Logging",
+    "title": "Base.CoreLogging.SimpleLogger",
+    "category": "type",
+    "text": "SimpleLogger(stream=stderr, min_level=Info)\n\nSimplistic logger for logging all messages with level greater than or equal to min_level to stream.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/Logging/#Using-Loggers-1",
+    "page": "Logging",
+    "title": "Using Loggers",
+    "category": "section",
+    "text": "Logger installation and inspection:Logging.global_logger\nLogging.with_logger\nLogging.current_loggerLoggers that are supplied with the system:Logging.NullLogger\nLogging.ConsoleLogger\nLogging.SimpleLogger"
+},
+
+{
     "location": "stdlib/Markdown/#",
     "page": "Markdown",
     "title": "Markdown",
@@ -18141,7 +18349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
