@@ -82,6 +82,8 @@ function compute_basic_blocks(stmts::Vector{Any})
             # :enter starts/ends a BB
             push!(jump_dests, idx)
             push!(jump_dests, idx+1)
+            # The catch block is a jump dest
+            push!(jump_dests, stmt.args[1])
         end
     end
     bb_starts = sort(collect(jump_dests))
@@ -429,9 +431,9 @@ function getindex(view::TypesView, v::OldSSAValue)
     return view.ir.ir.types[v.id]
 end
 
-function setindex!(compact::IncrementalCompact, v, idx)
+function setindex!(compact::IncrementalCompact, @nospecialize(v), idx)
     if idx < compact.result_idx
-        (compact.result[idx] == v) && return
+        (compact.result[idx] === v) && return
         # Kill count for current uses
         for ops in userefs(compact.result[idx])
             val = ops[]
