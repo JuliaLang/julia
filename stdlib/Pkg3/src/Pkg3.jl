@@ -50,7 +50,7 @@ function __init__()
     else
         atreplinit() do repl
             if isinteractive() && repl isa REPL.LineEditREPL
-                repl.interface = REPL.setup_interface(repl)
+                isdefined(repl, :interface) || (repl.interface = REPL.setup_interface(repl))
                 REPLMode.repl_init(repl)
             end
         end
