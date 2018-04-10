@@ -4941,7 +4941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "function",
-    "text": "copy(A::Transpose)\ncopy(A::Adjoint)\n\nEagerly evaluate the lazy matrix transpose/adjoint. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2im; -3im 4]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+2im\n 0-3im  4+0im\n\njulia> T = transpose(A)\n2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0-3im\n 0+2im  4+0im\n\njulia> copy(T)\n2×2 Array{Complex{Int64},2}:\n 1+0im  0-3im\n 0+2im  4+0im\n\n\n\n\n\ncopy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\n"
+    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ncopy(A::Transpose)\ncopy(A::Adjoint)\n\nEagerly evaluate the lazy matrix transpose/adjoint. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2im; -3im 4]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+2im\n 0-3im  4+0im\n\njulia> T = transpose(A)\n2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0-3im\n 0+2im  4+0im\n\njulia> copy(T)\n2×2 Array{Complex{Int64},2}:\n 1+0im  0-3im\n 0+2im  4+0im\n\n\n\n\n\n"
 },
 
 {
