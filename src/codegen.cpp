@@ -6166,6 +6166,12 @@ static std::unique_ptr<Module> emit_function(
                 } else if (((jl_expr_t*)stmt)->head == unreachable_sym) {
                     if (i + 2 <= stmtslen)
                         branch_targets.insert(i + 2);
+                } else if (((jl_expr_t*)stmt)->head == enter_sym) {
+                    branch_targets.insert(i + 1);
+                    if (i + 2 <= stmtslen)
+                        branch_targets.insert(i + 2);
+                    int dest = jl_unbox_long(jl_array_ptr_ref(((jl_expr_t*)stmt)->args, 0));
+                    branch_targets.insert(dest);
                 }
             } else if (jl_is_gotonode(stmt)) {
                 int dest = jl_gotonode_label(stmt);
@@ -6418,6 +6424,62 @@ static std::unique_ptr<Module> emit_function(
             come_from_bb[pair.first] = pair.second;
     }
 
+    // This alloca is used to represent SSA `undef` semantics on the stack.
+    // We emit an alloca here and resize it appropriately below. We also
+    // emit a call to lifetime_end of this alloca. This tells the optimizer
+    // that all loads from this alloca are undef and all stores to it are
+    // dead, which are the semantics we want.
+    size_t undef_alloca_bytes = 1;
+    size_t undef_alloca_align = 0;
+    AllocaInst *UndefAlloca = new AllocaInst(T_int8,
+#if JL_LLVM_VERSION >= 50000
+        0,
+#endif
+        ConstantInt::get(T_size, 1), "undef_alloca", /* InsertBefore= */ctx.ptlsStates);
+    ctx.builder.SetInsertPoint(ctx.ptlsStates);
+    ctx.builder.CreateLifetimeEnd(UndefAlloca);
+
+    auto undef_value_for_type = [&](jl_value_t *phiType, Type *UndefType) {
+        // While we're guaranteed that this value will not be looked at dynamically,
+        // we're not guaranteed that it won't be moved around. For things allocated on the
+        // stack, that generally involves memcpying them from one stack slot to another,
+        // so we need to make sure that such values are legal to be copied from.
+        Value *VNUndef;
+        if (UndefType == T_prjlvalue) {
+            VNUndef =  (llvm::Value*)ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+        } else if (UndefType->isPointerTy()) {
+            size_t nbytes, align, min_align;
+            if (jl_is_uniontype(phiType)) {
+                bool allunbox;
+                union_alloca_type((jl_uniontype_t *)phiType, allunbox, nbytes, align, min_align);
+            } else {
+                bool isboxed;
+                Type *vtype = julia_type_to_llvm(phiType, &isboxed);
+                assert(vtype->isAggregateType());
+                nbytes = jl_data_layout.getTypeStoreSize(vtype);
+                align = jl_data_layout.getABITypeAlignment(vtype);
+            }
+            if (nbytes > undef_alloca_bytes)
+                undef_alloca_bytes = nbytes;
+            if (align > undef_alloca_align)
+                undef_alloca_align = align;
+            VNUndef = UndefAlloca;
+            // It's legal to decay our addrspace(0) alloca to any of our addrspaces
+            ctx.builder.SetInsertPoint(ctx.ptlsStates);
+            if (UndefType->getPointerAddressSpace() !=
+                VNUndef->getType()->getPointerAddressSpace()) {
+                VNUndef = new AddrSpaceCastInst(VNUndef,
+                    cast<PointerType>(VNUndef->getType())->getElementType()->getPointerTo(
+                        UndefType->getPointerAddressSpace()), "",
+                    /*InsertBefore=*/ ctx.ptlsStates);
+            }
+            VNUndef = maybe_bitcast(ctx, VNUndef, UndefType);
+        } else {
+            VNUndef = (llvm::Value*)UndefValue::get(UndefType);
+        }
+        return VNUndef;
+    };
+
     // Codegen Phi nodes
     std::map<BasicBlock *, BasicBlock*> BB_rewrite_map;
     for (auto &tup : ctx.PhiNodes) {
@@ -6478,7 +6540,7 @@ static std::unique_ptr<Module> emit_function(
                             }
                         }
                         else {
-                            undef = UndefValue::get(VN->getType());
+                            undef = undef_value_for_type(phiType, VN->getType());
                         }
                         VN->addIncoming(undef, FromBB);
                     }
@@ -6518,7 +6580,7 @@ static std::unique_ptr<Module> emit_function(
             }
             if (!jl_is_uniontype(phiType)) {
                 if (val.typ == (jl_value_t*)jl_bottom_type) {
-                    V = UndefValue::get(VN->getType());
+                    V = undef_value_for_type(phiType, VN->getType());
                 }
                 else if (VN->getType() == T_prjlvalue) {
                     V = boxed(ctx, val);
@@ -6540,7 +6602,7 @@ static std::unique_ptr<Module> emit_function(
             else {
                 Value *RTindex = NULL;
                 if (val.typ == (jl_value_t*)jl_bottom_type) {
-                    V = UndefValue::get(VN->getType());
+                    V = undef_value_for_type(phiType, VN->getType());
                     RTindex = UndefValue::get(T_int8);
                 }
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
@@ -6600,6 +6662,7 @@ static std::unique_ptr<Module> emit_function(
             }
         }
         // Julia PHINodes may be incomplete with respect to predecessors, LLVM's may not
+        Value *VNUndef = nullptr;
         for (auto *pred : predecessors(PhiBB)) {
             PHINode *PhiN = VN ? VN : TindexN;
             bool found = false;
@@ -6610,10 +6673,10 @@ static std::unique_ptr<Module> emit_function(
             }
             if (!found) {
                 if (VN) {
-                    Value *undef = VN->getType() == T_prjlvalue ?
-                        (llvm::Value*)ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)) :
-                        (llvm::Value*)UndefValue::get(VN->getType());
-                    VN->addIncoming(undef, pred);
+                    if (!VNUndef) {
+                        VNUndef = undef_value_for_type(phiType, VN->getType());
+                    }
+                    VN->addIncoming(VNUndef, pred);
                 }
                 if (TindexN) {
                     TindexN->addIncoming(UndefValue::get(TindexN->getType()), pred);
@@ -6621,6 +6684,9 @@ static std::unique_ptr<Module> emit_function(
             }
         }
     }
+
+    UndefAlloca->setOperand(0, ConstantInt::get(T_size, undef_alloca_bytes));
+    UndefAlloca->setAlignment(undef_alloca_align);
 
     // step 13. Perform any delayed instantiations
     if (ctx.debug_enabled) {
@@ -7435,9 +7501,7 @@ extern "C" void *jl_init_llvm(void)
     const char *const argv_copyprop[] = {"", "-disable-copyprop"}; // llvm bug 21743
     cl::ParseCommandLineOptions(sizeof(argv_copyprop)/sizeof(argv_copyprop[0]), argv_copyprop, "disable-copyprop\n");
 #endif
-#if defined(JL_DEBUG_BUILD) || defined(USE_POLLY)
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
-#endif
 
     jl_page_size = jl_getpagesize();
     imaging_mode = jl_generating_output();

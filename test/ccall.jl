@@ -767,6 +767,7 @@ end
     @nospecialize(f, a, tt)
     # generic API 1
     cf = @cfunction $f Ref{T} (Ref{T},)
+    GC.gc()
     @test cf.ptr != C_NULL
     @test cf.f === f
     @test (cf._1 == C_NULL) == permanent
@@ -778,6 +779,7 @@ end
     end
     # generic API 2
     cf2 = @cfunction $f Any (Ref{S},)
+    GC.gc()
     @test cf2.ptr != C_NULL
     @test cf2.f === f
     @test (cf2._1 == C_NULL) == permanent

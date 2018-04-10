@@ -529,3 +529,10 @@ end
 let s = "   \$abc   "
     @test s[Base.shell_parse(s)[2]] == "abc"
 end
+
+# Logging macros should not output to finalized streams (#26687)
+let
+    cmd = `$(Base.julia_cmd()) -e 'finalizer(x->@info(x), "Hello")'`
+    output = readchomp(pipeline(cmd, stderr=catcmd))
+    @test occursin("Info: Hello", output)
+end

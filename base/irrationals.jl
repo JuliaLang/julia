@@ -125,6 +125,8 @@ for op in Symbol[:+, :-, :*, :/, :^]
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
 
+_round(x::Irrational, r::RoundingMode) = _round(float(x), r)
+
 macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
