@@ -7,8 +7,8 @@ export
     setprecision
 
 import
-    Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
-        exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
+    .Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
+        inv, exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
@@ -17,15 +17,15 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, beta
+        isone, big, beta, RefValue
 
-import Base.Rounding: rounding_raw, setrounding_raw
+import .Base.Rounding: rounding_raw, setrounding_raw
 
-import Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
+import .Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
 
-import Base.Math.lgamma_r
+import .Base.Math.lgamma_r
 
-import Base.FastMath.sincos_fast
+import .Base.FastMath.sincos_fast
 
 version() = VersionNumber(unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ())))
 patches() = split(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())),' ')
@@ -40,8 +40,8 @@ function __init__()
     end
 end
 
-const ROUNDING_MODE = Ref{Cint}(0)
-const DEFAULT_PRECISION = Ref(256)
+const ROUNDING_MODE = RefValue{Cint}(0)
+const DEFAULT_PRECISION = RefValue(256)
 
 # Basic type and initialization definitions
 
@@ -392,6 +392,8 @@ function -(c::BigInt, x::BigFloat)
     ccall((:mpfr_z_sub, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigInt}, Ref{BigFloat}, Int32), z, c, x, ROUNDING_MODE[])
     return z
 end
+
+inv(x::BigFloat) = one(Clong) / x # faster than fallback one(x)/x
 
 function fma(x::BigFloat, y::BigFloat, z::BigFloat)
     r = BigFloat()
@@ -934,7 +936,7 @@ end
 
 function _prettify_bigfloat(s::String)::String
     mantissa, exponent = split(s, 'e')
-    if !contains(mantissa, '.')
+    if !occursin('.', mantissa)
         mantissa = string(mantissa, '.')
     end
     mantissa = rstrip(mantissa, '0')

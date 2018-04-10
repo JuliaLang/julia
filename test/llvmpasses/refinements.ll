@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia.so -LateLowerGCFrame -S %s | FileCheck %s
+; RUN: opt -load libjulia%shlibext -LateLowerGCFrame -S %s | FileCheck %s
 
 %jl_value_t = type opaque
 

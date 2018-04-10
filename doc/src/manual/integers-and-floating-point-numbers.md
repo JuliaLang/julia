@@ -338,7 +338,7 @@ julia> 10_000, 0.000_000_005, 0xdead_beef, 0b1011_0010
 
 Floating-point numbers have [two zeros](https://en.wikipedia.org/wiki/Signed_zero), positive zero
 and negative zero. They are equal to each other but have different binary representations, as
-can be seen using the `bits` function: :
+can be seen using the [`bitstring`](@ref) function:
 
 ```jldoctest
 julia> 0.0 == -0.0
@@ -491,9 +491,10 @@ also have adjacent binary integer representations.
 
 ### Rounding modes
 
-If a number doesn't have an exact floating-point representation, it must be rounded to an appropriate
-representable value, however, if wanted, the manner in which this rounding is done can be changed
-according to the rounding modes presented in the [IEEE 754 standard](https://en.wikipedia.org/wiki/IEEE_754-2008).
+If a number doesn't have an exact floating-point representation, it must be rounded to an
+appropriate representable value. However, the manner in which this rounding is done can be
+changed if required according to the rounding modes presented in the [IEEE 754
+standard](https://en.wikipedia.org/wiki/IEEE_754-2008).
 
 ```jldoctest
 julia> x = 1.1; y = 0.1;
@@ -613,7 +614,7 @@ julia> setprecision(40) do
 
 ## [Numeric Literal Coefficients](@id man-numeric-literal-coefficients)
 
-To make common numeric formulas and expressions clearer, Julia allows variables to be immediately
+To make common numeric formulae and expressions clearer, Julia allows variables to be immediately
 preceded by a numeric literal, implying multiplication. This makes writing polynomial expressions
 much cleaner:
 
@@ -689,7 +690,7 @@ where syntactic conflicts arise:
   * The floating-point literal expression `1e10` could be interpreted as the numeric literal `1` multiplied
     by the variable `e10`, and similarly with the equivalent `E` form.
 
-In both cases, we resolve the ambiguity in favor of interpretation as a numeric literals:
+In both cases, we resolve the ambiguity in favor of interpretation as numeric literals:
 
   * Expressions starting with `0x` are always hexadecimal literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.

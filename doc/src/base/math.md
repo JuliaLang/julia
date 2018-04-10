@@ -32,7 +32,7 @@ Base.denominator
 Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
-Base.colon
+Base.:(:)
 Base.range
 Base.OneTo
 Base.StepRangeLen

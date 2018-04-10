@@ -19,7 +19,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     @test eof(io)
     seek(io, 0)
     @test read(io,UInt8) == convert(UInt8, 'a')
-    a = Vector{UInt8}(uninitialized, 2)
+    a = Vector{UInt8}(undef, 2)
     @test read!(io, a) == a
     @test a == UInt8['b','c']
     @test bufcontents(io) == "abc"
@@ -169,7 +169,7 @@ end
 
 @testset "issue 5453" begin
     io = IOBuffer("abcdef")
-    a = Vector{UInt8}(uninitialized, 1024)
+    a = Vector{UInt8}(undef, 1024)
     @test_throws EOFError read!(io,a)
     @test eof(io)
 end
@@ -195,12 +195,12 @@ end
 
 @testset "pr #11554" begin
     io  = IOBuffer(SubString("***αhelloworldω***", 4, 16))
-    io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), true, true)
+    io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), read=true, write=true)
 
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
     @test_throws ArgumentError write(io,'β')
-    a = Vector{UInt8}(uninitialized, 10)
+    a = Vector{UInt8}(undef, 10)
     @test read!(io, a) === a
     @test String(a) == "helloworld"
     @test read(io, Char) == 'ω'
@@ -227,12 +227,12 @@ end
 
 # issue #11917
 # (previous tests triggered this sometimes, but this should trigger nearly all the time)
-let io = IOBuffer(0)
+let io = IOBuffer(maxsize=0)
    write(io, fill(0x01, 1048577))
 end
 
 @testset "BufferStream" begin
-    bstream = BufferStream()
+    bstream = Base.BufferStream()
     @test isopen(bstream)
     @test isreadable(bstream)
     @test iswritable(bstream)
@@ -289,11 +289,11 @@ end
 end
 
 @testset "Test constructor with a generic type argument." begin
-    io = IOBuffer(Int16(10))
+    io = IOBuffer(maxsize=Int16(10))
     @test io isa IOBuffer
-    io = IOBuffer(Int32(10))
+    io = IOBuffer(maxsize=Int32(10))
     @test io isa IOBuffer
-    io = IOBuffer(Int64(10))
+    io = IOBuffer(maxsize=Int64(10))
     @test io isa IOBuffer
 end
 

@@ -35,7 +35,7 @@ The following data types exist in lowered form:
 
   * `LineNumberNode`
 
-    Contains a single number, specifying the line number the next statement came from.
+    Contains a number and a file name, specifying the line number the next statement came from.
 
   * `LabelNode`
 

@@ -30,13 +30,13 @@ end
 
 # check direct EachLine constructor
 let b = IOBuffer("foo\n")
-    @test collect(EachLine(b)) == ["foo"]
+    @test collect(Base.EachLine(b)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, keep=true)) == ["foo\n"]
+    @test collect(Base.EachLine(b, keep=true)) == ["foo\n"]
     seek(b, 0)
-    @test collect(EachLine(b, ondone=()->0)) == ["foo"]
+    @test collect(Base.EachLine(b, ondone=()->0)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, keep=true, ondone=()->0)) == ["foo\n"]
+    @test collect(Base.EachLine(b, keep=true, ondone=()->0)) == ["foo\n"]
 end
 
 # enumerate (issue #6284)
@@ -84,7 +84,7 @@ end
 # take
 # ----
 let t = take(0:2:8, 10), i = 0
-    @test length(collect(t)) == 5
+    @test length(collect(t)) == 5 == length(t)
 
     for j = t
         @test j == i*2
@@ -101,6 +101,8 @@ let i = 0
     @test i == 10
 end
 
+@test isempty(take(0:2:8, 0))
+@test_throws ArgumentError take(0:2:8, -1)
 @test length(take(1:3,typemax(Int))) == 3
 @test length(take(countfrom(1),3)) == 3
 @test length(take(1:6,3)) == 3
@@ -115,6 +117,9 @@ let i = 0
     @test i == 4
 end
 
+@test isempty(drop(0:2:10, 100))
+@test isempty(collect(drop(0:2:10, 100)))
+@test_throws ArgumentError drop(0:2:8, -1)
 @test length(drop(1:3,typemax(Int))) == 0
 @test Base.IteratorSize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))
@@ -267,7 +272,7 @@ let iters = (1:2,
              )
     for method in [size, length, ndims, eltype]
         for i = 1:length(iters)
-            args = iters[i]
+            args = (iters[i],)
             @test method(product(args...)) == method(collect(product(args...)))
             for j = 1:length(iters)
                 args = iters[i], iters[j]
@@ -431,7 +436,7 @@ end
     @test eltype(arr) == Int
 end
 
-@testset "IndexValue type" begin
+@testset "Pairs type" begin
     for A in ([4.0 5.0 6.0],
               [],
               (4.0, 5.0, 6.0),
@@ -473,12 +478,19 @@ end
         @test valtype(d) == V
         @test eltype(d) == Pair{K, V}
     end
+
+    let io = IOBuffer()
+        Base.showarg(io, pairs([1,2,3]), true)
+        @test String(take!(io)) == "pairs(::Array{$Int,1})"
+        Base.showarg(io, pairs((a=1, b=2)), true)
+        @test String(take!(io)) == "pairs(::NamedTuple)"
+    end
 end
 
 @testset "reverse iterators" begin
     squash(x::Number) = x
     squash(A) = reshape(A, length(A))
-    Z = Array{Int,0}(uninitialized); Z[] = 17 # zero-dimensional test case
+    Z = Array{Int,0}(undef); Z[] = 17 # zero-dimensional test case
     for itr in (2:10, "∀ϵ>0", 1:0, "", (2,3,5,7,11), [2,3,5,7,11], rand(5,6), Z, 3, true, 'x', 4=>5,
                 eachindex("∀ϵ>0"), view(Z), view(rand(5,6),2:4,2:6), (x^2 for x in 1:10),
                 Iterators.Filter(isodd, 1:10), flatten((1:10, 50:60)), enumerate("foo"),

@@ -132,6 +132,18 @@ mutable struct Error <: Result
     value
     backtrace
     source::LineNumberNode
+
+    function Error(test_type, orig_expr, value, bt, source)
+        if test_type === :test_error
+            bt = scrub_backtrace(bt)
+        end
+        if test_type === :test_error || test_type === :nontest_error
+            bt_str = sprint(showerror, value, bt)
+        else
+            bt_str = ""
+        end
+        new(test_type, orig_expr, repr(value), bt_str, source)
+    end
 end
 function Base.show(io::IO, t::Error)
     if t.test_type == :test_interrupted
@@ -146,12 +158,11 @@ function Base.show(io::IO, t::Error)
         println(io, "  Expression: ", t.orig_expr)
         print(  io, "       Value: ", t.value)
     elseif t.test_type == :test_error
-        println(io, "  Test threw an exception of type ", typeof(t.value))
+        println(io, "  Test threw exception ", t.value)
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, scrub_backtrace(t.backtrace))
         print(io, join(map(line->string("  ",line),
-                            split(errmsg, "\n")), "\n"))
+                           split(t.backtrace, "\n")), "\n"))
     elseif t.test_type == :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
@@ -159,11 +170,10 @@ function Base.show(io::IO, t::Error)
         println(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type == :nontest_error
         # we had an error outside of a @test
-        println(io, "  Got an exception of type $(typeof(t.value)) outside of a @test")
+        println(io, "  Got exception $(t.value) outside of a @test")
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, t.backtrace)
         print(io, join(map(line->string("  ",line),
-                            split(errmsg, "\n")), "\n"))
+                           split(t.backtrace, "\n")), "\n"))
     end
 end
 
@@ -394,7 +404,7 @@ function get_test_result(ex, source)
             isa(a, Expr) && a.head in (:kw, :parameters) && continue
 
             if isa(a, Expr) && a.head == :...
-                push!(escaped_args, Expr(:..., esc(a)))
+                push!(escaped_args, Expr(:..., esc(a.args[1])))
             else
                 push!(escaped_args, esc(a))
             end
@@ -412,6 +422,7 @@ function get_test_result(ex, source)
         try
             $testret
         catch _e
+            _e isa InterruptException && rethrow(_e)
             Threw(_e, catch_backtrace(), $(QuoteNode(source)))
         end
     end
@@ -476,6 +487,9 @@ macro test_throws(extype, ex)
         try
             Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
         catch _e
+            if $(esc(extype)) != InterruptException && _e isa InterruptException
+                rethrow(_e)
+            end
             Threw(_e, nothing, $(QuoteNode(__source__)))
         end
     end
@@ -519,15 +533,15 @@ end
 
 # Test for warning messages (deprecated)
 
-contains_warn(output, s::AbstractString) = contains(output, s)
-contains_warn(output, s::Regex) = contains(output, s)
+contains_warn(output, s::AbstractString) = occursin(s, output)
+contains_warn(output, s::Regex) = occursin(s, output)
 contains_warn(output, s::Function) = s(output)
 contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(output, s), S)
 
 """
     @test_warn msg expr
 
-Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
+Test whether evaluating `expr` results in [`stderr`](@ref) output that contains
 the `msg` string or matches the `msg` regular expression.  If `msg` is
 a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
 tuple or array, checks that the error output contains/matches each item in `msg`.
@@ -556,7 +570,7 @@ end
 """
     @test_nowarn expr
 
-Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
+Test whether evaluating `expr` results in empty [`stderr`](@ref) output
 (no warnings or other messages).  Returns the result of evaluating `expr`.
 """
 macro test_nowarn(expr)
@@ -680,7 +694,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
             # don't print the backtrace for Errors because it gets printed in the show
             # method
             if !isa(t, Error)
-                Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
             end
             println()
         end
@@ -698,7 +712,7 @@ function print_test_errors(ts::DefaultTestSet)
     for t in ts.results
         if (isa(t, Error) || isa(t, Fail)) && myid() == 1
             println("Error in testset $(ts.description):")
-            Base.show(STDOUT,t)
+            Base.show(stdout,t)
             println()
         elseif isa(t, DefaultTestSet)
             print_test_errors(t)
@@ -1007,6 +1021,7 @@ function testset_beginend(args, tests, source)
             srand(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
+            err isa InterruptException && rethrow(err)
             # something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
@@ -1079,6 +1094,7 @@ function testset_forloop(args, testloop, source)
         try
             $(esc(tests))
         catch err
+            err isa InterruptException && rethrow(err)
             # Something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
@@ -1193,9 +1209,7 @@ inferred by the compiler. It is useful to check for type stability.
 Returns the result of `f(x)` if the types match,
 and an `Error` `Result` if it finds different types.
 
-```jldoctest
-julia> using Test
-
+```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
 julia> f(a,b,c) = b > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
@@ -1210,14 +1224,19 @@ Variables:
 
 Body:
   begin
-      unless (Base.slt_int)(1, b::Int64)::Bool goto 3
+      # meta: location operators.jl > 279
+      # meta: location int.jl < 49
+      Core.SSAValue(2) = (Base.slt_int)(1, b::Int64)::Bool
+      # meta: pop locations (2)
+      unless Core.SSAValue(2) goto 7
       return 1
-      3:
+      7:
       return 1.0
   end::UNION{FLOAT64, INT64}
 
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
+Stacktrace:
 [...]
 
 julia> @inferred max(1,2)

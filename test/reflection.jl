@@ -88,7 +88,7 @@ i10165(::Type{AbstractArray{T,n}}) where {T,n} = 1
 
 # fullname
 @test fullname(Base) == (:Base,)
-@test fullname(Base.Pkg) == (:Base, :Pkg)
+@test fullname(Base.Iterators) == (:Base, :Iterators)
 
 const a_const = 1
 not_const = 1
@@ -218,7 +218,7 @@ mutable struct TLayout
     z::Int32
 end
 tlayout = TLayout(5,7,11)
-@test fieldnames(TLayout) == [:x, :y, :z] == Base.propertynames(tlayout)
+@test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test_throws BoundsError fieldtype(TLayout, 0)
@@ -232,7 +232,7 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
-@test fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
+@test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
@@ -269,14 +269,17 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
                   (Base.:+, Tuple{Int, Int})]
     meth = which(f, t)
     tt = Tuple{typeof(f), t.parameters...}
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::SimpleVector
+    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::Core.SimpleVector
     @test ti === tt # intersection should be a subtype
     world = typemax(UInt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
-    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
-    @test llvmf != C_NULL
-    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf) != C_NULL
+    llvmf1 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
+    @test llvmf1 != C_NULL
+    llvmf2 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, false, params)
+    @test llvmf2 != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf1) != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf2) != C_NULL
 end
 
 # issue #15714
@@ -329,22 +332,22 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         must_used_checked[sym] = false
     end
     for str in (sprint(code_warntype, f, types),
-                stringmime("text/plain", src))
+                repr("text/plain", src))
         for var in must_used_vars
-            @test contains(str, string(var))
+            @test occursin(string(var), str)
         end
-        @test !contains(str, "Any")
-        @test !contains(str, "ANY")
+        @test !occursin("::Any", str)
+        @test !occursin("::ANY", str)
         # Check that we are not printing the bare slot numbers
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
             if name in dupnames
-                if name in must_used_vars && contains(str, Regex("_$i\\b"))
+                if name in must_used_vars && occursin(Regex("_$i\\b"), str)
                     must_used_checked[name] = true
                     global used_dup_var_tested15714 = true
                 end
             else
-                @test !contains(str, Regex("_$i\\b"))
+                @test !occursin(Regex("_$i\\b"), str)
                 if name in must_used_vars
                     global used_unique_var_tested15714 = true
                 end
@@ -363,7 +366,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(src.slotnames)
         name = src.slotnames[i]
-        if name in must_used_vars && contains(str, Regex("_$i\\b"))
+        if name in must_used_vars && occursin(Regex("_$i\\b"), str)
             must_used_checked[name] = true
         end
     end
@@ -374,15 +377,17 @@ end
 test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
                         [:array_var15714])
 test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
-                        [:array_var15714, :index_var15714])
-@test used_dup_var_tested15714
+                        [:array_var15714])
+#This test doesn't work with the new optimizer because we drop slotnames
+#We may want to test it against debug info eventually
+#@test used_dup_var_tested15715
 @test used_unique_var_tested15714
 
 let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
     lrepr = string(li),
     mrepr = string(li.def),
-    lmime = stringmime("text/plain", li),
-    mmime = stringmime("text/plain", li.def)
+    lmime = repr("text/plain", li),
+    mmime = repr("text/plain", li.def)
 
     @test lrepr == lmime == "MethodInstance for fieldtype(...)"
     @test mrepr == mmime == "fieldtype(...) in Core"
@@ -393,7 +398,9 @@ end
 tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), cfunction(tracer, Cvoid, Tuple{Ptr{Cvoid}}))
+let ctracer = @cfunction(tracer, Cvoid, (Ptr{Cvoid},))
+    ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), ctracer)
+end
 meth = which(tracefoo,Tuple{Any,Any})
 ccall(:jl_trace_method, Cvoid, (Any,), meth)
 @test tracefoo(1, 2) == 3
@@ -406,7 +413,9 @@ ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Method Tracing test
 methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cfunction(methtracer, Cvoid, Tuple{Ptr{Cvoid}}))
+let cmethtracer = @cfunction(methtracer, Cvoid, (Ptr{Cvoid},))
+    ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cmethtracer)
+end
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
@@ -570,7 +579,7 @@ end
 @test_throws ErrorException sizeof(String)
 @test_throws ErrorException sizeof(Vector{Int})
 @test_throws ErrorException sizeof(Symbol)
-@test_throws ErrorException sizeof(SimpleVector)
+@test_throws ErrorException sizeof(Core.SimpleVector)
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
@@ -738,3 +747,12 @@ typeparam(::Type{T}, a::AbstractArray{T}) where T = 2
 @test typeparam(Int, rand(Int, 2)) == 2
 
 end
+
+# issue #26267
+module M26267
+import Test
+foo(x) = x
+end
+@test !(:Test in names(M26267, all=true, imported=false))
+@test :Test in names(M26267, all=true, imported=true)
+@test :Test in names(M26267, all=false, imported=true)

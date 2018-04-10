@@ -35,9 +35,10 @@ jl_module_t *jl_internal_main_module = NULL;
 
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
-    assert(jl_base_module != NULL);
+    jl_module_t *base_module = jl_base_relative_to(m);
+    assert(base_module != NULL);
     // using Base
-    jl_module_using(m, jl_base_module);
+    jl_module_using(m, base_module);
 }
 
 JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
@@ -109,7 +110,7 @@ static void jl_module_load_time_initialize(jl_module_t *m)
             jl_module_init_order = jl_alloc_vec_any(0);
         jl_array_ptr_1d_push(jl_module_init_order, (jl_value_t*)m);
         jl_function_t *f = jl_module_get_initializer(m);
-        if (f != NULL) {
+        if (f != NULL && jl_options.incremental) {
             jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
             JL_GC_PUSH1(&tt);
             tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
@@ -227,7 +228,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         for (int i = 0; i < jl_array_len(exprs); i++) {
             // process toplevel form
             ptls->world_age = jl_world_counter;
-            form = jl_expand(jl_array_ptr_ref(exprs, i), newm);
+            form = jl_expand_stmt(jl_array_ptr_ref(exprs, i), newm);
             ptls->world_age = jl_world_counter;
             (void)jl_toplevel_eval_flex(newm, form, 1, 1);
         }
@@ -286,6 +287,24 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     return (jl_value_t*)newm;
 }
 
+jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast)
+{
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 3);
+    args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
+    args[2] = jl_toplevel_eval_flex(m, f, fast, 0);
+    if (jl_is_module(args[1])) {
+        JL_TYPECHK("getfield", symbol, args[2]);
+        args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
+    }
+    else {
+        args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
+        args[0] = jl_apply(args, 3);
+    }
+    JL_GC_POP();
+    return args[0];
+}
+
 // module referenced by (top ...) from within m
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
@@ -320,6 +339,10 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
     else if (head == method_sym || head == abstracttype_sym || head == primtype_sym ||
              head == structtype_sym || jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
+    }
+    else if (head == cfunction_sym) {
+        *has_intrinsics = 1;
+        return;
     }
     else if (head == foreigncall_sym) {
         *has_intrinsics = 1;
@@ -515,14 +538,23 @@ static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_m
 static void import_module(jl_module_t *m, jl_module_t *import)
 {
     jl_sym_t *name = import->name;
+    jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
-        jl_binding_t *b = jl_get_binding(m, name);
+        b = jl_get_binding(m, name);
         if (b->owner != m || (b->value && b->value != (jl_value_t*)import)) {
             jl_errorf("importing %s into %s conflicts with an existing identifier",
                       jl_symbol_name(name), jl_symbol_name(m->name));
         }
     }
-    jl_set_const(m, name, (jl_value_t*)import);
+    else {
+        b = jl_get_binding_wr(m, name, 1);
+        b->imported = 1;
+    }
+    if (!b->constp) {
+        b->value = (jl_value_t*)import;
+        b->constp = 1;
+        jl_gc_wb(m, (jl_value_t*)import);
+    }
 }
 
 // replace Base.X with top-level X
@@ -584,6 +616,8 @@ static jl_code_info_t *expr_to_code_info(jl_value_t *expr)
     src->ssavaluetypes = jl_box_long(0);
     jl_gc_wb(src, src->ssavaluetypes);
     src->signature_for_inference_heuristics = jl_nothing;
+    src->codelocs = jl_nothing;
+    src->linetable = jl_nothing;
 
     JL_GC_POP();
     return src;
@@ -601,7 +635,15 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
 
     jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == module_sym) {
+    if (ex->head == dot_sym) {
+        if (jl_expr_nargs(ex) != 2)
+            jl_error("syntax: malformed \".\" expression");
+        return jl_eval_dot_expr(m, jl_exprarg(ex, 0), jl_exprarg(ex, 1), fast);
+    }
+    else if (ptls->in_pure_callback) {
+        jl_error("eval cannot be used in a generated function");
+    }
+    else if (ex->head == module_sym) {
         return jl_eval_module_expr(m, ex);
     }
     else if (ex->head == importall_sym) {
@@ -793,12 +835,15 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
         // worthwhile and also unsound (see #24316).
         // TODO: This is still not correct since an `eval` can happen elsewhere, but it
         // helps in common cases.
+        size_t last_age = ptls->world_age;
+        size_t world = jl_world_counter;
+        ptls->world_age = world;
         if (!has_defs) {
-            size_t world = jl_get_ptls_states()->world_age;
             jl_type_infer(&li, world, 0);
         }
         jl_value_t *dummy_f_arg = NULL;
-        result = jl_call_method_internal(li, &dummy_f_arg, 1);
+        result = li->invoke(li, &dummy_f_arg, 1);
+        ptls->world_age = last_age;
     }
     else {
         // use interpreter

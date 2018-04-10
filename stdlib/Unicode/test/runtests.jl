@@ -2,7 +2,7 @@
 
 using Test
 using Unicode
-using Unicode: normalize, isassigned, iscased
+using Unicode: normalize, isassigned
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
@@ -93,8 +93,8 @@ end
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
     for c in vcat(alower,ulower)
-        @test islower(c) == true
-        @test isupper(c) == false
+        @test islowercase(c) == true
+        @test isuppercase(c) == false
         @test isdigit(c) == false
         @test isnumeric(c) == false
     end
@@ -103,8 +103,8 @@ end
     uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
 
     for c in vcat(aupper,uupper)
-        @test islower(c) == false
-        @test isupper(c) == true
+        @test islowercase(c) == false
+        @test isuppercase(c) == true
         @test isdigit(c) == false
         @test isnumeric(c) == false
     end
@@ -201,8 +201,8 @@ end
     @test !all(isspace,"ΣβΣβ")
     @test  all(isalpha,"ΣβΣβ")
     @test  all(isprint,"ΣβΣβ")
-    @test !all(isupper,"ΣβΣβ")
-    @test !all(islower,"ΣβΣβ")
+    @test !all(isuppercase,"ΣβΣβ")
+    @test !all(islowercase,"ΣβΣβ")
     @test !all(isnumeric,"ΣβΣβ")
     @test !all(iscntrl,"ΣβΣβ")
     @test !all(ispunct,"ΣβΣβ")
@@ -329,17 +329,17 @@ end
     @test collect(g) == ["1","2","3","α","5"]
 end
 
-@testset "ucfirst/lcfirst" begin
-    @test ucfirst("Hola")=="Hola"
-    @test ucfirst("hola")=="Hola"
-    @test ucfirst("")==""
-    @test ucfirst("*")=="*"
-    @test ucfirst("Ǆxx") == ucfirst("ǆxx") == "ǅxx"
+@testset "uppercasefirst/lowercasefirst" begin
+    @test uppercasefirst("Hola")=="Hola"
+    @test uppercasefirst("hola")=="Hola"
+    @test uppercasefirst("")==""
+    @test uppercasefirst("*")=="*"
+    @test uppercasefirst("Ǆxx") == uppercasefirst("ǆxx") == "ǅxx"
 
-    @test lcfirst("Hola")=="hola"
-    @test lcfirst("hola")=="hola"
-    @test lcfirst("")==""
-    @test lcfirst("*")=="*"
+    @test lowercasefirst("Hola")=="hola"
+    @test lowercasefirst("hola")=="hola"
+    @test lowercasefirst("")==""
+    @test lowercasefirst("*")=="*"
 end
 
 @testset "issue #11482" begin
@@ -355,17 +355,17 @@ end
         @test lowercase('\U118bf') == '\U118df'
         @test uppercase('\U1044d') == '\U10425'
     end
-    @testset "ucfirst/lcfirst" begin
-        @test ucfirst("Abc") == "Abc"
-        @test ucfirst("abc") == "Abc"
-        @test lcfirst("ABC") == "aBC"
-        @test lcfirst("aBC") == "aBC"
-        @test ucfirst(GenericString("")) == ""
-        @test lcfirst(GenericString("")) == ""
-        @test ucfirst(GenericString("a")) == "A"
-        @test lcfirst(GenericString("A")) == "a"
-        @test lcfirst(GenericString("a")) == "a"
-        @test ucfirst(GenericString("A")) == "A"
+    @testset "uppercasefirst/lowercasefirst" begin
+        @test uppercasefirst("Abc") == "Abc"
+        @test uppercasefirst("abc") == "Abc"
+        @test lowercasefirst("ABC") == "aBC"
+        @test lowercasefirst("aBC") == "aBC"
+        @test uppercasefirst(GenericString("")) == ""
+        @test lowercasefirst(GenericString("")) == ""
+        @test uppercasefirst(GenericString("a")) == "A"
+        @test lowercasefirst(GenericString("A")) == "a"
+        @test lowercasefirst(GenericString("a")) == "a"
+        @test uppercasefirst(GenericString("A")) == "A"
     end
     @testset "titlecase" begin
         @test titlecase('ǉ') == 'ǈ'
@@ -376,7 +376,7 @@ end
         @test titlecase("abcD   EFG\n\thij", strict=true)  == "Abcd   Efg\n\tHij"
         @test titlecase("abcD   EFG\n\thij", strict=false) == "AbcD   EFG\n\tHij"
         @test titlecase("abc-def")                     == "Abc-Def"
-        @test titlecase("abc-def", wordsep = !iscased) == "Abc-Def"
+        @test titlecase("abc-def", wordsep = !Base.Unicode.iscased) == "Abc-Def"
         @test titlecase("abc-def", wordsep = isspace)  == "Abc-def"
     end
 end

@@ -5,7 +5,7 @@ const COMPILER_TEMP_SYM = Symbol("#temp#")
 # add the real backedges
 function finalize_backedges(frame::InferenceState)
     toplevel = !isa(frame.linfo.def, Method)
-    if !toplevel && frame.cached && frame.max_valid == typemax(UInt)
+    if !toplevel && (frame.cached || frame.parent !== nothing) && frame.max_valid == typemax(UInt)
         caller = frame.linfo
         for edges in frame.stmt_edges
             i = 1
@@ -15,7 +15,7 @@ function finalize_backedges(frame::InferenceState)
                     ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
                     i += 1
                 else
-                    typeassert(to, MethodTable)
+                    typeassert(to, Core.MethodTable)
                     typ = edges[i + 1]
                     ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
                     i += 2
@@ -164,7 +164,7 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
             # so need to check whether the code itself is also inferred
             if min_world(linfo) <= params.world <= max_world(linfo)
                 inf = linfo.inferred
-                if linfo.jlcall_api == 2
+                if invoke_api(linfo) == 2
                     method = linfo.def::Method
                     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                     tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
@@ -176,6 +176,8 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     tree.inferred = true
                     tree.pure = true
                     tree.inlineable = true
+                    tree.codelocs = nothing
+                    tree.linetable = nothing
                     i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                     return svec(linfo, tree, linfo.rettype)
                 elseif isa(inf, CodeInfo)
@@ -226,7 +228,7 @@ function typeinf_type(method::Method, @nospecialize(atypes), sparams::SimpleVect
     return widenconst(frame.bestguess)
 end
 
-function typeinf_ext(linfo::MethodInstance, world::UInt)
+@timeit function typeinf_ext(linfo::MethodInstance, world::UInt)
     if isa(linfo.def, Method)
         # method lambda - infer this specialization via the method cache
         return typeinf_code(linfo, true, true, Params(world))

@@ -884,7 +884,7 @@ un_fintrinsic(sqrt_float,sqrt_llvm)
 
 JL_DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b)
 {
-    JL_TYPECHK(isfalse, bool, isfalse);
+    JL_TYPECHK(select_value, bool, isfalse);
     return (isfalse == jl_false ? b : a);
 }
 

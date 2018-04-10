@@ -152,7 +152,7 @@ function _is_mailto(s::AbstractString)
     length(s) < 6 && return false
     # slicing strings is a bit risky, but this equality check is safe
     lowercase(s[1:6]) == "mailto:" || return false
-    return contains(s[6:end], _email_regex)
+    return occursin(_email_regex, s[6:end])
 end
 
 # –––––––––––

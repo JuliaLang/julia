@@ -20,7 +20,7 @@ on global variables (aside from constants like [`pi`](@ref)).
 Code should be as generic as possible. Instead of writing:
 
 ```julia
-convert(Complex{Float64}, x)
+Complex{Float64}(x)
 ```
 
 it's better to use available generic functions:
@@ -145,10 +145,10 @@ some alternatives to consider:
 It is usually not much help to construct arrays like the following:
 
 ```julia
-a = Vector{Union{Int,AbstractString,Tuple,Array}}(uninitialized, n)
+a = Vector{Union{Int,AbstractString,Tuple,Array}}(undef, n)
 ```
 
-In this case `Vector{Any}(uninitialized, n)` is better. It is also more helpful to the compiler to annotate specific
+In this case `Vector{Any}(undef, n)` is better. It is also more helpful to the compiler to annotate specific
 uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
 ## Use naming conventions consistent with Julia's `base/`
@@ -204,9 +204,9 @@ as applicable:
 
 9. **Varargs**.
    This refers to arguments that can be listed indefinitely at the end of a function call.
-   For example, in `Matrix{T}(uninitialized, dims)`, the dimensions can be given as a
-   [`Tuple`](@ref), e.g. `Matrix{T}(uninitialized, (1,2))`, or as [`Vararg`](@ref)s,
-   e.g. `Matrix{T}(uninitialized, 1, 2)`.
+   For example, in `Matrix{T}(undef, dims)`, the dimensions can be given as a
+   [`Tuple`](@ref), e.g. `Matrix{T}(undef, (1,2))`, or as [`Vararg`](@ref)s,
+   e.g. `Matrix{T}(undef, 1, 2)`.
 
 10. **Keyword arguments**.
    In Julia keyword arguments have to come last anyway in function definitions; they're

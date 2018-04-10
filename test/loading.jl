@@ -79,7 +79,71 @@ mktempdir() do dir
     end
 end
 
-import Base: UUID, SHA1, PkgId, load_path, identify_package, locate_package, version_slug
+## unit tests of project parsing ##
+
+import Base: SHA1, PkgId, load_path, identify_package, locate_package, version_slug, dummy_uuid
+import UUIDs: UUID, uuid4, uuid_version
+import Random: shuffle, randstring
+using Test
+
+function subset(v::Vector{T}, m::Int) where T
+    T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
+end
+
+function perm(p::Vector, i::Int)
+    for j = length(p):-1:1
+        i, k = divrem(i, j)
+        p[j], p[k+1] = p[k+1], p[j]
+    end
+    return p
+end
+
+@testset "explicit_project_deps_get" begin
+    mktempdir() do dir
+        project_file = joinpath(dir, "Project.toml")
+        touch(project_file) # dummy_uuid calls realpath
+        # various UUIDs to work with
+        proj_uuid = dummy_uuid(project_file)
+        root_uuid = uuid4()
+        this_uuid = uuid4()
+        # project file to subset/permute
+        lines = split("""
+        name = "Root"
+        uuid = "$root_uuid"
+        [deps]
+        This = "$this_uuid"
+        """, '\n')
+        N = length(lines)
+        # test every permutation of every subset of lines
+        for m = 0:2^N-1
+            s = subset(lines, m) # each subset of lines
+            for i = 1:factorial(count_ones(m))
+                p = perm(s, i) # each permutation of the subset
+                open(project_file, write=true) do io
+                    for line in p
+                        println(io, line)
+                    end
+                end
+                # look at lines and their order
+                n = findfirst(line -> startswith(line, "name"), p)
+                u = findfirst(line -> startswith(line, "uuid"), p)
+                d = findfirst(line -> line == "[deps]", p)
+                t = findfirst(line -> startswith(line, "This"), p)
+                # look up various packages by name
+                root = Base.explicit_project_deps_get(project_file, "Root")
+                this = Base.explicit_project_deps_get(project_file, "This")
+                that = Base.explicit_project_deps_get(project_file, "That")
+                # test that the correct answers are given
+                @test root == (coalesce(n, N+1) ≥ coalesce(d, N+1) ? false :
+                               coalesce(u, N+1) < coalesce(d, N+1) ? root_uuid : proj_uuid)
+                @test this == (coalesce(d, N+1) < coalesce(t, N+1) ≤ N ? this_uuid : false)
+                @test that == false
+            end
+        end
+    end
+end
+
+## functional testing of package identification, location & loading ##
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
@@ -91,11 +155,11 @@ push!(empty!(DEPOT_PATH), "depot")
 @testset "project & manifest identify_package & locate_package" begin
     local path
     for (names, uuid, path) in [
-        ("Foo",     "767738be-2f1f-45a9-b806-0234f3164144", "project/deps/Foo1/src/Foo.jl"       ),
-        ("Bar.Foo", "6f418443-bd2e-4783-b551-cdbac608adf2", "project/deps/Foo2.jl/src/Foo.jl"    ),
-        ("Bar",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0", "project/deps/Bar/src/Bar.jl"        ),
-        ("Foo.Baz", "6801f525-dc68-44e8-a4e8-cabd286279e7", "depot/packages/9HkB/TCSb/src/Baz.jl"),
-        ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"                ),
+        ("Foo",     "767738be-2f1f-45a9-b806-0234f3164144", "project/deps/Foo1/src/Foo.jl"      ),
+        ("Bar.Foo", "6f418443-bd2e-4783-b551-cdbac608adf2", "project/deps/Foo2.jl/src/Foo.jl"   ),
+        ("Bar",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0", "project/deps/Bar/src/Bar.jl"       ),
+        ("Foo.Baz", "6801f525-dc68-44e8-a4e8-cabd286279e7", "depot/packages/Baz/81oL/src/Baz.jl"),
+        ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"               ),
     ]
         n = map(String, split(names, '.'))
         pkg = identify_package(n...)
@@ -173,212 +237,286 @@ end
     @test Foo.which == "path"
 end
 
-function gen_entry_point(entry::String, pkg::PkgId)
-    mkpath(dirname(entry))
-    open(entry, "w") do io
+## systematic generation of test environments ##
+
+const M = 3 # number of node names
+const N = 12 # different UUIDs per name
+const NODES = 1:M*N
+const NAMES = map(string, ('A':'Z')[1:M])
+const UUIDS = [uuid4() for i = 1:M, j = 1:N]
+const KIND = [(i + j) % 3 for i = 1:M, j = 1:N]
+const KIND0 = filter(i -> KIND[i] == 0, NODES)
+const KIND2 = filter(i -> KIND[i] == 2, NODES)
+
+# kind 0: no project file
+# kind 1: project file without name or uuid
+# kind 2: project file with name and uuid
+
+# explicit env: root can be anything, everything else kind 2
+# implicit env: nodes can be anything, names must be unique
+
+# allowed dependencies between kinds (explicit and implicit):
+allowed(i::Int, j::Int) = KIND[i] ≤ KIND[j] && !(KIND[i] == KIND[j] == 1)
+
+# node names/labels
+L(i::Int) = NAMES[mod1(i, M)]
+
+# first generate random dependency graphs
+
+const graphs = Any[]
+
+while length(graphs) < 100
+    if (flat = rand(Bool))
+        root = rand(KIND0)
+        pool = root ∪ filter(i -> L(i) ≠ L(root), NODES)
+        size = rand(1:N)
+    else
+        root = rand(NODES)
+        pool = filter(i -> i ≠ root, KIND2)
+        size = rand(1:length(NODES)÷2)
+    end
+    graph = Dict(root => Int[])
+    KIND[root] ≠ 0 && push!(graph[root], root)
+    for _ = 1:size
+        i = rand(keys(graph))
+        J = filter(pool) do j
+            allowed(i, j) && all(L(j) ≠ L(k) for k in graph[i])
+        end
+        isempty(J) && continue
+        j = rand(J)
+        push!(graph[i], j)
+        if j ∉ keys(graph)
+            graph[j] = [j]
+            flat && filter!(k -> L(k) ≠ L(j), pool)
+            isempty(pool) && break
+        end
+    end
+    roots = flat ? reduce(∪, values(graph)) : graph[root]
+    for i in keys(graph)
+        KIND[i] == 0 && delete!(graph, i)
+    end
+    t = (flat, root,
+        Dict(L(i) => i for i in roots),
+        Dict(i => Dict(L(j) => j for j in deps) for (i, deps) in graph))
+    t in graphs || push!(graphs, t)
+end
+
+# materialize dependency graphs as explicit environments
+
+function make_entry_point(path::String, name::String, uuid::UUID)
+    mkpath(dirname(path))
+    open(path, "w") do io
         print(io, """
-        __precompile__(true)
-        module $(pkg.name)
-        uuid = $(pkg.uuid === nothing ? "nothing" : "Base.UUID(\"$(pkg.uuid)\")")
-        name = "$(pkg.name)"
+        module $name
+        name = $(repr(name))
+        uuid = $(repr(string(uuid)))
         end
         """)
     end
 end
 
-function gen_project_file(project_file::String, pkg::PkgId, deps::Pair{String,UUID}...)
-    mkpath(dirname(project_file))
+function make_env(flat, root, roots, graph, paths, dummies)
+    pkg(i::Int) = PkgId(KIND[i] == 2 ? UUIDS[i] : get(dummies, i, nothing), L(i))
+    return (flat, pkg(root),
+        Dict(n => pkg(i) for (n, i) in roots),
+        Dict(pkg(i) => Dict(n => pkg(j) for (n, j) in d) for (i, d) in graph),
+        Dict{PkgId,Union{Nothing,String}}(pkg(i) => path for (i, path) in paths),
+    )
+end
+
+const depots = [mktempdir() for _ = 1:3]
+const envs = Dict{String,Any}()
+
+append!(empty!(DEPOT_PATH), depots)
+
+for (flat, root, roots, graph) in graphs
+    if flat
+        all(KIND[i] == 2 for i in values(roots)) || continue
+        all(KIND[i] == 2 for i in keys(graph)) || continue
+    end
+    dir = mktempdir()
+    dummies = Dict{Int,UUID}()
+    paths = Dict{Int,Union{Nothing,String}}()
+    root_path = rand([false, true, joinpath("src", "$(randstring()).jl")])
+
+    # generate project file
+    project_file = joinpath(dir, "Project.toml")
     open(project_file, "w") do io
-        println(io, "name = $(repr(pkg.name))")
-        pkg.uuid !== nothing && println(io, "uuid = $(repr(string(pkg.uuid)))")
-        println(io, "\n[deps]")
-        for (name, uuid) in deps
-            println(io, "$name = ", repr(string(uuid)))
+        name, uuid, kind = L(root), UUIDS[root], KIND[root]
+        kind != 0 && println(io, "name = ", repr(name))
+        kind == 2 && println(io, "uuid = ", repr(string(uuid)))
+        kind == 1 && (dummies[root] = dummy_uuid(project_file))
+        root_path isa String && println(io, "path = ", repr(root_path))
+        println(io, "[deps]")
+        for (n, i) in roots
+            i == root && continue
+            @assert KIND[i] == 2
+            println(io, "$n = ", repr(string(UUIDS[i])))
+        end
+        kind == 0 && return
+        # generate entry point
+        if root_path == false
+            kind == 2 && (paths[root] = nothing)
+        else
+            root_path == true && (root_path = joinpath("src", "$name.jl"))
+            root_path = joinpath(dir, root_path)
+            make_entry_point(root_path, name, uuid)
+            paths[root] = root_path
         end
     end
-end
 
-function gen_implicit(dir::String, pkg::PkgId, proj::Bool, deps::Pair{String,UUID}...)
-    entry_point = joinpath(dir, pkg.name, "src", "$(pkg.name).jl")
-    gen_entry_point(entry_point, pkg)
-    proj && gen_project_file(joinpath(dir, pkg.name, "Project.toml"), pkg, deps...)
-    return entry_point
-end
-
-function gen_depot_ver(depot::String, pkg::PkgId, deps::Pair{String,UUID}...)
-    pkg.uuid === nothing && return nothing, nothing
-    tree = SHA1(rand(UInt8, 20)) # fake tree hash
-    dir = joinpath(depot, "packages", version_slug(pkg.uuid, tree))
-    entry = joinpath(dir, "src", "$(pkg.name).jl")
-    gen_entry_point(entry, pkg)
-    gen_project_file(joinpath(dir, "Project.toml"), pkg, deps...)
-    return tree, entry
-end
-
-let n = 0
-    global function gen_explicit(dir::String, pkg::PkgId=PkgId("Env$(n += 1)"))
-        gen_project_file(joinpath(dir, "Project.toml"), pkg)
-        close(open(joinpath(dir, "Manifest.toml"), "w"))
+    # count manifest entries
+    counts = Dict(name => 0 for name in NAMES)
+    for (i, _) in graph
+        i == root && continue
+        @assert KIND[i] == 2
+        counts[L(i)] += 1
     end
-end
 
-function gen_manifest(dir::String, name::String, uuid::UUID, tree::SHA1,
-    deps::Pair{String,UUID}...; toplevel::Bool = true)
-    toplevel && open(joinpath(dir, "Project.toml"), "a") do io
-        println(io, "$name = \"$uuid\"")
-    end
-    open(joinpath(dir, "Manifest.toml"), "a") do io
-        println(io, "[[$name]]")
-        println(io, "uuid = \"$uuid\"")
-        println(io, "git-tree-sha1 = \"$(bytes2hex(tree.bytes))\"")
-        if !isempty(deps)
-            println(io, "    [$name.deps]")
-            for (n, u) in deps
-                println(io, "    $n = \"$u\"")
+    # generate manifest file
+    open(joinpath(dir, "Manifest.toml"), "w") do io
+        for (i, deps) in graph
+            i == root && continue
+            name, uuid = L(i), UUIDS[i]
+            println(io, "[[$name]]")
+            println(io, "uuid = ", repr(string(uuid)))
+            if rand() < 2/3
+                sha1 = SHA1(rand(UInt8, 20))
+                println(io, "git-tree-sha1 = ", repr(string(sha1)))
+                path = joinpath(
+                    rand(depots), "packages",
+                    name, version_slug(uuid, sha1),
+                    "src", "$name.jl",
+                )
+                make_entry_point(path, name, uuid)
+                paths[i] = path # may get overwritten below
             end
-        end
-        println(io)
-    end
-end
-
-const name = "Flarp"
-const uuidA = UUID("b2cb3794-8625-4058-bcde-7eeb13ac1c8b")
-const uuidB = UUID("1513c021-3639-4616-a37b-ee45c9d2f773")
-const uuids = [nothing, uuidA, uuidB]
-
-ft(::UUID)    =  true:true
-ft(::Nothing) = false:true
-
-@testset "direct dependency loading: implict + implicit" begin
-    for uuid1 in uuids, proj1 in ft(uuid1),
-        uuid2 in uuids, proj2 in ft(uuid2)
-        pkg1 = uuid1 === nothing ? PkgId(name) : PkgId(uuid1, name)
-        pkg2 = uuid2 === nothing ? PkgId(name) : PkgId(uuid2, name)
-        empty!(LOAD_PATH)
-        mktempdir() do dir1
-            push!(LOAD_PATH, dir1)
-            path1 = gen_implicit(dir1, pkg1, proj1)
-            @test identify_package(name) == pkg1
-            @test locate_package(pkg1) == path1
-            path = uuid1 == coalesce(uuid2, uuid1) ? path1 : nothing
-            @test locate_package(pkg2) == path
-            mktempdir() do dir2
-                push!(LOAD_PATH, dir2)
-                path2 = gen_implicit(dir2, pkg2, proj2)
-                @test identify_package(name) == pkg1
-                @test locate_package(pkg1) == path1
-                path = uuid1 == coalesce(uuid2, uuid1) ? path1 : path2
-                @test locate_package(pkg2) == path
+            if rand() < 1/4
+                path = joinpath("deps", "$(randstring()).jl")
+                println(io, "path = ", repr(path))
+                path = joinpath(dir, path)
+                make_entry_point(path, name, uuid)
+                paths[i] = path # may overwrite path above
             end
-        end
-    end
-end
-
-@testset "direct dependency loading: explicit + explicit" begin
-    mktempdir() do depot
-        push!(empty!(DEPOT_PATH), depot)
-        pkgs  = [PkgId(uuid, name) for uuid in uuids]
-        pairs = [gen_depot_ver(depot, pkg) for pkg in pkgs, _ in 1:2]
-        trees = first.(pairs)
-        paths = last.(pairs)
-        for i = 1:length(uuids), k = 1:2,
-            j = 1:length(uuids), l = 1:2
-            uuids[i] !== nothing && uuids[j] !== nothing || continue
-            empty!(LOAD_PATH)
-            mktempdir() do dir1
-                push!(LOAD_PATH, dir1)
-                gen_explicit(dir1)
-                gen_manifest(dir1, name, uuids[i], trees[i,k])
-                @test identify_package(name) == pkgs[i]
-                @test locate_package(pkgs[i]) == paths[i,k]
-                path = uuids[i] == uuids[j] ? paths[i,k] : nothing
-                @test locate_package(pkgs[j]) == path
-                mktempdir() do dir2
-                    push!(LOAD_PATH, dir2)
-                    gen_explicit(dir2)
-                    gen_manifest(dir2, name, uuids[j], trees[j,l])
-                    @test identify_package(name) == pkgs[i]
-                    @test locate_package(pkgs[i]) == paths[i,k]
-                    path = uuids[i] == uuids[j] ? paths[i,k] : paths[j,l]
-                    @test locate_package(pkgs[j]) == path
+            # neither can occur, i.e. no entry in paths
+            deps = delete!(copy(deps), name)
+            isempty(deps) && continue
+            if all(counts[n] == 1 for n in keys(deps))
+                println(io, "deps = ", repr(keys(deps)))
+            else
+                println(io, "  [$name.deps]")
+                for (n, j) in deps
+                    @assert KIND[j] == 2
+                    println(io, "  $n = ", repr(string(UUIDS[j])))
                 end
             end
         end
     end
+
+    envs[dir] = make_env(flat, root, roots, graph, paths, dummies)
 end
 
-@testset "direct dependency loading: explicit + implicit" begin
-    mktempdir() do depot
-        push!(empty!(DEPOT_PATH), depot)
-        pkgs  = [PkgId(uuid, name) for uuid in uuids]
-        pairs = [gen_depot_ver(depot, pkg) for pkg in pkgs, _ in 1:2]
-        trees = first.(pairs)
-        paths = last.(pairs)
-        for i = 1:length(uuids), k = 1:2,
-            j = 1:length(uuids), l = 1:2, proj in ft(uuids[j])
-            uuids[i] !== nothing || continue
-            empty!(LOAD_PATH)
-            mktempdir() do dir1
-                push!(LOAD_PATH, dir1)
-                gen_explicit(dir1)
-                gen_manifest(dir1, name, uuids[i], trees[i,k])
-                @test identify_package(name) == pkgs[i]
-                @test locate_package(pkgs[i]) == paths[i,k]
-                path = uuids[i] == coalesce(uuids[j], uuids[i]) ? paths[i,k] : nothing
-                @test locate_package(pkgs[j]) == path
-                mktempdir() do dir2
-                    push!(LOAD_PATH, dir2)
-                    path2 = gen_implicit(dir2, pkgs[j], proj)
-                    @test identify_package(name) == pkgs[i]
-                    @test locate_package(pkgs[i]) == paths[i,k]
-                    path = uuids[i] == coalesce(uuids[j], uuids[i]) ? paths[i,k] : path2
-                    @test locate_package(pkgs[j]) == path
-                end
+# materialize dependency graphs as implicit environments (if possible)
+
+for (flat, root, roots, graph) in graphs
+    flat || continue
+    dir = mktempdir()
+    dummies = Dict{Int,UUID}()
+    paths = Dict{Int,Union{Nothing,String}}()
+
+    for (name, i) in roots
+        uuid, kind = UUIDS[i], KIND[i]
+        # generate package entry point
+        entry = joinpath(dir, name, "src", "$name.jl")
+        make_entry_point(entry, name, uuid)
+        paths[i] = entry
+        kind == 0 && continue
+        deps = delete!(copy(graph[i]), name)
+        # generate project file
+        project_file = joinpath(dir, name, "Project.toml")
+        open(project_file, "w") do io
+            kind != 0 && println(io, "name = ", repr(name))
+            kind == 2 && println(io, "uuid = ", repr(string(uuid)))
+            kind != 2 && (dummies[i] = dummy_uuid(project_file))
+            isempty(deps) || println(io, "[deps]")
+            for (n, j) in deps
+                @assert KIND[j] == 2
+                println(io, "  $n = ", repr(string(UUIDS[j])))
             end
+        end
+    end
+
+    envs[dir] = make_env(flat, root, roots, graph, paths, dummies)
+end
+
+## use generated environments to test package loading ##
+
+function test_find(
+        roots::Dict{String,PkgId},
+        graph::Dict{PkgId,Dict{String,PkgId}},
+        paths::Dict{PkgId,Union{Nothing,String}},
+    )
+    # check direct dependencies
+    for name in NAMES
+        id = identify_package(name)
+        @test id == get(roots, name, nothing)
+        path = locate_package(id)
+        @test path == get(paths, id, nothing)
+    end
+    # check indirect dependencies
+    for where in keys(graph)
+        where.uuid === nothing && continue
+        deps = get(graph, where, Dict(where.name => where))
+        for name in NAMES
+            id = identify_package(where, name)
+            @test id == get(deps, name, nothing)
+            path = locate_package(id)
+            @test path == get(paths, id, nothing)
         end
     end
 end
 
-const uuidT = UUID("a54bd003-d8dc-4161-b186-d5516cd448e9")
-
-@testset "indirect dependency loading: explicit + explicit" begin
-    mktempdir() do depot
-        push!(empty!(DEPOT_PATH), depot)
-        # generate top-level package
-        top = PkgId(uuidT, "TopLevel")
-        top_tree, _ = gen_depot_ver(depot, top)
-        # generate dependency packages
-        pkgs  = [PkgId(uuid, name) for uuid in uuids]
-        pairs = [gen_depot_ver(depot, pkg) for pkg in pkgs, _ in 1:2]
-        trees = first.(pairs)
-        paths = last.(pairs)
-        for i = 1:length(uuids), k = 1:2, s = false:true,
-            j = 1:length(uuids), l = 1:2, t = false:true
-            uuids[i] !== nothing && uuids[j] !== nothing || continue
-            empty!(LOAD_PATH)
-            mktempdir() do dir1
-                push!(LOAD_PATH, dir1)
-                gen_explicit(dir1)
-                gen_manifest(dir1, name, uuids[i], trees[i,k], toplevel=false)
-                s && gen_manifest(dir1, top.name, top.uuid, top_tree, name => uuids[i])
-                @test identify_package(top, name) == (s ? pkgs[i] : nothing)
-                @test locate_package(pkgs[i]) == paths[i,k]
-                path = uuids[i] == uuids[j] ? paths[i,k] : nothing
-                @test locate_package(pkgs[j]) == path
-                mktempdir() do dir2
-                    push!(LOAD_PATH, dir2)
-                    gen_explicit(dir2)
-                    t && gen_manifest(dir1, top.name, top.uuid, top_tree, name => uuids[j])
-                    gen_manifest(dir2, name, uuids[j], trees[j,l], toplevel=false)
-                    pkg = (s ? pkgs[i] : t ? pkgs[j] : nothing)
-                    @test identify_package(top, name) == pkg
-                    @test locate_package(pkgs[i]) == paths[i,k]
-                    path = uuids[i] == uuids[j] ? paths[i,k] : paths[j,l]
-                    @test locate_package(pkgs[j]) == path
-                end
-            end
-        end
+@testset "find_package with one env in load path" begin
+    for (env, (_, _, roots, graph, paths)) in envs
+        push!(empty!(LOAD_PATH), env)
+        test_find(roots, graph, paths)
     end
+end
+
+@testset "find_package with two envs in load path" begin
+    for x = false:true,
+        (env1, (_, _, roots1, graph1, paths1)) in (x ? envs : rand(envs, 10)),
+        (env2, (_, _, roots2, graph2, paths2)) in (x ? rand(envs, 10) : envs)
+        push!(empty!(LOAD_PATH), env1, env2)
+        roots = merge(roots2, roots1)
+        graph = merge(graph2, graph1)
+        paths = merge(paths2, paths1)
+        test_find(roots, graph, paths)
+    end
+end
+
+@testset "find_package with three envs in load path" begin
+    for (env1, (_, _, roots1, graph1, paths1)) in rand(envs, 10),
+        (env2, (_, _, roots2, graph2, paths2)) in rand(envs, 10),
+        (env3, (_, _, roots3, graph3, paths3)) in rand(envs, 10)
+        push!(empty!(LOAD_PATH), env1, env2, env3)
+        roots = merge(roots3, roots2, roots1)
+        graph = merge(graph3, graph2, graph1)
+        paths = merge(paths3, paths2, paths1)
+        test_find(roots, graph, paths)
+    end
+end
+
+# normalization of paths by include (#26424)
+@test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
+
+## cleanup after tests ##
+
+for env in keys(envs)
+    rm(env, force=true, recursive=true)
+end
+for depot in depots
+    rm(depot, force=true, recursive=true)
 end
 
 append!(empty!(DEPOT_PATH), saved_depot_path)

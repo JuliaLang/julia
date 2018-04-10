@@ -36,7 +36,7 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
     end
 
     # AbstractArray map for N-arg case
-    A = Array{Int}(uninitialized, 10)
+    A = Array{Int}(undef, 10)
     f(x, y, z) = x + y + z
     D = Float64[1:10...]
 
@@ -77,7 +77,7 @@ end
 function run_map_equivalence_tests(mapf)
     testmap_equivalence(mapf, identity, (1,2,3,4))
     testmap_equivalence(mapf, (x,y,z)->x+y+z, 1,2,3)
-    testmap_equivalence(mapf, x->x ? false : true, BitMatrix(uninitialized, 10,10))
-    testmap_equivalence(mapf, x->"foobar", BitMatrix(uninitialized, 10,10))
-    testmap_equivalence(mapf, (x,y,z)->string(x,y,z), BitVector(uninitialized, 10), fill(1.0, 10), "1234567890")
+    testmap_equivalence(mapf, x->x ? false : true, BitMatrix(undef, 10,10))
+    testmap_equivalence(mapf, x->"foobar", BitMatrix(undef, 10,10))
+    testmap_equivalence(mapf, (x,y,z)->string(x,y,z), BitVector(undef, 10), fill(1.0, 10), "1234567890")
 end

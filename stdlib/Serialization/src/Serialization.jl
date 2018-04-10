@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
 Provide serialization of Julia objects via the functions
 * [`serialize`](@ref)
@@ -8,8 +10,9 @@ Provide serialization of Julia objects via the functions
 module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
-import Core: svec
-using Base: ViewIndex, Slice, index_lengths, unwrap_unionall
+import Core: svec, SimpleVector
+using Base: unaliascopy, unwrap_unionall
+using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
 
@@ -18,7 +21,7 @@ abstract type AbstractSerializer end
 mutable struct Serializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
-    table::IdDict
+    table::IdDict{Any,Any}
     pending_refs::Vector{Int}
     known_object_data::Dict{UInt64,Any}
     Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}())
@@ -36,7 +39,7 @@ const n_reserved_tags = 12
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
-    Float16, Float32, Float64, Char, DataType, Union, UnionAll, TypeName, Tuple,
+    Float16, Float32, Float64, Char, DataType, Union, UnionAll, Core.TypeName, Tuple,
     Array, Expr, LineNumberNode, LabelNode, GotoNode, QuoteNode, CodeInfo, TypeVar,
     Core.Box, Core.MethodInstance, Module, Task, String, SimpleVector, Method,
     GlobalRef, SlotNumber, TypedSlot, NewvarNode, SSAValue,
@@ -110,7 +113,7 @@ const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
 const METHOD_TAG = sertag(Method)
 const TASK_TAG = sertag(Task)
 const DATATYPE_TAG = sertag(DataType)
-const TYPENAME_TAG = sertag(TypeName)
+const TYPENAME_TAG = sertag(Core.TypeName)
 const INT32_TAG = sertag(Int32)
 const INT64_TAG = sertag(Int64)
 const GLOBALREF_TAG = sertag(GlobalRef)
@@ -271,28 +274,11 @@ function serialize(s::AbstractSerializer, a::Array)
 end
 
 function serialize(s::AbstractSerializer, a::SubArray{T,N,A}) where {T,N,A<:Array}
-    b = trimmedsubarray(a)
+    # SubArray's copy only selects the relevant data (and reduces the size) but does not
+    # preserve the type of the argument. This internal function does both:
+    b = unaliascopy(a)
     serialize_any(s, b)
 end
-
-function trimmedsubarray(V::SubArray{T,N,A}) where {T,N,A<:Array}
-    dest = Array{eltype(V)}(uninitialized, trimmedsize(V))
-    copyto!(dest, V)
-    _trimmedsubarray(dest, V, (), V.indices...)
-end
-
-trimmedsize(V) = index_lengths(V.indices...)
-
-function _trimmedsubarray(A, V::SubArray{T,N,P,I,LD}, newindices) where {T,N,P,I,LD}
-    LD && return SubArray{T,N,P,I,LD}(A, newindices, Base.compute_offset1(A, 1, newindices), 1)
-    SubArray{T,N,P,I,LD}(A, newindices, 0, 0)
-end
-_trimmedsubarray(A, V, newindices, index::ViewIndex, indices...) = _trimmedsubarray(A, V, (newindices..., trimmedindex(V.parent, length(newindices)+1, index)), indices...)
-
-trimmedindex(P, d, i::Real) = oftype(i, 1)
-trimmedindex(P, d, i::Colon) = i
-trimmedindex(P, d, i::Slice) = i
-trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
 
 function serialize(s::AbstractSerializer, ss::String)
     len = sizeof(ss)
@@ -321,7 +307,7 @@ end
 
 function serialize(s::AbstractSerializer, n::BigInt)
     serialize_type(s, BigInt)
-    serialize(s, base(62,n))
+    serialize(s, string(n, base = 62))
 end
 
 function serialize(s::AbstractSerializer, n::BigFloat)
@@ -478,14 +464,14 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
     serialize(s, g.name)
 end
 
-function serialize(s::AbstractSerializer, t::TypeName)
+function serialize(s::AbstractSerializer, t::Core.TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
     write(s.io, object_number(s, t))
     serialize_typename(s, t)
 end
 
-function serialize_typename(s::AbstractSerializer, t::TypeName)
+function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.name)
     serialize(s, t.names)
     primary = unwrap_unionall(t.wrapper)
@@ -760,7 +746,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
     elseif b == FULL_DATATYPE_TAG
         return deserialize_datatype(s, true)
     elseif b == WRAPPER_DATATYPE_TAG
-        tname = deserialize(s)::TypeName
+        tname = deserialize(s)::Core.TypeName
         return unwrap_unionall(tname.wrapper)
     elseif b == OBJECT_TAG
         t = deserialize(s)
@@ -933,7 +919,7 @@ function deserialize_array(s::AbstractSerializer)
     end
     if isa(d1, Integer)
         if elty !== Bool && isbits(elty)
-            a = Vector{elty}(uninitialized, d1)
+            a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
         end
@@ -944,7 +930,7 @@ function deserialize_array(s::AbstractSerializer)
     if isbits(elty)
         n = prod(dims)::Int
         if elty === Bool && n > 0
-            A = Array{Bool, length(dims)}(uninitialized, dims)
+            A = Array{Bool, length(dims)}(undef, dims)
             i = 1
             while i <= n
                 b = read(s.io, UInt8)::UInt8
@@ -957,12 +943,12 @@ function deserialize_array(s::AbstractSerializer)
                 end
             end
         else
-            A = read!(s.io, Array{elty}(uninitialized, dims))
+            A = read!(s.io, Array{elty}(undef, dims))
         end
         s.table[slot] = A
         return A
     end
-    A = Array{elty, length(dims)}(uninitialized, dims)
+    A = Array{elty, length(dims)}(undef, dims)
     s.table[slot] = A
     sizehint!(s.table, s.counter + div(length(A),4))
     for i = eachindex(A)
@@ -986,7 +972,7 @@ end
 
 module __deserialized_types__ end
 
-function deserialize(s::AbstractSerializer, ::Type{TypeName})
+function deserialize(s::AbstractSerializer, ::Type{Core.TypeName})
     number = read(s.io, UInt64)
     return deserialize_typename(s, number)
 end
@@ -999,7 +985,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     else
         # reuse the same name for the type, if possible, for nicer debugging
         tn_name = isdefined(__deserialized_types__, name) ? gensym() : name
-        tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any),
+        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any),
                    tn_name, __deserialized_types__)
         makenew = true
     end
@@ -1055,13 +1041,13 @@ function deserialize_typename(s::AbstractSerializer, number)
             end
         end
     end
-    return tn::TypeName
+    return tn::Core.TypeName
 end
 
 function deserialize_datatype(s::AbstractSerializer, full::Bool)
     slot = s.counter; s.counter += 1
     if full
-        tname = deserialize(s)::TypeName
+        tname = deserialize(s)::Core.TypeName
         ty = tname.wrapper
     else
         name = deserialize(s)::Symbol

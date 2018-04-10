@@ -5,7 +5,7 @@ usual way of the operating system, or in a portable way from within Julia.
 Suppose you want to set the environment variable `JULIA_EDITOR` to
 `vim`, then either type `ENV["JULIA_EDITOR"] = "vim"` for instance in the REPL
 to make this change on a case by case basis, or add the same to the user
-configuration file `.juliarc.jl` in the user's home directory to have
+configuration file `~/.julia/config/startup.jl` in the user's home directory to have
 a permanent effect. The current value of the same environment variable is
 determined by evaluating `ENV["JULIA_EDITOR"]`.
 
@@ -42,14 +42,14 @@ determines the directory in which Julia initially searches for source files (via
 `Base.find_source_file()`).
 
 Likewise, the global variable `Base.SYSCONFDIR` determines a relative path to the
-configuration file directory. Then Julia searches for a `juliarc.jl` file at
+configuration file directory. Then Julia searches for a `startup.jl` file at
 
 ```
-$JULIA_BINDIR/$SYSCONFDIR/julia/juliarc.jl
-$JULIA_BINDIR/../etc/julia/juliarc.jl
+$JULIA_BINDIR/$SYSCONFDIR/julia/startup.jl
+$JULIA_BINDIR/../etc/julia/startup.jl
 ```
 
-by default (via `Base.load_juliarc()`).
+by default (via `Base.load_julia_startup()`).
 
 For example, a Linux installation with a Julia executable located at
 `/bin/julia`, a `DATAROOTDIR` of `../share`, and a `SYSCONFDIR` of `../etc` will
@@ -62,7 +62,7 @@ have `JULIA_BINDIR` set to `/bin`, a source-file search path of
 and a global configuration search path of
 
 ```
-/etc/julia/juliarc.jl
+/etc/julia/startup.jl
 ```
 
 ### `JULIA_LOAD_PATH`
@@ -97,7 +97,7 @@ respect to the working directory. If `$JULIA_PKGDIR` is not set, then
 $HOME/.julia
 ```
 
-Then the repository location [`Pkg.dir`](@ref) for a given Julia version is
+Then the repository location `Pkg.dir` for a given Julia version is
 
 ```
 $JULIA_PKGDIR/v$(VERSION.major).$(VERSION.minor)
@@ -128,7 +128,7 @@ $HOME/.julia_history
 ### `JULIA_PKGRESOLVE_ACCURACY`
 
 A positive `Int` that determines how much time the max-sum subroutine
-`MaxSum.maxsum()` of the package dependency resolver [`Base.Pkg.resolve`](@ref)
+`MaxSum.maxsum()` of the package dependency resolver `Pkg.resolve`
 will devote to attempting satisfying constraints before giving up: this value is
 by default `1`, and larger values correspond to larger amounts of time.
 
@@ -164,7 +164,7 @@ exists, or `emacs` otherwise.
 !!! note
 
     `$JULIA_EDITOR` is *not* used in the determination of the editor for
-    [`Base.Pkg.edit`](@ref): this function checks `$VISUAL` and `$EDITOR` alone.
+    `Pkg.edit`: this function checks `$VISUAL` and `$EDITOR` alone.
 
 ## Parallelization
 

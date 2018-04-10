@@ -27,6 +27,8 @@ export
     unlink,
     walkdir
 
+import .Base.RefValue
+
 # get and set current directory
 
 """
@@ -35,8 +37,8 @@ export
 Get the current working directory.
 """
 function pwd()
-    b = Vector{UInt8}(uninitialized, 1024)
-    len = Ref{Csize_t}(length(b))
+    b = Vector{UInt8}(undef, 1024)
+    len = RefValue{Csize_t}(length(b))
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
     String(b[1:len[]])
 end
@@ -171,9 +173,9 @@ end
 
 # The following use Unix command line facilites
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
-                                                          remove_destination::Bool=false)
+                                                          force::Bool=false)
     if ispath(dst)
-        if remove_destination
+        if force
             # Check for issue when: (src == dst) or when one is a link to the other
             # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
             if Base.samefile(src, dst)
@@ -186,23 +188,30 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
             end
             rm(dst; recursive=true)
         else
-            throw(ArgumentError(string("'$dst' exists. `remove_destination=true` ",
+            throw(ArgumentError(string("'$dst' exists. `force=true` ",
                                        "is required to remove '$dst' before $(txt).")))
         end
     end
 end
 
-function cptree(src::AbstractString, dst::AbstractString; remove_destination::Bool=false,
-                                                             follow_symlinks::Bool=false)
+function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
+                                                          follow_symlinks::Bool=false,
+                                                          remove_destination::Union{Bool,Nothing}=nothing)
+    # TODO: Remove after 0.7
+    if remove_destination !== nothing
+        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
+                     "`force` instead", :cptree)
+        force = remove_destination
+    end
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
-    checkfor_mv_cp_cptree(src, dst, "copying"; remove_destination=remove_destination)
+    checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
     for name in readdir(src)
         srcname = joinpath(src, name)
         if !follow_symlinks && islink(srcname)
             symlink(readlink(srcname), joinpath(dst, name))
         elseif isdir(srcname)
-            cptree(srcname, joinpath(dst, name); remove_destination=remove_destination,
+            cptree(srcname, joinpath(dst, name); force=force,
                                                  follow_symlinks=follow_symlinks)
         else
             sendfile(srcname, joinpath(dst, name))
@@ -211,35 +220,49 @@ function cptree(src::AbstractString, dst::AbstractString; remove_destination::Bo
 end
 
 """
-    cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false, follow_symlinks::Bool=false)
+    cp(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)
 
 Copy the file, link, or directory from `src` to `dest`.
-`remove_destination=true` will first remove an existing `dst`.
+`force=true` will first remove an existing `dst`.
 
 If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created as a
 symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` will be a copy
 of the file or directory `src` refers to.
 """
-function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false,
-                                                         follow_symlinks::Bool=false)
-    checkfor_mv_cp_cptree(src, dst, "copying"; remove_destination=remove_destination)
+function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
+                                                      follow_symlinks::Bool=false,
+                                                      remove_destination::Union{Bool,Nothing}=nothing)
+    # TODO: Remove after 0.7
+    if remove_destination !== nothing
+        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
+                     "`force` instead", :cp)
+        force = remove_destination
+    end
+    checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     if !follow_symlinks && islink(src)
         symlink(readlink(src), dst)
     elseif isdir(src)
-        cptree(src, dst; remove_destination=remove_destination, follow_symlinks=follow_symlinks)
+        cptree(src, dst; force=force, follow_symlinks=follow_symlinks)
     else
         sendfile(src, dst)
     end
 end
 
 """
-    mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
+    mv(src::AbstractString, dst::AbstractString; force::Bool=false)
 
 Move the file, link, or directory from `src` to `dst`.
-`remove_destination=true` will first remove an existing `dst`.
+`force=true` will first remove an existing `dst`.
 """
-function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
-    checkfor_mv_cp_cptree(src, dst, "moving"; remove_destination=remove_destination)
+function mv(src::AbstractString, dst::AbstractString; force::Bool=false,
+                                                      remove_destination::Union{Bool,Nothing}=nothing)
+    # TODO: Remove after 0.7
+    if remove_destination !== nothing
+        Base.depwarn("The `remove_destination` keyword argument is deprecated; use " *
+                     "`force` instead", :mv)
+        force = remove_destination
+    end
+    checkfor_mv_cp_cptree(src, dst, "moving"; force=force)
     rename(src, dst)
 end
 
@@ -261,7 +284,7 @@ end
 if Sys.iswindows()
 
 function tempdir()
-    temppath = Vector{UInt16}(uninitialized, 32767)
+    temppath = Vector{UInt16}(undef, 32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
         error("GetTempPath failed: $(Libc.FormatMessage())")
@@ -273,7 +296,7 @@ end
 const temp_prefix = cwstring("jl_")
 function _win_tempname(temppath::AbstractString, uunique::UInt32)
     tempp = cwstring(temppath)
-    tname = Vector{UInt16}(uninitialized, 32767)
+    tname = Vector{UInt16}(undef, 32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
     lentname = coalesce(findfirst(iszero,tname), 0)-1
     if uunique == 0 || lentname <= 0
@@ -289,7 +312,7 @@ function mktemp(parent=tempdir())
 end
 
 function mktempdir(parent=tempdir())
-    seed::UInt32 = Base.Crand(UInt32)
+    seed::UInt32 = Libc.rand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
             seed += 1
@@ -532,8 +555,8 @@ function rename(src::AbstractString, dst::AbstractString)
     err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
     # on error, default to cp && rm
     if err < 0
-        # remove_destination: is already done in the mv function
-        cp(src, dst; remove_destination=false, follow_symlinks=false)
+        # force: is already done in the mv function
+        cp(src, dst; force=false, follow_symlinks=false)
         rm(src; recursive=true)
     end
     nothing
@@ -611,7 +634,7 @@ function readlink(path::AbstractString)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
             uv_error("readlink", ret)
-            assert(false)
+            @assert false
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)

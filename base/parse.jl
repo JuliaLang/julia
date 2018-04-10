@@ -33,7 +33,7 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 """
 parse(T::Type, str; base = Int)
 
-function parse(::Type{T}, c::Char; base::Integer = 36) where T<:Integer
+function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
@@ -209,11 +209,12 @@ or [`nothing`](@ref) if the string does not contain a valid number.
 """
 function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
     # Zero base means, "figure it out"
-    tryparse_internal(T, s, start(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
+    tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
 end
 
 function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
-    tryparse_internal(T, s, start(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), true)
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
+                                 base===nothing ? 0 : check_valid_base(base), true))
 end
 
 ## string to float functions ##
@@ -277,16 +278,16 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     # find index of ± separating real/imaginary parts (if any)
-    i₊ = coalesce(findnext(occursin(('+','-')), s, i), 0)
+    i₊ = coalesce(findnext(in(('+','-')), s, i), 0)
     if i₊ == i # leading ± sign
-        i₊ = coalesce(findnext(occursin(('+','-')), s, i₊+1), 0)
+        i₊ = coalesce(findnext(in(('+','-')), s, i₊+1), 0)
     end
     if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
-        i₊ = coalesce(findnext(occursin(('+','-')), s, i₊+1), 0)
+        i₊ = coalesce(findnext(in(('+','-')), s, i₊+1), 0)
     end
 
     # find trailing im/i/j
-    iᵢ = coalesce(findprev(occursin(('m','i','j')), s, e), 0)
+    iᵢ = coalesce(findprev(in(('m','i','j')), s, e), 0)
     if iᵢ > 0 && s[iᵢ] == 'm' # im
         iᵢ -= 1
         if s[iᵢ] != 'i'
@@ -301,7 +302,9 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
             x === nothing && return nothing
             return Complex{T}(zero(x),x)
         else # purely real
-            return Complex{T}(tryparse_internal(T, s, i, e, raise))
+            x = tryparse_internal(T, s, i, e, raise)
+            x === nothing && return nothing
+            return Complex{T}(x)
         end
     end
 
@@ -322,12 +325,12 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
 end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
-tryparse_internal(T::Type{<:Complex}, s::AbstractString, i::Int, e::Int, raise::Bool) =
+tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Bool) where S<:Real =
     tryparse_internal(T, String(s), i, e, raise)
 
 # fallback methods for tryparse_internal
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
-    startpos == start(s) && endpos == lastindex(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
+    startpos == firstindex(s) && endpos == lastindex(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
     result = tryparse_internal(T, s, startpos, endpos)
     if raise && result === nothing
@@ -339,4 +342,7 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, rais
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
-    tryparse_internal(T, s, start(s), lastindex(s), true)
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
+
+tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =
+    tryparse_internal(T, s, firstindex(s), lastindex(s), false)

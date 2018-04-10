@@ -11,8 +11,6 @@ import LinearAlgebra: (\),
                  issuccess, issymmetric, ldltfact, ldltfact!, logdet
 
 using SparseArrays
-using Printf: @printf
-
 import Libdl
 
 export
@@ -45,7 +43,7 @@ const common_postorder = Ref{Ptr{Cint}}()
 ### These offsets are defined in SuiteSparse_wrapper.c
 const common_size = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
 
-const cholmod_com_offsets = Vector{Csize_t}(uninitialized, 19)
+const cholmod_com_offsets = Vector{Csize_t}(undef, 19)
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
     Nothing, (Ptr{Csize_t},), cholmod_com_offsets)
 
@@ -72,7 +70,7 @@ function defaults(a::Vector{UInt8})
     return a
 end
 
-const build_version_array = Vector{Cint}(uninitialized, 3)
+const build_version_array = Vector{Cint}(undef, 3)
 ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), build_version_array)
 const build_version = VersionNumber(build_version_array...)
 
@@ -80,7 +78,7 @@ function __init__()
     try
         ### Check if the linked library is compatible with the Julia code
         if Libdl.dlsym_e(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
-            current_version_array = Vector{Cint}(uninitialized, 3)
+            current_version_array = Vector{Cint}(undef, 3)
             ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), current_version_array)
             current_version = VersionNumber(current_version_array...)
         else # CHOLMOD < 2.1.1 does not include cholmod_version()
@@ -1031,7 +1029,7 @@ end
 ## convertion back to base Julia types
 function Matrix{T}(D::Dense{T}) where T
     s = unsafe_load(pointer(D))
-    a = Matrix{T}(uninitialized, s.nrow, s.ncol)
+    a = Matrix{T}(undef, s.nrow, s.ncol)
     copyto!(a, D)
 end
 
@@ -1062,7 +1060,7 @@ function Vector{T}(D::Dense{T}) where T
     if size(D, 2) > 1
         throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
     end
-    copyto!(Vector{T}(uninitialized, size(D, 1)), D)
+    copyto!(Vector{T}(undef, size(D, 1)), D)
 end
 Vector(D::Dense{T}) where {T} = Vector{T}(D)
 
@@ -1084,6 +1082,7 @@ function SparseMatrixCSC{Tv,SuiteSparse_long}(A::Sparse{Tv}) where Tv
         return B
     end
 end
+
 function (::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}})(A::Sparse{Float64})
     s = unsafe_load(pointer(A))
     if !issymmetric(A)
@@ -1101,6 +1100,8 @@ function (::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}})(
         return B
     end
 end
+convert(T::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}}, A::Sparse{Float64}) = T(A)
+
 function Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}(A::Sparse{Tv}) where Tv<:VTypes
     s = unsafe_load(pointer(A))
     if !ishermitian(A)
@@ -1118,6 +1119,8 @@ function Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}(A::Sparse{Tv}) where
         return B
     end
 end
+convert(T::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv}) where {Tv<:VTypes} = T(A)
+
 function sparse(A::Sparse{Float64}) # Notice! Cannot be type stable because of stype
     s = unsafe_load(pointer(A))
     if s.stype == 0
@@ -1145,7 +1148,7 @@ function sparse(F::Factor)
     SparseArrays.sortSparseMatrixCSC!(A)
     p = get_perm(F)
     if p != [1:s.n;]
-        pinv = Vector{Int}(uninitialized, length(p))
+        pinv = Vector{Int}(undef, length(p))
         for k = 1:length(p)
             pinv[p[k]] = k
         end
@@ -1198,11 +1201,13 @@ end
 
 function showfactor(io::IO, F::Factor)
     s = unsafe_load(pointer(F))
-    @printf(io, "type: %12s\n", s.is_ll!=0 ? "LLt" : "LDLt")
-    @printf(io, "method: %10s\n", s.is_super!=0 ? "supernodal" : "simplicial")
-    @printf(io, "maxnnz: %10d\n", Int(s.nzmax))
-    @printf(io, "nnz: %13d\n", nnz(F))
-    @printf(io, "success: %9s\n", "$(s.minor == size(F, 1))")
+    print(io, """
+        type:    $(s.is_ll!=0 ? "LLt" : "LDLt")
+        method:  $(s.is_super!=0 ? "supernodal" : "simplicial")
+        maxnnz:  $(Int(s.nzmax))
+        nnz:     $(nnz(F))
+        success: $(s.minor == size(F, 1))
+        """)
 end
 
 # getindex not defined for these, so don't use the normal array printer
@@ -1280,7 +1285,7 @@ end
 end
 
 function getLd!(S::SparseMatrixCSC)
-    d = Vector{eltype(S)}(uninitialized, size(S, 1))
+    d = Vector{eltype(S)}(undef, size(S, 1))
     fill!(d, 0)
     col = 1
     for k = 1:nnz(S)
@@ -1760,7 +1765,7 @@ function diag(F::Factor{Tv}) where Tv
         xv = f.x
         for j in 1:f.n
             jj = unsafe_load(c0, j) + 1
-            assert(unsafe_load(r0, jj) == j - 1)
+            @assert(unsafe_load(r0, jj) == j - 1)
             res[j] = unsafe_load(xv, jj)
         end
     end

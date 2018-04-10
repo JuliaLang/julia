@@ -45,7 +45,7 @@ using Random
 @test mapreduce(-, +, [-10]) == 10
 @test mapreduce(abs2, +, [-9, -3]) == 81 + 9
 @test mapreduce(-, +, [-9, -3, -4, 8, -2]) == (9 + 3 + 4 - 8 + 2)
-@test mapreduce(-, +, Vector(linspace(1.0, 10000.0, 10000))) == -50005000.0
+@test mapreduce(-, +, Vector(range(1.0, stop=10000.0, length=10000))) == -50005000.0
 # empty mr
 @test mapreduce(abs2, +, Float64[]) === 0.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
@@ -222,9 +222,9 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test extrema(A,(1,3)) == reshape([(5,24),(1,20),(3,22)],1,3,1)
 @test extrema(A,(2,3)) == reshape([(1,23),(2,24)],2,1,1)
 @test extrema(A,(1,2,3)) == reshape([(1,24)],1,1,1)
-@test size(extrema(A,1)) == size(maximum(A,1))
-@test size(extrema(A,(1,2))) == size(maximum(A,(1,2)))
-@test size(extrema(A,(1,2,3))) == size(maximum(A,(1,2,3)))
+@test size(extrema(A,1)) == size(maximum(A,dims=1))
+@test size(extrema(A,(1,2))) == size(maximum(A,dims=(1,2)))
+@test size(extrema(A,(1,2,3))) == size(maximum(A,dims=(1,2,3)))
 
 # any & all
 
@@ -323,10 +323,10 @@ struct SomeFunctor end
 @test in(1, 1:3) == true
 @test in(2, 1:3) == true
 
-# contains
+# occursin
 
-@test contains("quick fox", "fox") == true
-@test contains("quick fox", "lazy dog") == false
+@test occursin("fox", "quick fox") == true
+@test occursin("lazy dog", "quick fox") == false
 
 # count
 
@@ -375,7 +375,7 @@ A = reshape(map(UInt8, 1:100), (10,10))
 @test sum([-0.0, -0.0]) === -0.0
 @test prod([-0.0, -0.0]) === 0.0
 
-#contains
+# containment
 let A = Vector(1:10)
     @test A ∋ 5
     @test A ∌ 11

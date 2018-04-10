@@ -54,7 +54,7 @@ getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ)
 
 function show(io::IO, J::UniformScaling)
     s = "$(J.λ)"
-    if contains(s, r"\w+\s*[\+\-]\s*\w+")
+    if occursin(r"\w+\s*[\+\-]\s*\w+", s)
         s = "($s)"
     end
     print(io, "$(typeof(J))\n$s*I")
@@ -102,7 +102,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
             ($op)(UL::$t2, J::UniformScaling) = ($t2)(($op)(UL.data, J))
 
             function ($op)(UL::$t1, J::UniformScaling)
-                ULnew = copy_oftype(UL.data, Broadcast.combine_eltypes($op, UL, J))
+                ULnew = copy_oftype(UL.data, Base._return_type($op, Tuple{eltype(UL), typeof(J.λ)}))
                 for i = 1:size(ULnew, 1)
                     ULnew[i,i] = ($op)(1, J.λ)
                 end
@@ -113,7 +113,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
 end
 
 function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
-    ULnew = similar(parent(UL), Broadcast.combine_eltypes(-, J, UL))
+    ULnew = similar(parent(UL), Base._return_type(-, Tuple{typeof(J.λ), eltype(UL)}))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -129,7 +129,7 @@ function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
     return UpperTriangular(ULnew)
 end
 function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
-    ULnew = similar(parent(UL), Broadcast.combine_eltypes(-, J, UL))
+    ULnew = similar(parent(UL), Base._return_type(-, Tuple{typeof(J.λ), eltype(UL)}))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -147,7 +147,7 @@ end
 
 function (+)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, Broadcast.combine_eltypes(+, A, J))
+    B = similar(A, Base._return_type(+, Tuple{eltype(A), typeof(J.λ)}))
     copyto!(B,A)
     @inbounds for i = 1:n
         B[i,i] += J.λ
@@ -157,7 +157,7 @@ end
 
 function (-)(A::AbstractMatrix, J::UniformScaling)
     n = checksquare(A)
-    B = similar(A, Broadcast.combine_eltypes(-, A, J))
+    B = similar(A, Base._return_type(-, Tuple{eltype(A), typeof(J.λ)}))
     copyto!(B, A)
     @inbounds for i = 1:n
         B[i,i] -= J.λ
@@ -166,7 +166,7 @@ function (-)(A::AbstractMatrix, J::UniformScaling)
 end
 function (-)(J::UniformScaling, A::AbstractMatrix)
     n = checksquare(A)
-    B = convert(AbstractMatrix{Broadcast.combine_eltypes(-, J, A)}, -A)
+    B = convert(AbstractMatrix{Base._return_type(-, Tuple{typeof(J.λ), eltype(A)})}, -A)
     @inbounds for j = 1:n
         B[j,j] += J.λ
     end
@@ -195,23 +195,23 @@ end
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
 
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
-/(J::UniformScaling, A::AbstractMatrix) = mul2!(J.λ, inv(A))
+/(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
 /(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
 \(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) where {T<:Number} =
-    mul1!(inv(A), J.λ)
+    rmul!(inv(A), J.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
-\(A::AbstractMatrix, J::UniformScaling) = mul1!(inv(A), J.λ)
+\(A::AbstractMatrix, J::UniformScaling) = rmul!(inv(A), J.λ)
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
-broadcast(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
-broadcast(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
+Broadcast.make(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
+Broadcast.make(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
 
-broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
+Broadcast.make(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
@@ -268,7 +268,7 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(uninitialized, n,n), J)
+promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(undef, n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
 promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)

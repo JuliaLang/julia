@@ -1,5 +1,9 @@
 # Sparse Arrays
 
+```@meta
+DocTestSetup = :(using SparseArrays, LinearAlgebra)
+```
+
 Julia has support for sparse vectors and [sparse matrices](https://en.wikipedia.org/wiki/Sparse_matrix)
 in the `SparseArrays` stdlib module. Sparse arrays are arrays that contain enough zeros
 that storing them in a special data structure leads to savings in space and execution time,
@@ -207,7 +211,7 @@ SparseArrays.nnz
 SparseArrays.findnz
 SparseArrays.spzeros
 SparseArrays.spdiagm
-SparseArrays.blkdiag
+SparseArrays.blockdiag
 SparseArrays.sprand
 SparseArrays.sprandn
 SparseArrays.nonzeros
@@ -217,4 +221,8 @@ SparseArrays.dropzeros!
 SparseArrays.dropzeros
 SparseArrays.permute
 permute!{Tv, Ti, Tp <: Integer, Tq <: Integer}(::SparseMatrixCSC{Tv,Ti}, ::SparseMatrixCSC{Tv,Ti}, ::AbstractArray{Tp,1}, ::AbstractArray{Tq,1})
+```
+
+```@meta
+DocTestSetup = nothing
 ```

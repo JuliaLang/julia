@@ -71,7 +71,7 @@ uintptr_t __stop_jl_interpreter_frame = (uintptr_t)&__stop_jl_interpreter_frame_
 //               sizeof(struct interpreter_state). Additionally, make sure that
 //               MAX_INTERP_STATE_SIZE+STACK_PADDING+8 is a multiple of 16 to
 //               ensure the proper stack alignment.
-#define MAX_INTERP_STATE_SIZE 56
+#define MAX_INTERP_STATE_SIZE 72
 #define STACK_PADDING 0
 
 static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Stack layout invariants violated.");
@@ -257,7 +257,7 @@ asm(
 
 #elif defined(_CPU_ARM_)
 
-#define MAX_INTERP_STATE_SIZE 32
+#define MAX_INTERP_STATE_SIZE 48
 
 // Check that the interpreter state can fit
 static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE,

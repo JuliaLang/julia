@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo
+using Core: CodeInfo, SimpleVector
 
 const Callable = Union{Function,Type}
 
@@ -84,9 +84,9 @@ julia> convert(Int, 3.0)
 3
 
 julia> convert(Int, 3.5)
-ERROR: InexactError: convert(Int64, 3.5)
+ERROR: InexactError: Int64(Int64, 3.5)
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:703
+[...]
 ```
 
 If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
@@ -120,7 +120,7 @@ true
 function convert end
 
 convert(::Type{Any}, @nospecialize(x)) = x
-convert(::Type{T}, x::T) where {T} = x
+convert(::Type{T}, x::T) where {T} = (@_inline_meta; x)
 
 """
     @eval [mod,] ex
@@ -210,7 +210,7 @@ end
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
 function unwrapva(@nospecialize(t))
     t2 = unwrap_unionall(t)
-    isvarargtype(t2) ? t2.parameters[1] : t
+    isvarargtype(t2) ? rewrap_unionall(t2.parameters[1],t) : t
 end
 
 typename(a) = error("typename does not apply to this type")
@@ -223,6 +223,7 @@ end
 typename(union::UnionAll) = typename(union.body)
 
 convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
+convert(::Type{Tuple{}}, x::Tuple{Any, Vararg{Any}}) = throw(MethodError(convert, (Tuple{}, x)))
 convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
     (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
 
@@ -362,20 +363,20 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    out = Vector{Any}(uninitialized, 4)
+    out = Vector{Any}(undef, 4)
     l = 4
     i = 1
     for x in xs
         for y in x
             if i > l
-                ccall(:jl_array_grow_end, Cvoid, (Any, UInt), out, 16)
+                _growend!(out, 16)
                 l += 16
             end
             Core.arrayset(true, out, y, i)
             i += 1
         end
     end
-    ccall(:jl_array_del_end, Cvoid, (Any, UInt), out, l-i+1)
+    _deleteend!(out, l-i+1)
     out
 end
 
@@ -414,22 +415,24 @@ Annotates the expression `blk` as a bounds checking block, allowing it to be eli
     its caller in order for `@inbounds` to have effect.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> @inline function g(A, i)
            @boundscheck checkbounds(A, i)
            return "accessing (\$A)[\$i]"
-       end
-       f1() = return g(1:2, -1)
-       f2() = @inbounds return g(1:2, -1)
-f2 (generic function with 1 method)
+       end;
+
+julia> f1() = return g(1:2, -1);
+
+julia> f2() = @inbounds return g(1:2, -1);
 
 julia> f1()
 ERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]
 Stacktrace:
- [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:435
- [2] checkbounds at ./abstractarray.jl:399 [inlined]
+ [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:455
+ [2] checkbounds at ./abstractarray.jl:420 [inlined]
  [3] g at ./none:2 [inlined]
  [4] f1() at ./none:1
+ [5] top-level scope
 
 julia> f2()
 "accessing (1:2)[-1]"
@@ -591,8 +594,11 @@ Colons (:) are used to signify indexing entire objects or dimensions at once.
 Very few operations are defined on Colons directly; instead they are converted
 by [`to_indices`](@ref) to an internal vector type (`Base.Slice`) to represent the
 collection of indices they span before being used.
+
+The singleton instance of `Colon` is also a function used to construct ranges;
+see [`:`](@ref).
 """
-struct Colon
+struct Colon <: Function
 end
 const (:) = Colon()
 
@@ -620,16 +626,6 @@ struct Val{x}
 end
 
 Val(x) = (@_pure_meta; Val{x}())
-
-# used by keyword arg call lowering
-function vector_any(@nospecialize xs...)
-    n = length(xs)
-    a = Vector{Any}(uninitialized, n)
-    @inbounds for i = 1:n
-        Core.arrayset(false, a, xs[i], i)
-    end
-    a
-end
 
 """
     invokelatest(f, args...; kwargs...)
@@ -768,4 +764,3 @@ ismissing(::Missing) = true
 
 function popfirst! end
 function peek end
-

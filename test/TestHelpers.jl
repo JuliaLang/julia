@@ -41,95 +41,6 @@ function with_fake_pty(f)
     end
 end
 
-function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
-    output_file = tempname()
-    wrapped_code = quote
-        using Serialization
-        result = let
-            $code
-        end
-        open($output_file, "w") do fp
-            serialize(fp, result)
-        end
-    end
-    cmd = `$(Base.julia_cmd()) --startup-file=no -e $wrapped_code`
-    try
-        challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
-        return open(output_file, "r") do fp
-            deserialize(fp)
-        end
-    finally
-        isfile(output_file) && rm(output_file)
-    end
-    return nothing
-end
-
-function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
-    function format_output(output)
-        !debug && return ""
-        str = read(seekstart(output), String)
-        isempty(str) && return ""
-        "Process output found:\n\"\"\"\n$str\n\"\"\""
-    end
-    out = IOBuffer()
-    with_fake_pty() do slave, master
-        p = spawn(detach(cmd), slave, slave, slave)
-
-        # Kill the process if it takes too long. Typically occurs when process is waiting
-        # for input.
-        timer = Channel{Symbol}(1)
-        @async begin
-            waited = 0
-            while waited < timeout && process_running(p)
-                sleep(1)
-                waited += 1
-            end
-
-            if process_running(p)
-                kill(p)
-                put!(timer, :timeout)
-            elseif success(p)
-                put!(timer, :success)
-            else
-                put!(timer, :failure)
-            end
-
-            # SIGKILL stubborn processes
-            if process_running(p)
-                sleep(3)
-                process_running(p) && kill(p, Base.SIGKILL)
-            end
-
-            close(master)
-        end
-
-        for (challenge, response) in challenges
-            write(out, readuntil(master, challenge, keep=true))
-            if !isopen(master)
-                error("Could not locate challenge: \"$challenge\". ",
-                      format_output(out))
-            end
-            write(master, response)
-        end
-
-        # Capture output from process until `master` is closed
-        while !eof(master)
-            write(out, readavailable(master))
-        end
-
-        status = fetch(timer)
-        if status != :success
-            if status == :timeout
-                error("Process timed out possibly waiting for a response. ",
-                      format_output(out))
-            else
-                error("Failed process. ", format_output(out), "\n", p)
-            end
-        end
-    end
-    nothing
-end
-
 # OffsetArrays (arrays with indexing that doesn't start at 1)
 
 # This test file is designed to exercise support for generic indexing,
@@ -150,10 +61,10 @@ OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 OffsetArray(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) where {T,N} = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) where {T,N} = OffsetArray(A, offsets)
 
-OffsetArray{T,N}(::Uninitialized, inds::Indices{N}) where {T,N} =
-    OffsetArray{T,N,Array{T,N}}(Array{T,N}(uninitialized, map(length, inds)), map(indsoffset, inds))
-OffsetArray{T}(::Uninitialized, inds::Indices{N}) where {T,N} =
-    OffsetArray{T,N}(uninitialized, inds)
+OffsetArray{T,N}(::UndefInitializer, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N,Array{T,N}}(Array{T,N}(undef, map(length, inds)), map(indsoffset, inds))
+OffsetArray{T}(::UndefInitializer, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N}(undef, inds)
 
 Base.IndexStyle(::Type{T}) where {T<:OffsetArray} = Base.IndexStyle(parenttype(T))
 parenttype(::Type{OffsetArray{T,N,AA}}) where {T,N,AA} = AA
@@ -187,9 +98,9 @@ end
 Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) =
     OffsetArray(f(map(length, shape)), map(indsoffset, shape))
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:Array} =
-    OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
+    OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:BitArray} =
-    OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
+    OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
 
 Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
 

@@ -201,44 +201,44 @@ union jl_typemap_t {
     struct _jl_value_t *unknown; // nothing
 };
 
-// calling conventions for externally-callable julia entry points.
-// this is used to set jlcall_api fields
-typedef enum {
-    JL_API_NOT_SET = 0,
-    JL_API_GENERIC = 1,         // (function, args ptr, arg count)
-    JL_API_CONST = 2,           // result is a constant value, no function pointer
-    JL_API_WITH_PARAMETERS = 3, // (svec of static parameter values, function, args ptr, arg count)
-    JL_API_INTERPRETED = 4,     // jl_interpret_call(method_instance, func and args ptr, arg count + 1, svec of sparam_vals)
-} jl_callingconv_t;
+typedef jl_value_t *(jl_call_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t);
+typedef jl_call_t *jl_callptr_t;
 
-// "jlcall" calling convention signatures.
-// This defines the default ABI used by compiled julia functions.
-typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t); // JL_API_GENERIC
-typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t); // JL_API_WITH_PARAMETERS
-typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t, jl_svec_t*); // JL_API_INTERPRETED
+// "speccall" calling convention signatures.
+// This describes some of the special ABI used by compiled julia functions.
+JL_DLLEXPORT extern jl_call_t jl_fptr_trampoline;
 
-JL_EXTENSION typedef struct {
-    union {
-        jl_fptr_t fptr;
-        jl_fptr_t fptr1;
-        // constant fptr2;
-        jl_fptr_sparam_t fptr3;
-        jl_fptr_linfo_t fptr4;
-    };
-    uint8_t jlcall_api;
-} jl_generic_fptr_t;
+JL_DLLEXPORT extern jl_call_t jl_fptr_args;
+typedef jl_value_t *(*jl_fptr_args_t)(jl_value_t*, jl_value_t**, uint32_t);
+
+JL_DLLEXPORT extern jl_call_t jl_fptr_const_return;
+
+JL_DLLEXPORT extern jl_call_t jl_fptr_sparam;
+typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
+
+JL_DLLEXPORT extern jl_call_t jl_fptr_interpret_call;
+typedef jl_value_t *(*jl_fptr_interpret_t)(struct _jl_method_instance_t*, jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
+
+JL_EXTENSION typedef union {
+    void* fptr;
+    jl_fptr_args_t fptr1;
+    jl_fptr_sparam_t fptr3;
+    jl_fptr_interpret_t fptr4;
+} jl_generic_specptr_t;
 
 typedef struct _jl_llvm_functions_t {
-    const char *functionObject;     // jlcall llvm Function name
-    const char *specFunctionObject; // specialized llvm Function name
+    const char *functionObject;         // jl_callptr_t llvm Function name
+    const char *specFunctionObject;     // specialized llvm Function name (on sig+rettype)
 } jl_llvm_functions_t;
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     jl_array_t *code;  // Any array of statements
+    jl_value_t *codelocs; // Int array of indicies into the line table
     jl_value_t *signature_for_inference_heuristics; // optional method used during inference
     jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
+    jl_value_t *linetable; // Table of locations
     jl_array_t *slotflags;  // local var bit flags
     jl_array_t *slotnames; // names of local variables
     uint8_t inferred;
@@ -301,15 +301,14 @@ typedef struct _jl_method_instance_t {
     jl_value_t *rettype; // return type for fptr
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sparam_syms
     jl_array_t *backedges;
-    jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == JL_API_CONST, or null
+    jl_value_t *inferred;  // inferred jl_code_info_t, or jl_nothing, or null
     jl_value_t *inferred_const; // inferred constant return value, or null
     size_t min_world;
     size_t max_world;
     uint8_t inInference; // flags to tell if inference is running on this function
-    uint8_t jlcall_api;
     uint8_t compile_traced; // if set will notify callback if this linfo is compiled
-    jl_fptr_t fptr; // jlcall entry point with api specified by jlcall_api
-    jl_fptr_t unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred fptr may get stored here, jlcall_api = JL_API_GENERIC
+    jl_callptr_t invoke; // jlcall entry point
+    jl_generic_specptr_t specptr;
 
     // names of declarations in the JIT,
     // suitable for referencing in LLVM IR
@@ -598,6 +597,10 @@ extern JL_DLLEXPORT jl_datatype_t *jl_globalref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_labelnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_phinode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_pinode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_phicnode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_upsilonnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_quotenode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_newvarnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_intrinsic_type JL_GLOBALLY_ROOTED;
@@ -940,6 +943,10 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_globalref(v)   jl_typeis(v,jl_globalref_type)
 #define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
+#define jl_is_pinode(v)      jl_typeis(v,jl_pinode_type)
+#define jl_is_phinode(v)     jl_typeis(v,jl_phinode_type)
+#define jl_is_phicnode(v)    jl_typeis(v,jl_phicnode_type)
+#define jl_is_upsilonnode(v) jl_typeis(v,jl_upsilonnode_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)
 #define jl_is_newvarnode(v)  jl_typeis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
@@ -1280,6 +1287,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT jl_value_t *jl_ptrarrayref(jl_array_t *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;  // 0-indexed
 JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *v, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i);  // 0-indexed
+JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
 JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
 JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
@@ -1342,7 +1350,7 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 
 // eq hash tables
-JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
+JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val, int *inserted);
 JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key,
                                         jl_value_t *deflt);
 
@@ -1446,6 +1454,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                              char *filename, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule);
+JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str);
 
 // external libraries
@@ -1516,6 +1525,7 @@ STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs);
 JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT int32_t jl_invoke_api(jl_method_instance_t *mi);
 
 STATIC_INLINE
 jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
@@ -1721,7 +1731,7 @@ typedef struct {
     void *data;
     uv_loop_t *loop;
     uv_handle_type type;
-    uv_file file;
+    uv_os_fd_t file;
 } jl_uv_file_t;
 
 #ifdef __GNUC__

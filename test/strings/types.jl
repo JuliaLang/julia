@@ -118,8 +118,8 @@ end
 # search and SubString (issue #5679)
 let str = "Hello, world!"
     u = SubString(str, 1, 5)
-    @test findlast("World", u) == 0:-1
-    @test findlast(equalto('z'), u) == nothing
+    @test findlast("World", u) == nothing
+    @test findlast(isequal('z'), u) == nothing
     @test findlast("ll", u) == 3:4
 end
 
@@ -154,8 +154,8 @@ end
 @test parse(Float32, SubString("10",1,1)) === 1.0f0
 
 # issue #5870
-@test !contains(SubString("",1,0), Regex("aa"))
-@test contains(SubString("",1,0), Regex(""))
+@test !occursin(Regex("aa"), SubString("",1,0))
+@test occursin(Regex(""), SubString("",1,0))
 
 # isvalid, length, prevind, nextind for SubString{String}
 let s = "lorem ipsum", sdict = Dict(
@@ -185,6 +185,43 @@ let s = "lorem ipsum", sdict = Dict(
         @test_throws BoundsError prevind(ss, 0)
         @test_throws BoundsError nextind(s, ncodeunits(ss)+1)
         @test_throws BoundsError nextind(ss, ncodeunits(ss)+1)
+    end
+end
+
+# proper nextind/prevind/thisind for SubString{String}
+let rng = MersenneTwister(1), strs = ["∀∃∀"*String(rand(rng, UInt8, 40))*"∀∃∀",
+                                      String(rand(rng, UInt8, 50))]
+    for s in strs
+        a = 0
+        while !done(s, a)
+            a = nextind(s, a)
+            b = a - 1
+            while !done(s, b)
+                ss = SubString(s, a:b)
+                s2 = s[a:b]
+                @test ncodeunits(ss) == ncodeunits(s2)
+                for i in 0:ncodeunits(ss)+1
+                    @test thisind(ss, i) == thisind(s2, i)
+                end
+                for i in 0:ncodeunits(ss)
+                    @test nextind(ss, i) == nextind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test nextind(ss, i, j) == nextind(s2, i, j)
+                        end
+                    end
+                end
+                for i in 1:ncodeunits(ss)+1
+                    @test prevind(ss, i) == prevind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test prevind(ss, i, j) == prevind(s2, i, j)
+                        end
+                    end
+                end
+                b = nextind(s, b)
+            end
+        end
     end
 end
 
@@ -237,14 +274,14 @@ end
             for c in ('X', 'δ', '\U0001d6a5')
                 s = convert(T, string(prefix, c, suffix))
                 r = reverse(s)
-                ri = findfirst(equalto(c), r)
+                ri = findfirst(isequal(c), r)
                 @test c == s[reverseind(s, ri)] == r[ri]
                 s = convert(T, string(prefix, prefix, c, suffix, suffix))
                 pre = convert(T, prefix)
                 sb = SubString(s, nextind(pre, lastindex(pre)),
                                lastindex(convert(T, string(prefix, prefix, c, suffix))))
                 r = reverse(sb)
-                ri = findfirst(equalto(c), r)
+                ri = findfirst(isequal(c), r)
                 @test c == sb[reverseind(sb, ri)] == r[ri]
             end
         end

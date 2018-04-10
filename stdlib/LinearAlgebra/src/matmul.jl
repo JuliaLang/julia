@@ -108,9 +108,7 @@ mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, x::AbstractVect
 # Matrix-matrix multiplication
 
 """
-```
-*(A::AbstractMatrix, B::AbstractMatrix)
-```
+    *(A::AbstractMatrix, B::AbstractMatrix)
 
 Matrix multiplication.
 
@@ -158,18 +156,18 @@ julia> Y
 mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = generic_matmatmul!(C, 'N', 'N', A, B)
 
 """
-    mul1!(A, B)
+    rmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
 """
-mul1!(A, B)
+rmul!(A, B)
 
 """
-    mul2!(A, B)
+    lmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
 """
-mul2!(A, B)
+lmul!(A, B)
 
 function *(transA::Transpose{<:Any,<:AbstractMatrix}, B::AbstractMatrix)
     A = transA.parent
@@ -261,15 +259,15 @@ mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB::Transpo
     (A = adjA.parent; B = transB.parent; generic_matmatmul!(C, 'C', 'T', A, B))
 # Supporting functions for matrix multiplication
 
-function copytri!(A::AbstractMatrix, uplo::Char, conjugate::Bool=false)
+function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false)
     n = checksquare(A)
     if uplo == 'U'
         for i = 1:(n-1), j = (i+1):n
-            A[j,i] = conjugate ? conj(A[i,j]) : A[i,j]
+            A[j,i] = conjugate ? adjoint(A[i,j]) : transpose(A[i,j])
         end
     elseif uplo == 'L'
         for i = 1:(n-1), j = (i+1):n
-            A[i,j] = conjugate ? conj(A[j,i]) : A[j,i]
+            A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else
         throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
@@ -277,7 +275,7 @@ function copytri!(A::AbstractMatrix, uplo::Char, conjugate::Bool=false)
     A
 end
 
-function gemv!(y::StridedVector{T}, tA::Char, A::StridedVecOrMat{T}, x::StridedVector{T}) where T<:BlasFloat
+function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T}) where T<:BlasFloat
     mA, nA = lapack_size(tA, A)
     if nA != length(x)
         throw(DimensionMismatch("second dimension of A, $nA, does not match length of x, $(length(x))"))
@@ -295,7 +293,7 @@ function gemv!(y::StridedVector{T}, tA::Char, A::StridedVecOrMat{T}, x::StridedV
     return generic_matvecmul!(y, tA, A, x)
 end
 
-function syrk_wrapper!(C::StridedMatrix{T}, tA::Char, A::StridedVecOrMat{T}) where T<:BlasFloat
+function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T}) where T<:BlasFloat
     nC = checksquare(C)
     if tA == 'T'
         (nA, mA) = size(A,1), size(A,2)
@@ -323,7 +321,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::Char, A::StridedVecOrMat{T}) whe
     return generic_matmatmul!(C, tA, tAt, A, A)
 end
 
-function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::Char, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}}) where T<:BlasReal
+function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}}) where T<:BlasReal
     nC = checksquare(C)
     if tA == 'C'
         (nA, mA) = size(A,1), size(A,2)
@@ -346,7 +344,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
     end
 
     # Result array does not need to be initialized as long as beta==0
-    #    C = Matrix{T}(uninitialized, mA, mA)
+    #    C = Matrix{T}(undef, mA, mA)
 
     if stride(A, 1) == stride(C, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(C, 2) >= size(C, 1)
         return copytri!(BLAS.herk!('U', tA, one(T), A, zero(T), C), 'U', true)
@@ -354,7 +352,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
     return generic_matmatmul!(C,tA, tAt, A, A)
 end
 
-function gemm_wrapper(tA::Char, tB::Char,
+function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
                       A::StridedVecOrMat{T},
                       B::StridedVecOrMat{T}) where T<:BlasFloat
     mA, nA = lapack_size(tA, A)
@@ -363,7 +361,7 @@ function gemm_wrapper(tA::Char, tB::Char,
     gemm_wrapper!(C, tA, tB, A, B)
 end
 
-function gemm_wrapper!(C::StridedVecOrMat{T}, tA::Char, tB::Char,
+function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
                        A::StridedVecOrMat{T},
                        B::StridedVecOrMat{T}) where T<:BlasFloat
     mA, nA = lapack_size(tA, A)
@@ -400,9 +398,9 @@ end
 # blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
-lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
+lapack_size(t::AbstractChar, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
-function copyto!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
+function copyto!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
@@ -412,7 +410,7 @@ function copyto!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRang
     B
 end
 
-function copy_transpose!(B::AbstractMatrix, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
+function copy_transpose!(B::AbstractMatrix, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
         LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
@@ -493,9 +491,10 @@ function generic_matmatmul(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S})
 end
 
 const tilebufsize = 10800  # Approximately 32k/3
-const Abuf = Vector{UInt8}(uninitialized, tilebufsize)
-const Bbuf = Vector{UInt8}(uninitialized, tilebufsize)
-const Cbuf = Vector{UInt8}(uninitialized, tilebufsize)
+# per-thread arrays of buffers resized by __init__ if needed
+const Abuf = [Vector{UInt8}(undef, tilebufsize)]
+const Bbuf = [Vector{UInt8}(undef, tilebufsize)]
+const Cbuf = [Vector{UInt8}(undef, tilebufsize)]
 
 function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     mA, nA = lapack_size(tA, A)
@@ -534,8 +533,8 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     if tile_size > 0
         sz = (tile_size, tile_size)
         # FIXME: This code is completely invalid!!!
-        Atile = unsafe_wrap(Array, convert(Ptr{T}, pointer(Abuf)), sz)
-        Btile = unsafe_wrap(Array, convert(Ptr{S}, pointer(Bbuf)), sz)
+        Atile = unsafe_wrap(Array, convert(Ptr{T}, pointer(Abuf[Threads.threadid()])), sz)
+        Btile = unsafe_wrap(Array, convert(Ptr{S}, pointer(Bbuf[Threads.threadid()])), sz)
 
         z1 = zero(A[1, 1]*B[1, 1] + A[1, 1]*B[1, 1])
         z = convert(promote_type(typeof(z1), R), z1)
@@ -556,7 +555,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
             end
         else
             # FIXME: This code is completely invalid!!!
-            Ctile = unsafe_wrap(Array, convert(Ptr{R}, pointer(Cbuf)), sz)
+            Ctile = unsafe_wrap(Array, convert(Ptr{R}, pointer(Cbuf[Threads.threadid()])), sz)
             for jb = 1:tile_size:nB
                 jlim = min(jb+tile_size-1,nB)
                 jlen = jlim-jb+1

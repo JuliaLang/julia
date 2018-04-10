@@ -27,7 +27,7 @@ end
 #    # May assume x is `Float` now
 # end
 # ```
-mutable struct Conditional
+struct Conditional
     var::Slot
     vtype
     elsetype
@@ -48,8 +48,16 @@ struct PartialTypeVar
     PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
 end
 
+# Wraps a type and represents that the value may also be undef at this point.
+# (only used in optimize, not abstractinterpret)
+struct MaybeUndef
+    typ
+    MaybeUndef(@nospecialize(typ)) = new(typ)
+end
+
 # The type of a variable load is either a value or an UndefVarError
-mutable struct VarState
+# (only used in abstractinterpret, doesn't appear in optimize)
+struct VarState
     typ
     undef::Bool
     VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
@@ -57,7 +65,7 @@ end
 
 const VarTable = Array{Any,1}
 
-mutable struct StateUpdate
+struct StateUpdate
     var::Union{Slot,SSAValue}
     vtype::VarState
     state::VarTable
@@ -66,32 +74,6 @@ end
 struct NotFound end
 
 const NOT_FOUND = NotFound()
-
-#####################
-# lattice utilities #
-#####################
-
-function rewrap(@nospecialize(t), @nospecialize(u))
-    isa(t, Const) && return t
-    isa(t, Conditional) && return t
-    return rewrap_unionall(t, u)
-end
-
-_typename(a) = Union{}
-_typename(a::Vararg) = Any
-_typename(a::TypeVar) = Any
-function _typename(a::Union)
-    ta = _typename(a.a)
-    tb = _typename(a.b)
-    ta === tb ? tb : (ta === Any || tb === Any) ? Any : Union{}
-end
-_typename(union::UnionAll) = _typename(union.body)
-
-_typename(a::DataType) = Const(a.name)
-
-# N.B.: typename maps type equivalence classes to a single value
-typename_static(@nospecialize(t)) = isType(t) ? _typename(t.parameters[1]) : Any
-typename_static(t::Const) = _typename(t.val)
 
 #################
 # lattice logic #
@@ -120,6 +102,11 @@ end
 maybe_extract_const_bool(c) = nothing
 
 function ⊑(@nospecialize(a), @nospecialize(b))
+    if isa(a, MaybeUndef) && !isa(b, MaybeUndef)
+        return false
+    end
+    isa(a, MaybeUndef) && (a = a.typ)
+    isa(b, MaybeUndef) && (b = b.typ)
     (a === NOT_FOUND || b === Any) && return true
     (a === Any || b === NOT_FOUND) && return false
     a === Union{} && return true
@@ -160,48 +147,11 @@ function widenconst(c::Const)
         return typeof(c.val)
     end
 end
+widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(@nospecialize(t)) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
-
-function tmerge(@nospecialize(typea), @nospecialize(typeb))
-    typea ⊑ typeb && return typeb
-    typeb ⊑ typea && return typea
-    if isa(typea, Conditional) && isa(typeb, Conditional)
-        if typea.var === typeb.var
-            vtype = tmerge(typea.vtype, typeb.vtype)
-            elsetype = tmerge(typea.elsetype, typeb.elsetype)
-            if vtype != elsetype
-                return Conditional(typea.var, vtype, elsetype)
-            end
-        end
-        return Bool
-    end
-    typea, typeb = widenconst(typea), widenconst(typeb)
-    typea === typeb && return typea
-    if !(isa(typea,Type) || isa(typea,TypeVar)) || !(isa(typeb,Type) || isa(typeb,TypeVar))
-        return Any
-    end
-    if (typea <: Tuple) && (typeb <: Tuple)
-        if isa(typea, DataType) && isa(typeb, DataType) && length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
-            return typejoin(typea, typeb)
-        end
-        if isa(typea, Union) || isa(typeb, Union) || (isa(typea,DataType) && length(typea.parameters)>3) ||
-            (isa(typeb,DataType) && length(typeb.parameters)>3)
-            # widen tuples faster (see #6704), but not too much, to make sure we can infer
-            # e.g. (t::Union{Tuple{Bool},Tuple{Bool,Int}})[1]
-            return Tuple
-        end
-    end
-    u = Union{typea, typeb}
-    if unionlen(u) > MAX_TYPEUNION_LEN || type_too_complex(u, MAX_TYPE_DEPTH)
-        # don't let type unions get too big
-        # TODO: something smarter, like a common supertype
-        return Any
-    end
-    return u
-end
 
 function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
     sa === sb && return sa

@@ -453,10 +453,7 @@ MyBetterContainer{Float64,UnitRange{Float64}}
 
 julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
 ERROR: MethodError: Cannot `convert` an object of type UnitRange{Float64} to an object of type MyBetterContainer{Int64,UnitRange{Float64}}
-This may have arisen from a call to the constructor MyBetterContainer{Int64,UnitRange{Float64}}(...),
-since type constructors fall back to convert methods.
-Stacktrace:
- [1] MyBetterContainer{Int64,UnitRange{Float64}}(::UnitRange{Float64}) at ./sysimg.jl:114
+[...]
 ```
 
 The inner constructor requires that the element type of `A` be `T`.
@@ -621,7 +618,7 @@ end
 
 ```jldoctest
 julia> function strange_twos(n)
-           a = Vector{rand(Bool) ? Int64 : Float64}(n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
            for i = 1:n
                a[i] = 2
            end
@@ -640,14 +637,14 @@ This should be written as:
 
 ```jldoctest
 julia> function fill_twos!(a)
-           for i=eachindex(a)
+           for i = eachindex(a)
                a[i] = 2
            end
        end
 fill_twos! (generic function with 1 method)
 
 julia> function strange_twos(n)
-           a = Vector{rand(Bool) ? Int64 : Float64}(uninitialized, n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
            fill_twos!(a)
            return a
        end
@@ -841,7 +838,7 @@ Consider the following contrived example. Imagine we wanted to write a function 
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
 of the input vector. Assume that it is not important whether rows or columns are filled with these
 copies (perhaps the rest of the code can be easily adapted accordingly). We could conceivably
-do this in at least four ways (in addition to the recommended call to the built-in [`repmat`](@ref)):
+do this in at least four ways (in addition to the recommended call to the built-in [`repeat`](@ref)):
 
 ```julia
 function copy_cols(x::Vector{T}) where T
@@ -934,7 +931,7 @@ function xinc!(ret::AbstractVector{T}, x::T) where T
 end
 
 function loopinc_prealloc()
-    ret = Vector{Int}(uninitialized, 3)
+    ret = Vector{Int}(undef, 3)
     y = 0
     for i = 1:10^7
         xinc!(ret, i)
@@ -1285,7 +1282,7 @@ end
 
 function main()
     n = 2000
-    u = Vector{Float64}(uninitialized, n)
+    u = Vector{Float64}(undef, n)
     init!(u)
     du = similar(u)
 

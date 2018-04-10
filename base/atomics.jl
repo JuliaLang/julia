@@ -2,8 +2,8 @@
 
 using Core.Intrinsics: llvmcall
 
-import Base: setindex!, getindex, unsafe_convert
-import Base.Sys: ARCH, WORD_SIZE
+import .Base: setindex!, getindex, unsafe_convert
+import .Base.Sys: ARCH, WORD_SIZE
 
 export
     Atomic,
@@ -316,7 +316,7 @@ function atomic_min! end
 unsafe_convert(::Type{Ptr{T}}, x::Atomic{T}) where {T} = convert(Ptr{T}, pointer_from_objref(x))
 setindex!(x::Atomic{T}, v) where {T} = setindex!(x, convert(T, v))
 
-const llvmtypes = Dict(
+const llvmtypes = IdDict{Any,String}(
     Bool => "i1",
     Int8 => "i8", UInt8 => "i8",
     Int16 => "i16", UInt16 => "i16",

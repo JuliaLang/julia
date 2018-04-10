@@ -1,21 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑
+import Core.Compiler: Const, Conditional, ⊑, isdispatchelem
 
-using Random
+using Random, Core.IR
 using InteractiveUtils: code_llvm
 
 # demonstrate some of the type-size limits
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 0) == Ref{Complex{T} where T}
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
-    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 10) == comparison
-    @test Core.Compiler.limit_type_size(sig, ref, comparison,  10) == ref
-    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{ref}
-    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison},  10) == sig
+    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 100, 10) == comparison
+    @test Core.Compiler.limit_type_size(sig, ref, comparison, 100, 10) == ref
+    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 10) == Tuple{ref}
+    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  10) == sig
 end
 
 
@@ -169,12 +169,12 @@ mutable struct A14009{T}; end
 A14009(a::T) where {T} = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
-code_llvm(DevNull, f14009, (Int,))
+code_llvm(devnull, f14009, (Int,))
 
 mutable struct B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
-code_llvm(DevNull, f14009, (Int,))
+code_llvm(devnull, f14009, (Int,))
 
 
 # issue #9232
@@ -188,7 +188,7 @@ result_type9232(::Type{T1}, ::Type{T2}) where {T1<:Number,T2<:Number} = arithtyp
 function g10878(x; kw...); end
 invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
 code_typed(invoke_g10878, ())
-code_llvm(DevNull, invoke_g10878, ())
+code_llvm(devnull, invoke_g10878, ())
 
 
 # issue #10930
@@ -210,8 +210,8 @@ end
 end
 let
     ast12474 = code_typed(f12474, Tuple{Float64})
-    @test isconcretetype(ast12474[1][2])
-    @test all(isconcretetype, ast12474[1][1].slottypes)
+    @test isdispatchelem(ast12474[1][2])
+    @test all(isdispatchelem, ast12474[1][1].slottypes)
 end
 
 
@@ -437,10 +437,10 @@ function is_typed_expr(e::Expr)
     return false
 end
 test_inferred_static(@nospecialize(other)) = true
-test_inferred_static(slot::TypedSlot) = @test isconcretetype(slot.typ)
+test_inferred_static(slot::TypedSlot) = @test isdispatchelem(slot.typ)
 function test_inferred_static(expr::Expr)
     if is_typed_expr(expr)
-        @test isconcretetype(expr.typ)
+        @test isdispatchelem(expr.typ)
     end
     for a in expr.args
         test_inferred_static(a)
@@ -448,10 +448,10 @@ function test_inferred_static(expr::Expr)
 end
 function test_inferred_static(arrow::Pair)
     code, rt = arrow
-    @test isconcretetype(rt)
+    @test isdispatchelem(rt)
     @test code.inferred
-    @test all(isconcretetype, code.slottypes)
-    @test all(isconcretetype, code.ssavaluetypes)
+    @test all(isdispatchelem, code.slottypes)
+    @test all(isdispatchelem, code.ssavaluetypes)
     for e in code.code
         test_inferred_static(e)
     end
@@ -585,8 +585,9 @@ tpara18457(::Type{A}) where {A<:AbstractMyType18457} = tpara18457(supertype(A))
 
     function FOO_19322(Y::AbstractMatrix; frac::Float64=0.3, nbins::Int=100, n_sims::Int=100)
         num_iters, num_chains = size(Y)
-        start_iters = unique([1; [round(Int64, s) for s in logspace(log(10,100),
-                                                                    log(10,num_iters/2),nbins-1)]])
+        start_iters = unique([1; map(s->round(Int64, exp10(s)), range(log(10,100),
+                                                                      stop=log(10,num_iters/2),
+                                                                      length=nbins-1))])
         result = zeros(Float64, 10, length(start_iters) * num_chains)
         j=1
         for c in 1:num_chains
@@ -889,7 +890,7 @@ end
 f22290() = return 3
 for i in 1:3
     ir = sprint(io -> code_llvm(io, f22290, Tuple{}))
-    @test contains(ir, "julia_f22290")
+    @test occursin("julia_f22290", ir)
 end
 
 # constant inference of isdefined
@@ -926,7 +927,7 @@ end
 @test isdefined_tfunc(Const(Base), Const(:length)) === Const(true)
 @test isdefined_tfunc(Const(Base), Symbol) == Bool
 @test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) == Bool
-@test isdefined_tfunc(SimpleVector, Const(1)) === Const(false)
+@test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
 @test isdefined_tfunc(Vector{Int}, Const(1)) == Bool
@@ -1019,7 +1020,7 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
     ft = isa(f, Type) ? Type{f} : typeof(f)
     tt = Tuple{ft, t.parameters...}
     precompile(tt)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Ref{SimpleVector}, (Any, Any), tt, meth.sig)
+    (ti, env) = ccall(:jl_type_intersection_with_env, Ref{Core.SimpleVector}, (Any, Any), tt, meth.sig)
     meth = Base.func_for_method_checked(meth, tt)
     return ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
                  (Any, Any, Any, UInt), meth, tt, env, world)
@@ -1030,9 +1031,9 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
-        @test linfo.jlcall_api == 2
+        @test Core.Compiler.invoke_api(linfo) == 2
     end
-    if linfo.jlcall_api == 2
+    if Core.Compiler.invoke_api(linfo) == 2
         @test linfo.inferred_const == val
         return
     end
@@ -1062,25 +1063,25 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     end
 end
 
-function find_call(code, func, narg)
-    for ex in code
+function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
+    for ex in code.code
+        Meta.isexpr(ex, :(=)) && (ex = ex.args[2])
         isa(ex, Expr) || continue
-        ex = ex::Expr
         if ex.head === :call && length(ex.args) == narg
             farg = ex.args[1]
             if isa(farg, GlobalRef)
-                farg = farg::GlobalRef
                 if isdefined(farg.mod, farg.name) && isconst(farg.mod, farg.name)
-                    farg = getfield(farg.mod, farg.name)
+                    farg = typeof(getfield(farg.mod, farg.name))
                 end
+            elseif isa(farg, Core.SSAValue)
+                farg = code.ssavaluetypes[farg.id + 1]
+            else
+                farg = typeof(farg)
             end
-            if farg === func
+            if farg === typeof(func)
                 return true
             end
-        elseif Core.Compiler.is_meta_expr(ex)
-            continue
         end
-        find_call(ex.args, func, narg) && return true
     end
     return false
 end
@@ -1090,29 +1091,29 @@ test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
 test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
-@eval test_const_return(()->Core.sizeof($(Array{Int,0}(uninitialized))), Tuple{}, sizeof(Int))
-@eval test_const_return(()->Core.sizeof($(Matrix{Float32}(uninitialized, 2, 2))), Tuple{}, 4 * 2 * 2)
+@eval test_const_return(()->Core.sizeof($(Array{Int,0}(undef))), Tuple{}, sizeof(Int))
+@eval test_const_return(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2))), Tuple{}, 4 * 2 * 2)
 
 # Make sure Core.sizeof with a ::DataType as inferred input type is inferred but not constant.
 function sizeof_typeref(typeref)
-    Core.sizeof(typeref[])
+    return Core.sizeof(typeref[])
 end
 @test @inferred(sizeof_typeref(Ref{DataType}(Int))) == sizeof(Int)
-@test find_call(first(code_typed(sizeof_typeref, (Ref{DataType},))[1]).code, Core.sizeof, 2)
+@test find_call(first(code_typed(sizeof_typeref, (Ref{DataType},))[1]), Core.sizeof, 2)
 # Constant `Vector` can be resized and shouldn't be optimized to a constant.
 const constvec = [1, 2, 3]
 @eval function sizeof_constvec()
-    Core.sizeof($constvec)
+    return Core.sizeof($constvec)
 end
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 3
-@test find_call(first(code_typed(sizeof_constvec, ())[1]).code, Core.sizeof, 2)
+@test find_call(first(code_typed(sizeof_constvec, ())[1]), Core.sizeof, 2)
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
 
 test_const_return((x)->isdefined(x, :re), Tuple{ComplexF64}, true)
 isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
-@test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)
+@test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]), isdefined, 3)
 
 let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
         findfirst(x->x===isa, Core.Compiler.T_FFUNC_KEY)][3]
@@ -1417,3 +1418,8 @@ function h25579(g)
 end
 @test Base.return_types(h25579, (Base.RefValue{Union{Nothing, Int}},)) ==
         Any[Union{Type{Float64}, Type{Int}, Type{Nothing}}]
+
+f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
+g26172(::Val{0}) = ()
+g26172(v) = (nothing, g26172(f26172(v))...)
+@test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)

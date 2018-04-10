@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function args_morespecific(a, b)
     sp = (ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0)
     if sp  # make sure morespecific(a,b) implies !morespecific(b,a)
@@ -20,8 +22,8 @@ end
 
 # issue #11534
 let
-    t1 = Tuple{AbstractArray, Tuple{Vararg{RangeIndex}}}
-    t2 = Tuple{Array, T} where T<:Tuple{Vararg{RangeIndex}}
+    t1 = Tuple{AbstractArray, Tuple{Vararg{Base.RangeIndex}}}
+    t2 = Tuple{Array, T} where T<:Tuple{Vararg{Base.RangeIndex}}
     @test !args_morespecific(t1, t2)
     @test  args_morespecific(t2, t1)
 end
@@ -132,7 +134,7 @@ f17016(f, t1::Tuple) = 1
 
 @test  args_morespecific(Tuple{Union{Base.StepRange{T, S} where S, Base.StepRangeLen{T, T, S} where S},
                                Union{Base.StepRange{T, S} where S, Base.StepRangeLen{T, T, S} where S}} where T,
-                         Tuple{T, T} where T<:Union{Base.StepRangeLen, Base.LinSpace})
+                         Tuple{T, T} where T<:Union{Base.StepRangeLen, Base.LinRange})
 
 @test args_morespecific(Tuple{Type{Tuple}, Any, Any},
                         Tuple{Type{Tuple{Vararg{E, N} where N}}, Any, Any} where E)
@@ -182,4 +184,12 @@ let x = Type{Union{Tuple{T}, Tuple{Ptr{T}, Ptr{T}, Any}} where T},
     @test !args_morespecific(y, x)
     @test !args_morespecific(x.parameters[1], y.parameters[1])
     @test !args_morespecific(y.parameters[1], x.parameters[1])
+end
+
+let A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N},
+    B = Tuple{Array, Int},
+    C = Tuple{AbstractArray, Int, Array}
+    @test args_morespecific(A, B)
+    @test args_morespecific(B, C)
+    @test args_morespecific(A, C)
 end

@@ -1253,9 +1253,42 @@ for it = 1:5
     global x_24305 = x_24305 + h
 end
 
-@test round.(x_24305, 2) == [1.78, 1.42, 1.24]
+@test round.(x_24305, digits=2) == [1.78, 1.42, 1.24]
 
 # PR #24399
 let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
     @test e[1] isa TypeVar
 end
+
+# issue #24521
+g24521(::T, ::T) where {T} = T
+@test_throws MethodError g24521(Tuple{Any}, Tuple{T} where T)
+@test g24521(Vector, Matrix) == UnionAll
+@test [Tuple{Vararg{Int64,N} where N}, Tuple{Vararg{Int64,N}} where N] isa Vector{Type}
+f24521(::Type{T}, ::Type{T}) where {T} = T
+@test f24521(Tuple{Any}, Tuple{T} where T) == Tuple{Any}
+@test f24521(Tuple{Vararg{Int64,N} where N}, Tuple{Vararg{Int64,N}} where N) == Tuple{Vararg{Int64,N}} where N
+
+# issue #26654
+@test !(Ref{Union{Int64, Ref{Number}}} <: Ref{Union{Ref{T}, T}} where T)
+@test !(Ref{Union{Int64, Val{Number}}} <: Ref{Union{Val{T}, T}} where T)
+@test !(Ref{Union{Ref{Number}, Int64}} <: Ref{Union{Ref{T}, T}} where T)
+@test !(Ref{Union{Val{Number}, Int64}} <: Ref{Union{Val{T}, T}} where T)
+
+# issue #26180
+@test !(Ref{Union{Ref{Int64}, Ref{Number}}} <: Ref{Ref{T}} where T)
+@test !(Ref{Union{Ref{Int64}, Ref{Number}}} <: Ref{Union{Ref{T}, Ref{T}}} where T)
+
+# issue #25240, #26405
+f26405(::Type{T}) where {T<:Union{Integer, Missing}} = T
+@test f26405(Union{Missing, Int}) == Union{Missing, Int}
+
+# issue #24748
+abstract type Foo24748{T1,T2,T3} end
+@test !(Foo24748{Int,Float64,Ref{Integer}} <: Foo24748{<:T,<:T,Ref{T}} where T)
+
+# issue #26129
+@test !(Tuple{Type{Union{Missing, Float64}}, Type{Vector{Missing}}} <: Tuple{Type{T}, Type{Vector{T}}} where T)
+@test !(Tuple{Type{Union{Missing, Float64}}, Type{Vector{Float64}}} <: Tuple{Type{T}, Type{Vector{T}}} where T)
+@test [[1],[missing]] isa Vector{Vector}
+@test [[missing],[1]] isa Vector{Vector}

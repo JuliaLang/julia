@@ -434,13 +434,14 @@ JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
+    size_t len = jl_array_len(a);
     if (a->flags.how == 3 && a->offset == 0 && a->elsize == 1 &&
         (jl_array_ndims(a) != 1 ||
-         ((a->maxsize + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (jl_array_len(a) + sizeof(void*) + 1 <= GC_MAX_SZCLASS)))) {
+         ((a->maxsize + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS)))) {
         jl_value_t *o = jl_array_data_owner(a);
         if (jl_is_string(o)) {
             a->flags.isshared = 1;
-            *(size_t*)o = jl_array_len(a);
+            *(size_t*)o = len;
             a->nrows = 0;
 #ifdef STORE_ARRAY_LEN
             a->length = 0;
@@ -449,7 +450,12 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
             return o;
         }
     }
-    return jl_pchar_to_string((const char*)jl_array_data(a), jl_array_len(a));
+    a->nrows = 0;
+#ifdef STORE_ARRAY_LEN
+    a->length = 0;
+#endif
+    a->maxsize = 0;
+    return jl_pchar_to_string((const char*)jl_array_data(a), len);
 }
 
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
@@ -875,6 +881,29 @@ JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc)
     jl_array_grow_at_beg(a, 0, inc, n);
 }
 
+STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
+{
+    //if we dont manage this array return
+    if (a->flags.how == 0) return;
+
+    int newbytes = (a->maxsize - dec) * a->elsize;
+    int oldnbytes = (a->maxsize) * a->elsize;
+
+    char *originalptr = ((char*) a->data) - a->offset;
+    if (a->flags.how == 1) {
+        //this is a julia-allocated buffer that needs to be marked
+    }
+    else if (a->flags.how == 2) {
+        //malloc-allocated pointer this array object manages
+        a->data = jl_gc_managed_realloc(originalptr, newbytes, oldnbytes,
+                                        a->flags.isaligned, (jl_value_t*) a);
+        a->maxsize -= dec;
+    }
+    else if (a->flags.how == 3) {
+        //this has has a pointer to the object that owns the data
+    }
+}
+
 static size_t jl_array_limit_offset(jl_array_t *a, size_t offset)
 {
     // make sure offset doesn't grow forever due to deleting at beginning
@@ -993,6 +1022,8 @@ JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec)
         jl_bounds_error_int((jl_value_t*)a, dec);
     if (__unlikely(a->flags.isshared))
         array_try_unshare(a);
+    if (dec == 0)
+        return;
     jl_array_del_at_beg(a, 0, dec, n);
 }
 
@@ -1003,20 +1034,33 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
         jl_bounds_error_int((jl_value_t*)a, 0);
     if (__unlikely(a->flags.isshared))
         array_try_unshare(a);
+    if (dec == 0)
+        return;
     jl_array_del_at_end(a, n - dec, dec, n);
 }
 
 JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
 {
     size_t n = jl_array_nrows(a);
-    if (sz <= n)
-        return;
-    size_t inc = sz - n;
-    jl_array_grow_end(a, inc);
-    a->nrows = n;
+
+    int min = a->offset + a->length;
+    sz = (sz < min) ? min : sz;
+
+    if (sz <= a->maxsize) {
+        size_t dec = a->maxsize - sz;
+        //if we dont save at least an eighth of maxsize then its not worth it to shrink
+        if (dec < a->maxsize / 8) return;
+        jl_array_shrink(a, dec);
+    }
+    else {
+        size_t inc = sz - n;
+        jl_array_grow_end(a, inc);
+
+        a->nrows = n;
 #ifdef STORE_ARRAY_LEN
-    a->length = n;
+        a->length = n;
 #endif
+    }
 }
 
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary)

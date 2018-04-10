@@ -92,7 +92,7 @@ for (idx, tname) in enumerate(msgtypes)
     end
 end
 
-let msg_cases = :(assert(false))
+let msg_cases = :(@assert false)
     for i = length(msgtypes):-1:1
         mti = msgtypes[i]
         msg_cases = :(if idx == $i
@@ -201,7 +201,7 @@ function flush_gc_msgs()
         end
     catch e
         bt = catch_backtrace()
-        @schedule showerror(STDERR, e, bt)
+        @schedule showerror(stderr, e, bt)
     end
 end
 

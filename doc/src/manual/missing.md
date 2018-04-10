@@ -276,10 +276,6 @@ julia> y = Union{Missing, String}[missing, "b"]
 
 julia> convert(Array{String}, y)
 ERROR: MethodError: Cannot `convert` an object of type Missing to an object of type String
-This may have arisen from a call to the constructor String(...),
-since type constructors fall back to convert methods.
-Stacktrace:
-[...
 ```
 ## Skipping Missing Values
 

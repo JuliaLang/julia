@@ -2,11 +2,10 @@
 
 baremodule Base
 
-using Core.Intrinsics
-ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, true)
+using Core.Intrinsics, Core.IR
 
-getproperty(x, f::Symbol) = getfield(x, f)
-setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
@@ -16,6 +15,10 @@ setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
 
+getproperty(Core.@nospecialize(x), f::Symbol) = getfield(x, f)
+setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+
+function include_relative end
 function include(mod::Module, path::AbstractString)
     local result
     if INCLUDE_STATE === 1
@@ -50,7 +53,7 @@ let SOURCE_PATH = ""
     global _include
     function _include(mod::Module, path)
         prev = SOURCE_PATH
-        path = joinpath(dirname(prev), path)
+        path = normpath(joinpath(dirname(prev), path))
         push!(_included_files, (mod, abspath(path)))
         SOURCE_PATH = path
         result = Core.include(mod, path)
@@ -92,6 +95,15 @@ if false
     println(io::IO, x...) = Core.println(io, x...)
 end
 
+"""
+    time_ns()
+
+Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+"""
+time_ns() = ccall(:jl_hrtime, UInt64, ())
+
+start_base_include = time_ns()
+
 ## Load essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
@@ -115,6 +127,7 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
+include("refvalue.jl")
 include("refpointer.jl")
 include("checked.jl")
 using .Checked
@@ -134,33 +147,38 @@ include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
+include("views.jl")
 include("reinterpretarray.jl")
 
 
 # ## dims-type-converting Array constructors for convenience
 # type and dimensionality specified, accepting dims as series of Integers
-Vector{T}(::Uninitialized, m::Integer) where {T} = Vector{T}(uninitialized, Int(m))
-Matrix{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Matrix{T}(uninitialized, Int(m), Int(n))
+Vector{T}(::UndefInitializer, m::Integer) where {T} = Vector{T}(undef, Int(m))
+Matrix{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Matrix{T}(undef, Int(m), Int(n))
 # type but not dimensionality specified, accepting dims as series of Integers
-Array{T}(::Uninitialized, m::Integer) where {T} = Array{T,1}(uninitialized, Int(m))
-Array{T}(::Uninitialized, m::Integer, n::Integer) where {T} = Array{T,2}(uninitialized, Int(m), Int(n))
-Array{T}(::Uninitialized, m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(uninitialized, Int(m), Int(n), Int(o))
-Array{T}(::Uninitialized, d::Integer...) where {T} = Array{T}(uninitialized, convert(Tuple{Vararg{Int}}, d))
+Array{T}(::UndefInitializer, m::Integer) where {T} = Array{T,1}(undef, Int(m))
+Array{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Array{T,2}(undef, Int(m), Int(n))
+Array{T}(::UndefInitializer, m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(undef, Int(m), Int(n), Int(o))
+Array{T}(::UndefInitializer, d::Integer...) where {T} = Array{T}(undef, convert(Tuple{Vararg{Int}}, d))
 # dimensionality but not type specified, accepting dims as series of Integers
-Vector(::Uninitialized, m::Integer) = Vector{Any}(uninitialized, Int(m))
-Matrix(::Uninitialized, m::Integer, n::Integer) = Matrix{Any}(uninitialized, Int(m), Int(n))
+Vector(::UndefInitializer, m::Integer) = Vector{Any}(undef, Int(m))
+Matrix(::UndefInitializer, m::Integer, n::Integer) = Matrix{Any}(undef, Int(m), Int(n))
 # empty vector constructor
-Vector() = Vector{Any}(uninitialized, 0)
+Vector() = Vector{Any}(undef, 0)
 
 # Array constructors for nothing and missing
 # type and dimensionality specified
-Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), nothing)
-Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(uninitialized, d...), missing)
+Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), nothing)
+Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), missing)
 # type but not dimensionality specified
-Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(uninitialized, d...), nothing)
-Array{T}(::Missing, d...) where {T} = fill!(Array{T}(uninitialized, d...), missing)
+Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(undef, d...), nothing)
+Array{T}(::Missing, d...) where {T} = fill!(Array{T}(undef, d...), missing)
 
 include("abstractdict.jl")
+
+include("iterators.jl")
+using .Iterators: zip, enumerate
+using .Iterators: Flatten, product  # for generators
 
 include("namedtuple.jl")
 
@@ -206,27 +224,22 @@ end
 include("some.jl")
 
 include("dict.jl")
+include("abstractset.jl")
 include("set.jl")
-include("iterators.jl")
-using .Iterators: zip, enumerate
-using .Iterators: Flatten, product  # for generators
 
 include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
 
 # Definition of StridedArray
-StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
-StridedReinterpretArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
-StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N,A}}
-StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1,A}}
-StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},
-    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
-    Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2,A}}
+StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
+StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
+StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,StridedReinterpretArray}} = ReshapedArray{T,N,A}
+StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray,StridedReinterpretArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
+StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
+StridedVector{T} = Union{DenseArray{T,1}, StridedSubArray{T,1}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1}}
+StridedMatrix{T} = Union{DenseArray{T,2}, StridedSubArray{T,2}, StridedReshapedArray{T,2}, StridedReinterpretArray{T,2}}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
@@ -312,28 +325,6 @@ include("weakkeydict.jl")
 # Logging
 include("logging.jl")
 using .CoreLogging
-global_logger(SimpleLogger(Core.STDERR, CoreLogging.Info))
-
-# To limit dependency on rand functionality (implemented in the Random
-# module), Crand is used in file.jl, and could be used in error.jl
-# (but it breaks a test)
-"""
-    Crand([T::Type])
-
-Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
-by composing two calls to `Crand()`. `T` can be `UInt32` or `Float64`.
-"""
-Crand() = ccall(:rand, Cuint, ())
-# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
-Crand(::Type{UInt32}) = ((Crand() % UInt32) << 16) ⊻ (Crand() % UInt32)
-Crand(::Type{Float64}) = Crand(UInt32) / 2^32
-
-"""
-    Csrand([seed])
-
-Interface the the C `srand(seed)` function.
-"""
-Csrand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 # functions defined in Random
 function rand end
@@ -341,12 +332,10 @@ function randn end
 
 # I/O
 include("stream.jl")
-include("socket.jl")
 include("filesystem.jl")
 using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
-import .Grisu.print_shortest
 include("methodshow.jl")
 
 # core math functions
@@ -421,8 +410,6 @@ include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
-include("i18n.jl")
-using .I18n
 
 # Stack frames and traces
 include("stacktraces.jl")
@@ -431,20 +418,11 @@ using .StackTraces
 include("initdefs.jl")
 include("client.jl")
 
-# misc useful functions & macros
-include("util.jl")
-
 # statistics
 include("statistics.jl")
 
 # missing values
 include("missing.jl")
-
-# libgit2 support
-include("libgit2/libgit2.jl")
-
-# package manager
-include("pkg/pkg.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -453,17 +431,15 @@ include("threadcall.jl")
 include("uuid.jl")
 include("loading.jl")
 
+# misc useful functions & macros
+include("util.jl")
+
+creating_sysimg = true
 # set up depot & load paths to be able to find stdlib packages
-let BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+let BINDIR = Sys.BINDIR
     init_depot_path(BINDIR)
     init_load_path(BINDIR)
 end
-
-INCLUDE_STATE = 3 # include = include_relative
-
-import Base64
-
-INCLUDE_STATE = 2
 
 include("asyncmap.jl")
 
@@ -479,54 +455,100 @@ include("docs/basedocs.jl")
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
 using .Docs
-isdefined(Core, :Compiler) && Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
+if isdefined(Core, :Compiler) && is_primary_base_module
+    Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
+end
 
+end_base_include = time_ns()
+
+if is_primary_base_module
 function __init__()
-    # for the few uses of Crand in Base:
-    Csrand()
+    # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
+    if !haskey(ENV, "OPENBLAS_MAIN_FREE") && !haskey(ENV, "GOTOBLAS_MAIN_FREE")
+        ENV["OPENBLAS_MAIN_FREE"] = "1"
+    end
+    # And try to prevent openblas from starting too many threads, unless/until specifically requested
+    if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
+        cpu_cores = Sys.CPU_CORES::Int
+        if cpu_cores > 8 # always at most 8
+            ENV["OPENBLAS_NUM_THREADS"] = "8"
+        elseif haskey(ENV, "JULIA_CPU_CORES") # or exactly as specified
+            ENV["OPENBLAS_NUM_THREADS"] = cpu_cores
+        end # otherwise, trust that openblas will pick CPU_CORES anyways, without any intervention
+    end
+    # for the few uses of Libc.rand in Base:
+    Libc.srand()
     # Base library init
     reinit_stdio()
-    global_logger(root_module(PkgId("Logging")).ConsoleLogger(STDERR))
-    Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
-    early_init()
+    Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
+    # initialize loading
     init_depot_path()
     init_load_path()
-    init_threadcall()
+    nothing
 end
 
 INCLUDE_STATE = 3 # include = include_relative
+end
+
+const tot_time_stdlib = RefValue(0.0)
 
 end # baremodule Base
 
-using Base
+using .Base
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
+if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main
-Base.require(Base, :Base64)
-Base.require(Base, :CRC32c)
-Base.require(Base, :Dates)
-Base.require(Base, :DelimitedFiles)
-Base.require(Base, :Serialization)
-Base.require(Base, :Distributed)
-Base.require(Base, :FileWatching)
-Base.require(Base, :Future)
-Base.require(Base, :IterativeEigensolvers)
-Base.require(Base, :Libdl)
-Base.require(Base, :LinearAlgebra)
-Base.require(Base, :Logging)
-Base.require(Base, :Mmap)
-Base.require(Base, :Printf)
-Base.require(Base, :Profile)
-Base.require(Base, :Random)
-Base.require(Base, :SharedArrays)
-Base.require(Base, :SparseArrays)
-Base.require(Base, :SuiteSparse)
-Base.require(Base, :Test)
-Base.require(Base, :Unicode)
-Base.require(Base, :REPL)
-Base.require(Base, :Markdown)
+let
+    # Stdlibs manually sorted in top down order
+    stdlibs = [
+            # No deps
+            :Base64,
+            :CRC32c,
+            :SHA,
+            :FileWatching,
+            :Unicode,
+            :Mmap,
+            :Serialization,
+            :Libdl,
+            :Markdown,
+            :LibGit2,
+            :Logging,
+            :Sockets,
+
+            :Printf,
+            :Profile,
+            :Dates,
+            :DelimitedFiles,
+            :Random,
+            :UUIDs,
+            :Future,
+            :Pkg,
+            :LinearAlgebra,
+            :IterativeEigensolvers,
+            :SparseArrays,
+            :SuiteSparse,
+            :SharedArrays,
+            :Distributed,
+            :Test,
+            :REPL,
+            :Pkg3,
+        ]
+
+    maxlen = maximum(textwidth.(string.(stdlibs)))
+
+    print_time = (mod, t) -> (print(rpad(string(mod) * "  ", maxlen + 3, "─")); Base.time_print(t * 10^9); println())
+    print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
+
+    Base.tot_time_stdlib[] = @elapsed for stdlib in stdlibs
+        tt = @elapsed Base.require(Base, stdlib)
+        print_time(stdlib, tt)
+    end
+
+    print_time("Stdlibs total", Base.tot_time_stdlib[])
+end
 
 @eval Base begin
     @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
@@ -566,6 +588,9 @@ Base.require(Base, :Markdown)
     @deprecate_binding REPLCompletions root_module(Base, :REPL).REPLCompletions true ", use `REPL.REPLCompletions` instead"
     @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
 
+    @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
+    @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
+
     @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
 
     @deprecate_stdlib readdlm  DelimitedFiles true
@@ -579,6 +604,7 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib base64decode Base64 true
     @deprecate_stdlib Base64EncodePipe Base64 true
     @deprecate_stdlib Base64DecodePipe Base64 true
+    @deprecate_stdlib stringmime Base64 true
 
     @deprecate_stdlib poll_fd FileWatching true
     @deprecate_stdlib poll_file FileWatching true
@@ -666,7 +692,7 @@ Base.require(Base, :Markdown)
     ## functions that were re-exported from Base
     @deprecate_stdlib nonzeros   SparseArrays true
     @deprecate_stdlib permute    SparseArrays true
-    @deprecate_stdlib blkdiag    SparseArrays true
+    @deprecate_stdlib blkdiag    SparseArrays true blockdiag
     @deprecate_stdlib dropzeros  SparseArrays true
     @deprecate_stdlib dropzeros! SparseArrays true
     @deprecate_stdlib issparse   SparseArrays true
@@ -703,7 +729,6 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib diag        LinearAlgebra true
     @deprecate_stdlib diagind     LinearAlgebra true
     @deprecate_stdlib diagm       LinearAlgebra true
-    @deprecate_stdlib diff        LinearAlgebra true
     @deprecate_stdlib dot         LinearAlgebra true
     @deprecate_stdlib eig         LinearAlgebra true
     @deprecate_stdlib eigfact!    LinearAlgebra true
@@ -740,7 +765,6 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib nullspace   LinearAlgebra true
     @deprecate_stdlib ordschur!   LinearAlgebra true
     @deprecate_stdlib ordschur    LinearAlgebra true
-    @deprecate_stdlib peakflops   LinearAlgebra true
     @deprecate_stdlib pinv        LinearAlgebra true
     @deprecate_stdlib qr          LinearAlgebra true
     @deprecate_stdlib qrfact!     LinearAlgebra true
@@ -759,7 +783,7 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib svdvals!    LinearAlgebra true
     @deprecate_stdlib svdvals     LinearAlgebra true
     @deprecate_stdlib sylvester   LinearAlgebra true
-    @deprecate_stdlib trace       LinearAlgebra true
+    @deprecate_stdlib trace       LinearAlgebra true tr
     @deprecate_stdlib transpose!  LinearAlgebra true
     # @deprecate_stdlib transpose   LinearAlgebra true
     @deprecate_stdlib tril!       LinearAlgebra true
@@ -847,6 +871,7 @@ Base.require(Base, :Markdown)
     @deprecate_stdlib methodswith   InteractiveUtils true
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
+    @deprecate_stdlib peakflops     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
@@ -856,11 +881,54 @@ Base.require(Base, :Markdown)
     @eval @deprecate_stdlib $(Symbol("@code_lowered"))  InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@code_llvm"))     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@code_native"))   InteractiveUtils true
+
+    @eval @deprecate_stdlib $(Symbol("@ip_str")) Sockets true
+    @deprecate_stdlib IPAddr         Sockets true
+    @deprecate_stdlib IPv4           Sockets true
+    @deprecate_stdlib IPv6           Sockets true
+    @deprecate_stdlib accept         Sockets true
+    @deprecate_stdlib connect        Sockets true
+    @deprecate_stdlib getaddrinfo    Sockets true
+    @deprecate_stdlib getalladdrinfo Sockets true
+    @deprecate_stdlib getnameinfo    Sockets true
+    @deprecate_stdlib getipaddr      Sockets true
+    @deprecate_stdlib getpeername    Sockets true
+    @deprecate_stdlib getsockname    Sockets true
+    @deprecate_stdlib listen         Sockets true
+    @deprecate_stdlib listenany      Sockets true
+    @deprecate_stdlib recv           Sockets true
+    @deprecate_stdlib recvfrom       Sockets true
+    @deprecate_stdlib send           Sockets true
+    @deprecate_stdlib TCPSocket      Sockets true
+    @deprecate_stdlib UDPSocket      Sockets true
+
+end
 end
 
-empty!(DEPOT_PATH)
+# Clear global state
+empty!(Core.ARGS)
+empty!(Base.ARGS)
 empty!(LOAD_PATH)
+@eval Base creating_sysimg = false
+Base.init_load_path() # want to be able to find external packages in userimg.jl
 
-Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
+let
+tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
+tot_time_precompile = Base.is_primary_base_module ? (@elapsed Base.include(Base, "precompile.jl")) : 0.0
 
-Base.include(Base, "precompile.jl")
+
+tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
+tot_time = tot_time_base + Base.tot_time_stdlib[] + tot_time_userimg + tot_time_precompile
+
+println("Sysimage built. Summary:")
+print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
+print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base          / tot_time) * 100); println("%")
+print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (Base.tot_time_stdlib[] / tot_time) * 100); println("%")
+if isfile("userimg.jl")
+print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
+end
+print("Precompile: ─ "); Base.time_print(tot_time_precompile    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_precompile    / tot_time) * 100); println("%")
+end
+
+empty!(LOAD_PATH)
+empty!(DEPOT_PATH)

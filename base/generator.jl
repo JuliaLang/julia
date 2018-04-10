@@ -64,7 +64,7 @@ Given the type of an iterator, return one of the following values:
 * `SizeUnknown()` if the length (number of elements) cannot be determined in advance.
 * `HasLength()` if there is a fixed, finite length.
 * `HasShape{N}()` if there is a known length plus a notion of multidimensional shape (as for an array).
-   In this case `N` should give the number of dimensions, and the [`size`](@ref) function is valid
+   In this case `N` should give the number of dimensions, and the [`axes`](@ref) function is valid
    for the iterator.
 * `IsInfinite()` if the iterator yields values forever.
 

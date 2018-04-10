@@ -3,6 +3,7 @@
 using REPL.REPLCompletions
 using Test
 using Random
+import Pkg
 
 let ex = quote
     module CompletionFoo
@@ -87,7 +88,7 @@ end
 function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
     # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
-    # clone METADATA (only pkg and libgit2-online tests should need internet access)
+    # clone METADATA (only Pkg and LibGit2 tests should need internet access)
     tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
         @test !isdir(Pkg.dir())
@@ -206,7 +207,7 @@ let
 end
 
 # inexistent completion inside a string
-let s = "Pkg.add(\"lol"
+let s = "Base.print(\"lol"
     c, r, res = test_complete(s)
     @test res == false
 end
@@ -439,7 +440,7 @@ let s = "CompletionFoo.kwtest( "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test contains(c[1], "x, y, w...")
+    @test occursin("x, y, w...", c[1])
 end
 
 # Test of inference based getfield completion
@@ -613,11 +614,11 @@ let s, c, r
         @test s[r] == ""
     end
 
-    s = "cd \$(Pk"
+    s = "cd \$(Iter"
     c,r = test_scomplete(s)
-    @test "Pkg" in c
-    @test r == 6:7
-    @test s[r] == "Pk"
+    @test "Iterators" in c
+    @test r == 6:9
+    @test s[r] == "Iter"
 
     # Pressing tab after having entered "/tmp " should not
     # attempt to complete "/tmp" but rather work on the current
@@ -711,27 +712,27 @@ end
 end
 
 #test that it can auto complete with spaces in file/path
-let path = tempdir(),
-    space_folder = randstring() * " α",
-    dir = joinpath(path, space_folder),
+mktempdir() do path
+    space_folder = randstring() * " α"
+    dir = joinpath(path, space_folder)
     dir_space = replace(space_folder, " " => "\\ ")
 
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
             s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
-            c,r = test_scomplete(s)
+            c, r = test_scomplete(s)
             @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file" in c
 
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
-            c,r = test_complete(s)
+            c, r = test_complete(s)
             @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file\"" in c
         end
         # Test for issue #10324
         s = "cd(\"$dir_space"
-        c,r = test_complete(s)
+        c, r = test_complete(s)
         @test r == 5:15
         @test s[r] ==  dir_space
 
@@ -743,11 +744,11 @@ let path = tempdir(),
                 if !(c in ['\'','$']) # As these characters hold special meaning
                     # in shell commands the shell path completion cannot complete
                     # paths with these characters
-                    c,r,res = test_scomplete(test_dir)
+                    c, r, res = test_scomplete(test_dir)
                     @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                     @test res
                 end
-                c,r,res  = test_complete("\""*test_dir)
+                c, r, res = test_complete("\""*test_dir)
                 @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                 @test res
             finally

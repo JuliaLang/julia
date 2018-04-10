@@ -22,7 +22,8 @@ show(io::IO, x::Irrational{sym}) where {sym} = print(io, "$sym = $(string(float(
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
 promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float64
-promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Number} = promote_type(Float64, T)
+promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Real} = promote_type(Float64, T)
+promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number} = promote_type(promote_type(S, real(T)), T)
 
 AbstractFloat(x::AbstractIrrational) = Float64(x)
 Float16(x::AbstractIrrational) = Float16(Float32(x))
@@ -153,7 +154,8 @@ big(::Type{<:AbstractIrrational}) = BigFloat
 
 # align along = for nice Array printing
 function alignment(io::IO, x::AbstractIrrational)
-    m = match(r"^(.*?)(=.*)$", sprint(showcompact, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(showcompact, x, context=io, sizehint=0)), 0) :
+    ctx = IOContext(io, :compact=>true)
+    m = match(r"^(.*?)(=.*)$", sprint(show, x, context=ctx, sizehint=0))
+    m === nothing ? (length(sprint(show, x, context=ctx, sizehint=0)), 0) :
     (length(m.captures[1]), length(m.captures[2]))
 end

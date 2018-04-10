@@ -140,5 +140,6 @@ end
 
 @test_throws DomainError logdet(bkfact([-1 -1; -1 1]))
 @test logabsdet(bkfact([8 4; 4 2]))[1] == -Inf
+@test isa(bkfact(Symmetric(ones(0,0))), BunchKaufman) # 0x0 matrix
 
 end # module TestBunchKaufman

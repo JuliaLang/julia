@@ -74,10 +74,8 @@ primitive type
 ```@docs
 Base.Docs
 Base.Iterators
-Base.LibGit2
 Base.Libc
 Base.Meta
-Base.Pkg
 Base.StackTraces
 Base.Sys
 Base.Threads
@@ -196,7 +194,6 @@ Base.invokelatest
 new
 Base.:(|>)
 Base.:(∘)
-Base.equalto
 ```
 
 ## Syntax
@@ -231,8 +228,7 @@ Base.skipmissing
 
 ```@docs
 Base.run
-Base.spawn
-Base.DevNull
+Base.devnull
 Base.success
 Base.process_running
 Base.process_exited
@@ -248,7 +244,6 @@ Base.withenv
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
 Base.Libc.gethostname
-Base.getipaddr
 Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
@@ -276,7 +271,6 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
-Base.assert
 Base.@assert
 Base.ArgumentError
 Base.AssertionError
@@ -295,10 +289,10 @@ Base.MissingException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
-Base.ParseError
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
+Core.UndefKeywordError
 Core.UndefRefError
 Core.UndefVarError
 Base.InitError
@@ -339,6 +333,7 @@ Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)
 Meta.parse(::AbstractString)
+Meta.ParseError
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1

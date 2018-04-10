@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #  Method
 #  1. Argument reduction: Reduce x to an r so that |r| <= 0.5*log10(2). Given x,
 #     find r and integer k such that
@@ -81,6 +83,7 @@ julia> exp10(0.2)
 1.5848931924611136
 ```
 """
+exp10(x::Real) = exp10(float(x))
 function exp10(x::T) where T<:Union{Float32,Float64}
     xa = reinterpret(Unsigned, x) & ~sign_mask(T)
     xsb = signbit(x)

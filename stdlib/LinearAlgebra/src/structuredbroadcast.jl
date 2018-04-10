@@ -41,16 +41,20 @@ Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:UnitUpperTriangular}, ::Struc
 # All other combinations fall back to the default style
 Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::StructuredMatrixStyle) = DefaultArrayStyle{2}()
 
-# And structured matrices lose to the DefaultArrayStyle
+# And structured matrices lose to the DefaultArrayStyle — except scalars!
 Broadcast.BroadcastStyle(a::Broadcast.DefaultArrayStyle{Any}, ::StructuredMatrixStyle) = a
 Broadcast.BroadcastStyle(a::Broadcast.DefaultArrayStyle{N}, ::StructuredMatrixStyle) where N =
     typeof(a)(Broadcast._max(Val(2),Val(N)))
-Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::Broadcast.VectorStyle) = Broadcast.MatrixStyle()
-Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::Broadcast.MatrixStyle) = Broadcast.MatrixStyle()
+Broadcast.BroadcastStyle(::Broadcast.DefaultArrayStyle{0}, s::StructuredMatrixStyle) = s
+# We can define these rules symmetrically without ambiguity since both args are leaf-types but have abstract fallbacks to override
+Broadcast.BroadcastStyle(::StructuredMatrixStyle, a::Broadcast.DefaultArrayStyle{Any}) = a
+Broadcast.BroadcastStyle(::StructuredMatrixStyle, a::Broadcast.DefaultArrayStyle{N}) where N =
+    typeof(a)(Broadcast._max(Val(2),Val(N)))
+Broadcast.BroadcastStyle(s::StructuredMatrixStyle, ::Broadcast.DefaultArrayStyle{0}) = s
 
 # And a definition akin to similar using the structured type:
 structured_broadcast_alloc(bc, ::Type{<:Diagonal}, ::Type{ElType}, n) where {ElType} =
-    Diagonal(Array{ElType}(uninitialized, n))
+    Diagonal(Array{ElType}(undef, n))
 # Bidiagonal is tricky as we need to know if it's upper or lower. The promotion
 # system will return Tridiagonal when there's more than one Bidiagonal, but when
 # there's only one, we need to make figure out upper or lower
@@ -60,31 +64,30 @@ find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidia
 find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
     ex = find_bidiagonal(bc)
-    return Bidiagonal(Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1), ex.uplo)
+    return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1), ex.uplo)
 end
 structured_broadcast_alloc(bc, ::Type{<:SymTridiagonal}, ::Type{ElType}, n) where {ElType} =
-    SymTridiagonal(Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1))
+    SymTridiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1))
 structured_broadcast_alloc(bc, ::Type{<:Tridiagonal}, ::Type{ElType}, n) where {ElType} =
-    Tridiagonal(Array{ElType}(uninitialized, n-1),Array{ElType}(uninitialized, n),Array{ElType}(uninitialized, n-1))
+    Tridiagonal(Array{ElType}(undef, n-1),Array{ElType}(undef, n),Array{ElType}(undef, n-1))
 structured_broadcast_alloc(bc, ::Type{<:LowerTriangular}, ::Type{ElType}, n) where {ElType} =
-    LowerTriangular(Array{ElType}(uninitialized, n, n))
+    LowerTriangular(Array{ElType}(undef, n, n))
 structured_broadcast_alloc(bc, ::Type{<:UpperTriangular}, ::Type{ElType}, n) where {ElType} =
-    UpperTriangular(Array{ElType}(uninitialized, n, n))
+    UpperTriangular(Array{ElType}(undef, n, n))
 structured_broadcast_alloc(bc, ::Type{<:UnitLowerTriangular}, ::Type{ElType}, n) where {ElType} =
-    UnitLowerTriangular(Array{ElType}(uninitialized, n, n))
+    UnitLowerTriangular(Array{ElType}(undef, n, n))
 structured_broadcast_alloc(bc, ::Type{<:UnitUpperTriangular}, ::Type{ElType}, n) where {ElType} =
-    UnitUpperTriangular(Array{ElType}(uninitialized, n, n))
+    UnitUpperTriangular(Array{ElType}(undef, n, n))
 
 # A _very_ limited list of structure-preserving functions known at compile-time. This list is
 # derived from the formerly-implemented `broadcast` methods in 0.6. Note that this must
 # preserve both zeros and ones (for Unit***erTriangular) and symmetry (for SymTridiagonal)
 const TypeFuncs = Union{typeof(round),typeof(trunc),typeof(floor),typeof(ceil)}
-isstructurepreserving(::Any) = false
-isstructurepreserving(bc::Broadcasted) = isstructurepreserving(bc.f, bc.args)
-isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::Tuple{StructuredMatrix}) = true
-isstructurepreserving(::TypeFuncs, ::Tuple{StructuredMatrix}) = true
-isstructurepreserving(::Base.Broadcast.TypeArgFunction{<:TypeFuncs,<:Any,1}, ::Tuple{StructuredMatrix}) = true
-isstructurepreserving(f, args) = false
+isstructurepreserving(bc::Broadcasted) = isstructurepreserving(bc.f, bc.args...)
+isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::StructuredMatrix) = true
+isstructurepreserving(::TypeFuncs, ::StructuredMatrix) = true
+isstructurepreserving(::TypeFuncs, ::Ref{<:Type}, ::StructuredMatrix) = true
+isstructurepreserving(f, args...) = false
 
 _iszero(n::Number) = iszero(n)
 _iszero(x) = x == 0

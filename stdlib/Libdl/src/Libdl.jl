@@ -5,7 +5,7 @@ __precompile__(true)
 module Libdl
 @doc """
 Interface to libdl. Provides dynamic linking support.
-""" -> Libdl
+""" Libdl
 
 import Base.DL_LOAD_PATH
 
@@ -32,7 +32,7 @@ const RTLD_NOLOAD    = 0x00000020
 const RTLD_DEEPBIND  = 0x00000040
 const RTLD_FIRST     = 0x00000080
 
-@doc """
+"""
     RTLD_DEEPBIND
     RTLD_FIRST
     RTLD_GLOBAL
@@ -44,7 +44,7 @@ const RTLD_FIRST     = 0x00000080
 
 Enum constant for [`dlopen`](@ref). See your platform man page for details, if
 applicable.
-""" ->
+"""
 (RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL, RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW)
 
 """
@@ -236,8 +236,8 @@ function dllist()
     dynamic_libraries = Vector{AbstractString}()
 
     @static if Sys.islinux()
-        callback = cfunction(dl_phdr_info_callback, Cint,
-                             Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
+        callback = @cfunction(dl_phdr_info_callback, Cint,
+                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}))
         ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
     end
 
@@ -256,8 +256,8 @@ function dllist()
     end
 
     @static if Sys.isbsd() && !Sys.isapple()
-        callback = cfunction(dl_phdr_info_callback, Cint,
-                             Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
+        callback = @cfunction(dl_phdr_info_callback, Cint,
+                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}))
         ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
         popfirst!(dynamic_libraries)
     end

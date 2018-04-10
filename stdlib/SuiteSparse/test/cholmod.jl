@@ -631,8 +631,8 @@ GC.gc()
 @testset "Issue 11747 - Wrong show method defined for FactorComponent" begin
     v = cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10])).L
     for s in (sprint(show, MIME("text/plain"), v), sprint(show, v))
-        @test contains(s, "method: simplicial")
-        @test !contains(s, "#undef")
+        @test occursin("method:  simplicial", s)
+        @test !occursin("#undef", s)
     end
 end
 
@@ -739,7 +739,7 @@ end
     o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, findall(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
     for uplo in (1, -1)
         unsafe_store!(Ptr{Int8}(pointer(C)), uplo, Int(o) + 1)
-        @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
+        @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) ≈ Symmetric(A'A)
     end
 end
 

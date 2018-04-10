@@ -32,6 +32,22 @@ Base
 parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
 """
+    moduleroot(m::Module) -> Module
+
+Find the root module of a given module. This is the first module in the chain of
+parent modules of `m` which is either a registered root module or which is its
+own parent module.
+"""
+function moduleroot(m::Module)
+    while true
+        is_root_module(m) && return m
+        p = parentmodule(m)
+        p == m && return m
+        m = p
+    end
+end
+
+"""
     @__MODULE__ -> Module
 
 Get the `Module` of the toplevel eval,
@@ -48,8 +64,8 @@ Get the fully-qualified name of a module as a tuple of symbols. For example,
 
 # Examples
 ```jldoctest
-julia> fullname(Base.Pkg)
-(:Base, :Pkg)
+julia> fullname(Base.Iterators)
+(:Base, :Iterators)
 
 julia> fullname(Main)
 (:Main,)
@@ -129,19 +145,17 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
 """
     fieldnames(x::DataType)
 
-Get an array of the fields of a `DataType`.
+Get a tuple with the names of the fields of a `DataType`.
 
 # Examples
 ```jldoctest
 julia> fieldnames(Rational)
-2-element Array{Symbol,1}:
- :num
- :den
+(:num, :den)
 ```
 """
-fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:fieldcount(t)]
+fieldnames(t::DataType) = ntuple(i -> fieldname(t, i), fieldcount(t))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
-fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:fieldcount(t)]
+fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
     nameof(t::DataType) -> Symbol
@@ -453,7 +467,6 @@ Compute a type that contains the intersection of `T` and `S`. Usually this will 
 smallest such type or one close to it.
 """
 typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
-typeseq(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; a<:b && b<:a)
 
 """
     fieldoffset(type, i)
@@ -663,7 +676,7 @@ end
 # type for reflecting and pretty-printing a subset of methods
 mutable struct MethodList
     ms::Array{Method,1}
-    mt::MethodTable
+    mt::Core.MethodTable
 end
 
 length(m::MethodList) = length(m.ms)
@@ -672,7 +685,7 @@ start(m::MethodList) = start(m.ms)
 done(m::MethodList, s) = done(m.ms, s)
 next(m::MethodList, s) = next(m.ms, s)
 
-function MethodList(mt::MethodTable)
+function MethodList(mt::Core.MethodTable)
     ms = Method[]
     visit(mt) do m
         push!(ms, m)
@@ -711,11 +724,11 @@ function methods(@nospecialize(f))
     return methods(f, Tuple{Vararg{Any}})
 end
 
-function visit(f, mt::MethodTable)
+function visit(f, mt::Core.MethodTable)
     mt.defs !== nothing && visit(f, mt.defs)
     nothing
 end
-function visit(f, mc::TypeMapLevel)
+function visit(f, mc::Core.TypeMapLevel)
     if mc.targ !== nothing
         e = mc.targ::Vector{Any}
         for i in 1:length(e)
@@ -732,7 +745,7 @@ function visit(f, mc::TypeMapLevel)
     mc.any !== nothing && visit(f, mc.any)
     nothing
 end
-function visit(f, d::TypeMapEntry)
+function visit(f, d::Core.TypeMapEntry)
     while d !== nothing
         f(d.func)
         d = d.next
@@ -740,14 +753,14 @@ function visit(f, d::TypeMapEntry)
     nothing
 end
 
-function length(mt::MethodTable)
+function length(mt::Core.MethodTable)
     n = 0
     visit(mt) do m
         n += 1
     end
     return n::Int
 end
-isempty(mt::MethodTable) = (mt.defs === nothing)
+isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
 uncompressed_ast(m::Method) = isdefined(m,:source) ? uncompressed_ast(m, m.source) :
                               isdefined(m,:generator) ? error("Method is @generated; try `code_lowered` instead.") :
@@ -1046,8 +1059,8 @@ max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
 """
     propertynames(x, private=false)
 
-Get an array of the properties (`x.property`) of an object `x`.   This
-is typically the same as [`fieldnames(typeof(x))`](@ref), but types
+Get a tuple or a vector of the properties (`x.property`) of an object `x`.
+This is typically the same as [`fieldnames(typeof(x))`](@ref), but types
 that overload [`getproperty`](@ref) should generally overload `propertynames`
 as well to get the properties of an instance of the type.
 
