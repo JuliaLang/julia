@@ -1368,6 +1368,9 @@ export readandwrite
 
 @deprecate squeeze(A, dims) squeeze(A, dims=dims)
 
+@deprecate diff(A::AbstractMatrix, dim::Integer) diff(A, dims=dim)
+@deprecate unique(A::AbstractArray, dim::Int)    unique(A, dims=dim)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
@@ -1528,7 +1531,8 @@ end
 @deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
            collect(m.match for m in eachmatch(r, s, overlap = overlap)))
 
-@deprecate diff(A::AbstractMatrix) diff(A, 1)
+# remove depwarn for `diff` in multidimensional.jl
+# @deprecate diff(A::AbstractMatrix) diff(A, dims=1)
 
 # PR 26194
 export assert
