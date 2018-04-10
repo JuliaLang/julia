@@ -272,6 +272,13 @@ end
     @test round(pi, sigdigits=1) ≈ 3.
     @test round(pi, sigdigits=3) ≈ 3.14
     @test round(pi, sigdigits=4, base=2) ≈ 3.25
+    @test round(big(pi)) ≈ big"3."
+    @test round(big(pi), digits=0) ≈ big"3."
+    @test round(big(pi), digits=1) ≈ big"3.1"
+    @test round(big(pi), digits=3, base=2) ≈ big"3.125"
+    @test round(big(pi), sigdigits=1) ≈ big"3."
+    @test round(big(pi), sigdigits=3) ≈ big"3.14"
+    @test round(big(pi), sigdigits=4, base=2) ≈ big"3.25"
     @test round(10*pi, digits=-1) ≈ 30.
     @test round(.1, digits=0) == 0.
     @test round(-.1, digits=0) == -0.

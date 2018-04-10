@@ -827,25 +827,18 @@ function isinteger(x::BigFloat)
     return ccall((:mpfr_integer_p, :libmpfr), Int32, (Ref{BigFloat},), x) != 0
 end
 
-for f in (:ceil, :floor, :trunc)
+for (f,R) in ((:roundeven, :Nearest),
+              (:ceil, :Up),
+              (:floor, :Down),
+              (:trunc, :ToZero),
+              (:round, :NearestTiesAway))
     @eval begin
-        function ($f)(x::BigFloat)
+        function round(x::BigFloat, ::RoundingMode{$(QuoteNode(R))})
             z = BigFloat()
             ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), z, x)
             return z
         end
     end
-end
-
-function round(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_rint, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Cint), z, x, ROUNDING_MODE[])
-    return z
-end
-function round(x::BigFloat,::RoundingMode{:NearestTiesAway})
-    z = BigFloat()
-    ccall((:mpfr_round, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), z, x)
-    return z
 end
 
 function isinf(x::BigFloat)
