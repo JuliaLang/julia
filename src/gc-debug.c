@@ -576,7 +576,11 @@ static void gc_scrub_range(char *low, char *high)
 
 static void gc_scrub_task(jl_task_t *ta)
 {
+#ifdef JULIA_ENABLE_PARTR
+    int16_t tid = ta->current_tid;
+#else
     int16_t tid = ta->tid;
+#endif
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
     if (ptls == ptls2 && ta == ptls2->current_task) {
