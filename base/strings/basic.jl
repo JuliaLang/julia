@@ -377,6 +377,7 @@ julia> thisind("αβγdef", 10)
 
 julia> thisind("αβγdef", 20)
 20
+```
 """
 thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
 
