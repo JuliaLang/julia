@@ -6845,7 +6845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\n"
+    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository\'s history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\n"
 },
 
 {
@@ -6877,7 +6877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\n"
+    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository\'s history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\n"
 },
 
 {
@@ -7493,7 +7493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -14849,6 +14849,1190 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/LibGit2/#",
+    "page": "LibGit2",
+    "title": "LibGit2",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2-1",
+    "page": "LibGit2",
+    "title": "LibGit2",
+    "category": "section",
+    "text": "DocTestSetup = :(using LibGit2)The LibGit2 module provides bindings to libgit2, a portable C library that implements core functionality for the Git version control system. These bindings are currently used to power Julia\'s package manager. It is expected that this module will eventually be moved into a separate package."
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.Buffer",
+    "page": "LibGit2",
+    "title": "LibGit2.Buffer",
+    "category": "type",
+    "text": "LibGit2.Buffer\n\nA data buffer for exporting data from libgit2. Matches the git_buf struct.\n\nWhen fetching data from LibGit2, a typical usage would look like:\n\nbuf_ref = Ref(Buffer())\n@check ccall(..., (Ptr{Buffer},), buf_ref)\n# operation on buf_ref\nfree(buf_ref)\n\nIn particular, note that LibGit2.free should be called afterward on the Ref object.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.CheckoutOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.CheckoutOptions",
+    "category": "type",
+    "text": "LibGit2.CheckoutOptions\n\nMatches the git_checkout_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\ncheckout_strategy: determine how to handle conflicts and whether to force the  checkout/recreate missing files.\ndisable_filters: if nonzero, do not apply filters like CLRF (to convert file newlines between UNIX and DOS).\ndir_mode: read/write/access mode for any directories involved in the checkout. Default is 0755.\nfile_mode: read/write/access mode for any files involved in the checkout.  Default is 0755 or 0644, depending on the blob.\nfile_open_flags: bitflags used to open any files during the checkout.\nnotify_flags: Flags for what sort of conflicts the user should be notified about.\nnotify_cb: An optional callback function to notify the user if a checkout conflict occurs.  If this function returns a non-zero value, the checkout will be cancelled.\nnotify_payload: Payload for the notify callback function.\nprogress_cb: An optional callback function to display checkout progress.\nprogress_payload: Payload for the progress callback.\npaths: If not empty, describes which paths to search during the checkout.  If empty, the checkout will occur over all files in the repository.\nbaseline: Expected content of the workdir, captured in a (pointer to a)  GitTree. Defaults to the state of the tree at HEAD.\nbaseline_index: Expected content of the workdir, captured in a (pointer to a)  GitIndex. Defaults to the state of the index at HEAD.\ntarget_directory: If not empty, checkout to this directory instead of the workdir.\nancestor_label: In case of conflicts, the name of the common ancestor side.\nour_label: In case of conflicts, the name of \"our\" side.\ntheir_label: In case of conflicts, the name of \"their\" side.\nperfdata_cb: An optional callback function to display performance data.\nperfdata_payload: Payload for the performance callback.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.CloneOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.CloneOptions",
+    "category": "type",
+    "text": "LibGit2.CloneOptions\n\nMatches the git_clone_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\ncheckout_opts: The options for performing the checkout of the remote as part of the clone.\nfetch_opts: The options for performing the pre-checkout fetch of the remote as part of the clone.\nbare: If 0, clone the full remote repository. If non-zero, perform a bare clone, in which  there is no local copy of the source files in the repository and the gitdir and workdir  are the same.\nlocalclone: Flag whether to clone a local object database or do a fetch. The default is to let git decide.  It will not use the git-aware transport for a local clone, but will use it for URLs which begin with file://.\ncheckout_branch: The name of the branch to checkout. If an empty string, the default branch of the  remote will be checked out.\nrepository_cb: An optional callback which will be used to create the new repository into which  the clone is made.\nrepository_cb_payload: The payload for the repository callback.\nremote_cb: An optional callback used to create the GitRemote before making the clone from it.\nremote_cb_payload: The payload for the remote callback.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.DescribeOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.DescribeOptions",
+    "category": "type",
+    "text": "LibGit2.DescribeOptions\n\nMatches the git_describe_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nmax_candidates_tags: consider this many most recent tags in refs/tags to describe a commit.  Defaults to 10 (so that the 10 most recent tags would be examined to see if they describe a commit).\ndescribe_strategy: whether to consider all entries in refs/tags (equivalent to git-describe --tags)  or all entries in refs/ (equivalent to git-describe --all). The default is to only show annotated tags.  If Consts.DESCRIBE_TAGS is passed, all tags, annotated or not, will be considered.  If Consts.DESCRIBE_ALL is passed, any ref in refs/ will be considered.\npattern: only consider tags which match pattern. Supports glob expansion.\nonly_follow_first_parent: when finding the distance from a matching reference to the described  object, only consider the distance from the first parent.\nshow_commit_oid_as_fallback: if no matching reference can be found which describes a commit, show the  commit\'s GitHash instead of throwing an error (the default behavior).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.DescribeFormatOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.DescribeFormatOptions",
+    "category": "type",
+    "text": "LibGit2.DescribeFormatOptions\n\nMatches the git_describe_format_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nabbreviated_size: lower bound on the size of the abbreviated GitHash to use, defaulting to 7.\nalways_use_long_format: set to 1 to use the long format for strings even if a short format can be used.\ndirty_suffix: if set, this will be appended to the end of the description string if the workdir is dirty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.DiffDelta",
+    "page": "LibGit2",
+    "title": "LibGit2.DiffDelta",
+    "category": "type",
+    "text": "LibGit2.DiffDelta\n\nDescription of changes to one entry. Matches the git_diff_delta struct.\n\nThe fields represent:\n\nstatus: One of Consts.DELTA_STATUS, indicating whether the file has been added/modified/deleted.\nflags: Flags for the delta and the objects on each side. Determines whether to treat the file(s)  as binary/text, whether they exist on each side of the diff, and whether the object ids are known  to be correct.\nsimilarity: Used to indicate if a file has been renamed or copied.\nnfiles: The number of files in the delta (for instance, if the delta  was run on a submodule commit id, it may contain more than one file).\nold_file: A DiffFile containing information about the file(s) before the changes.\nnew_file: A DiffFile containing information about the file(s) after the changes.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.DiffFile",
+    "page": "LibGit2",
+    "title": "LibGit2.DiffFile",
+    "category": "type",
+    "text": "LibGit2.DiffFile\n\nDescription of one side of a delta. Matches the git_diff_file struct.\n\nThe fields represent:\n\nid: the GitHash of the item in the diff. If the item is empty on this  side of the diff (for instance, if the diff is of the removal of a file), this will  be GitHash(0).\npath: a NULL terminated path to the item relative to the working directory of the repository.\nsize: the size of the item in bytes.\nflags: a combination of the git_diff_flag_t  flags. The ith bit of this integer sets the ith flag.\nmode: the stat mode for the item.\nid_abbrev: only present in LibGit2 versions newer than or equal to 0.25.0.  The length of the id field when converted using string. Usually equal to OID_HEXSZ (40).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.DiffOptionsStruct",
+    "page": "LibGit2",
+    "title": "LibGit2.DiffOptionsStruct",
+    "category": "type",
+    "text": "LibGit2.DiffOptionsStruct\n\nMatches the git_diff_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nflags: flags controlling which files will appear in the diff. Defaults to DIFF_NORMAL.\nignore_submodules: whether to look at files in submodules or not. Defaults to SUBMODULE_IGNORE_UNSPECIFIED, which means the submodule\'s configuration will control  whether it appears in the diff or not.\npathspec: path to files to include in the diff. Default is to use all files in the repository.\nnotify_cb: optional callback which will notify the user of changes to the diff as file deltas are  added to it.\nprogress_cb: optional callback which will display diff progress. Only relevant on libgit2 versions  at least as new as 0.24.0.\npayload: the payload to pass to notify_cb and progress_cb.\ncontext_lines: the number of unchanged lines used to define the edges of a hunk.  This is also the number of lines which will be shown before/after a hunk to provide  context. Default is 3.\ninterhunk_lines: the maximum number of unchanged lines between two separate  hunks allowed before the hunks will be combined. Default is 0.\nid_abbrev: sets the length of the abbreviated GitHash to print.  Default is 7.\nmax_size: the maximum file size of a blob. Above this size, it will be treated  as a binary blob. The default is 512 MB.\nold_prefix: the virtual file directory in which to place old files on one side  of the diff. Default is \"a\".\nnew_prefix: the virtual file directory in which to place new files on one side  of the diff. Default is \"b\".\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.FetchHead",
+    "page": "LibGit2",
+    "title": "LibGit2.FetchHead",
+    "category": "type",
+    "text": "LibGit2.FetchHead\n\nContains the information about HEAD during a fetch, including the name and URL of the branch fetched from, the oid of the HEAD, and whether the fetched HEAD has been merged locally.\n\nThe fields represent:\n\nname: The name in the local reference database of the fetch head, for example,  \"refs/heads/master\".\nurl: The URL of the fetch head.\noid: The GitHash of the tip of the fetch head.\nismerge: Boolean flag indicating whether the changes at the  remote have been merged into the local copy yet or not. If true, the local  copy is up to date with the remote fetch head.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.FetchOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.FetchOptions",
+    "category": "type",
+    "text": "LibGit2.FetchOptions\n\nMatches the git_fetch_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\ncallbacks: remote callbacks to use during the fetch.\nprune: whether to perform a prune after the fetch or not. The default is to  use the setting from the GitConfig.\nupdate_fetchhead: whether to update the FetchHead after the fetch.  The default is to perform the update, which is the normal git behavior.\ndownload_tags: whether to download tags present at the remote or not. The default  is to request the tags for objects which are being downloaded anyway from the server.\nproxy_opts: options for connecting to the remote through a proxy. See ProxyOptions.  Only present on libgit2 versions newer than or equal to 0.25.0.\ncustom_headers: any extra headers needed for the fetch. Only present on libgit2 versions  newer than or equal to 0.24.0.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitAnnotated",
+    "page": "LibGit2",
+    "title": "LibGit2.GitAnnotated",
+    "category": "type",
+    "text": "GitAnnotated(repo::GitRepo, commit_id::GitHash)\nGitAnnotated(repo::GitRepo, ref::GitReference)\nGitAnnotated(repo::GitRepo, fh::FetchHead)\nGitAnnotated(repo::GitRepo, comittish::AbstractString)\n\nAn annotated git commit carries with it information about how it was looked up and why, so that rebase or merge operations have more information about the context of the commit. Conflict files contain information about the source/target branches in the merge which are conflicting, for instance. An annotated commit can refer to the tip of a remote branch, for instance when a FetchHead is passed, or to a branch head described using GitReference.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitBlame",
+    "page": "LibGit2",
+    "title": "LibGit2.GitBlame",
+    "category": "type",
+    "text": "GitBlame(repo::GitRepo, path::AbstractString; options::BlameOptions=BlameOptions())\n\nConstruct a GitBlame object for the file at path, using change information gleaned from the history of repo. The GitBlame object records who changed which chunks of the file when, and how. options controls how to separate the contents of the file and which commits to probe - see BlameOptions for more information.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitBlob",
+    "page": "LibGit2",
+    "title": "LibGit2.GitBlob",
+    "category": "type",
+    "text": "GitBlob(repo::GitRepo, hash::AbstractGitHash)\nGitBlob(repo::GitRepo, spec::AbstractString)\n\nReturn a GitBlob object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitCommit",
+    "page": "LibGit2",
+    "title": "LibGit2.GitCommit",
+    "category": "type",
+    "text": "GitCommit(repo::GitRepo, hash::AbstractGitHash)\nGitCommit(repo::GitRepo, spec::AbstractString)\n\nReturn a GitCommit object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitHash",
+    "page": "LibGit2",
+    "title": "LibGit2.GitHash",
+    "category": "type",
+    "text": "GitHash\n\nA git object identifier, based on the sha-1 hash. It is a 20 byte string (40 hex digits) used to identify a GitObject in a repository.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitObject",
+    "page": "LibGit2",
+    "title": "LibGit2.GitObject",
+    "category": "type",
+    "text": "GitObject(repo::GitRepo, hash::AbstractGitHash)\nGitObject(repo::GitRepo, spec::AbstractString)\n\nReturn the specified object (GitCommit, GitBlob, GitTree or GitTag) from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitRemote",
+    "page": "LibGit2",
+    "title": "LibGit2.GitRemote",
+    "category": "type",
+    "text": "GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString) -> GitRemote\n\nLook up a remote git repository using its name and URL. Uses the default fetch refspec.\n\nExamples\n\nrepo = LibGit2.init(repo_path)\nremote = LibGit2.GitRemote(repo, \"upstream\", repo_url)\n\n\n\n\n\nGitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString) -> GitRemote\n\nLook up a remote git repository using the repository\'s name and URL, as well as specifications for how to fetch from the remote (e.g. which remote branch to fetch from).\n\nExamples\n\nrepo = LibGit2.init(repo_path)\nrefspec = \"+refs/heads/mybranch:refs/remotes/origin/mybranch\"\nremote = LibGit2.GitRemote(repo, \"upstream\", repo_url, refspec)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitRemoteAnon",
+    "page": "LibGit2",
+    "title": "LibGit2.GitRemoteAnon",
+    "category": "function",
+    "text": "GitRemoteAnon(repo::GitRepo, url::AbstractString) -> GitRemote\n\nLook up a remote git repository using only its URL, not its name.\n\nExamples\n\nrepo = LibGit2.init(repo_path)\nremote = LibGit2.GitRemoteAnon(repo, repo_url)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitRepo",
+    "page": "LibGit2",
+    "title": "LibGit2.GitRepo",
+    "category": "type",
+    "text": "LibGit2.GitRepo(path::AbstractString)\n\nOpen a git repository at path.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitRepoExt",
+    "page": "LibGit2",
+    "title": "LibGit2.GitRepoExt",
+    "category": "function",
+    "text": "LibGit2.GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))\n\nOpen a git repository at path with extended controls (for instance, if the current user must be a member of a special access group to read path).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitRevWalker",
+    "page": "LibGit2",
+    "title": "LibGit2.GitRevWalker",
+    "category": "type",
+    "text": "GitRevWalker(repo::GitRepo)\n\nA GitRevWalker walks through the revisions (i.e. commits) of a git repository repo. It is a collection of the commits in the repository, and supports iteration and calls to map and count (for instance, count could be used to determine what percentage of commits in a repository were made by a certain author).\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, count finds the number of commits along the walk with a certain GitHash. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitShortHash",
+    "page": "LibGit2",
+    "title": "LibGit2.GitShortHash",
+    "category": "type",
+    "text": "GitShortHash(hash::GitHash, len::Integer)\n\nA shortened git object identifier, which can be used to identify a git object when it is unique, consisting of the initial len hexadecimal digits of hash (the remaining digits are ignored).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitSignature",
+    "page": "LibGit2",
+    "title": "LibGit2.GitSignature",
+    "category": "type",
+    "text": "LibGit2.GitSignature\n\nThis is a Julia wrapper around a pointer to a git_signature object.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitStatus",
+    "page": "LibGit2",
+    "title": "LibGit2.GitStatus",
+    "category": "type",
+    "text": "LibGit2.GitStatus(repo::GitRepo; status_opts=StatusOptions())\n\nCollect information about the status of each file in the git repository repo (e.g. is the file modified, staged, etc.). status_opts can be used to set various options, for instance whether or not to look at untracked files or whether to include submodules or not. See StatusOptions for more information.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitTag",
+    "page": "LibGit2",
+    "title": "LibGit2.GitTag",
+    "category": "type",
+    "text": "GitTag(repo::GitRepo, hash::AbstractGitHash)\nGitTag(repo::GitRepo, spec::AbstractString)\n\nReturn a GitTag object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitTree",
+    "page": "LibGit2",
+    "title": "LibGit2.GitTree",
+    "category": "type",
+    "text": "GitTree(repo::GitRepo, hash::AbstractGitHash)\nGitTree(repo::GitRepo, spec::AbstractString)\n\nReturn a GitTree object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.IndexEntry",
+    "page": "LibGit2",
+    "title": "LibGit2.IndexEntry",
+    "category": "type",
+    "text": "LibGit2.IndexEntry\n\nIn-memory representation of a file entry in the index. Matches the git_index_entry struct.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.IndexTime",
+    "page": "LibGit2",
+    "title": "LibGit2.IndexTime",
+    "category": "type",
+    "text": "LibGit2.IndexTime\n\nMatches the git_index_time struct.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.BlameOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.BlameOptions",
+    "category": "type",
+    "text": "LibGit2.BlameOptions\n\nMatches the git_blame_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nflags: one of Consts.BLAME_NORMAL or Consts.BLAME_FIRST_PARENT (the other blame flags  are not yet implemented by libgit2).\nmin_match_characters: the minimum number of alphanumeric characters which much change in a commit in order for the change to be associated with that commit. The default is 20. Only takes effect if one of the Consts.BLAME_*_COPIES flags are used, which libgit2 does not implement yet.\nnewest_commit: the GitHash of the newest commit from which to look at changes.\noldest_commit: the GitHash of the oldest commit from which to look at changes.\nmin_line: the first line of the file from which to starting blaming. The default is 1.\nmax_line: the last line of the file to which to blame. The default is 0, meaning the last line of the file.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.MergeOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.MergeOptions",
+    "category": "type",
+    "text": "LibGit2.MergeOptions\n\nMatches the git_merge_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nflags: an enum for flags describing merge behavior.  Defined in git_merge_flag_t.  The corresponding Julia enum is GIT_MERGE and has values:\nMERGE_FIND_RENAMES: detect if a file has been renamed between the common ancestor and the \"ours\" or \"theirs\" side of the merge. Allows merges where a file has been renamed.\nMERGE_FAIL_ON_CONFLICT: exit immediately if a conflict is found rather than trying to resolve it.\nMERGE_SKIP_REUC: do not write the REUC extension on the index resulting from the merge.\nMERGE_NO_RECURSIVE: if the commits being merged have multiple merge bases, use the first one, rather than trying to recursively merge the bases.\nrename_threshold: how similar two files must to consider one a rename of the other. This is an integer that sets the percentage similarity. The default is 50.\ntarget_limit: the maximum number of files to compare with to look for renames. The default is 200.\nmetric: optional custom function to use to determine the similarity between two files for rename detection.\nrecursion_limit: the upper limit on the number of merges of common ancestors to perform to try to build a new virtual merge base for the merge. The default is no limit. This field is only present on libgit2 versions newer than 0.24.0.\ndefault_driver: the merge driver to use if both sides have changed. This field is only present on libgit2 versions newer than 0.25.0.\nfile_favor: how to handle conflicting file contents for the text driver.\nMERGE_FILE_FAVOR_NORMAL: if both sides of the merge have changes to a section,  make a note of the conflict in the index which git checkout will use to create  a merge file, which the user can then reference to resolve the conflicts. This is  the default.\nMERGE_FILE_FAVOR_OURS: if both sides of the merge have changes to a section,  use the version in the \"ours\" side of the merge in the index.\nMERGE_FILE_FAVOR_THEIRS: if both sides of the merge have changes to a section,  use the version in the \"theirs\" side of the merge in the index.\nMERGE_FILE_FAVOR_UNION: if both sides of the merge have changes to a section,  include each unique line from both sides in the file which is put into the index.\nfile_flags: guidelines for merging files.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.ProxyOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.ProxyOptions",
+    "category": "type",
+    "text": "LibGit2.ProxyOptions\n\nOptions for connecting through a proxy.\n\nMatches the git_proxy_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nproxytype: an enum for the type of proxy to use.  Defined in git_proxy_t.  The corresponding Julia enum is GIT_PROXY and has values:\nPROXY_NONE: do not attempt the connection through a proxy.\nPROXY_AUTO: attempt to figure out the proxy configuration from the git configuration.\nPROXY_SPECIFIED: connect using the URL given in the url field of this struct.\nDefault is to auto-detect the proxy type.\nurl: the URL of the proxy.\ncredential_cb: a pointer to a callback function which will be called if the remote requires authentication to connect.\ncertificate_cb: a pointer to a callback function which will be called if certificate verification fails. This lets the user decide whether or not to keep connecting. If the function returns 1, connecting will be allowed. If it returns 0, the connection will not be allowed. A negative value can be used to return errors.\npayload: the payload to be provided to the two callback functions.\n\nExamples\n\njulia> fo = LibGit2.FetchOptions(\n           proxy_opts = LibGit2.ProxyOptions(url = Cstring(\"https://my_proxy_url.com\")))\n\njulia> fetch(remote, \"master\", options=fo)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.PushOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.PushOptions",
+    "category": "type",
+    "text": "LibGit2.PushOptions\n\nMatches the git_push_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nparallelism: if a pack file must be created, this variable sets the number of worker  threads which will be spawned by the packbuilder. If 0, the packbuilder will auto-set  the number of threads to use. The default is 1.\ncallbacks: the callbacks (e.g. for authentication with the remote) to use for the push.\nproxy_opts: only relevant if the LibGit2 version is greater than or equal to 0.25.0.  Sets options for using a proxy to communicate with a remote. See ProxyOptions  for more information.\ncustom_headers: only relevant if the LibGit2 version is greater than or equal to 0.24.0.  Extra headers needed for the push operation.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.RebaseOperation",
+    "page": "LibGit2",
+    "title": "LibGit2.RebaseOperation",
+    "category": "type",
+    "text": "LibGit2.RebaseOperation\n\nDescribes a single instruction/operation to be performed during the rebase. Matches the git_rebase_operation struct.\n\nThe fields represent:\n\noptype: the type of rebase operation currently being performed. The options are:\nREBASE_OPERATION_PICK: cherry-pick the commit in question.\nREBASE_OPERATION_REWORD: cherry-pick the commit in question, but rewrite its message using the prompt.\nREBASE_OPERATION_EDIT: cherry-pick the commit in question, but allow the user to edit the commit\'s contents and its message.\nREBASE_OPERATION_SQUASH: squash the commit in question into the previous commit. The commit messages of the two commits will be merged.\nREBASE_OPERATION_FIXUP: squash the commit in question into the previous commit. Only the commit message of the previous commit will be used.\nREBASE_OPERATION_EXEC: do not cherry-pick a commit. Run a command and continue if the command exits successfully.\nid: the GitHash of the commit being worked on during this rebase step.\nexec: in case REBASE_OPERATION_EXEC is used, the command to run during this step (for instance, running the test suite after each commit).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.RebaseOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.RebaseOptions",
+    "category": "type",
+    "text": "LibGit2.RebaseOptions\n\nMatches the git_rebase_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nquiet: inform other git clients helping with/working on the rebase that the rebase should be done \"quietly\". Used for interoperability. The default is 1.\ninmemory: start an in-memory rebase. Callers working on the rebase can go through its steps and commit any changes, but cannot rewind HEAD or update the repository. The workdir will not be modified. Only present on libgit2 versions newer than or equal to 0.24.0.\nrewrite_notes_ref: name of the reference to notes to use to rewrite the commit notes as the rebase is finished.\nmerge_opts: merge options controlling how the trees will be merged at each rebase step.  Only present on libgit2 versions newer than or equal to 0.24.0.\ncheckout_opts: checkout options for writing files when initializing the rebase, stepping through it, and aborting it. See CheckoutOptions for more information.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.RemoteCallbacks",
+    "page": "LibGit2",
+    "title": "LibGit2.RemoteCallbacks",
+    "category": "type",
+    "text": "LibGit2.RemoteCallbacks\n\nCallback settings. Matches the git_remote_callbacks struct.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.SignatureStruct",
+    "page": "LibGit2",
+    "title": "LibGit2.SignatureStruct",
+    "category": "type",
+    "text": "LibGit2.SignatureStruct\n\nAn action signature (e.g. for committers, taggers, etc). Matches the git_signature struct.\n\nThe fields represent:\n\nname: The full name of the committer or author of the commit.\nemail: The email at which the committer/author can be contacted.\nwhen: a TimeStruct indicating when the commit was  authored/committed into the repository.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.StatusEntry",
+    "page": "LibGit2",
+    "title": "LibGit2.StatusEntry",
+    "category": "type",
+    "text": "LibGit2.StatusEntry\n\nProviding the differences between the file as it exists in HEAD and the index, and providing the differences between the index and the working directory. Matches the git_status_entry struct.\n\nThe fields represent:\n\nstatus: contains the status flags for the file, indicating if it is current, or has been changed in some way in the index or work tree.\nhead_to_index: a pointer to a DiffDelta which encapsulates the difference(s) between the file as it exists in HEAD and in the index.\nindex_to_workdir: a pointer to a DiffDelta which encapsulates the difference(s) between the file as it exists in the index and in the workdir.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.StatusOptions",
+    "page": "LibGit2",
+    "title": "LibGit2.StatusOptions",
+    "category": "type",
+    "text": "LibGit2.StatusOptions\n\nOptions to control how git_status_foreach_ext() will issue callbacks. Matches the git_status_opt_t struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nshow: a flag for which files to examine and in which order. The default is Consts.STATUS_SHOW_INDEX_AND_WORKDIR.\nflags: flags for controlling any callbacks used in a status call.\npathspec: an array of paths to use for path-matching. The behavior of the path-matching will vary depending on the values of show and flags.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.StrArrayStruct",
+    "page": "LibGit2",
+    "title": "LibGit2.StrArrayStruct",
+    "category": "type",
+    "text": "LibGit2.StrArrayStruct\n\nA LibGit2 representation of an array of strings. Matches the git_strarray struct.\n\nWhen fetching data from LibGit2, a typical usage would look like:\n\nsa_ref = Ref(StrArrayStruct())\n@check ccall(..., (Ptr{StrArrayStruct},), sa_ref)\nres = convert(Vector{String}, sa_ref[])\nfree(sa_ref)\n\nIn particular, note that LibGit2.free should be called afterward on the Ref object.\n\nConversely, when passing a vector of strings to LibGit2, it is generally simplest to rely on implicit conversion:\n\nstrs = String[...]\n@check ccall(..., (Ptr{StrArrayStruct},), strs)\n\nNote that no call to free is required as the data is allocated by Julia.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.TimeStruct",
+    "page": "LibGit2",
+    "title": "LibGit2.TimeStruct",
+    "category": "type",
+    "text": "LibGit2.TimeStruct\n\nTime in a signature. Matches the git_time struct.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.add!",
+    "page": "LibGit2",
+    "title": "LibGit2.add!",
+    "category": "function",
+    "text": "add!(repo::GitRepo, files::AbstractString...; flags::Cuint = Consts.INDEX_ADD_DEFAULT)\nadd!(idx::GitIndex, files::AbstractString...; flags::Cuint = Consts.INDEX_ADD_DEFAULT)\n\nAdd all the files with paths specified by files to the index idx (or the index of the repo). If the file already exists, the index entry will be updated. If the file does not exist already, it will be newly added into the index. files may contain glob patterns which will be expanded and any matching files will be added (unless INDEX_ADD_DISABLE_PATHSPEC_MATCH is set, see below). If a file has been ignored (in .gitignore or in the config), it will not be added, unless it is already being tracked in the index, in which case it will be updated. The keyword argument flags is a set of bit-flags which control the behavior with respect to ignored files:\n\nConsts.INDEX_ADD_DEFAULT - default, described above.\nConsts.INDEX_ADD_FORCE - disregard the existing ignore rules and force addition of the file to the index even if it is already ignored.\nConsts.INDEX_ADD_CHECK_PATHSPEC - cannot be used at the same time as INDEX_ADD_FORCE. Check that each file in files which exists on disk is not in the ignore list. If one of the files is ignored, the function will return EINVALIDSPEC.\nConsts.INDEX_ADD_DISABLE_PATHSPEC_MATCH - turn off glob matching, and only add files to the index which exactly match the paths specified in files.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.add_fetch!",
+    "page": "LibGit2",
+    "title": "LibGit2.add_fetch!",
+    "category": "function",
+    "text": "add_fetch!(repo::GitRepo, rmt::GitRemote, fetch_spec::String)\n\nAdd a fetch refspec for the specified rmt. This refspec will contain information about which branch(es) to fetch from.\n\nExamples\n\njulia> LibGit2.add_fetch!(repo, remote, \"upstream\");\n\njulia> LibGit2.fetch_refspecs(remote)\nString[\"+refs/heads/*:refs/remotes/upstream/*\"]\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.add_push!",
+    "page": "LibGit2",
+    "title": "LibGit2.add_push!",
+    "category": "function",
+    "text": "add_push!(repo::GitRepo, rmt::GitRemote, push_spec::String)\n\nAdd a push refspec for the specified rmt. This refspec will contain information about which branch(es) to push to.\n\nExamples\n\njulia> LibGit2.add_push!(repo, remote, \"refs/heads/master\");\n\njulia> remote = LibGit2.get(LibGit2.GitRemote, repo, branch);\n\njulia> LibGit2.push_refspecs(remote)\nString[\"refs/heads/master\"]\n\nnote: Note\nYou may need to close and reopen the GitRemote in question after updating its push refspecs in order for the change to take effect and for calls to push to work.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.addblob!",
+    "page": "LibGit2",
+    "title": "LibGit2.addblob!",
+    "category": "function",
+    "text": "LibGit2.addblob!(repo::GitRepo, path::AbstractString)\n\nRead the file at path and adds it to the object database of repo as a loose blob. Return the GitHash of the resulting blob.\n\nExamples\n\nhash_str = string(commit_oid)\nblob_file = joinpath(repo_path, \".git\", \"objects\", hash_str[1:2], hash_str[3:end])\nid = LibGit2.addblob!(repo, blob_file)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.author",
+    "page": "LibGit2",
+    "title": "LibGit2.author",
+    "category": "function",
+    "text": "author(c::GitCommit)\n\nReturn the Signature of the author of the commit c. The author is the person who made changes to the relevant file(s). See also committer.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.authors",
+    "page": "LibGit2",
+    "title": "LibGit2.authors",
+    "category": "function",
+    "text": "authors(repo::GitRepo) -> Vector{Signature}\n\nReturn all authors of commits to the repo repository.\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nrepo_file = open(joinpath(repo_path, test_file), \"a\")\n\nprintln(repo_file, commit_msg)\nflush(repo_file)\nLibGit2.add!(repo, test_file)\nsig = LibGit2.Signature(\"TEST\", \"TEST@TEST.COM\", round(time(), 0), 0)\ncommit_oid1 = LibGit2.commit(repo, \"commit1\"; author=sig, committer=sig)\nprintln(repo_file, randstring(10))\nflush(repo_file)\nLibGit2.add!(repo, test_file)\ncommit_oid2 = LibGit2.commit(repo, \"commit2\"; author=sig, committer=sig)\n\n# will be a Vector of [sig, sig]\nauths = LibGit2.authors(repo)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.branch",
+    "page": "LibGit2",
+    "title": "LibGit2.branch",
+    "category": "function",
+    "text": "branch(repo::GitRepo)\n\nEquivalent to git branch. Create a new branch from the current HEAD.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.branch!",
+    "page": "LibGit2",
+    "title": "LibGit2.branch!",
+    "category": "function",
+    "text": "branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=\"\"; kwargs...)\n\nCheckout a new git branch in the repo repository. commit is the GitHash, in string form, which will be the start of the new branch. If commit is an empty string, the current HEAD will be used.\n\nThe keyword arguments are:\n\ntrack::AbstractString=\"\": the name of the remote branch this new branch should track, if any. If empty (the default), no remote branch will be tracked.\nforce::Bool=false: if true, branch creation will be forced.\nset_head::Bool=true: if true, after the branch creation finishes the branch head will be set as the HEAD of repo.\n\nEquivalent to git checkout [-b|-B] <branch_name> [<commit>] [--track <track>].\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nLibGit2.branch!(repo, \"new_branch\", set_head=false)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.checkout!",
+    "page": "LibGit2",
+    "title": "LibGit2.checkout!",
+    "category": "function",
+    "text": "checkout!(repo::GitRepo, commit::AbstractString=\"\"; force::Bool=true)\n\nEquivalent to git checkout [-f] --detach <commit>. Checkout the git commit commit (a GitHash in string form) in repo. If force is true, force the checkout and discard any current changes. Note that this detaches the current HEAD.\n\nExamples\n\nrepo = LibGit2.init(repo_path)\nopen(joinpath(LibGit2.path(repo), \"file1\"), \"w\") do f\n    write(f, \"111\n\")\nend\nLibGit2.add!(repo, \"file1\")\ncommit_oid = LibGit2.commit(repo, \"add file1\")\nopen(joinpath(LibGit2.path(repo), \"file1\"), \"w\") do f\n    write(f, \"112\n\")\nend\n# would fail without the force=true\n# since there are modifications to the file\nLibGit2.checkout!(repo, string(commit_oid), force=true)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.clone",
+    "page": "LibGit2",
+    "title": "LibGit2.clone",
+    "category": "function",
+    "text": "clone(repo_url::AbstractString, repo_path::AbstractString, clone_opts::CloneOptions)\n\nClone the remote repository at repo_url (which can be a remote URL or a path on the local filesystem) to repo_path (which must be a path on the local filesystem). Options for the clone, such as whether to perform a bare clone or not, are set by CloneOptions.\n\nExamples\n\nrepo_url = \"https://github.com/JuliaLang/Example.jl\"\nrepo = LibGit2.clone(repo_url, \"/home/me/projects/Example\")\n\n\n\n\n\nclone(repo_url::AbstractString, repo_path::AbstractString; kwargs...)\n\nClone a remote repository located at repo_url to the local filesystem location repo_path.\n\nThe keyword arguments are:\n\nbranch::AbstractString=\"\": which branch of the remote to clone, if not the default repository branch (usually master).\nisbare::Bool=false: if true, clone the remote as a bare repository, which will make repo_path itself the git directory instead of repo_path/.git. This means that a working tree cannot be checked out. Plays the role of the git CLI argument --bare.\nremote_cb::Ptr{Cvoid}=C_NULL: a callback which will be used to create the remote before it is cloned. If C_NULL (the default), no attempt will be made to create the remote - it will be assumed to already exist.\ncredentials::Creds=nothing: provides credentials and/or settings when authenticating against a private repository.\ncallbacks::Callbacks=Callbacks(): user provided callbacks and payloads.\n\nEquivalent to git clone [-b <branch>] [--bare] <repo_url> <repo_path>.\n\nExamples\n\nrepo_url = \"https://github.com/JuliaLang/Example.jl\"\nrepo1 = LibGit2.clone(repo_url, \"test_path\")\nrepo2 = LibGit2.clone(repo_url, \"test_path\", isbare=true)\njulia_url = \"https://github.com/JuliaLang/julia\"\njulia_repo = LibGit2.clone(julia_url, \"julia_path\", branch=\"release-0.6\")\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.commit",
+    "page": "LibGit2",
+    "title": "LibGit2.commit",
+    "category": "function",
+    "text": "commit(repo::GitRepo, msg::AbstractString; kwargs...) -> GitHash\n\nWrapper around git_commit_create. Create a commit in the repository repo. msg is the commit message. Return the OID of the new commit.\n\nThe keyword arguments are:\n\nrefname::AbstractString=Consts.HEAD_FILE: if not NULL, the name of the reference to update to point to the new commit. For example, \"HEAD\" will update the HEAD of the current branch. If the reference does not yet exist, it will be created.\nauthor::Signature = Signature(repo) is a Signature containing information about the person who authored the commit.\ncommitter::Signature = Signature(repo) is a Signature containing information about the person who commited the commit to the repository. Not necessarily the same as author, for instance if author emailed a patch to committer who committed it.\ntree_id::GitHash = GitHash() is a git tree to use to create the commit, showing its ancestry and relationship with any other history. tree must belong to repo.\nparent_ids::Vector{GitHash}=GitHash[] is a list of commits by GitHash to use as parent commits for the new one, and may be empty. A commit might have multiple parents if it is a merge commit, for example.\n\n\n\n\n\nLibGit2.commit(rb::GitRebase, sig::GitSignature)\n\nCommit the current patch to the rebase rb, using sig as the committer. Is silent if the commit has already been applied.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.committer",
+    "page": "LibGit2",
+    "title": "LibGit2.committer",
+    "category": "function",
+    "text": "committer(c::GitCommit)\n\nReturn the Signature of the committer of the commit c. The committer is the person who committed the changes originally authored by the author, but need not be the same as the author, for example, if the author emailed a patch to a committer who committed it.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#Base.count-Tuple{Function,LibGit2.GitRevWalker}",
+    "page": "LibGit2",
+    "title": "Base.count",
+    "category": "method",
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository\'s history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.counthunks",
+    "page": "LibGit2",
+    "title": "LibGit2.counthunks",
+    "category": "function",
+    "text": "counthunks(blame::GitBlame)\n\nReturn the number of distinct \"hunks\" with a file. A hunk may contain multiple lines. A hunk is usually a piece of a file that was added/changed/removed together, for example, a function added to a source file or an inner loop that was optimized out of that function later.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.create_branch",
+    "page": "LibGit2",
+    "title": "LibGit2.create_branch",
+    "category": "function",
+    "text": "LibGit2.create_branch(repo::GitRepo, bname::AbstractString, commit_obj::GitCommit; force::Bool=false)\n\nCreate a new branch in the repository repo with name bname, which points to commit commit_obj (which has to be part of repo). If force is true, overwrite an existing branch named bname if it exists. If force is false and a branch already exists named bname, this function will throw an error.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.credentials_callback",
+    "page": "LibGit2",
+    "title": "LibGit2.credentials_callback",
+    "category": "function",
+    "text": "credential_callback(...) -> Cint\n\nA LibGit2 credential callback function which provides different credential acquisition functionality w.r.t. a connection protocol. The payload_ptr is required to contain a LibGit2.CredentialPayload object which will keep track of state and settings.\n\nThe allowed_types contains a bitmask of LibGit2.Consts.GIT_CREDTYPE values specifying which authentication methods should be attempted.\n\nCredential authentication is done in the following order (if supported):\n\nSSH agent\nSSH private/public key pair\nUsername/password plain text\n\nIf a user is presented with a credential prompt they can abort the prompt by typing ^D (pressing the control key together with the d key).\n\nNote: Due to the specifics of the libgit2 authentication procedure, when authentication fails, this function is called again without any indication whether authentication was successful or not. To avoid an infinite loop from repeatedly using the same faulty credentials, we will keep track of state using the payload.\n\nFor addition details see the LibGit2 guide on authenticating against a server.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.credentials_cb",
+    "page": "LibGit2",
+    "title": "LibGit2.credentials_cb",
+    "category": "function",
+    "text": "C function pointer for credentials_callback\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.default_signature",
+    "page": "LibGit2",
+    "title": "LibGit2.default_signature",
+    "category": "function",
+    "text": "Return signature object. Free it after use.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.delete_branch",
+    "page": "LibGit2",
+    "title": "LibGit2.delete_branch",
+    "category": "function",
+    "text": "LibGit2.delete_branch(branch::GitReference)\n\nDelete the branch pointed to by branch.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.diff_files",
+    "page": "LibGit2",
+    "title": "LibGit2.diff_files",
+    "category": "function",
+    "text": "diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...) -> Vector{AbstractString}\n\nShow which files have changed in the git repository repo between branches branch1 and branch2.\n\nThe keyword argument is:\n\nfilter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED])), and it sets options for the diff. The default is to show files added, modified, or deleted.\n\nReturn only the names of the files which have changed, not their contents.\n\nExamples\n\nLibGit2.branch!(repo, \"branch/a\")\nLibGit2.branch!(repo, \"branch/b\")\n# add a file to repo\nopen(joinpath(LibGit2.path(repo),\"file\"),\"w\") do f\n    write(f, \"hello repo\n\")\nend\nLibGit2.add!(repo, \"file\")\nLibGit2.commit(repo, \"add file\")\n# returns [\"file\"]\nfilt = Set([LibGit2.Consts.DELTA_ADDED])\nfiles = LibGit2.diff_files(repo, \"branch/a\", \"branch/b\", filter=filt)\n# returns [] because existing files weren\'t modified\nfilt = Set([LibGit2.Consts.DELTA_MODIFIED])\nfiles = LibGit2.diff_files(repo, \"branch/a\", \"branch/b\", filter=filt)\n\nEquivalent to git diff --name-only --diff-filter=<filter> <branch1> <branch2>.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.entryid",
+    "page": "LibGit2",
+    "title": "LibGit2.entryid",
+    "category": "function",
+    "text": "entryid(te::GitTreeEntry)\n\nReturn the GitHash of the object to which te refers.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.entrytype",
+    "page": "LibGit2",
+    "title": "LibGit2.entrytype",
+    "category": "function",
+    "text": "entrytype(te::GitTreeEntry)\n\nReturn the type of the object to which te refers. The result will be one of the types which objtype returns, e.g. a GitTree or GitBlob.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.fetch",
+    "page": "LibGit2",
+    "title": "LibGit2.fetch",
+    "category": "function",
+    "text": "fetch(rmt::GitRemote, refspecs; options::FetchOptions=FetchOptions(), msg=\"\")\n\nFetch from the specified rmt remote git repository, using refspecs to determine which remote branch(es) to fetch. The keyword arguments are:\n\noptions: determines the options for the fetch, e.g. whether to prune afterwards. See FetchOptions for more information.\nmsg: a message to insert into the reflogs.\n\n\n\n\n\nfetch(repo::GitRepo; kwargs...)\n\nFetches updates from an upstream of the repository repo.\n\nThe keyword arguments are:\n\nremote::AbstractString=\"origin\": which remote, specified by name, of repo to fetch from. If this is empty, the URL will be used to construct an anonymous remote.\nremoteurl::AbstractString=\"\": the URL of remote. If not specified, will be assumed based on the given name of remote.\nrefspecs=AbstractString[]: determines properties of the fetch.\ncredentials=nothing: provides credentials and/or settings when authenticating against a private remote.\ncallbacks=Callbacks(): user provided callbacks and payloads.\n\nEquivalent to git fetch [<remoteurl>|<repo>] [<refspecs>].\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.fetchheads",
+    "page": "LibGit2",
+    "title": "LibGit2.fetchheads",
+    "category": "function",
+    "text": "fetchheads(repo::GitRepo) -> Vector{FetchHead}\n\nReturn the list of all the fetch heads for repo, each represented as a FetchHead, including their names, URLs, and merge statuses.\n\nExamples\n\njulia> fetch_heads = LibGit2.fetchheads(repo);\n\njulia> fetch_heads[1].name\n\"refs/heads/master\"\n\njulia> fetch_heads[1].ismerge\ntrue\n\njulia> fetch_heads[2].name\n\"refs/heads/test_branch\"\n\njulia> fetch_heads[2].ismerge\nfalse\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.fetch_refspecs",
+    "page": "LibGit2",
+    "title": "LibGit2.fetch_refspecs",
+    "category": "function",
+    "text": "fetch_refspecs(rmt::GitRemote) -> Vector{String}\n\nGet the fetch refspecs for the specified rmt. These refspecs contain information about which branch(es) to fetch from.\n\nExamples\n\njulia> remote = LibGit2.get(LibGit2.GitRemote, repo, \"upstream\");\n\njulia> LibGit2.add_fetch!(repo, remote, \"upstream\");\n\njulia> LibGit2.fetch_refspecs(remote)\nString[\"+refs/heads/*:refs/remotes/upstream/*\"]\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.fetchhead_foreach_cb",
+    "page": "LibGit2",
+    "title": "LibGit2.fetchhead_foreach_cb",
+    "category": "function",
+    "text": "C function pointer for fetchhead_foreach_callback\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.merge_base",
+    "page": "LibGit2",
+    "title": "LibGit2.merge_base",
+    "category": "function",
+    "text": "merge_base(repo::GitRepo, one::AbstractString, two::AbstractString) -> GitHash\n\nFind a merge base (a common ancestor) between the commits one and two. one and two may both be in string form. Return the GitHash of the merge base.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.merge!-Tuple{GitRepo}",
+    "page": "LibGit2",
+    "title": "LibGit2.merge!",
+    "category": "method",
+    "text": "merge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Return true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\nnote: Note\nIf you specify a branch, this must be done in reference format, since the string will be turned into a GitReference. For example, if you wanted to merge branch branch_a, you would call merge!(repo, branch=\"refs/heads/branch_a\").\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.merge!-Tuple{GitRepo,Array{LibGit2.GitAnnotated,1}}",
+    "page": "LibGit2",
+    "title": "LibGit2.merge!",
+    "category": "method",
+    "text": "merge!(repo::GitRepo, anns::Vector{GitAnnotated}; kwargs...) -> Bool\n\nMerge changes from the annotated commits (captured as GitAnnotated objects) anns into the HEAD of the repository repo. The keyword arguments are:\n\nmerge_opts::MergeOptions = MergeOptions(): options for how to perform the merge, including whether fastforwarding is allowed. See MergeOptions for more information.\ncheckout_opts::CheckoutOptions = CheckoutOptions(): options for how to perform the checkout. See CheckoutOptions for more information.\n\nanns may refer to remote or local branch heads. Return true if the merge is successful, otherwise return false (for instance, if no merge is possible because the branches have no common ancestor).\n\nExamples\n\nupst_ann = LibGit2.GitAnnotated(repo, \"branch/a\")\n\n# merge the branch in\nLibGit2.merge!(repo, [upst_ann])\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.merge!-Tuple{GitRepo,Array{LibGit2.GitAnnotated,1},Bool}",
+    "page": "LibGit2",
+    "title": "LibGit2.merge!",
+    "category": "method",
+    "text": "merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool; kwargs...) -> Bool\n\nMerge changes from the annotated commits (captured as GitAnnotated objects) anns into the HEAD of the repository repo. If fastforward is true, only a fastforward merge is allowed. In this case, if conflicts occur, the merge will fail. Otherwise, if fastforward is false, the merge may produce a conflict file which the user will need to resolve.\n\nThe keyword arguments are:\n\nmerge_opts::MergeOptions = MergeOptions(): options for how to perform the merge, including whether fastforwarding is allowed. See MergeOptions for more information.\ncheckout_opts::CheckoutOptions = CheckoutOptions(): options for how to perform the checkout. See CheckoutOptions for more information.\n\nanns may refer to remote or local branch heads. Return true if the merge is successful, otherwise return false (for instance, if no merge is possible because the branches have no common ancestor).\n\nExamples\n\nupst_ann_1 = LibGit2.GitAnnotated(repo, \"branch/a\")\n\n# merge the branch in, fastforward\nLibGit2.merge!(repo, [upst_ann_1], true)\n\n# merge conflicts!\nupst_ann_2 = LibGit2.GitAnnotated(repo, \"branch/b\")\n# merge the branch in, try to fastforward\nLibGit2.merge!(repo, [upst_ann_2], true) # will return false\nLibGit2.merge!(repo, [upst_ann_2], false) # will return true\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.ffmerge!",
+    "page": "LibGit2",
+    "title": "LibGit2.ffmerge!",
+    "category": "function",
+    "text": "ffmerge!(repo::GitRepo, ann::GitAnnotated)\n\nFastforward merge changes into current HEAD. This is only possible if the commit referred to by ann is descended from the current HEAD (e.g. if pulling changes from a remote branch which is simply ahead of the local branch tip).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.fullname",
+    "page": "LibGit2",
+    "title": "LibGit2.fullname",
+    "category": "function",
+    "text": "LibGit2.fullname(ref::GitReference)\n\nReturn the name of the reference pointed to by the symbolic reference ref. If ref is not a symbolic reference, return an empty string.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.features",
+    "page": "LibGit2",
+    "title": "LibGit2.features",
+    "category": "function",
+    "text": "features()\n\nReturn a list of git features the current version of libgit2 supports, such as threading or using HTTPS or SSH.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.filename",
+    "page": "LibGit2",
+    "title": "LibGit2.filename",
+    "category": "function",
+    "text": "filename(te::GitTreeEntry)\n\nReturn the filename of the object on disk to which te refers.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.filemode",
+    "page": "LibGit2",
+    "title": "LibGit2.filemode",
+    "category": "function",
+    "text": "filemode(te::GitTreeEntry) -> Cint\n\nReturn the UNIX filemode of the object on disk to which te refers as an integer.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.gitdir",
+    "page": "LibGit2",
+    "title": "LibGit2.gitdir",
+    "category": "function",
+    "text": "LibGit2.gitdir(repo::GitRepo)\n\nReturn the location of the \"git\" files of repo:\n\nfor normal repositories, this is the location of the .git folder.\nfor bare repositories, this is the location of the repository itself.\n\nSee also workdir, path.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.git_url",
+    "page": "LibGit2",
+    "title": "LibGit2.git_url",
+    "category": "function",
+    "text": "LibGit2.git_url(; kwargs...) -> String\n\nCreate a string based upon the URL components provided. When the scheme keyword is not provided the URL produced will use the alternative scp-like syntax.\n\nKeywords\n\nscheme::AbstractString=\"\": the URL scheme which identifies the protocol to be used. For HTTP use \"http\", SSH use \"ssh\", etc. When scheme is not provided the output format will be \"ssh\" but using the scp-like syntax.\nusername::AbstractString=\"\": the username to use in the output if provided.\npassword::AbstractString=\"\": the password to use in the output if provided.\nhost::AbstractString=\"\": the hostname to use in the output. A hostname is required to be specified.\nport::Union{AbstractString,Integer}=\"\": the port number to use in the output if provided. Cannot be specified when using the scp-like syntax.\npath::AbstractString=\"\": the path to use in the output if provided.\n\nExamples\n\njulia> LibGit2.git_url(username=\"git\", host=\"github.com\", path=\"JuliaLang/julia.git\")\n\"git@github.com:JuliaLang/julia.git\"\n\njulia> LibGit2.git_url(scheme=\"https\", host=\"github.com\", path=\"/JuliaLang/julia.git\")\n\"https://github.com/JuliaLang/julia.git\"\n\njulia> LibGit2.git_url(scheme=\"ssh\", username=\"git\", host=\"github.com\", port=2222, path=\"JuliaLang/julia.git\")\n\"ssh://git@github.com:2222/JuliaLang/julia.git\"\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.@githash_str",
+    "page": "LibGit2",
+    "title": "LibGit2.@githash_str",
+    "category": "macro",
+    "text": "@githash_str -> AbstractGitHash\n\nConstruct a git hash object from the given string, returning a GitShortHash if the string is shorter than 40 hexadecimal digits, otherwise a GitHash.\n\nExamples\n\njulia> LibGit2.githash\"d114feb74ce633\"\nGitShortHash(\"d114feb74ce633\")\n\njulia> LibGit2.githash\"d114feb74ce63307afe878a5228ad014e0289a85\"\nGitHash(\"d114feb74ce63307afe878a5228ad014e0289a85\")\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.head",
+    "page": "LibGit2",
+    "title": "LibGit2.head",
+    "category": "function",
+    "text": "LibGit2.head(repo::GitRepo) -> GitReference\n\nReturn a GitReference to the current HEAD of repo.\n\n\n\n\n\nhead(pkg::AbstractString) -> String\n\nReturn current HEAD GitHash of the pkg repo as a string.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.head!",
+    "page": "LibGit2",
+    "title": "LibGit2.head!",
+    "category": "function",
+    "text": "LibGit2.head!(repo::GitRepo, ref::GitReference) -> GitReference\n\nSet the HEAD of repo to the object pointed to by ref.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.head_oid",
+    "page": "LibGit2",
+    "title": "LibGit2.head_oid",
+    "category": "function",
+    "text": "LibGit2.head_oid(repo::GitRepo) -> GitHash\n\nLookup the object id of the current HEAD of git repository repo.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.headname",
+    "page": "LibGit2",
+    "title": "LibGit2.headname",
+    "category": "function",
+    "text": "LibGit2.headname(repo::GitRepo)\n\nLookup the name of the current HEAD of git repository repo. If repo is currently detached, return the name of the HEAD it\'s detached from.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.init",
+    "page": "LibGit2",
+    "title": "LibGit2.init",
+    "category": "function",
+    "text": "LibGit2.init(path::AbstractString, bare::Bool=false) -> GitRepo\n\nOpen a new git repository at path. If bare is false, the working tree will be created in path/.git. If bare is true, no working directory will be created.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.is_ancestor_of",
+    "page": "LibGit2",
+    "title": "LibGit2.is_ancestor_of",
+    "category": "function",
+    "text": "is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo) -> Bool\n\nReturn true if a, a GitHash in string form, is an ancestor of b, a GitHash in string form.\n\nExamples\n\njulia> repo = LibGit2.GitRepo(repo_path);\n\njulia> LibGit2.add!(repo, test_file1);\n\njulia> commit_oid1 = LibGit2.commit(repo, \"commit1\");\n\njulia> LibGit2.add!(repo, test_file2);\n\njulia> commit_oid2 = LibGit2.commit(repo, \"commit2\");\n\njulia> LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)\ntrue\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.isbinary",
+    "page": "LibGit2",
+    "title": "LibGit2.isbinary",
+    "category": "function",
+    "text": "isbinary(blob::GitBlob) -> Bool\n\nUse a heuristic to guess if a file is binary: searching for NULL bytes and looking for a reasonable ratio of printable to non-printable characters among the first 8000 bytes.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.iscommit",
+    "page": "LibGit2",
+    "title": "LibGit2.iscommit",
+    "category": "function",
+    "text": "iscommit(id::AbstractString, repo::GitRepo) -> Bool\n\nCheck if commit id (which is a GitHash in string form) is in the repository.\n\nExamples\n\njulia> repo = LibGit2.GitRepo(repo_path);\n\njulia> LibGit2.add!(repo, test_file);\n\njulia> commit_oid = LibGit2.commit(repo, \"add test_file\");\n\njulia> LibGit2.iscommit(string(commit_oid), repo)\ntrue\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.isdiff",
+    "page": "LibGit2",
+    "title": "LibGit2.isdiff",
+    "category": "function",
+    "text": "LibGit2.isdiff(repo::GitRepo, treeish::AbstractString, pathspecs::AbstractString=\"\"; cached::Bool=false)\n\nChecks if there are any differences between the tree specified by treeish and the tracked files in the working tree (if cached=false) or the index (if cached=true). pathspecs are the specifications for options for the diff.\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nLibGit2.isdiff(repo, \"HEAD\") # should be false\nopen(joinpath(repo_path, new_file), \"a\") do f\n    println(f, \"here\'s my cool new file\")\nend\nLibGit2.isdiff(repo, \"HEAD\") # now true\n\nEquivalent to git diff-index <treeish> [-- <pathspecs>].\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.isdirty",
+    "page": "LibGit2",
+    "title": "LibGit2.isdirty",
+    "category": "function",
+    "text": "LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=\"\"; cached::Bool=false) -> Bool\n\nCheck if there have been any changes to tracked files in the working tree (if cached=false) or the index (if cached=true). pathspecs are the specifications for options for the diff.\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nLibGit2.isdirty(repo) # should be false\nopen(joinpath(repo_path, new_file), \"a\") do f\n    println(f, \"here\'s my cool new file\")\nend\nLibGit2.isdirty(repo) # now true\nLibGit2.isdirty(repo, new_file) # now true\n\nEquivalent to git diff-index HEAD [-- <pathspecs>].\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.isorphan",
+    "page": "LibGit2",
+    "title": "LibGit2.isorphan",
+    "category": "function",
+    "text": "LibGit2.isorphan(repo::GitRepo)\n\nCheck if the current branch is an \"orphan\" branch, i.e. has no commits. The first commit to this branch will have no parents.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.isset",
+    "page": "LibGit2",
+    "title": "LibGit2.isset",
+    "category": "function",
+    "text": "isset(val::Integer, flag::Integer)\n\nTest whether the bits of val indexed by flag are set (1) or unset (0).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.iszero",
+    "page": "LibGit2",
+    "title": "LibGit2.iszero",
+    "category": "function",
+    "text": "iszero(id::GitHash) -> Bool\n\nDetermine whether all hexadecimal digits of the given GitHash are zero.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.lookup_branch",
+    "page": "LibGit2",
+    "title": "LibGit2.lookup_branch",
+    "category": "function",
+    "text": "lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false) -> Union{GitReference, Nothing}\n\nDetermine if the branch specified by branch_name exists in the repository repo. If remote is true, repo is assumed to be a remote git repository. Otherwise, it is part of the local filesystem.\n\nReturn either a GitReference to the requested branch if it exists, or nothing if not.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#Base.map-Tuple{Function,LibGit2.GitRevWalker}",
+    "page": "LibGit2",
+    "title": "Base.map",
+    "category": "method",
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository\'s history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.mirror_callback",
+    "page": "LibGit2",
+    "title": "LibGit2.mirror_callback",
+    "category": "function",
+    "text": "Mirror callback function\n\nFunction sets +refs/*:refs/* refspecs and mirror flag for remote reference.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.mirror_cb",
+    "page": "LibGit2",
+    "title": "LibGit2.mirror_cb",
+    "category": "function",
+    "text": "C function pointer for mirror_callback\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.message",
+    "page": "LibGit2",
+    "title": "LibGit2.message",
+    "category": "function",
+    "text": "message(c::GitCommit, raw::Bool=false)\n\nReturn the commit message describing the changes made in commit c. If raw is false, return a slightly \"cleaned up\" message (which has any leading newlines removed). If raw is true, the message is not stripped of any such newlines.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.merge_analysis",
+    "page": "LibGit2",
+    "title": "LibGit2.merge_analysis",
+    "category": "function",
+    "text": "merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated}) -> analysis, preference\n\nRun analysis on the branches pointed to by the annotated branch tips anns and determine under what circumstances they can be merged. For instance, if anns[1] is simply an ancestor of ann[2], then merge_analysis will report that a fast-forward merge is possible.\n\nReturn two outputs, analysis and preference. analysis has several possible values:     * MERGE_ANALYSIS_NONE: it is not possible to merge the elements of anns.     * MERGE_ANALYSIS_NORMAL: a regular merge, when HEAD and the commits that the       user wishes to merge have all diverged from a common ancestor. In this case the       changes have to be resolved and conflicts may occur.     * MERGE_ANALYSIS_UP_TO_DATE: all the input commits the user wishes to merge can       be reached from HEAD, so no merge needs to be performed.     * MERGE_ANALYSIS_FASTFORWARD: the input commit is a descendant of HEAD and so no       merge needs to be performed - instead, the user can simply checkout the       input commit(s).     * MERGE_ANALYSIS_UNBORN: the HEAD of the repository refers to a commit which does not       exist. It is not possible to merge, but it may be possible to checkout the input       commits. preference also has several possible values:     * MERGE_PREFERENCE_NONE: the user has no preference.     * MERGE_PREFERENCE_NO_FASTFORWARD: do not allow any fast-forward merges.     * MERGE_PREFERENCE_FASTFORWARD_ONLY: allow only fast-forward merges and no       other type (which may introduce conflicts). preference can be controlled through the repository or global git configuration.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.name",
+    "page": "LibGit2",
+    "title": "LibGit2.name",
+    "category": "function",
+    "text": "LibGit2.name(ref::GitReference)\n\nReturn the full name of ref.\n\n\n\n\n\nname(rmt::GitRemote)\n\nGet the name of a remote repository, for instance \"origin\". If the remote is anonymous (see GitRemoteAnon) the name will be an empty string \"\".\n\nExamples\n\njulia> repo_url = \"https://github.com/JuliaLang/Example.jl\";\n\njulia> repo = LibGit2.clone(cache_repo, \"test_directory\");\n\njulia> remote = LibGit2.GitRemote(repo, \"origin\", repo_url);\n\njulia> name(remote)\n\"origin\"\n\n\n\n\n\nLibGit2.name(tag::GitTag)\n\nThe name of tag (e.g. \"v0.5\").\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.need_update",
+    "page": "LibGit2",
+    "title": "LibGit2.need_update",
+    "category": "function",
+    "text": "need_update(repo::GitRepo)\n\nEquivalent to git update-index. Return true if repo needs updating.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.objtype",
+    "page": "LibGit2",
+    "title": "LibGit2.objtype",
+    "category": "function",
+    "text": "objtype(obj_type::Consts.OBJECT)\n\nReturn the type corresponding to the enum value.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.path",
+    "page": "LibGit2",
+    "title": "LibGit2.path",
+    "category": "function",
+    "text": "LibGit2.path(repo::GitRepo)\n\nReturn the base file path of the repository repo.\n\nfor normal repositories, this will typically be the parent directory of the \".git\" directory (note: this may be different than the working directory, see workdir for more details).\nfor bare repositories, this is the location of the \"git\" files.\n\nSee also gitdir, workdir.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.peel",
+    "page": "LibGit2",
+    "title": "LibGit2.peel",
+    "category": "function",
+    "text": "peel([T,] ref::GitReference)\n\nRecursively peel ref until an object of type T is obtained. If no T is provided, then ref will be peeled until an object other than a GitTag is obtained.\n\nA GitTag will be peeled to the object it references.\nA GitCommit will be peeled to a GitTree.\n\nnote: Note\nOnly annotated tags can be peeled to GitTag objects. Lightweight tags (the default) are references under refs/tags/ which point directly to GitCommit objects.\n\n\n\n\n\npeel([T,] obj::GitObject)\n\nRecursively peel obj until an object of type T is obtained. If no T is provided, then obj will be peeled until the type changes.\n\nA GitTag will be peeled to the object it references.\nA GitCommit will be peeled to a GitTree.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.posixpath",
+    "page": "LibGit2",
+    "title": "LibGit2.posixpath",
+    "category": "function",
+    "text": "LibGit2.posixpath(path)\n\nStandardise the path string path to use POSIX separators.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.push",
+    "page": "LibGit2",
+    "title": "LibGit2.push",
+    "category": "function",
+    "text": "push(rmt::GitRemote, refspecs; force::Bool=false, options::PushOptions=PushOptions())\n\nPush to the specified rmt remote git repository, using refspecs to determine which remote branch(es) to push to. The keyword arguments are:\n\nforce: if true, a force-push will occur, disregarding conflicts.\noptions: determines the options for the push, e.g. which proxy headers to use. See PushOptions for more information.\n\nnote: Note\nYou can add information about the push refspecs in two other ways: by setting an option in the repository\'s GitConfig (with push.default as the key) or by calling add_push!. Otherwise you will need to explicitly specify a push refspec in the call to push for it to have any effect, like so: LibGit2.push(repo, refspecs=[\"refs/heads/master\"]).\n\n\n\n\n\npush(repo::GitRepo; kwargs...)\n\nPushes updates to an upstream of repo.\n\nThe keyword arguments are:\n\nremote::AbstractString=\"origin\": the name of the upstream remote to push to.\nremoteurl::AbstractString=\"\": the URL of remote.\nrefspecs=AbstractString[]: determines properties of the push.\nforce::Bool=false: determines if the push will be a force push,  overwriting the remote branch.\ncredentials=nothing: provides credentials and/or settings when authenticating against  a private remote.\ncallbacks=Callbacks(): user provided callbacks and payloads.\n\nEquivalent to git push [<remoteurl>|<repo>] [<refspecs>].\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.push!-Tuple{LibGit2.GitRevWalker,LibGit2.GitHash}",
+    "page": "LibGit2",
+    "title": "LibGit2.push!",
+    "category": "method",
+    "text": "LibGit2.push!(w::GitRevWalker, cid::GitHash)\n\nStart the GitRevWalker walker at commit cid. This function can be used to apply a function to all commits since a certain year, by passing the first commit of that year as cid and then passing the resulting w to map.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.push_head!",
+    "page": "LibGit2",
+    "title": "LibGit2.push_head!",
+    "category": "function",
+    "text": "LibGit2.push_head!(w::GitRevWalker)\n\nPush the HEAD commit and its ancestors onto the GitRevWalker w. This ensures that HEAD and all its ancestor commits will be encountered during the walk.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.push_refspecs",
+    "page": "LibGit2",
+    "title": "LibGit2.push_refspecs",
+    "category": "function",
+    "text": "push_refspecs(rmt::GitRemote) -> Vector{String}\n\nGet the push refspecs for the specified rmt. These refspecs contain information about which branch(es) to push to.\n\nExamples\n\njulia> remote = LibGit2.get(LibGit2.GitRemote, repo, \"upstream\");\n\njulia> LibGit2.add_push!(repo, remote, \"refs/heads/master\");\n\njulia> close(remote);\n\njulia> remote = LibGit2.get(LibGit2.GitRemote, repo, \"upstream\");\n\njulia> LibGit2.push_refspecs(remote)\nString[\"refs/heads/master\"]\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.raw",
+    "page": "LibGit2",
+    "title": "LibGit2.raw",
+    "category": "function",
+    "text": "raw(id::GitHash) -> Vector{UInt8}\n\nObtain the raw bytes of the GitHash as a vector of length 20.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.read_tree!",
+    "page": "LibGit2",
+    "title": "LibGit2.read_tree!",
+    "category": "function",
+    "text": "LibGit2.read_tree!(idx::GitIndex, tree::GitTree)\nLibGit2.read_tree!(idx::GitIndex, treehash::AbstractGitHash)\n\nRead the tree tree (or the tree pointed to by treehash in the repository owned by idx) into the index idx. The current index contents will be replaced.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.rebase!",
+    "page": "LibGit2",
+    "title": "LibGit2.rebase!",
+    "category": "function",
+    "text": "LibGit2.rebase!(repo::GitRepo, upstream::AbstractString=\"\", newbase::AbstractString=\"\")\n\nAttempt an automatic merge rebase of the current branch, from upstream if provided, or otherwise from the upstream tracking branch. newbase is the branch to rebase onto. By default this is upstream.\n\nIf any conflicts arise which cannot be automatically resolved, the rebase will abort, leaving the repository and working tree in its original state, and the function will throw a GitError. This is roughly equivalent to the following command line statement:\n\ngit rebase --merge [<upstream>]\nif [ -d \".git/rebase-merge\" ]; then\n    git rebase --abort\nfi\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.ref_list",
+    "page": "LibGit2",
+    "title": "LibGit2.ref_list",
+    "category": "function",
+    "text": "LibGit2.ref_list(repo::GitRepo) -> Vector{String}\n\nGet a list of all reference names in the repo repository.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.reftype",
+    "page": "LibGit2",
+    "title": "LibGit2.reftype",
+    "category": "function",
+    "text": "LibGit2.reftype(ref::GitReference) -> Cint\n\nReturn a Cint corresponding to the type of ref:\n\n0 if the reference is invalid\n1 if the reference is an object id\n2 if the reference is symbolic\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.remotes",
+    "page": "LibGit2",
+    "title": "LibGit2.remotes",
+    "category": "function",
+    "text": "LibGit2.remotes(repo::GitRepo)\n\nReturn a vector of the names of the remotes of repo.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.remove!",
+    "page": "LibGit2",
+    "title": "LibGit2.remove!",
+    "category": "function",
+    "text": "remove!(repo::GitRepo, files::AbstractString...)\nremove!(idx::GitIndex, files::AbstractString...)\n\nRemove all the files with paths specified by files in the index idx (or the index of the repo).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.reset",
+    "page": "LibGit2",
+    "title": "LibGit2.reset",
+    "category": "function",
+    "text": "reset(val::Integer, flag::Integer)\n\nUnset the bits of val indexed by flag, returning them to 0.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.reset!",
+    "page": "LibGit2",
+    "title": "LibGit2.reset!",
+    "category": "function",
+    "text": "reset!(payload, [config]) -> CredentialPayload\n\nReset the payload state back to the initial values so that it can be used again within the credential callback. If a config is provided the configuration will also be updated.\n\n\n\n\n\nUpdates some entries, determined by the pathspecs, in the index from the target commit tree.\n\n\n\n\n\nSets the current head to the specified commit oid and optionally resets the index and working tree to match.\n\n\n\n\n\ngit reset [<committish>] [–] <pathspecs>... \n\n\n\n\n\nreset!(repo::GitRepo, id::GitHash, mode::Cint=Consts.RESET_MIXED)\n\nReset the repository repo to its state at id, using one of three modes set by mode:\n\nConsts.RESET_SOFT - move HEAD to id.\nConsts.RESET_MIXED - default, move HEAD to id and reset the index to id.\nConsts.RESET_HARD - move HEAD to id, reset the index to id, and discard all working changes.\n\nExamples\n\n# fetch changes\nLibGit2.fetch(repo)\nisfile(joinpath(repo_path, our_file)) # will be false\n\n# fastforward merge the changes\nLibGit2.merge!(repo, fastforward=true)\n\n# because there was not any file locally, but there is\n# a file remotely, we need to reset the branch\nhead_oid = LibGit2.head_oid(repo)\nnew_head = LibGit2.reset!(repo, head_oid, LibGit2.Consts.RESET_HARD)\n\nIn this example, the remote which is being fetched from does have a file called our_file in its index, which is why we must reset.\n\nEquivalent to git reset [--soft | --mixed | --hard] <id>.\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nhead_oid = LibGit2.head_oid(repo)\nopen(joinpath(repo_path, \"file1\"), \"w\") do f\n    write(f, \"111\n\")\nend\nLibGit2.add!(repo, \"file1\")\nmode = LibGit2.Consts.RESET_HARD\n# will discard the changes to file1\n# and unstage it\nnew_head = LibGit2.reset!(repo, head_oid, mode)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.restore",
+    "page": "LibGit2",
+    "title": "LibGit2.restore",
+    "category": "function",
+    "text": "restore(s::State, repo::GitRepo)\n\nReturn a repository repo to a previous State s, for example the HEAD of a branch before a merge attempt. s can be generated using the snapshot function.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.revcount",
+    "page": "LibGit2",
+    "title": "LibGit2.revcount",
+    "category": "function",
+    "text": "LibGit2.revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)\n\nList the number of revisions between commit1 and commit2 (committish OIDs in string form). Since commit1 and commit2 may be on different branches, revcount performs a \"left-right\" revision list (and count), returning a tuple of Ints - the number of left and right commits, respectively. A left (or right) commit refers to which side of a symmetric difference in a tree the commit is reachable from.\n\nEquivalent to git rev-list --left-right --count <commit1> <commit2>.\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nrepo_file = open(joinpath(repo_path, test_file), \"a\")\nprintln(repo_file, \"hello world\")\nflush(repo_file)\nLibGit2.add!(repo, test_file)\ncommit_oid1 = LibGit2.commit(repo, \"commit 1\")\nprintln(repo_file, \"hello world again\")\nflush(repo_file)\nLibGit2.add!(repo, test_file)\ncommit_oid2 = LibGit2.commit(repo, \"commit 2\")\nLibGit2.revcount(repo, string(commit_oid1), string(commit_oid2))\n\nThis will return (-1, 0).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.set_remote_url",
+    "page": "LibGit2",
+    "title": "LibGit2.set_remote_url",
+    "category": "function",
+    "text": "set_remote_url(repo::GitRepo, remote_name, url)\nset_remote_url(repo::String, remote_name, url)\n\nSet both the fetch and push url for remote_name for the GitRepo or the git repository located at path. Typically git repos use \"origin\" as the remote name.\n\nExamples\n\nrepo_path = joinpath(tempdir(), \"Example\")\nrepo = LibGit2.init(repo_path)\nLibGit2.set_remote_url(repo, \"upstream\", \"https://github.com/JuliaLang/Example.jl\")\nLibGit2.set_remote_url(repo_path, \"upstream2\", \"https://github.com/JuliaLang/Example2.jl\")\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.shortname",
+    "page": "LibGit2",
+    "title": "LibGit2.shortname",
+    "category": "function",
+    "text": "LibGit2.shortname(ref::GitReference)\n\nReturn a shortened version of the name of ref that\'s \"human-readable\".\n\njulia> repo = LibGit2.GitRepo(path_to_repo);\n\njulia> branch_ref = LibGit2.head(repo);\n\njulia> LibGit2.name(branch_ref)\n\"refs/heads/master\"\n\njulia> LibGit2.shortname(branch_ref)\n\"master\"\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.snapshot",
+    "page": "LibGit2",
+    "title": "LibGit2.snapshot",
+    "category": "function",
+    "text": "snapshot(repo::GitRepo) -> State\n\nTake a snapshot of the current state of the repository repo, storing the current HEAD, index, and any uncommitted work. The output State can be used later during a call to restore to return the repository to the snapshotted state.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.status",
+    "page": "LibGit2",
+    "title": "LibGit2.status",
+    "category": "function",
+    "text": "LibGit2.status(repo::GitRepo, path::String) -> Union{Cuint, Cvoid}\n\nLookup the status of the file at path in the git repository repo. For instance, this can be used to check if the file at path has been modified and needs to be staged and committed.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.stage",
+    "page": "LibGit2",
+    "title": "LibGit2.stage",
+    "category": "function",
+    "text": "stage(ie::IndexEntry) -> Cint\n\nGet the stage number of ie. The stage number 0 represents the current state of the working tree, but other numbers can be used in the case of a merge conflict. In such a case, the various stage numbers on an IndexEntry describe which side(s) of the conflict the current state of the file belongs to. Stage 0 is the state before the attempted merge, stage 1 is the changes which have been made locally, stages 2 and larger are for changes from other branches (for instance, in the case of a multi-branch \"octopus\" merge, stages 2, 3, and 4 might be used).\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.tag_create",
+    "page": "LibGit2",
+    "title": "LibGit2.tag_create",
+    "category": "function",
+    "text": "LibGit2.tag_create(repo::GitRepo, tag::AbstractString, commit; kwargs...)\n\nCreate a new git tag tag (e.g. \"v0.5\") in the repository repo, at the commit commit.\n\nThe keyword arguments are:\n\nmsg::AbstractString=\"\": the message for the tag.\nforce::Bool=false: if true, existing references will be overwritten.\nsig::Signature=Signature(repo): the tagger\'s signature.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.tag_delete",
+    "page": "LibGit2",
+    "title": "LibGit2.tag_delete",
+    "category": "function",
+    "text": "LibGit2.tag_delete(repo::GitRepo, tag::AbstractString)\n\nRemove the git tag tag from the repository repo.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.tag_list",
+    "page": "LibGit2",
+    "title": "LibGit2.tag_list",
+    "category": "function",
+    "text": "LibGit2.tag_list(repo::GitRepo) -> Vector{String}\n\nGet a list of all tags in the git repository repo.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.target",
+    "page": "LibGit2",
+    "title": "LibGit2.target",
+    "category": "function",
+    "text": "LibGit2.target(tag::GitTag)\n\nThe GitHash of the target object of tag.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.toggle",
+    "page": "LibGit2",
+    "title": "LibGit2.toggle",
+    "category": "function",
+    "text": "toggle(val::Integer, flag::Integer)\n\nFlip the bits of val indexed by flag, so that if a bit is 0 it will be 1 after the toggle, and vice-versa.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.transact",
+    "page": "LibGit2",
+    "title": "LibGit2.transact",
+    "category": "function",
+    "text": "transact(f::Function, repo::GitRepo)\n\nApply function f to the git repository repo, taking a snapshot before applying f. If an error occurs within f, repo will be returned to its snapshot state using restore. The error which occurred will be rethrown, but the state of repo will not be corrupted.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.treewalk",
+    "page": "LibGit2",
+    "title": "LibGit2.treewalk",
+    "category": "function",
+    "text": "treewalk(f, tree::GitTree, post::Bool=false)\n\nTraverse the entries in tree and its subtrees in post or pre order. Preorder means beginning at the root and then traversing the leftmost subtree (and recursively on down through that subtree\'s leftmost subtrees) and moving right through the subtrees. Postorder means beginning at the bottom of the leftmost subtree, traversing upwards through it, then traversing the next right subtree (again beginning at the bottom) and finally visiting the tree root last of all.\n\nThe function parameter f should have following signature:\n\n(String, GitTreeEntry) -> Cint\n\nA negative value returned from f stops the tree walk. A positive value means that the entry will be skipped if post is false.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.upstream",
+    "page": "LibGit2",
+    "title": "LibGit2.upstream",
+    "category": "function",
+    "text": "upstream(ref::GitReference) -> Union{GitReference, Nothing}\n\nDetermine if the branch containing ref has a specified upstream branch.\n\nReturn either a GitReference to the upstream branch if it exists, or nothing if the requested branch does not have an upstream counterpart.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.update!",
+    "page": "LibGit2",
+    "title": "LibGit2.update!",
+    "category": "function",
+    "text": "update!(repo::GitRepo, files::AbstractString...)\nupdate!(idx::GitIndex, files::AbstractString...)\n\nUpdate all the files with paths specified by files in the index idx (or the index of the repo). Match the state of each file in the index with the current state on disk, removing it if it has been removed on disk, or updating its entry in the object database.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.url",
+    "page": "LibGit2",
+    "title": "LibGit2.url",
+    "category": "function",
+    "text": "url(rmt::GitRemote)\n\nGet the fetch URL of a remote git repository.\n\nExamples\n\njulia> repo_url = \"https://github.com/JuliaLang/Example.jl\";\n\njulia> repo = LibGit2.init(mktempdir());\n\njulia> remote = LibGit2.GitRemote(repo, \"origin\", repo_url);\n\njulia> LibGit2.url(remote)\n\"https://github.com/JuliaLang/Example.jl\"\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.version",
+    "page": "LibGit2",
+    "title": "LibGit2.version",
+    "category": "function",
+    "text": "version() -> VersionNumber\n\nReturn the version of libgit2 in use, as a VersionNumber.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.with",
+    "page": "LibGit2",
+    "title": "LibGit2.with",
+    "category": "function",
+    "text": "with(f::Function, obj)\n\nResource management helper function. Applies f to obj, making sure to call close on obj after f successfully returns or throws an error. Ensures that allocated git resources are finalized as soon as they are no longer needed.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.with_warn",
+    "page": "LibGit2",
+    "title": "LibGit2.with_warn",
+    "category": "function",
+    "text": "with_warn(f::Function, ::Type{T}, args...)\n\nResource management helper function. Apply f to args, first constructing an instance of type T from args. Makes sure to call close on the resulting object after f successfully returns or throws an error. Ensures that allocated git resources are finalized as soon as they are no longer needed. If an error is thrown by f, a warning is shown containing the error.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.workdir",
+    "page": "LibGit2",
+    "title": "LibGit2.workdir",
+    "category": "function",
+    "text": "LibGit2.workdir(repo::GitRepo)\n\nReturn the location of the working directory of repo. This will throw an error for bare repositories.\n\nnote: Note\nThis will typically be the parent directory of gitdir(repo), but can be different in some cases: e.g. if either the core.worktree configuration variable or the GIT_WORK_TREE environment variable is set.\n\nSee also gitdir, path.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.GitObject-Tuple{LibGit2.GitTreeEntry}",
+    "page": "LibGit2",
+    "title": "LibGit2.GitObject",
+    "category": "method",
+    "text": "(::Type{T})(te::GitTreeEntry) where T<:GitObject\n\nGet the git object to which te refers and return it as its actual type (the type entrytype would show), for instance a GitBlob or GitTag.\n\nExamples\n\ntree = LibGit2.GitTree(repo, \"HEAD^{tree}\")\ntree_entry = tree[1]\nblob = LibGit2.GitBlob(tree_entry)\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.UserPasswordCredential",
+    "page": "LibGit2",
+    "title": "LibGit2.UserPasswordCredential",
+    "category": "type",
+    "text": "Credential that support only user and password parameters\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.SSHCredential",
+    "page": "LibGit2",
+    "title": "LibGit2.SSHCredential",
+    "category": "type",
+    "text": "SSH credential type\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.isfilled",
+    "page": "LibGit2",
+    "title": "LibGit2.isfilled",
+    "category": "function",
+    "text": "isfilled(cred::AbstractCredential) -> Bool\n\nVerifies that a credential is ready for use in authentication.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.CachedCredentials",
+    "page": "LibGit2",
+    "title": "LibGit2.CachedCredentials",
+    "category": "type",
+    "text": "Caches credential information for re-use\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.CredentialPayload",
+    "page": "LibGit2",
+    "title": "LibGit2.CredentialPayload",
+    "category": "type",
+    "text": "LibGit2.CredentialPayload\n\nRetains the state between multiple calls to the credential callback for the same URL. A CredentialPayload instance is expected to be reset! whenever it will be used with a different URL.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.approve",
+    "page": "LibGit2",
+    "title": "LibGit2.approve",
+    "category": "function",
+    "text": "approve(payload::CredentialPayload; shred::Bool=true) -> Nothing\n\nStore the payload credential for re-use in a future authentication. Should only be called when authentication was successful.\n\nThe shred keyword controls whether sensitive information in the payload credential field should be destroyed. Should only be set to false during testing.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#LibGit2.reject",
+    "page": "LibGit2",
+    "title": "LibGit2.reject",
+    "category": "function",
+    "text": "reject(payload::CredentialPayload; shred::Bool=true) -> Nothing\n\nDiscard the payload credential from begin re-used in future authentication. Should only be called when authentication was unsuccessful.\n\nThe shred keyword controls whether sensitive information in the payload credential field should be destroyed. Should only be set to false during testing.\n\n\n\n\n\n"
+},
+
+{
+    "location": "stdlib/LibGit2/#Functionality-1",
+    "page": "LibGit2",
+    "title": "Functionality",
+    "category": "section",
+    "text": "Some of this documentation assumes some prior knowledge of the libgit2 API. For more information on some of the objects and methods referenced here, consult the upstream libgit2 API reference.LibGit2.Buffer\nLibGit2.CheckoutOptions\nLibGit2.CloneOptions\nLibGit2.DescribeOptions\nLibGit2.DescribeFormatOptions\nLibGit2.DiffDelta\nLibGit2.DiffFile\nLibGit2.DiffOptionsStruct\nLibGit2.FetchHead\nLibGit2.FetchOptions\nLibGit2.GitAnnotated\nLibGit2.GitBlame\nLibGit2.GitBlob\nLibGit2.GitCommit\nLibGit2.GitHash\nLibGit2.GitObject\nLibGit2.GitRemote\nLibGit2.GitRemoteAnon\nLibGit2.GitRepo\nLibGit2.GitRepoExt\nLibGit2.GitRevWalker\nLibGit2.GitShortHash\nLibGit2.GitSignature\nLibGit2.GitStatus\nLibGit2.GitTag\nLibGit2.GitTree\nLibGit2.IndexEntry\nLibGit2.IndexTime\nLibGit2.BlameOptions\nLibGit2.MergeOptions\nLibGit2.ProxyOptions\nLibGit2.PushOptions\nLibGit2.RebaseOperation\nLibGit2.RebaseOptions\nLibGit2.RemoteCallbacks\nLibGit2.SignatureStruct\nLibGit2.StatusEntry\nLibGit2.StatusOptions\nLibGit2.StrArrayStruct\nLibGit2.TimeStruct\nLibGit2.add!\nLibGit2.add_fetch!\nLibGit2.add_push!\nLibGit2.addblob!\nLibGit2.author\nLibGit2.authors\nLibGit2.branch\nLibGit2.branch!\nLibGit2.checkout!\nLibGit2.clone\nLibGit2.commit\nLibGit2.committer\nLibGit2.count(::Function, ::LibGit2.GitRevWalker; ::LibGit2.GitHash, ::Cint, ::Bool)\nLibGit2.counthunks\nLibGit2.create_branch\nLibGit2.credentials_callback\nLibGit2.credentials_cb\nLibGit2.default_signature\nLibGit2.delete_branch\nLibGit2.diff_files\nLibGit2.entryid\nLibGit2.entrytype\nLibGit2.fetch\nLibGit2.fetchheads\nLibGit2.fetch_refspecs\nLibGit2.fetchhead_foreach_cb\nLibGit2.merge_base\nLibGit2.merge!(::LibGit2.GitRepo; ::Any...)\nLibGit2.merge!(::LibGit2.GitRepo, ::Vector{LibGit2.GitAnnotated}; ::LibGit2.MergeOptions, ::LibGit2.CheckoutOptions)\nLibGit2.merge!(::LibGit2.GitRepo, ::Vector{LibGit2.GitAnnotated}, ::Bool; ::LibGit2.MergeOptions, ::LibGit2.CheckoutOptions)\nLibGit2.ffmerge!\nLibGit2.fullname\nLibGit2.features\nLibGit2.filename\nLibGit2.filemode\nLibGit2.gitdir\nLibGit2.git_url\nLibGit2.@githash_str\nLibGit2.head\nLibGit2.head!\nLibGit2.head_oid\nLibGit2.headname\nLibGit2.init\nLibGit2.is_ancestor_of\nLibGit2.isbinary\nLibGit2.iscommit\nLibGit2.isdiff\nLibGit2.isdirty\nLibGit2.isorphan\nLibGit2.isset\nLibGit2.iszero\nLibGit2.lookup_branch\nLibGit2.map(::Function, ::LibGit2.GitRevWalker; ::LibGit2.GitHash, ::AbstractString, ::Cint, ::Bool)\nLibGit2.mirror_callback\nLibGit2.mirror_cb\nLibGit2.message\nLibGit2.merge_analysis\nLibGit2.name\nLibGit2.need_update\nLibGit2.objtype\nLibGit2.path\nLibGit2.peel\nLibGit2.posixpath\nLibGit2.push\nLibGit2.push!(::LibGit2.GitRevWalker, ::LibGit2.GitHash)\nLibGit2.push_head!\nLibGit2.push_refspecs\nLibGit2.raw\nLibGit2.read_tree!\nLibGit2.rebase!\nLibGit2.ref_list\nLibGit2.reftype\nLibGit2.remotes\nLibGit2.remove!\nLibGit2.reset\nLibGit2.reset!\nLibGit2.restore\nLibGit2.revcount\nLibGit2.set_remote_url\nLibGit2.shortname\nLibGit2.snapshot\nLibGit2.status\nLibGit2.stage\nLibGit2.tag_create\nLibGit2.tag_delete\nLibGit2.tag_list\nLibGit2.target\nLibGit2.toggle\nLibGit2.transact\nLibGit2.treewalk\nLibGit2.upstream\nLibGit2.update!\nLibGit2.url\nLibGit2.version\nLibGit2.with\nLibGit2.with_warn\nLibGit2.workdir\nLibGit2.GitObject(::LibGit2.GitTreeEntry)\nLibGit2.UserPasswordCredential\nLibGit2.SSHCredential\nLibGit2.isfilled\nLibGit2.CachedCredentials\nLibGit2.CredentialPayload\nLibGit2.approve\nLibGit2.rejectDocTestSetup = nothing"
+},
+
+{
     "location": "stdlib/Libdl/#",
     "page": "Dynamic Linker",
     "title": "Dynamic Linker",
@@ -18349,7 +19533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
