@@ -672,11 +672,11 @@ _oidd_nextind(a, i) = reinterpret(Int, ccall(:jl_eqtable_nextind, Csize_t, (Any,
 
 start(d::IdDict) = _oidd_nextind(d.ht, 0)
 done(d::IdDict, i) = (i == -1)
-next(d::IdDict{K,V}, i) where {K, V} = (Pair{K,V}(d.ht[i+1], d.ht[i+2]), _oidd_nextind(d.ht, i+2))
+next(d::IdDict{K, V}, i) where {K, V} = (Pair{K, V}(d.ht[i + 1]::K, d.ht[i + 2]::V), _oidd_nextind(d.ht, i + 2))
 
 length(d::IdDict) = d.count
 
-copy(d::IdDict) = IdDict(d)
+copy(d::IdDict) = typeof(d)(d)
 
 get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
 
@@ -689,14 +689,14 @@ mutable struct IdSet{T} <: AbstractSet{T}
     dict::IdDict{T,Nothing}
 
     IdSet{T}() where {T} = new(IdDict{T,Nothing}())
-    IdSet{T}(s::IdSet{T}) where {T} = new(IdDict{T,Nothing}(s.dict))
+    IdSet{T}(s::IdSet{T}) where {T} = new(copy(s.dict))
 end
 
 IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
 IdSet() = IdSet{Any}()
 
-copy(s::IdSet{T}) where {T} = IdSet{T}(s)
-copymutable(s::IdSet{T}) where {T} = IdSet{T}(s)
+copymutable(s::IdSet) = typeof(s)(s)
+copy(s::IdSet) = typeof(s)(s)
 
 isempty(s::IdSet) = isempty(s.dict)
 length(s::IdSet)  = length(s.dict)

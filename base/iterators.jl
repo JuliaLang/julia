@@ -226,10 +226,10 @@ length(v::Pairs)  = length(v.itr)
 axes(v::Pairs) = axes(v.itr)
 size(v::Pairs)    = size(v.itr)
 @inline start(v::Pairs) = start(v.itr)
-@propagate_inbounds function next(v::Pairs, state)
+@propagate_inbounds function next(v::Pairs{K, V}, state) where {K, V}
     indx, n = next(v.itr, state)
     item = v.data[indx]
-    return (Pair(indx, item), n)
+    return (Pair{K, V}(indx, item), n)
 end
 @inline done(v::Pairs, state) = done(v.itr, state)
 
