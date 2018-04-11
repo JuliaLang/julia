@@ -875,6 +875,7 @@ void jl_get_builtin_hooks(void)
     jl_methoderror_type = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type = (jl_datatype_t*)core("LoadError");
     jl_initerror_type = (jl_datatype_t*)core("InitError");
+    jl_lineinfonode_type = (jl_datatype_t*)core("LineInfoNode");
 }
 
 void jl_get_builtins(void)
