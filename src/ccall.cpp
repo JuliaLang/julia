@@ -1126,8 +1126,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
 
     CallInst *inst = ctx.builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
-    if (isString)
+    if (isString) {
         f->addFnAttr(Attribute::AlwaysInline);
+        inst->setAttributes(f->getAttributes());
+    }
 
     JL_GC_POP();
 

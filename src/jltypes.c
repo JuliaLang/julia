@@ -111,6 +111,7 @@ jl_datatype_t *jl_methoderror_type;
 jl_datatype_t *jl_loaderror_type;
 jl_datatype_t *jl_initerror_type;
 jl_datatype_t *jl_undefvarerror_type;
+jl_datatype_t *jl_lineinfonode_type;
 jl_unionall_t *jl_ref_type;
 jl_unionall_t *jl_pointer_type;
 jl_typename_t *jl_pointer_typename;
