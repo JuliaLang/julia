@@ -97,7 +97,6 @@ function Base.show(io::IO, code::IRCode)
         maxused = maximum(used)
         maxsize = length(string(maxused))
     end
-
     for idx in eachindex(code.stmts)
         if !isassigned(code.stmts, idx)
             # This is invalid, but do something useful rather
