@@ -1508,7 +1508,7 @@ end
 @deprecate floor(x::Number, digits) floor(x; digits=digits)
 @deprecate ceil(x::Number, digits) ceil(x; digits=digits)
 @deprecate round(x::Number, digits) round(x; digits=digits)
-@deprecate signif(x::Number, digits) round(x; sigdigits=digits, base = base)
+@deprecate signif(x::Number, digits) round(x; sigdigits=digits)
 
 @deprecate trunc(x::Number, digits, base) trunc(x; digits=digits, base = base)
 @deprecate floor(x::Number, digits, base) floor(x; digits=digits, base = base)
