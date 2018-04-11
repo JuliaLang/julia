@@ -17,7 +17,7 @@ include("compiler/ssair/passes.jl")
 include("compiler/ssair/inlining2.jl")
 include("compiler/ssair/verify.jl")
 include("compiler/ssair/legacy.jl")
-@isdefined(Base) && include("compiler/ssair/show.jl")
+#@isdefined(Base) && include("compiler/ssair/show.jl")
 
 function normalize_expr(stmt::Expr)
     if stmt.head === :gotoifnot
@@ -159,14 +159,20 @@ end
 
 function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     ir = just_construct_ssa(ci, copy(ci.code), nargs, linetable)
+    #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     #@timeit "verify 1" verify_ir(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, linetable, sv)
     #@timeit "verify 2" verify_ir(ir)
     @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
+    ir = compact!(ir)
+    #@Base.show ("before_sroa", ir)
     @timeit "SROA" ir = getfield_elim_pass!(ir, domtree)
-    @timeit "compact 2" ir = compact!(ir)
+    #@Base.show ir.new_nodes
+    #@Base.show ("after_sroa", ir)
+    ir = adce_pass!(ir)
+    #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
     #@Base.show ir
