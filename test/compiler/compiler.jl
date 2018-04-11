@@ -514,9 +514,21 @@ end
 @test h18679() === nothing
 
 
-# issue #5575
-f5575() = zeros(Type[Float64][1], 1)
+# issue #5575: inference with abstract types on a reasonably complex method tree
+zeros5575(::Type{T}, dims::Tuple{Vararg{Any,N}}) where {T,N} = Array{T,N}(dims)
+zeros5575(dims::Tuple) = zeros5575(Float64, dims)
+zeros5575(::Type{T}, dims...) where {T} = zeros5575(T, dims)
+zeros5575(a::AbstractArray) = zeros5575(a, Float64)
+zeros5575(a::AbstractArray, ::Type{T}) where {T} = zeros5575(a, T, size(a))
+zeros5575(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} = zeros5575(T, dims)
+zeros5575(a::AbstractArray, ::Type{T}, dims...) where {T} = zeros5575(T, dims)
+zeros5575(dims...) = zeros5575(dims)
+f5575() = zeros5575(Type[Float64][1], 1)
 @test Base.return_types(f5575, ())[1] == Vector
+
+g5575() = zeros(Type[Float64][1], 1)
+@test_broken Base.return_types(g5575, ())[1] == Vector # This should be fixed by removing deprecations
+
 
 # make sure Tuple{unknown} handles the possibility that `unknown` is a Vararg
 function maybe_vararg_tuple_1()
