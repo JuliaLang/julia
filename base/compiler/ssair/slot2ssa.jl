@@ -91,14 +91,13 @@ function new_to_regular(@nospecialize(stmt))
         return SSAValue(stmt.id)
     end
     urs = userefs(stmt)
-    urs === () && return stmt
     for op in urs
         val = op[]
         if isa(val, NewSSAValue)
             op[] = SSAValue(val.id)
         end
     end
-    urs[]
+    return urs[]
 end
 
 function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecialize(stmt::Union{SlotNumber, TypedSlot}), @nospecialize(ssa))
@@ -157,7 +156,6 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
         return stmt
     end
     urs = userefs(stmt)
-    urs === () && return stmt
     for op in urs
         val = op[]
         if isa(val, Union{SlotNumber, TypedSlot}) && cond(val)
@@ -170,7 +168,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
             op[] = x
         end
     end
-    urs[]
+    return urs[]
 end
 
 function fixup_uses!(ir::IRCode, ci::CodeInfo, code, uses::Vector{Int}, slot, @nospecialize(ssa))
@@ -231,11 +229,11 @@ function idf(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
     pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
     sort!(pq, by=x->x[2])
     phiblocks = Int[]
-    processed = IdSet{Int}()
+    processed = BitSet()
     while !isempty(pq)
         node, level = pop!(pq)
         worklist = Int[]
-        visited = IdSet{Int}()
+        visited = BitSet()
         push!(worklist, node)
         while !isempty(worklist)
             active = pop!(worklist)
@@ -312,7 +310,7 @@ end
     RPO traversal and in particular, any use of an SSA value must come after (by linear
     order) its definition.
 """
-function domsort_ssa!(ir, domtree)
+function domsort_ssa!(ir::IRCode, domtree::DomTree)
     # First compute the new order of basic blocks
     result_order = Int[]
     stack = Int[]
@@ -324,43 +322,44 @@ function domsort_ssa!(ir, domtree)
         cs = domtree.nodes[node].children
         terminator = ir.stmts[ir.cfg.blocks[node].stmts.last]
         iscondbr = isa(terminator, GotoIfNot)
-        old_node = node
-        if length(cs) >= 1
-            # Adding the nodes in reverse sorted order attempts to retain
-            # the original source order of the nodes as much as possible.
-            # This is not required for correctness, but is easier on the humans
-            if (old_node + 1) in cs
-                # Schedule the fall through node first,
-                # so we can retain the fall through
-                append!(stack, reverse(sort(filter(x->x != old_node + 1, cs))))
-                node = node + 1
+        let old_node = node + 1
+            if length(cs) >= 1
+                # Adding the nodes in reverse sorted order attempts to retain
+                # the original source order of the nodes as much as possible.
+                # This is not required for correctness, but is easier on the humans
+                if old_node in cs
+                    # Schedule the fall through node first,
+                    # so we can retain the fall through
+                    append!(stack, reverse(sort(filter(x -> (x != old_node), cs))))
+                    node = node + 1
+                else
+                    append!(stack, reverse(sort(cs)))
+                    node = pop!(stack)
+                end
             else
-                append!(stack, reverse(sort(cs)))
-                node = pop!(stack)
+                if isempty(stack)
+                    node = -1
+                else
+                    node = pop!(stack)
+                end
             end
-        else
-            if isempty(stack)
-                node = -1
-            else
-                node = pop!(stack)
-            end
-        end
-        if node != old_node + 1 && !isa(terminator, Union{GotoNode, ReturnNode})
-            if isa(terminator, GotoIfNot)
-                # Need to break the critical edge
-                ncritbreaks += 1
-                push!(result_order, 0)
-            else
-                nnewfallthroughs += 1
+            if node != old_node && !isa(terminator, Union{GotoNode, ReturnNode})
+                if isa(terminator, GotoIfNot)
+                    # Need to break the critical edge
+                    ncritbreaks += 1
+                    push!(result_order, 0)
+                else
+                    nnewfallthroughs += 1
+                end
             end
         end
     end
     bb_rename = IdDict{Int,Int}(i=>x for (x, i) in pairs(result_order) if i !== 0)
     new_bbs = Vector{BasicBlock}(undef, length(result_order))
     nstmts = sum(length(ir.cfg.blocks[i].stmts) for i in result_order if i !== 0)
-    result_stmts = Vector{Any}(undef, nstmts+ncritbreaks+nnewfallthroughs)
+    result_stmts = Vector{Any}(undef, nstmts + ncritbreaks + nnewfallthroughs)
     result_types = Any[Any for i = 1:length(result_stmts)]
-    result_ltable = Int[0 for i = 1:length(result_stmts)]
+    result_ltable = fill(0, length(result_stmts))
     inst_rename = Vector{Any}(undef, length(ir.stmts))
     for i = 1:length(ir.new_nodes)
         push!(inst_rename, SSAValue(nstmts + i + ncritbreaks + nnewfallthroughs))
@@ -414,21 +413,25 @@ function domsort_ssa!(ir, domtree)
             end
         end
         bb_start_off += length(inst_range)
-        new_preds = Int[rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds if haskey(bb_rename, i)]
-        new_succs = Int[rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs if haskey(bb_rename, i)]
+        local new_preds, new_succs
+        let bb = bb, bb_rename = bb_rename, result_order = result_order
+            new_preds = Int[rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds if haskey(bb_rename, i)]
+            new_succs = Int[rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs if haskey(bb_rename, i)]
+        end
         new_bbs[new_bb] = BasicBlock(inst_range, new_preds, new_succs)
     end
     result_stmts = Any[renumber_ssa!(result_stmts[i], inst_rename, true) for i in 1:length(result_stmts)]
     cfg = CFG(new_bbs, Int[first(bb.stmts) for bb in new_bbs[2:end]])
-    new_new_nodes = NewNode[(inst_rename[pos].id, reverse_affinity, typ,
-        renumber_ssa!(isa(node, PhiNode) ?
-        rename_phinode_edges(node, 0, result_order, bb_rename) : node,
-        inst_rename, true), lno) for (pos, reverse_affinity, typ, node, lno) in ir.new_nodes]
+    new_new_nodes = NewNode[let (pos, reverse_affinity, typ, node, lno) = ir.new_nodes[i]
+            isa(node, PhiNode) && (node = rename_phinode_edges(node, 0, result_order, bb_rename))
+            node = renumber_ssa!(node, inst_rename, true)
+            (inst_rename[pos].id, reverse_affinity, typ, node, lno)
+        end for i in 1:length(ir.new_nodes)]
     new_ir = IRCode(ir, result_stmts, result_types, result_ltable, cfg, new_new_nodes)
-    new_ir
+    return new_ir
 end
 
-function compute_live_ins(cfg, defuse)
+function compute_live_ins(cfg::CFG, defuse)
     # We remove from `uses` any block where all uses are dominated
     # by a def. This prevents insertion of dead phi nodes at the top
     # of such a block if that block happens to be in a loop
@@ -451,7 +454,7 @@ function compute_live_ins(cfg, defuse)
         end
     end
     # To obtain live ins from bb_uses, recursively add predecessors
-    extra_liveins = IdSet{Int}()
+    extra_liveins = BitSet()
     worklist = Int[]
     for bb in bb_uses
         append!(worklist, filter(p->p != 0 && !(p in bb_defs), cfg.blocks[bb].preds))
@@ -552,9 +555,9 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             SSAValue(-1)
         end for x in 1:length(ci.slotnames)
     ]
-    worklist = Any[(1, 0, initial_incoming_vals)]
-    visited = IdSet{Int}()
-    type_refine_phi = IdSet{Int}()
+    worklist = Tuple{Int, Int, Vector{Any}}[(1, 0, initial_incoming_vals)]
+    visited = BitSet()
+    type_refine_phi = BitSet()
     @timeit "SSA Rename" while !isempty(worklist)
         (item, pred, incoming_vals) = pop!(worklist)
         # Rename existing phi nodes first, because their uses occur on the edge
@@ -670,7 +673,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         end
     end
     # Delete any instruction in unreachable blocks (except for terminators)
-    for bb in setdiff(IdSet{Int}(1:length(cfg.blocks)), visited)
+    for bb in setdiff(BitSet(1:length(cfg.blocks)), visited)
         for idx in cfg.blocks[bb].stmts
             if isa(code[idx], Union{GotoNode, GotoIfNot, ReturnNode})
                 code[idx] = ReturnNode()
@@ -769,5 +772,5 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         end for i in 1:length(new_nodes)]
     ir = IRCode(ir, new_code, types, ir.lines, ir.cfg, new_nodes)
     @timeit "domsort" ir = domsort_ssa!(ir, domtree)
-    ir
+    return ir
 end
