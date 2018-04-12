@@ -143,8 +143,6 @@ function pointer_from_objref(@nospecialize(x))
     ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
 end
 
-eltype(::Type{Ptr{T}}) where {T} = T
-
 ## limited pointer arithmetic & comparison ##
 
 ==(x::Ptr, y::Ptr) = UInt(x) == UInt(y)
