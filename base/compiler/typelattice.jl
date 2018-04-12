@@ -9,8 +9,76 @@
 struct Const
     val
     actual::Bool  # if true, we obtained `val` by actually calling a @pure function
-    Const(@nospecialize(v)) = new(v, false)
+    function Const(@nospecialize(v))
+        m = typeof(v).name.module
+        if m === Core || m === Core.Intrinsics
+            cached = get(Const_cache, v, nothing)
+            cached isa Const && return cached
+        end
+        return new(v, false)
+    end
     Const(@nospecialize(v), a::Bool) = new(v, a)
+end
+
+# maintain an allocation cache of objects we guess to be very common
+const Const_cache = IdDict()
+@noinline function push_Const_cache(@nospecialize(x))
+    Const_cache[x] = Const(x)
+    Const_cache[typeof(x)] = Const(typeof(x))
+end
+@noinline function push_Const_cache_num(@nospecialize(T))
+    min = typemin(T)
+    max = typemax(T)
+    min < -256 && (min = T(-256))
+    max > 256 && (max = T(256))
+    for x = min:max
+        Const_cache[x] = Const(x)
+    end
+    Const_cache[T] = Const(T)
+end
+push_Const_cache(UnionAll)
+push_Const_cache(Union)
+push_Const_cache(DataType)
+push_Const_cache(Union{})
+push_Const_cache(typeof(Union{}))
+push_Const_cache(Type)
+push_Const_cache(Type{Union{}})
+push_Const_cache(Module)
+push_Const_cache(Core)
+push_Const_cache(Array)
+push_Const_cache(Vector)
+push_Const_cache(Vector{Any})
+push_Const_cache("")
+for n = ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), Core.Intrinsics, false, false)
+    push_Const_cache(getfield(Intrinsics, n))
+end
+push_Const_cache(())
+push_Const_cache(nothing)
+push_Const_cache((nothing,))
+push_Const_cache(true)
+push_Const_cache(false)
+push_Const_cache_num(Int8)
+push_Const_cache_num(UInt8)
+push_Const_cache_num(Int16)
+push_Const_cache_num(UInt16)
+push_Const_cache_num(Int32)
+push_Const_cache_num(UInt32)
+push_Const_cache_num(Int64)
+push_Const_cache_num(UInt64)
+push_Const_cache(bitcast(Float64, 0x7ff0000000000000)) # Inf64
+push_Const_cache(bitcast(Float32, 0x7f800000)) # Inf32
+push_Const_cache(bitcast(Float64, 0x7ff8000000000000)) # NaN64
+push_Const_cache(bitcast(Float32, 0x7fc00000)) # NaN32
+push_Const_cache(0.0)
+push_Const_cache(0.0f0)
+push_Const_cache(1.0)
+push_Const_cache(1.0f0)
+for c = 0x00:0x7f
+    push_Const_cache(reinterpret(Char, UInt32(c) << 24))
+end
+for x in keys(Const_cache)
+    m = typeof(x).name.module
+    m === Core || m === Core.Intrinsics || println("unexpected item ", x)
 end
 
 # The type of this value might be Bool.
