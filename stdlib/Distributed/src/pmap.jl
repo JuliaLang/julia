@@ -156,9 +156,6 @@ pmap(f, p::AbstractWorkerPool, c1, c...; kwargs...) = pmap(a->f(a...), p, zip(c1
 pmap(f, c; kwargs...) = pmap(f, default_worker_pool(), c; kwargs...)
 pmap(f, c1, c...; kwargs...) = pmap(a->f(a...), zip(c1, c...); kwargs...)
 
-@deprecate pmap(p::AbstractWorkerPool, f, c; kwargs...) pmap(f, p, c; kwargs...)
-@deprecate pmap(p::AbstractWorkerPool, f, c1, c...; kwargs...) pmap(f, p, c1, c...; kwargs...)
-
 function wrap_on_error(f, on_error; capture_data=false)
     return x -> begin
         try
