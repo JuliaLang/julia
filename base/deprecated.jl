@@ -1254,6 +1254,11 @@ end
 @deprecate rsearchindex(s::AbstractString, c::Char) coalesce(findlast(isequal(c), s), 0)
 @deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) coalesce(findprev(isequal(c), s, i), 0)
 
+@deprecate search(s::ByteArray, t::ByteArray, i) coalesce(findnext(String(UInt8.(t)), String(UInt8.(s)), i), 0:-1)
+@deprecate rsearch(s::ByteArray, t::ByteArray, i) coalesce(findprev(String(UInt8.(t)), String(UInt8.(s)), i), 0:-1)
+@deprecate searchindex(s::ByteArray, t::ByteArray, i) first(coalesce(findnext(String(UInt8.(t)), String(UInt8.(s)), i), 0:-1))
+@deprecate rsearchindex(s::ByteArray, t::ByteArray, i) first(coalesce(findprev(String(UInt8.(t)), String(UInt8.(s)), i), 0:-1))
+
 @deprecate ismatch(r::Regex, s::AbstractString) occursin(r, s)
 
 @deprecate findin(a, b) findall(in(b), a)
