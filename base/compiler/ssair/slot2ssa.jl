@@ -369,12 +369,12 @@ function domsort_ssa!(ir, domtree)
     crit_edge_breaks_fixup = Tuple{Int, Int}[]
     for (new_bb, bb) in pairs(result_order)
         if bb == 0
-            new_bbs[new_bb] = BasicBlock((1:1) .+ bb_start_off, [new_bb-1], [result_stmts[bb_start_off].dest])
+            new_bbs[new_bb] = BasicBlock((bb_start_off+1):(bb_start_off+1), [new_bb-1], [result_stmts[bb_start_off].dest])
             bb_start_off += 1
             continue
         end
         old_inst_range = ir.cfg.blocks[bb].stmts
-        inst_range = (1:length(old_inst_range)) .+ bb_start_off
+        inst_range = (bb_start_off+1):(bb_start_off+length(old_inst_range))
         inst_rename[old_inst_range] = Any[SSAValue(x) for x in inst_range]
         for (nidx, idx) in zip(inst_range, old_inst_range)
             stmt = ir.stmts[idx]

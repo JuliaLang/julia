@@ -32,7 +32,7 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
 
         if first_bb != block
             new_range = first_bb+1:block
-            bb_rename[new_range] = (1:length(new_range)) .+ length(new_cfg_blocks)
+            bb_rename[new_range] = (1+length(new_cfg_blocks)):(length(new_range)+length(new_cfg_blocks))
             append!(new_cfg_blocks, map(copy, ir.cfg.blocks[new_range]))
             push!(merged_orig_blocks, last(new_range))
         end
@@ -55,12 +55,12 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
         orig_succs = copy(new_cfg_blocks[end].succs)
         empty!(new_cfg_blocks[end].succs)
         if need_split_before
-            bb_rename_range = (1:length(ir2.cfg.blocks)) .+ length(new_cfg_blocks)
+            bb_rename_range = (1+length(new_cfg_blocks)):(length(ir2.cfg.blocks)+length(new_cfg_blocks))
             push!(new_cfg_blocks[end].succs, length(new_cfg_blocks)+1)
             append!(new_cfg_blocks, ir2.cfg.blocks)
         else
             # Merge the last block that was already there with the first block we're adding
-            bb_rename_range = (1:length(ir2.cfg.blocks)) .+ (length(new_cfg_blocks) - 1)
+            bb_rename_range = length(new_cfg_blocks):(length(new_cfg_blocks)+length(ir2.cfg.blocks)-1)
             append!(new_cfg_blocks[end].succs, ir2.cfg.blocks[1].succs)
             append!(new_cfg_blocks, ir2.cfg.blocks[2:end])
         end
@@ -106,7 +106,7 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
         end
     end
     new_range = first_bb+1:length(ir.cfg.blocks)
-    bb_rename[new_range] = (1:length(new_range)) .+ length(new_cfg_blocks)
+    bb_rename[new_range] = (1+length(new_cfg_blocks)):(length(new_range)+length(new_cfg_blocks))
     append!(new_cfg_blocks, ir.cfg.blocks[new_range])
 
     # Rename edges original bbs
