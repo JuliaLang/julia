@@ -10,7 +10,7 @@ Code inclusion is quite straightforward: it simply parses and evaluates a source
 !!! note
     You only need to read this chapter if you want to understand the technical details of package loading in Julia. If you just want to install and use packages, simply use Julia's built-in package manager to add packages to your environment and write `import X` or `using X` in your code to load packages that you've added.
 
-A *package* is a source tree with a standard layout providing functionality that can be reused by other Julia projects. A package is loaded by `import X` or  `using X` statements. These statements also make the module named `X`, which results from loading the package code, available within the module where the import statement occurs. The meaning of `import X` is context-dependent: its meaning and behavior depend on what code it occurs in. What it does depends on the answers to two questions:
+A *package* is a source tree with a standard layout providing functionality that can be reused by other Julia projects. A package is loaded by `import X` or  `using X` statements. These statements also make the module named `X`, which results from loading the package code, available within the module where the import statement occurs. The meaning of `X` in `import X` is context-dependent: which `X` package is loaded depends on what code the statement occurs in. The effect of `import X` depends on two questions:
 
 1. **What** package is `X` in this context?
 2. **Where** can that `X` package be found?
@@ -50,7 +50,7 @@ As an abstraction, an environment provides three maps: `roots`, `graph` and `pat
 Each kind of environment defines these three maps differently, as detailed in the following sections.
 
 !!! note
-    For clarity of exposition, the examples throughout this chapter include fully materialized data structures for `roots`, `graph` and `paths`. However, these maps are really only abstractions—for efficiency, Julia's package loading code does not actually materialize them. Instead, it quries them through internal APIs and lazily computes only as much of each structure as is necessary to load a given package.
+    For clarity of exposition, the examples throughout this chapter include fully materialized data structures for `roots`, `graph` and `paths`. However, these maps are really only abstractions—for efficiency, Julia's package loading code does not actually materialize them. Instead, it queries them through internal APIs and lazily computes only as much of each structure as is necessary to load a given package.
 
 ### Project environments
 
@@ -79,7 +79,7 @@ roots = Dict(
 
 Given this `roots` map, in the code of `App` the statement `import Priv` will cause Julia to look up `roots[:Priv]`, which yields `ba13f791-ae1d-465a-978b-69c3ad90f72b`, the UUID of the `Priv` package that is to be loaded in that context. This UUID identifies which `Priv` package to load and use when the main application evaluates `import Priv`.
 
-**The dependency graph** of a project environment is determined by the contents of the manifest file, if present, or if there is no manifest file, `graph` is empty. A manifest file contains a stanza for each direct or indirect dependency of a project, including for each one, its UUID and exact version information and optionally an explicit path to to its source code. Consider the following example manifest file for `App`:
+**The dependency graph** of a project environment is determined by the contents of the manifest file, if present, or if there is no manifest file, `graph` is empty. A manifest file contains a stanza for each direct or indirect dependency of a project, including for each one, its UUID and exact version information and optionally an explicit path to its source code. Consider the following example manifest file for `App`:
 
 ```toml
 [[Priv]] # the private one
@@ -193,7 +193,7 @@ This example map includes three different kinds of package locations:
 
 Package directories provide a kind of environment that approximates package loading in Julia 0.6 and earlier, and which resembles package loading in many other dynamic languages. The set of packages available in a package directory corresponds to the set of subdirectories it contains that look like packages: if `X/src/X.jl` is a file in a package directory, then `X` is considered to be a package and `X/src/X.jl` is the file you load to get `X`. Which packages can "see" each other as dependencies depends on whether they contain project files or not and what appears in the `[deps]` sections of those project files.
 
-**The roots map** is determined by the subdirectories of a package directory for which `X/src/X.jl` exists and whether `X/Project.toml` exists and has a top-level `uuid` entry. Specifically `:x => uuid` goes in `roots` for each such `X` where `uuid` is defined as:
+**The roots map** is determined by the subdirectories of a package directory for which `X/src/X.jl` exists and whether `X/Project.toml` exists and has a top-level `uuid` entry. Specifically `:X => uuid` goes in `roots` for each such `X` where `uuid` is defined as:
 
 1. If `X/Project.toml` exists and has a `uuid` entry, then `uuid` is that value.
 2. If `X/Project.toml` exists and but does *not* have a top-level UUID entry, `uuid` is a dummy UUID generated by hashing the canonical path of `X/Project.toml`.
