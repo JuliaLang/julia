@@ -813,6 +813,15 @@ static jl_cgval_t emit_select_value(jl_codectx_t &ctx, jl_value_t **args, size_t
                 emit_unbox(ctx, llt1, x, t1));
     }
     else {
+        // type inference may know something we don't, in which case it may
+        // be illegal for us to convert to rt_hint. Check first if either
+        // of the types have empty intersection with the result type,
+        // in which case, we may use the other one.
+        if (jl_type_intersection(t1, rt_hint) == jl_bottom_type) {
+            return y;
+        } else if (jl_type_intersection(t2, rt_hint) == jl_bottom_type) {
+            return x;
+        }
         // if they aren't the same type, consider using the expr type
         // to instantiate a union-split optimization
         x = convert_julia_type(ctx, x, rt_hint);

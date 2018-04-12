@@ -695,7 +695,7 @@ end
 
 # align: number of ' ' to insert after '\n'
 # if align < 0: align like line above
-function edit_insert_newline(s::PromptState, align=-1)
+function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_indent)
     push_undo(s)
     buf = buffer(s)
     if align < 0

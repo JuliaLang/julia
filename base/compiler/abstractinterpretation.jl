@@ -249,7 +249,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
             comparison = method.sig
         end
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, spec_len)
+        newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, sv.params.TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
@@ -866,7 +866,8 @@ function abstract_eval_global(M::Module, s::Symbol)
 end
 
 function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
-    typ = src.ssavaluetypes[s.id + 1]
+    new_style_ir = src.codelocs !== nothing
+    typ = src.ssavaluetypes[new_style_ir ? s.id : (s.id + 1)]
     if typ === NOT_FOUND
         return Bottom
     end

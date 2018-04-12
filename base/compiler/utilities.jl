@@ -4,6 +4,14 @@
 # generic #
 ###########
 
+if !isdefined(@__MODULE__, Symbol("@timeit"))
+    # This is designed to allow inserting timers when loading a second copy
+    # of inference for performing performance experiments.
+    macro timeit(args...)
+        esc(args[end])
+    end
+end
+
 # avoid cycle due to over-specializing `any` when used by inference
 function _any(@nospecialize(f), a)
     for x in a

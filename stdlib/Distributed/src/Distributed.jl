@@ -95,7 +95,13 @@ include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
 include("precompile.jl")
 
+# Deprecations
+
 @eval @deprecate $(Symbol("@parallel")) $(Symbol("@distributed"))
+
+# PR 26783
+@deprecate pmap(p::AbstractWorkerPool, f, c; kwargs...) pmap(f, p, c; kwargs...)
+@deprecate pmap(p::AbstractWorkerPool, f, c1, c...; kwargs...) pmap(f, p, c1, c...; kwargs...)
 
 function __init__()
     push!(Base.package_callbacks, _require_callback)

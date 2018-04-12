@@ -20,8 +20,8 @@ struct HMAC_CTX{CTX<:SHA_CTX}
     end
 end
 
-function update!(ctx::HMAC_CTX, data)
-    update!(ctx.context, data)
+function update!(ctx::HMAC_CTX, data, datalen=length(data))
+    update!(ctx.context, data, datalen)
 end
 
 function digest!(ctx::HMAC_CTX{CTX}) where CTX

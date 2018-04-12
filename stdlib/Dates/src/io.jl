@@ -17,11 +17,10 @@ abstract type AbstractDateToken end
 `locale`. If a `tryparsenext` method does not need a locale, it can leave
 the argument out in the method definition.
 
-Return a tuple of 2 elements `(res, idx)`, where:
+If parsing succeeds, returns a tuple of 2 elements `(res, idx)`, where:
 
-* `res` is either the result of the parsing, or `nothing` if parsing failed.
-* `idx` is an `Int` - if parsing failed, the index at which it failed; if
-   parsing succeeded, `idx` is the index _after_ the index at which parsing ended.
+* `res` is the result of the parsing.
+* `idx::Int`, is the index _after_ the index at which parsing ended.
 """
 function tryparsenext end
 
@@ -39,7 +38,7 @@ function format end
 
 # fallback to tryparsenext/format methods that don't care about locale
 @inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
-    tryparsenext(d, str, i, len)
+    return tryparsenext(d, str, i, len)
 end
 
 function Base.string(t::Time)
@@ -91,20 +90,19 @@ end
 for c in "yYmdHMS"
     @eval begin
         @inline function tryparsenext(d::DatePart{$c}, str, i, len)
-            tryparsenext_base10(str, i, len, min_width(d), max_width(d))
+            return tryparsenext_base10(str, i, len, min_width(d), max_width(d))
         end
     end
 end
 
 for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
-        word, i = tryparsenext_word(str, i, len, locale, max_width(d))
-        val = word === nothing ? 0 : $fn(word, locale)
-        if val == 0
-            return nothing, i
-        else
-            return val, i
-        end
+        next = tryparsenext_word(str, i, len, locale, max_width(d))
+        next === nothing && return nothing
+        word, i = next
+        val = $fn(word, locale)
+        val == 0 && return nothing
+        return val, i
     end
 end
 
@@ -112,17 +110,15 @@ end
 struct Decimal3 end
 
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
-    ms, ii = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
-    if ms !== nothing
-        val0 = val = ms
-        len = ii - i
-        if len > 3
-            val, r = divrem(val, Int64(10) ^ (len - 3))
-            r == 0 || throw(InexactError(:convert, Decimal3, val0))
-        else
-            val *= Int64(10) ^ (3 - len)
-        end
-        ms = val
+    val = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
+    val === nothing && return nothing
+    ms0, ii = val
+    len = ii - i
+    if len > 3
+        ms, r = divrem(ms0, Int64(10) ^ (len - 3))
+        r == 0 || throw(InexactError(:convert, Decimal3, ms0))
+    else
+        ms = ms0 * Int64(10) ^ (3 - len)
     end
     return ms, ii
 end
@@ -186,10 +182,10 @@ Delim(d::T) where {T<:AbstractChar} = Delim{T, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
 @inline function tryparsenext(d::Delim{<:AbstractChar, N}, str, i::Int, len) where N
-    for j=1:N
-        i > len && return (nothing, i)
+    for j = 1:N
+        i > len && return nothing
         c, i = next(str, i)
-        c != d.d && return (nothing, i)
+        c != d.d && return nothing
     end
     return true, i
 end
@@ -199,12 +195,12 @@ end
     i2 = start(d.d)
     for j = 1:N
         if i1 > len
-            return nothing, i1
+            return nothing
         end
         c1, i1 = next(str, i1)
         c2, i2 = next(d.d, i2)
         if c1 != c2
-            return nothing, i1
+            return nothing
         end
     end
     return true, i1
@@ -415,7 +411,7 @@ parsing many date time strings of the same format, consider creating a
 [`DateFormat`](@ref) object once and using that as the second argument instead.
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    parse(DateTime, dt, DateFormat(format, locale))
+    return parse(DateTime, dt, DateFormat(format, locale))
 end
 
 """

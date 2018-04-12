@@ -7,7 +7,7 @@ import Dates
 import LibGit2
 
 import ..depots, ..logdir, ..devdir, ..print_first_command_header
-import ..Operations, ..Display
+import ..Operations, ..Display, ..GitTools
 using ..Types, ..TOML
 
 
@@ -24,15 +24,15 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     if mode == :develop
-        handle_repos_develop!(ctx, pkgs)
+        new_git = handle_repos_develop!(ctx, pkgs)
     else
-        handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
+        new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
     end
     project_deps_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
     stdlib_resolve!(ctx, pkgs)
     ensure_resolved(ctx.env, pkgs, registry=true)
-    Operations.add_or_develop(ctx, pkgs)
+    Operations.add_or_develop(ctx, pkgs; new_git=new_git)
     ctx.preview && preview_info()
 end
 
@@ -86,7 +86,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
                         return
                     end
                     branch = LibGit2.headname(repo)
-                    LibGit2.fetch(repo)
+                    GitTools.fetch(repo)
                     ff_succeeded = try
                         LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
                     catch e

@@ -1068,3 +1068,43 @@ end
 
 # issue 20225, check this can print
 @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
+
+# different output depending on whether color is requested:	+# issue 20225, check this can print
+let buf = IOBuffer()
+    @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
+    show(buf, "text/plain", md"*emph*")
+    @test String(take!(buf)) == "  emph\n"
+    show(buf, "text/markdown", md"*emph*")
+    @test String(take!(buf)) == "*emph*\n"
+    show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
+    @test String(take!(buf)) == "  \e[4memph\e[24m\n"
+end
+
+# table rendering with term #25213
+t = """
+    a   |   b
+    :-- | --:
+    1   |   2"""
+@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2\n"
+
+# test Base.copy
+let
+    md = doc"test"
+    md′ = copy(md)
+    @test length(md) == length(md′) == 1
+    push!(md, "new")
+    @test length(md) == 2
+    @test length(md′) == 1
+
+    @test !haskey(md.meta, :foo)
+    md.meta[:foo] = 42
+    @test !haskey(md′.meta, :foo)
+end
+
+let
+    v = Markdown.parse("foo\n\n- 1\n- 2\n\n- 3\n\n\n- 1\n- 2\n\nbar\n\n- 1\n\n  2\n- 4\n\nbuz\n\n- 1\n- 2\n  3\n- 4\n")
+    @test v.content[2].loose
+    @test !v.content[3].loose
+    @test v.content[5].loose
+    @test !v.content[7].loose
+end

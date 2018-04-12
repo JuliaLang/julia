@@ -9,7 +9,7 @@ using REPL.TerminalMenus
 
 using ..TOML
 import ..Pkg3
-import Pkg3: depots, logdir
+import Pkg3: GitTools, depots, logdir
 
 import Base: SHA1, AbstractEnv
 using SHA
@@ -623,7 +623,9 @@ function isdir_windows_workaround(path::String)
 end
 
 function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
+    creds = LibGit2.CachedCredentials()
     env = ctx.env
+    new_uuids = UUID[]
     for pkg in pkgs
         pkg.repo == nothing && continue
         pkg.special_action = PKGSPEC_DEVELOPED
@@ -643,14 +645,12 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             mkpath(clone_path)
             repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
             repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-                printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
-                r = LibGit2.clone(pkg.repo.url, repo_path)
-                LibGit2.fetch(r, remoteurl=pkg.repo.url, refspecs=refspecs)
+                r = GitTools.clone(pkg.repo.url, repo_path)
+                GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
                 r, true
             end
             if !just_cloned
-                printpkgstyle(ctx, :Updating, "repo from $(pkg.repo.url)")
-                LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+                GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
             end
             close(repo)
 
@@ -674,15 +674,19 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             else
                 mkpath(dev_pkg_path)
                 mv(project_path, dev_pkg_path; force=true)
+                push!(new_uuids, pkg.uuid)
             end
             pkg.path = dev_pkg_path
         end
         @assert pkg.path != nothing
     end
+    return new_uuids
 end
 
 function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
+    creds = LibGit2.CachedCredentials()
     env = ctx.env
+    new_uuids = UUID[]
     for pkg in pkgs
         pkg.repo == nothing && continue
         pkg.special_action = PKGSPEC_REPO_ADDED
@@ -691,16 +695,15 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
         mkpath(clones_dir)
         repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
         repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-            printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
-            r = LibGit2.clone(pkg.repo.url, repo_path, isbare=true)
-            LibGit2.fetch(r, remoteurl=pkg.repo.url, refspecs=refspecs)
+            r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
+            GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
             r, true
         end
         info = manifest_info(env, pkg.uuid)
         pinned = (info != nothing && get(info, "pinned", false))
-        if upgrade_or_add  && !pinned && !just_cloned
-            printpkgstyle(ctx, :Updating, "repo from $(pkg.repo.url)")
-            LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+        if upgrade_or_add && !pinned && !just_cloned
+            rev = pkg.repo.rev
+            GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
         end
         if upgrade_or_add && !pinned
             rev = pkg.repo.rev
@@ -746,9 +749,11 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             version_path = Pkg3.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
             mkpath(version_path)
             mv(project_path, version_path; force=true)
+            push!(new_uuids, pkg.uuid)
         end
         @assert pkg.version isa VersionNumber
     end
+    return new_uuids
 end
 
 function parse_package!(env, pkg, project_path)
@@ -963,11 +968,11 @@ function registries(; clone_default=true)::Vector{String}
     if clone_default
         if !ispath(user_regs)
             mkpath(user_regs)
+            creds = LibGit2.CachedCredentials()
             printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
             for (reg, url) in DEFAULT_REGISTRIES
-                printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
                 path = joinpath(user_regs, reg)
-                repo = LibGit2.clone(url, path)
+                repo = GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)
                 close(repo)
             end
         end

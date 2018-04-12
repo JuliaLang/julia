@@ -265,65 +265,70 @@ end
 
 # custom rounding and significant-digit ops
 @testset "rounding to digits relative to the decimal point" begin
-    @test round(pi,0) ≈ 3.
-    @test round(pi,1) ≈ 3.1
-    @test round(10*pi,-1) ≈ 30.
-    @test round(.1,0) == 0.
-    @test round(-.1,0) == -0.
-    @test isnan(round(NaN, 2))
-    @test isinf(round(Inf,2))
-    @test isinf(round(-Inf,2))
+    @test round(pi) ≈ 3.
+    @test round(pi, digits=0) ≈ 3.
+    @test round(pi, digits=1) ≈ 3.1
+    @test round(pi, digits=3, base=2) ≈ 3.125
+    @test round(pi, sigdigits=1) ≈ 3.
+    @test round(pi, sigdigits=3) ≈ 3.14
+    @test round(pi, sigdigits=4, base=2) ≈ 3.25
+    @test round(10*pi, digits=-1) ≈ 30.
+    @test round(.1, digits=0) == 0.
+    @test round(-.1, digits=0) == -0.
+    @test isnan(round(NaN, digits=2))
+    @test isinf(round(Inf, digits=2))
+    @test isinf(round(-Inf, digits=2))
 end
 @testset "round vs trunc vs floor vs ceil" begin
-    @test round(123.456,1) ≈ 123.5
-    @test round(-123.456,1) ≈ -123.5
-    @test trunc(123.456,1) ≈ 123.4
-    @test trunc(-123.456,1) ≈ -123.4
-    @test ceil(123.456,1) ≈ 123.5
-    @test ceil(-123.456,1) ≈ -123.4
-    @test floor(123.456,1) ≈ 123.4
-    @test floor(-123.456,1) ≈ -123.5
+    @test round(123.456, digits=1) ≈ 123.5
+    @test round(-123.456, digits=1) ≈ -123.5
+    @test trunc(123.456, digits=1) ≈ 123.4
+    @test trunc(-123.456, digits=1) ≈ -123.4
+    @test ceil(123.456, digits=1) ≈ 123.5
+    @test ceil(-123.456, digits=1) ≈ -123.4
+    @test floor(123.456, digits=1) ≈ 123.4
+    @test floor(-123.456, digits=1) ≈ -123.5
 end
 @testset "rounding with too much (or too few) precision" begin
     for x in (12345.6789, 0, -12345.6789)
         y = float(x)
-        @test y == trunc(x, 1000)
-        @test y == round(x, 1000)
-        @test y == floor(x, 1000)
-        @test y == ceil(x, 1000)
+        @test y == trunc(x, digits=1000)
+        @test y == round(x, digits=1000)
+        @test y == floor(x, digits=1000)
+        @test y == ceil(x, digits=1000)
     end
     let x = 12345.6789
-        @test 0.0 == trunc(x, -1000)
-        @test 0.0 == round(x, -1000)
-        @test 0.0 == floor(x, -1000)
-        @test Inf == ceil(x, -1000)
+        @test 0.0 == trunc(x, digits=-1000)
+        @test 0.0 == round(x, digits=-1000)
+        @test 0.0 == floor(x, digits=-1000)
+        @test Inf == ceil(x, digits=-1000)
     end
     let x = -12345.6789
-        @test -0.0 == trunc(x, -1000)
-        @test -0.0 == round(x, -1000)
-        @test -Inf == floor(x, -1000)
-        @test -0.0 == ceil(x, -1000)
+        @test -0.0 == trunc(x, digits=-1000)
+        @test -0.0 == round(x, digits=-1000)
+        @test -Inf == floor(x, digits=-1000)
+        @test -0.0 == ceil(x, digits=-1000)
     end
     let x = 0.0
-        @test 0.0 == trunc(x, -1000)
-        @test 0.0 == round(x, -1000)
-        @test 0.0 == floor(x, -1000)
-        @test 0.0 == ceil(x, -1000)
+        @test 0.0 == trunc(x, digits=-1000)
+        @test 0.0 == round(x, digits=-1000)
+        @test 0.0 == floor(x, digits=-1000)
+        @test 0.0 == ceil(x, digits=-1000)
     end
 end
 @testset "rounding in other bases" begin
-    @test round(pi, 2, base = 2) ≈ 3.25
-    @test round(pi, 3, base = 2) ≈ 3.125
-    @test round(pi, 3, base = 5) ≈ 3.144
+    @test round(pi, digits = 2, base = 2) ≈ 3.25
+    @test round(pi, digits = 3, base = 2) ≈ 3.125
+    @test round(pi, digits = 3, base = 5) ≈ 3.144
 end
 @testset "vectorized trunc/round/floor/ceil with digits/base argument" begin
     a = rand(2, 2, 2)
     for f in (round, trunc, floor, ceil)
-        @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
-        @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
-        @test f.(a, 9, base = 2) == map(x->f(x, 9, base = 2), a)
-        @test f.(a[:, 1, 1], 9, base = 2) == map(x->f(x, 9, base = 2), a[:, 1, 1])
-        @test f.(a[:, :, 1], 9, base = 2) == map(x->f(x, 9, base = 2), a[:, :, 1])
-        @test f.(a, 9, base = 2) == map(x->f(x, 9, base = 2), a)
+        @test f.(a[:, 1, 1],  digits=2) == map(x->f(x, digits=2), a[:, 1, 1])
+        @test f.(a[:, :, 1],  digits=2) == map(x->f(x, digits=2), a[:, :, 1])
+        @test f.(a,  digits=9, base = 2) == map(x->f(x, digits=9, base = 2), a)
+        @test f.(a[:, 1, 1], digits=9, base = 2) == map(x->f(x, digits=9, base = 2), a[:, 1, 1])
+        @test f.(a[:, :, 1], digits=9, base = 2) == map(x->f(x, digits=9, base = 2), a[:, :, 1])
+        @test f.(a, digits=9, base = 2) == map(x->f(x, digits=9, base = 2), a)
     end
 end

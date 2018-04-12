@@ -837,6 +837,9 @@ function __dot__(x::Expr)
     dotargs = map(__dot__, x.args)
     if x.head == :call && dottable(x.args[1])
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
+    elseif x.head == :comparison
+        Expr(:comparison, (iseven(i) && dottable(arg) && arg isa Symbol && isoperator(arg) ?
+                               Symbol('.', arg) : arg for (i, arg) in pairs(dotargs))...)
     elseif x.head == :$
         x.args[1]
     elseif x.head == :let # don't add dots to `let x=...` assignments

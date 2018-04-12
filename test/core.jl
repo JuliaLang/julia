@@ -929,6 +929,15 @@ function f24331()
 end
 @test f24331() == [2]
 
+# issue #26743
+function f26743()
+    try
+        return 5
+    finally
+    end
+end
+@test @inferred(f26743()) == 5
+
 # finalizers
 let A = [1]
     local x = 0
@@ -6010,6 +6019,11 @@ let a = Foo17149()
     @test a === a
 end
 
+# issue #21004
+const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
+@test_throws ArgumentError PTuple_21004(1)
+@test_throws UndefVarError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
 @test foo_22792(Union{Int,UInt}) == 1
@@ -6032,3 +6046,8 @@ g1_23206(::Tuple{Type{Int}, T}) where T = 0
 g2_23206(::Tuple{Type{Int}}) = 1
 @test_throws MethodError g1_23206(tuple(Int, 2))
 @test_throws MethodError g2_23206(tuple(Int, 2))
+
+# issue #26739
+let x26739 = Int[1]
+    @test eval(:(identity.($x26739))) == x26739
+end

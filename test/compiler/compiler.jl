@@ -7,15 +7,15 @@ using Random, Core.IR
 using InteractiveUtils: code_llvm
 
 # demonstrate some of the type-size limits
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 0) == Ref{Complex{T} where T}
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
-    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 10) == comparison
-    @test Core.Compiler.limit_type_size(sig, ref, comparison,  10) == ref
-    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{ref}
-    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison},  10) == sig
+    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 100, 10) == comparison
+    @test Core.Compiler.limit_type_size(sig, ref, comparison, 100, 10) == ref
+    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 10) == Tuple{ref}
+    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  10) == sig
 end
 
 

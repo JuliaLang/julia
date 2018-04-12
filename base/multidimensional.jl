@@ -1083,10 +1083,10 @@ diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 
 """
     diff(A::AbstractVector)
-    diff(A::AbstractMatrix, dim::Integer)
+    diff(A::AbstractMatrix; dims::Integer)
 
 Finite difference operator of matrix or vector `A`. If `A` is a matrix,
-specify the dimension over which to operate with the `dim` argument.
+specify the dimension over which to operate with the `dims` keyword argument.
 
 # Examples
 ```jldoctest
@@ -1095,7 +1095,7 @@ julia> a = [2 4; 6 16]
  2   4
  6  16
 
-julia> diff(a,2)
+julia> diff(a, dims=2)
 2×1 Array{Int64,2}:
   2
  10
@@ -1107,13 +1107,17 @@ julia> diff(vec(a))
  12
 ```
 """
-function diff(A::AbstractMatrix, dim::Integer)
-    if dim == 1
+function diff(A::AbstractMatrix; dims::Union{Integer,Nothing}=nothing)
+    if dims === nothing
+        depwarn("`diff(A::AbstractMatrix)` is deprecated, use `diff(A, dims=1)` instead.", :diff)
+        dims = 1
+    end
+    if dims == 1
         [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
-    elseif dim == 2
+    elseif dims == 2
         [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
     else
-        throw(ArgumentError("dimension dim must be 1 or 2, got $dim"))
+        throw(ArgumentError("dimension must be 1 or 2, got $dims"))
     end
 end
 
@@ -1724,9 +1728,9 @@ end
 hash(x::Prehashed) = x.hash
 
 """
-    unique(A::AbstractArray, dim::Int)
+    unique(A::AbstractArray; dims::Int)
 
-Return unique regions of `A` along dimension `dim`.
+Return unique regions of `A` along dimension `dims`.
 
 # Examples
 ```jldoctest
@@ -1745,7 +1749,7 @@ julia> unique(A)
   true
  false
 
-julia> unique(A, 2)
+julia> unique(A, dims=2)
 2×1×2 Array{Bool,3}:
 [:, :, 1] =
   true
@@ -1755,14 +1759,18 @@ julia> unique(A, 2)
   true
  false
 
-julia> unique(A, 3)
+julia> unique(A, dims=3)
 2×2×1 Array{Bool,3}:
 [:, :, 1] =
   true   true
  false  false
 ```
 """
-@generated function unique(A::AbstractArray{T,N}, dim::Int) where {T,N}
+unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
+
+_unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
+
+@generated function _unique_dims(A::AbstractArray{T,N}, dim::Integer) where {T,N}
     quote
         1 <= dim <= $N || return copy(A)
         hashes = zeros(UInt, axes(A, dim))

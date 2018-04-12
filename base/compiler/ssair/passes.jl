@@ -139,15 +139,21 @@ function walk_to_def(compact, def, intermediaries = IdSet{Int}(), allow_phinode=
                 def = def.val
             end
             continue
+        elseif isa(def, FastForward)
+            append!(phi_locs, def.phi_locs)
+            def = def.to
         elseif isa(def, PhiNode)
             # For now, we don't track setfields structs through phi nodes
             allow_phinode || break
-            possible_predecessors = collect(Iterators.filter(1:length(def.edges)) do n
-                isassigned(def.values, n) || return false
-                value = def.values[n]
-                edge_typ = compact_exprtype(compact, value)
-                return edge_typ ⊑ typeconstraint
-            end)
+            push!(intermediaries, defidx)
+            possible_predecessors = let def=def, typeconstraint=typeconstraint
+                collect(Iterators.filter(1:length(def.edges)) do n
+                    isassigned(def.values, n) || return false
+                    value = def.values[n]
+                    edge_typ = widenconst(compact_exprtype(compact, value))
+                    return typeintersect(edge_typ, typeconstraint) !== Union{}
+                end)
+            end
             # For now, only look at unique predecessors
             if length(possible_predecessors) == 1
                 n = possible_predecessors[1]
@@ -187,6 +193,11 @@ function process_immutable_preserve(new_preserves, compact, def)
             push!(new_preserves, arg)
         end
     end
+end
+
+struct FastForward
+    to::SSAValue
+    phi_locs::Vector{Tuple{Int64, Int64}}
 end
 
 function getfield_elim_pass!(ir::IRCode, domtree)
@@ -292,16 +303,18 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             field === nothing && continue
             isdefined(obj, field) || continue
             val = getfield(obj, field)
-	    is_inlineable_constant(val) || continue
+            is_inlineable_constant(val) || continue
             forwarded = quoted(val)
         end
         # Step 4: Remember any phinodes we need to insert
         if !isempty(phi_locs) && isa(forwarded, SSAValue)
             # TODO: We have have to use BB ids for phi_locs
             # to avoid index invalidation.
-            push!(insertions, (idx, phi_locs))
+            push!(insertions, idx)
+            compact[idx] = FastForward(forwarded, phi_locs)
+        else
+            compact[idx] = forwarded
         end
-        compact[idx] = forwarded
     end
     ir = finish(compact)
     # Now go through any mutable structs and see which ones we can eliminate
@@ -389,17 +402,20 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
             new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
                 old_preserves..., new_preserves...)
-	    new_expr.typ = useexpr.typ
-	    ir[SSAValue(use)] = new_expr
+            new_expr.typ = useexpr.typ
+            ir[SSAValue(use)] = new_expr
         end
     end
-    for (idx, phi_locs) in insertions
+    for idx in insertions
         # For non-dominating load-store forward, we may have to insert extra phi nodes
         # TODO: Can use the domtree to eliminate unnecessary phis, but ok for now
-        forwarded = ir.stmts[idx]
+        ff = ir.stmts[idx]
+        ff === nothing && continue # May have been DCE'd if there were no more uses
+        ff = ff::FastForward
+        forwarded = ff.to
         if isa(forwarded, SSAValue)
             forwarded_typ = ir.types[forwarded.id]
-            for (pred, pos) in reverse!(phi_locs)
+            for (pred, pos) in reverse!(ff.phi_locs)
                 node = PhiNode()
                 push!(node.edges, pred)
                 push!(node.values, forwarded)
@@ -414,12 +430,13 @@ end
 function type_lift_pass!(ir::IRCode)
     type_ctx_uses = Vector{Vector{Int}}[]
     has_non_type_ctx_uses = IdSet{Int}()
-    lifted_undef = IdDict{Int, SSAValue}()
+    lifted_undef = IdDict{Int, Any}()
     for (idx, stmt) in pairs(ir.stmts)
         if stmt isa Expr && (stmt.head === :isdefined || stmt.head === :undefcheck)
             val = (stmt.head === :isdefined) ? stmt.args[1] : stmt.args[2]
             # undef can only show up by being introduced in a phi
-            # node, so lift all phi nodes that have maybe undef values
+            # node (or an UpsilonNode() argument to a PhiC node),
+            # so lift all these nodes that have maybe undef values
             processed = IdDict{Int, SSAValue}()
             if !isa(val, SSAValue)
                 if stmt.head === :undefcheck
@@ -433,7 +450,7 @@ function type_lift_pass!(ir::IRCode)
                 stmt_id = ir.stmts[stmt_id].val.id
             end
             def = ir.stmts[stmt_id]
-            if !isa(def, PhiNode)
+            if !isa(def, PhiNode) && !isa(def, PhiCNode)
                 if stmt.head === :isdefined
                     ir.stmts[idx] = true
                 else
@@ -446,40 +463,63 @@ function type_lift_pass!(ir::IRCode)
                 while !isempty(worklist)
                     item, which, use = pop!(worklist)
                     def = ir.stmts[item]
-                    edges = copy(def.edges)
-                    values = Vector{Any}(undef, length(edges))
-                    new_phi = length(values) == 0 ? false : insert_node!(ir, item, Bool, PhiNode(edges, values))
+                    if isa(def, PhiNode)
+                        edges = copy(def.edges)
+                        values = Vector{Any}(undef, length(edges))
+                        new_phi = length(values) == 0 ? false : insert_node!(ir, item, Bool, PhiNode(edges, values))
+                    else
+                        values = Vector{Any}(undef, length(def.values))
+                        new_phi = length(values) == 0 ? false : insert_node!(ir, item, Bool, PhiCNode(values))
+                    end
                     processed[item] = new_phi
                     if first
                         lifted_undef[stmt_id] = new_phi
                         first = false
                     end
-                    for i = 1:length(edges)
+                    local id::Int = 0
+                    for i = 1:length(values)
                         if !isassigned(def.values, i)
                             val = false
                         elseif !isa(def.values[i], SSAValue)
                             val = true
                         else
-                            id = def.values[i].id
+                            up_id = id = def.values[i].id
+                            @label restart
                             if !isa(ir.types[id], MaybeUndef)
                                 val = true
                             else
-                                while isa(ir.stmts[id], PiNode)
-                                    id = ir.stmts[id].val.id
-                                end
-                                if isa(ir.stmts[id], PhiNode)
-                                    if haskey(processed, id)
-                                        val = processed[id]
+                                if isa(ir.stmts[id], UpsilonNode)
+                                    up = ir.stmts[id]
+                                    if !isdefined(up, :val)
+                                        val = false
+                                    elseif !isa(up.val, SSAValue)
+                                        val = true
                                     else
-                                        push!(worklist, (id, new_phi, i))
-                                        continue
+                                        id = up.val.id
+                                        @goto restart
                                     end
                                 else
-                                    val = true
+                                    while isa(ir.stmts[id], PiNode)
+                                        id = ir.stmts[id].val.id
+                                    end
+                                    if isa(ir.stmts[id], Union{PhiNode, PhiCNode})
+                                        if haskey(processed, id)
+                                            val = processed[id]
+                                        else
+                                            push!(worklist, (id, new_phi, i))
+                                            continue
+                                        end
+                                    else
+                                        val = true
+                                    end
                                 end
                             end
                         end
-                        values[i] = val
+                        if isa(def, PhiNode)
+                            values[i] = val
+                        else
+                            values[i] = insert_node!(ir, up_id, Bool, UpsilonNode(val))
+                        end
                     end
                     if which !== SSAValue(0)
                         ir[which].values[use] = new_phi

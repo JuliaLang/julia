@@ -6,7 +6,7 @@ import LibGit2
 
 import REPL
 using REPL.TerminalMenus
-using ..Types, ..GraphType, ..Resolve, ..Pkg2, ..BinaryProvider
+using ..Types, ..GraphType, ..Resolve, ..Pkg2, ..BinaryProvider, ..GitTools
 import ..depots, ..devdir, ..Types.uuid_julia
 
 function find_installed(name::String, uuid::UUID, sha1::SHA1)
@@ -64,14 +64,16 @@ function set_maximum_version_registry!(env::EnvCache, pkg::PackageSpec)
         pathvers = keys(load_versions(path))
         union!(pkgversions, pathvers)
     end
-    length(pkgversions) == 0 && return VersionNumber(0)
-    max_version = maximum(pkgversions)
-    pkg.version = VersionNumber(max_version.major, max_version.minor, max_version.patch, max_version.prerelease, ("",))
+    if length(pkgversions) == 0
+        pkg.version = VersionNumber(0)
+    else
+        max_version = maximum(pkgversions)
+        pkg.version = VersionNumber(max_version.major, max_version.minor, max_version.patch, max_version.prerelease, ("",))
+    end
 end
 
 # This also sets the .path field for fixed packages in `pkgs`
 function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::Dict{UUID, String})
-    fix_deps = PackageSpec[]
     fixed_pkgs = PackageSpec[]
     fix_deps_map = Dict{UUID,Vector{PackageSpec}}()
     uuid_to_pkg = Dict{UUID,PackageSpec}()
@@ -102,36 +104,14 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
             cmderror("path $(path) for package $(pkg.name) no longer exists. Remove the package or `develop` it at a new path")
         end
 
-        # Checked out package has by definition a version higher than all registered.
-        # TODO: Remove hardcoded names
-        if path !== nothing && !(isfile(path, "Project.toml") || isfile(path, "JuliaProject.toml"))
-            set_maximum_version_registry!(ctx.env, pkg)
-        end
-
         uuid_to_pkg[pkg.uuid] = pkg
         uuid_to_name[pkg.uuid] = pkg.name
-        # Backwards compatability with Pkg2 REQUIRE format
-        reqfile = joinpath(path, "REQUIRE")
-        fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
-        !isfile(reqfile) && continue
-        for r in Pkg2.Reqs.read(reqfile)
-            r isa Pkg2.Reqs.Requirement || continue
-            pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
-            if pkg_name == "julia"
-                if !(VERSION in vspec)
-                    error("julia version requirement for package $pkg not satisfied")
-                end
-            else
-                deppkg = PackageSpec(pkg_name, vspec)
-                push!(fix_deps_map[pkg.uuid], deppkg)
-                push!(fix_deps, deppkg)
-            end
+        found_project = collect_project!(pkg, path, fix_deps_map)
+        if !found_project
+            collect_require!(ctx, pkg, path, fix_deps_map)
         end
     end
 
-    # Look up the UUIDS for all the fixed dependencies in the registry in one shot
-    registry_resolve!(ctx.env, fix_deps)
-    ensure_resolved(ctx.env, fix_deps; registry=true)
     fixed = Dict{UUID,Fixed}()
     # Collect the dependencies for the fixed packages
     for (uuid, fixed_pkgs) in fix_deps_map
@@ -145,6 +125,47 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
         fixed[uuid] = Fixed(fix_pkg.version, q)
     end
     return fixed
+end
+
+function collect_project!(pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
+    project_file = joinpath(path, "Project.toml")
+    fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
+    !isfile(project_file) && return false
+    project = read_project(project_file)
+    for (deppkg_name, uuid) in project["deps"]
+        vspec = VersionSpec() # TODO: Update with compatibility from Project
+        deppkg = PackageSpec(deppkg_name, UUID(uuid), vspec)
+        push!(fix_deps_map[pkg.uuid], deppkg)
+    end
+    pkg.version = VersionNumber(get(project, "version", "0.0"))
+    return true
+end
+
+# Backwards compatibility with Pkg2 REQUIRE format
+function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
+    fix_deps = PackageSpec[]
+    reqfile = joinpath(path, "REQUIRE")
+    # Checked out "old-school" packages have by definition a version higher than all registered.
+    set_maximum_version_registry!(ctx.env, pkg)
+    !haskey(fix_deps_map, pkg.uuid) && (fix_deps_map[pkg.uuid] = valtype(fix_deps_map)())
+    if isfile(reqfile)
+        for r in Pkg2.Reqs.read(reqfile)
+            r isa Pkg2.Reqs.Requirement || continue
+            pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
+            if pkg_name == "julia"
+                if !(VERSION in vspec)
+                    error("julia version requirement for package $pkg not satisfied")
+                end
+            else
+                deppkg = PackageSpec(pkg_name, vspec)
+                push!(fix_deps_map[pkg.uuid], deppkg)
+                push!(fix_deps, deppkg)
+            end
+        end
+        # Packages from REQUIRE files need to get their UUID from the registry
+        registry_resolve!(ctx.env, fix_deps)
+        ensure_resolved(ctx.env, fix_deps; registry=true)
+    end
 end
 
 
@@ -385,12 +406,12 @@ function install_git(
     version::Union{VersionNumber,Nothing},
     version_path::String
 )::Nothing
+    creds = LibGit2.CachedCredentials()
     clones_dir = joinpath(depots()[1], "clones")
     ispath(clones_dir) || mkpath(clones_dir)
     repo_path = joinpath(clones_dir, string(uuid))
     repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-        printpkgstyle(ctx, :Cloning, "[$uuid] $name from $(urls[1])")
-        LibGit2.clone(urls[1], repo_path, isbare=true)
+        GitTools.clone(urls[1], repo_path; isbare=true, header = "[$uuid] $name from $(urls[1])", credentials=creds)
     end
     git_hash = LibGit2.GitHash(hash.bytes)
     for i = 2:length(urls)
@@ -401,7 +422,7 @@ function install_git(
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
         end
         url = urls[i]
-        LibGit2.fetch(repo, remoteurl=url, refspecs=refspecs)
+        GitTools.fetch(repo, url, refspecs=refspecs, credentials=creds)
     end
     tree = try
         LibGit2.GitObject(repo, git_hash)
@@ -587,28 +608,37 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
     delete!(info, "deps")
     if path != nothing
         path = joinpath(dirname(ctx.env.project_file), path)
-        # Remove when packages uses Project files properly
-        dep_pkgs = PackageSpec[]
-        stdlib_deps = find_stdlib_deps(ctx, path)
-        for (stdlib_uuid, stdlib) in stdlib_deps
-            push!(dep_pkgs, PackageSpec(stdlib, stdlib_uuid))
+        deps = Dict{String,String}()
+
+        # Check for deps in project file
+        project_file = joinpath(path, "Project.toml")
+        if isfile(project_file)
+            project = read_project(project_file)
+            deps = project["deps"]
+        else
+            # Check in REQUIRE file
+            # Remove when packages uses Project files properly
+            dep_pkgs = PackageSpec[]
+            stdlib_deps = find_stdlib_deps(ctx, path)
+            for (stdlib_uuid, stdlib) in stdlib_deps
+                push!(dep_pkgs, PackageSpec(stdlib, stdlib_uuid))
+            end
+            reqfile = joinpath(path, "REQUIRE")
+            if isfile(reqfile)
+                for r in Pkg2.Reqs.read(reqfile)
+                    r isa Pkg2.Reqs.Requirement || continue
+                    push!(dep_pkgs, PackageSpec(r.package))
+                end
+                registry_resolve!(env, dep_pkgs)
+                ensure_resolved(env, dep_pkgs; registry=true)
+                for dep_pkg in dep_pkgs
+                    dep_pkg.name == "julia" && continue
+                    deps[dep_pkg.name] = string(dep_pkg.uuid)
+                end
+            end
         end
-        reqfile = joinpath(path, "REQUIRE")
-        if isfile(reqfile)
-            for r in Pkg2.Reqs.read(reqfile)
-                r isa Pkg2.Reqs.Requirement || continue
-                push!(dep_pkgs, PackageSpec(r.package))
-            end
-            registry_resolve!(env, dep_pkgs)
-            ensure_resolved(env, dep_pkgs; registry=true)
-            deps = Dict{String,String}()
-            for dep_pkg in dep_pkgs
-                dep_pkg.name == "julia" && continue
-                deps[dep_pkg.name] = string(dep_pkg.uuid)
-            end
-            if !isempty(deps)
-                info["deps"] = deps
-            end
+        if !isempty(deps)
+            info["deps"] = deps
         end
     else
         for path in registered_paths(env, uuid)
@@ -886,7 +916,7 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec})
     write_env(ctx)
 end
 
-function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec})
+function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; new_git = UUID[])
     # if julia is passed as a package the solver gets tricked;
     # this catches the error early on
     any(pkg->(pkg.uuid == uuid_julia), pkgs) &&
@@ -912,13 +942,14 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec})
     end
     # resolve & apply package versions
     resolve_versions!(ctx, pkgs)
-    new = apply_versions(ctx, pkgs)
+    new_apply = apply_versions(ctx, pkgs)
     write_env(ctx) # write env before building
-    build_versions(ctx, new)
+    build_versions(ctx, union(new_apply, new_git))
 end
 
 function up(ctx::Context, pkgs::Vector{PackageSpec})
     # resolve upgrade levels to version specs
+    new_git = UUID[]
     for pkg in pkgs
         if pkg.uuid in keys(ctx.stdlibs)
             pkg.version = VersionSpec()
@@ -929,7 +960,8 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
         info = manifest_info(ctx.env, pkg.uuid)
         if haskey(info, "repo-url")
             pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
-            handle_repos_add!(ctx, [pkg]; upgrade_or_add = (level == UPLEVEL_MAJOR))
+            new = handle_repos_add!(ctx, [pkg]; upgrade_or_add = (level == UPLEVEL_MAJOR))
+            append!(new_git, new)
         else
             ver = VersionNumber(info["version"])
             if level == UPLEVEL_FIXED
@@ -945,9 +977,9 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
     end
     # resolve & apply package versions
     resolve_versions!(ctx, pkgs)
-    new = apply_versions(ctx, pkgs)
+    new_apply = apply_versions(ctx, pkgs)
     write_env(ctx) # write env before building
-    build_versions(ctx, new)
+    build_versions(ctx, union(new_apply, new_git))
 end
 
 function pin(ctx::Context, pkgs::Vector{PackageSpec})

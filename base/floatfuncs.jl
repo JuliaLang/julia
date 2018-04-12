@@ -44,43 +44,51 @@ isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
 """
     round([T,] x, [r::RoundingMode])
-    round(x, [digits; base = 10])
+    round(x, [r::RoundingMode]; digits::Integer=0, base = 10)
+    round(x, [r::RoundingMode]; sigdigits::Integer, base = 10)
 
-Rounds `x` to an integer value according to the provided
-[`RoundingMode`](@ref), returning a value of the same type as `x`. When not
-specifying a rounding mode the global mode will be used
-(see [`rounding`](@ref)), which by default is round to the nearest integer
-([`RoundNearest`](@ref) mode), with ties (fractional values of 0.5) being
-rounded to the nearest even integer.
+Rounds the number `x`.
+
+Without keyword arguments, `x` is rounded to an integer value, returning a value of type
+`T`, or of the same type of `x` if no `T` is provided. An [`InexactError`](@ref) will be
+thrown if the value is not representable by `T`, similar to [`convert`](@ref).
+
+If the `digits` keyword argument is provided, it rounds to the specified number of digits
+after the decimal place (or before if negative), in base `base`.
+
+If the `sigdigits` keyword argument is provided, it rounds to the specified number of
+significant digits, in base `base`.
+
+The [`RoundingMode`](@ref) `r` controls the direction of the rounding; the default is
+[`RoundNearest`](@ref), which rounds to the nearest integer, with ties (fractional values
+of 0.5) being rounded to the nearest even integer. Note that `round` may give incorrect
+results if the global rounding mode is changed (see [`rounding`](@ref)).
 
 # Examples
 ```jldoctest
 julia> round(1.7)
 2.0
 
+julia> round(Int, 1.7)
+2
+
 julia> round(1.5)
 2.0
 
 julia> round(2.5)
 2.0
-```
 
-The optional [`RoundingMode`](@ref) argument will change how the number gets
-rounded.
-
-`round(T, x, [r::RoundingMode])` converts the result to type `T`, throwing an
-[`InexactError`](@ref) if the value is not representable.
-
-`round(x, digits)` rounds to the specified number of digits after the decimal place (or
-before if negative). `round(x, digits, base = base)` rounds using a base other than 10.
-
-# Examples
-```jldoctest
-julia> round(pi, 2)
+julia> round(pi; digits=2)
 3.14
 
-julia> round(pi, 3, base = 2)
+julia> round(pi; digits=3, base=2)
 3.125
+
+julia> round(123.456; sigdigits=2)
+120.0
+
+julia> round(357.913; sigdigits=4, base=2)
+352.0
 ```
 
 !!! note
@@ -104,93 +112,93 @@ julia> round(pi, 3, base = 2)
     1.2
     ```
 
-See also [`signif`](@ref) for rounding to significant digits.
+# Extensions
+
+To extend `round` to new numeric types, it is typically sufficient to define `Base._round(x::NewType, ::RoundingMode)`.
 """
 round(T::Type, x)
-round(x::Real, ::RoundingMode{:ToZero}) = trunc(x)
-round(x::Real, ::RoundingMode{:Up}) = ceil(x)
-round(x::Real, ::RoundingMode{:Down}) = floor(x)
+
+round(::Type{T}, x::AbstractFloat, r::RoundingMode{:ToZero}) where {T<:Integer} = trunc(T, x)
+round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T, _round(x,r))
+
+function round(x::Real, r::RoundingMode=RoundNearest;
+    digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base=10)
+    isfinite(x) || return x
+    _round(x,r,digits,sigdigits,base)
+end
+trunc(x::Real; kwargs...) = round(x, RoundToZero; kwargs...)
+floor(x::Real; kwargs...) = round(x, RoundDown; kwargs...)
+ceil(x::Real; kwargs...)  = round(x, RoundUp; kwargs...)
+
+_round(x, r::RoundingMode, digits::Nothing, sigdigits::Nothing, base) = _round(x, r)
+_round(x::Integer, r::RoundingMode) = x
+
+# round x to multiples of 1/invstep
+function _round_invstep(x, invstep, r::RoundingMode)
+    y = _round(x * invstep, r) / invstep
+    if !isfinite(y)
+        return x
+    end
+    return y
+end
+
+# round x to multiples of step
+function _round_step(x, step, r::RoundingMode)
+    # TODO: use div with rounding mode
+    y = _round(x / step, r) * step
+    if !isfinite(y)
+        if x > 0
+            return (r == RoundUp ? oftype(x, Inf) : zero(x))
+        elseif x < 0
+            return (r == RoundDown ? -oftype(x, Inf) : -zero(x))
+        else
+            return x
+        end
+    end
+    return y
+end
+
+function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
+    fx = float(x)
+    if digits >= 0
+        invstep = oftype(fx, base)^digits
+        _round_invstep(fx, invstep, r)
+    else
+        step = oftype(fx, base)^-digits
+        _round_step(fx, step, r)
+    end
+end
+
+hidigit(x::Integer, base) = ndigits0z(x, base)
+function hidigit(x::AbstractFloat, base)
+    iszero(x) && return 0
+    if base == 10
+        return 1 + floor(Int, log10(abs(x)))
+    elseif base == 2
+        return 1 + exponent(x)
+    else
+        return 1 + floor(Int, log(base, abs(x)))
+    end
+end
+hidigit(x::Real, base) = hidigit(float(x), base)
+
+function _round(x, r::RoundingMode, digits::Nothing, sigdigits::Integer, base)
+    h = hidigit(x, base)
+    _round(x, r, sigdigits-h, nothing, base)
+end
+
+_round(x, r::RoundingMode, digits::Integer, sigdigits::Integer, base) =
+    throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
+
 # C-style round
-function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
+function _round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     y = trunc(x)
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
+function _round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
     y = floor(x)
     ifelse(x==y,y,copysign(floor(2*x-y),x))
-end
-round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T,round(x,r))
-
-# adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
-# for round, og is the power of 10 relative to the decimal point
-# for signif, og is the absolute power of 10
-# digits and base must be integers, x must be convertable to float
-
-function _signif_og(x, digits, base)
-    if base == 10
-        e = floor(log10(abs(x)) - digits + 1.)
-        og = oftype(x, exp10(abs(e)))
-    elseif base == 2
-        e = exponent(abs(x)) - digits + 1.
-        og = oftype(x, exp2(abs(e)))
-    else
-        e = floor(log(base, abs(x)) - digits + 1.)
-        og = oftype(x, float(base) ^ abs(e))
-    end
-    return og, e
-end
-
-"""
-    signif(x, digits; base = 10)
-
-Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
-base `base` representation, default 10.
-
-# Examples
-```jldoctest
-julia> signif(123.456, 2)
-120.0
-
-julia> signif(357.913, 4, base = 2)
-352.0
-```
-"""
-function signif(x::Real, digits::Integer; base::Integer = 10)
-    digits < 1 && throw(DomainError(digits, "`digits` cannot be less than 1."))
-
-    x = float(x)
-    (x == 0 || !isfinite(x)) && return x
-    og, e = _signif_og(x, digits, base)
-    if e >= 0 # for numeric stability
-        r = round(x/og)*og
-    else
-        r = round(x*og)/og
-    end
-    !isfinite(r) ? x : r
-end
-
-for f in (:round, :ceil, :floor, :trunc)
-    @eval begin
-        function ($f)(x::Real, digits::Integer; base::Integer = 10)
-            x = float(x)
-            og = convert(eltype(x),base)^digits
-            r = ($f)(x * og) / og
-
-            if !isfinite(r)
-                if digits > 0
-                    return x
-                elseif x > 0
-                    return $(:ceil == f ? :(convert(eltype(x), Inf)) : :(zero(x)))
-                elseif x < 0
-                    return $(:floor == f ? :(-convert(eltype(x), Inf)) : :(-zero(x)))
-                else
-                    return x
-                end
-            end
-            return r
-        end
-    end
 end
 
 # isapprox: approximate equality of numbers

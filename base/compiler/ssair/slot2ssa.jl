@@ -42,14 +42,14 @@ function lift_defuse(cfg::CFG, defuse)
 end
 
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
-function scan_slot_def_use(nargs, ci::CodeInfo)
+function scan_slot_def_use(nargs, ci::CodeInfo, code)
     nslots = length(ci.slotnames)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
     # Set defs for arguments
     for var in result[1:(1+nargs)]
         push!(var.defs, 0)
     end
-    for (idx, stmt) in Iterators.enumerate(ci.code)
+    for (idx, stmt) in Iterators.enumerate(code)
         scan_entry!(result, idx, stmt)
     end
     result
@@ -72,9 +72,9 @@ function renumber_ssa!(@nospecialize(stmt), ssanums::Vector{Any}, new_ssa::Bool=
     return ssamap(val->renumber_ssa(val, ssanums, new_ssa, used_ssa), stmt)
 end
 
-function make_ssa!(ci::CodeInfo, idx, slot, @nospecialize(typ))
+function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ))
     (idx == 0) && return Argument(slot)
-    stmt = ci.code[idx]
+    stmt = code[idx]
     @assert isexpr(stmt, :(=))
     push!(ci.ssavaluetypes, typ)
     ssa = length(ci.ssavaluetypes)-1
@@ -173,9 +173,9 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
     urs[]
 end
 
-function fixup_uses!(ir::IRCode, ci::CodeInfo, uses::Vector{Int}, slot, @nospecialize(ssa))
+function fixup_uses!(ir::IRCode, ci::CodeInfo, code, uses::Vector{Int}, slot, @nospecialize(ssa))
     for use in uses
-        ci.code[use] = fixemup!(stmt->slot_id(stmt)==slot, stmt->ssa, ir, ci, use, ci.code[use])
+        code[use] = fixemup!(stmt->slot_id(stmt)==slot, stmt->ssa, ir, ci, use, code[use])
     end
 end
 
@@ -289,8 +289,8 @@ function rename_phinode_edges(node, bb, result_order, bb_rename)
     new_values = Any[]
     new_edges = Any[]
     for (idx, edge) in pairs(node.edges)
-        haskey(bb_rename, edge) || continue
-        new_edge_from = rename_incoming_edge(edge, bb, result_order, bb_rename)
+        (edge == 0 || haskey(bb_rename, edge)) || continue
+        new_edge_from = edge == 0 ? 0 : rename_incoming_edge(edge, bb, result_order, bb_rename)
         push!(new_edges, new_edge_from)
         if isassigned(node.values, idx)
             push!(new_values, node.values[idx])
@@ -404,6 +404,9 @@ function domsort_ssa!(ir, domtree)
             end
             result_stmts[inst_range[end]] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
+            if isa(terminator, Expr) && terminator.head == :enter
+                terminator.args[1] = bb_rename[terminator.args[1]]
+            end
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
                 result_stmts[inst_range[end]+1] = GotoNode(bb_rename[bb+1])
@@ -417,10 +420,10 @@ function domsort_ssa!(ir, domtree)
     end
     result_stmts = Any[renumber_ssa!(result_stmts[i], inst_rename, true) for i in 1:length(result_stmts)]
     cfg = CFG(new_bbs, Int[first(bb.stmts) for bb in new_bbs[2:end]])
-    new_new_nodes = NewNode[(inst_rename[pos].id, typ,
+    new_new_nodes = NewNode[(inst_rename[pos].id, reverse_affinity, typ,
         renumber_ssa!(isa(node, PhiNode) ?
         rename_phinode_edges(node, 0, result_order, bb_rename) : node,
-        inst_rename, true), lno) for (pos, typ, node, lno) in ir.new_nodes]
+        inst_rename, true), lno) for (pos, reverse_affinity, typ, node, lno) in ir.new_nodes]
     new_ir = IRCode(ir, result_stmts, result_types, result_ltable, cfg, new_new_nodes)
     new_ir
 end
@@ -451,26 +454,46 @@ function compute_live_ins(cfg, defuse)
     extra_liveins = IdSet{Int}()
     worklist = Int[]
     for bb in bb_uses
-        append!(worklist, filter(p->!(p in bb_defs), cfg.blocks[bb].preds))
+        append!(worklist, filter(p->p != 0 && !(p in bb_defs), cfg.blocks[bb].preds))
     end
     while !isempty(worklist)
         elem = pop!(worklist)
         (elem in bb_uses || elem in extra_liveins) && continue
         push!(extra_liveins, elem)
-        append!(worklist, filter(p->!(p in bb_defs), cfg.blocks[elem].preds))
+        append!(worklist, filter(p->p != 0 && !(p in bb_defs), cfg.blocks[elem].preds))
     end
     append!(bb_uses, extra_liveins)
     BlockLiveness(bb_defs, bb_uses)
 end
 
-function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int)
+function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::DomTree, defuse, nargs::Int)
     cfg = ir.cfg
     left = Int[]
-    livenesses = map(du->compute_live_ins(cfg, du), defuse)
+    catch_entry_blocks = Tuple{Int, Int}[]
+    for (idx, stmt) in pairs(code)
+        if isexpr(stmt, :enter)
+            push!(catch_entry_blocks, (block_for_inst(cfg, idx), block_for_inst(cfg, stmt.args[1])))
+        end
+    end
+
+    exc_handlers = IdDict{Int, Int}()
+    # Record the correct exception handler for all cricitcal sections
+    for (enter_block, exc) in catch_entry_blocks
+        exc_handlers[enter_block+1] = exc
+        # TODO: Cut off here if the terminator is a leave corresponding to this enter
+        for block in dominated(domtree, enter_block+1)
+            exc_handlers[block] = exc
+        end
+    end
+
     phi_slots = Vector{Int}[Vector{Int}() for _ = 1:length(ir.cfg.blocks)]
     phi_nodes = Vector{Pair{Int,PhiNode}}[Vector{Pair{Int,PhiNode}}() for _ = 1:length(cfg.blocks)]
     phi_ssas = SSAValue[]
-    for (idx, slot) in Iterators.enumerate(defuse)
+    phicnodes = IdDict{Int, Vector{Tuple{SlotNumber, NewSSAValue, PhiCNode}}}()
+    for (_, exc) in catch_entry_blocks
+        phicnodes[exc] = Vector{Tuple{SlotNumber, NewSSAValue, PhiCNode}}()
+    end
+    @timeit "idf" for (idx, slot) in Iterators.enumerate(defuse)
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
         # TODO: Restore this optimization
@@ -478,28 +501,43 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             if slot.defs[] == 0
                 typ = ci.slottypes[idx]
                 ssaval = Argument(idx)
-                fixup_uses!(ir, ci, slot.uses, idx, ssaval)
-            elseif isa(ci.code[slot.defs[]], NewvarNode)
+                fixup_uses!(ir, ci, code, slot.uses, idx, ssaval)
+            elseif isa(code[slot.defs[]], NewvarNode)
                 typ = MaybeUndef(Union{})
                 ssaval = nothing
                 for use in slot.uses[]
                     insert_node!(ir, use, Union{}, Expr(:throw_undef_if_not, ci.slotnames[idx], false))
                 end
-                fixup_uses!(ir, ci, slot.uses, idx, nothing)
+                fixup_uses!(ir, ci, code, slot.uses, idx, nothing)
             else
-                val = ci.code[slot.defs[]].args[2]
+                val = code[slot.defs[]].args[2]
                 typ = typ_for_val(val, ci)
-                ssaval = SSAValue(make_ssa!(ci, slot.defs[], idx, typ))
-                fixup_uses!(ir, ci, slot.uses, idx, ssaval)
+                ssaval = SSAValue(make_ssa!(ci, code, slot.defs[], idx, typ))
+                fixup_uses!(ir, ci, code, slot.uses, idx, ssaval)
             end
             continue
         end
-        # TODO: Perform liveness here to eliminate dead phi nodes
-        phiblocks = idf(cfg, livenesses[idx], domtree)
+        @timeit "liveness" (live = compute_live_ins(cfg, slot))
+        for li in live.live_in_bbs
+            cidx = findfirst(x->x[2] == li, catch_entry_blocks)
+            if cidx !== nothing
+                # The slot is live-in into this block. We need to
+                # Create a PhiC node in the catch entry block and
+                # an upsilon node in the corresponding enter block
+                node = PhiCNode(Any[])
+                phic_ssa = NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, li), Union{}, node).id)
+                push!(phicnodes[li], (SlotNumber(idx), phic_ssa, node))
+                # Inform IDF that we now have a def in the catch block
+                if !(li in live.def_bbs)
+                    push!(live.def_bbs, li)
+                end
+            end
+        end
+        phiblocks = idf(cfg, live, domtree)
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
-            ssa = insert_node!(ir, first_insert_for_bb(ci.code, cfg, block), Union{}, node)
+            ssa = insert_node!(ir, first_insert_for_bb(code, cfg, block), Union{}, node)
             push!(phi_nodes[block], ssa.id=>node)
         end
         push!(left, idx)
@@ -517,18 +555,19 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
     worklist = Any[(1, 0, initial_incoming_vals)]
     visited = IdSet{Int}()
     type_refine_phi = IdSet{Int}()
-    while !isempty(worklist)
+    @timeit "SSA Rename" while !isempty(worklist)
         (item, pred, incoming_vals) = pop!(worklist)
         # Rename existing phi nodes first, because their uses occur on the edge
         # TODO: This isn't necessary if inlining stops replacing arguments by slots.
         for idx in cfg.blocks[item].stmts
-            stmt = ci.code[idx]
+            stmt = code[idx]
             if isexpr(stmt, :(=))
                 stmt = stmt.args[2]
             end
             isa(stmt, PhiNode) || continue
             for (edgeidx, edge) in pairs(stmt.edges)
-                block_for_inst(cfg, edge) == pred || continue
+                from_bb = edge == 0 ? 0 : block_for_inst(cfg, edge)
+                from_bb == pred || continue
                 isassigned(stmt.values, edgeidx) || break
                 stmt.values[edgeidx] = rename_uses!(ir, ci, edge, stmt.values[edgeidx], incoming_vals)
                 break
@@ -556,35 +595,73 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             end
             typ = incoming_val == undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci)
             new_node_id = ssaval - length(ir.stmts)
-            old_insert, old_typ, _, old_line = ir.new_nodes[new_node_id]
+            old_insert, reverse_affinity, old_typ, _, old_line = ir.new_nodes[new_node_id]
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval)
             end
             new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(old_typ, typ)
-            ir.new_nodes[new_node_id] = (old_insert, new_typ, node, old_line)
+            ir.new_nodes[new_node_id] = (old_insert, reverse_affinity, new_typ, node, old_line)
             incoming_vals[slot] = NewSSAValue(ssaval)
         end
         (item in visited) && continue
+        # Record phi_C nodes if necessary
+        if haskey(phicnodes, item)
+            for (slot, ssa, _) in phicnodes[item]
+                incoming_vals[slot_id(slot)] = ssa
+            end
+        end
+        # Record initial upsilon nodes if necessary
+        eidx = findfirst(x->x[1] == item, catch_entry_blocks)
+        if eidx !== nothing
+            for (slot, _, node) in phicnodes[catch_entry_blocks[eidx][2]]
+                ivalundef = incoming_vals[slot_id(slot)] === undef_token
+                unode = ivalundef ? UpsilonNode() : UpsilonNode(incoming_vals[slot_id(slot)])
+                typ = ivalundef ? MaybeUndef(Union{}) : ci.slottypes[slot_id(slot)]
+                push!(node.values,
+                    NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item)+1,
+                                 typ, unode).id))
+            end
+        end
         push!(visited, item)
         for idx in cfg.blocks[item].stmts
-            stmt = ci.code[idx]
+            stmt = code[idx]
             (isa(stmt, PhiNode) || (isexpr(stmt, :(=)) && isa(stmt.args[2], PhiNode))) && continue
             if isa(stmt, NewvarNode)
                 incoming_vals[slot_id(stmt.slot)] = undef_token
-                ci.code[idx] = nothing
+                code[idx] = nothing
             else
                 stmt = rename_uses!(ir, ci, idx, stmt, incoming_vals)
-                if stmt === nothing && isa(ci.code[idx], Union{ReturnNode, GotoIfNot}) && idx == last(cfg.blocks[item].stmts)
+                if stmt === nothing && isa(code[idx], Union{ReturnNode, GotoIfNot}) && idx == last(cfg.blocks[item].stmts)
                     # preserve the CFG
                     stmt = ReturnNode()
                 end
-                ci.code[idx] = stmt
+                code[idx] = stmt
                 # Record a store
                 if isexpr(stmt, :(=)) && isa(stmt.args[1], SlotNumber)
                     id = slot_id(stmt.args[1])
                     val = stmt.args[2]
                     typ = typ_for_val(val, ci)
-                    incoming_vals[id] = SSAValue(make_ssa!(ci, idx, id, typ))
+                    # Having undef_token appear on the RHS is possible if we're on a dead brach.
+                    # Do something reasonable here, by marking the LHS as undef as well.
+                    if val !== undef_token
+                        incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ))
+                    else
+                        code[idx] = nothing
+                        incoming_vals[id] = undef_token
+                    end
+                    if haskey(exc_handlers, item)
+                        exc = exc_handlers[item]
+                        cidx = findfirst(x->slot_id(x[1]) == id, phicnodes[exc])
+                        if cidx !== nothing
+                            node = UpsilonNode(incoming_vals[id])
+                            if incoming_vals[id] === undef_token
+                                node = UpsilonNode()
+                                typ = MaybeUndef(Union{})
+                            end
+                            push!(phicnodes[exc][cidx][3].values,
+                                NewSSAValue(insert_node!(ir, idx+1, typ, node, true).id))
+                        end
+                    end
                 end
             end
         end
@@ -595,36 +672,54 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
     # Delete any instruction in unreachable blocks (except for terminators)
     for bb in setdiff(IdSet{Int}(1:length(cfg.blocks)), visited)
         for idx in cfg.blocks[bb].stmts
-            if isa(ci.code[idx], Union{GotoNode, GotoIfNot, ReturnNode})
-                ci.code[idx] = ReturnNode()
+            if isa(code[idx], Union{GotoNode, GotoIfNot, ReturnNode})
+                code[idx] = ReturnNode()
             else
-                ci.code[idx] = nothing
+                code[idx] = nothing
             end
         end
     end
     # Convert into IRCode form
-    code = ir.stmts
+    new_code = ir.stmts
     ssavalmap = Any[SSAValue(-1) for _ in 1:(length(ci.ssavaluetypes)+1)]
-    types = Any[Any for _ in 1:length(code)]
+    types = Any[Any for _ in 1:length(new_code)]
     # Detect statement positions for assignments and construct array
-    for (idx, stmt) in Iterators.enumerate(ci.code)
+    for (idx, stmt) in Iterators.enumerate(code)
         if isexpr(stmt, :(=)) && isa(stmt.args[1], SSAValue)
             ssavalmap[stmt.args[1].id + 1] = SSAValue(idx)
             types[idx] = ci.ssavaluetypes[stmt.args[1].id + 1]
             stmt = stmt.args[2]
             if isa(stmt, PhiNode)
-                edges = Any[block_for_inst(cfg, edge) for edge in stmt.edges]
-                code[idx] = PhiNode(edges, stmt.values)
+                edges = Any[edge == 0 ? 0 : block_for_inst(cfg, edge) for edge in stmt.edges]
+                new_code[idx] = PhiNode(edges, stmt.values)
             else
-                code[idx] = stmt
+                new_code[idx] = stmt
             end
         # Convert GotoNode/GotoIfNot/PhiNode to BB addressing
         elseif isa(stmt, GotoNode)
-            code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
+            new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
-            code[idx] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+            new_code[idx] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+        elseif isexpr(stmt, :enter)
+            new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]))
         else
-            code[idx] = stmt
+            new_code[idx] = stmt
+        end
+    end
+    for (_, nodes) in phicnodes
+        for (_, ssa, node) in nodes
+            new_typ = Union{}
+            new_idx = ssa.id - length(ir.stmts)
+            old_insert, reverse_affinity, old_typ, _, old_line = ir.new_nodes[new_idx]
+            for i = 1:length(node.values)
+                orig_typ = typ = typ_for_val(node.values[i], ci)
+                @assert !isa(typ, MaybeUndef)
+                while isa(typ, DelayedTyp)
+                    typ = ir.new_nodes[typ.phi.id - length(ir.stmts)][3]
+                end
+                new_typ = tmerge(new_typ, typ)
+            end
+            ir.new_nodes[new_idx] = (old_insert, reverse_affinity, new_typ, node, old_line)
         end
     end
     # This is a bit awkward, because it basically duplicates what type
@@ -635,7 +730,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         changed = false
         for phi in type_refine_phi
             new_idx = phi - length(ir.stmts)
-            old_insert, old_typ, node, old_line = ir.new_nodes[new_idx]
+            old_insert, reverse_affinity, old_typ, node, old_line = ir.new_nodes[new_idx]
             new_typ = Union{}
             for i = 1:length(node.values)
                 if !isassigned(node.values, i)
@@ -645,28 +740,34 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                     continue
                 end
                 typ = typ_for_val(node.values[i], ci)
-                if isa(typ, DelayedTyp)
-                    typ = ir.new_nodes[typ.phi.id - length(ir.stmts)][2]
+                was_maybe_undef = false
+                if isa(typ, MaybeUndef)
+                    typ = typ.typ
+                    was_maybe_undef = true
                 end
-                new_typ = tmerge(new_typ, typ)
+                @assert !isa(typ, MaybeUndef)
+                while isa(typ, DelayedTyp)
+                    typ = ir.new_nodes[typ.phi.id - length(ir.stmts)][3]
+                end
+                new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
             end
             if !(old_typ ⊑ new_typ) || !(new_typ ⊑ old_typ)
-                ir.new_nodes[new_idx] = (old_insert, new_typ, node, old_line)
+                ir.new_nodes[new_idx] = (old_insert, reverse_affinity, new_typ, node, old_line)
                 changed = true
             end
         end
     end
     types = Any[isa(types[i], DelayedTyp) ? ir.new_nodes[types[i].phi.id - length(ir.stmts)][2] : types[i] for i in 1:length(types)]
-    new_nodes = NewNode[let (pos, typ, node, line) = ir.new_nodes[i]
+    new_nodes = NewNode[let (pos, reverse_affinity, typ, node, line) = ir.new_nodes[i]
             typ = isa(typ, DelayedTyp) ? ir.new_nodes[typ.phi.id - length(ir.stmts)][2] : typ
-            (pos, typ, node, line)
+            (pos, reverse_affinity, typ, node, line)
         end for i in 1:length(ir.new_nodes)]
     # Renumber SSA values
-    code = Any[new_to_regular(renumber_ssa!(code[i], ssavalmap)) for i in 1:length(code)]
-    new_nodes = NewNode[let (pt, typ, stmt, line) = new_nodes[i]
-            (pt, typ, new_to_regular(renumber_ssa!(stmt, ssavalmap)), line)
+    new_code = Any[new_to_regular(renumber_ssa!(new_code[i], ssavalmap)) for i in 1:length(new_code)]
+    new_nodes = NewNode[let (pt, reverse_affinity, typ, stmt, line) = new_nodes[i]
+            (pt, reverse_affinity, typ, new_to_regular(renumber_ssa!(stmt, ssavalmap)), line)
         end for i in 1:length(new_nodes)]
-    ir = IRCode(ir, code, types, ir.lines, ir.cfg, new_nodes)
-    ir = domsort_ssa!(ir, domtree)
+    ir = IRCode(ir, new_code, types, ir.lines, ir.cfg, new_nodes)
+    @timeit "domsort" ir = domsort_ssa!(ir, domtree)
     ir
 end

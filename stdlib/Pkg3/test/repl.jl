@@ -8,7 +8,7 @@ import LibGit2
 
 include("utils.jl")
 
-const TEST_SIG = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+const TEST_SIG = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time()), 0)
 const TEST_PKG = (name = "Example", uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a"))
 
 function git_init_package(tmp, path)
@@ -100,11 +100,11 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
                 empty!(DEPOT_PATH)
                 write("Project.toml", proj)
                 write("Manifest.toml", manifest)
-                depot_dir = mktempdir()
-                pushfirst!(DEPOT_PATH, depot_dir)
-                pkg"up --fixed"
-                @test Pkg3.installed()[pkg2] == v"0.2.0"
-                try rm(depot_dir; recursive=true) end
+                mktempdir() do depot_dir
+                    pushfirst!(DEPOT_PATH, depot_dir)
+                    pkg"up --fixed"
+                    @test Pkg3.installed()[pkg2] == v"0.2.0"
+                end
             finally
                 empty!(DEPOT_PATH)
                 append!(DEPOT_PATH, old_depot)
@@ -121,22 +121,39 @@ locate_name(pkg) = Base.locate_package(Base.identify_package(pkg))
 
 temp_pkg_dir() do project_path; cd(project_path) do
     mktempdir() do tmp
-        withenv("JULIA_PKG_DEVDIR" => tmp) do
-            pkg"init"
-            pkg"develop Example#c37b675"
-            @test locate_name("Example") ==  joinpath(tmp, "Example", "src", "Example.jl")
-            Pkg3.test("Example")
-            # Test an unregistered package
-            p1_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithProject")
-            p2_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithoutProject")
-            Pkg3.REPLMode.pkgstr("develop $(p1_path)")
-            Pkg3.REPLMode.pkgstr("develop $(p2_path)")
-            @test locate_name("UnregisteredWithProject") == joinpath(p1_path, "src", "UnregisteredWithProject.jl")
-            @test locate_name("UnregisteredWithoutProject") == joinpath(p2_path, "src", "UnregisteredWithoutProject.jl")
-            @test Pkg3.installed()["UnregisteredWithProject"] == v"0.1.0"
-            @test Pkg3.installed()["UnregisteredWithoutProject"] == v"0.0.0"
-            Pkg3.test("UnregisteredWithoutProject")
-            Pkg3.test("UnregisteredWithProject")
+        mktempdir() do depot_dir
+            old_depot = copy(DEPOT_PATH)
+            try
+                empty!(DEPOT_PATH)
+                pushfirst!(DEPOT_PATH, depot_dir)
+                withenv("JULIA_PKG_DEVDIR" => tmp) do
+                    pkg"init"
+
+                    # Test an unregistered package
+                    p1_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithProject")
+                    p2_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithoutProject")
+                    p1_new_path = joinpath(tmp, "UnregisteredWithProject")
+                    p2_new_path = joinpath(tmp, "UnregisteredWithoutProject")
+                    cp(p1_path, p1_new_path)
+                    cp(p2_path, p2_new_path)
+                    Pkg3.REPLMode.pkgstr("develop $(p1_new_path)")
+                    Pkg3.REPLMode.pkgstr("develop $(p2_new_path)")
+                    Pkg3.REPLMode.pkgstr("build")
+                    @test locate_name("UnregisteredWithProject") == joinpath(p1_new_path, "src", "UnregisteredWithProject.jl")
+                    @test locate_name("UnregisteredWithoutProject") == joinpath(p2_new_path, "src", "UnregisteredWithoutProject.jl")
+                    @test Pkg3.installed()["UnregisteredWithProject"] == v"0.1.0"
+                    @test Pkg3.installed()["UnregisteredWithoutProject"] == v"0.0.0"
+                    Pkg3.test("UnregisteredWithoutProject")
+                    Pkg3.test("UnregisteredWithProject")
+
+                    pkg"develop Example#c37b675"
+                    @test locate_name("Example") ==  joinpath(tmp, "Example", "src", "Example.jl")
+                    Pkg3.test("Example")
+                end
+            finally
+                empty!(DEPOT_PATH)
+                append!(DEPOT_PATH, old_depot)
+            end
         end # withenv
     end # mktempdir
     # nested
@@ -172,6 +189,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
     end
 end # cd
 end # temp_pkg_dir
+
 
 test_complete(s) = Pkg3.REPLMode.completions(s,lastindex(s))
 apply_completion(str) = begin
@@ -261,5 +279,6 @@ mktempdir() do tmp
         end
     end
 end
+
 
 end # module

@@ -492,7 +492,9 @@ mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 
 """
-    trunc([T,] x, [digits; base = 10])
+    trunc([T,] x)
+    trunc(x; digits::Integer= [, base = 10])
+    trunc(x; sigdigits::Integer= [, base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
 is less than or equal to `x`.
@@ -500,12 +502,14 @@ is less than or equal to `x`.
 `trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits` and `base` work as for [`round`](@ref).
+`digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function trunc end
 
 """
-    floor([T,] x, [digits; base = 10])
+    floor([T,] x)
+    floor(x; digits::Integer= [, base = 10])
+    floor(x; sigdigits::Integer= [, base = 10])
 
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
 equal to `x`.
@@ -513,12 +517,14 @@ equal to `x`.
 `floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits` and `base` work as for [`round`](@ref).
+`digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function floor end
 
 """
-    ceil([T,] x, [digits; base = 10])
+    ceil([T,] x)
+    ceil(x; digits::Integer= [, base = 10])
+    ceil(x; sigdigits::Integer= [, base = 10])
 
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
 equal to `x`.
@@ -526,14 +532,9 @@ equal to `x`.
 `ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
 representable.
 
-`digits` and `base` work as for [`round`](@ref).
+`digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function ceil end
-
-round(x::Integer) = x
-trunc(x::Integer) = x
-floor(x::Integer) = x
- ceil(x::Integer) = x
 
 round(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 trunc(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)

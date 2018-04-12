@@ -30,7 +30,7 @@ pgenerate(f, c) = pgenerate(default_worker_pool(), f, c)
 pgenerate(f, c1, c...) = pgenerate(a->f(a...), zip(c1, c...))
 
 """
-    pmap([::AbstractWorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_delays=[], retry_check=nothing) -> collection
+    pmap(f, [::AbstractWorkerPool], c...; distributed=true, batch_size=1, on_error=nothing, retry_delays=[], retry_check=nothing) -> collection
 
 Transform collection `c` by applying `f` to each element using available
 workers and tasks.
@@ -96,7 +96,7 @@ delays up to 3 times. Return a `NaN` in place for all `InexactError` occurrences
 pmap(f, c; on_error = e->(isa(e, InexactError) ? NaN : rethrow(e)), retry_delays = ExponentialBackOff(n = 3))
 ```
 """
-function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_error=nothing,
+function pmap(f, p::AbstractWorkerPool, c; distributed=true, batch_size=1, on_error=nothing,
                                            retry_delays=[], retry_check=nothing)
     f_orig = f
     # Don't do remote calls if there are no workers.
@@ -152,8 +152,8 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
     end
 end
 
-pmap(p::AbstractWorkerPool, f, c1, c...; kwargs...) = pmap(p, a->f(a...), zip(c1, c...); kwargs...)
-pmap(f, c; kwargs...) = pmap(default_worker_pool(), f, c; kwargs...)
+pmap(f, p::AbstractWorkerPool, c1, c...; kwargs...) = pmap(a->f(a...), p, zip(c1, c...); kwargs...)
+pmap(f, c; kwargs...) = pmap(f, default_worker_pool(), c; kwargs...)
 pmap(f, c1, c...; kwargs...) = pmap(a->f(a...), zip(c1, c...); kwargs...)
 
 function wrap_on_error(f, on_error; capture_data=false)
@@ -215,7 +215,7 @@ function process_batch_errors!(p, f, results, on_error, retry_delays, retry_chec
         if (length(retry_delays) > 0) &&
                 (retry_check==nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
             # BatchProcessingError.data is a tuple of original args
-            error_processed = pmap(p, x->f(x...), [x.data for x in errors];
+            error_processed = pmap(x->f(x...), p, [x.data for x in errors];
                     on_error = on_error, retry_delays = collect(retry_delays)[2:end], retry_check = retry_check)
         elseif on_error !== nothing
             error_processed = map(on_error, exceptions)

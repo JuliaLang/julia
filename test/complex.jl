@@ -893,13 +893,13 @@ end
 end
 
 @testset "round and float, PR #8291" begin
-    @test round(Complex(1.125, 0.875), 2) == Complex(1.12, 0.88)
+    @test round(Complex(1.125, 0.875), digits=2) == Complex(1.12, 0.88)
     @test round(Complex(1.5, 0.5), RoundDown, RoundUp) == Complex(1.0, 1.0)
     @test round.([1:5;] .+ im) == [1:5;] .+ im
     @test round.([1:5;] .+ 0.5im) == [1.0:5.0;]
 
     @test float(Complex(1, 2)) == Complex(1.0, 2.0)
-    @test round(float(Complex(π, ℯ)),3) == Complex(3.142, 2.718)
+    @test round(float(Complex(π, ℯ)), digits=3) == Complex(3.142, 2.718)
 end
 
 @testset "ComplexF16 arithmetic, PR #10003" begin

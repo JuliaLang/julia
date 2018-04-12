@@ -400,22 +400,26 @@ static jl_value_t *pick_union_element(jl_value_t *u, jl_stenv_t *e, int8_t R)
     return u;
 }
 
-// compare the current component of `u` to `t`. `R==1` means `u` came from the right side.
-static int subtype_union(jl_value_t *t, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
-{
-    jl_value_t *choice = pick_union_element((jl_value_t*)u, e, R);
-    return R ? subtype(t, choice, e, param) : subtype(choice, t, e, param);
-}
+static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
-// subtype(), but taking apart unions before handling vars
-static int subtype_ufirst(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+// subtype for variable bounds consistency check. needs its own forall/exists environment.
+static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
-    if (jl_is_uniontype(x) && jl_is_typevar(y))
-        return subtype_union(y, (jl_uniontype_t*)x, e, 0, 0);
-    if (jl_is_typevar(x) && jl_is_uniontype(y))
-        return (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b ||
-                subtype_union(x, (jl_uniontype_t*)y, e, 1, 0));
-    return subtype(x, y, e, 0);
+    jl_unionstate_t oldLunions = e->Lunions;
+    jl_unionstate_t oldRunions = e->Runions;
+    int sub;
+    memset(e->Lunions.stack, 0, sizeof(e->Lunions.stack));
+    memset(e->Runions.stack, 0, sizeof(e->Runions.stack));
+    e->Runions.depth = 0;
+    e->Runions.more = 0;
+    e->Lunions.depth = 0;
+    e->Lunions.more = 0;
+
+    sub = forall_exists_subtype(x, y, e, 0);
+
+    e->Runions = oldRunions;
+    e->Lunions = oldLunions;
+    return sub;
 }
 
 // use the current context to record where a variable occurred, for the purpose
@@ -450,13 +454,13 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_ufirst(b->ub, a, e);
+        return e->ignore_free || subtype_ccheck(b->ub, a, e);
     record_var_occurrence(bb, e, param);
     if (!bb->right)  // check ∀b . b<:a
-        return subtype_ufirst(bb->ub, a, e);
+        return subtype_ccheck(bb->ub, a, e);
     if (bb->ub == a)
         return 1;
-    if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ufirst(bb->lb, a, e)))
+    if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(bb->lb, a, e)))
         return 0;
     // for contravariance we would need to compute a meet here, but
     // because of invariance bb.ub ⊓ a == a here always. however for this
@@ -476,7 +480,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         if (aa && !aa->right && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
             // an "exists" var cannot equal a "forall" var inside it unless the forall
             // var has equal bounds.
-            return subtype_ufirst(aa->ub, aa->lb, e);
+            return subtype_ccheck(aa->ub, aa->lb, e);
         }
     }
     return 1;
@@ -487,17 +491,17 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_ufirst(a, b->lb, e);
+        return e->ignore_free || subtype_ccheck(a, b->lb, e);
     record_var_occurrence(bb, e, param);
     if (!bb->right)  // check ∀b . b>:a
-        return subtype_ufirst(a, bb->lb, e);
+        return subtype_ccheck(a, bb->lb, e);
     if (bb->lb == bb->ub) {
         if (jl_is_typevar(bb->lb) && !jl_is_type(a) && !jl_is_typevar(a))
             return var_gt((jl_tvar_t*)bb->lb, a, e, param);
         if (jl_is_typevar(a) && !jl_is_type(bb->lb) && !jl_is_typevar(bb->lb))
             return var_lt((jl_tvar_t*)a, bb->lb, e, param);
     }
-    if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ufirst(a, bb->ub, e)))
+    if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e)))
         return 0;
     bb->lb = simple_join(bb->lb, a);
     assert(bb->lb != (jl_value_t*)b);
@@ -522,11 +526,9 @@ static int is_leaf_bound(jl_value_t *v)
     return !jl_is_type(v) && !jl_is_typevar(v);
 }
 
-static int is_leaf_typevar(jl_value_t *v)
+static int is_leaf_typevar(jl_tvar_t *v)
 {
-    if (jl_is_typevar(v))
-        return is_leaf_typevar(((jl_tvar_t*)v)->lb);
-    return is_leaf_bound(v);
+    return is_leaf_bound(v->lb);
 }
 
 static jl_value_t *widen_Type(jl_value_t *t)
@@ -632,7 +634,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
     int diagonal = !vb.occurs_inv && vb.occurs_cov > 1;
-    if (ans && (vb.concrete || (diagonal && is_leaf_typevar((jl_value_t*)u->var)))) {
+    if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
             // upper bound is concrete.
@@ -956,8 +958,6 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         return x == jl_bottom_type;
     return x == y || jl_egal(x, y);
 }
-
-static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
@@ -1562,7 +1562,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     else {
         res = intersect(u->body, t, e, param);
     }
-    vb->concrete |= (!vb->occurs_inv && vb->occurs_cov > 1 && is_leaf_typevar((jl_value_t*)u->var));
+    vb->concrete |= (!vb->occurs_inv && vb->occurs_cov > 1 && is_leaf_typevar(u->var));
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -2030,11 +2030,11 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 if (ii == jl_bottom_type) return jl_bottom_type;
                 if (jl_is_typevar(xp1)) {
                     jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)xp1);
-                    if (xb && is_leaf_typevar((jl_value_t*)xb->var)) xb->concrete = 1;
+                    if (xb && is_leaf_typevar(xb->var)) xb->concrete = 1;
                 }
                 if (jl_is_typevar(yp1)) {
                     jl_varbinding_t *yb = lookup(e, (jl_tvar_t*)yp1);
-                    if (yb && is_leaf_typevar((jl_value_t*)yb->var)) yb->concrete = 1;
+                    if (yb && is_leaf_typevar(yb->var)) yb->concrete = 1;
                 }
                 JL_GC_PUSH2(&ii, &i2);
                 // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
