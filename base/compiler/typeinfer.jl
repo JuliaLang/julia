@@ -319,11 +319,14 @@ function typeinf_work(frame::InferenceState)
                     else
                         # general case
                         frame.handler_at[l] = frame.cur_hand
+                        changes_else = changes
                         if isa(condt, Conditional)
-                            changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes)
-                            changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
-                        else
-                            changes_else = changes
+                            if condt.elsetype !== Any && condt.elsetype !== changes[slot_id(condt.var)]
+                                changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes_else)
+                            end
+                            if condt.vtype !== Any && condt.vtype !== changes[slot_id(condt.var)]
+                                changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
+                            end
                         end
                         newstate_else = stupdate!(s[l], changes_else)
                         if newstate_else !== false
