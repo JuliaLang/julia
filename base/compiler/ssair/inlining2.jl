@@ -323,21 +323,11 @@ function maybe_make_invoke!(ir::IRCode, idx::Int, @nospecialize(etype), atypes::
     nothing
 end
 
-function exprtype_func(@nospecialize(arg1), ir::IRCode)
-    ft = exprtype(arg1, ir, ir.mod)
+function singleton_type(@nospecialize(ft))
     if isa(ft, Const)
-        f = ft.val
-    elseif isa(ft, Conditional)
-        f = nothing
-        ft = Bool
-    else
-        f = nothing
-        if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
-            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
-            return nothing
-        end
+        return ft.val
     end
-    return (f, ft)
+    return nothing
 end
 
 function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
@@ -350,9 +340,10 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         isempty(eargs) && continue
         arg1 = eargs[1]
 
-        res = exprtype_func(arg1, ir)
-        res !== nothing || continue
-        (f, ft) = res
+        ft = exprtype(arg1, ir, ir.mod)
+        has_free_typevars(ft) && continue
+        isa(ft, Conditional) && (ft = Bool)
+        f = singleton_type(ft)
 
         atypes = Vector{Any}(undef, length(stmt.args))
         atypes[1] = ft
@@ -384,9 +375,10 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         isapply = false
         if f === Core._apply
             new_atypes = Any[]
-            res = exprtype_func(stmt.args[2], ir)
-            res !== nothing || continue
-            (f, ft) = res
+            ft = exprtype(stmt.args[2], ir, ir.mod)
+            has_free_typevars(ft) && continue
+            isa(ft, Conditional) && (ft = Bool)
+            f = singleton_type(ft)
             # Push function type
             push!(new_atypes, ft)
             # Try to figure out the signature of the function being called
@@ -407,7 +399,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                 # get a good method match. This pattern is used in the array code a bunch.
                 if isa(def, SSAValue) && is_tuple_call(ir, ir[def])
                     for tuparg in ir[def].args[2:end]
-                        push!(new_atypes, exprtype(tuparg , ir, ir.mod))
+                        push!(new_atypes, exprtype(tuparg, ir, ir.mod))
                     end
                 else
                     append!(new_atypes, typ.parameters)
@@ -593,7 +585,9 @@ function compute_invoke_data(@nospecialize(atypes), argexprs::Vector{Any}, sv::O
     invoke_tt = widenconst(atypes[3])
     if !(isconcretetype(ft) || ft <: Type) || !isType(invoke_tt) ||
             has_free_typevars(invoke_tt) || has_free_typevars(ft) || (ft <: Builtin)
-        # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+        # TODO: this can be rather aggressive at preventing inlining of closures
+        # XXX: this is wrong for `ft <: Type`, since we are failing to check that
+        #      the result doesn't have subtypes, or to do an intersection lookup
         return nothing
     end
     if !(isa(invoke_tt.parameters[1], Type) &&
