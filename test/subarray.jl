@@ -524,7 +524,7 @@ let foo = [X]
 end
 
 # test @views macro
-@views let f!(x) = (x[1:end-1] .+= x[2:end].^2; nothing)
+@views let f!(x) = x[1:end-1] .+= x[2:end].^2
     x = [1,2,3,4]
     f!(x)
     @test x == [5,11,19,4]

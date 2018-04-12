@@ -559,11 +559,10 @@ end
 # Test that broadcasting identity where the input and output Array shapes do not match
 # yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
 let N = 5
-    for rhs in (zeros(N, N), zeros(N, 1), zeros(1, N), zeros(1, 1))
-        local o = fill(1, N, N)
-        o .= rhs
-        @test iszero(o)
-    end
+    @test iszero(fill(1, N, N) .= zeros(N, N))
+    @test iszero(fill(1, N, N) .= zeros(N, 1))
+    @test iszero(fill(1, N, N) .= zeros(1, N))
+    @test iszero(fill(1, N, N) .= zeros(1, 1))
 end
 
 @testset "test broadcast for matrix of matrices" begin
@@ -638,16 +637,3 @@ let n = 1
     @test ceil.(Int, n ./ (1,)) == (1,)
     @test ceil.(Int, 1 ./ (1,)) == (1,)
 end
-
-# issue #25954, value of `.=`
-# TODO: use these if we want `.=` to return its RHS
-#let a = zeros(2, 3), b = zeros(4, 5)
-#    a .= b .= 1
-#    @test a == ones(2, 3)
-#    @test b == ones(4, 5)
-#    @test (b .= 1) === 1
-#    c = [6, 7]; d = [8, 9]
-#    x = (a .= c.+d)
-#    @test a == [14 14 14; 16 16 16]
-#    @test x == [14, 16]
-#end
