@@ -151,8 +151,9 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
             inline_cfg = inline_ir.cfg
             linetable_offset = length(linetable)
             # Append the linetable of the inlined function to our line table
+            inlined_at = compact.result_lines[idx]
             for entry in inline_linetable
-                push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line, compact.result_lines[idx]))
+                push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line, (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
             end
             # If the iterator already moved on to the next basic block,
             # temorarily re-open in again.
@@ -261,6 +262,7 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
     end
 
     ir = finish(compact)
+    return ir
 end
 
 function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(invoke_data))
@@ -313,6 +315,7 @@ function maybe_make_invoke!(ir, idx, @nospecialize(etype), atypes::Vector{Any}, 
     ex.typ = etype
     ex.args = argexprs
     ir[SSAValue(idx)] = ex
+    nothing
 end
 
 function exprtype_func(@nospecialize(arg1), ir)

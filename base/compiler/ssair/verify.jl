@@ -70,6 +70,7 @@ function verify_ir(ir::IRCode)
     # Verify statements
     domtree = construct_domtree(ir.cfg)
     for (bb, idx, stmt) in bbidxstmt(ir)
+        stmt === nothing && continue
         if isa(stmt, PhiNode)
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)
@@ -110,10 +111,26 @@ function verify_ir(ir::IRCode)
                 end
             end
         else
+            if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
+                if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
+                    if ir.lines[idx] <= 0
+                        @verify_error "Missing line number information for statement $idx of $ir"
+                    end
+                end
+            end
             for op in userefs(stmt)
                 op = op[]
                 check_op(ir, domtree, op, bb, idx)
             end
+        end
+    end
+end
+
+function verify_linetable(linetable::Vector{LineInfoNode})
+    for i in 1:length(linetable)
+        line = linetable[i]
+        if i <= line.inlined_at
+            @verify_error "Misordered linetable"
         end
     end
 end

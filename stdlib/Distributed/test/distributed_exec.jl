@@ -304,7 +304,7 @@ workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
 # specify pids for pmap
-@test sort(workers()[1:2]) == sort(unique(pmap(WorkerPool(workers()[1:2]), x->(sleep(0.1);myid()), 1:10)))
+@test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), WorkerPool(workers()[1:2]), 1:10)))
 
 # Testing buffered  and unbuffered reads
 # This large array should write directly to the socket
@@ -546,7 +546,7 @@ walk_args(1)
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "generic_map_tests.jl"))
 empty_pool = WorkerPool([myid()])
-pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
+pmap_fallback = (f, c...) -> pmap(f, empty_pool, c...)
 generic_map_tests(pmap_fallback)
 
 # pmap with various types. Test for equivalence with map
@@ -589,13 +589,13 @@ pmap(_->myid(), 1:nworkers())  # priming run
 
 # Same tests with custom worker pools.
 wp = WorkerPool(workers())
-@test nworkers() == length(unique(pmap(wp, _->myid(), 1:100)))
-@test nworkers() == length(unique(remotecall_fetch(wp->pmap(wp, _->myid(), 1:100), id_other, wp)))
+@test nworkers() == length(unique(pmap(_->myid(), wp, 1:100)))
+@test nworkers() == length(unique(remotecall_fetch(wp->pmap(_->myid(), wp, 1:100), id_other, wp)))
 
 
 # CachingPool tests
 wp = CachingPool(workers())
-@test [1:100...] == pmap(wp, x->x, 1:100)
+@test [1:100...] == pmap(x->x, wp, 1:100)
 
 clear!(wp)
 @test length(wp.map_obj2ref) == 0

@@ -283,7 +283,7 @@ function optimize(me::InferenceState)
             reindex_labels!(opt)
             nargs = Int(opt.nargs) - 1
             if def isa Method
-                topline = LineInfoNode(opt.mod, def.name, def.file, Int(def.line), Int(0))
+                topline = LineInfoNode(opt.mod, def.name, def.file, Int(def.line), 0)
             else
                 topline = LineInfoNode(opt.mod, NullLineInfo.method, NullLineInfo.file, 0, 0)
             end

@@ -368,7 +368,7 @@ mutable struct IncrementalCompact
         new_len = length(code.stmts) + length(code.new_nodes)
         result = Array{Any}(undef, new_len)
         result_types = Array{Any}(undef, new_len)
-        result_lines = Array{Int}(undef, new_len)
+        result_lines = fill(0, new_len)
         used_ssas = fill(0, new_len)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
@@ -546,6 +546,7 @@ function resize!(compact::IncrementalCompact, nnewnodes)
     resize!(compact.result_lines, nnewnodes)
     resize!(compact.used_ssas, nnewnodes)
     compact.used_ssas[(old_length+1):nnewnodes] = 0
+    nothing
 end
 
 function finish_current_bb!(compact, old_result_idx=compact.result_idx)

@@ -1447,8 +1447,8 @@ timesofar("cat")
     @check_bit_operation diff(b1) Vector{Int}
 
     b1 = bitrand(n1, n2)
-    @check_bit_operation diff(b1, 1) Matrix{Int}
-    @check_bit_operation diff(b1, 2) Matrix{Int}
+    @check_bit_operation diff(b1, dims=1) Matrix{Int}
+    @check_bit_operation diff(b1, dims=2) Matrix{Int}
 
     b1 = bitrand(n1, n1)
     @check_bit_operation svd(b1)

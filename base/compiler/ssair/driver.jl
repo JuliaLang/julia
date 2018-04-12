@@ -151,6 +151,6 @@ function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode}, s
     @timeit "compact 2" ir = compact!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
-    #@timeit "verify 3" verify_ir(ir)
+    #@timeit "verify 3" (verify_ir(ir); verify_linetable(linetable))
     return ir
 end

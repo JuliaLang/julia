@@ -618,23 +618,23 @@ Base.hash(::HashCollision, h::UInt) = h
 let A, B, C, D
     A = fill(1., 10, 10)
     A[diagind(A)] = shuffle!([1:10;])
-    @test unique(A, 1) == A
-    @test unique(A, 2) == A
+    @test unique(A, dims=1) == A
+    @test unique(A, dims=2) == A
 
     # 10 repeats of each row
     B = A[shuffle!(repeat(1:10, 10)), :]
-    C = unique(B, 1)
+    C = unique(B, dims=1)
     @test sortrows(C) == sortrows(A)
-    @test unique(B, 2) == B
-    @test unique(B', 2)' == C
+    @test unique(B, dims=2) == B
+    @test unique(B', dims=2)' == C
 
     # Along third dimension
     D = cat(3, B, B)
-    @test unique(D, 1) == cat(3, C, C)
-    @test unique(D, 3) == cat(3, B)
+    @test unique(D, dims=1) == cat(3, C, C)
+    @test unique(D, dims=3) == cat(3, B)
 
     # With hash collisions
-    @test map(x -> x.x, unique(map(HashCollision, B), 1)) == C
+    @test map(x -> x.x, unique(map(HashCollision, B), dims=1)) == C
 end
 
 @testset "large matrices transpose" begin
@@ -2216,14 +2216,14 @@ end
     X = [3  9   5;
          7  4   2;
          2  1  10]
-    @test diff(X,1) == [4  -5 -3; -5  -3  8]
-    @test diff(X,2) == [6 -4; -3 -2; -1 9]
-    @test diff(view(X, 1:2, 1:2),1) == [4 -5]
-    @test diff(view(X, 1:2, 1:2),2) == reshape([6; -3], (2,1))
-    @test diff(view(X, 2:3, 2:3),1) == [-3 8]
-    @test diff(view(X, 2:3, 2:3),2) == reshape([-2; 9], (2,1))
-    @test_throws ArgumentError diff(X,3)
-    @test_throws ArgumentError diff(X,-1)
+    @test diff(X,dims=1) == [4  -5 -3; -5  -3  8]
+    @test diff(X,dims=2) == [6 -4; -3 -2; -1 9]
+    @test diff(view(X, 1:2, 1:2),dims=1) == [4 -5]
+    @test diff(view(X, 1:2, 1:2),dims=2) == reshape([6; -3], (2,1))
+    @test diff(view(X, 2:3, 2:3),dims=1) == [-3 8]
+    @test diff(view(X, 2:3, 2:3),dims=2) == reshape([-2; 9], (2,1))
+    @test_throws ArgumentError diff(X,dims=3)
+    @test_throws ArgumentError diff(X,dims=-1)
 end
 
 @testset "accumulate, accumulate!" begin
