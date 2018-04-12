@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    StringIndexError(str, i)
+
+An error occurred when trying to access `str` at index `i` that is not valid.
+"""
 struct StringIndexError <: Exception
     string::AbstractString
     index::Integer
