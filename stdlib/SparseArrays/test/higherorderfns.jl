@@ -344,12 +344,6 @@ end
                 ((spargsl..., s, s, s, spargsr...), (dargsl..., s, s, s, dargsr...)), )
             # test broadcast entry point
             @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
-            try !isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
-            catch
-                @show map(typeof, sparseargs)
-                @show map(size, sparseargs)
-                continue
-            end
             @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
             # test broadcast! entry point
             fX = broadcast(*, sparseargs...); X = sparse(fX)

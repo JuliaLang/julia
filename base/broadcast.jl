@@ -630,63 +630,6 @@ broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
 # broadcastable(x) = collect(x)
 # broadcastable(::Union{AbstractDict, NamedTuple}) = error("intentionally unimplemented to allow development in 1.x")
 
-# TODO: IS THIS SECTION NEEDED OR NOT???
-# """
-#     broadcast!(f, dest, As...)
-#
-# Like [`broadcast`](@ref), but store the result of
-# `broadcast(f, As...)` in the `dest` array.
-# Note that `dest` is only used to store the result, and does not supply
-# arguments to `f` unless it is also listed in the `As`,
-# as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
-# """
-# @inline function broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N}
-#     As′ = map(broadcastable, As)
-#     broadcast!(f, dest, combine_styles(As′...), As′...)
-# end
-# @inline broadcast!(f::Tf, dest, ::BroadcastStyle, As::Vararg{Any,N}) where {Tf,N} = broadcast!(f, dest, nothing, As...)
-#
-# # Default behavior (separated out so that it can be called by users who want to extend broadcast!).
-# @inline function broadcast!(f, dest, ::Nothing, As::Vararg{Any, N}) where N
-#     if f isa typeof(identity) && N == 1
-#         A = As[1]
-#         if A isa AbstractArray && Base.axes(dest) == Base.axes(A)
-#             return copyto!(dest, A)
-#         end
-#     end
-#     _broadcast!(f, dest, As...)
-#     return dest
-# end
-#
-# # Optimization for the case where all arguments are 0-dimensional
-# @inline function broadcast!(f, dest, ::AbstractArrayStyle{0}, As::Vararg{Any, N}) where N
-#     if dest isa AbstractArray
-#         if f isa typeof(identity) && N == 1
-#             return fill!(dest, As[1][])
-#         else
-#             @inbounds for I in eachindex(dest)
-#                 dest[I] = f(map(getindex, As)...)
-#             end
-#             return dest
-#         end
-#     end
-#     _broadcast!(f, dest, As...)
-#     return dest
-# end
-#
-
-#
-# # This indirection allows size-dependent implementations.
-# @inline function _broadcast!(f, C, A, Bs::Vararg{Any,N}) where N
-#     shape = broadcast_indices(C)
-#     @boundscheck check_broadcast_indices(shape, A, Bs...)
-#     A′ = broadcast_unalias(C, A)
-#     Bs′ = map(B->broadcast_unalias(C, B), Bs)
-#     keeps, Idefaults = map_newindexer(shape, A′, Bs′)
-#     iter = CartesianIndices(shape)
-#     _broadcast!(f, C, keeps, Idefaults, A′, Bs′, Val(N), iter)
-#     return C
-# end
 @inline _broadcast_getindex_evalf(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)  # not propagate_inbounds
 
 @noinline function broadcast_getindex_error(bc, I)
@@ -809,7 +752,7 @@ Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
-broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = materialize!(dest, make(f, As...))
+broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = (materialize!(dest, make(f, As...)); dest)
 
 """
     Broadcast.materialize(bc)
