@@ -569,13 +569,13 @@ end
 
 @testset "issue #5853, sparse diff" begin
     for i=1:2, a=Any[[1 2 3], reshape([1, 2, 3],(3,1)), Matrix(1.0I, 3, 3)]
-        @test all(diff(sparse(a),i) == diff(a,i))
+        @test all(diff(sparse(a),dims=i) == diff(a,dims=i))
     end
 end
 
 @testset "access to undefined error types that initially allocate elements as #undef" begin
     @test all(sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4]))
-    sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), 1)
+    sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), dims=1)
 end
 
 @testset "issue #6036" begin

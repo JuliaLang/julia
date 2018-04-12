@@ -202,7 +202,7 @@ end
         Bvs = eigvecs(B)
         Avs = eigvecs(A)
         Bvs = LAPACK.gebak!('S','R',ilo,ihi,scale,Bvs)
-        @test norm(diff(Avs ./ Bvs, 1)) < 100 * eps(abs(float(one(elty))))
+        @test norm(diff(Avs ./ Bvs, dims=1)) < 100 * eps(abs(float(one(elty))))
     end
 end
 

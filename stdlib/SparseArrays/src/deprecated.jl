@@ -233,6 +233,7 @@ Base.@deprecate_binding blkdiag blockdiag
 @deprecate complex(x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) complex.(x, y)
 @deprecate complex(x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) complex.(x, y)
 
+@deprecate diff(a::SparseMatrixCSC, dim::Integer) diff(a, dims=dim)
 
 # END 0.7 deprecations
 
