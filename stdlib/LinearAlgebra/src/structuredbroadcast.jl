@@ -41,17 +41,6 @@ Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:UnitUpperTriangular}, ::Struc
 # All other combinations fall back to the default style
 Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::StructuredMatrixStyle) = DefaultArrayStyle{2}()
 
-# And structured matrices lose to the DefaultArrayStyle — except scalars!
-Broadcast.BroadcastStyle(a::Broadcast.DefaultArrayStyle{Any}, ::StructuredMatrixStyle) = a
-Broadcast.BroadcastStyle(a::Broadcast.DefaultArrayStyle{N}, ::StructuredMatrixStyle) where N =
-    typeof(a)(Broadcast._max(Val(2),Val(N)))
-Broadcast.BroadcastStyle(::Broadcast.DefaultArrayStyle{0}, s::StructuredMatrixStyle) = s
-# We can define these rules symmetrically without ambiguity since both args are leaf-types but have abstract fallbacks to override
-Broadcast.BroadcastStyle(::StructuredMatrixStyle, a::Broadcast.DefaultArrayStyle{Any}) = a
-Broadcast.BroadcastStyle(::StructuredMatrixStyle, a::Broadcast.DefaultArrayStyle{N}) where N =
-    typeof(a)(Broadcast._max(Val(2),Val(N)))
-Broadcast.BroadcastStyle(s::StructuredMatrixStyle, ::Broadcast.DefaultArrayStyle{0}) = s
-
 # And a definition akin to similar using the structured type:
 structured_broadcast_alloc(bc, ::Type{<:Diagonal}, ::Type{ElType}, n) where {ElType} =
     Diagonal(Array{ElType}(undef, n))
@@ -98,12 +87,12 @@ fzero(::Type{T}) where T = T
 fzero(S::StructuredMatrix) = zero(eltype(S))
 fzero(x) = missing
 function fzero(bc::Broadcast.Broadcasted)
-    args = map(fzero, Tuple(bc.args))
+    args = map(fzero, bc.args)
     return any(ismissing, args) ? missing : bc.f(args...)
 end
 
 function Broadcast.broadcast_similar(::StructuredMatrixStyle{T}, ::Type{ElType}, inds, bc) where {T,ElType}
-    if isstructurepreserving(bc) || (!(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}) && fzeropreserving(bc))
+    if isstructurepreserving(bc) || (fzeropreserving(bc) && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
         return structured_broadcast_alloc(bc, T, ElType, length(inds[1]))
     end
     return broadcast_similar(DefaultArrayStyle{2}(), ElType, inds, bc)
