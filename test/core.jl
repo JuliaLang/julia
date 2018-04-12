@@ -1720,7 +1720,7 @@ mutable struct SIQ{A,B} <: Number
 end
 import Base: promote_rule
 promote_rule(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) where {T,T2,S,S2} = SIQ{promote_type(T,S)}
-@test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
+@test promote_type(SIQ{Int},SIQ{Float64}) == SIQ
 f4731(x::T...) where {T} = ""
 f4731(x...) = 0
 g4731() = f4731()

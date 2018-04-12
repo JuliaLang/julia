@@ -275,25 +275,6 @@ end
 
 ## promotions in arithmetic, etc. ##
 
-# Because of the promoting fallback definitions for Number, we need
-# a special case for undefined promote_rule on numeric types.
-# Otherwise, typejoin(T,S) is called (returning Number) so no conversion
-# happens, and +(promote(x,y)...) is called again, causing a stack
-# overflow.
-function promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
-    @_inline_meta
-    promote_to_supertype(T, S, typejoin(T,S))
-end
-
-# promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
-# for example this makes promote_type(Integer,Real) == Real without
-# promoting arbitrary pairs of numeric types to Number.
-promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = T
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = T
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = S
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
-    error("no promotion exists for ", T, " and ", S)
-
 promote() = ()
 promote(x) = (x,)
 
