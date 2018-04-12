@@ -598,6 +598,10 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
 }
 
 #ifndef JULIA_ENABLE_PARTR
+JL_DLLEXPORT jl_task_t *jl_task_new(jl_function_t *start) {
+    return jl_new_task(start, 0);
+}
+
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
