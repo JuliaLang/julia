@@ -8,7 +8,7 @@ Julia has two mechanisms for loading code:
 Code inclusion is quite straightforward: it simply parses and evaluates a source file in the context of the caller. Package loading is built on top of code inclusion and is quite a bit more complex. The rest of this chapter, therefore, focuses on the behavior and mechanics of package loading.
 
 !!! note
-​    You do not need to read this chapter unless you want to understand the technical details of code loading. If you use standard tools like Julia built-in package manager all you need to know is how to add packages to your projects and shared environments and you can import them.
+    You only need to read this chapter if you want to understand the technical details of package loading in Julia. If you just want to install and use packages, simply use Julia's built-in package manager to add packages to your environment and write `import X` or `using X` in your code to load packages that you've added.
 
 A *package* is a source tree with a standard layout providing functionality that can be reused by other Julia projects. A package is loaded by `import X` or  `using X` statements. These statements also make the module named `X`, which results from loading the package code, available within the module where the import statement occurs. The meaning of `import X` is context-dependent: its meaning and behavior depend on what code it occurs in. What it does depends on the answers to two questions:
 
@@ -50,7 +50,7 @@ As an abstraction, an environment provides three maps: `roots`, `graph` and `pat
 Each kind of environment defines these three maps differently, as detailed in the following sections.
 
 !!! note
-    Although in examples throughout this chapter we give fully materialized data structures for `roots`, `graph` and `paths`, they are really only abstractions and Julia's package loading code does not actually materialize them for performance reasons. Instead, these abstract data structures are queried through internal APIs and only materialized lazily on demand as package loading takes place.
+    For clarity of exposition, the examples throughout this chapter include fully materialized data structures for `roots`, `graph` and `paths`. However, these maps are really only abstractions—for efficiency, Julia's package loading code does not actually materialize them. Instead, it quries them through internal APIs and lazily computes only as much of each structure as is necessary to load a given package.
 
 ### Project environments
 
