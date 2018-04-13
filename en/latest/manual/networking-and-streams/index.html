@@ -53,7 +53,9 @@ end</code></pre><p>You can call:</p><pre><code class="language-julia-repl">julia
 &quot;HELLO AGAIN.&quot;</code></pre><p>to open <code>hello.txt</code>, call <code>read_and_capitalize</code> on it, close <code>hello.txt</code> and return the capitalized contents.</p><p>To avoid even having to define a named function, you can use the <code>do</code> syntax, which creates an anonymous function on the fly:</p><pre><code class="language-julia-repl">julia&gt; open(&quot;hello.txt&quot;) do f
            uppercase(read(f, String))
        end
-&quot;HELLO AGAIN.&quot;</code></pre><h2><a class="nav-anchor" id="A-simple-TCP-example-1" href="#A-simple-TCP-example-1">A simple TCP example</a></h2><p>Let&#39;s jump right in with a simple example involving TCP sockets. Let&#39;s first create a simple server:</p><pre><code class="language-julia-repl">julia&gt; @async begin
+&quot;HELLO AGAIN.&quot;</code></pre><h2><a class="nav-anchor" id="A-simple-TCP-example-1" href="#A-simple-TCP-example-1">A simple TCP example</a></h2><p>Let&#39;s jump right in with a simple example involving TCP sockets. This functionality is in a standard library package called <code>Sockets</code>. Let&#39;s first create a simple server:</p><pre><code class="language-julia-repl">julia&gt; using Sockets
+
+julia&gt; @async begin
            server = listen(2000)
            while true
                sock = accept(server)
@@ -87,7 +89,7 @@ julia&gt; Hello World</code></pre><p>As expected we saw &quot;Hello World&quot; 
            while true
                sock = accept(server)
                @async while isopen(sock)
-                   write(sock,readline(sock))
+                   write(sock, readline(sock, keep=true))
                end
            end
        end
@@ -96,8 +98,8 @@ Task (runnable) @0x00007fd31dc12e60
 julia&gt; clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
-julia&gt; @async while true
-           write(stdout,readline(clientside))
+julia&gt; @async while isopen(clientside)
+           write(stdout, readline(clientside, keep=true))
        end
 Task (runnable) @0x00007fd31dc11870
 
