@@ -1,13 +1,12 @@
 function ssaargmap(f, @nospecialize(stmt))
     urs = userefs(stmt)
-    urs === () && return stmt
     for op in urs
         val = op[]
         if isa(val, Union{SSAValue, Argument})
             op[] = f(val)
         end
     end
-    urs[]
+    return urs[]
 end
 
 function line_to_vector(line::Int, linetable::Vector{LineInfoNode})
@@ -222,15 +221,13 @@ function inflate_ir(ci::CodeInfo)
     for i = 1:length(code)
         stmt = code[i]
         urs = userefs(stmt)
-        if urs !== ()
-            for op in urs
-                val = op[]
-                if isa(val, SlotNumber)
-                    op[] = Argument(val.id)
-                end
+        for op in urs
+            val = op[]
+            if isa(val, SlotNumber)
+                op[] = Argument(val.id)
             end
-            stmt = urs[]
         end
+        stmt = urs[]
         # Translate statement edges to bb_edges
         if isa(stmt, GotoNode)
             code[i] = GotoNode(block_for_inst(cfg, stmt.label))
@@ -263,15 +260,13 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs, linetable)
     for i = 1:length(ci.code)
         stmt = ci.code[i]
         urs = userefs(stmt)
-        if urs !== ()
-            for op in urs
-                val = op[]
-                if isa(val, Argument)
-                    op[] = SlotNumber(val.n)
-                end
+        for op in urs
+            val = op[]
+            if isa(val, Argument)
+                op[] = SlotNumber(val.n)
             end
-            stmt = urs[]
         end
+        stmt = urs[]
         if isa(stmt, GotoNode)
             ci.code[i] = GotoNode(first(ir.cfg.blocks[stmt.label].stmts))
         elseif isa(stmt, GotoIfNot)

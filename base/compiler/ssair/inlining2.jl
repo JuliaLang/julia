@@ -1,22 +1,24 @@
-function ssa_inlining_pass!(ir::IRCode, domtree, linetable, sv::OptimizationState)
+const InliningTodo = Tuple{Int, Tuple{Bool, Bool, Bool, Int}, Method, Vector{Any}, Vector{LineInfoNode}, IRCode, Bool}
+
+function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # Go through the function, perfoming simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
-    @timeit "analysis" todo = assemble_inline_todo!(ir, domtree, linetable, sv)
+    @timeit "analysis" todo = assemble_inline_todo!(ir, linetable, sv)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
-    @timeit "execution" ir = batch_inline!(todo, ir, domtree, linetable, sv)
+    @timeit "execution" ir = batch_inline!(todo, ir, linetable, sv)
     return ir
 end
 
-function batch_inline!(todo, ir, domtree, linetable, sv)
+function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     new_cfg_blocks = BasicBlock[]
     inserted_block_ranges = UnitRange{Int}[]
     todo_bbs = Tuple{Int, Int}[]
     first_bb = 0
     bb_rename = zeros(Int, length(ir.cfg.blocks))
-    split_targets = IdSet{Int}()
-    merged_orig_blocks = IdSet{Int}()
+    split_targets = BitSet()
+    merged_orig_blocks = BitSet()
     for (idx, _a, _b, _c, _d, ir2, lie) in todo
         # A linear inline does not modify the CFG
         lie && continue
@@ -77,13 +79,13 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
             if old_block != 1 || need_split_before
                 p = new_cfg_blocks[new_block].preds
                 map!(p, p) do old_pred_block
-                    bb_rename_range[old_pred_block]
+                    return bb_rename_range[old_pred_block]
                 end
             end
             if new_block != last(new_block_range)
                 s = new_cfg_blocks[new_block].succs
                 map!(s, s) do old_succ_block
-                    bb_rename_range[old_succ_block]
+                    return bb_rename_range[old_succ_block]
                 end
             end
         end
@@ -105,7 +107,7 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
             end
         end
     end
-    new_range = first_bb+1:length(ir.cfg.blocks)
+    new_range = (first_bb + 1):length(ir.cfg.blocks)
     bb_rename[new_range] = (1:length(new_range)) .+ length(new_cfg_blocks)
     append!(new_cfg_blocks, ir.cfg.blocks[new_range])
 
@@ -114,11 +116,11 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
         p, s = new_cfg_blocks[bb].preds, new_cfg_blocks[bb].succs
         map!(p, p) do pred_bb
             pred_bb == length(bb_rename) && return length(new_cfg_blocks)
-            bb_rename[pred_bb+1]-1
+            return bb_rename[pred_bb + 1] - 1
         end
         if !(orig_bb in merged_orig_blocks)
             map!(s, s) do succ_bb
-                bb_rename[succ_bb]
+                return bb_rename[succ_bb]
             end
         end
     end
@@ -126,7 +128,7 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
     for bb in collect(split_targets)
         s = new_cfg_blocks[bb].succs
         map!(s, s) do succ_bb
-            bb_rename[succ_bb]
+            return bb_rename[succ_bb]
         end
     end
 
@@ -134,134 +136,137 @@ function batch_inline!(todo, ir, domtree, linetable, sv)
     for bb in 1:length(new_cfg_blocks)
         s = new_cfg_blocks[bb].succs
         map!(s, s) do succ_bb
-            succ_bb < 0 ? bb_rename[-succ_bb] : succ_bb
+            return succ_bb < 0 ? bb_rename[-succ_bb] : succ_bb
         end
     end
 
-    compact = IncrementalCompact(ir)
-    compact.result_bbs = new_cfg_blocks
-    nnewnodes = length(compact.result) + sum(todo) do (_a, _b, _c, _d, _e, ir2, _f)
-        length(ir2.stmts) + length(ir2.new_nodes)
-    end
-    resize!(compact, nnewnodes)
-    (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
-    for (idx, stmt) in compact
-        if compact.idx-1 == inline_idx
-            # Ok, do the inlining here
-            inline_cfg = inline_ir.cfg
-            linetable_offset = length(linetable)
-            # Append the linetable of the inlined function to our line table
-            inlined_at = compact.result_lines[idx]
-            for entry in inline_linetable
-                push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line, (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
-            end
-            # If the iterator already moved on to the next basic block,
-            # temorarily re-open in again.
-            refinish = false
-            if compact.result_idx == first(compact.result_bbs[compact.active_result_bb].stmts)
-                compact.active_result_bb -= 1
-                refinish = true
-            end
-            argexprs = copy(stmt.args)
-            # At the moment we will allow globalrefs in argument position, turn those into ssa values
-            for (aidx, aexpr) in pairs(argexprs)
-                if isa(aexpr, GlobalRef)
-                    argexprs[aidx] = insert_node_here!(compact, aexpr, compact_exprtype(compact, aexpr), compact.result_lines[idx])
+    let compact = IncrementalCompact(ir)
+        compact.result_bbs = new_cfg_blocks
+        nnewnodes = length(compact.result) + (sum(todo) do (_a, _b, _c, _d, _e, ir2, _f)
+            return length(ir2.stmts) + length(ir2.new_nodes)
+        end)
+        resize!(compact, nnewnodes)
+        (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
+        for (idx, stmt) in compact
+            if compact.idx - 1 == inline_idx
+                # Ok, do the inlining here
+                inline_cfg = inline_ir.cfg
+                linetable_offset = length(linetable)
+                # Append the linetable of the inlined function to our line table
+                inlined_at = compact.result_lines[idx]
+                for entry in inline_linetable
+                    push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
+                        (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
                 end
-            end
-            argexprs = rewrite_exprargs((node, typ)->insert_node_here!(compact, node, typ, compact.result_lines[idx]),
-                                        arg->compact_exprtype(compact, arg), isinvoke, isapply, argexprs)
-            if isva
-                vararg = mk_tuplecall!(compact, argexprs[na:end], compact.result_lines[idx])
-                argexprs = Any[argexprs[1:(na - 1)]..., vararg]
-            end
-            # Special case inlining that maintains the current basic block if there's only one BB in the target
-            if lie
-                terminator = inline_ir[SSAValue(last(inline_cfg.blocks[1].stmts))]
-                compact[idx] = nothing
-                inline_compact = IncrementalCompact(compact, inline_ir, compact.result_idx)
-                for (idx′, stmt′) in inline_compact
-                    # This dance is done to maintain accurate usage counts in the
-                    # face of rename_arguments! mutating in place - should figure out
-                    # something better eventually.
-                    inline_compact[idx′] = nothing
-                    stmt′ = ssa_substitute!(stmt′, argexprs, method.sig, spvals)
-                    compact.result_lines[idx′] += linetable_offset
-                    if isa(stmt′, ReturnNode)
-                        isa(stmt′.val, SSAValue) && (compact.used_ssas[stmt′.val.id] += 1)
-                        compact.ssa_rename[compact.idx-1] = stmt′.val
-                        stmt′ = nothing
+                # If the iterator already moved on to the next basic block,
+                # temorarily re-open in again.
+                refinish = false
+                if compact.result_idx == first(compact.result_bbs[compact.active_result_bb].stmts)
+                    compact.active_result_bb -= 1
+                    refinish = true
+                end
+                argexprs = copy(stmt.args)
+                # At the moment we will allow globalrefs in argument position, turn those into ssa values
+                for aidx in 1:length(argexprs)
+                    aexpr = argexprs[aidx]
+                    if isa(aexpr, GlobalRef)
+                        argexprs[aidx] = insert_node_here!(compact, aexpr, compact_exprtype(compact, aexpr), compact.result_lines[idx])
                     end
-                    inline_compact[idx′] = stmt′
                 end
-                just_fixup!(inline_compact)
-                compact.result_idx = inline_compact.result_idx
-                refinish && finish_current_bb!(compact)
-            else
-                bb_offset, post_bb_id = popfirst!(todo_bbs)
-                # This implements the need_split_before flag above
-                need_split_before = !isempty(inline_ir.cfg.blocks[1].preds)
-                if need_split_before
-                    finish_current_bb!(compact)
+                argexprs = rewrite_exprargs((node, typ)->insert_node_here!(compact, node, typ, compact.result_lines[idx]),
+                                            arg->compact_exprtype(compact, arg), isinvoke, isapply, argexprs)
+                if isva
+                    vararg = mk_tuplecall!(compact, argexprs[na:end], compact.result_lines[idx])
+                    argexprs = Any[argexprs[1:(na - 1)]..., vararg]
                 end
-                pn = PhiNode()
-                compact[idx] = nothing
-                inline_compact = IncrementalCompact(compact, inline_ir, compact.result_idx)
-                for (idx′, stmt′) in inline_compact
-                    inline_compact[idx′] = nothing
-                    stmt′ = ssa_substitute!(stmt′, argexprs, method.sig, spvals)
-                    compact.result_lines[idx′] += linetable_offset
-                    if isa(stmt′, ReturnNode)
-                        if isdefined(stmt′, :val)
-                            push!(pn.edges, inline_compact.active_result_bb-1)
-                            push!(pn.values, stmt′.val)
-                            stmt′ = GotoNode(post_bb_id)
+                # Special case inlining that maintains the current basic block if there's only one BB in the target
+                if lie
+                    terminator = inline_ir[SSAValue(last(inline_cfg.blocks[1].stmts))]
+                    compact[idx] = nothing
+                    inline_compact = IncrementalCompact(compact, inline_ir, compact.result_idx)
+                    for (idx′, stmt′) in inline_compact
+                        # This dance is done to maintain accurate usage counts in the
+                        # face of rename_arguments! mutating in place - should figure out
+                        # something better eventually.
+                        inline_compact[idx′] = nothing
+                        stmt′ = ssa_substitute!(stmt′, argexprs, method.sig, spvals)
+                        compact.result_lines[idx′] += linetable_offset
+                        if isa(stmt′, ReturnNode)
+                            isa(stmt′.val, SSAValue) && (compact.used_ssas[stmt′.val.id] += 1)
+                            compact.ssa_rename[compact.idx-1] = stmt′.val
+                            stmt′ = nothing
                         end
-                    elseif isa(stmt′, GotoNode)
-                        stmt′ = GotoNode(stmt′.label + bb_offset)
-                    elseif isa(stmt′, Expr) && stmt′.head == :enter
-                        stmt′ = Expr(:enter, stmt′.args[1] + bb_offset)
-                    elseif isa(stmt′, GotoIfNot)
-                        stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
-                    elseif isa(stmt′, PhiNode)
-                        stmt′ = PhiNode(Any[edge+bb_offset for edge in stmt′.edges], stmt′.values)
+                        inline_compact[idx′] = stmt′
                     end
-                    inline_compact[idx′] = stmt′
-                end
-                just_fixup!(inline_compact)
-                compact.result_idx = inline_compact.result_idx
-                compact.active_result_bb = inline_compact.active_result_bb
-                for i = 1:length(pn.values)
-                    isassigned(pn.values, i) || continue
-                    if isa(pn.values[i], SSAValue)
-                        compact.used_ssas[pn.values[i].id] += 1
-                    end
-                end
-                if length(pn.edges) == 1
-                    compact.ssa_rename[compact.idx-1] = pn.values[1]
+                    just_fixup!(inline_compact)
+                    compact.result_idx = inline_compact.result_idx
+                    refinish && finish_current_bb!(compact)
                 else
-                    pn_ssa = insert_node_here!(compact, pn, stmt.typ, compact.result_lines[idx])
-                    compact.ssa_rename[compact.idx-1] = pn_ssa
+                    bb_offset, post_bb_id = popfirst!(todo_bbs)
+                    # This implements the need_split_before flag above
+                    need_split_before = !isempty(inline_ir.cfg.blocks[1].preds)
+                    if need_split_before
+                        finish_current_bb!(compact)
+                    end
+                    pn = PhiNode()
+                    compact[idx] = nothing
+                    inline_compact = IncrementalCompact(compact, inline_ir, compact.result_idx)
+                    for (idx′, stmt′) in inline_compact
+                        inline_compact[idx′] = nothing
+                        stmt′ = ssa_substitute!(stmt′, argexprs, method.sig, spvals)
+                        compact.result_lines[idx′] += linetable_offset
+                        if isa(stmt′, ReturnNode)
+                            if isdefined(stmt′, :val)
+                                push!(pn.edges, inline_compact.active_result_bb-1)
+                                push!(pn.values, stmt′.val)
+                                stmt′ = GotoNode(post_bb_id)
+                            end
+                        elseif isa(stmt′, GotoNode)
+                            stmt′ = GotoNode(stmt′.label + bb_offset)
+                        elseif isa(stmt′, Expr) && stmt′.head == :enter
+                            stmt′ = Expr(:enter, stmt′.args[1] + bb_offset)
+                        elseif isa(stmt′, GotoIfNot)
+                            stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
+                        elseif isa(stmt′, PhiNode)
+                            stmt′ = PhiNode(Any[edge+bb_offset for edge in stmt′.edges], stmt′.values)
+                        end
+                        inline_compact[idx′] = stmt′
+                    end
+                    just_fixup!(inline_compact)
+                    compact.result_idx = inline_compact.result_idx
+                    compact.active_result_bb = inline_compact.active_result_bb
+                    for i = 1:length(pn.values)
+                        isassigned(pn.values, i) || continue
+                        if isa(pn.values[i], SSAValue)
+                            compact.used_ssas[pn.values[i].id] += 1
+                        end
+                    end
+                    if length(pn.edges) == 1
+                        compact.ssa_rename[compact.idx-1] = pn.values[1]
+                    else
+                        pn_ssa = insert_node_here!(compact, pn, stmt.typ, compact.result_lines[idx])
+                        compact.ssa_rename[compact.idx-1] = pn_ssa
+                    end
+                    refinish && finish_current_bb!(compact)
                 end
-                refinish && finish_current_bb!(compact)
+                if !isempty(todo)
+                    (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
+                else
+                    inline_idx = -1
+                end
+            elseif isa(stmt, GotoNode)
+                compact[idx] = GotoNode(bb_rename[stmt.label])
+            elseif isa(stmt, Expr) && stmt.head == :enter
+                compact[idx] = Expr(:enter, bb_rename[stmt.args[1]])
+            elseif isa(stmt, GotoIfNot)
+                compact[idx] = GotoIfNot(stmt.cond, bb_rename[stmt.dest])
+            elseif isa(stmt, PhiNode)
+                compact[idx] = PhiNode(Any[edge == length(bb_rename) ? length(new_cfg_blocks) : bb_rename[edge+1]-1 for edge in stmt.edges], stmt.values)
             end
-            if !isempty(todo)
-                (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
-            else
-                inline_idx = -1
-            end
-        elseif isa(stmt, GotoNode)
-            compact[idx] = GotoNode(bb_rename[stmt.label])
-        elseif isa(stmt, Expr) && stmt.head == :enter
-            compact[idx] = Expr(:enter, bb_rename[stmt.args[1]])
-        elseif isa(stmt, GotoIfNot)
-            compact[idx] = GotoIfNot(stmt.cond, bb_rename[stmt.dest])
-        elseif isa(stmt, PhiNode)
-            compact[idx] = PhiNode(Any[edge == length(bb_rename) ? length(new_cfg_blocks) : bb_rename[edge+1]-1 for edge in stmt.edges], stmt.values)
         end
-    end
 
-    ir = finish(compact)
+        ir = finish(compact)
+    end
     return ir
 end
 
@@ -276,7 +281,7 @@ function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(
     end
 end
 
-function rewrite_exprargs(inserter, exprtype, isinvoke, isapply, argexprs)
+function rewrite_exprargs(inserter, exprtype, isinvoke::Bool, isapply::Bool, argexprs::Vector{Any})
     if isapply
         new_argexprs = Any[argexprs[2]]
         # Flatten all tuples
@@ -297,11 +302,11 @@ function rewrite_exprargs(inserter, exprtype, isinvoke, isapply, argexprs)
         argexprs = argexprs[4:end]
         pushfirst!(argexprs, argexpr0)
     end
-    argexprs
+    return argexprs
 end
 
-function maybe_make_invoke!(ir, idx, @nospecialize(etype), atypes::Vector{Any}, sv::OptimizationState,
-                    @nospecialize(atype_unlimited), isinvoke, isapply, @nospecialize(invoke_data))
+function maybe_make_invoke!(ir::IRCode, idx::Int, @nospecialize(etype), atypes::Vector{Any}, sv::OptimizationState,
+                    @nospecialize(atype_unlimited), isinvoke::Bool, isapply::Bool, @nospecialize(invoke_data))
     nu = countunionsplit(atypes)
     nu > 1 && return # TODO: The old optimizer did union splitting here. Is this the right place?
     ex = Expr(:invoke)
@@ -318,34 +323,27 @@ function maybe_make_invoke!(ir, idx, @nospecialize(etype), atypes::Vector{Any}, 
     nothing
 end
 
-function exprtype_func(@nospecialize(arg1), ir)
-    ft = exprtype(arg1, ir, ir.mod)
+function singleton_type(@nospecialize(ft))
     if isa(ft, Const)
-        f = ft.val
-    elseif isa(ft, Conditional)
-        f = nothing
-        ft = Bool
-    else
-        f = nothing
-        if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
-            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
-            return nothing
-        end
+        return ft.val
     end
-    return (f, ft)
+    return nothing
 end
 
-function assemble_inline_todo!(ir, domtree, linetable, sv)
-    todo = Tuple{Int, Tuple{Bool, Bool, Bool, Int}, Method, Vector{Any}, Vector{LineInfoNode}, IRCode, Bool}[]
-    for (idx, stmt) in pairs(ir.stmts)
+function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
+    # todo = (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie)
+    todo = InliningTodo[]
+    for idx in 1:length(ir.stmts)
+        stmt = ir.stmts[idx]
         isexpr(stmt, :call) || continue
         eargs = stmt.args
         isempty(eargs) && continue
         arg1 = eargs[1]
 
-        res = exprtype_func(arg1, ir)
-        res !== nothing || continue
-        (f, ft) = res
+        ft = exprtype(arg1, ir, ir.mod)
+        has_free_typevars(ft) && continue
+        isa(ft, Conditional) && (ft = Bool)
+        f = singleton_type(ft)
 
         atypes = Vector{Any}(undef, length(stmt.args))
         atypes[1] = ft
@@ -377,9 +375,10 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
         isapply = false
         if f === Core._apply
             new_atypes = Any[]
-            res = exprtype_func(stmt.args[2], ir)
-            res !== nothing || continue
-            (f, ft) = res
+            ft = exprtype(stmt.args[2], ir, ir.mod)
+            has_free_typevars(ft) && continue
+            isa(ft, Conditional) && (ft = Bool)
+            f = singleton_type(ft)
             # Push function type
             push!(new_atypes, ft)
             # Try to figure out the signature of the function being called
@@ -400,7 +399,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
                 # get a good method match. This pattern is used in the array code a bunch.
                 if isa(def, SSAValue) && is_tuple_call(ir, ir[def])
                     for tuparg in ir[def].args[2:end]
-                        push!(new_atypes, exprtype(tuparg , ir, ir.mod))
+                        push!(new_atypes, exprtype(tuparg, ir, ir.mod))
                     end
                 else
                     append!(new_atypes, typ.parameters)
@@ -425,7 +424,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
             res === nothing && continue
             (f, ft, atypes, argexprs, invoke_data) = res
         end
-        isinvoke = invoke_data !== nothing
+        isinvoke = (invoke_data !== nothing)
 
         atype_unlimited = argtypes_to_type(atypes)
 
@@ -517,7 +516,7 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
         isva = na > 0 && method.isva
         if isva
             @assert length(atypes) >= na - 1
-            va_type = tuple_tfunc(Tuple{Any[widenconst(typ) for typ in atypes]...})
+            va_type = tuple_tfunc(Tuple{Any[widenconst(atypes[i]) for i in 1:length(atypes)]...})
             atypes = Any[atypes[1:(na - 1)]..., va_type]
         end
 
@@ -567,13 +566,13 @@ function assemble_inline_todo!(ir, domtree, linetable, sv)
     todo
 end
 
-function mk_tuplecall!(compact, args, line_idx)
+function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int)
     e = Expr(:call, TOP_TUPLE, args...)
-    e.typ = tuple_tfunc(Tuple{Any[widenconst(compact_exprtype(compact, x)) for x in args]...})
+    e.typ = tuple_tfunc(Tuple{Any[widenconst(compact_exprtype(compact, args[i])) for i in 1:length(args)]...})
     return insert_node_here!(compact, e, e.typ, line_idx)
 end
 
-function linear_inline_eligible(ir)
+function linear_inline_eligible(ir::IRCode)
     length(ir.cfg.blocks) == 1 || return false
     terminator = ir[SSAValue(last(ir.cfg.blocks[1].stmts))]
     isa(terminator, ReturnNode) || return false
@@ -581,12 +580,14 @@ function linear_inline_eligible(ir)
     return true
 end
 
-function compute_invoke_data(atypes, argexprs, sv)
+function compute_invoke_data(@nospecialize(atypes), argexprs::Vector{Any}, sv::OptimizationState)
     ft = widenconst(atypes[2])
     invoke_tt = widenconst(atypes[3])
     if !(isconcretetype(ft) || ft <: Type) || !isType(invoke_tt) ||
             has_free_typevars(invoke_tt) || has_free_typevars(ft) || (ft <: Builtin)
-        # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+        # TODO: this can be rather aggressive at preventing inlining of closures
+        # XXX: this is wrong for `ft <: Type`, since we are failing to check that
+        #      the result doesn't have subtypes, or to do an intersection lookup
         return nothing
     end
     if !(isa(invoke_tt.parameters[1], Type) &&
@@ -607,7 +608,7 @@ function compute_invoke_data(atypes, argexprs, sv)
     pushfirst!(atypes, atype0)
     pushfirst!(argexprs, argexpr0)
     f = isdefined(ft, :instance) ? ft.instance : nothing
-    (f, ft, atypes, argexprs, invoke_data)
+    return svec(f, ft, atypes, argexprs, invoke_data)
 end
 
 function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector{Any})
@@ -680,7 +681,7 @@ function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, atypes::Vec
     return false
 end
 
-function ssa_substitute!(val, arg_replacements, spsig, spvals)
+function ssa_substitute!(@nospecialize(val), arg_replacements::Vector{Any}, @nospecialize(spsig), spvals::Vector{Any})
     if isa(val, Argument)
         return arg_replacements[val.n]
     end
@@ -715,14 +716,13 @@ function ssa_substitute!(val, arg_replacements, spsig, spvals)
         end
     end
     urs = userefs(val)
-    urs === () && return val
     for op in urs
         op[] = ssa_substitute!(op[], arg_replacements, spsig, spvals)
     end
-    urs[]
+    return urs[]
 end
 
-function find_inferred!(ir, idx, linfo, atypes, sv)
+function find_inferred!(ir::IRCode, idx::Int, linfo::MethodInstance, @nospecialize(atypes), sv::OptimizationState)
     # see if the method has a InferenceResult in the current cache
     # or an existing inferred code info store in `.inferred`
     haveconst = false

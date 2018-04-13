@@ -69,7 +69,8 @@ function verify_ir(ir::IRCode)
     end
     # Verify statements
     domtree = construct_domtree(ir.cfg)
-    for (bb, idx, stmt) in bbidxstmt(ir)
+    for (bb, idx) in bbidxiter(ir)
+        stmt = ir.stmts[idx]
         stmt === nothing && continue
         if isa(stmt, PhiNode)
             @assert length(stmt.edges) == length(stmt.values)

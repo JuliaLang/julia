@@ -21,9 +21,9 @@ include("compiler/ssair/legacy.jl")
 
 function normalize_expr(stmt::Expr)
     if stmt.head === :gotoifnot
-        return GotoIfNot(stmt.args...)
+        return GotoIfNot(stmt.args[1], stmt.args[2]::Int)
     elseif stmt.head === :return
-        return ReturnNode((length(stmt.args) == 0 ? (nothing,) : stmt.args)...)
+        return (length(stmt.args) == 0) ? ReturnNode(nothing) : ReturnNode(stmt.args[1])
     elseif stmt.head === :unreachable
         return ReturnNode()
     else
@@ -144,7 +144,7 @@ function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode}, s
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     #@timeit "verify 1" verify_ir(ir)
-    @timeit "Inlining" ir = ssa_inlining_pass!(ir, nothing, linetable, sv)
+    @timeit "Inlining" ir = ssa_inlining_pass!(ir, linetable, sv)
     #@timeit "verify 2" verify_ir(ir)
     @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
     @timeit "SROA" ir = getfield_elim_pass!(ir, domtree)

@@ -7,13 +7,13 @@ struct Argument
 end
 
 struct GotoIfNot
-    cond
+    cond::Any
     dest::Int
     GotoIfNot(@nospecialize(cond), dest::Int) = new(cond, dest)
 end
 
 struct ReturnNode
-    val
+    val::Any
     ReturnNode(@nospecialize(val)) = new(val)
     # unassigned val indicates unreachable
     ReturnNode() = new()
@@ -60,11 +60,11 @@ end
 block_for_inst(cfg::CFG, inst) = block_for_inst(cfg.index, inst)
 
 function compute_basic_blocks(stmts::Vector{Any})
-    jump_dests = IdSet{Int}(1)
+    jump_dests = BitSet(1)
     # First go through and compute jump destinations
     for (idx, stmt) in pairs(stmts)
         # Terminators
-        if isa(stmt, Union{GotoIfNot, GotoNode, ReturnNode})
+        if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
             if isa(stmt, GotoIfNot)
                 push!(jump_dests, idx+1)
                 push!(jump_dests, stmt.dest)
@@ -86,7 +86,7 @@ function compute_basic_blocks(stmts::Vector{Any})
             push!(jump_dests, stmt.args[1])
         end
     end
-    bb_starts = sort(collect(jump_dests))
+    bb_starts = collect(jump_dests)
     for i = length(stmts):-1:1
         if stmts[i] != nothing
             push!(bb_starts, i+1)
@@ -137,7 +137,7 @@ function compute_basic_blocks(stmts::Vector{Any})
     CFG(blocks, basic_block_index)
 end
 
-function first_insert_for_bb(code, cfg, block)
+function first_insert_for_bb(code, cfg::CFG, block::Int)
     for idx in cfg.blocks[block].stmts
         stmt = code[idx]
         if !isa(stmt, LabelNode) && !isa(stmt, PhiNode)
@@ -175,7 +175,7 @@ function getindex(x::IRCode, s::SSAValue)
     end
 end
 
-function setindex!(x::IRCode, repl, s::SSAValue)
+function setindex!(x::IRCode, @nospecialize(repl), s::SSAValue)
     @assert s.id <= length(x.stmts)
     x.stmts[s.id] = repl
     nothing
@@ -190,15 +190,23 @@ struct NewSSAValue
     id::Int
 end
 
-mutable struct UseRefIterator
+mutable struct UseRef
     stmt::Any
+    op::Int
+    UseRef(@nospecialize(a)) = new(a, 0)
 end
-getindex(it::UseRefIterator) = it.stmt
+struct UseRefIterator
+    use::Tuple{UseRef, Nothing}
+    relevant::Bool
+    UseRefIterator(@nospecialize(a), relevant::Bool) = new((UseRef(a), nothing), relevant)
+end
+getindex(it::UseRefIterator) = it.use[1].stmt
 
-struct UseRef
-    urs::UseRefIterator
-    use::Int
-end
+# TODO: stack-allocation
+#struct UseRef
+#    urs::UseRefIterator
+#    use::Int
+#end
 
 struct OOBToken
 end
@@ -207,29 +215,43 @@ struct UndefToken
 end
 
 function getindex(x::UseRef)
-    stmt = x.urs.stmt
+    stmt = x.stmt
     if isa(stmt, Expr) && stmt.head === :(=)
         rhs = stmt.args[2]
-        if isa(rhs, Expr) && is_relevant_expr(rhs)
-            x.use > length(rhs.args) && return OOBToken()
-            return rhs.args[x.use]
+        if isa(rhs, Expr)
+            if is_relevant_expr(rhs)
+                x.op > length(rhs.args) && return OOBToken()
+                return rhs.args[x.op]
+            end
         end
-        x.use == 1 || return OOBToken()
+        x.op == 1 || return OOBToken()
         return rhs
-    elseif isa(stmt, Expr) && is_relevant_expr(stmt)
-        x.use > length(stmt.args) && return OOBToken()
-        return stmt.args[x.use]
+    elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
+        x.op > length(stmt.args) && return OOBToken()
+        return stmt.args[x.op]
     elseif isa(stmt, GotoIfNot)
-        x.use == 1 || return OOBToken()
+        x.op == 1 || return OOBToken()
         return stmt.cond
-    elseif isa(stmt, ReturnNode) || isa(stmt, PiNode) || isa(stmt, UpsilonNode)
+    elseif isa(stmt, ReturnNode)
         isdefined(stmt, :val) || return OOBToken()
-        x.use == 1 || return OOBToken()
+        x.op == 1 || return OOBToken()
         return stmt.val
-    elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
-        x.use > length(stmt.values) && return OOBToken()
-        isassigned(stmt.values, x.use) || return UndefToken()
-        return stmt.values[x.use]
+    elseif isa(stmt, PiNode)
+        isdefined(stmt, :val) || return OOBToken()
+        x.op == 1 || return OOBToken()
+        return stmt.val
+    elseif isa(stmt, UpsilonNode)
+        isdefined(stmt, :val) || return OOBToken()
+        x.op == 1 || return OOBToken()
+        return stmt.val
+    elseif isa(stmt, PhiNode)
+        x.op > length(stmt.values) && return OOBToken()
+        isassigned(stmt.values, x.op) || return UndefToken()
+        return stmt.values[x.op]
+    elseif isa(stmt, PhiCNode)
+        x.op > length(stmt.values) && return OOBToken()
+        isassigned(stmt.values, x.op) || return UndefToken()
+        return stmt.values[x.op]
     else
         return OOBToken()
     end
@@ -243,32 +265,41 @@ function is_relevant_expr(e::Expr)
 end
 
 function setindex!(x::UseRef, @nospecialize(v))
-    stmt = x.urs.stmt
+    stmt = x.stmt
     if isa(stmt, Expr) && stmt.head === :(=)
         rhs = stmt.args[2]
-        if isa(rhs, Expr) && is_relevant_expr(rhs)
-            x.use > length(rhs.args) && throw(BoundsError())
-            rhs.args[x.use] = v
-        else
-            x.use == 1 || throw(BoundsError())
-            stmt.args[2] = v
+        if isa(rhs, Expr)
+            if is_relevant_expr(rhs)
+                x.op > length(rhs.args) && throw(BoundsError())
+                rhs.args[x.op] = v
+                return v
+            end
         end
-    elseif isa(stmt, Expr) && is_relevant_expr(stmt)
-        x.use > length(stmt.args) && throw(BoundsError())
-        stmt.args[x.use] = v
+        x.op == 1 || throw(BoundsError())
+        stmt.args[2] = v
+    elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
+        x.op > length(stmt.args) && throw(BoundsError())
+        stmt.args[x.op] = v
     elseif isa(stmt, GotoIfNot)
-        x.use == 1 || throw(BoundsError())
-        x.urs.stmt = GotoIfNot(v, stmt.dest)
-    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
-        x.use == 1 || throw(BoundsError())
-        x.urs.stmt = typeof(stmt)(v)
+        x.op == 1 || throw(BoundsError())
+        x.stmt = GotoIfNot(v, stmt.dest)
+    elseif isa(stmt, ReturnNode)
+        x.op == 1 || throw(BoundsError())
+        x.stmt = typeof(stmt)(v)
+    elseif isa(stmt, UpsilonNode)
+        x.op == 1 || throw(BoundsError())
+        x.stmt = typeof(stmt)(v)
     elseif isa(stmt, PiNode)
-        x.use == 1 || throw(BoundsError())
-        x.urs.stmt = typeof(stmt)(v, stmt.typ)
-    elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
-        x.use > length(stmt.values) && throw(BoundsError())
-        isassigned(stmt.values, x.use) || throw(BoundsError())
-        stmt.values[x.use] = v
+        x.op == 1 || throw(BoundsError())
+        x.stmt = typeof(stmt)(v, stmt.typ)
+    elseif isa(stmt, PhiNode)
+        x.op > length(stmt.values) && throw(BoundsError())
+        isassigned(stmt.values, x.op) || throw(BoundsError())
+        stmt.values[x.op] = v
+    elseif isa(stmt, PhiCNode)
+        x.op > length(stmt.values) && throw(BoundsError())
+        isassigned(stmt.values, x.op) || throw(BoundsError())
+        stmt.values[x.op] = v
     else
         throw(BoundsError())
     end
@@ -276,27 +307,37 @@ function setindex!(x::UseRef, @nospecialize(v))
 end
 
 function userefs(@nospecialize(x))
-    if (isa(x, Expr) && is_relevant_expr(x)) ||
-        isa(x, Union{GotoIfNot, ReturnNode, PiNode, PhiNode, PhiCNode, UpsilonNode})
-        UseRefIterator(x)
-    else
-        ()
-    end
+    relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
+        isa(x, GotoIfNot) || isa(x, ReturnNode) ||
+        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
+    return UseRefIterator(x, relevant)
 end
 
-start(it::UseRefIterator) = 1
-function next(it::UseRefIterator, use)
-    x = UseRef(it, use)
-    v = x[]
-    v === UndefToken() && return next(it, use + 1)
-    x, use + 1
+start(it::UseRefIterator) = (it.use[1].op = 0; nothing)
+next(it::UseRefIterator, ::Nothing) = it.use
+@noinline function done(it::UseRefIterator, ::Nothing)
+    it.relevant || return true
+    use = it.use[1]
+    while true
+        use.op += 1
+        y = use[]
+        y === OOBToken() && return true
+        y === UndefToken() || break
+    end
+    return false
 end
-function done(it::UseRefIterator, use)
-    x, _ = next(it, use)
-    v = x[]
-    v === OOBToken() && return true
-    false
-end
+#iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
+#@noinline function iterate(it::UseRefIterator, ::Nothing)
+#    it.relevant || return nothing
+#    use = it.use[1]
+#    while true
+#        use.op += 1
+#        y = use[]
+#        y === OOBToken() && return nothing
+#        y === UndefToken() || break
+#    end
+#    return it.use
+#end
 
 function scan_ssa_use!(used, @nospecialize(stmt))
     if isa(stmt, SSAValue)
@@ -312,14 +353,13 @@ end
 
 function ssamap(f, @nospecialize(stmt))
     urs = userefs(stmt)
-    urs === () && return stmt
     for op in urs
         val = op[]
         if isa(val, SSAValue)
             op[] = f(val)
         end
     end
-    urs[]
+    return urs[]
 end
 
 function foreachssa(f, @nospecialize(stmt))
@@ -392,7 +432,7 @@ struct TypesView
 end
 types(ir::Union{IRCode, IncrementalCompact}) = TypesView(ir)
 
-function getindex(compact::IncrementalCompact, idx)
+function getindex(compact::IncrementalCompact, idx::Int)
     if idx < compact.result_idx
         return compact.result[idx]
     else
@@ -400,7 +440,7 @@ function getindex(compact::IncrementalCompact, idx)
     end
 end
 
-function count_added_node!(compact, v)
+function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
     if isa(v, SSAValue)
         compact.used_ssas[v.id] += 1
     else
@@ -431,7 +471,7 @@ function getindex(view::TypesView, v::OldSSAValue)
     return view.ir.ir.types[v.id]
 end
 
-function setindex!(compact::IncrementalCompact, @nospecialize(v), idx)
+function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::Int)
     if idx < compact.result_idx
         (compact.result[idx] === v) && return
         # Kill count for current uses
@@ -453,42 +493,28 @@ end
 
 function getindex(view::TypesView, idx)
     isa(idx, SSAValue) && (idx = idx.id)
-    if isa(view.ir, IncrementalCompact) && idx < view.ir.result_idx
-        return view.ir.result_types[idx]
-    else
-        ir = isa(view.ir, IncrementalCompact) ? view.ir.ir : view.ir
-        if idx <= length(ir.types)
-            return ir.types[idx]
-        else
-            return ir.new_nodes[idx - length(ir.types)][3]
+    ir = view.ir
+    if isa(ir, IncrementalCompact)
+        if idx < ir.result_idx
+            return ir.result_types[idx]
         end
+        ir = ir.ir
+    end
+    if idx <= length(ir.types)
+        return ir.types[idx]
+    else
+        return ir.new_nodes[idx - length(ir.types)][3]
     end
 end
-
-# maybe use expr_type?
-function value_typ(ir::IRCode, value)
-    isa(value, SSAValue) && return ir.types[value.id]
-    isa(value, GlobalRef) && return abstract_eval_global(value.mod, value.name)
-    isa(value, Argument) && return ir.argtypes[value.n]
-    # TODO: isa QuoteNode, etc.
-    return typeof(value)
-end
-
-function value_typ(ir::IncrementalCompact, value)
-    isa(value, SSAValue) && return types(ir)[value.id]
-    isa(value, GlobalRef) && return abstract_eval_global(value.mod, value.name)
-    isa(value, Argument) && return ir.ir.argtypes[value.n]
-    # TODO: isa QuoteNode, etc.
-    return typeof(value)
-end
-
 
 start(compact::IncrementalCompact) = (compact.idx, 1)
 function done(compact::IncrementalCompact, (idx, _a)::Tuple{Int, Int})
     return idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
 end
 
-function process_phinode_values(old_values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas)
+function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int},
+                                processed_idx::Int, result_idx::Int,
+                                ssa_rename::Vector{Any}, used_ssas::Vector{Int})
     values = Vector{Any}(undef, length(old_values))
     for i = 1:length(old_values)
         isassigned(old_values, i) || continue
@@ -503,7 +529,7 @@ function process_phinode_values(old_values, late_fixup, processed_idx, result_id
         end
         values[i] = val
     end
-    values
+    return values
 end
 
 function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{Any},
@@ -597,7 +623,7 @@ function next(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
             finish_current_bb!(compact, old_result_idx)
         end
         (old_result_idx == result_idx) && return next(compact, (idx, active_bb))
-        return (old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb)
+        return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb)
     end
     # This will get overwritten in future iterations if
     # result_idx is not, incremented, but that's ok and expected
@@ -615,7 +641,7 @@ function next(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
     if !isassigned(compact.result, old_result_idx)
         @assert false
     end
-    return (old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb)
+    return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb)
 end
 
 function maybe_erase_unused!(extra_worklist, compact, idx)
@@ -654,10 +680,11 @@ end
 
 function just_fixup!(compact)
     for idx in compact.late_fixup
-        stmt = compact.result[idx]::Union{PhiNode, PhiCNode}
+        stmt = compact.result[idx]
         if isa(stmt, PhiNode)
             compact.result[idx] = PhiNode(stmt.edges, fixup_phinode_values!(compact, stmt.values))
         else
+            stmt = stmt::PhiCNode
             compact.result[idx] = PhiCNode(fixup_phinode_values!(compact, stmt.values))
         end
     end
@@ -697,19 +724,19 @@ function compact!(code::IRCode)
     return finish(compact)
 end
 
-struct BBIdxStmt
+struct BBIdxIter
     ir::IRCode
 end
 
-bbidxstmt(ir) = BBIdxStmt(ir)
+bbidxiter(ir) = BBIdxIter(ir)
 
-start(x::BBIdxStmt) = (1,1)
-done(x::BBIdxStmt, (idx, bb)) = idx > length(x.ir.stmts)
-function next(x::BBIdxStmt, (idx, bb))
+start(x::BBIdxIter) = (1, 1)
+done(x::BBIdxIter, (idx, bb)) = (idx > length(x.ir.stmts))
+function next(x::BBIdxIter, (idx, bb))
     active_bb = x.ir.cfg.blocks[bb]
     next_bb = bb
     if idx == last(active_bb.stmts)
         next_bb += 1
     end
-    return (bb, idx, x.ir.stmts[idx]), (idx + 1, next_bb)
+    return (bb, idx), (idx + 1, next_bb)
 end
