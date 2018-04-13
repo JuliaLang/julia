@@ -298,7 +298,7 @@ for f in Symbol[
     :filemode,
     :filesize,
     :mtime,
-    :ctime
+    :ctime,
 ]
     @eval ($f)(path...)  = ($f)(stat(path...))
 end

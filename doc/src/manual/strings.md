@@ -46,7 +46,8 @@ An `Char` value represents a single character: it is just a 32-bit primitive typ
 representation and appropriate arithmetic behaviors, and which can be converted
 to a numeric value representing a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
-  other subtypes of `AbstractChar`, e.g. to optimize operations for other [text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
+other subtypes of `AbstractChar`, e.g. to optimize operations for other
+[text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
 input and shown:
 
 ```jldoctest
@@ -599,6 +600,8 @@ Some other useful functions include:
   * [`lastindex(str)`](@ref) gives the maximal (byte) index that can be used to index into `str`.
   * [`length(str)`](@ref) the number of characters in `str`.
   * [`length(str, i, j)`](@ref) the number of valid character indices in `str` from `i` to `j`.
+  * [`ncodeunits(str)`](@ref) number of [code units](https://en.wikipedia.org/wiki/Character_encoding#Terminology) in a string.
+  * [`codeunit(str, i)`](@ref) gives the code unit value in the string `str` at index `i`.
   * [`i = start(str)`](@ref start) gives the first valid index at which a character can be found in `str`
     (typically 1).
   * [`c, j = next(str,i)`](@ref next) returns next character at or after the index `i` and the next valid
@@ -839,9 +842,10 @@ for regular expressions containing quotation marks or newlines).
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 
-Another useful non-standard string literal is the byte-array string literal: `b"..."`. This form
-lets you use string notation to express literal byte arrays -- i.e. arrays of
-[`UInt8`](@ref) values. The rules for byte array literals are the following:
+Another useful non-standard string literal is the byte-array string literal: `b"..."`. This
+form lets you use string notation to express read only literal byte arrays -- i.e. arrays of
+[`UInt8`](@ref) values. The type of those objects is `CodeUnits{UInt8, String}`.
+The rules for byte array literals are the following:
 
   * ASCII characters and ASCII escapes produce a single byte.
   * `\x` and octal escape sequences produce the *byte* corresponding to the escape value.
@@ -867,12 +871,35 @@ julia> b"DATA\xff\u2200"
 
 The ASCII string "DATA" corresponds to the bytes 68, 65, 84, 65. `\xff` produces the single byte 255.
 The Unicode escape `\u2200` is encoded in UTF-8 as the three bytes 226, 136, 128. Note that the
-resulting byte array does not correspond to a valid UTF-8 string -- if you try to use this as
-a regular string literal, you will get a syntax error:
+resulting byte array does not correspond to a valid UTF-8 string:
 
-```julia-repl
-julia> "DATA\xff\u2200"
-ERROR: syntax: invalid UTF-8 sequence
+```jldoctest
+julia> isvalid("DATA\xff\u2200")
+false
+```
+
+As it was mentioned `CodeUnits{UInt8,String}` type behaves like read only array of `UInt8` and
+if you need a standard vector you can convert it using `Vector{UInt8}`:
+
+```jldoctest
+julia> x = b"123"
+3-element Base.CodeUnits{UInt8,String}:
+ 0x31
+ 0x32
+ 0x33
+
+julia> x[1]
+0x31
+
+julia> x[1] = 0x32
+ERROR: setindex! not defined for Base.CodeUnits{UInt8,String}
+[...]
+
+julia> Vector{UInt8}(x)
+3-element Array{UInt8,1}:
+ 0x31
+ 0x32
+ 0x33
 ```
 
 Also observe the significant distinction between `\xff` and `\uff`: the former escape sequence

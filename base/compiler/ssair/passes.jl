@@ -1,10 +1,10 @@
-function compact_exprtype(compact, value)
+function compact_exprtype(compact::IncrementalCompact, @nospecialize(value))
     if isa(value, Union{SSAValue, OldSSAValue})
         return types(compact)[value]
     elseif isa(value, Argument)
         return compact.ir.argtypes[value.n]
     end
-    exprtype(value, compact.ir, compact.ir.mod)
+    return exprtype(value, compact.ir, compact.ir.mod)
 end
 
 """
@@ -26,7 +26,7 @@ struct SSADefUse
 end
 SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
-function try_compute_fieldidx(typ, use_expr)
+function try_compute_fieldidx(@nospecialize(typ), @nospecialize(use_expr))
     field = use_expr.args[3]
     isa(field, QuoteNode) && (field = field.value)
     isa(field, Union{Int, Symbol}) || return nothing
@@ -64,16 +64,16 @@ function lift_defuse(cfg::CFG, ssa::SSADefUse)
     SSADefUse(bb_uses, bb_defs, Int[])
 end
 
-function find_curblock(domtree, allblocks, curblock)
+function find_curblock(domtree::DomTree, allblocks, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
     while !(curblock in allblocks)
         curblock = domtree.idoms[curblock]
     end
-    curblock
+    return curblock
 end
 
-function val_for_def_expr(ir, def, fidx)
+function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
     if isexpr(ir[SSAValue(def)], :new)
         return ir[SSAValue(def)].args[1+fidx]
     else
@@ -82,13 +82,13 @@ function val_for_def_expr(ir, def, fidx)
     end
 end
 
-function compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, curblock)
+function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks, du, phinodes, fidx, curblock)
     curblock = find_curblock(domtree, allblocks, curblock)
     def = reduce(max, 0, stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock)
     def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
 end
 
-function compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use_idx)
+function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks, du, phinodes, fidx, use_idx)
     # Find the first dominating def
     curblock = stmtblock = block_for_inst(ir.cfg, use_idx)
     curblock = find_curblock(domtree, allblocks, curblock)
@@ -116,7 +116,7 @@ function compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use_i
     end
 end
 
-function walk_to_def(compact, def, intermediaries = IdSet{Int}(), allow_phinode=true, phi_locs=Tuple{Int, Int}[])
+function walk_to_def(compact::IncrementalCompact, @nospecialize(def), intermediaries=IdSet{Int}(), allow_phinode::Bool=true, phi_locs=Tuple{Int, Int}[])
     if !isa(def, SSAValue)
         return (def, 0)
     end
@@ -187,7 +187,7 @@ end
 
 is_tuple_call(ir, def) = isa(def, Expr) && is_known_call(def, tuple, ir, ir.mod)
 
-function process_immutable_preserve(new_preserves, compact, def)
+function process_immutable_preserve(new_preserves::Vector{Any}, compact::IncrementalCompact, def::Expr)
     for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
         if !isbits(compact_exprtype(compact, arg))
             push!(new_preserves, arg)
@@ -200,7 +200,7 @@ struct FastForward
     phi_locs::Vector{Tuple{Int64, Int64}}
 end
 
-function getfield_elim_pass!(ir::IRCode, domtree)
+function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
     compact = IncrementalCompact(ir)
     insertions = Vector{Any}()
     defuses = IdDict{Int, Tuple{IdSet{Int}, SSADefUse}}()

@@ -230,7 +230,7 @@ This section lists changes that do not have deprecation warnings.
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
-  * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
+  * `getindex(s::String, r::UnitRange{Int})` now throws `StringIndexError` if `last(r)`
     is not a valid index into `s` ([#22572]).
 
   * `ntuple(f, n::Integer)` throws `ArgumentError` if `n` is negative.
@@ -766,6 +766,16 @@ Deprecated or removed
     with different element type and/or shape depending on `opts...`. Where strictly
     necessary, consider `fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))})`.
     For an algebraic multiplicative identity, consider `one(A)` ([#24656]).
+
+  * The `similar(dims->f(..., dims...), [T], axes...)` method to add offset array support
+    to a function `f` that would otherwise create a non-offset array has been deprecated.
+    Instead, call `f(..., axes...)` directly and, if needed, the offset array implementation
+    should add offset axis support to the function `f` directly ([#26733]).
+
+  * The functions `ones` and `zeros` used to accept any objects as dimensional arguments,
+    implicitly converting them to `Int`s.  This is now deprecated; only `Integer`s or
+    `AbstractUnitRange`s are accepted as arguments.  Instead, convert the arguments before
+    calling `ones` or `zeros` ([#26733]).
 
   * The `Operators` module is deprecated. Instead, import required operators explicitly
     from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).

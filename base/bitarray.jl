@@ -56,8 +56,8 @@ julia> BitArray(undef, (3, 1))
 """
 BitArray(::UndefInitializer, dims::Integer...) = BitArray(undef, map(Int,dims))
 BitArray{N}(::UndefInitializer, dims::Integer...) where {N} = BitArray{N}(undef, map(Int,dims))
-BitArray(::UndefInitializer, dims::NTuple{N,Int}) where {N} = BitArray{N}(undef, dims...)
-BitArray{N}(::UndefInitializer, dims::NTuple{N,Int}) where {N} = BitArray{N}(undef, dims...)
+BitArray(::UndefInitializer, dims::NTuple{N,Integer}) where {N} = BitArray{N}(undef, map(Int, dims)...)
+BitArray{N}(::UndefInitializer, dims::NTuple{N,Integer}) where {N} = BitArray{N}(undef, map(Int, dims)...)
 
 const BitVector = BitArray{1}
 const BitMatrix = BitArray{2}
@@ -366,8 +366,10 @@ julia> falses(2,3)
  false  false  false
 ```
 """
-falses(dims::Dims) = fill!(BitArray(undef, dims), false)
-falses(dims::Integer...) = falses(map(Int,dims))
+falses(dims::DimOrInd...) = falses(dims)
+falses(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = falses(map(to_dim, dims))
+falses(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), false)
+falses(dims::Tuple{}) = fill!(BitArray(undef, dims), false)
 
 """
     trues(dims)
@@ -382,8 +384,10 @@ julia> trues(2,3)
  true  true  true
 ```
 """
-trues(dims::Dims) = fill!(BitArray(undef, dims), true)
-trues(dims::Integer...) = trues(map(Int,dims))
+trues(dims::DimOrInd...) = trues(dims)
+trues(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = trues(map(to_dim, dims))
+trues(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), true)
+trues(dims::Tuple{}) = fill!(BitArray(undef, dims), true)
 
 function one(x::BitMatrix)
     m, n = size(x)

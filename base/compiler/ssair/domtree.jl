@@ -12,18 +12,18 @@ end
 """
     Checks if bb1 dominates bb2
 """
-function dominates(domtree, bb1, bb2)
+function dominates(domtree::DomTree, bb1::Int, bb2::Int)
     bb1 == bb2 && return true
     target_level = domtree.nodes[bb1].level
     source_level = domtree.nodes[bb2].level
     source_level < target_level && return false
-    for _ in (source_level-1):-1:target_level
+    for _ in (source_level - 1):-1:target_level
         bb2 = domtree.idoms[bb2]
     end
     return bb1 == bb2
 end
 
-function update_level!(domtree, node, level)
+function update_level!(domtree::Vector{DomTreeNode}, node::Int, level::Int)
     domtree[node] = DomTreeNode(level, domtree[node].children)
     foreach(domtree[node].children) do child
         update_level!(domtree, child, level+1)
@@ -41,30 +41,28 @@ function dominated(domtree::DomTree, root::Int)
     doms
 end
 
-function start(doms::DominatedBlocks)
-    nothing
-end
+start(doms::DominatedBlocks) = nothing
 
 function next(doms::DominatedBlocks, state::Nothing)
     bb = pop!(doms.worklist)
     for dominated in doms.domtree.nodes[bb].children
         push!(doms.worklist, dominated)
     end
-    (bb, nothing)
+    return (bb, nothing)
 end
 
-function done(doms::DominatedBlocks, state::Nothing)
-    isempty(doms.worklist)
-end
+done(doms::DominatedBlocks, state::Nothing) = isempty(doms.worklist)
 
 # Construct Dom Tree
 # Simple algorithm - TODO: Switch to the fast version (e.g. https://tanujkhattar.wordpress.com/2016/01/11/dominator-tree-of-a-directed-graph/)
-function construct_domtree(cfg)
-    dominators = IdSet{Int}[n == 1 ? IdSet{Int}(n) : IdSet{Int}(1:length(cfg.blocks)) for n = 1:length(cfg.blocks)]
+function construct_domtree(cfg::CFG)
+    nblocks = length(cfg.blocks)
+    dom_all = BitSet(1:nblocks)
+    dominators = BitSet[n == 1 ? BitSet(1) : copy(dom_all) for n = 1:nblocks]
     changed = true
     while changed
         changed = false
-        for n = 2:length(cfg.blocks)
+        for n = 2:nblocks
             isempty(cfg.blocks[n].preds) && continue
             firstp, rest = Iterators.peel(Iterators.filter(p->p != 0, cfg.blocks[n].preds))
             new_doms = copy(dominators[firstp])
@@ -72,21 +70,24 @@ function construct_domtree(cfg)
                 intersect!(new_doms, dominators[p])
             end
             push!(new_doms, n)
-            changed |= (new_doms != dominators[n])
+            changed = changed || (new_doms != dominators[n])
             dominators[n] = new_doms
         end
     end
     # Compute idoms
-    idoms = fill(0, length(cfg.blocks))
-    for i = 2:length(cfg.blocks)
-        for dom in dominators[i]
+    idoms = fill(0, nblocks)
+    for i = 2:nblocks
+        doms = collect(dominators[i])
+        for dom in doms
             i == dom && continue
-            any(p->p !== i && p !== dom && dom in dominators[p], dominators[i]) && continue
+            let i = i, dom = dom
+                any(p -> (p !== i && p !== dom && dom in dominators[p]), doms) && continue
+            end
             idoms[i] = dom
         end
     end
     # Compute children
-    domtree = DomTreeNode[DomTreeNode() for _ = 1:length(cfg.blocks)]
+    domtree = DomTreeNode[DomTreeNode() for _ = 1:nblocks]
     for (idx, idom) in Iterators.enumerate(idoms)
         (idx == 1 || idom == 0) && continue
         push!(domtree[idom].children, idx)

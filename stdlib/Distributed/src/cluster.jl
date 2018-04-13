@@ -1046,6 +1046,9 @@ function disable_nagle(sock)
     end
 end
 
+wp_bind_addr(p::LocalProcess) = p.bind_addr
+wp_bind_addr(p) = p.config.bind_addr
+
 function check_same_host(pids)
     if myid() != 1
         return remotecall_fetch(check_same_host, 1, pids)
@@ -1056,8 +1059,8 @@ function check_same_host(pids)
         if all(p -> (p==1) || (isa(map_pid_wrkr[p].manager, LocalManager)), pids)
             return true
         else
-            first_bind_addr = notnothing(map_pid_wrkr[pids[1]].config.bind_addr)
-            return all(p -> (p != 1) && (notnothing(map_pid_wrkr[p].config.bind_addr) == first_bind_addr), pids[2:end])
+            first_bind_addr = notnothing(wp_bind_addr(map_pid_wrkr[pids[1]]))
+            return all(p -> notnothing(wp_bind_addr(map_pid_wrkr[p])) == first_bind_addr, pids[2:end])
         end
     end
 end

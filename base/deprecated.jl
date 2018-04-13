@@ -1511,7 +1511,7 @@ end
 @deprecate floor(x::Number, digits) floor(x; digits=digits)
 @deprecate ceil(x::Number, digits) ceil(x; digits=digits)
 @deprecate round(x::Number, digits) round(x; digits=digits)
-@deprecate signif(x::Number, digits) round(x; sigdigits=digits, base = base)
+@deprecate signif(x::Number, digits) round(x; sigdigits=digits)
 
 @deprecate trunc(x::Number, digits, base) trunc(x; digits=digits, base = base)
 @deprecate floor(x::Number, digits, base) floor(x; digits=digits, base = base)
@@ -1566,6 +1566,26 @@ end
 
 @deprecate Crand Libc.rand false
 @deprecate Csrand Libc.srand false
+
+# Deprecate `similar(f, axes)` (PR #26733)
+@noinline function similar(f, shape::Tuple)
+    depwarn("using similar(f, shape) to call `f` with axes `shape` is deprecated; call `f` directly and/or add methods such that it supports axes", :similar)
+    f(to_shape(shape))
+end
+@noinline function similar(f, dims::DimOrInd...)
+    depwarn("using similar(f, shape...) to call `f` with axes `shape` is deprecated; call `f` directly and/or add methods such that it supports axes", :similar)
+    f(to_shape(dims))
+end
+# Deprecate non-integer/axis arguments to zeros/ones to match fill/trues/falses
+@deprecate zeros(::Type{T}, dims...) where {T}                  zeros(T, convert(Dims, dims)...)
+@deprecate zeros(dims...)                                       zeros(convert(Dims, dims)...)
+@deprecate zeros(::Type{T}, dims::NTuple{N, Any}) where {T, N}  zeros(T, convert(Dims, dims))
+@deprecate zeros(dims::Tuple)                                   zeros(convert(Dims, dims))
+@deprecate ones(::Type{T}, dims...) where {T}                   ones(T, convert(Dims, dims)...)
+@deprecate ones(dims...)                                        ones(convert(Dims, dims)...)
+@deprecate ones(::Type{T}, dims::NTuple{N, Any}) where {T, N}   ones(T, convert(Dims, dims))
+@deprecate ones(dims::Tuple)                                    ones(convert(Dims, dims))
+
 
 @deprecate showcompact(x) show(IOContext(stdout, :compact => true), x)
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)

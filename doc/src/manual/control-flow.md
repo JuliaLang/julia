@@ -584,7 +584,7 @@ below all interrupt the normal flow of control.
 | [`TypeError`](@ref)           |
 | [`UndefRefError`](@ref)       |
 | [`UndefVarError`](@ref)       |
-| `UnicodeError`                |
+| [`StringIndexError`](@ref)    |
 
 For example, the [`sqrt`](@ref) function throws a [`DomainError`](@ref) if applied to a negative
 real value:
@@ -739,8 +739,8 @@ julia> f(-1)
 It is important to note that in real code computing this function, one would compare `x` to zero
 instead of catching an exception. The exception is much slower than simply comparing and branching.
 
-`try/catch` statements also allow the `Exception` to be saved in a variable. In this contrived
-example, the following example calculates the square root of the second element of `x` if `x`
+`try/catch` statements also allow the `Exception` to be saved in a variable. The following
+contrived example calculates the square root of the second element of `x` if `x`
 is indexable, otherwise assumes `x` is a real number and returns its square root:
 
 ```jldoctest
