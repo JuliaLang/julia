@@ -68,23 +68,13 @@ and a global configuration search path of
 ### `JULIA_LOAD_PATH`
 
 A separated list of absolute paths that are to be appended to the variable
-[`LOAD_PATH`](@ref). (In Unix-like systems, the path separator is `:`; in Windows
-systems, the path separator is `;`.) The `LOAD_PATH` variable is where
-[`Base.require`](@ref) and `Base.load_in_path()` look for code; it defaults to the absolute
-paths
-
-```
-$JULIA_HOME/../local/share/julia/site/v$(VERSION.major).$(VERSION.minor)
-$JULIA_HOME/../share/julia/site/v$(VERSION.major).$(VERSION.minor)
-```
-
-so that, e.g., version 0.6 of Julia on a Linux system with a Julia executable at
-`/bin/julia` will have a default `LOAD_PATH` of
-
-```
-/local/share/julia/site/v0.6
-/share/julia/site/v0.6
-```
+[`LOAD_PATH`](@ref). (In Unix-like systems, the path separator is `:`; in
+Windows systems, the path separator is `;`.) The `LOAD_PATH` variable is where
+[`Base.require`](@ref) and `Base.load_in_path()` look for code; it defaults to
+the absolute path
+`$JULIA_HOME/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)` so that,
+e.g., version 0.7 of Julia on a Linux system with a Julia executable at
+`/bin/julia` will have a default `LOAD_PATH` of `/share/julia/stdlib/v0.7`.
 
 ### `JULIA_PKGDIR`
 

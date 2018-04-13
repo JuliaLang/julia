@@ -467,17 +467,33 @@ mutable struct EnvCache
             for entry in LOAD_PATH
                 project_file = Base.find_env(entry)
                 project_file isa String && !isdir(project_file) && break
+                project_file = nothing
             end
-            project_file === nothing && error("No Pkg3 environment found in LOAD_PATH")
+            if project_file == nothing
+                project_dir = nothing
+                for entry in LOAD_PATH
+                    project_dir = Base.find_env(entry)
+                    project_dir isa String && isdir(project_dir) && break
+                    project_dir = nothing
+                end
+                project_dir == nothing && error("No Pkg3 environment found in LOAD_PATH")
+                project_file = joinpath(project_dir, Base.project_names[end])
+            end
         elseif env isa AbstractEnv
             project_file = Base.find_env(env)
             project_file === nothing && error("package environment does not exist: $env")
         elseif env isa String
-            isdir(env) && error("environment is a package directory: $env")
-            project_file = endswith(env, ".toml") ? abspath(env) :
-                                                    abspath(env, Base.project_names[end])
+            if isdir(env)
+                isempty(readdir(env)) || error("environment is a package directory: $env")
+                project_file = joinpath(env, Base.project_names[end])
+            else
+                project_file = endswith(env, ".toml") ? abspath(env) :
+                    abspath(env, Base.project_names[end])
+            end
         end
-        @assert project_file isa String && (isfile(project_file) || !ispath(project_file))
+        @assert project_file isa String &&
+            (isfile(project_file) || !ispath(project_file) ||
+             isdir(project_file) && isempty(readdir(project_file)))
         project_dir = dirname(project_file)
         git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
 
@@ -529,7 +545,7 @@ is_project_uuid(env::EnvCache, uuid::UUID) =
 ###########
 # Context #
 ###########
-stdlib_dir() = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+stdlib_dir() = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
 stdlib_path(stdlib::String) = joinpath(stdlib_dir(), stdlib)
 function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
