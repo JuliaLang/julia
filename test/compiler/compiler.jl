@@ -1076,6 +1076,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
 end
 
 function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
+    new_style_ir = (code.codelocs !== nothing)
     for ex in code.code
         Meta.isexpr(ex, :(=)) && (ex = ex.args[2])
         isa(ex, Expr) || continue
@@ -1086,7 +1087,7 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                     farg = typeof(getfield(farg.mod, farg.name))
                 end
             elseif isa(farg, Core.SSAValue)
-                farg = code.ssavaluetypes[farg.id + 1]
+                farg = code.ssavaluetypes[farg.id + (new_style_ir ? 0 : 1)]
             else
                 farg = typeof(farg)
             end
