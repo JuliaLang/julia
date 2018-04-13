@@ -954,7 +954,7 @@ julia> getindex(A, 2:4)
 """
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
-    error_if_canonical_indexing(IndexStyle(A), A, I...)
+    error_if_canonical_getindex(IndexStyle(A), A, I...)
     _getindex(IndexStyle(A), A, to_indices(A, I)...)
 end
 function unsafe_getindex(A::AbstractArray, I...)
@@ -963,15 +963,15 @@ function unsafe_getindex(A::AbstractArray, I...)
     r
 end
 
-error_if_canonical_indexing(::IndexLinear, A::AbstractArray, ::Int) =
-    error("indexing not defined for ", typeof(A))
-error_if_canonical_indexing(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
-    error("indexing not defined for ", typeof(A))
-error_if_canonical_indexing(::IndexStyle, ::AbstractArray, ::Any...) = nothing
+error_if_canonical_getindex(::IndexLinear, A::AbstractArray, ::Int) =
+    error("getindex not defined for ", typeof(A))
+error_if_canonical_getindex(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
+    error("getindex not defined for ", typeof(A))
+error_if_canonical_getindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
 _getindex(::IndexStyle, A::AbstractArray, I...) =
-    error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+    error("getindex for $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## IndexLinear Scalar indexing: canonical method is one Int
 _getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
@@ -1031,7 +1031,7 @@ Store values from array `X` within some subset of `A` as specified by `inds`.
 """
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
-    error_if_canonical_indexing(IndexStyle(A), A, I...)
+    error_if_canonical_setindex(IndexStyle(A), A, I...)
     _setindex!(IndexStyle(A), A, v, to_indices(A, I)...)
 end
 function unsafe_setindex!(A::AbstractArray, v, I...)
@@ -1039,9 +1039,16 @@ function unsafe_setindex!(A::AbstractArray, v, I...)
     @inbounds r = setindex!(A, v, I...)
     r
 end
+
+error_if_canonical_setindex(::IndexLinear, A::AbstractArray, ::Int) =
+    error("setindex! not defined for ", typeof(A))
+error_if_canonical_setindex(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
+    error("setindex! not defined for ", typeof(A))
+error_if_canonical_setindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
+
 ## Internal defitions
 _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
-    error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+    error("setindex! for $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## IndexLinear Scalar indexing
 _setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))

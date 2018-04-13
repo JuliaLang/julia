@@ -892,7 +892,7 @@ julia> x[1]
 0x31
 
 julia> x[1] = 0x32
-ERROR: indexing not defined for Base.CodeUnits{UInt8,String}
+ERROR: setindex! not defined for Base.CodeUnits{UInt8,String}
 [...]
 
 julia> Vector{UInt8}(x)
