@@ -173,34 +173,28 @@ BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
 # methods that instead specialize on `BroadcastStyle`,
 #    copyto!(dest::AbstractArray, bc::Broadcasted{MyStyle})
 
-struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, ElType, Axes, Indexing<:Union{Nothing,Tuple}, F, Args<:Tuple}
+struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, Indexing<:Union{Nothing,Tuple}, F, Args<:Tuple}
     f::F
     args::Args
     axes::Axes          # the axes of the resulting object (may be bigger than implied by `args` if this is nested inside a larger `Broadcasted`)
     indexing::Indexing  # index-replacement info computed from `newindexer` below
 end
 
-function Broadcasted(f::F, args::Args) where {F, Args<:Tuple}
-    style = combine_styles(args...)
-    # Unknown is a flag indicating the ElType has not been set
+Broadcasted(f::F, args::Args, axes=nothing, indexing=nothing) where {F, Args<:Tuple} =
+    Broadcasted{typeof(combine_styles(args...))}(f, args, axes, indexing)
+Broadcasted{Nothing}(f::F, args::Args, axes=nothing, indexing=nothing) where {F, Args<:Tuple} =
+    Broadcasted{typeof(combine_styles(args...))}(f, args, axes, indexing)
+function Broadcasted{Style}(f::F, args::Args, axes=nothing, indexing=nothing) where {Style<:BroadcastStyle, F, Args<:Tuple}
     # using Core.Typeof rather than F preserves inferrability when f is a type
-    return Broadcasted{typeof(style), Unknown, Nothing, Nothing, Core.Typeof(f), Args}(f, args, nothing, nothing)
+    Broadcasted{Style, typeof(axes), typeof(indexing), Core.Typeof(f), Args}(f, args, axes, indexing)
 end
-Broadcasted{Style}(f::F, args::Args) where {Style<:BroadcastStyle, F, Args<:Tuple} =
-    Broadcasted{Style, Unknown, Nothing, Nothing, Core.Typeof(f), Args}(f, args, nothing, nothing)
-Broadcasted{Style,ElType}(f::F, args::Args) where {Style<:BroadcastStyle, ElType, F, Args<:Tuple} =
-    Broadcasted{Style, ElType, Nothing, Nothing, Core.Typeof(f), Args}(f, args, nothing, nothing)
-Broadcasted{Style,ElType}(f::F, args::Args, axes::Tuple) where {Style<:BroadcastStyle, ElType, F, Args<:Tuple} =
-    Broadcasted{Style, ElType, typeof(axes), Nothing, Core.Typeof(f), Args}(f, args, axes, nothing)
-Broadcasted{Style,ElType}(f::F, args::Args, axes::Tuple, indexing) where {Style<:Union{Nothing,BroadcastStyle}, ElType, F, Args<:Tuple} =
-    Broadcasted{Style, ElType, typeof(axes), typeof(indexing), Core.Typeof(f), Args}(f, args, axes, indexing)
 
-Base.convert(::Type{Broadcasted{Nothing}}, bc::Broadcasted{Style,ElType,Axes,Indexing,F,Args}) where {Style,ElType,Axes,Indexing,F,Args} =
-    Broadcasted{Nothing,ElType,Axes,Indexing,F,Args}(bc.f, bc.args, bc.axes, bc.indexing)
+Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{Style,Axes,Indexing,F,Args}) where {NewStyle,Style,Axes,Indexing,F,Args} =
+    Broadcasted{NewStyle,Axes,Indexing,F,Args}(bc.f, bc.args, bc.axes, bc.indexing)
 
 # Fully-instantiatiated Broadcasted
-const BroadcastedF{Style<:Union{Nothing,BroadcastStyle}, ElType, N, F, Args<:Tuple} =
-    Broadcasted{Style, ElType, <:Indices{N}, <:Tuple, F, Args}
+const BroadcastedF{Style<:Union{Nothing,BroadcastStyle}, N, F, Args<:Tuple} =
+    Broadcasted{Style, <:Indices{N}, <:Tuple, F, Args}
 
 ## Allocating the output container
 """
@@ -249,23 +243,17 @@ broadcast_skip_axes_instantiation(bc::Broadcasted{Style{Tuple}}) = true
 
 ### End of methods that users will typically have to specialize ###
 
-# Broadcasted traits
-Base.eltype(::Type{<:Broadcasted{Style,ElType}}) where {Style,ElType} = ElType
-Base.eltype(::Type{<:Broadcasted{Style,Unknown}}) where {Style} =
-    error("non-instantiated Broadcasted wrappers do not have eltype assigned")
-Base.eltype(bc::Broadcasted) = eltype(typeof(bc))
-
-Base.axes(bc::Broadcasted{Style,ElType}) where {Style,ElType} = bc.axes
-Base.axes(::Broadcasted{Style,ElType,Nothing}) where {Style,ElType} =
+Base.axes(bc::Broadcasted{Style}) where {Style} = bc.axes
+Base.axes(::Broadcasted{Style,Nothing}) where {Style} =
     error("non-instantiated Broadcasted wrappers do not have axes assigned")
 
-Broadcast.BroadcastStyle(::Type{<:Broadcasted{Style}}) where Style = Style()
-Broadcast.BroadcastStyle(::Type{<:Broadcasted{Unknown}}) =
+BroadcastStyle(::Type{<:Broadcasted{Style}}) where Style = Style()
+BroadcastStyle(::Type{<:Broadcasted{Unknown}}) =
     error("non-instantiated Broadcasted wrappers do not have a style assigned")
-Broadcast.BroadcastStyle(::Type{<:Broadcasted{Nothing}}) =
+BroadcastStyle(::Type{<:Broadcasted{Nothing}}) =
     error("non-instantiated Broadcasted wrappers do not have a style assigned")
 
-argtype(::Type{Broadcasted{Style,ElType,Axes,Indexing,F,Args}}) where {Style,ElType,Axes,Indexing,F,Args} = Args
+argtype(::Type{Broadcasted{Style,Axes,Indexing,F,Args}}) where {Style,Axes,Indexing,F,Args} = Args
 argtype(bc::Broadcasted) = argtype(typeof(bc))
 
 const NestedTuple = Tuple{<:Broadcasted,Vararg{Any}}
@@ -276,47 +264,27 @@ not_nested(::Tuple{})     = true
 
 ## Instantiation fills in the "missing" fields in Broadcasted.
 instantiate(x) = x
-instantiate(x, axes) = x
 
-# Setting ElType
-@inline instantiate(bc::Broadcasted{Style,Unknown,Nothing,Nothing}) where {Style} =
-    instantiate(instantiate_eltype(bc))
-@inline instantiate(bc::Broadcasted{Style,Unknown,Nothing,Nothing}, axes) where {Style} =
-    instantiate(instantiate_eltype(bc), axes)
-@inline function instantiate_eltype(bc::Broadcasted{Style,Unknown,Nothing,Nothing}) where {Style}
-    args = map(instantiate, bc.args) # some of the args may be Broadcasted objects in their own right
-    T = combine_eltypes(bc.f, args)
-    return Broadcasted{Style,T}(bc.f, args)
-end
+# TODO: remove trait in favor of dispatch
+@inline instantiate(bc::Broadcasted{Style}) where {Style} = broadcast_skip_axes_instantiation(bc) ? bc : _instantiate(bc)
 
-# Setting axes
-@inline function instantiate(bc::Broadcasted{Style,ElType,Nothing,Nothing}) where {Style,ElType}
-    if broadcast_skip_axes_instantiation(bc)
-        return Style <: Nothing ? instantiate_eltype(bc) : bc
-    end
-    return instantiate(instantiate_axes(bc))
-end
-@inline instantiate(bc::Broadcasted{Style,ElType,Nothing,Nothing}, axes) where {Style,ElType} =
-    instantiate(instantiate_axes(bc, axes))
-@inline function instantiate_axes(bc::Broadcasted{Style,ElType,Nothing,Nothing}) where {Style,ElType}
-    axes = combine_indices(bc.args...)
-    return instantiate_axes(bc, axes)
-end
-@inline function instantiate_axes(bc::Broadcasted{Style,ElType,Nothing,Nothing}, axes) where {Style,ElType}
-    args = map(x->instantiate(x, axes), bc.args)
-    return Broadcasted{Style,ElType}(bc.f, args, axes)
-end
+_instantiate(bc) = bc
 
-# Setting indexing
-@inline function instantiate(bc::Broadcasted{Style,ElType,Axes,Nothing}) where {Style,ElType,Axes}
-    @inline _newindexer(arg) = newindexer(axes(bc), arg)
+@inline function _instantiate(bc::Broadcasted{Style,Nothing,Nothing}) where {Style}
     args = map(instantiate, bc.args)
+    axes = combine_indices(args...)
+    @inline _newindexer(arg) = newindexer(axes, arg)
     indexing = map(_newindexer, args)
-    return instantiate(Broadcasted{Style,ElType}(bc.f, args, axes(bc), indexing))
+    return Broadcasted{Style}(bc.f, args, axes, indexing)
 end
 
-instantiate(bc::Broadcasted{Style,ElType,Axes,Indexing}) where {Style,ElType,Axes,Indexing<:Tuple} = bc
-
+@inline function _instantiate(bc::Broadcasted{Style,<:Any,Nothing}) where {Style}
+    args = map(instantiate, bc.args)
+    axes = broadcast_shape(bc.axes, combine_indices(args...))
+    @inline _newindexer(arg) = newindexer(axes, arg)
+    indexing = map(_newindexer, args)
+    return Broadcasted{Style}(bc.f, args, axes, indexing)
+end
 
 ## Flattening
 
@@ -338,7 +306,7 @@ becomes
 This is an optional operation that may make custom implementation of broadcasting easier in
 some cases.
 """
-function flatten(bc::Broadcasted{Style,ElType}) where {Style,ElType}
+function flatten(bc::Broadcasted{Style}) where {Style}
     isflat(bc.args) && return bc
     # concatenate the nested arguments into {a, b, c, d}
     args = cat_nested(x->x.args, bc)
@@ -354,11 +322,11 @@ function flatten(bc::Broadcasted{Style,ElType}) where {Style,ElType}
         newf = @inline function(args::Vararg{Any,N}) where N
             bc.f(makeargs(args...)...)
         end
-        return Broadcasted{Style,ElType}(newf, args)
+        return Broadcasted{Style}(newf, args)
     end
 end
 
-function flatten(bc::BroadcastedF{Style,ElType}) where {Style,ElType}
+function flatten(bc::BroadcastedF{Style}) where {Style}
     isflat(bc.args) && return bc
     # Since bc is instantiated, let's preserve the instatiation in the result
     args, indexing = cat_nested(x->x.args, bc), cat_nested(x->x.indexing, bc)
@@ -366,7 +334,7 @@ function flatten(bc::BroadcastedF{Style,ElType}) where {Style,ElType}
         newf = @inline function(args::Vararg{Any,N}) where N
             bc.f(makeargs(args...)...)
         end
-        return Broadcasted{Style,ElType}(newf, args, axes(bc), indexing)
+        return Broadcasted{Style}(newf, args, axes(bc), indexing)
     end
 end
 
@@ -566,7 +534,7 @@ Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 Base.@propagate_inbounds _broadcast_getindex(::Style{Tuple}, A::Tuple{Any}, I) = A[1]
 
 # For Broadcasted
-Base.@propagate_inbounds _broadcast_getindex(bc::BroadcastedF{Style, ElType, N, F, Args}, I::Union{Int,CartesianIndex{N}}) where {Style,ElType,N,F,Args} =
+Base.@propagate_inbounds _broadcast_getindex(bc::BroadcastedF{Style, N, F, Args}, I::Union{Int,CartesianIndex{N}}) where {Style,N,F,Args} =
     _broadcast_getindex_bc(bc, I)
 Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted, I)
     broadcast_skip_axes_instantiation(bc) && return _broadcast_getindex_bc(bc, I)
@@ -637,11 +605,8 @@ broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
     error("indexing requires complete instantiation")
 end
 
-# An element type satisfying for all A:
-# broadcast_getindex(
-#     combine_styles(A),
-#     A, broadcast_indices(A)
-# )::_broadcast_getindex_eltype(A)
+## Computation of inferred result type, for empty and concretely inferred cases only
+_broadcast_getindex_eltype(bc::Broadcasted) = Base._return_type(bc.f, eltypes(bc.args))
 _broadcast_getindex_eltype(A) = _broadcast_getindex_eltype(combine_styles(A), A)
 _broadcast_getindex_eltype(::BroadcastStyle, A) = eltype(A)  # Tuple, Array, etc.
 _broadcast_getindex_eltype(::DefaultArrayStyle{0}, ::Ref{T}) where {T} = T
@@ -653,11 +618,6 @@ eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).typ
 
 # Inferred eltype of result of broadcast(f, args...)
 combine_eltypes(f, args::Tuple) = Base._return_type(f, eltypes(args))
-
-maptoTuple(f) = Tuple{}
-maptoTuple(f, a, b...) = Tuple{f(a), maptoTuple(f, b...).types...}
-combine_eltypes(f, A, As...) =
-    Base._return_type(f, maptoTuple(_broadcast_getindex_eltype, A, As...))
 
 ## Broadcasting core
 
@@ -761,36 +721,30 @@ Take a lazy `Broadcasted` object and compute the result
 """
 materialize(bc::Broadcasted) = copy(instantiate(bc))
 materialize(x) = x
-function materialize!(dest, bc::Broadcasted)
-    args = map(instantiate, bc.args)
-    axs = combine_indices(dest, args...)
-    return copyto!(dest, instantiate(Broadcasted(bc.f, args), axs))
+function materialize!(dest, bc::Broadcasted{Style}) where {Style}
+    return copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
 end
 function materialize!(dest, x)
-    axs = combine_indices(dest, x)
-    return copyto!(dest, instantiate(Broadcasted(identity, (x,)), axs))
+    return copyto!(dest, instantiate(Broadcasted(identity, (x,), axes(dest))))
 end
 
 ## general `copy` methods
-copy(bc::Broadcasted{<:AbstractArrayStyle{0}, ElType}) where ElType = _broadcast_getindex(bc, 1)
+copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = _broadcast_getindex(bc, 1)
 copy(bc::Broadcasted{Nothing}) = error("broadcasting requires an assigned BroadcastStyle")
 copy(bc::Broadcasted{Unknown}) = error("broadcasting requires an assigned BroadcastStyle")
 
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
-function copy(bc::Broadcasted{Style, ElType}) where {Style, ElType}
-    # Special handling for types that should be treated incrementally
-    if Style<:NonleafHandlingStyles && !Base.isconcretetype(ElType)
-        return copy_nonleaf(bc)
+function copy(bc::Broadcasted{Style}) where {Style}
+    ElType = combine_eltypes(bc.f, bc.args)
+    if Base.isconcretetype(ElType)
+        # We can trust it and defer to the simpler `copyto!`
+        dest = broadcast_similar(Style(), ElType, axes(bc), bc)
+        return copyto!(dest, bc)
     end
-    dest = broadcast_similar(Style(), ElType, axes(bc), bc)
-    return copyto!(dest, bc)
-end
-
-# When ElType is not concrete, use narrowing. Use the first output
-# value to determine the starting output eltype; copyto_nonleaf!
-# will widen `dest` as needed to accommodate later values.
-function copy_nonleaf(bc::Broadcasted{Style,ElType}) where {Style,ElType}
+    # When ElType is not concrete, use narrowing. Use the first output
+    # value to determine the starting output eltype; copyto_nonleaf!
+    # will widen `dest` as needed to accommodate later values.
     iter = CartesianIndices(axes(bc))
     state = start(iter)
     if done(iter, state)
@@ -812,21 +766,21 @@ end
 @inline copyto!(dest::AbstractArray, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
 
 # Performance optimization for the Scalar case
-@inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0},ElType,Nothing,Nothing}) where ElType
+@inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0}})
     if not_nested(bc)
         if bc.f === identity && bc.args isa Tuple{Any} # only a single input argument to broadcast!
             # broadcast!(identity, dest, val) is equivalent to fill!(dest, val)
-            return fill!(dest, bc.args[1])
+            return fill!(dest, bc.args[1][])
         else
             args = bc.args
             @inbounds for I in eachindex(dest)
-                dest[I] = bc.f(args...)
+                dest[I] = bc.f(map(getindex, args)...)
             end
             return dest
         end
     end
     # Fall back to the default implementation
-    return copyto!(dest, instantiate(instantiate_axes(bc)))
+    return copyto!(dest, instantiate(bc))
 end
 
 # For broadcasted assignments like `broadcast!(f, A, ..., A, ...)`, where `A`
@@ -889,7 +843,7 @@ end
 # We could eventually allow for all broadcasting and other array types, but that
 # requires very careful consideration of all the edge effects.
 const ChunkableOp = Union{typeof(&), typeof(|), typeof(xor), typeof(~)}
-const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, ElType, Axes, Indexing<:Union{Nothing,Tuple}, F<:ChunkableOp, Args<:Tuple} = Broadcasted{Style,ElType,Axes,Indexing,F,Args}
+const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, Axes, Indexing<:Union{Nothing,Tuple}, F<:ChunkableOp, Args<:Tuple} = Broadcasted{Style,Axes,Indexing,F,Args}
 ischunkedbroadcast(R, bc::BroadcastedChunkableOp) = ischunkedbroadcast(R, bc.args)
 ischunkedbroadcast(R, args) = false
 ischunkedbroadcast(R, args::Tuple{<:BitArray,Vararg{Any}}) = size(R) == size(args[1]) && ischunkedbroadcast(R, tail(args))

@@ -92,12 +92,12 @@ is_supported_sparse_broadcast(x, rest...) = axes(x) === () && is_supported_spars
 is_supported_sparse_broadcast(x::Ref, rest...) = is_supported_sparse_broadcast(rest...)
 
 # Dispatch on broadcast operations by number of arguments
-const Broadcasted0{Style<:Union{Nothing,BroadcastStyle},ElType,Axes,Indexing<:Union{Nothing,Tuple{}},F} =
-    Broadcasted{Style,ElType,Axes,Indexing,F,Tuple{}}
-const SpBroadcasted1{Style<:SPVM,ElType,Axes,Indexing<:Union{Nothing,Tuple},F,Args<:Tuple{SparseVecOrMat}} =
-    Broadcasted{Style,ElType,Axes,Indexing,F,Args}
-const SpBroadcasted2{Style<:SPVM,ElType,Axes,Indexing<:Union{Nothing,Tuple},F,Args<:Tuple{SparseVecOrMat,SparseVecOrMat}} =
-    Broadcasted{Style,ElType,Axes,Indexing,F,Args}
+const Broadcasted0{Style<:Union{Nothing,BroadcastStyle},Axes,Indexing<:Union{Nothing,Tuple{}},F} =
+    Broadcasted{Style,Axes,Indexing,F,Tuple{}}
+const SpBroadcasted1{Style<:SPVM,Axes,Indexing<:Union{Nothing,Tuple},F,Args<:Tuple{SparseVecOrMat}} =
+    Broadcasted{Style,Axes,Indexing,F,Args}
+const SpBroadcasted2{Style<:SPVM,Axes,Indexing<:Union{Nothing,Tuple},F,Args<:Tuple{SparseVecOrMat,SparseVecOrMat}} =
+    Broadcasted{Style,Axes,Indexing,F,Args}
 
 # (1) The definitions below provide a common interface to sparse vectors and matrices
 # sufficient for the purposes of map[!]/broadcast[!]. This interface treats sparse vectors
@@ -154,7 +154,7 @@ function _noshapecheck_map(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
     maxnnzC = fpreszeros ? min(length(A), _sumnnzs(A, Bs...)) : length(A)
-    entrytypeC = Base.Broadcast.combine_eltypes(f, A, Bs...)
+    entrytypeC = Base.Broadcast.combine_eltypes(f, (A, Bs...))
     indextypeC = _promote_indtype(A, Bs...)
     C = _allocres(size(A), indextypeC, entrytypeC, maxnnzC)
     return fpreszeros ? _map_zeropres!(f, C, A, Bs...) :
@@ -182,7 +182,7 @@ function _diffshape_broadcast(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMa
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
     indextypeC = _promote_indtype(A, Bs...)
-    entrytypeC = Base.Broadcast.combine_eltypes(f, A, Bs...)
+    entrytypeC = Base.Broadcast.combine_eltypes(f, (A, Bs...))
     shapeC = to_shape(Base.Broadcast.combine_indices(A, Bs...))
     maxnnzC = fpreszeros ? _checked_maxnnzbcres(shapeC, A, Bs...) : _densennz(shapeC)
     C = _allocres(shapeC, indextypeC, entrytypeC, maxnnzC)
@@ -1070,17 +1070,12 @@ broadcast(f::Tf, A::SparseMatrixCSC, ::Type{T}) where {Tf,T} = broadcast(x -> f(
 # vectors/matrices, promote all structured matrices and dense vectors/matrices to sparse
 # and rebroadcast. otherwise, divert to generic AbstractArray broadcast code.
 
-function copy(bc::Broadcasted{PromoteToSparse, ElType}) where ElType
+function copy(bc::Broadcasted{PromoteToSparse})
     bcf = flatten(bc)
     if is_supported_sparse_broadcast(bcf.args...)
         broadcast(bcf.f, map(_sparsifystructured, bcf.args)...)
     else
-        # Fall back to the DefaultArrayStyle implementation
-        if !Base.isconcretetype(ElType)
-            return copy_nonleaf(bc)
-        end
-        dest = Broadcast.broadcast_similar(Broadcast.DefaultArrayStyle{2}(), ElType, axes(bc), bc)
-        return copyto!(dest, bc)
+        return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{2}}, bc))
     end
 end
 
