@@ -941,6 +941,10 @@ function effect_free(@nospecialize(e), src, mod::Module, allow_volatile::Bool)
             return allow_volatile
         elseif head === :copyast
             return true
+        elseif head === :boundscheck
+            return true
+        elseif head === :cfunction
+            return allow_volatile
         else
             return false
         end
@@ -1403,7 +1407,6 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     # see if each argument occurs only once in the body expression
     stmts = []
     prelude_stmts = []
-    stmts_free = true # true = all entries of stmts are effect_free
 
     argexprs = copy(argexprs)
     if isva
@@ -1412,7 +1415,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         push!(prelude_stmts, Expr(:(=), varargvar, argexprs[na]))
         argexprs[na] = varargvar
     end
-    for i = na:-1:1 # stmts_free needs to be calculated in reverse-argument order
+    for i = na:-1:1 # statements needs to be moved in reverse-argument order
         #args_i = args[i]
         aei = argexprs[i]
         aeitype = argtype = widenconst(exprtype(aei, sv.src, sv.mod))
@@ -1420,36 +1423,12 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
             pushfirst!(prelude_stmts, invoke_texpr)
         end
 
-        # ok for argument to occur more than once if the actual argument
-        # is a symbol or constant, or is not affected by previous statements
-        # that will exist after the inlining pass finishes
-        affect_free = stmts_free  # false = previous statements might affect the result of evaluating argument
-        occ = 0
-        for j = length(body.args):-1:1
-            b = body.args[j]
-            if occ < 6
-                occ += occurs_more(b, x->(isa(x, Slot) && slot_id(x) == i), 6)
-            end
-            if occ > 0 && affect_free && !effect_free(b, src, method.module, true)
-                #TODO: we might be able to short-circuit this test better by memoizing effect_free(b) in the for loop over i
-                affect_free = false
-            end
-            if occ > 5 && !affect_free
-                break
-            end
-        end
-        free = effect_free(aei, sv.src, sv.mod, true)
-        if ((occ==0 && aeitype===Bottom) || (occ > 1 && !inline_worthy(aei, sv.src, sv.mod, sv.params)) ||
-                (affect_free && !free) || (!affect_free && !effect_free(aei, sv.src, sv.mod, false)))
-            if occ != 0
-                vnew = newvar!(sv, aeitype)
-                argexprs[i] = vnew
-                pushfirst!(prelude_stmts, Expr(:(=), vnew, aei))
-                stmts_free &= free
-            elseif !free && !isType(aeitype)
-                pushfirst!(prelude_stmts, aei)
-                stmts_free = false
-            end
+        # in linear IR form, the only operations with side-effects are globals
+        # otherwise, aei must be a Slot / SSAValue / QuoteNode / self-quoting object
+        if aei isa GlobalRef || aei isa Expr
+            vnew = newvar!(sv, aeitype)
+            argexprs[i] = vnew
+            pushfirst!(prelude_stmts, Expr(:(=), vnew, aei))
         end
     end
     invoke_fexpr === nothing || pushfirst!(prelude_stmts, invoke_fexpr)
@@ -1651,7 +1630,7 @@ isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
 
 function statement_cost(ex::Expr, line::Int, src::CodeInfo, mod::Module, params::Params)
     head = ex.head
-    if is_meta_expr(ex) || head == :copyast # not sure if copyast is right
+    if is_meta_expr(ex) || head == :copyast || head == :simdloop # not sure if copyast is right
         return 0
     end
     argcost = 0
