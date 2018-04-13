@@ -33,6 +33,12 @@ An *environment* determines what `import X` and `using X` mean in various code c
 2. **A package directory** is a directory containing the source trees of a set of packages as subdirectories. This kind of environment was the only kind that existed in Julia 0.6 and earlier. If `X` is a subdirectory of a package directory and `X/src/X.jl` exists, then the package `X` is available in the package directory environment and `X/src/X.jl` is the source file by which it is loaded.
 3. **A stacked environment** is an ordered set of project environments and package directories, overlaid to make a single composite environment in which all the packages available in its constituent environments are available. Julia's load path is a stacked environment, for example.
 
+These three kinds of environment each serve a different purpose:
+
+* Project environments provide **reproducibility.** By checking a project environment into version control—i.e. a git repository—along with the rest of the project's source code, you can reproduce the exact state of the project _and_ all of its dependencies since the manifest file captures the exact version of every dependency and can be rematerialized easily.
+* Package directories provide low-overhead **convenience** when a project environment would be overkill: are handy when you have a set of packages and just want to put them somewhere and use them as they are without having to create and maintain a project environment for them.
+* Stacked environments allow for **augmentation** of the primary environment with additional tools. You can push an environment including development tools onto the stack and they will be available from the REPL and scripts but not from inside of packages.
+
 As an abstraction, an environment provides three maps: `roots`, `graph` and `paths`. When resolving the meaning of `import X`, `roots` and `graph` are used to determine the identity of `X` and answer the question *"what is `X`?"*, while the `paths` map is used to locate the source code of `X` and answer the question *"where is `X`?"* The specific roles of the three maps are:
 
 - **roots:** `name::Symbol` ⟶ `uuid::UUID`
