@@ -192,7 +192,24 @@ macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
 
-macro pure(ex)
+"""
+    @hyperpure
+
+Annotates a function to ease type inference by strictly specifying the 
+output is completely determined by the input.
+
+Usage can easily lead to whole program corruption or crashes and should be avoided
+by all users.
+
+Do not use if the function involved:
+
+- Involves globals, pointers
+- Does not return exactly (`===`) the same result for the same input
+- Gets its methods extended after it is called
+- Uses dispatch on any of its arguments
+
+"""
+macro hyperpure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
 
