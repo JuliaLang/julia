@@ -331,7 +331,7 @@ julia&gt; f(1)
 1.0
 
 julia&gt; f(-1)
-0.0 + 1.0im</code></pre><p>It is important to note that in real code computing this function, one would compare <code>x</code> to zero instead of catching an exception. The exception is much slower than simply comparing and branching.</p><p><code>try/catch</code> statements also allow the <code>Exception</code> to be saved in a variable. In this contrived example, the following example calculates the square root of the second element of <code>x</code> if <code>x</code> is indexable, otherwise assumes <code>x</code> is a real number and returns its square root:</p><pre><code class="language-julia-repl">julia&gt; sqrt_second(x) = try
+0.0 + 1.0im</code></pre><p>It is important to note that in real code computing this function, one would compare <code>x</code> to zero instead of catching an exception. The exception is much slower than simply comparing and branching.</p><p><code>try/catch</code> statements also allow the <code>Exception</code> to be saved in a variable. The following contrived example calculates the square root of the second element of <code>x</code> if <code>x</code> is indexable, otherwise assumes <code>x</code> is a real number and returns its square root:</p><pre><code class="language-julia-repl">julia&gt; sqrt_second(x) = try
            sqrt(x[2])
        catch y
            if isa(y, DomainError)
