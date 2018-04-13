@@ -721,10 +721,10 @@ Take a lazy `Broadcasted` object and compute the result
 """
 materialize(bc::Broadcasted) = copy(instantiate(bc))
 materialize(x) = x
-function materialize!(dest, bc::Broadcasted{Style}) where {Style}
+@inline function materialize!(dest, bc::Broadcasted{Style}) where {Style}
     return copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
 end
-function materialize!(dest, x)
+@inline function materialize!(dest, x)
     return copyto!(dest, instantiate(Broadcasted(identity, (x,), axes(dest))))
 end
 

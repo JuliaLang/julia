@@ -973,7 +973,7 @@ function _shapecheckbc(f, args...)
 end
 
 
-function copyto!(dest::SparseVecOrMat, bc::Broadcasted{<:SPVM})
+@inline function copyto!(dest::SparseVecOrMat, bc::Broadcasted{<:SPVM})
     if bc.f === identity && bc isa SpBroadcasted1 && Base.axes(dest) == (A = bc.args[1]; Base.axes(A))
         return copyto!(dest, A)
     end
@@ -982,7 +982,7 @@ function copyto!(dest::SparseVecOrMat, bc::Broadcasted{<:SPVM})
     return _copyto!(bcf.f, dest, As...)
 end
 
-function _copyto!(f, dest, As::SparseVecOrMat...)
+@inline function _copyto!(f, dest, As::SparseVecOrMat...)
     _aresameshape(dest, As...) && return _noshapecheck_map!(f, dest, As...)
     Base.Broadcast.check_broadcast_indices(axes(dest), As...)
     fofzeros = f(_zeros_eltypes(As...)...)
@@ -993,7 +993,7 @@ function _copyto!(f, dest, As::SparseVecOrMat...)
     end
 end
 
-function _copyto!(f, dest, args...)
+@inline function _copyto!(f, dest, args...)
     # args contains nothing but SparseVecOrMat and scalars
     # See below for capturescalars
     parevalf, passedsrcargstup = capturescalars(f, args)
@@ -1079,7 +1079,7 @@ function copy(bc::Broadcasted{PromoteToSparse})
     end
 end
 
-function copyto!(dest::SparseVecOrMat, bc::Broadcasted{PromoteToSparse})
+@inline function copyto!(dest::SparseVecOrMat, bc::Broadcasted{PromoteToSparse})
     bcf = flatten(bc)
     broadcast!(bcf.f, dest, map(_sparsifystructured, bcf.args)...)
 end
