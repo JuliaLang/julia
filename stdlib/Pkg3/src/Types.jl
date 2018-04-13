@@ -775,12 +775,17 @@ end
 function parse_package!(env, pkg, project_path)
     found_project_file = false
     for projname in project_names
-        if isfile(joinpath(project_path, "Project.toml"))
+        if isfile(joinpath(project_path, projname))
             found_project_file = true
             project_data = parse_toml(project_path, "Project.toml")
             pkg.uuid = UUID(project_data["uuid"])
             pkg.name = project_data["name"]
-            pkg.version = VersionNumber(get(project_data, "version", "0.0"))
+            if haskey(project_data, "version")
+                pkg.version = VersionNumber(project_data["version"])
+            else
+                @warn "project file for $(pkg.name) is missing a `version` entry"
+                Pkg3.Operations.set_maximum_version_registry!(env, pkg)
+            end
             break
         end
     end
