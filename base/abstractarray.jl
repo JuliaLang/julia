@@ -590,14 +590,9 @@ indices of the result will match `A`.
 
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
-
-    similar(dims->zeros(Int, dims), axes(A))
-
-would create an array of `Int`, initialized to zero, matching the
-indices of `A`.
 """
-similar(f, shape::Tuple) = f(to_shape(shape))
-similar(f, dims::DimOrInd...) = similar(f, dims)
+similar(::Type{T}, shape::Tuple) where {T} = T(to_shape(shape))
+similar(::Type{T}, dims::DimOrInd...) where {T} = similar(T, dims)
 
 """
     empty(v::AbstractVector, [eltype])
@@ -885,14 +880,6 @@ isempty(a::AbstractArray) = (_length(a) == 0)
 
 # keys with an IndexStyle
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
-
-"""
-   of_indices(x, y)
-
-Represents the array `y` as an array having the same indices type as `x`.
-"""
-of_indices(x, y) = similar(dims->y, oftype(axes(x), axes(y)))
-
 
 ## range conversions ##
 

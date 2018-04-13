@@ -282,23 +282,23 @@ operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
 # mode predicate methods for file names
 
 for f in Symbol[
-    :ispath
-    :isfifo
-    :ischardev
-    :isdir
-    :isblockdev
-    :isfile
-    :issocket
-    :issetuid
-    :issetgid
-    :issticky
-    :uperm
-    :gperm
-    :operm
-    :filemode
-    :filesize
-    :mtime
-    :ctime
+    :ispath,
+    :isfifo,
+    :ischardev,
+    :isdir,
+    :isblockdev,
+    :isfile,
+    :issocket,
+    :issetuid,
+    :issetgid,
+    :issticky,
+    :uperm,
+    :gperm,
+    :operm,
+    :filemode,
+    :filesize,
+    :mtime,
+    :ctime,
 ]
     @eval ($f)(path...)  = ($f)(stat(path...))
 end
