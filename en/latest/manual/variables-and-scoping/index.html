@@ -207,4 +207,55 @@ julia&gt; f()
 3</code></pre><h2><a class="nav-anchor" id="Constants-1" href="#Constants-1">Constants</a></h2><p>A common use of variables is giving names to specific, unchanging values. Such variables are only assigned once. This intent can be conveyed to the compiler using the <code>const</code> keyword:</p><pre><code class="language-julia-repl">julia&gt; const e  = 2.71828182845904523536;
 
 julia&gt; const pi = 3.14159265358979323846;</code></pre><p>Multiple variables can be declared in a single <code>const</code> statement:</p><pre><code class="language-julia-repl">julia&gt; const a, b = 1, 2
-(1, 2)</code></pre><p>The <code>const</code> declaration should only be used in global scope on globals. It is difficult for the compiler to optimize code involving global variables, since their values (or even their types) might change at almost any time. If a global variable will not change, adding a <code>const</code> declaration solves this performance problem.</p><p>Local constants are quite different. The compiler is able to determine automatically when a local variable is constant, so local constant declarations are not necessary, and in fact are currently not supported.</p><p>Special top-level assignments, such as those performed by the <code>function</code> and <code>struct</code> keywords, are constant by default.</p><p>Note that <code>const</code> only affects the variable binding; the variable may be bound to a mutable object (such as an array), and that object may still be modified.</p><footer><hr/><a class="previous" href="../control-flow/"><span class="direction">Previous</span><span class="title">Control Flow</span></a><a class="next" href="../types/"><span class="direction">Next</span><span class="title">Types</span></a></footer></article></body></html>
+(1, 2)</code></pre><p>The <code>const</code> declaration should only be used in global scope on globals. It is difficult for the compiler to optimize code involving global variables, since their values (or even their types) might change at almost any time. If a global variable will not change, adding a <code>const</code> declaration solves this performance problem.</p><p>Local constants are quite different. The compiler is able to determine automatically when a local variable is constant, so local constant declarations are not necessary, and in fact are currently not supported.</p><p>Special top-level assignments, such as those performed by the <code>function</code> and <code>struct</code> keywords, are constant by default.</p><p>Note that <code>const</code> only affects the variable binding; the variable may be bound to a mutable object (such as an array), and that object may still be modified. Additionally when one tries to assign a value a variable that is declared constant the following scenarios are possible:</p><ul><li>if a new value has a different type than the type of the constant then an error is thrown:</li></ul><pre><code class="language-julia-repl">julia&gt; const x = 1.0
+1.0
+
+julia&gt; x = 1
+ERROR: invalid redefinition of constant x</code></pre><ul><li>if a new value has the same type as the constant then a warning is printed:</li></ul><pre><code class="language-julia-repl">julia&gt; const y = 1.0
+1.0
+
+julia&gt; y = 2.0
+WARNING: redefining constant y
+2.0</code></pre><ul><li>if an assignment would not result in the change of variable value no message is given:</li></ul><pre><code class="language-julia-repl">julia&gt; const z = 100
+100
+
+julia&gt; z = 100
+100</code></pre><p>The last rule applies for immutable objects even if the vairable binding would change, e.g.:</p><pre><code class="language-julia-repl">julia&gt; const s1 = &quot;1&quot;
+&quot;1&quot;
+
+julia&gt; s2 = &quot;1&quot;
+&quot;1&quot;
+
+julia&gt; pointer.([s1, s2], 1)
+2-element Array{Ptr{UInt8},1}:
+ Ptr{UInt8} @0x00000000132c9638
+ Ptr{UInt8} @0x0000000013dd3d18
+
+julia&gt; s1 = s2
+&quot;1&quot;
+
+julia&gt; pointer.([s1, s2], 1)
+2-element Array{Ptr{UInt8},1}:
+ Ptr{UInt8} @0x0000000013dd3d18
+ Ptr{UInt8} @0x0000000013dd3d18</code></pre><p>However, for mutable objects the warning is printed as expected:</p><pre><code class="language-julia-repl">julia&gt; const a = [1]
+1-element Array{Int64,1}:
+ 1
+
+julia&gt; a = [1]
+WARNING: redefining constant a
+1-element Array{Int64,1}:
+ 1</code></pre><p>Note that although possible, changing the value of a variable that is declared as constant is strongly discouraged. For instance, if a method references a constant and is already compiled before the constant is changed then it might keep using the old value:</p><pre><code class="language-julia-repl">julia&gt; const x = 1
+1
+
+julia&gt; f() = x
+f (generic function with 1 method)
+
+julia&gt; f()
+1
+
+julia&gt; x = 2
+WARNING: redefining constant x
+2
+
+julia&gt; f()
+1</code></pre><footer><hr/><a class="previous" href="../control-flow/"><span class="direction">Previous</span><span class="title">Control Flow</span></a><a class="next" href="../types/"><span class="direction">Next</span><span class="title">Types</span></a></footer></article></body></html>
