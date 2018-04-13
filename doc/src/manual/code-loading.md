@@ -185,7 +185,7 @@ paths = Dict{Tuple{UUID,Symbol},String}(
 
 This example map includes three different kinds of package locations:
 
-1. The private `Priv` package is "[vendored](https://stackoverflow.com/a/35109534/659248)" inside inside of `App` repository.
+1. The private `Priv` package is "[vendored](https://stackoverflow.com/a/35109534/659248)" inside of `App` repository.
 2. The public `Priv` and `Zebra` packages are in the system depot, where packages installed and managed by the system administrator live. These are available to all users on the system.
 3. The `Pub` package is in the user depot, where packages installed by the user live. These are only available to the user who installed them.
 
