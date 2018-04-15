@@ -862,6 +862,16 @@
                  (if (not (symbol? v))
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
+     (for-each (lambda (t)
+                 (if (expr-contains-p (lambda (e)
+                                        (and (pair? e) (eq? (car e) 'call)
+                                             (expr-contains-p (lambda (a) (memq a params))
+                                                              e)))
+                                      t)
+                     (error (string "unsupported field type expression \""
+                                    (deparse t)
+                                    "\""))))
+               field-types)
      `(block
        (scope-block
         (block
