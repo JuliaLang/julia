@@ -1189,3 +1189,10 @@ end
     @test repr("text/plain", context=:compact=>true) == "\"text/plain\""
     @test repr(MIME("text/plain"), context=:compact=>true) == "MIME type text/plain"
 end
+
+@testset "#26799 BigInt summary" begin
+    @test Base.dims2string(tuple(BigInt(10))) == "10-element"
+    @test Base.inds2string(tuple(BigInt(10))) == "10"
+    @test summary(BigInt(1):BigInt(10)) == "10-element UnitRange{BigInt}"
+    @test summary(Base.OneTo(BigInt(10))) == "10-element Base.OneTo{BigInt}"
+end
