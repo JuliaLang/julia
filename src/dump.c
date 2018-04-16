@@ -2990,9 +2990,9 @@ void jl_init_serializer(void)
                      jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
                      jl_box_int64(21), jl_box_int64(22), jl_box_int64(23),
                      jl_box_int64(24), jl_box_int64(25), jl_box_int64(26),
-                     jl_box_int64(27), jl_box_int64(28),
+                     jl_box_int64(27),
 #ifndef JULIA_ENABLE_PARTR
-                     jl_box_int64(29),
+                     jl_box_int64(28),
 #endif
 
                      jl_bool_type, jl_int32_type, jl_int64_type,

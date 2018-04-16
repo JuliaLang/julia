@@ -284,8 +284,8 @@ void jl_init_threadtls(int16_t tid)
 }
 
 // all threads call this function to run user code
-static jl_value_t *jl_thread_run_fun(jl_callptr_t fptr, jl_method_instance_t *mfunc,
-                                     jl_value_t **args, uint32_t nargs)
+jl_value_t *jl_thread_run_fun(jl_callptr_t fptr, jl_method_instance_t *mfunc,
+                              jl_value_t **args, uint32_t nargs)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *res = jl_nothing;

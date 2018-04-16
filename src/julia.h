@@ -1689,10 +1689,10 @@ struct _jl_task_t {
     arraylist_t locks;
 
     /* task function pointer */
-    jl_generic_fptr_t fptr;
+    jl_callptr_t fptr;
 
     /* reduction function pointer, for parfors */
-    jl_generic_fptr_t rfptr;
+    jl_callptr_t rfptr;
 
     /* current exception handler */
     jl_handler_t *eh;

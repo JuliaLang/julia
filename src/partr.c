@@ -322,7 +322,7 @@ static inline int last_arriver(arriver_t *arr, int idx)
 
 /*  reduce()
  */
-static inline jl_value_t *reduce(arriver_t *arr, reducer_t *red, jl_generic_fptr_t *fptr,
+static inline jl_value_t *reduce(arriver_t *arr, reducer_t *red, jl_callptr_t fptr,
                                  jl_method_instance_t *mfunc, jl_value_t *_rargs,
                                  jl_value_t *val, int idx)
 {
@@ -350,8 +350,7 @@ static inline jl_value_t *reduce(arriver_t *arr, reducer_t *red, jl_generic_fptr
         nidx = ridx & 0x1 ? ridx + 1 : ridx - 1;
         /* TODO: review needed */
         JL_TRY {
-            (void)jl_assume(fptr->jlcall_api != JL_API_CONST);
-            val = jl_call_fptr_internal(fptr, mfunc, rargs, nrargs);
+            val = fptr(mfunc, rargs, nrargs);
         }
         JL_CATCH {
             val = jl_get_ptls_states()->exception_in_transit;
@@ -475,7 +474,7 @@ static void sync_grains(jl_task_t *task)
 
     /* reduce... */
     if (task->red) {
-        task->result = reduce(task->arr, task->red, &task->rfptr, task->mredfunc,
+        task->result = reduce(task->arr, task->red, task->rfptr, task->mredfunc,
                               task->rargs, task->result, task->grain_num);
         jl_gc_wb(task, task->result);
 
@@ -540,8 +539,7 @@ static void NOINLINE JL_NORETURN task_wrapper()
         }
         JL_TIMING(ROOT);
         ptls->world_age = jl_world_counter;
-        (void)jl_assume(task->fptr.jlcall_api != JL_API_CONST);
-        task->result = jl_call_fptr_internal(&task->fptr, task->mfunc, args, nargs);
+        task->result = task->fptr(task->mfunc, args, nargs);
         jl_gc_wb(task, task->result);
         task->state = done_sym;
     }
@@ -648,10 +646,8 @@ static void JL_NORETURN run_next()
 // specialize and compile the user function
 static int setup_task_fun(jl_value_t *_args,
                           jl_method_instance_t **mfunc,
-                          jl_generic_fptr_t *fptr)
+                          jl_callptr_t *fptr)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-
     uint32_t nargs;
     jl_value_t **args;
     if (!jl_is_svec(_args)) {
@@ -663,12 +659,14 @@ static int setup_task_fun(jl_value_t *_args,
         args = jl_svec_data(_args);
     }
 
+    size_t world = jl_get_ptls_states()->world_age;
     *mfunc = jl_lookup_generic(args, nargs,
                                jl_int32hash_fast(jl_return_address()),
-                               ptls->world_age);
+                               world);
 
     // Ignore constant return value for now.
-    if (jl_compile_method_internal(fptr, *mfunc))
+    *fptr = jl_compile_method_internal(mfunc, world);
+    if (*fptr == jl_fptr_const_return)
         return -1;
 
     return 0;
@@ -683,54 +681,55 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 
-    jl_task_t *task = (jl_task_t *)jl_gc_alloc(ptls, sizeof (jl_task_t),
-                                               jl_task_type);
+    jl_task_t *task = (jl_task_t *)jl_new_struct_uninit(jl_task_type);
+    JL_GC_PUSH1(&task);
     if (setup_task_fun(_args, &task->mfunc, &task->fptr) != 0)
-        return NULL;
-    task->args = _args;
-    task->result = jl_nothing;
+        task = NULL;
+    else {
+        task->args = _args;
+        task->result = jl_nothing;
 
-    // initialize elements
-    task->next = NULL;
-    task->storage = jl_nothing;
-    task->state = runnable_sym;
-    task->started = 0;
-    task->exception = jl_nothing;
-    task->backtrace = jl_nothing;
-    task->eh = NULL;
-    arraylist_new(&task->locks, 0);
-    task->gcstack = NULL;
-    task->current_module = NULL;
-    task->world_age = ptls->world_age;
-    task->current_tid = -1;
-    task->sticky_tid = -1;
-    task->parent = ptls->current_task;
-    task->arr = NULL;
-    task->red = NULL;
-    task->red_result = jl_nothing;
-    task->cq.head = NULL;
-    JL_MUTEX_INIT(&task->cq.lock);
-    task->grain_num = -1;
+        // initialize elements
+        task->next = NULL;
+        task->storage = jl_nothing;
+        task->state = runnable_sym;
+        task->started = 0;
+        task->exception = jl_nothing;
+        task->backtrace = jl_nothing;
+        task->eh = NULL;
+        arraylist_new(&task->locks, 0);
+        task->gcstack = NULL;
+        task->current_module = NULL;
+        task->world_age = ptls->world_age;
+        task->current_tid = -1;
+        task->sticky_tid = -1;
+        task->parent = ptls->current_task;
+        task->arr = NULL;
+        task->red = NULL;
+        task->red_result = jl_nothing;
+        task->cq.head = NULL;
+        JL_MUTEX_INIT(&task->cq.lock);
+        task->grain_num = -1;
 #ifdef ENABLE_TIMINGS
-    task->timing_stack = NULL;
+        task->timing_stack = NULL;
 #endif
 
-    // set up stack with guard page
-    JL_GC_PUSH1(&task);
-    task->ssize = LLT_ALIGN(1*1024*1024, jl_page_size);
-    size_t stkbufsize = task->ssize + jl_page_size + (jl_page_size - 1);
-    task->stkbuf = (void *)jl_gc_alloc_buf(ptls, stkbufsize);
-    jl_gc_wb_buf(task, task->stkbuf, stkbufsize);
-    char *stk = (char *)LLT_ALIGN((uintptr_t)task->stkbuf, jl_page_size);
-    if (mprotect(stk, jl_page_size - 1, PROT_NONE) == -1)
-        jl_errorf("mprotect: %s", strerror(errno));
-    stk += jl_page_size;
+        // set up stack with guard page
+        task->ssize = LLT_ALIGN(1*1024*1024, jl_page_size);
+        size_t stkbufsize = task->ssize + jl_page_size + (jl_page_size - 1);
+        task->stkbuf = (void *)jl_gc_alloc_buf(ptls, stkbufsize);
+        jl_gc_wb_buf(task, task->stkbuf, stkbufsize);
+        char *stk = (char *)LLT_ALIGN((uintptr_t)task->stkbuf, jl_page_size);
+        if (mprotect(stk, jl_page_size - 1, PROT_NONE) == -1)
+            jl_errorf("mprotect: %s", strerror(errno));
+        stk += jl_page_size;
 
-    // set up entry point for this task
-    init_task_entry(task_wrapper, task, stk);
+        // set up entry point for this task
+        init_task_entry(task_wrapper, task, stk);
 
-    // for task cleanup
-    jl_gc_add_finalizer((jl_value_t *)task, jl_unprotect_stack_func);
+        // for task cleanup
+        jl_gc_add_finalizer((jl_value_t *)task, jl_unprotect_stack_func);
+    }
 
     JL_GC_POP();
     return task;
@@ -749,10 +748,12 @@ JL_DLLEXPORT int jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach)
 
     if (task == NULL)
         return -1;
-    if (sticky)
-        task->settings |= TASK_IS_STICKY;
-    if (detach)
-        task->settings |= TASK_IS_DETACHED;
+    if (!task->started) {
+        if (sticky)
+            task->settings |= TASK_IS_STICKY;
+        if (detach)
+            task->settings |= TASK_IS_DETACHED;
+    }
 
     if (multiq_insert(task, ptls->tid) != 0) {
         return -2;
@@ -787,7 +788,7 @@ JL_DLLEXPORT jl_task_t *jl_task_new_multi(jl_value_t *_args, int64_t count, jl_v
         return NULL;
     reducer_t *red = NULL;
     jl_method_instance_t *mredfunc = NULL;
-    jl_generic_fptr_t rfptr;
+    jl_callptr_t rfptr;
     if (_rargs != NULL) {
         red = reducer_alloc();
         if (red == NULL) {
@@ -983,15 +984,14 @@ JL_DLLEXPORT void jl_task_yield(int requeue)
  */
 JL_DLLEXPORT jl_condition_t *jl_condition_new(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-
     jl_condition_t *cond = (jl_condition_t *)
-            jl_gc_alloc(ptls, sizeof (jl_condition_t), jl_condition_type);
+            jl_new_struct_uninit(jl_condition_type);
     cond->notify = 0;
-    jl_gc_wb(cond, cond->notify);
     cond->waitq.head = NULL;
-    jl_gc_wb(cond, cond->waitq.head);
+
+    JL_GC_PUSH1(&cond);
     JL_MUTEX_INIT(&cond->waitq.lock);
+    JL_GC_POP();
 
     return cond;
 }
@@ -1032,10 +1032,8 @@ JL_DLLEXPORT void jl_task_notify(jl_condition_t *c)
 {
     JL_LOCK(&c->waitq.lock);
     c->notify = 1;
-    jl_gc_wb(c, c->notify);
     jl_task_t *qtask = c->waitq.head;
     c->waitq.head = NULL;
-    jl_gc_wb(c, c->waitq.head);
     JL_UNLOCK(&c->waitq.lock);
 
     jl_task_t *qnext;
