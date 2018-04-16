@@ -8,16 +8,16 @@ if JULIA_PARTR
 import Core.Condition
 
 Condition() = ccall(:jl_condition_new, Ref{Condition}, ())
-wait(c::Condition) = ccall(:jl_task_wait, Cvoid, (Ref{Condition},), Ref{c})
-notify(c::Condition, arg, all, error) = ccall(:jl_task_notify, Cvoid, (Ref{Condition},), Ref{c})
+wait(c::Condition) = ccall(:jl_task_wait, Cvoid, (Ref{Condition},), c)
+notify(c::Condition, arg, all, error) = ccall(:jl_task_notify, Cvoid, (Ref{Condition},), c)
 notify(c::Condition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 notify_error(c::Condition, err) = notify(c, err, true, true)
-n_waiters(c::Condition) = 0 # TODO: do we need this?
 
+schedule(t::Task) = ccall(:jl_task_spawn, Cint, (Ref{Task},Int8,Int8), t, 0, 0)
+fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), t)
 yield() = ccall(:jl_task_yield, Cvoid, (Cint,), 1)
 wait() = ccall(:jl_task_yield, Cvoid, (Cint,), 0)
-fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), Ref{t})
-schedule(t::Task) = ccall(:jl_task_spawn, Cint, (Ref{Task},Int8,Int8), Ref{t}, 0, 0)
+
 macro schedule(expr)
     thunk = esc(:(()->($expr)))
     :(schedule(Task($thunk)))
@@ -32,7 +32,7 @@ yieldto(t::Task, @nospecialize x = nothing) = yield() # TODO: cannot yieldto any
 try_yieldto(undo, reftask::Ref{Task}) = yield() # TODO: cannot yieldto anymore
 throwto(t::Task, @nospecialize exc) = () # TODO: how to throw to?
 
-else
+else # !JULIA_PARTR
 
 
 """

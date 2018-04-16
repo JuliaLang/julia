@@ -744,8 +744,8 @@ void jl_init_tasks(void)
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_any_type,
-                                jl_any_type,
+                                jl_int64_type,
+                                jl_int32_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type),
@@ -757,10 +757,9 @@ void jl_init_tasks(void)
     jl_svecset(jl_task_type->types, 14, (jl_value_t*)jl_task_type);
     jl_condition_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Condition"), NULL, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(4, "notify", "waitq_head", "waitq_lock_owner", "waitq_lock_count"),
-                        jl_svec(4, jl_uint8_type, jl_any_type, jl_int64_type, jl_int32_type),
-                        0, 1, 4);
-    jl_svecset(jl_condition_type->types, 1, (jl_value_t*)jl_task_type);
+                        jl_perm_symsvec(3, "head", "lock_owner", "lock_count"),
+                        jl_svec(3, jl_task_type, jl_int64_type, jl_int32_type),
+                        0, 1, 3);
 #endif /* JULIA_ENABLE_PARTR */
 
     done_sym = jl_symbol("done");
@@ -787,15 +786,19 @@ void jl_init_root_task(void *stack, size_t ssize)
     ptls->current_task->stkbuf = stack;
 #endif
 #ifdef JULIA_ENABLE_PARTR
-    ptls->current_task->settings = TASK_IS_STICKY | TASK_IS_DETACHED;
-    ptls->current_task->next = NULL;
     ptls->current_task->storage = jl_nothing;
-    ptls->current_task->current_tid = ptls->tid;
-    ptls->current_task->sticky_tid = ptls->tid;
+    ptls->current_task->args = jl_nothing;
+    ptls->current_task->mfunc = NULL;
+    ptls->current_task->rargs = jl_nothing;
+    ptls->current_task->mredfunc = NULL;
+    ptls->current_task->next = NULL;
     ptls->current_task->parent = NULL;
+    ptls->current_task->red_result = jl_nothing;
+    ptls->current_task->current_tid = ptls->tid;
     ptls->current_task->arr = NULL;
     ptls->current_task->red = NULL;
-    ptls->current_task->red_result = jl_nothing;
+    ptls->current_task->settings = TASK_IS_STICKY | TASK_IS_DETACHED;
+    ptls->current_task->sticky_tid = ptls->tid;
     ptls->current_task->grain_num = -1;
 #else
     ptls->current_task->tls = jl_nothing;
@@ -804,16 +807,18 @@ void jl_init_root_task(void *stack, size_t ssize)
     ptls->current_task->parent = ptls->current_task;
     ptls->current_task->donenotify = jl_nothing;
 #endif
-    ptls->current_task->result = jl_nothing;
     ptls->current_task->state = runnable_sym;
-    ptls->current_task->started = 1;
+    ptls->current_task->result = jl_nothing;
     ptls->current_task->exception = jl_nothing;
     ptls->current_task->backtrace = jl_nothing;
     ptls->current_task->logstate = jl_nothing;
-    ptls->current_task->eh = NULL;
+    ptls->current_task->started = 1;
 #ifdef JULIA_ENABLE_THREADING
     arraylist_new(&ptls->current_task->locks, 0);
 #endif
+    ptls->current_task->fptr = NULL;
+    ptls->current_task->rfptr = NULL;
+    ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
     ptls->current_task->current_module = ptls->current_module;
 

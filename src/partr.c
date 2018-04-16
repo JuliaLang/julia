@@ -687,28 +687,33 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
         task = NULL;
     else {
         task->args = _args;
-        task->result = jl_nothing;
 
         // initialize elements
-        task->next = NULL;
         task->storage = jl_nothing;
         task->state = runnable_sym;
-        task->started = 0;
+        task->result = jl_nothing;
         task->exception = jl_nothing;
         task->backtrace = jl_nothing;
-        task->eh = NULL;
+        task->logstate = jl_nothing;
+        task->rargs = jl_nothing;
+        task->mredfunc = NULL;
+        task->cq.head = NULL;
+        JL_MUTEX_INIT(&task->cq.lock);
+        task->next = NULL;
+        task->parent = ptls->current_task;
+        task->red_result = jl_nothing;
+        task->started = 0;
         arraylist_new(&task->locks, 0);
+        task->rfptr = NULL;
+        task->eh = NULL;
         task->gcstack = NULL;
         task->current_module = NULL;
         task->world_age = ptls->world_age;
         task->current_tid = -1;
-        task->sticky_tid = -1;
-        task->parent = ptls->current_task;
         task->arr = NULL;
         task->red = NULL;
-        task->red_result = jl_nothing;
-        task->cq.head = NULL;
-        JL_MUTEX_INIT(&task->cq.lock);
+        task->settings = 0;
+        task->sticky_tid = -1;
         task->grain_num = -1;
 #ifdef ENABLE_TIMINGS
         task->timing_stack = NULL;
@@ -986,11 +991,9 @@ JL_DLLEXPORT jl_condition_t *jl_condition_new(void)
 {
     jl_condition_t *cond = (jl_condition_t *)
             jl_new_struct_uninit(jl_condition_type);
-    cond->notify = 0;
-    cond->waitq.head = NULL;
-
+    cond->head = NULL;
     JL_GC_PUSH1(&cond);
-    JL_MUTEX_INIT(&cond->waitq.lock);
+    JL_MUTEX_INIT(&cond->lock);
     JL_GC_POP();
 
     return cond;
@@ -1003,25 +1006,19 @@ JL_DLLEXPORT jl_condition_t *jl_condition_new(void)
 JL_DLLEXPORT void jl_task_wait(jl_condition_t *c)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (!c->notify) {
-        JL_LOCK(&c->waitq.lock);
-        if (!c->notify) {
-            if (c->waitq.head == NULL) {
-                c->waitq.head = ptls->current_task;
-                jl_gc_wb(c, c->waitq.head);
-            }
-            else {
-                jl_task_t *pt = c->waitq.head;
-                while (pt->next)
-                    pt = pt->next;
-                pt->next = ptls->current_task;
-            }
-            JL_UNLOCK(&c->waitq.lock);
-            jl_task_yield(0);
-        }
-        else
-            JL_UNLOCK(&c->waitq.lock);
+    JL_LOCK(&c->lock);
+    if (c->head == NULL) {
+        c->head = ptls->current_task;
+        jl_gc_wb(c, c->head);
     }
+    else {
+        jl_task_t *pt = c->head;
+        while (pt->next)
+            pt = pt->next;
+        pt->next = ptls->current_task;
+    }
+    JL_UNLOCK(&c->lock);
+    jl_task_yield(0);
 }
 
 
@@ -1030,11 +1027,10 @@ JL_DLLEXPORT void jl_task_wait(jl_condition_t *c)
  */
 JL_DLLEXPORT void jl_task_notify(jl_condition_t *c)
 {
-    JL_LOCK(&c->waitq.lock);
-    c->notify = 1;
-    jl_task_t *qtask = c->waitq.head;
-    c->waitq.head = NULL;
-    JL_UNLOCK(&c->waitq.lock);
+    JL_LOCK(&c->lock);
+    jl_task_t *qtask = c->head;
+    c->head = NULL;
+    JL_UNLOCK(&c->lock);
 
     jl_task_t *qnext;
     while (qtask) {
