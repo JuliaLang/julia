@@ -1310,73 +1310,119 @@ function _generated_stub(gen::Symbol, args::Vector{Any}, params::Vector{Any}, li
     return Expr(:meta, :generated, stub)
 end
 
-f24852_kernel(x, y) = x * y
+f24852_kernel1(x, y::Tuple) = x * y[1][1][1]
+f24852_kernel2(x, y::Tuple) = f24852_kernel1(x, (y,))
+f24852_kernel3(x, y::Tuple) = f24852_kernel2(x, (y,))
+f24852_kernel(x, y::Number) = f24852_kernel3(x, (y,))
 
-function f24852_kernel_cinfo(x, y)
-    sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f24852_kernel),x,y}, -1, typemax(UInt))[1]
+function f24852_kernel_cinfo(fsig::Type)
+    world = typemax(UInt) # FIXME
+    sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
+    isdefined(method, :source) || return (nothing, :(f(x, y)))
     code_info = Base.uncompressed_ast(method)
     body = Expr(:block, code_info.code...)
-    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
+    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 1, :propagate)
+    if startswith(String(method.name), "f24852")
+        for a in body.args
+            if a isa Expr && a.head == :(=)
+                a = a.args[2]
+            end
+            if a isa Expr && length(a.args) === 3 && a.head === :call
+                pushfirst!(a.args, Core.SlotNumber(1))
+            end
+        end
+    end
+    pushfirst!(code_info.slotnames, Symbol("#self#"))
+    pushfirst!(code_info.slotflags, 0x00)
     return method, code_info
 end
 
-function f24852_gen_cinfo_uninflated(X, Y, f, x, y)
-    _, code_info = f24852_kernel_cinfo(x, y)
+function f24852_gen_cinfo_uninflated(X, Y, _, f, x, y)
+    _, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
     return code_info
 end
 
-function f24852_gen_cinfo_inflated(X, Y, f, x, y)
-    method, code_info = f24852_kernel_cinfo(x, y)
-    code_info.signature_for_inference_heuristics = Core.Compiler.svec(f, (x, y), typemax(UInt))
+function f24852_gen_cinfo_inflated(X, Y, _, f, x, y)
+    method, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
+    code_info.method_for_inference_limit_heuristics = method
     return code_info
 end
 
-function f24852_gen_expr(X, Y, f, x, y)
-    return :(f24852_kernel(x::$X, y::$Y))
+function f24852_gen_expr(X, Y, _, f, x, y) # deparse f(x::X, y::Y) where {X, Y}
+    if f === typeof(f24852_kernel)
+        f2 = :f24852_kernel3
+    elseif f === typeof(f24852_kernel3)
+        f2 = :f24852_kernel2
+    elseif f === typeof(f24852_kernel2)
+        f2 = :f24852_kernel1
+    elseif f === typeof(f24852_kernel1)
+        return :((x::$X) * (y::$Y)[1][1][1])
+    else
+        return :(error(repr(f)))
+    end
+    return :(f24852_late_expr($f2, x::$X, (y::$Y,)))
 end
 
 @eval begin
-    function f24852_late_expr(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:f24852_late_expr, :x, :y],
+    function f24852_late_expr(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_late_inflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:f24852_late_inflated, :x, :y],
+    function f24852_late_inflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_late_uninflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:f24852_late_uninflated, :x, :y],
+    function f24852_late_uninflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
 end
 
 @eval begin
-    function f24852_early_expr(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:f24852_early_expr, :x, :y],
+    function f24852_early_expr(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_early_inflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:f24852_early_inflated, :x, :y],
+    function f24852_early_inflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_early_uninflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:f24852_early_uninflated, :x, :y],
+    function f24852_early_uninflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
 end
 
 x, y = rand(), rand()
 result = f24852_kernel(x, y)
 
-@test result === f24852_late_expr(x, y)
-@test result === f24852_late_uninflated(x, y)
-@test result === f24852_late_inflated(x, y)
+@test result === f24852_late_expr(f24852_kernel, x, y)
+@test Base.return_types(f24852_late_expr, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === f24852_late_uninflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === f24852_late_uninflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
 
-@test result === f24852_early_expr(x, y)
-@test result === f24852_early_uninflated(x, y)
-@test result === f24852_early_inflated(x, y)
+@test result === f24852_early_expr(f24852_kernel, x, y)
+@test Base.return_types(f24852_early_expr, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === f24852_early_uninflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_early_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === @inferred f24852_early_inflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_early_inflated, typeof((f24852_kernel, x, y))) == Any[Float64]
 
-# TODO: test that `expand_early = true` + inflated `signature_for_inference_heuristics`
+# TODO: test that `expand_early = true` + inflated `method_for_inference_limit_heuristics`
 # can be used to tighten up some inference result.
 
 # Test that Conditional doesn't get widened to Bool too quickly

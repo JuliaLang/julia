@@ -2300,7 +2300,8 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
 
     size_t nf = jl_datatype_nfields(jl_code_info_type);
     for (i = 0; i < nf - 5; i++) {
-        jl_serialize_value_(&s, jl_get_nth_field((jl_value_t*)code, i), 1);
+        int copy = (i != 2); // don't copy contents of method_for_inference_limit_heuristics field
+        jl_serialize_value_(&s, jl_get_nth_field((jl_value_t*)code, i), copy);
     }
 
     ios_putc('\0', s.s);

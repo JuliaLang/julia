@@ -187,6 +187,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     cyclei = 0
     infstate = sv
     edgecycle = false
+    method2 = method_for_inference_heuristics(method, sig, sparams, sv.params.world) # Union{Method, Nothing}
     while !(infstate === nothing)
         infstate = infstate::InferenceState
         if method === infstate.linfo.def
@@ -197,7 +198,9 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                 edgecycle = true
                 break
             end
-            if topmost === nothing
+            inf_method2 = infstate.src.method_for_inference_limit_heuristics # limit only if user token match
+            inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
+            if topmost === nothing && method2 === inf_method2
                 # inspect the parent of this edge,
                 # to see if they are the same Method as sv
                 # in which case we'll need to ensure it is convergent
