@@ -1524,3 +1524,43 @@ f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
 g26172(::Val{0}) = ()
 g26172(v) = (nothing, g26172(f26172(v))...)
 @test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)
+
+# 26826 constant prop through varargs
+
+struct Foo26826{A,B}
+    a::A
+    b::B
+end
+
+x26826 = rand()
+
+apply26826(f, args...) = f(args...)
+
+f26826(x) = apply26826(Base.getproperty, Foo26826(1, x), :b)
+# We use getproperty to drive these tests because it requires constant
+# propagation in order to lower to a well-inferred getfield call.
+
+@test @inferred(f26826(x26826)) === x26826
+
+getfield26826(x, args...) = Base.getproperty(x, getfield(args, 2))
+
+g26826(x) = getfield26826(x, :a, :b)
+
+@test @inferred(g26826(Foo26826(1, x26826))) === x26826
+
+# Somewhere in here should be a single getfield call, and it should be inferred as Float64.
+# If this test is broken (especially if inference is getting a correct, but loose result,
+# like a Union) then it's potentially an indication that the optimizer isn't hitting the
+# InferenceResult cache properly for varargs methods.
+typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first.code
+found_well_typed_getfield_call = false
+for stmnt in typed_code
+    if Meta.isexpr(stmnt, :(=)) && Meta.isexpr(stmnt.args[2], :call)
+        lhs = stmnt.args[2]
+        if lhs.args[1] == GlobalRef(Base, :getfield) && lhs.typ === Float64
+            global found_well_typed_getfield_call = true
+        end
+    end
+end
+
+@test found_well_typed_getfield_call
