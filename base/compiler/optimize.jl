@@ -2712,7 +2712,7 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
     # There are other cases that we can merge
     # but those require control flow analysis.
     var_has_static_undef(ctx.sv.src, key.first, key.second) && return false
-    local defkey
+    local defkey, deftyp
     for def in info.defs
         # No NewvarNode def for variables that aren't used undefined
         defex = (def.assign::Expr).args[2]
@@ -2734,6 +2734,12 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
             end
         else
             return @isdefined(defkey)
+        end
+        new_deftyp = exprtype(defex, ctx.sv.src, ctx.sv.mod)
+        if @isdefined(deftyp) && deftyp != new_deftyp
+            return true
+        else
+            deftyp = new_deftyp
         end
     end
 
@@ -2759,8 +2765,18 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
     if defkey.second
         # SSAValue def
         replace_v = SSAValue(defkey.first - 1)
+        # don't replace TypedSlots with SSAValues
+        replace_typ = exprtype(replace_v, ctx.sv.src, ctx.sv.mod)
+        if !(replace_typ ⊑ deftyp)
+            return false
+        end
     else
         replace_v = SlotNumber(defkey.first)
+        # don't lose type information from TypedSlots
+        replace_typ = exprtype(replace_v, ctx.sv.src, ctx.sv.mod)
+        if !(replace_typ ⊑ deftyp)
+            replace_v = TypedSlot(defkey.first, deftyp)
+        end
     end
     for use in info.uses
         if isdefined(use, :expr)

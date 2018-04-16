@@ -302,13 +302,33 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     return true
 end
 
+# pick a wider type that contains both typea and typeb,
+# with some limits on how "large" it can get,
+# but without losing too much precision in common cases
+# and also trying to be associative and commutative
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
     typea ⊑ typeb && return typeb
     typeb ⊑ typea && return typea
+    # type-lattice for MaybeUndef wrapper
     if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
         return MaybeUndef(tmerge(
             isa(typea, MaybeUndef) ? typea.typ : typea,
             isa(typeb, MaybeUndef) ? typeb.typ : typeb))
+    end
+    # type-lattice for Conditional wrapper
+    if isa(typea, Conditional) && isa(typeb, Const)
+        if typeb.val === true
+            typeb = Conditional(typea.var, Any, Union{})
+        elseif typeb.val === false
+            typeb = Conditional(typea.var, Union{}, Any)
+        end
+    end
+    if isa(typeb, Conditional) && isa(typea, Const)
+        if typea.val === true
+            typea = Conditional(typeb.var, Any, Union{})
+        elseif typea.val === false
+            typea = Conditional(typeb.var, Union{}, Any)
+        end
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
         if typea.var === typeb.var
@@ -320,6 +340,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
         return Bool
     end
+    # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
     typea === typeb && return typea
     if !(isa(typea, Type) || isa(typea, TypeVar)) ||
