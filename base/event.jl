@@ -15,7 +15,7 @@ notify_error(c::Condition, err) = notify(c, err, true, true)
 n_waiters(c::Condition) = 0 # TODO: do we need this?
 
 yield() = ccall(:jl_task_yield, Cvoid, (Cint,), 1)
-wait() = yield()
+wait() = ccall(:jl_task_yield, Cvoid, (Cint,), 0)
 fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), Ref{t})
 schedule(t::Task) = ccall(:jl_task_spawn, Cint, (Ref{Task},Int8,Int8), Ref{t}, 0, 0)
 macro schedule(expr)

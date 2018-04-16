@@ -25,9 +25,8 @@ typedef struct _jl_threadarg_t {
 void jl_init_threadtls(int16_t tid);
 
 // generic helper for a thread to run a function
-jl_value_t *jl_thread_run_fun(const jl_generic_fptr_t *fptr,
-                              jl_method_instance_t *mfunc, jl_value_t **args,
-                              uint32_t nargs);
+jl_value_t *jl_thread_run_fun(jl_callptr_t fptr, jl_method_instance_t *mfunc,
+                              jl_value_t **args, uint32_t nargs);
 
 // provided by a threading infrastructure
 void jl_init_threadinginfra(void);
@@ -43,7 +42,6 @@ void jl_threadfun(void *arg);
 #include "partr.h"
 #endif
 #endif
->>>>>>> Integrating partr in progress
 
 #ifdef __cplusplus
 }
