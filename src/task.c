@@ -800,6 +800,8 @@ void jl_init_root_task(void *stack, size_t ssize)
     ptls->current_task->settings = TASK_IS_STICKY | TASK_IS_DETACHED;
     ptls->current_task->sticky_tid = ptls->tid;
     ptls->current_task->grain_num = -1;
+    ptls->current_task->fptr = NULL;
+    ptls->current_task->rfptr = NULL;
 #else
     ptls->current_task->tls = jl_nothing;
     ptls->current_task->start = NULL;
@@ -816,8 +818,6 @@ void jl_init_root_task(void *stack, size_t ssize)
 #ifdef JULIA_ENABLE_THREADING
     arraylist_new(&ptls->current_task->locks, 0);
 #endif
-    ptls->current_task->fptr = NULL;
-    ptls->current_task->rfptr = NULL;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
     ptls->current_task->current_module = ptls->current_module;
