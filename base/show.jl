@@ -1836,8 +1836,8 @@ end
 ## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
 dims2string(d) = isempty(d) ? "0-dimensional" :
-                       length(d) == 1 ? "$(d[1])-element" :
-                       join(map(string,d), '×')
+                 length(d) == 1 ? "$(d[1])-element" :
+                 join(map(string,d), '×')
 
 inds2string(inds) = join(map(string,inds), '×')
 
