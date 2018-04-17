@@ -25,6 +25,14 @@ target = """71.163.72.113 - - [30/Jul/2014:16:40:55 -0700] "GET emptymind.org/th
 pat = r"""([\d\.]+) ([\w.-]+) ([\w.-]+) (\[.+\]) "([^"\r\n]*|[^"\r\n\[]*\[.+\][^"]+|[^"\r\n]+.[^"]+)" (\d{3}) (\d+|-) ("(?:[^"]|\")+)"? ("(?:[^"]|\")+)"?"""
 match(pat, target)
 
+# issue #26829
+@test map(m -> m.match, eachmatch(r"^$|\S", "ö")) == ["ö"]
+
+# issue #26199
+@test map(m -> m.match, eachmatch(r"(\p{L}+)", "Tú")) == ["Tú"]
+@test map(m -> m.match, eachmatch(r"(\p{L}+)", "Tú lees.")) == ["Tú", "lees"]
+@test map(m -> m.match, eachmatch(r"(\p{L}+)", "¿Cuál es tu pregunta?")) == ["Cuál", "es", "tu", "pregunta"]
+
 # Issue 9545 (32 bit)
 buf = PipeBuffer()
 show(buf, r"")
