@@ -167,7 +167,7 @@ end
 
 
 
-test(;kwargs...)                                  = test(PackageSpec[], kwargs...)
+test(;kwargs...)                                  = test(PackageSpec[]; kwargs...)
 test(pkg::Union{String, PackageSpec}; kwargs...)  = test([pkg]; kwargs...)
 test(pkgs::Vector{String}; kwargs...)             = test([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
 test(pkgs::Vector{PackageSpec}; kwargs...)        = test(Context(), pkgs; kwargs...)
