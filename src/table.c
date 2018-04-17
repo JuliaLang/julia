@@ -1,12 +1,12 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#define hash_size(h) (jl_array_len(h)/2)
+#define hash_size(h) (jl_array_len(h) / 2)
 
 // compute empirical max-probe for a given size
-#define max_probe(size) ((size)<=1024 ? 16 : (size)>>6)
+#define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 
-#define keyhash(k)     jl_object_id(k)
-#define h2index(hv,sz) (size_t)(((hv) & ((sz)-1))*2)
+#define keyhash(k) jl_object_id(k)
+#define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key, int *inserted);
 
@@ -16,15 +16,15 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     // pa doesn't have to be a GC slot but *pa needs to be rooted
     size_t sz = jl_array_len(a);
     size_t i;
-    void **ol = (void**)a->data;
+    void **ol = (void **)a->data;
     jl_array_t *newa = jl_alloc_vec_any(newsz);
     // keep the original array in the original slot since we need `ol`
     // to be valid in the loop below.
     JL_GC_PUSH1(&newa);
-    for(i=0; i < sz; i+=2) {
-        if (ol[i+1] != NULL) {
-            (*jl_table_lookup_bp(&newa, ol[i], NULL)) = ol[i+1];
-            jl_gc_wb(newa, ol[i+1]);
+    for (i = 0; i < sz; i += 2) {
+        if (ol[i + 1] != NULL) {
+            (*jl_table_lookup_bp(&newa, ol[i], NULL)) = ol[i + 1];
+            jl_gc_wb(newa, ol[i + 1]);
             // it is however necessary here because allocation
             // can (and will) occur in a recursive call inside table_lookup_bp
         }
@@ -46,31 +46,31 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key, int *inserted)
     size_t newsz, sz = hash_size(a);
     assert(sz >= 1);
     size_t maxprobe = max_probe(sz);
-    void **tab = (void**)a->data;
+    void **tab = (void **)a->data;
 
     if (inserted)
         *inserted = 0;
 
-    hv = keyhash((jl_value_t*)key);
- retry_bp:
+    hv = keyhash((jl_value_t *)key);
+retry_bp:
     iter = 0;
-    index = h2index(hv,sz);
+    index = h2index(hv, sz);
     sz *= 2;
     orig = index;
 
     do {
-        if (tab[index+1] == NULL) {
+        if (tab[index + 1] == NULL) {
             tab[index] = key;
             if (inserted)
                 *inserted = 1;
             jl_gc_wb(a, key);
-            return &tab[index+1];
+            return &tab[index + 1];
         }
 
-        if (jl_egal((jl_value_t*)key, (jl_value_t*)tab[index]))
-            return &tab[index+1];
+        if (jl_egal((jl_value_t *)key, (jl_value_t *)tab[index]))
+            return &tab[index + 1];
 
-        index = (index+2) & (sz-1);
+        index = (index + 2) & (sz - 1);
         iter++;
         if (iter > maxprobe)
             break;
@@ -81,16 +81,16 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key, int *inserted)
     /* it's important to grow the table really fast; otherwise we waste */
     /* lots of time rehashing all the keys over and over. */
     sz = jl_array_len(a);
-    if (sz >= (1<<19) || (sz <= (1<<8)))
-        newsz = sz<<1;
+    if (sz >= (1 << 19) || (sz <= (1 << 8)))
+        newsz = sz << 1;
     else if (sz <= HT_N_INLINE)
         newsz = HT_N_INLINE;
     else
-        newsz = sz<<2;
+        newsz = sz << 2;
     *pa = jl_idtable_rehash(*pa, newsz);
 
     a = *pa;
-    tab = (void**)a->data;
+    tab = (void **)a->data;
     sz = hash_size(a);
     maxprobe = max_probe(sz);
 
@@ -106,8 +106,8 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     size_t sz = hash_size(a);
     assert(sz >= 1);
     size_t maxprobe = max_probe(sz);
-    void **tab = (void**)a->data;
-    uint_t hv = keyhash((jl_value_t*)key);
+    void **tab = (void **)a->data;
+    uint_t hv = keyhash((jl_value_t *)key);
     size_t index = h2index(hv, sz);
     sz *= 2;
     size_t orig = index;
@@ -116,10 +116,10 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     do {
         if (tab[index] == NULL)
             return NULL;
-        if (jl_egal((jl_value_t*)key, (jl_value_t*)tab[index]))
-            return &tab[index+1];
+        if (jl_egal((jl_value_t *)key, (jl_value_t *)tab[index]))
+            return &tab[index + 1];
 
-        index = (index+2) & (sz-1);
+        index = (index + 2) & (sz - 1);
         iter++;
         if (iter > maxprobe)
             break;
@@ -146,7 +146,7 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
     void **bp = jl_table_peek_bp(h, key);
     if (bp == NULL || *bp == NULL)
         return deflt;
-    return (jl_value_t*)*bp;
+    return (jl_value_t *)*bp;
 }
 
 JL_DLLEXPORT
@@ -160,8 +160,8 @@ jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt, int *fou
     }
     if (found)
         *found = 1;
-    jl_value_t *val = (jl_value_t*)*bp;
-    *(bp-1) = jl_nothing; // clear the key
+    jl_value_t *val = (jl_value_t *)*bp;
+    *(bp - 1) = jl_nothing; // clear the key
     *bp = NULL;
     return val;
 }
@@ -169,11 +169,13 @@ jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt, int *fou
 JL_DLLEXPORT
 size_t jl_eqtable_nextind(jl_array_t *t, size_t i)
 {
-    if (i&1) i++;
+    if (i & 1)
+        i++;
     size_t alen = jl_array_dim0(t);
-    while (i < alen && ((void**)t->data)[i+1] == NULL)
-        i+=2;
-    if (i >= alen) return (size_t)-1;
+    while (i < alen && ((void **)t->data)[i + 1] == NULL)
+        i += 2;
+    if (i >= alen)
+        return (size_t)-1;
     return i;
 }
 
