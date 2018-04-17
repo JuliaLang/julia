@@ -127,8 +127,9 @@ For users coming to Julia from R, these are some noteworthy differences:
     matrices, then `A * B` denotes a matrix multiplication in Julia, equivalent to R's `A %*% B`.
     In R, this same notation would perform an element-wise (Hadamard) product. To get the element-wise
     multiplication operation, you need to write `A .* B` in Julia.
-  * Julia performs matrix transposition using the `.'` operator and conjugated transposition using
-    the `'` operator. Julia's `A.'` is therefore equivalent to R's `t(A)`.
+  * Julia performs matrix transposition using the `transpose` function and conjugated transposition using
+    the `'` operator or the `adjoint` function. Julia's `transpose(A)` is therefore equivalent to R's `t(A)`.
+    Additionally a non-recursive transpose in Julia is provided by the `permutedims` function.
   * Julia does not require parentheses when writing `if` statements or `for`/`while` loops: use `for i in [1, 2, 3]`
     instead of `for (i in c(1, 2, 3))` and `if i == 1` instead of `if (i == 1)`.
   * Julia does not treat the numbers `0` and `1` as Booleans. You cannot write `if (1)` in Julia,
@@ -149,7 +150,8 @@ For users coming to Julia from R, these are some noteworthy differences:
       * The [DataFrames package](https://github.com/JuliaStats/DataFrames.jl) provides data frames.
       * Generalized linear models are provided by the [GLM package](https://github.com/JuliaStats/GLM.jl).
   * Julia provides tuples and real hash tables, but not R-style lists. When returning multiple items,
-    you should typically use a tuple: instead of `list(a = 1, b = 2)`, use `(1, 2)`.
+    you should typically use a tuple or a named tuple: instead of `list(a = 1, b = 2)`, use `(1, 2)`
+    or `(a=1, b=2)`.
   * Julia encourages users to write their own types, which are easier to use than S3 or S4 objects
     in R. Julia's multiple dispatch system means that `table(x::TypeA)` and `table(x::TypeB)` act
     like R's `table.TypeA(x)` and `table.TypeB(x)`.
@@ -167,13 +169,14 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia's [`sum`](@ref), [`prod`](@ref), [`maximum`](@ref), and [`minimum`](@ref) are different
     from their counterparts in R. They all accept one or two arguments. The first argument is an iterable
     collection such as an array.  If there is a second argument, then this argument indicates the
-    dimensions, over which the operation is carried out.  For instance, let `A=[[1 2],[3 4]]` in Julia
-    and `B=rbind(c(1,2),c(3,4))` be the same matrix in R.  Then `sum(A)` gives the same result as
-    `sum(B)`, but `sum(A, 1)` is a row vector containing the sum over each column and `sum(A, 2)`
-    is a column vector containing the sum over each row.  This contrasts to the behavior of R, where
-    `sum(B,1)=11` and `sum(B,2)=12`.  If the second argument is a vector, then it specifies all the
-    dimensions over which the sum is performed, e.g., `sum(A,[1,2])=10`.  It should be noted that
-    there is no error checking regarding the second argument.
+    dimensions, over which the operation is carried out.  For instance, let `A = [1 2; 3 4]` in Julia
+    and `B <- rbind(c(1,2),c(3,4))` be the same matrix in R.  Then `sum(A)` gives the same result as
+    `sum(B)`, but `sum(A, dims=1)` is a row vector containing the sum over each column and `sum(A, dims=2)`
+    is a column vector containing the sum over each row. This contrasts to the behavior of R, where separate
+    `colSums(B)` and `rowSums(B)` functions provide these functionalities. If the `dims` keyword argument is a
+    vector, then it specifies all the dimensions over which the sum is performed, while retaining the
+    dimensions of the summed array, e.g. `sum(A, dims=(1,2)) == hcat(10)`. It should be noted that there is no
+    error checking regarding the second argument.
   * Julia has several functions that can mutate their arguments. For example, it has both [`sort`](@ref)
     and [`sort!`](@ref).
   * In R, performance requires vectorization. In Julia, almost the opposite is true: the best performing
