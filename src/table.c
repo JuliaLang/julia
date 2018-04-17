@@ -8,7 +8,7 @@
 #define keyhash(k) jl_object_id(k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-static void **jl_table_lookup_bp(jl_array_t **pa, void *key, int *inserted);
+static int jl_table_assign_bp(jl_array_t **pa, void *key, void *val);
 
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
 {
@@ -23,8 +23,7 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     JL_GC_PUSH1(&newa);
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
-            (*jl_table_lookup_bp(&newa, ol[i], NULL)) = ol[i + 1];
-            jl_gc_wb(newa, ol[i + 1]);
+            jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
             // it is however necessary here because allocation
             // can (and will) occur in a recursive call inside table_lookup_bp
         }
@@ -37,70 +36,80 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     return newa;
 }
 
-static void **jl_table_lookup_bp(jl_array_t **pa, void *key, int *inserted)
+static int jl_table_assign_bp(jl_array_t **pa, void *key, void *val)
 {
     // pa points to a **rooted** gc frame slot
     uint_t hv;
     jl_array_t *a = *pa;
-    size_t orig, index, iter;
+    size_t orig, index, iter, empty_slot;
     size_t newsz, sz = hash_size(a);
     assert(sz >= 1);
     size_t maxprobe = max_probe(sz);
     void **tab = (void **)a->data;
 
-    if (inserted)
-        *inserted = 0;
-
     hv = keyhash((jl_value_t *)key);
-retry_bp:
-    iter = 0;
-    index = h2index(hv, sz);
-    sz *= 2;
-    orig = index;
+    while (1) {
+        iter = 0;
+        index = h2index(hv, sz);
+        sz *= 2;
+        orig = index;
+        empty_slot = -1;
 
-    do {
-        if (tab[index + 1] == NULL) {
-            tab[index] = key;
-            if (inserted)
-                *inserted = 1;
+        do {
+            if (tab[index] == NULL) {
+                if (empty_slot == -1)
+                    empty_slot = index;
+                break;
+            }
+            if (jl_egal((jl_value_t *)key, (jl_value_t *)tab[index])) {
+                if (tab[index + 1] != NULL) {
+                    tab[index + 1] = val;
+                    jl_gc_wb(a, val);
+                    return 0;
+                }
+                // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
+                assert(key == jl_nothing);
+                if (empty_slot == -1)
+                    empty_slot = index;
+            }
+            if (empty_slot == -1 && tab[index + 1] == NULL) {
+                assert(tab[index] == jl_nothing);
+                empty_slot = index;
+            }
+
+            index = (index + 2) & (sz - 1);
+            iter++;
+        } while (iter <= maxprobe && index != orig);
+
+        if (empty_slot != -1) {
+            tab[empty_slot] = key;
             jl_gc_wb(a, key);
-            return &tab[index + 1];
+            tab[empty_slot + 1] = val;
+            jl_gc_wb(a, val);
+            return 1;
         }
 
-        if (jl_egal((jl_value_t *)key, (jl_value_t *)tab[index]))
-            return &tab[index + 1];
+        /* table full */
+        /* quadruple size, rehash, retry the insert */
+        /* it's important to grow the table really fast; otherwise we waste */
+        /* lots of time rehashing all the keys over and over. */
+        sz = jl_array_len(a);
+        if (sz >= (1 << 19) || (sz <= (1 << 8)))
+            newsz = sz << 1;
+        else if (sz <= HT_N_INLINE)
+            newsz = HT_N_INLINE;
+        else
+            newsz = sz << 2;
+        *pa = jl_idtable_rehash(*pa, newsz);
 
-        index = (index + 2) & (sz - 1);
-        iter++;
-        if (iter > maxprobe)
-            break;
-    } while (index != orig);
-
-    /* table full */
-    /* quadruple size, rehash, retry the insert */
-    /* it's important to grow the table really fast; otherwise we waste */
-    /* lots of time rehashing all the keys over and over. */
-    sz = jl_array_len(a);
-    if (sz >= (1 << 19) || (sz <= (1 << 8)))
-        newsz = sz << 1;
-    else if (sz <= HT_N_INLINE)
-        newsz = HT_N_INLINE;
-    else
-        newsz = sz << 2;
-    *pa = jl_idtable_rehash(*pa, newsz);
-
-    a = *pa;
-    tab = (void **)a->data;
-    sz = hash_size(a);
-    maxprobe = max_probe(sz);
-
-    goto retry_bp;
-
-    return NULL;
+        a = *pa;
+        tab = (void **)a->data;
+        sz = hash_size(a);
+        maxprobe = max_probe(sz);
+    }
 }
 
 /* returns bp if key is in hash, otherwise NULL */
-/* if return is non-NULL and *bp == NULL then key was deleted */
 static void **jl_table_peek_bp(jl_array_t *a, void *key)
 {
     size_t sz = hash_size(a);
@@ -116,26 +125,28 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     do {
         if (tab[index] == NULL)
             return NULL;
-        if (jl_egal((jl_value_t *)key, (jl_value_t *)tab[index]))
-            return &tab[index + 1];
+        if (jl_egal((jl_value_t *)key, (jl_value_t *)tab[index])) {
+            if (tab[index + 1] != NULL)
+                return &tab[index + 1];
+            // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
+            assert(key == jl_nothing);
+        }
 
         index = (index + 2) & (sz - 1);
         iter++;
-        if (iter > maxprobe)
-            break;
-    } while (index != orig);
+    } while (iter <= maxprobe && index != orig);
 
     return NULL;
 }
 
 JL_DLLEXPORT
-jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val, int *inserted)
+jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val, int *p_inserted)
 {
     JL_GC_PUSH1(&h);
     // &h may be assigned to in jl_idtable_rehash so it need to be rooted
-    void **bp = jl_table_lookup_bp(&h, key, inserted);
-    *bp = val;
-    jl_gc_wb(h, val);
+    int inserted = jl_table_assign_bp(&h, key, val);
+    if (p_inserted)
+        *p_inserted = inserted;
     JL_GC_POP();
     return h;
 }
@@ -144,22 +155,17 @@ JL_DLLEXPORT
 jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
 {
     void **bp = jl_table_peek_bp(h, key);
-    if (bp == NULL || *bp == NULL)
-        return deflt;
-    return (jl_value_t *)*bp;
+    return (bp == NULL) ? deflt : (jl_value_t *)*bp;
 }
 
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt, int *found)
 {
     void **bp = jl_table_peek_bp(h, key);
-    if (bp == NULL || *bp == NULL) {
-        if (found)
-            *found = 0;
-        return deflt;
-    }
     if (found)
-        *found = 1;
+        *found = (bp != NULL);
+    if (bp == NULL)
+        return deflt;
     jl_value_t *val = (jl_value_t *)*bp;
     *(bp - 1) = jl_nothing; // clear the key
     *bp = NULL;
