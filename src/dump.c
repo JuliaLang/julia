@@ -784,11 +784,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_typeis(v, jl_task_type)) {
         jl_error("Task cannot be serialized");
     }
-#ifdef JULIA_ENABLE_PARTR
-    else if (jl_typeis(v, jl_condition_type)) {
-        jl_error("Condition cannot be serialized");
-    }
-#endif
     else if (jl_typeis(v, jl_string_type)) {
         writetag(s->s, jl_string_type);
         write_int32(s->s, jl_string_len(v));

@@ -673,11 +673,6 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v)
     else if (dt == jl_task_type) {
         dtsz = sizeof(jl_task_t);
     }
-#ifdef JULIA_ENABLE_PARTR
-    else if (dt == jl_condition_type) {
-        dtsz = sizeof(jl_condition_t);
-    }
-#endif
     else if (dt == jl_symbol_type) {
         return;
     }

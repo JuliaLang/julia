@@ -450,7 +450,7 @@ static void enqueue_task(jl_task_t *task)
         assert(task->sticky_tid != -1);
         jl_taskq_t *taskq = &sticky_taskqs[task->sticky_tid];
         JL_LOCK(&taskq->lock);
-        if (taskq->head == NULL)
+        if (!taskq->head)
             taskq->head = task;
         else {
             jl_task_t *pt = taskq->head;
@@ -495,7 +495,7 @@ static void sync_grains(jl_task_t *task)
     if (was_last) {
         /* a non-parent task must wake up the parent */
         if (task->grain_num > 0)
-            multiq_insert(task->parent, 0);
+            enqueue_task(task->parent);
 
         /* this is the parent task which was last; it can just end */
         if (task->red)
@@ -531,7 +531,7 @@ static void NOINLINE JL_NORETURN task_wrapper()
         args = jl_svec_data(task->args);
     }
 
-    /* TODO: review needed */
+    jl_sym_t *new_state;
     JL_TRY {
         if (ptls->defer_signal) {
             ptls->defer_signal = 0;
@@ -541,12 +541,12 @@ static void NOINLINE JL_NORETURN task_wrapper()
         ptls->world_age = jl_world_counter;
         task->result = task->fptr(task->mfunc, args, nargs);
         jl_gc_wb(task, task->result);
-        task->state = done_sym;
+        new_state = done_sym;
     }
     JL_CATCH {
         task->exception = ptls->exception_in_transit;
         jl_gc_wb(task, task->exception);
-        task->state = failed_sym;
+        new_state = failed_sym;
     }
 
     /* grain tasks must synchronize */
@@ -568,6 +568,8 @@ static void NOINLINE JL_NORETURN task_wrapper()
             qtask = qnext;
         }
     }
+
+    task->state = new_state;
 
     /* clear thread state */
     ptls->in_finalizer = 0;
@@ -592,6 +594,7 @@ static void JL_NORETURN run_next()
     /* TODO: threads should sleep after spinning for some time */
     do {
         /* first check for sticky tasks */
+        // TODO: fix this to round-robin through all sticky tasks
         JL_LOCK(&ptls->sticky_taskq->lock);
         task = ptls->sticky_taskq->head;
         if (task) {
@@ -620,7 +623,7 @@ static void JL_NORETURN run_next()
             else
                 jl_cpu_pause();
         }
-    } while (task == NULL);
+    } while (!task);
 
     /* run/resume the task */
     ptls->pgcstack = task->gcstack;
@@ -743,29 +746,26 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
 
 /*  jl_task_spawn() -- enqueue a task for execution
 
-    If `sticky` is set, the task will only run on the thread that first picks
-    it up (which thread that is cannot be controlled). If `detach` is set, the
-    spawned task cannot be synced. Yields.
+    If `sticky` is set, the task will only run on the current thread. If `detach`
+    is set, the spawned task cannot be synced. Yields.
  */
 JL_DLLEXPORT int jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 
-    if (task == NULL)
-        return -1;
     if (!task->started) {
-        if (sticky)
+        task->prio = ptls->tid;
+        if (sticky) {
             task->settings |= TASK_IS_STICKY;
+            task->sticky_tid = ptls->tid;
+        }
         if (detach)
             task->settings |= TASK_IS_DETACHED;
     }
-
-    if (multiq_insert(task, ptls->tid) != 0) {
-        return -2;
-    }
+    enqueue_task(task);
 
     /* only yield if we're running a non-sticky task */
-    if (!(ptls->current_task->settings & TASK_IS_STICKY))
+    if (ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY))
         jl_task_yield(1);
 
     return 0;
@@ -854,21 +854,18 @@ JL_DLLEXPORT int jl_task_spawn_multi(jl_task_t *task)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 
-    if (task == NULL)
-        return -1;
-
     /* enqueue (GRAIN_K * nthreads) tasks */
     jl_task_t *t = task;
     for (int64_t i = 0;  i < GRAIN_K * jl_n_threads;  ++i) {
-        if (t == NULL) // TODO: this should never happen
-            return -3;
+        if (!t) // TODO: this should never happen
+            return -1;
         if (multiq_insert(t, ptls->tid) != 0) // TODO: raise an error?
             return -2;
         t = t->next;
     }
 
     /* only yield if we're running a non-sticky task */
-    if (!(ptls->current_task->settings & TASK_IS_STICKY))
+    if (ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY))
         jl_task_yield(1);
 
     return 0;
@@ -892,13 +889,14 @@ JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
        this task back to the ready queue
      */
     if (task->state != done_sym  &&  task->state != failed_sym) {
+        // TODO: problem if a grain task does a sync?
         ptls->current_task->next = NULL;
         JL_LOCK(&task->cq.lock);
 
         /* ensure the task didn't finish before we got the lock */
         if (task->state != done_sym  &&  task->state != failed_sym) {
             /* add the current task to the CQ */
-            if (task->cq.head == NULL) {
+            if (!task->cq.head) {
                 task->cq.head = ptls->current_task;
                 jl_gc_wb(task, task->cq.head);
             }
@@ -941,7 +939,7 @@ JL_DLLEXPORT void jl_task_yield(int requeue)
         jl_timing_block_stop(blk);
 #endif
 
-    if (!jl_setjmp(ytask->ctx, 0)) {
+    if (ytask  &&  !jl_setjmp(ytask->ctx, 0)) {
         ytask->current_tid = -1;
         ptls->current_task = NULL;
 
@@ -1007,7 +1005,7 @@ JL_DLLEXPORT void jl_task_wait(jl_condition_t *c)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_LOCK(&c->lock);
-    if (c->head == NULL) {
+    if (!c->head) {
         c->head = ptls->current_task;
         jl_gc_wb(c, c->head);
     }
