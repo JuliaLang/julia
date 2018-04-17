@@ -1,4 +1,20 @@
-const InliningTodo = Tuple{Int, Tuple{Bool, Bool, Bool, Int}, Method, Vector{Any}, Vector{LineInfoNode}, IRCode, Bool}
+struct InliningTodo
+    idx::Int # The statement to replace
+    # Properties of the call - these determine how arguments
+    # need to be rewritten.
+    isva::Bool
+    isinvoke::Bool
+    isapply::Bool
+    na::Int
+    method::Method  # The method being inlined
+    sparams::Vector{Any} # The static parameters we computed for this call site
+    # The LineTable and IR of the inlinee
+    linetable::Vector{LineInfoNode}
+    ir::IRCode
+    # If the function being inlined is a single basic block we can use a
+    # simpler inlining algorithm. This flag determines whether that's allowed
+    linear_inline_eligible::Bool
+end
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # Go through the function, perfoming simple ininlingin (e.g. replacing call by constants
@@ -19,16 +35,18 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
     bb_rename = zeros(Int, length(ir.cfg.blocks))
     split_targets = BitSet()
     merged_orig_blocks = BitSet()
-    for (idx, _a, _b, _c, _d, ir2, lie) in todo
+    for item in todo
+        local idx, ir2, lie
         # A linear inline does not modify the CFG
-        lie && continue
+        item.linear_inline_eligible && continue
+        inlinee_cfg = item.ir.cfg
         # Figure out if we need to split the BB
         need_split_before = false
         need_split = true
-        block = block_for_inst(ir.cfg, idx)
+        block = block_for_inst(ir.cfg, item.idx)
         last_block_idx = last(ir.cfg.blocks[block].stmts)
 
-        if !isempty(ir2.cfg.blocks[1].preds)
+        if !isempty(inlinee_cfg.blocks[1].preds)
             need_split_before = true
         end
 
@@ -43,7 +61,7 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
             need_split = false
             post_bb_id = -ir[SSAValue(last_block_idx)].label
         else
-            post_bb_id = length(new_cfg_blocks) + length(ir2.cfg.blocks) + (need_split_before ? 1 : 0)
+            post_bb_id = length(new_cfg_blocks) + length(inlinee_cfg.blocks) + (need_split_before ? 1 : 0)
             need_split = true #!(idx == last_block_idx)
         end
 
@@ -57,21 +75,21 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
         orig_succs = copy(new_cfg_blocks[end].succs)
         empty!(new_cfg_blocks[end].succs)
         if need_split_before
-            bb_rename_range = (1:length(ir2.cfg.blocks)) .+ length(new_cfg_blocks)
+            bb_rename_range = (1:length(inlinee_cfg.blocks)) .+ length(new_cfg_blocks)
             push!(new_cfg_blocks[end].succs, length(new_cfg_blocks)+1)
-            append!(new_cfg_blocks, ir2.cfg.blocks)
+            append!(new_cfg_blocks, inlinee_cfg.blocks)
         else
             # Merge the last block that was already there with the first block we're adding
-            bb_rename_range = (1:length(ir2.cfg.blocks)) .+ (length(new_cfg_blocks) - 1)
-            append!(new_cfg_blocks[end].succs, ir2.cfg.blocks[1].succs)
-            append!(new_cfg_blocks, ir2.cfg.blocks[2:end])
+            bb_rename_range = (1:length(inlinee_cfg.blocks)) .+ (length(new_cfg_blocks) - 1)
+            append!(new_cfg_blocks[end].succs, inlinee_cfg.blocks[1].succs)
+            append!(new_cfg_blocks, inlinee_cfg.blocks[2:end])
         end
         if need_split
             push!(new_cfg_blocks, BasicBlock(ir.cfg.blocks[block].stmts,
                 Int[], orig_succs))
             push!(split_targets, length(new_cfg_blocks))
         end
-        new_block_range = (length(new_cfg_blocks)-length(ir2.cfg.blocks)+1):length(new_cfg_blocks)
+        new_block_range = (length(new_cfg_blocks)-length(inlinee_cfg.blocks)+1):length(new_cfg_blocks)
         push!(inserted_block_ranges, new_block_range)
 
         # Fixup the edges of the newely added blocks
@@ -96,8 +114,8 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
 
         for (old_block, new_block) in enumerate(bb_rename_range)
             if (length(new_cfg_blocks[new_block].succs) == 0)
-                terminator_idx = last(ir2.cfg.blocks[old_block].stmts)
-                terminator = ir2[SSAValue(terminator_idx)]
+                terminator_idx = last(inlinee_cfg.blocks[old_block].stmts)
+                terminator = item.ir[SSAValue(terminator_idx)]
                 if isa(terminator, ReturnNode) && isdefined(terminator, :val)
                     push!(new_cfg_blocks[new_block].succs, post_bb_id)
                     if need_split
@@ -142,19 +160,20 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
 
     let compact = IncrementalCompact(ir)
         compact.result_bbs = new_cfg_blocks
-        nnewnodes = length(compact.result) + (sum(todo) do (_a, _b, _c, _d, _e, ir2, _f)
-            return length(ir2.stmts) + length(ir2.new_nodes)
+        nnewnodes = length(compact.result) + (sum(todo) do item
+            return length(item.ir.stmts) + length(item.ir.new_nodes)
         end)
         resize!(compact, nnewnodes)
-        (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
+        item = popfirst!(todo)
+        inline_idx = item.idx
         for (idx, stmt) in compact
             if compact.idx - 1 == inline_idx
                 # Ok, do the inlining here
-                inline_cfg = inline_ir.cfg
+                inline_cfg = item.ir.cfg
                 linetable_offset = length(linetable)
                 # Append the linetable of the inlined function to our line table
                 inlined_at = compact.result_lines[idx]
-                for entry in inline_linetable
+                for entry in item.linetable
                     push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
                         (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
                 end
@@ -174,22 +193,22 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
                     end
                 end
                 argexprs = rewrite_exprargs((node, typ)->insert_node_here!(compact, node, typ, compact.result_lines[idx]),
-                                            arg->compact_exprtype(compact, arg), isinvoke, isapply, argexprs)
-                if isva
-                    vararg = mk_tuplecall!(compact, argexprs[na:end], compact.result_lines[idx])
-                    argexprs = Any[argexprs[1:(na - 1)]..., vararg]
+                                            arg->compact_exprtype(compact, arg), item.isinvoke, item.isapply, argexprs)
+                if item.isva
+                    vararg = mk_tuplecall!(compact, argexprs[item.na:end], compact.result_lines[idx])
+                    argexprs = Any[argexprs[1:(item.na - 1)]..., vararg]
                 end
                 # Special case inlining that maintains the current basic block if there's only one BB in the target
-                if lie
-                    terminator = inline_ir[SSAValue(last(inline_cfg.blocks[1].stmts))]
+                if item.linear_inline_eligible
+                    terminator = item.ir[SSAValue(last(inline_cfg.blocks[1].stmts))]
                     compact[idx] = nothing
-                    inline_compact = IncrementalCompact(compact, inline_ir, compact.result_idx)
+                    inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
                     for (idx′, stmt′) in inline_compact
                         # This dance is done to maintain accurate usage counts in the
                         # face of rename_arguments! mutating in place - should figure out
                         # something better eventually.
                         inline_compact[idx′] = nothing
-                        stmt′ = ssa_substitute!(stmt′, argexprs, method.sig, spvals)
+                        stmt′ = ssa_substitute!(stmt′, argexprs, item.method.sig, item.sparams)
                         compact.result_lines[idx′] += linetable_offset
                         if isa(stmt′, ReturnNode)
                             isa(stmt′.val, SSAValue) && (compact.used_ssas[stmt′.val.id] += 1)
@@ -204,16 +223,16 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
                 else
                     bb_offset, post_bb_id = popfirst!(todo_bbs)
                     # This implements the need_split_before flag above
-                    need_split_before = !isempty(inline_ir.cfg.blocks[1].preds)
+                    need_split_before = !isempty(item.ir.cfg.blocks[1].preds)
                     if need_split_before
                         finish_current_bb!(compact)
                     end
                     pn = PhiNode()
                     compact[idx] = nothing
-                    inline_compact = IncrementalCompact(compact, inline_ir, compact.result_idx)
+                    inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
                     for (idx′, stmt′) in inline_compact
                         inline_compact[idx′] = nothing
-                        stmt′ = ssa_substitute!(stmt′, argexprs, method.sig, spvals)
+                        stmt′ = ssa_substitute!(stmt′, argexprs, item.method.sig, item.sparams)
                         compact.result_lines[idx′] += linetable_offset
                         if isa(stmt′, ReturnNode)
                             if isdefined(stmt′, :val)
@@ -250,7 +269,8 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
                     refinish && finish_current_bb!(compact)
                 end
                 if !isempty(todo)
-                    (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie) = popfirst!(todo)
+                    item = popfirst!(todo)
+                    inline_idx = item.idx
                 else
                     inline_idx = -1
                 end
@@ -568,7 +588,10 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         end
         #verify_ir(ir2)
 
-        push!(todo, (idx, (isva, isinvoke, isapply, na), method, Any[methsp...], inline_linetable, ir2, linear_inline_eligible(ir2)))
+        push!(todo, InliningTodo(idx,
+            isva, isinvoke, isapply, na,
+            method, Any[methsp...],
+            inline_linetable, ir2, linear_inline_eligible(ir2)))
     end
     todo
 end
