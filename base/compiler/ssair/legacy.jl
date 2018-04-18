@@ -137,6 +137,7 @@ function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, linetable::Vector
     topline = 1
     for (idx, stmt) in pairs(code.stmts)
         line = code.lines[idx]
+        flag = code.flags[idx]
         # push labels first
         if haskey(block_start, idx)
             push!(new_code, LabelNode(length(new_code) + 1))
@@ -149,6 +150,9 @@ function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, linetable::Vector
             push_new_lineinfo!(new_code, topline, line, linetable)
             topline = line
         end
+        #if flag & IR_FLAG_INBOUNDS != 0x00
+        #    push!(new_code, Expr(:inbounds, true))
+        #end
         # record if this'll need a fixup after stmt number
         if isa(stmt, GotoIfNot)
             new_stmt = Expr(:gotoifnot, rename(stmt.cond), stmt.dest)
@@ -180,6 +184,9 @@ function replace_code!(ci::CodeInfo, code::IRCode, nargs::Int, linetable::Vector
         end
         # and finally, record the new new statement
         push!(new_code, new_stmt)
+        #if (flag & IR_FLAG_INBOUNDS != 0) && idx != length(code.stmts)
+        #    push!(new_code, Expr(:inbounds, false))
+        #end
     end
     for i in fixup
         val = new_code[i]
@@ -242,7 +249,8 @@ function inflate_ir(ci::CodeInfo)
             code[i] = stmt
         end
     end
-    ir = IRCode(code, copy(ci.ssavaluetypes), copy(ci.codelocs), cfg, copy(ci.slottypes), ci.linetable[1].mod, Any[])
+    ir = IRCode(code, copy(ci.ssavaluetypes), copy(ci.codelocs), copy(ci.ssaflags), cfg, copy(ci.slottypes), ci.linetable[1].mod, Any[])
+    return ir
 end
 
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs, linetable)
@@ -255,6 +263,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs, linetable)
     ci.codelocs = ir.lines
     ci.linetable = linetable
     ci.ssavaluetypes = ir.types
+    ci.ssaflags = ir.flags
     # Translate BB Edges to statement edges
     # (and undo normalization for now)
     for i = 1:length(ci.code)

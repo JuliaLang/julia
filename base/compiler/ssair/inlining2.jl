@@ -35,6 +35,10 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
     bb_rename = zeros(Int, length(ir.cfg.blocks))
     split_targets = BitSet()
     merged_orig_blocks = BitSet()
+    boundscheck = inbounds_option()
+    if boundscheck === :default && sv.src.propagate_inbounds
+        boundscheck = :propagate
+    end
     for item in todo
         local idx, ir2, lie
         # A linear inline does not modify the CFG
@@ -198,6 +202,13 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
                     vararg = mk_tuplecall!(compact, argexprs[item.na:end], compact.result_lines[idx])
                     argexprs = Any[argexprs[1:(item.na - 1)]..., vararg]
                 end
+                flag = compact.result_flags[idx]
+                boundscheck_idx = boundscheck
+                if boundscheck_idx === :default || boundscheck_idx === :propagate
+                    if (flag & IR_FLAG_INBOUNDS) != 0
+                        boundscheck_idx = :off
+                    end
+                end
                 # Special case inlining that maintains the current basic block if there's only one BB in the target
                 if item.linear_inline_eligible
                     terminator = item.ir[SSAValue(last(inline_cfg.blocks[1].stmts))]
@@ -208,8 +219,7 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
                         # face of rename_arguments! mutating in place - should figure out
                         # something better eventually.
                         inline_compact[idx′] = nothing
-                        stmt′ = ssa_substitute!(stmt′, argexprs, item.method.sig, item.sparams)
-                        compact.result_lines[idx′] += linetable_offset
+                        stmt′ = ssa_substitute!(idx′, stmt′, argexprs, item.method.sig, item.sparams, linetable_offset, boundscheck_idx, compact)
                         if isa(stmt′, ReturnNode)
                             isa(stmt′.val, SSAValue) && (compact.used_ssas[stmt′.val.id] += 1)
                             compact.ssa_rename[compact.idx-1] = stmt′.val
@@ -232,8 +242,7 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
                     inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
                     for (idx′, stmt′) in inline_compact
                         inline_compact[idx′] = nothing
-                        stmt′ = ssa_substitute!(stmt′, argexprs, item.method.sig, item.sparams)
-                        compact.result_lines[idx′] += linetable_offset
+                        stmt′ = ssa_substitute!(idx′, stmt′, argexprs, item.method.sig, item.sparams, linetable_offset, boundscheck_idx, compact)
                         if isa(stmt′, ReturnNode)
                             if isdefined(stmt′, :val)
                                 push!(pn.edges, inline_compact.active_result_bb-1)
@@ -711,7 +720,16 @@ function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, atypes::Vec
     return false
 end
 
-function ssa_substitute!(@nospecialize(val), arg_replacements::Vector{Any}, @nospecialize(spsig), spvals::Vector{Any})
+function ssa_substitute!(idx::Int, @nospecialize(val), arg_replacements::Vector{Any},
+                         @nospecialize(spsig), spvals::Vector{Any},
+                         linetable_offset::Int, boundscheck::Symbol, compact::IncrementalCompact)
+    compact.result_flags[idx] &= ~IR_FLAG_INBOUNDS
+    compact.result_lines[idx] += linetable_offset
+    return ssa_substitute_op!(val, arg_replacements, spsig, spvals, boundscheck)
+end
+
+function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
+                            @nospecialize(spsig), spvals::Vector{Any}, boundscheck::Symbol)
     if isa(val, Argument)
         return arg_replacements[val.n]
     end
@@ -733,21 +751,19 @@ function ssa_substitute!(@nospecialize(val), arg_replacements::Vector{Any}, @nos
                     e.args[3] = svec(argtuple...)
                 end
             end
-    #=
         elseif head === :boundscheck
-            if boundscheck === :propagate
-                return e
-            elseif boundscheck === :off
+            if boundscheck === :off # inbounds == true
                 return false
-            else
+            elseif boundscheck === :propagate
+                return e
+            else # on or default
                 return true
             end
-    =#
         end
     end
     urs = userefs(val)
     for op in urs
-        op[] = ssa_substitute!(op[], arg_replacements, spsig, spvals)
+        op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, boundscheck)
     end
     return urs[]
 end

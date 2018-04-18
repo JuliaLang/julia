@@ -153,17 +153,20 @@ struct IRCode
     stmts::Vector{Any}
     types::Vector{Any}
     lines::Vector{Int}
+    flags::Vector{UInt8}
     argtypes::Vector{Any}
     cfg::CFG
     new_nodes::Vector{NewNode}
     mod::Module
     meta::Vector{Any}
 
-    function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, cfg::CFG, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
-        return new(stmts, types, lines, argtypes, cfg, NewNode[], mod, meta)
+    function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
+            cfg::CFG, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
+        return new(stmts, types, lines, flags, argtypes, cfg, NewNode[], mod, meta)
     end
-    function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, cfg::CFG, new_nodes::Vector{NewNode})
-        return new(stmts, types, lines, ir.argtypes, cfg, new_nodes, ir.mod, ir.meta)
+    function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
+            cfg::CFG, new_nodes::Vector{NewNode})
+        return new(stmts, types, lines, flags, ir.argtypes, cfg, new_nodes, ir.mod, ir.meta)
     end
 end
 
@@ -392,6 +395,7 @@ mutable struct IncrementalCompact
     result::Vector{Any}
     result_types::Vector{Any}
     result_lines::Vector{Int}
+    result_flags::Vector{UInt8}
     result_bbs::Vector{BasicBlock}
     ssa_rename::Vector{Any}
     used_ssas::Vector{Int}
@@ -409,10 +413,11 @@ mutable struct IncrementalCompact
         result = Array{Any}(undef, new_len)
         result_types = Array{Any}(undef, new_len)
         result_lines = fill(0, new_len)
+        result_flags = fill(0x00, new_len)
         used_ssas = fill(0, new_len)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
-        return new(code, result, result_types, result_lines, code.cfg.blocks, ssa_rename, used_ssas, late_fixup, perm, 1, 1, 1, 1)
+        return new(code, result, result_types, result_lines, result_flags, code.cfg.blocks, ssa_rename, used_ssas, late_fixup, perm, 1, 1, 1, 1)
     end
 
     # For inlining
@@ -422,8 +427,8 @@ mutable struct IncrementalCompact
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         used_ssas = fill(0, new_len)
         late_fixup = Vector{Int}()
-        return new(code, parent.result, parent.result_types, parent.result_lines, parent.result_bbs, ssa_rename, parent.used_ssas,
-            late_fixup, perm, 1, 1, result_offset, parent.active_result_bb)
+        return new(code, parent.result, parent.result_types, parent.result_lines, parent.result_flags, parent.result_bbs,
+            ssa_rename, parent.used_ssas, late_fixup, perm, 1, 1, result_offset, parent.active_result_bb)
     end
 end
 
@@ -461,6 +466,7 @@ function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nos
     compact.result[compact.result_idx] = val
     compact.result_types[compact.result_idx] = typ
     compact.result_lines[compact.result_idx] = ltable_idx
+    compact.result_flags[compact.result_idx] = 0x00
     count_added_node!(compact, val)
     ret = SSAValue(compact.result_idx)
     compact.result_idx += 1
@@ -570,6 +576,7 @@ function resize!(compact::IncrementalCompact, nnewnodes)
     resize!(compact.result, nnewnodes)
     resize!(compact.result_types, nnewnodes)
     resize!(compact.result_lines, nnewnodes)
+    resize!(compact.result_flags, nnewnodes)
     resize!(compact.used_ssas, nnewnodes)
     compact.used_ssas[(old_length+1):nnewnodes] = 0
     nothing
@@ -584,6 +591,7 @@ function finish_current_bb!(compact, old_result_idx=compact.result_idx)
         compact.result[old_result_idx] = nothing
         compact.result_types[old_result_idx] = Nothing
         compact.result_lines[old_result_idx] = 0
+        compact.result_flags[old_result_idx] = 0x00
         compact.result_idx = old_result_idx + 1
     end
     compact.result_bbs[compact.active_result_bb] = BasicBlock(bb, StmtRange(first(bb.stmts), compact.result_idx-1))
@@ -614,6 +622,7 @@ function next(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
         new_idx += length(compact.ir.stmts)
         compact.result_types[old_result_idx] = typ
         compact.result_lines[old_result_idx] = new_line
+        compact.result_flags[old_result_idx] = 0x00
         result_idx = process_node!(compact, old_result_idx, new_node, new_idx, idx)
         compact.result_idx = result_idx
         # If this instruction has reverse affinity and we were at the end of a basic block,
@@ -629,6 +638,7 @@ function next(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
     # result_idx is not, incremented, but that's ok and expected
     compact.result_types[old_result_idx] = compact.ir.types[idx]
     compact.result_lines[old_result_idx] = compact.ir.lines[idx]
+    compact.result_flags[old_result_idx] = compact.ir.flags[idx]
     result_idx = process_node!(compact, old_result_idx, compact.ir.stmts[idx], idx, idx)
     stmt_if_any = old_result_idx == result_idx ? nothing : compact.result[old_result_idx]
     compact.result_idx = result_idx
@@ -697,6 +707,7 @@ function finish(compact::IncrementalCompact)
     resize!(compact.result, result_idx-1)
     resize!(compact.result_types, result_idx-1)
     resize!(compact.result_lines, result_idx-1)
+    resize!(compact.result_flags, result_idx-1)
     bb = compact.result_bbs[end]
     compact.result_bbs[end] = BasicBlock(bb,
                 StmtRange(first(bb.stmts), result_idx-1))
@@ -711,7 +722,7 @@ function finish(compact::IncrementalCompact)
         maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist))
     end
     cfg = CFG(compact.result_bbs, Int[first(bb.stmts) for bb in compact.result_bbs[2:end]])
-    return IRCode(compact.ir, compact.result, compact.result_types, compact.result_lines, cfg, NewNode[])
+    return IRCode(compact.ir, compact.result, compact.result_types, compact.result_lines, compact.result_flags, cfg, NewNode[])
 end
 
 function compact!(code::IRCode)
