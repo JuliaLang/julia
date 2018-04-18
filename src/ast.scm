@@ -179,6 +179,13 @@
                               ""))
                         "")
                     (string.rep "    " ilvl) "end"))
+	   ((do)
+	    (let ((call (cadr e))
+		  (args (cdr (cadr (caddr e))))
+		  (body (caddr (caddr e))))
+	      (deparse-block (string (deparse call) " do" (if (null? args) "" " ")
+				     (deparse-arglist args))
+			     (cdr body) ilvl)))
            ((struct)
             (string (if (eq? (cadr e) 'true) "mutable " "")
                     "struct "
