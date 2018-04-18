@@ -235,7 +235,7 @@ typedef struct _jl_llvm_functions_t {
 typedef struct _jl_code_info_t {
     jl_array_t *code;  // Any array of statements
     jl_value_t *codelocs; // Int array of indicies into the line table
-    jl_value_t *signature_for_inference_heuristics; // optional method used during inference
+    jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
     jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
     jl_value_t *linetable; // Table of locations

@@ -155,33 +155,21 @@ function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleV
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt), method, atypes, sparams, world)
 end
 
-# TODO: Use these functions instead of directly manipulating
-# the "actual" method for appropriate places in inference (see #24676)
-function method_for_inference_heuristics(cinfo, default)
-    if isa(cinfo, CodeInfo)
-        # appropriate format for `sig` is svec(ftype, argtypes, world)
-        sig = cinfo.signature_for_inference_heuristics
-        if isa(sig, SimpleVector) && length(sig) == 3
-            methods = _methods(sig[1], sig[2], -1, sig[3])
-            if length(methods) == 1
-                _, _, m = methods[]
-                if isa(m, Method)
-                    return m
+# This function is used for computing alternate limit heuristics
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector, world::UInt)
+    if isdefined(method, :generator) && method.generator.expand_early
+        method_instance = code_for_method(method, sig, sparams, world, false)
+        if isa(method_instance, MethodInstance)
+            cinfo = get_staged(method_instance)
+            if isa(cinfo, CodeInfo)
+                method2 = cinfo.method_for_inference_limit_heuristics
+                if method2 isa Method
+                    return method2
                 end
             end
         end
     end
-    return default
-end
-
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)
-    if isdefined(method, :generator) && method.generator.expand_early
-        method_instance = code_for_method(method, sig, sparams, world, false)
-        if isa(method_instance, MethodInstance)
-            return method_for_inference_heuristics(get_staged(method_instance), method)
-        end
-    end
-    return method
+    return nothing
 end
 
 function exprtype(@nospecialize(x), src, mod::Module)

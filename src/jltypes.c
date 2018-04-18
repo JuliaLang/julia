@@ -2026,7 +2026,7 @@ void jl_init_types(void)
                         jl_perm_symsvec(12,
                             "code",
                             "codelocs",
-                            "signature_for_inference_heuristics",
+                            "method_for_inference_limit_heuristics",
                             "slottypes",
                             "ssavaluetypes",
                             "linetable",

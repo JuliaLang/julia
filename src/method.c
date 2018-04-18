@@ -232,7 +232,7 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
                 jl_array_del_end(meta, na - ins);
         }
     }
-    li->signature_for_inference_heuristics = jl_nothing;
+    li->method_for_inference_limit_heuristics = jl_nothing;
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ast, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_len(vis);
@@ -303,7 +303,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
         (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     src->code = NULL;
-    src->signature_for_inference_heuristics = NULL;
+    src->method_for_inference_limit_heuristics = NULL;
     src->slotnames = NULL;
     src->slotflags = NULL;
     src->slottypes = NULL;
