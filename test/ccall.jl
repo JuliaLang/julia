@@ -1424,3 +1424,12 @@ macro cglobal26297(sym)
 end
 cglobal26297() = @cglobal26297(:global_var)
 @test cglobal26297() != C_NULL
+
+# issue #26607
+noop_func_26607 = () -> nothing
+function callthis_26607(args)
+    @cfunction(noop_func_26607, Cvoid, ())
+    return nothing
+end
+@test callthis_26607(Int64(0)) === nothing
+@test callthis_26607(Int32(0)) === nothing
