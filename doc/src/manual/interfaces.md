@@ -449,8 +449,6 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | `Base.copy(bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast` |
 | `Base.copyto!(dest, bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast!`, specializing on `DestStyle` |
 | `Base.copyto!(dest::DestType, bc::Broadcasted{Nothing})` | Custom implementation of `broadcast!`, specializing on `DestType` |
-| `Base.is_broadcast_incremental(bc::Broadcasted{DestStyle})` | Indicate that nested broadcasting should be implemented eagerly |
-| `Base.broadcast_skip_axes_instantiation(::Broadcasted{DestStyle})` | Define to return `true` if `DestStyle` doesn't benefit from computing the axes of the output |
 
 [Broadcasting](@ref) is triggered by an explicit call to `broadcast` or `broadcast!`, or implicitly by
 "dot" operations like `A .+ b` or `f.(x, y)`. Any object that has [`axes`](@ref) and supports

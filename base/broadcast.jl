@@ -6,7 +6,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, linearindices, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: broadcast, broadcast!, copy, copyto!
-export BroadcastStyle, broadcast_indices, broadcast_similar, broadcastable, broadcast_skip_axes_instantiation,
+export BroadcastStyle, broadcast_indices, broadcast_similar, broadcastable,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
@@ -230,28 +230,16 @@ You should only need to provide a custom implementation for non-AbstractArraySty
 """
 broadcast_indices
 
-"""
-    Base.broadcast_skip_axes_instantiation(::Broadcasted{MyStyle})::Bool
-
-Define this method to return `true` if `MyStyle` does not require computation of
-the axes of the broadcasted object. The only motivation for setting this to `true` is performance.
-"""
-broadcast_skip_axes_instantiation(bc::Broadcasted)               = false
-broadcast_skip_axes_instantiation(bc::Broadcasted{<:AbstractArrayStyle{0}}) = true
-broadcast_skip_axes_instantiation(bc::Broadcasted{Unknown})      = true
-broadcast_skip_axes_instantiation(bc::Broadcasted{Style{Tuple}}) = true
-
 ### End of methods that users will typically have to specialize ###
 
-Base.axes(bc::Broadcasted{Style}) where {Style} = bc.axes
-Base.axes(::Broadcasted{Style,Nothing}) where {Style} =
-    error("non-instantiated Broadcasted wrappers do not have axes assigned")
+Base.axes(bc::Broadcasted{Style}) where {Style} = _axes(bc, bc.axes)
+_axes(::Broadcasted{Style}, axes) where {Style} = axes
+_axes(::Broadcasted{Style}, ::Nothing) where {Style} =
+    throw(ArgumentError("a Broadcasted{$Style} wrapper skipped instantiation but has not defined `Base.axes`"))
 
-BroadcastStyle(::Type{<:Broadcasted{Style}}) where Style = Style()
-BroadcastStyle(::Type{<:Broadcasted{Unknown}}) =
-    error("non-instantiated Broadcasted wrappers do not have a style assigned")
-BroadcastStyle(::Type{<:Broadcasted{Nothing}}) =
-    error("non-instantiated Broadcasted wrappers do not have a style assigned")
+BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
+BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
+    throw(ArgumentError("Broadcasted{Unknown} wrappers do not have a style assigned"))
 
 argtype(::Type{Broadcasted{Style,Axes,Indexing,F,Args}}) where {Style,Axes,Indexing,F,Args} = Args
 argtype(bc::Broadcasted) = argtype(typeof(bc))
@@ -265,8 +253,18 @@ not_nested(::Tuple{})     = true
 ## Instantiation fills in the "missing" fields in Broadcasted.
 instantiate(x) = x
 
-# TODO: remove trait in favor of dispatch
-@inline instantiate(bc::Broadcasted{Style}) where {Style} = broadcast_skip_axes_instantiation(bc) ? bc : _instantiate(bc)
+"""
+    Broadcast.instantiate(bc::Broadcasted)
+
+Construct the axes and indexing helpers for the lazy Broadcasted object `bc`.
+
+Custom `BroadcastStyle`s may override this default in cases where it is fast and easy
+to compute the resulting `axes` and indexing helpers on-demand, leaving those fields
+of the `Broadcasted` object empty (populated with `nothing`). If they do so, however,
+they must provide their own `Base.axes(::Broadcasted{Style})` and
+`Broadcast._broadcast_getindex(::Broadcasted{Style})` methods as appropriate.
+"""
+@inline instantiate(bc::Broadcasted{Style}) where {Style} = _instantiate(bc)
 
 _instantiate(bc) = bc
 
@@ -285,6 +283,8 @@ end
     indexing = map(_newindexer, args)
     return Broadcasted{Style}(bc.f, args, axes, indexing)
 end
+
+instantiate(bc::Broadcasted{<:Union{AbstractArrayStyle{0}, Style{Tuple}}}) = bc
 
 ## Flattening
 
@@ -527,19 +527,18 @@ end
     (keep, keeps...), (Idefault, Idefaults...)
 end
 
-Base.@propagate_inbounds _broadcast_getindex(::Type{T}, I) where T = T
+# Base.@propagate_inbounds _broadcast_getindex(::Type{T}, I) where {T} = T
+Base.@propagate_inbounds _broadcast_getindex(::Base.RefValue{Type{T}}, I) where {T} = T
+Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
 Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(combine_styles(A), A, I)
-Base.@propagate_inbounds _broadcast_getindex(::DefaultArrayStyle{0}, A, I) = A[]
+Base.@propagate_inbounds _broadcast_getindex(::AbstractArrayStyle{0}, A, I) = A[]
 Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
-Base.@propagate_inbounds _broadcast_getindex(::Style{Tuple}, A::Tuple{Any}, I) = A[1]
 
 # For Broadcasted
-Base.@propagate_inbounds _broadcast_getindex(bc::BroadcastedF{Style, N, F, Args}, I::Union{Int,CartesianIndex{N}}) where {Style,N,F,Args} =
-    _broadcast_getindex_bc(bc, I)
-Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted, I)
-    broadcast_skip_axes_instantiation(bc) && return _broadcast_getindex_bc(bc, I)
-    broadcast_getindex_error(bc, I)
-end
+Base.@propagate_inbounds _broadcast_getindex(bc::Broadcasted, I) = _broadcast_getindex_bc(bc, I, bc.indexing)
+
+Base.@propagate_inbounds _broadcast_getindex(bc::Broadcasted{<:Union{Style{Tuple}, AbstractArrayStyle{0}}}, I) =
+    _broadcast_getindex_evalf(bc.f, _getindex(bc.args, I)...)
 
 # Utilities for _broadcast_getindex
 # For most styles
@@ -550,17 +549,18 @@ Base.@propagate_inbounds _getindex(args::Tuple{Any}, I, indexing::Tuple{Any}) =
     (_getidx(args[1], I, indexing[1]),)
 Base.@propagate_inbounds _getindex(args::Tuple{}, I, ::Tuple) = ()
 Base.@propagate_inbounds _getindex(args::Tuple{}, I, ::Tuple{Any}) = ()
-# For styles that bypass construction of indexing
-Base.@propagate_inbounds _getindex(args::Tuple, I, ::Nothing) =
-    (_broadcast_getindex(args[1], I), _getindex(tail(args), I, nothing)...)
-Base.@propagate_inbounds _getindex(args::Tuple{Any}, I, ::Nothing) =
-    (_broadcast_getindex(args[1], I),)
-Base.@propagate_inbounds _getindex(args::Tuple{}, I, ::Nothing) = ()
+# For styles skipping reindexers
+Base.@propagate_inbounds _getindex(args::Tuple, I) = (_broadcast_getindex(args[1], I), _getindex(tail(args), I)...)
+Base.@propagate_inbounds _getindex(args::Tuple{Any}, I) = (_broadcast_getindex(args[1], I),)
+Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 
-Base.@propagate_inbounds function _broadcast_getindex_bc(bc::Broadcasted, I)
-    args = _getindex(bc.args, I, bc.indexing)
+
+Base.@propagate_inbounds function _broadcast_getindex_bc(bc::Broadcasted{Style}, I, indexing) where {Style}
+    args = _getindex(bc.args, I, indexing)
     return _broadcast_getindex_evalf(bc.f, args...)
 end
+_broadcast_getindex_bc(bc::Broadcasted{Style}, I, ::Nothing) where {Style} =
+    throw(ArgumentError("a Broadcasted{$Style} wrapper skipped instantiation but has not defined _broadcast_getindex"))
 
 """
     broadcastable(x)
@@ -719,7 +719,7 @@ broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = (materialize!(dest, ma
 
 Take a lazy `Broadcasted` object and compute the result
 """
-materialize(bc::Broadcasted) = copy(instantiate(bc))
+@inline materialize(bc::Broadcasted) = copy(instantiate(bc))
 materialize(x) = x
 @inline function materialize!(dest, bc::Broadcasted{Style}) where {Style}
     return copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
@@ -915,18 +915,6 @@ longest_tuple(l::Tuple, t::Tuple) = longest_tuple(l, tail(t))
 longest_tuple(l::Tuple, ::Tuple{}) = l
 longest_tuple(l::Tuple, t::Tuple{Broadcasted}) = longest_tuple(l, t[1].args)
 longest_tuple(l::Tuple, t::Tuple{Broadcasted,Vararg{Any}}) = longest_tuple(longest_tuple(l, t[1].args), tail(t))
-# TODO: WAS THIS IMPORTANT?
-# @inline broadcast(f, ::Style{Tuple}, ::Nothing, ::Nothing, A, Bs...) =
-#     tuplebroadcast(f, longest_tuple(A, Bs...), A, Bs...)
-# @inline tuplebroadcast(f, ::NTuple{N,Any}, As...) where {N} =
-#     ntuple(k -> f(tuplebroadcast_getargs(As, k)...), Val(N))
-# @inline tuplebroadcast(f, ::NTuple{N,Any}, ::Ref{Type{T}}, As...) where {N,T} =
-#     ntuple(k -> f(T, tuplebroadcast_getargs(As, k)...), Val(N))
-# longest_tuple(A::Tuple, B::Tuple, Bs...) = longest_tuple(_longest_tuple(A, B), Bs...)
-# longest_tuple(A, B::Tuple, Bs...) = longest_tuple(B, Bs...)
-# longest_tuple(A::Tuple, B, Bs...) = longest_tuple(A, Bs...)
-# longest_tuple(A, B, Bs...) = longest_tuple(Bs...)
-# longest_tuple(A::Tuple) = A
 # Support only 1-tuples and N-tuples where there are no conflicts in N
 _longest_tuple(A::Tuple{Any}, B::Tuple{Any}) = A
 _longest_tuple(A::Tuple{Any}, B::NTuple{N,Any}) where N = B
