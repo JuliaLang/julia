@@ -27,6 +27,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
         new_git = handle_repos_develop!(ctx, pkgs)
     else
         new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
+        update_registry(ctx)
     end
     project_deps_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
@@ -56,17 +57,7 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
 end
 
 
-up(;kwargs...)                           = up(PackageSpec[]; kwargs...)
-up(pkg::Union{String, PackageSpec}; kwargs...)               = up([pkg]; kwargs...)
-up(pkgs::Vector{String}; kwargs...)      = up([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-up(pkgs::Vector{PackageSpec}; kwargs...) = up(Context(), pkgs; kwargs...)
-
-function up(ctx::Context, pkgs::Vector{PackageSpec};
-            level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, kwargs...)
-    print_first_command_header()
-    Context!(ctx; kwargs...)
-    ctx.preview && preview_info()
-
+function update_registry(ctx)
     # Update the registry
     errors = Tuple{String, String}[]
     if ctx.preview
@@ -86,7 +77,13 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
                         return
                     end
                     branch = LibGit2.headname(repo)
-                    GitTools.fetch(repo)
+                    try
+                        GitTools.fetch(repo)
+                    catch e
+                        e isa LibGit2.GitError || rethrow(e)
+                        push!(errors, (reg, "failed to fetch from repo"))
+                        return
+                    end
                     ff_succeeded = try
                         LibGit2.merge!(repo; branch="refs/remotes/origin/$branch", fastforward=true)
                     catch e
@@ -107,7 +104,6 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
             end
         end
     end
-
     if !isempty(errors)
         warn_str = "Some registries failed to update:"
         for (reg, err) in errors
@@ -115,7 +111,19 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
         end
         @warn warn_str
     end
+end
 
+up(;kwargs...)                           = up(PackageSpec[]; kwargs...)
+up(pkg::Union{String, PackageSpec}; kwargs...)               = up([pkg]; kwargs...)
+up(pkgs::Vector{String}; kwargs...)      = up([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+up(pkgs::Vector{PackageSpec}; kwargs...) = up(Context(), pkgs; kwargs...)
+
+function up(ctx::Context, pkgs::Vector{PackageSpec};
+            level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, kwargs...)
+    print_first_command_header()
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
+    update_registry(ctx)
     if isempty(pkgs)
         if mode == PKGMODE_PROJECT
             for (name::String, uuidstr::String) in ctx.env.project["deps"]
