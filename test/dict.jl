@@ -609,6 +609,7 @@ import Base.ImmutableDict
     d2 = ImmutableDict(d1, k2 => v2)
     d3 = ImmutableDict(d2, k1 => v2)
     d4 = ImmutableDict(d3, k2 => v1)
+    d5 = ImmutableDict(k1 => v1, k2 => v2)
     dnan = ImmutableDict{String, Float64}(k2, NaN)
     dnum = ImmutableDict(dnan, k2 => 1)
 
@@ -621,11 +622,13 @@ import Base.ImmutableDict
     @test length(d2) == 2
     @test length(d3) == 3
     @test length(d4) == 4
+    @test length(d5) == 2
     @test !(k1 in keys(d))
     @test k1 in keys(d1)
     @test k1 in keys(d2)
     @test k1 in keys(d3)
     @test k1 in keys(d4)
+    @test k1 in keys(d5)
 
     @test !haskey(d, k1)
     @test haskey(d1, k1)
@@ -635,6 +638,7 @@ import Base.ImmutableDict
     @test !(k2 in keys(d1))
     @test k2 in keys(d2)
     @test !(k1 in values(d4))
+    @test k2 in keys(d5)
     @test v1 in values(d4)
     @test collect(d1) == [Pair(k1, v1)]
     @test collect(d4) == reverse([Pair(k1, v1), Pair(k2, v2), Pair(k1, v2), Pair(k2, v1)])
@@ -643,6 +647,8 @@ import Base.ImmutableDict
     @test (k1 => v2) in d3
     @test (k1 => v1) in d4
     @test (k1 => v2) in d4
+    @test (k1 => v1) in d5
+    @test (k2 => v2) in d5
     @test in(k2 => "value2", d4, ===)
     @test in(k2 => v2, d4, ===)
     @test in(k2 => NaN, dnan, isequal)

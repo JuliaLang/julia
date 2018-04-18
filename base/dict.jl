@@ -714,6 +714,14 @@ ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
 ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
 
+function ImmutableDict(KV::Pair{K,V}, KVs::Pair{K,V}...) where {K,V}
+    dict = ImmutableDict(KV)
+    for pair in KVs
+        dict = ImmutableDict(dict, pair)
+    end
+    dict
+end
+
 function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
     key, value = key_value
     while isdefined(dict, :parent)
