@@ -1750,7 +1750,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 NewCall->setAttributes(attr);
 #endif
 #if JL_LLVM_VERSION >= 40000
-                NewCall->copyMetadata(CI);
+                NewCall->copyMetadata(*CI);
 #else
                 SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
                 CI->getAllMetadata(MDs);
@@ -1767,7 +1767,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 CallInst *NewCall = CallInst::Create(CI, None, CI);
                 NewCall->takeName(CI);
 #if JL_LLVM_VERSION >= 40000
-                NewCall->copyMetadata(CI);
+                NewCall->copyMetadata(*CI);
 #else
                 SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
                 CI->getAllMetadata(MDs);
