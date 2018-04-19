@@ -233,10 +233,8 @@ size(v::Pairs)    = size(v.itr)
 end
 @inline done(v::Pairs, state) = done(v.itr, state)
 
-eltype(::Type{Pairs{K, V}}) where {K, V} = Pair{K, V}
-
-IteratorSize(::Type{Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
-IteratorEltype(::Type{Pairs{<:Any, <:Any, I}}) where {I} = IteratorEltype(I)
+IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
+IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:Base.AbstractUnitRange, <:Tuple}}) = HasLength()
 
 reverse(v::Pairs) = Pairs(v.data, reverse(v.itr))
 
@@ -472,11 +470,11 @@ start(i::Rest) = i.st
 @propagate_inbounds next(i::Rest, st) = next(i.itr, st)
 done(i::Rest, st) = done(i.itr, st)
 
-eltype(::Type{Rest{I}}) where {I} = eltype(I)
-IteratorEltype(::Type{Rest{I,S}}) where {I,S} = IteratorEltype(I)
+eltype(::Type{<:Rest{I}}) where {I} = eltype(I)
+IteratorEltype(::Type{<:Rest{I}}) where {I} = IteratorEltype(I)
 rest_iteratorsize(a) = SizeUnknown()
 rest_iteratorsize(::IsInfinite) = IsInfinite()
-IteratorSize(::Type{Rest{I,S}}) where {I,S} = rest_iteratorsize(IteratorSize(I))
+IteratorSize(::Type{<:Rest{I}}) where {I} = rest_iteratorsize(IteratorSize(I))
 
 # Count -- infinite counting
 
@@ -897,7 +895,10 @@ flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknow
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
 flatten_iteratorsize(a, b) = SizeUnknown()
 
-IteratorSize(::Type{Flatten{I}}) where {I} = flatten_iteratorsize(IteratorSize(I), eltype(I))
+_flatten_iteratorsize(sz, ::EltypeUnknown, I) = SizeUnknown()
+_flatten_iteratorsize(sz, ::HasEltype, I) = flatten_iteratorsize(sz, eltype(I))
+
+IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
     fieldcount(T)*length(f.it)
@@ -967,6 +968,8 @@ partition_iteratorsize(isz) = isz
 function IteratorSize(::Type{PartitionIterator{T}}) where {T}
     partition_iteratorsize(IteratorSize(T))
 end
+
+IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
 
 function length(itr::PartitionIterator)
     l = length(itr.c)

@@ -37,6 +37,7 @@ isempty(c::CompositeException) = isempty(c.exceptions)
 start(c::CompositeException) = start(c.exceptions)
 next(c::CompositeException, state) = next(c.exceptions, state)
 done(c::CompositeException, state) = done(c.exceptions, state)
+eltype(::Type{CompositeException}) = Any
 
 function showerror(io::IO, ex::CompositeException)
     if !isempty(ex)

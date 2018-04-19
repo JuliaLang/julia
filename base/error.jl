@@ -176,6 +176,7 @@ function next(ebo::ExponentialBackOff, state)
 end
 done(ebo::ExponentialBackOff, state) = state[1]<1
 length(ebo::ExponentialBackOff) = ebo.n
+eltype(::Type{ExponentialBackOff}) = Float64
 
 """
     retry(f::Function;  delays=ExponentialBackOff(), check=nothing) -> Function

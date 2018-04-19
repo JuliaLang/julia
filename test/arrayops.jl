@@ -1314,11 +1314,10 @@ end
 
 @testset "eachindexvalue" begin
     A14 = [11 13; 12 14]
-    R = CartesianIndices(axes(A14))
     @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
-    @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(Array(R))
+    @test [a for (a,b) in pairs(IndexCartesian(), A14)] == Array(CartesianIndices(axes(A14)))
     @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
-    @test [b for (a,b) in pairs(IndexCartesian(), A14)] == [11,12,13,14]
+    @test [b for (a,b) in pairs(IndexCartesian(), A14)] == A14
 end
 
 @testset "reverse" begin
