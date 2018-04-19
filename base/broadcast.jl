@@ -267,7 +267,7 @@ they must provide their own `Base.axes(::Broadcasted{Style})` and
 `Base.getindex(::Broadcasted{Style}, I::Union{Int,CartesianIndex})` methods as appropriate.
 """
 @inline function instantiate(bc::Broadcasted{Style}) where {Style}
-    args = instantiate(bc.args)
+    args = instantiate_args(bc.args)
     if bc.axes isa Nothing
         axes = combine_indices(args...)
     else
@@ -279,8 +279,8 @@ end
 
 instantiate(bc::Broadcasted{<:Union{AbstractArrayStyle{0}, Style{Tuple}}}) = bc
 
-@inline instantiate(args::Tuple) = (instantiate(args[1]), instantiate(Base.tail(args))...)
-instantiate(args::Tuple{}) = ()
+@inline instantiate_args(args::Tuple) = (instantiate(args[1]), instantiate_args(Base.tail(args))...)
+instantiate_args(args::Tuple{}) = ()
 
 ## Flattening
 
@@ -526,37 +526,36 @@ Base.@propagate_inbounds Base.getindex(bc::Broadcasted{Nothing}, I) =
 Base.@propagate_inbounds _broadcast_getindex(::Base.RefValue{Type{T}}, I) where {T} = T
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple, I) = A[I[1]]
-Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(combine_styles(A), A, I)
-Base.@propagate_inbounds _broadcast_getindex(::AbstractArrayStyle{0}, A, I) = A[]
-Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
+Base.@propagate_inbounds _broadcast_getindex(A::Ref, I) = A[]
+Base.@propagate_inbounds _broadcast_getindex(A, I) = A[I]
 
 # For Broadcasted
-Base.@propagate_inbounds _broadcast_getindex(bc::Broadcasted, I) = _broadcast_getindex_bc(bc, I, bc.indexing)
+Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted, I)
+    bc.indexing isa Nothing && throw(ArgumentError("a Broadcasted{$Style} wrapper skipped instantiation but has not defined _broadcast_getindex"))
+    args = _getindex(bc.args, I, bc.indexing)
+    return _broadcast_getindex_evalf(bc.f, args...)
+end
 
 Base.@propagate_inbounds _broadcast_getindex(bc::Broadcasted{<:Union{Style{Tuple}, AbstractArrayStyle{0}}}, I) =
     _broadcast_getindex_evalf(bc.f, _getindex(bc.args, I)...)
 
 # Utilities for _broadcast_getindex
 # For most styles
-Base.@propagate_inbounds _getidx(arg, I, keep_default) = _broadcast_getindex(arg, newindex(I, keep_default...))
-Base.@propagate_inbounds _getindex(args::Tuple, I, indexing::Tuple) =
-    (_getidx(args[1], I, indexing[1]), _getindex(tail(args), I, tail(indexing))...)
-Base.@propagate_inbounds _getindex(args::Tuple{Any}, I, indexing::Tuple{Any}) =
-    (_getidx(args[1], I, indexing[1]),)
-Base.@propagate_inbounds _getindex(args::Tuple{}, I, ::Tuple) = ()
-Base.@propagate_inbounds _getindex(args::Tuple{}, I, ::Tuple{Any}) = ()
+Base.@propagate_inbounds _getindex(args::Tuple, I, indexing) =
+    (_broadcast_getindex(args[1], newindex(I, indexing[1][1], indexing[1][2])), _getindex(tail(args), I, tail(indexing))...)
+Base.@propagate_inbounds _getindex(args::Tuple{Any}, I, indexing) =
+    (_broadcast_getindex(args[1], newindex(I, indexing[1][1], indexing[1][2])),)
+Base.@propagate_inbounds _getindex(args::Tuple{Any,Any}, I, indexing) =
+    (_broadcast_getindex(args[1], newindex(I, indexing[1][1], indexing[1][2])),
+     _broadcast_getindex(args[2], newindex(I, indexing[2][1], indexing[2][2])))
+Base.@propagate_inbounds _getindex(args::Tuple{}, I, indexing) = ()
 # For styles skipping reindexers
 Base.@propagate_inbounds _getindex(args::Tuple, I) = (_broadcast_getindex(args[1], I), _getindex(tail(args), I)...)
 Base.@propagate_inbounds _getindex(args::Tuple{Any}, I) = (_broadcast_getindex(args[1], I),)
+Base.@propagate_inbounds _getindex(args::Tuple{Any,Any}, I) =
+    (_broadcast_getindex(args[1], I), _broadcast_getindex(args[2], I))
 Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 
-
-Base.@propagate_inbounds function _broadcast_getindex_bc(bc::Broadcasted{Style}, I, indexing) where {Style}
-    args = _getindex(bc.args, I, indexing)
-    return _broadcast_getindex_evalf(bc.f, args...)
-end
-_broadcast_getindex_bc(bc::Broadcasted{Style}, I, ::Nothing) where {Style} =
-    throw(ArgumentError("a Broadcasted{$Style} wrapper skipped instantiation but has not defined _broadcast_getindex"))
 
 """
     broadcastable(x)
@@ -786,8 +785,13 @@ end
 # LHS and RHS will always match. This is not true in general, but with the `.op=`
 # syntax it's fairly common for an argument to be `===` a source.
 broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
-@inline map_broadcasted_args(f, bc::Broadcasted) = typeof(bc)(bc.f, map(arg->map_broadcasted_args(f, arg), bc.args), bc.axes, bc.indexing)
-map_broadcasted_args(f, arg) = f(arg)
+
+@inline map_broadcast_unalias(dest, bc::Broadcasted) = typeof(bc)(bc.f, map_broadcast_unalias_args(dest, bc.args), bc.axes, bc.indexing)
+map_broadcast_unalias(dest, x) = broadcast_unalias(dest, x)
+
+@inline map_broadcast_unalias_args(dest, args::Tuple) = (map_broadcast_unalias(dest, args[1]), map_broadcast_unalias_args(dest, tail(args))...)
+map_broadcast_unalias_args(dest, args::Tuple{Any}) = (map_broadcast_unalias(dest, args[1]),)
+map_broadcast_unalias_args(dest, args::Tuple{}) = ()
 
 # Specialize this method if all you want to do is specialize on typeof(dest)
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
@@ -799,7 +803,7 @@ map_broadcasted_args(f, arg) = f(arg)
             return copyto!(dest, A)
         end
     end
-    bc′ = map_broadcasted_args(arg->broadcast_unalias(dest, arg), bc)
+    bc′ = map_broadcast_unalias(dest, bc)
     @simd for I in CartesianIndices(axes(bc′))
         @inbounds dest[I] = bc′[I]
     end
