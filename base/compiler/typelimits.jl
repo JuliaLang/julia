@@ -73,7 +73,7 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         for p in cP
             is_derived_type(t, p, mindepth) && return true
         end
-        if isconcretetype(c) && isbits(c)
+        if isconcretetype(c) && isbitstype(c)
             # see if it was extracted from a fieldtype
             # however, only look through types that can be inlined
             # to ensure monotonicity of derivation

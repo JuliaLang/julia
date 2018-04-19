@@ -3350,7 +3350,7 @@ end
 @noinline throw_error() = error()
 foo11904(x::Int) = x
 @inline function foo11904(x::Nullable11904{S}) where S
-    if isbits(S)
+    if isbitstype(S)
         Nullable11904(foo11904(x.value), x.hasvalue)
     else
         throw_error()

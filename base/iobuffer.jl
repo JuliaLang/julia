@@ -171,7 +171,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isbits(T) && isa(a,Array)
+    if isbitstype(T) && isa(a,Array)
         nb = UInt(nel * sizeof(T))
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else

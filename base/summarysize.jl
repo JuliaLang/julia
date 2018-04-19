@@ -45,7 +45,7 @@ function summarysize(obj;
         else
             nf = _nfields(x)
             ft = typeof(x).types
-            if !isbits(ft[i]) && isdefined(x, i)
+            if !isbitstype(ft[i]) && isdefined(x, i)
                 val = getfield(x, i)
             end
         end
@@ -108,7 +108,7 @@ function (ss::SummarySize)(obj::Array)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
         size += Core.sizeof(obj)
-        if !isbits(eltype(obj)) && !isempty(obj)
+        if !isbitstype(eltype(obj)) && !isempty(obj)
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end

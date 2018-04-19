@@ -437,7 +437,7 @@ end
 # fills up A reinterpreted as an array of Float64 with n64 values
 function _rand!(r::MersenneTwister, A::Array{T}, n64::Int, I::FloatInterval_64) where T
     # n64 is the length in terms of `Float64` of the target
-    @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbits(T)
+    @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbitstype(T)
     GC.@preserve A rand!(r, UnsafeView{Float64}(pointer(A), n64), SamplerTrivial(I))
     A
 end

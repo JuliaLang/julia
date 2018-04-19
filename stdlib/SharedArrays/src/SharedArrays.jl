@@ -104,7 +104,7 @@ beginning of the file.
 SharedArray
 
 function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
-    isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
+    isbitstype(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     pids, onlocalhost = shared_pids(pids)
 
@@ -178,7 +178,7 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
     if !isabspath(filename)
         throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     end
-    if !isbits(T)
+    if !isbitstype(T)
         throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
     end
 

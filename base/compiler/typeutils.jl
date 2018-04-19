@@ -53,11 +53,11 @@ end
 function valid_tparam(@nospecialize(x))
     if isa(x, Tuple)
         for t in x
-            isa(t, Symbol) || isbits(typeof(t)) || return false
+            isa(t, Symbol) || isbitstype(typeof(t)) || return false
         end
         return true
     end
-    return isa(x, Symbol) || isbits(typeof(x))
+    return isa(x, Symbol) || isbitstype(typeof(x))
 end
 
 has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0

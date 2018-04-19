@@ -261,7 +261,7 @@ function isdefined_tfunc(args...)
                 end
             elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
-            elseif !isvatuple(a1) && isbits(fieldtype(a1, idx))
+            elseif !isvatuple(a1) && isbitstype(fieldtype(a1, idx))
                 return Const(true)
             elseif isa(arg1, Const) && isimmutable((arg1::Const).val)
                 return Const(isdefined((arg1::Const).val, idx))

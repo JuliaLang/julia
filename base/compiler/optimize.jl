@@ -399,7 +399,7 @@ function optimize(me::InferenceState)
         me.src.inlineable = false
     elseif !me.src.inlineable && isa(def, Method)
         bonus = 0
-        if me.bestguess ⊑ Tuple && !isbits(widenconst(me.bestguess))
+        if me.bestguess ⊑ Tuple && !isbitstype(widenconst(me.bestguess))
             bonus = me.params.inline_tupleret_bonus
         end
         me.src.inlineable = isinlineable(def, me.src, me.mod, me.params, bonus)
@@ -709,7 +709,7 @@ end
 # since codegen optimizations of functions like `is` will depend on knowing it
 function widen_slot_type(@nospecialize(ty), untypedload::Bool)
     if isa(ty, DataType)
-        if untypedload || isbits(ty) || isdefined(ty, :instance)
+        if untypedload || isbitstype(ty) || isdefined(ty, :instance)
             return ty
         end
     elseif isa(ty, Union)
@@ -1157,6 +1157,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                 f === Core.sizeof || f === isdefined ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
+                istopfunction(topmod, f, :isbitstype) ||
                 istopfunction(topmod, f, :promote_type) ||
                 (f === Core.kwfunc && length(argexprs) == 2) ||
                 (is_inlineable_constant(val) &&
@@ -3096,7 +3097,7 @@ function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
             si.defs[i] = ex.args[i + 1]
         else
             ft = fieldtype(vt, i)
-            if isbits(ft)
+            if isbitstype(ft)
                 ex = Expr(:new, ft)
                 ex.typ = ft
                 si.defs[i] = ex
@@ -3633,7 +3634,7 @@ function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_pre
         if !@isdefined(fld_name)
             fld_name = :struct_field
         end
-        need_preserved_root = has_preserve && !isbits(field_typ)
+        need_preserved_root = has_preserve && !isbitstype(field_typ)
         local var_slot
         if !has_def
             # If there's no direct use of the field

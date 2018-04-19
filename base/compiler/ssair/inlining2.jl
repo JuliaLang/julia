@@ -668,6 +668,7 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
                 f === Core.sizeof || f === isdefined ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
+                istopfunction(topmod, f, :isbitstype) ||
                 istopfunction(topmod, f, :promote_type) ||
                 (f === Core.kwfunc && length(atypes) == 2) ||
                 (is_inlineable_constant(val) &&
