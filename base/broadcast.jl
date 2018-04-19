@@ -266,27 +266,21 @@ of the `Broadcasted` object empty (populated with `nothing`). If they do so, how
 they must provide their own `Base.axes(::Broadcasted{Style})` and
 `Base.getindex(::Broadcasted{Style}, I::Union{Int,CartesianIndex})` methods as appropriate.
 """
-@inline instantiate(bc::Broadcasted{Style}) where {Style} = _instantiate(bc)
-
-_instantiate(bc) = bc
-
-@inline function _instantiate(bc::Broadcasted{Style,Nothing,Nothing}) where {Style}
-    args = map(instantiate, bc.args)
-    axes = combine_indices(args...)
-    @inline _newindexer(arg) = newindexer(axes, arg)
-    indexing = map(_newindexer, args)
-    return Broadcasted{Style}(bc.f, args, axes, indexing)
-end
-
-@inline function _instantiate(bc::Broadcasted{Style,<:Any,Nothing}) where {Style}
-    args = map(instantiate, bc.args)
-    axes = broadcast_shape(bc.axes, combine_indices(args...))
-    @inline _newindexer(arg) = newindexer(axes, arg)
-    indexing = map(_newindexer, args)
+@inline function instantiate(bc::Broadcasted{Style}) where {Style}
+    args = instantiate(bc.args)
+    if bc.axes isa Nothing
+        axes = combine_indices(args...)
+    else
+        axes = broadcast_shape(bc.axes, combine_indices(args...))
+    end
+    indexing = map_newindexer(axes, args)
     return Broadcasted{Style}(bc.f, args, axes, indexing)
 end
 
 instantiate(bc::Broadcasted{<:Union{AbstractArrayStyle{0}, Style{Tuple}}}) = bc
+
+@inline instantiate(args::Tuple) = (instantiate(args[1]), instantiate(Base.tail(args))...)
+instantiate(args::Tuple{}) = ()
 
 ## Flattening
 
@@ -516,18 +510,8 @@ end
 end
 
 # Equivalent to map(x->newindexer(shape, x), As) (but see #17126)
-map_newindexer(shape, ::Tuple{}) = (), ()
-@inline function map_newindexer(shape, As)
-    A1 = As[1]
-    keeps, Idefaults = map_newindexer(shape, tail(As))
-    keep, Idefault = newindexer(shape, A1)
-    (keep, keeps...), (Idefault, Idefaults...)
-end
-@inline function map_newindexer(shape, A, Bs)
-    keeps, Idefaults = map_newindexer(shape, Bs)
-    keep, Idefault = newindexer(shape, A)
-    (keep, keeps...), (Idefault, Idefaults...)
-end
+map_newindexer(shape, ::Tuple{}) = ()
+@inline map_newindexer(shape, As) = (newindexer(shape, As[1]), map_newindexer(shape, tail(As))...)
 
 @inline function Base.getindex(bc::Broadcasted, I)
     @boundscheck checkbounds(bc, I)
@@ -802,7 +786,7 @@ end
 # LHS and RHS will always match. This is not true in general, but with the `.op=`
 # syntax it's fairly common for an argument to be `===` a source.
 broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
-map_broadcasted_args(f, bc::Broadcasted) = typeof(bc)(bc.f, map(arg->map_broadcasted_args(f, arg), bc.args), bc.axes, bc.indexing)
+@inline map_broadcasted_args(f, bc::Broadcasted) = typeof(bc)(bc.f, map(arg->map_broadcasted_args(f, arg), bc.args), bc.axes, bc.indexing)
 map_broadcasted_args(f, arg) = f(arg)
 
 # Specialize this method if all you want to do is specialize on typeof(dest)
