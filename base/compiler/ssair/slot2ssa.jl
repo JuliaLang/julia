@@ -181,13 +181,14 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(code::Vector{Any}, lines::Vector{Int})
+function strip_trailing_junk!(code::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     for i = length(code):-1:1
         if code[i] !== nothing
             resize!(code, i)
             resize!(lines, i)
+            resize!(flags, i)
             break
         end
     end
@@ -197,6 +198,7 @@ function strip_trailing_junk!(code::Vector{Any}, lines::Vector{Int})
     if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
         push!(code, ReturnNode())
         push!(lines, 0)
+        push!(flags, 0x00)
     end
     return code
 end
@@ -360,6 +362,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     result_stmts = Vector{Any}(undef, nstmts + ncritbreaks + nnewfallthroughs)
     result_types = Any[Any for i = 1:length(result_stmts)]
     result_ltable = fill(0, length(result_stmts))
+    result_flags = fill(0x00, length(result_stmts))
     inst_rename = Vector{Any}(undef, length(ir.stmts))
     for i = 1:length(ir.new_nodes)
         push!(inst_rename, SSAValue(nstmts + i + ncritbreaks + nnewfallthroughs))
@@ -384,6 +387,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             end
             result_types[nidx] = ir.types[idx]
             result_ltable[nidx] = ir.lines[idx]
+            result_flags[nidx] = ir.flags[idx]
         end
         # Now fix up the terminator
         terminator = result_stmts[inst_range[end]]
@@ -427,7 +431,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             node = renumber_ssa!(node, inst_rename, true)
             (inst_rename[pos].id, reverse_affinity, typ, node, lno)
         end for i in 1:length(ir.new_nodes)]
-    new_ir = IRCode(ir, result_stmts, result_types, result_ltable, cfg, new_new_nodes)
+    new_ir = IRCode(ir, result_stmts, result_types, result_ltable, result_flags, cfg, new_new_nodes)
     return new_ir
 end
 
@@ -770,7 +774,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
     new_nodes = NewNode[let (pt, reverse_affinity, typ, stmt, line) = new_nodes[i]
             (pt, reverse_affinity, typ, new_to_regular(renumber_ssa!(stmt, ssavalmap)), line)
         end for i in 1:length(new_nodes)]
-    ir = IRCode(ir, new_code, types, ir.lines, ir.cfg, new_nodes)
+    ir = IRCode(ir, new_code, types, ir.lines, ir.flags, ir.cfg, new_nodes)
     @timeit "domsort" ir = domsort_ssa!(ir, domtree)
     return ir
 end

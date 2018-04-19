@@ -239,6 +239,12 @@ typedef struct _jl_code_info_t {
     jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
     jl_value_t *linetable; // Table of locations
+    jl_array_t *ssaflags; // flags associated with each statement:
+        // 0 = inbounds
+        // 1,2 = <reserved> inlinehint,always-inline,noinline
+        // 3 = <reserved> strict-ieee (strictfp)
+        // 4-6 = <unused>
+        // 7 = has out-of-band info
     jl_array_t *slotflags;  // local var bit flags
     jl_array_t *slotnames; // names of local variables
     uint8_t inferred;

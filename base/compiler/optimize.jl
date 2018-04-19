@@ -218,6 +218,9 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # const SLOT_CALLED      = 64
 
+const IR_FLAG_INBOUNDS = 0x01
+
+
 # known affect-free calls (also effect-free)
 const _PURE_BUILTINS = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 

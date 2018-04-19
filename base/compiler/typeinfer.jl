@@ -170,14 +170,13 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
                     tree.method_for_inference_limit_heuristics = nothing
                     tree.slotnames = Any[ COMPILER_TEMP_SYM for i = 1:method.nargs ]
-                    tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
+                    tree.slotflags = fill(0x00, Int(method.nargs))
                     tree.slottypes = nothing
                     tree.ssavaluetypes = 0
                     tree.inferred = true
+                    tree.ssaflags = UInt8[]
                     tree.pure = true
                     tree.inlineable = true
-                    tree.codelocs = nothing
-                    tree.linetable = nothing
                     i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                     return svec(linfo, tree, linfo.rettype)
                 elseif isa(inf, CodeInfo)
