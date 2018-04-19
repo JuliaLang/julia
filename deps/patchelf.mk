@@ -1,7 +1,7 @@
 ## patchelf ##
 
 $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://nixos.org/releases/patchelf/patchelf-$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://nixos.org/releases/patchelf/patchelf-$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.gz
 
 $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.gz
 	$(JLCHECKSUM) $<
