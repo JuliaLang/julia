@@ -335,7 +335,7 @@ function next(itr::RegexMatchIterator, prev_match)
             offset = prev_match.offset
         end
     else
-        offset = prev_match.offset + endof(prev_match.match)
+        offset = prev_match.offset + sizeof(prev_match.match)
     end
 
     opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
