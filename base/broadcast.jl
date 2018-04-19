@@ -853,7 +853,7 @@ function __dot__(x::Expr)
         if x.head == :&& || x.head == :||
             Base.depwarn("""
                 using $(x.head) expressions in @. is deprecated; in the future it will
-                become elementwise. Break the expression into smaller parts instead.""", ())
+                become elementwise. Break the expression into smaller parts instead.""", nothing)
         end
         head = string(x.head)
         if last(head) == '=' && first(head) != '.'

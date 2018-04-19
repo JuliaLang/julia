@@ -82,11 +82,12 @@ function depwarn(msg, funcsym)
         _id=(frame,funcsym),
         _group=:depwarn,
         caller=caller,
-        maxlog=funcsym === () ? nothing : 1
+        maxlog=funcsym === nothing ? nothing : 1
     )
     nothing
 end
 
+firstcaller(bt::Vector, ::Nothing) = Ptr{Cvoid}(0), StackTraces.UNKNOWN
 firstcaller(bt::Vector, funcsym::Symbol) = firstcaller(bt, (funcsym,))
 function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
