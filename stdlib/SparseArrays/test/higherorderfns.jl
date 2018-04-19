@@ -352,10 +352,11 @@ end
             @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
             @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
             X = sparse(fX) # reset / warmup for @allocated test
+            # It'd be nice for this to be zero, but there's currently some constant overhead
             @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
             X = sparse(fX) # reset / warmup for @allocated test
-            @test (@allocated broadcast!(*, X, sparseargs...)) <= (any(x->isa(x, Transpose), sparseargs) ? 2500 : 128)
-            # Broadcasting over Transposes currently requires making a CSC copy
+            # And broadcasting over Transposes currently requires making a CSC copy, so we must account for that in the bounds
+            @test (@allocated broadcast!(*, X, sparseargs...)) <= (sum(x->isa(x, Transpose) ? Base.summarysize(x)*2+128 : 0, sparseargs) + 128)
         end
     end
     # test combinations at the limit of inference (eight arguments net)
