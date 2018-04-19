@@ -1478,15 +1478,14 @@ end
 let a = Array{Float64}(undef, 10)
     @test size(a) == (10,)
     @test size(a, 1) == 10
-    @test size(a,2,1) == (1,10)
+    @test (size(a,2), size(a,1)) == (1,10)
     aa = Array{Float64}(undef, 2,3)
     @test size(aa) == (2,3)
-    @test size(aa,4,3,2,1) == (1,1,3,2)
-    @test size(aa,1,2) == (2,3)
+    @test (size(aa,4), size(aa,3), size(aa,2), size(aa,1)) == (1,1,3,2)
     aaa = Array{Float64}(undef, 9,8,7,6,5,4,3,2,1)
-    @test size(aaa,1,1) == (9,9)
+    @test size(aaa,1) == 9
     @test size(aaa,4) == 6
-    @test size(aaa,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
+    @test size(aaa) == (9,8,7,6,5,4,3,2,1)
 
     #18459 Test Array{T, N} constructor
     b = Vector{Float64}(undef, 10)
@@ -2176,19 +2175,16 @@ end
     b = Vector{Float64}(undef, 10)
     @test size(a) == (10,)
     @test size(a, 1) == 10
-    @test size(a,2,1) == (1,10)
     @test size(a) == size(b)
     a = Array{Float64}(undef, 2,3)
     b = Matrix{Float64}(undef, 2,3)
     @test size(a) == (2,3)
-    @test size(a,4,3,2,1) == (1,1,3,2)
-    @test size(a,1,2) == (2,3)
+    @test (size(a, 1), size(a, 2), size(a, 3)) == (2,3,1)
     @test size(a) == size(b)
     a = Array{Float64}(undef, 9,8,7,6,5,4,3,2,1)
     b = Array{Float64,9}(undef, 9,8,7,6,5,4,3,2,1)
-    @test size(a,1,1) == (9,9)
     @test size(a,4) == 6
-    @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
+    @test size(a) == (9,8,7,6,5,4,3,2,1)
     @test size(a) == size(b)
 end
 
