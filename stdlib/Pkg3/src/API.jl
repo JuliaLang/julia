@@ -7,7 +7,7 @@ import Dates
 import LibGit2
 
 import ..depots, ..logdir, ..devdir, ..print_first_command_header
-import ..Operations, ..Display, ..GitTools
+import ..Operations, ..Display, ..GitTools, ..Pkg3
 using ..Types, ..TOML
 
 
@@ -15,8 +15,10 @@ preview_info() = printstyled("───── Preview mode ─────\n"; c
 
 include("generate.jl")
 
+parse_package(pkg) = Pkg3.REPLMode.parse_package(pkg; context=Pkg3.REPLMode.CMD_ADD)
+
 add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
-add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([parse_package(pkg) for pkg in pkgs]; kwargs...)
 add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, kwargs...)
@@ -35,6 +37,7 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
     ensure_resolved(ctx.env, pkgs, registry=true)
     Operations.add_or_develop(ctx, pkgs; new_git=new_git)
     ctx.preview && preview_info()
+    return
 end
 
 add(args...; kwargs...) = add_or_develop(args...; mode = :add, kwargs...)
@@ -54,6 +57,7 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     manifest_resolve!(ctx.env, pkgs)
     Operations.rm(ctx, pkgs)
     ctx.preview && preview_info()
+    return
 end
 
 
@@ -111,6 +115,7 @@ function update_registry(ctx)
         end
         @warn warn_str
     end
+    return
 end
 
 up(;kwargs...)                           = up(PackageSpec[]; kwargs...)
@@ -143,6 +148,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
     end
     Operations.up(ctx, pkgs)
     ctx.preview && preview_info()
+    return
 end
 
 
@@ -157,6 +163,7 @@ function pin(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     project_deps_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     Operations.pin(ctx, pkgs)
+    return
 end
 
 
@@ -171,6 +178,7 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     registry_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs; registry=true)
     Operations.free(ctx, pkgs)
+    return
 end
 
 
@@ -194,6 +202,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
     Operations.test(ctx, pkgs; coverage=coverage)
+    return
 end
 
 
@@ -307,6 +316,7 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
     byte_save_str = length(paths_to_delete) == 0 ? "" : ("saving " * @sprintf("%.3f %s", bytes, Base._mem_units[mb]))
     @info("Deleted $(length(paths_to_delete)) package installations $byte_save_str")
     ctx.preview && preview_info()
+    return
 end
 
 
@@ -325,6 +335,7 @@ function _get_deps!(ctx::Context, pkgs::Vector{PackageSpec}, uuids::Vector{UUID}
         end
         _get_deps!(ctx, pkgs, uuids)
     end
+    return
 end
 
 build(pkgs...) = build([PackageSpec(pkg) for pkg in pkgs])
@@ -357,6 +368,7 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     length(uuids) == 0 && (@info("no packages to build"); return)
     Operations.build_versions(ctx, uuids; might_need_to_resolve=true)
     ctx.preview && preview_info()
+    return
 end
 
 init() = init(Context())
@@ -365,6 +377,26 @@ function init(ctx::Context, path::String=pwd())
     print_first_command_header()
     Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
     Operations.init(ctx)
+    return
 end
+
+#####################################
+# Backwards compatibility with Pkg2 #
+#####################################
+
+function clone(pkg::String...)
+    Base.depwarn("Pkg.clone is only kept for legacy CI script reasons, please use `add`", :clone)
+    add(joinpath(pkg...))
+end
+
+function dir(pkg::String, paths::String...)
+    Base.depwarn("Pkg.dir is only kept for legacy CI script reasons", :dir)
+    pkgid = Base.identify_package(pkg)
+    pkgid == nothing && return nothing
+    path = Base.locate_package(pkgid)
+    pkgid == nothing && return nothing
+    return joinpath(abspath(path, "..", "..", paths...))
+end
+
 
 end # module

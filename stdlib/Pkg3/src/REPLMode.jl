@@ -135,11 +135,11 @@ let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(
     global const name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
-function parse_package(word::AbstractString; context=nothing)# ::PackageSpec
+function parse_package(word::AbstractString; context=nothing)::PackageSpec
     word = replace(word, "~" => homedir())
     if context in (CMD_ADD, CMD_DEVELOP) && isdir(word)
         pkg = PackageSpec()
-        pkg.repo = Types.GitRepo(word)
+        pkg.repo = Types.GitRepo(abspath(word))
         return pkg
     elseif occursin(uuid_re, word)
         return PackageSpec(UUID(word))

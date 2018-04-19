@@ -628,7 +628,7 @@ end
 
 
 const refspecs = ["+refs/*:refs/remotes/cache/*"]
-const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$"
+const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?(?:\/)?$"
 
 # Windows sometimes throw on `isdir`...
 function isdir_windows_workaround(path::String)
