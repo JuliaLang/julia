@@ -236,6 +236,8 @@ Base.axes(bc::Broadcasted{Style}) where {Style} = _axes(bc, bc.axes)
 _axes(::Broadcasted{Style}, axes) where {Style} = axes
 _axes(::Broadcasted{Style}, ::Nothing) where {Style} =
     throw(ArgumentError("a Broadcasted{$Style} wrapper skipped instantiation but has not defined `Base.axes`"))
+Base.axes(bc::Broadcasted{<:AbstractArrayStyle{0}}) = ()
+Base.axes(bc::Broadcasted{Style{Tuple}, Nothing}) = (Base.OneTo(length(longest_tuple(nothing, bc.args))),)
 
 BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
 BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
@@ -262,7 +264,7 @@ Custom `BroadcastStyle`s may override this default in cases where it is fast and
 to compute the resulting `axes` and indexing helpers on-demand, leaving those fields
 of the `Broadcasted` object empty (populated with `nothing`). If they do so, however,
 they must provide their own `Base.axes(::Broadcasted{Style})` and
-`Broadcast._broadcast_getindex(::Broadcasted{Style})` methods as appropriate.
+`Base.getindex(::Broadcasted{Style}, I::Union{Int,CartesianIndex})` methods as appropriate.
 """
 @inline instantiate(bc::Broadcasted{Style}) where {Style} = _instantiate(bc)
 
@@ -527,9 +529,19 @@ end
     (keep, keeps...), (Idefault, Idefaults...)
 end
 
-# Base.@propagate_inbounds _broadcast_getindex(::Type{T}, I) where {T} = T
+@inline function Base.getindex(bc::Broadcasted, I)
+    @boundscheck checkbounds(bc, I)
+    @inbounds _broadcast_getindex(bc, I)
+end
+Base.@propagate_inbounds Base.getindex(bc::Broadcasted{Nothing}, I) =
+    convert(Broadcasted{typeof(combine_styles(bc.args...))}, bc)[I]
+
+@inline Base.checkbounds(bc::Broadcasted, I) =
+    Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
+
 Base.@propagate_inbounds _broadcast_getindex(::Base.RefValue{Type{T}}, I) where {T} = T
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
+Base.@propagate_inbounds _broadcast_getindex(A::Tuple, I) = A[I[1]]
 Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(combine_styles(A), A, I)
 Base.@propagate_inbounds _broadcast_getindex(::AbstractArrayStyle{0}, A, I) = A[]
 Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
@@ -729,9 +741,9 @@ end
 end
 
 ## general `copy` methods
-copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = _broadcast_getindex(bc, 1)
-copy(bc::Broadcasted{Nothing}) = error("broadcasting requires an assigned BroadcastStyle")
-copy(bc::Broadcasted{Unknown}) = error("broadcasting requires an assigned BroadcastStyle")
+copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc[CartesianIndex()]
+copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
+    throw(ArgumentError("broadcasting requires an assigned BroadcastStyle"))
 
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
@@ -753,9 +765,9 @@ function copy(bc::Broadcasted{Style}) where {Style}
     end
     # Initialize using the first value
     I, state = next(iter, state)
-    val = _broadcast_getindex(bc, I)
+    @inbounds val = bc[I]
     dest = broadcast_similar(Style(), typeof(val), axes(bc), bc)
-    dest[I] = val
+    @inbounds dest[I] = val
     # Now handle the remaining values
     return copyto_nonleaf!(dest, bc, iter, state, 1)
 end
@@ -805,7 +817,7 @@ map_broadcasted_args(f, arg) = f(arg)
     end
     bc′ = map_broadcasted_args(arg->broadcast_unalias(dest, arg), bc)
     @simd for I in CartesianIndices(axes(bc′))
-        @inbounds dest[I] = _broadcast_getindex(bc′, I)
+        @inbounds dest[I] = bc′[I]
     end
     return dest
 end
@@ -819,7 +831,7 @@ function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     destc = dest.chunks
     ind = cind = 1
     @simd for I in CartesianIndices(axes(bc))
-        @inbounds tmp[ind] = _broadcast_getindex(bc, I)
+        @inbounds tmp[ind] = bc[I]
         ind += 1
         if ind > bitcache_size
             dumpbitcache(destc, cind, tmp)
@@ -878,7 +890,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
     T = eltype(dest)
     while !done(iter, state)
         I, state = next(iter, state)
-        @inbounds val = _broadcast_getindex(bc, I)
+        @inbounds val = bc[I]
         S = typeof(val)
         if S <: T
             @inbounds dest[I] = val
@@ -901,8 +913,7 @@ end
 
 @inline copy(bc::Broadcasted{Style{Tuple}}) =
     tuplebroadcast(longest_tuple(nothing, bc.args), bc)
-@inline tuplebroadcast(::NTuple{N,Any}, bc) where {N} =
-    ntuple(k -> _broadcast_getindex(bc, k), Val(N))
+@inline tuplebroadcast(::NTuple{N,Any}, bc) where {N} = ntuple(k -> @inbounds(bc[k]), Val(N))
 # This is a little tricky: find the longest tuple (first arg) within the list of arguments (second arg)
 # Start with nothing as a placeholder and go until we find the first tuple in the argument list
 longest_tuple(::Nothing, t::Tuple{Tuple,Vararg{Any}}) = longest_tuple(t[1], tail(t))

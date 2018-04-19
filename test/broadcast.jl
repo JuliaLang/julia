@@ -695,3 +695,9 @@ let X = Any[1,2]
     X .= nothing
     @test X[1] == X[2] == nothing
 end
+
+# Ensure that broadcast styles with custom indexing work
+let X = zeros(2, 3)
+    X .= (1, 2)
+    @test X == [1 1 1; 2 2 2]
+end
