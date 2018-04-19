@@ -196,7 +196,7 @@ end
 
 find_env(env::Function) = find_env(env())
 
-load_path() = filter(env -> env ≠ nothing, map(find_env, LOAD_PATH))
+load_path() = String[env for env in map(find_env, LOAD_PATH) if env ≠ nothing]
 
 ## package identification: determine unique identity of package to be loaded ##
 
