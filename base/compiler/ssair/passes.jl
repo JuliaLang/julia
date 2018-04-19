@@ -189,7 +189,7 @@ is_tuple_call(ir, def) = isa(def, Expr) && is_known_call(def, tuple, ir, ir.mod)
 
 function process_immutable_preserve(new_preserves::Vector{Any}, compact::IncrementalCompact, def::Expr)
     for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
-        if !isbits(compact_exprtype(compact, arg))
+        if !isbitstype(compact_exprtype(compact, arg))
             push!(new_preserves, arg)
         end
     end
@@ -373,7 +373,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
                 for stmt in du.uses
                     ir[SSAValue(stmt)] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
                 end
-                if !isbits(fieldtype(typ, fidx))
+                if !isbitstype(fieldtype(typ, fidx))
                     for (use, list) in preserve_uses
                         push!(list, compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use))
                     end

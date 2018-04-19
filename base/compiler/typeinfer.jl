@@ -168,16 +168,15 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     method = linfo.def::Method
                     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                     tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
-                    tree.signature_for_inference_heuristics = nothing
+                    tree.method_for_inference_limit_heuristics = nothing
                     tree.slotnames = Any[ COMPILER_TEMP_SYM for i = 1:method.nargs ]
-                    tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
+                    tree.slotflags = fill(0x00, Int(method.nargs))
                     tree.slottypes = nothing
                     tree.ssavaluetypes = 0
                     tree.inferred = true
+                    tree.ssaflags = UInt8[]
                     tree.pure = true
                     tree.inlineable = true
-                    tree.codelocs = nothing
-                    tree.linetable = nothing
                     i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                     return svec(linfo, tree, linfo.rettype)
                 elseif isa(inf, CodeInfo)
@@ -319,11 +318,14 @@ function typeinf_work(frame::InferenceState)
                     else
                         # general case
                         frame.handler_at[l] = frame.cur_hand
+                        changes_else = changes
                         if isa(condt, Conditional)
-                            changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes)
-                            changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
-                        else
-                            changes_else = changes
+                            if condt.elsetype !== Any && condt.elsetype !== changes[slot_id(condt.var)]
+                                changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes_else)
+                            end
+                            if condt.vtype !== Any && condt.vtype !== changes[slot_id(condt.var)]
+                                changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
+                            end
                         end
                         newstate_else = stupdate!(s[l], changes_else)
                         if newstate_else !== false

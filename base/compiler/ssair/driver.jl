@@ -114,26 +114,44 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, linetab
         end
         idx += 1
     end
-    reindex_labels!(code)
+    reindex_labels!(code) # update labels changed above
+
+    inbounds_depth = 0 # Number of stacked inbounds
     meta = Any[]
     lines = fill(0, length(code))
+    flags = fill(0x00, length(code))
     let loc = RefValue(1)
         for i = 1:length(code)
             stmt = code[i]
-            stmt = normalize(stmt, meta, linetable, loc)
+            if isexpr(stmt, :inbounds)
+                arg1 = stmt.args[1]
+                if arg1 === true # push
+                    inbounds_depth += 1
+                elseif arg1 === false # clear
+                    inbounds_depth = 0
+                elseif inbounds_depth > 0 # pop
+                    inbounds_depth -= 1
+                end
+                stmt = nothing
+            else
+                stmt = normalize(stmt, meta, linetable, loc)
+            end
             code[i] = stmt
             if !(stmt === nothing)
                 lines[i] = loc[]
+                if inbounds_depth > 0
+                     flags[i] |= IR_FLAG_INBOUNDS
+                end
             end
         end
     end
-    code = strip_trailing_junk!(code, lines)
+    code = strip_trailing_junk!(code, lines, flags)
     cfg = compute_basic_blocks(code)
     defuse_insts = scan_slot_def_use(nargs, ci, code)
     @timeit "domtree 1" domtree = construct_domtree(cfg)
     ir = let code = Any[nothing for _ = 1:length(code)]
              argtypes = ci.slottypes[1:(nargs+1)]
-            IRCode(code, Any[], lines, cfg, argtypes, mod, meta)
+            IRCode(code, Any[], lines, flags, cfg, argtypes, mod, meta)
         end
     @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs)
     return ir

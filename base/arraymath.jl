@@ -94,7 +94,7 @@ function reverse(A::Array{T}; dims::Integer) where T
             end
         end
     else
-        if isbits(T) && M>200
+        if isbitstype(T) && M>200
             for i = 1:sd
                 ri = sd+1-i
                 for j=0:stride:(N-stride)

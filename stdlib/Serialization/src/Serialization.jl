@@ -259,7 +259,7 @@ function serialize(s::AbstractSerializer, a::Array)
     else
         serialize(s, length(a))
     end
-    if isbits(elty)
+    if isbitstype(elty)
         serialize_array_data(s.io, a)
     else
         sizehint!(s.table, div(length(a),4))  # prepare for lots of pointers
@@ -918,7 +918,7 @@ function deserialize_array(s::AbstractSerializer)
         elty = UInt8
     end
     if isa(d1, Integer)
-        if elty !== Bool && isbits(elty)
+        if elty !== Bool && isbitstype(elty)
             a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
@@ -927,7 +927,7 @@ function deserialize_array(s::AbstractSerializer)
     else
         dims = convert(Dims, d1)::Dims
     end
-    if isbits(elty)
+    if isbitstype(elty)
         n = prod(dims)::Int
         if elty === Bool && n > 0
             A = Array{Bool, length(dims)}(undef, dims)
@@ -1135,7 +1135,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
     end
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
-    elseif isbits(t)
+    elseif isbitstype(t)
         if nf == 1
             f1 = deserialize(s)
             return ccall(:jl_new_struct, Any, (Any,Any...), t, f1)

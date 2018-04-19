@@ -218,6 +218,9 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # const SLOT_CALLED      = 64
 
+const IR_FLAG_INBOUNDS = 0x01
+
+
 # known affect-free calls (also effect-free)
 const _PURE_BUILTINS = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 
@@ -263,7 +266,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
     return inlineable
 end
 
-const enable_new_optimizer = RefValue(true)
+const enable_new_optimizer = RefValue(false)
 
 # converge the optimization work
 function optimize(me::InferenceState)
@@ -396,7 +399,7 @@ function optimize(me::InferenceState)
         me.src.inlineable = false
     elseif !me.src.inlineable && isa(def, Method)
         bonus = 0
-        if me.bestguess ⊑ Tuple && !isbits(widenconst(me.bestguess))
+        if me.bestguess ⊑ Tuple && !isbitstype(widenconst(me.bestguess))
             bonus = me.params.inline_tupleret_bonus
         end
         me.src.inlineable = isinlineable(def, me.src, me.mod, me.params, bonus)
@@ -706,7 +709,7 @@ end
 # since codegen optimizations of functions like `is` will depend on knowing it
 function widen_slot_type(@nospecialize(ty), untypedload::Bool)
     if isa(ty, DataType)
-        if untypedload || isbits(ty) || isdefined(ty, :instance)
+        if untypedload || isbitstype(ty) || isdefined(ty, :instance)
             return ty
         end
     elseif isa(ty, Union)
@@ -1154,6 +1157,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                 f === Core.sizeof || f === isdefined ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
+                istopfunction(topmod, f, :isbitstype) ||
                 istopfunction(topmod, f, :promote_type) ||
                 (f === Core.kwfunc && length(argexprs) == 2) ||
                 (is_inlineable_constant(val) &&
@@ -2712,7 +2716,7 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
     # There are other cases that we can merge
     # but those require control flow analysis.
     var_has_static_undef(ctx.sv.src, key.first, key.second) && return false
-    local defkey
+    local defkey, deftyp
     for def in info.defs
         # No NewvarNode def for variables that aren't used undefined
         defex = (def.assign::Expr).args[2]
@@ -2734,6 +2738,12 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
             end
         else
             return @isdefined(defkey)
+        end
+        new_deftyp = exprtype(defex, ctx.sv.src, ctx.sv.mod)
+        if @isdefined(deftyp) && deftyp != new_deftyp
+            return true
+        else
+            deftyp = new_deftyp
         end
     end
 
@@ -2759,8 +2769,18 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
     if defkey.second
         # SSAValue def
         replace_v = SSAValue(defkey.first - 1)
+        # don't replace TypedSlots with SSAValues
+        replace_typ = exprtype(replace_v, ctx.sv.src, ctx.sv.mod)
+        if !(replace_typ ⊑ deftyp)
+            return false
+        end
     else
         replace_v = SlotNumber(defkey.first)
+        # don't lose type information from TypedSlots
+        replace_typ = exprtype(replace_v, ctx.sv.src, ctx.sv.mod)
+        if !(replace_typ ⊑ deftyp)
+            replace_v = TypedSlot(defkey.first, deftyp)
+        end
     end
     for use in info.uses
         if isdefined(use, :expr)
@@ -3077,7 +3097,7 @@ function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
             si.defs[i] = ex.args[i + 1]
         else
             ft = fieldtype(vt, i)
-            if isbits(ft)
+            if isbitstype(ft)
                 ex = Expr(:new, ft)
                 ex.typ = ft
                 si.defs[i] = ex
@@ -3614,7 +3634,7 @@ function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_pre
         if !@isdefined(fld_name)
             fld_name = :struct_field
         end
-        need_preserved_root = has_preserve && !isbits(field_typ)
+        need_preserved_root = has_preserve && !isbitstype(field_typ)
         local var_slot
         if !has_def
             # If there's no direct use of the field

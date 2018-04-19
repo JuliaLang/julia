@@ -352,11 +352,11 @@ function isprimitivetype(@nospecialize(t::Type))
 end
 
 """
-    isbits(T)
+    isbitstype(T)
 
 Return `true` if type `T` is a "plain data" type,
 meaning it is immutable and contains no references to other values,
-only `primitive` types and other `isbits` types.
+only `primitive` types and other `isbitstype` types.
 Typical examples are numeric types such as [`UInt8`](@ref),
 [`Float64`](@ref), and [`Complex{Float64}`](@ref).
 This category of types is significant since they are valid as type parameters,
@@ -365,14 +365,20 @@ and have a defined layout that is compatible with C.
 
 # Examples
 ```jldoctest
-julia> isbits(Complex{Float64})
+julia> isbitstype(Complex{Float64})
 true
 
-julia> isbits(Complex)
+julia> isbitstype(Complex)
 false
 ```
 """
-isbits(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+
+"""
+    isbits(x)
+
+Return `true` if `x` is an instance of an `isbitstype` type.
+"""
 isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
 
 """

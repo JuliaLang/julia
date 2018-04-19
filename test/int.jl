@@ -280,3 +280,10 @@ end
     @test_throws ArgumentError big"1_0_0_0_"
     @test_throws ArgumentError big"_1_0_0_0"
 end
+
+# issue #26779
+struct MyInt26779 <: Integer
+    x::Int
+end
+@test promote_type(MyInt26779, Int) == Integer
+@test_throws ErrorException MyInt26779(1) + 1

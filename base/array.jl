@@ -85,7 +85,6 @@ UInt8
 ```
 """
 eltype(::Type) = Any
-eltype(::Type{Any}) = Any
 eltype(::Type{Bottom}) = throw(ArgumentError("Union{} does not have elements"))
 eltype(x) = eltype(typeof(x))
 
@@ -117,7 +116,7 @@ asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1
 """
     Base.isbitsunion(::Type{T})
 
-Return whether a type is an "is-bits" Union type, meaning each type included in a Union is `isbits`.
+Return whether a type is an "is-bits" Union type, meaning each type included in a Union is `isbitstype`.
 """
 isbitsunion(u::Union) = ccall(:jl_array_store_unboxed, Cint, (Any,), u) == Cint(1)
 isbitsunion(x) = false
@@ -125,7 +124,7 @@ isbitsunion(x) = false
 """
     Base.bitsunionsize(U::Union)
 
-For a Union of `isbits` types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`
+For a Union of `isbitstype` types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`
 """
 function bitsunionsize(u::Union)
     sz = Ref{Csize_t}(0)
@@ -135,7 +134,7 @@ function bitsunionsize(u::Union)
 end
 
 length(a::Array) = arraylen(a)
-elsize(::Type{<:Array{T}}) where {T} = isbits(T) ? sizeof(T) : (isbitsunion(T) ? bitsunionsize(T) : sizeof(Ptr))
+elsize(::Type{<:Array{T}}) where {T} = isbitstype(T) ? sizeof(T) : (isbitsunion(T) ? bitsunionsize(T) : sizeof(Ptr))
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -178,7 +177,7 @@ the same manner as C.
 function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     t1 = @_gc_preserve_begin dest
     t2 = @_gc_preserve_begin src
-    if isbits(T)
+    if isbitstype(T)
         unsafe_copyto!(pointer(dest, doffs), pointer(src, soffs), n)
     elseif isbitsunion(T)
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
@@ -1478,7 +1477,7 @@ function vcat(arrays::Vector{T}...) where T
     end
     arr = Vector{T}(undef, n)
     ptr = pointer(arr)
-    if isbits(T)
+    if isbitstype(T)
         elsz = Core.sizeof(T)
     elseif isbitsunion(T)
         elsz = bitsunionsize(T)
@@ -1490,7 +1489,7 @@ function vcat(arrays::Vector{T}...) where T
     for a in arrays
         na = length(a)
         nba = na * elsz
-        if isbits(T)
+        if isbitstype(T)
             ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
                   ptr, a, nba)
         elseif isbitsunion(T)

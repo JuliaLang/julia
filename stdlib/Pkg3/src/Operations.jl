@@ -753,9 +753,8 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         end
         write_env(localctx, display_diff = false)
         will_resolve && build_versions(localctx, new)
-        withenv("JULIA_LOAD_PATH" => joinpath(tmpdir)) do
-            f()
-        end
+        sep = Sys.iswindows() ? ';' : ':'
+        withenv(f, "JULIA_LOAD_PATH" => "$tmpdir$sep$(Types.stdlib_dir())")
     end
 end
 
@@ -823,7 +822,6 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
         log_file = splitext(build_file)[1] * ".log"
         printpkgstyle(ctx, :Building,
             rpad(name * " ", max_name + 1, "─"), "→ ", Types.pathrepr(ctx, log_file))
-
         code = """
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))

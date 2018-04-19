@@ -48,7 +48,9 @@ function init_depot_path(BINDIR = Sys.BINDIR)
         depots = split(ENV["JULIA_DEPOT_PATH"], Sys.iswindows() ? ';' : ':')
         append!(empty!(DEPOT_PATH), map(expanduser, depots))
     else
-        push!(DEPOT_PATH, joinpath(homedir(), ".julia"))
+        push!(empty!(DEPOT_PATH), joinpath(homedir(), ".julia"))
+        push!(DEPOT_PATH, abspath(BINDIR, "..", "local", "share", "julia"))
+        push!(DEPOT_PATH, abspath(BINDIR, "..", "share", "julia"))
     end
 end
 
@@ -115,14 +117,15 @@ function parse_load_path(str::String)
     return envs
 end
 
+const default_named = parse_load_path("@v#.#.#|@v#.#|@v#|@default|@!v#.#")
+
 function init_load_path(BINDIR = Sys.BINDIR)
-    if !Base.creating_sysimg
-        load_path = get(ENV, "JULIA_LOAD_PATH", "@|@v#.#.#|@v#.#|@v#|@default|@!v#.#")
-        append!(empty!(LOAD_PATH), parse_load_path(load_path))
-    end
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    push!(LOAD_PATH, abspath(BINDIR, "..", "local", "share", "julia", "site", vers))
-    push!(LOAD_PATH, abspath(BINDIR, "..", "share", "julia", "site", vers))
+    stdlib = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    load_path = Base.creating_sysimg           ? Any[stdlib] :
+                haskey(ENV, "JULIA_LOAD_PATH") ? parse_load_path(ENV["JULIA_LOAD_PATH"]) :
+                                                 Any[CurrentEnv(); default_named; stdlib]
+    append!(empty!(LOAD_PATH), load_path)
 end
 
 const atexit_hooks = []
