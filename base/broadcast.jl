@@ -527,7 +527,11 @@ Base.@propagate_inbounds _broadcast_getindex(::Base.RefValue{Type{T}}, I) where 
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple, I) = A[I[1]]
 Base.@propagate_inbounds _broadcast_getindex(A::Ref, I) = A[]
-Base.@propagate_inbounds _broadcast_getindex(A, I) = A[I]
+Base.@propagate_inbounds _broadcast_getindex(A::Number, I) = A
+Base.@propagate_inbounds _broadcast_getindex(A::AbstractArray{<:Any,0}, I) = A[]
+Base.@propagate_inbounds _broadcast_getindex(A, I) = __broadcast_getindex(combine_styles(A), A, I)
+Base.@propagate_inbounds __broadcast_getindex(::Any, A, I) = A[I]
+Base.@propagate_inbounds __broadcast_getindex(::AbstractArrayStyle{0}, A, I) = A[]
 
 # For Broadcasted
 Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted, I)
