@@ -84,7 +84,12 @@ julia> eltype(fill(0x1, (2,2)))
 UInt8
 ```
 """
-eltype(::Type) = Any
+function eltype(t::Type)
+    # TODO: change post-0.7
+    #throw(MethodError(eltype, (t,)))
+    depwarn("The fallback definition of `eltype` is deprecated; either define it for your type or avoid calling it on types that might not support it.", :eltype)
+    return Any
+end
 eltype(::Type{Bottom}) = throw(ArgumentError("Union{} does not have elements"))
 eltype(x) = eltype(typeof(x))
 

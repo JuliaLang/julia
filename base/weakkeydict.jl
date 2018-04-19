@@ -58,7 +58,7 @@ WeakKeyDict(ps::Pair...)                            = WeakKeyDict{Any,Any}(ps)
 
 function WeakKeyDict(kv)
     try
-        Base.dict_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
+        Base.dict_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, IteratorEltype(typeof(kv)) isa HasEltype ? eltype(kv) : Any)
     catch e
         if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))

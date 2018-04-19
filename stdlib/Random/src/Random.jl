@@ -132,7 +132,7 @@ struct SamplerTrivial{T,E} <: Sampler{E}
     self::T
 end
 
-SamplerTrivial(x::T) where {T} = SamplerTrivial{T,eltype(T)}(x)
+SamplerTrivial(x::T) where {T} = SamplerTrivial{T,Any}(x)
 
 Sampler(::AbstractRNG, x, ::Repetition) = SamplerTrivial(x)
 
@@ -144,14 +144,14 @@ struct SamplerSimple{T,S,E} <: Sampler{E}
     data::S
 end
 
-SamplerSimple(x::T, data::S) where {T,S} = SamplerSimple{T,S,eltype(T)}(x, data)
+SamplerSimple(x::T, data::S) where {T,S} = SamplerSimple{T,S,Any}(x, data)
 
 Base.getindex(sp::SamplerSimple) = sp.self
 
 # simple sampler carrying a (type) tag T and data
 struct SamplerTag{T,S,E} <: Sampler{E}
     data::S
-    SamplerTag{T}(s::S) where {T,S} = new{T,S,eltype(T)}(s)
+    SamplerTag{T}(s::S) where {T,S} = new{T,S,Any}(s)
 end
 
 

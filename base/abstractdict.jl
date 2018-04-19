@@ -586,7 +586,7 @@ end
 
 function IdDict(kv)
     try
-        dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
+        dict_with_eltype((K, V) -> IdDict{K, V}, kv, IteratorEltype(typeof(kv)) isa HasEltype ? eltype(kv) : Any)
     catch e
         if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError(

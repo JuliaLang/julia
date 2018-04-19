@@ -350,7 +350,7 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
         else
             return Any[ p for p in tti0.parameters ]
         end
-    elseif tti0 <: Array
+    elseif tti0 isa Type{<:Array{T}} where T
         return Any[Vararg{eltype(tti0)}]
     else
         return Any[abstract_iteration(typ, vtypes, sv)]

@@ -42,8 +42,7 @@ mutable struct WorkerConfig
 
     function WorkerConfig()
         wc = new()
-        for n in 1:length(WorkerConfig.types)
-            T = eltype(fieldtype(WorkerConfig, n))
+        for n in 1:fieldcount(WorkerConfig)
             setfield!(wc, n, nothing)
         end
         wc

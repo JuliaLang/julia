@@ -1147,6 +1147,9 @@ Deprecated or removed
 
   * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.
 
+  * The fallback definition of `eltype` that returned `Any` for any type is deprecated.
+    Code should be restructured to avoid calling `eltype` on types that might not support it ([#26852]).
+
 Command-line option changes
 ---------------------------
 
