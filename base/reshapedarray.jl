@@ -35,6 +35,7 @@ start(R::ReshapedArrayIterator) = start(R.iter)
     ReshapedIndex(item), inext
 end
 length(R::ReshapedArrayIterator) = length(R.iter)
+eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
 """
     reshape(A, dims...) -> R
