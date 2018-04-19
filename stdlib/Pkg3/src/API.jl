@@ -65,7 +65,7 @@ function update_registry(ctx)
     # Update the registry
     errors = Tuple{String, String}[]
     if ctx.preview
-        info("Skipping updating registry in preview mode")
+        @info("Skipping updating registry in preview mode")
     else
         for reg in registries()
             if isdir(joinpath(reg, ".git"))
@@ -398,5 +398,61 @@ function dir(pkg::String, paths::String...)
     return joinpath(abspath(path, "..", "..", paths...))
 end
 
+
+function precompile(ctx::Context)
+    printpkgstyle(ctx, :Precompiling, "project...")
+
+    pkgids = [Base.PkgId(UUID(uuid), name) for (name, uuid) in ctx.env.project["deps"] if !(UUID(uuid) in  keys(ctx.stdlibs))]
+    if ctx.env.pkg !== nothing && isfile( joinpath( dirname(ctx.env.project_file), "src", ctx.env.pkg.name * ".jl"))
+        push!(pkgids, Base.PkgId(ctx.env.pkg.uuid, ctx.env.pkg.name))
+    end
+
+    needs_to_be_precompiled = String[]
+    for pkg in pkgids
+        paths = Base.find_all_in_cache_path(pkg)
+        sourcepath = Base.locate_package(pkg)
+        if sourcepath == nothing
+            cmderror("couldn't find path to $(pkg.name) when trying to precompilie project")
+        end
+        found_matching_precompile = false
+        for path_to_try in paths::Vector{String}
+            staledeps = Base.stale_cachefile(sourcepath, path_to_try)
+            if !(staledeps isa Bool)
+                found_matching_precompile = true
+            end
+        end
+        if !found_matching_precompile
+            # Only precompile packages that has contains `__precompile__` or `__precompile__(true)`
+            source = read(sourcepath, String)
+            if occursin(r"__precompile__\(\)|__precompile__\(true\)", source)
+                push!(needs_to_be_precompiled, pkg.name)
+            end
+        end
+    end
+
+    # Perhaps running all the imports in the same process would avoid some overheda.
+    # Julia starts pretty fast though (0.3 seconds)
+    code = join(["import " * pkg for pkg in needs_to_be_precompiled], '\n') * "\nexit(0)"
+    for (i, pkg) in enumerate(needs_to_be_precompiled)
+        code = """
+            empty!(Base.DEPOT_PATH)
+            append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
+            empty!(Base.DL_LOAD_PATH)
+            append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
+            empty!(Base.LOAD_PATH)
+            append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
+            import $pkg
+        """
+        printpkgstyle(ctx, :Precompiling, pkg, " [$i of $(length(needs_to_be_precompiled))]")
+        run(pipeline(ignorestatus(```
+        $(Base.julia_cmd()) -O$(Base.JLOptions().opt_level) --color=no --history-file=no
+        --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
+        --compiled-modules="yes"
+        --depwarn=no
+        --eval $code
+        ```)))
+    end
+    return nothing
+end
 
 end # module

@@ -14,7 +14,7 @@ using ..Types, ..Display, ..Operations
 ############
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
                    CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
-                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE)
+                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE, CMD_PRECOMPILE)
 
 struct Command
     kind::CommandKind
@@ -52,6 +52,7 @@ const cmds = Dict(
     "develop"   => CMD_DEVELOP,
     "dev"       => CMD_DEVELOP,
     "generate"  => CMD_GENERATE,
+    "precompile" => CMD_PRECOMPILE,
 )
 
 #################
@@ -163,14 +164,22 @@ end
 ################
 # REPL parsing #
 ################
-const lex_re = r"^[\?\./\+\-](?!\-) | [^@\#\s]+\s*=\s*[^@\#\s]+ | \#\s*[^@\#\s]* | @\s*[^@\#\s]* | [^@\#\s]+"x
+const lex_re = r"^[\?\./\+\-](?!\-) | [^@\#\s;]+\s*=\s*[^@\#\s;]+ | \#\s*[^@\#\s;]* | @\s*[^@\#\s;]* | [^@\#\s;]+|;"x
 
 const Token = Union{Command, Option, VersionRange, String, Rev}
 
-function tokenize(cmd::String)::Vector{Token}
+function tokenize(cmd::String)::Vector{Vector{Token}}
+    words = map(m->m.match, eachmatch(lex_re, cmd))
+    commands = Vector{Token}[]
+    while !isempty(words)
+        push!(commands, tokenize!(words))
+    end
+    return commands
+end
+
+function tokenize!(words::Vector{<:AbstractString})::Vector{Token}
     print_first_command_header()
     tokens = Token[]
-    words = map(m->m.match, eachmatch(lex_re, cmd))
     help_mode = false
     preview_mode = false
     # First parse a Command or a modifier (help / preview) + Command
@@ -196,7 +205,9 @@ function tokenize(cmd::String)::Vector{Token}
     # Now parse the arguments / options to the command
     while !isempty(words)
         word = popfirst!(words)
-        if first(word) == '-'
+        if word == ";"
+            return tokens
+        elseif first(word) == '-'
             push!(tokens, parse_option(word))
         elseif first(word) == '@'
             push!(tokens, VersionRange(strip(word[2:end])))
@@ -209,14 +220,17 @@ function tokenize(cmd::String)::Vector{Token}
     return tokens
 end
 
+
 #############
 # Execution #
 #############
 
 function do_cmd(repl::REPL.AbstractREPL, input::String; do_rethrow=false)
     try
-        tokens = tokenize(input)
-        do_cmd!(tokens, repl)
+        commands = tokenize(input)
+        for command in commands
+            do_cmd!(command, repl)
+        end
     catch err
         if do_rethrow
             rethrow(err)
@@ -269,6 +283,7 @@ function do_cmd!(tokens::Vector{Token}, repl)
     cmd.kind == CMD_PIN      ? Base.invokelatest(           do_pin!, ctx, tokens) :
     cmd.kind == CMD_FREE     ? Base.invokelatest(          do_free!, ctx, tokens) :
     cmd.kind == CMD_GENERATE ? Base.invokelatest(      do_generate!, ctx, tokens) :
+    cmd.kind == CMD_PRECOMPILE ? Base.invokelatest(  do_precompile!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -282,6 +297,8 @@ backspace when the input line is empty or press Ctrl+C.
 **Synopsis**
 
     pkg> [--env=...] cmd [opts] [args]
+
+Multiple commands can be given on the same line by interleaving a `;` between the commands.
 
 **Environment**
 
@@ -323,6 +340,8 @@ What action you want the package manager to take:
 `develop`: clone the full package repo locally for development
 
 `free`: undos a `pin` or `develop`
+
+`precompile`: precompile all the project dependencies
 """
 
 const helps = Dict(
@@ -466,6 +485,10 @@ const helps = Dict(
     pkg> develop Example#c37b675
     pkg> develop https://github.com/JuliaLang/Example.jl#master
     ```
+    """, CMD_PRECOMPILE => md"""
+        precompile
+
+    Precompile all the dependencies of the project by running `import` on all of them in a new process.
     """
 )
 
@@ -712,6 +735,13 @@ function do_generate!(ctx::Context, tokens::Vector{Token})
     API.generate(pkg)
 end
 
+function do_precompile!(ctx::Context, tokens::Vector{Token})
+    if !isempty(tokens)
+        cmderror("`precompile` does not take any arguments")
+    end
+    API.precompile(ctx)
+end
+
 
 ######################
 # REPL mode creation #
@@ -817,7 +847,7 @@ function completions(full, index)
 
         # tokenize input, don't offer any completions for invalid commands
         tokens = try
-            tokenize(join(pre_words[1:end-1], ' '))
+            tokenize(join(pre_words[1:end-1], ' '))[end]
         catch
             return String[], 0:-1, false
         end

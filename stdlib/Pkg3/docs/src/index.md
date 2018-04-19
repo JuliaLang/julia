@@ -322,6 +322,7 @@ Downloaded MacroTools ─ v0.4.0
 The dependencies of the unregistered package (here `MacroTools`) got installed.
 For unregistered packages we could have given a branch (or commit SHA) to track using `#`, just like for registered packages.
 
+
 ## Developing packages
 
 Let’s say we found a bug in one of our dependencies, e.g. `JSON` that we want to fix. We can get the full git-repo using the `develop` command
@@ -352,7 +353,7 @@ It is also possible to give a local path as the argument to `develop` which will
 
 Overriding the dependency path for a non registered package is done by giving the git-repo url as an argument to `develop`.
 
-### Updating dependencies
+## Updating dependencies
 
 When new versions of packages the project is using  are released, it is a good idea to update. Simply calling `up` will try to update *all* the dependencies of the project. Sometimes this is not what you want. You can specify a subset of the dependencies to upgrade by giving them as arguments to `up`, e.g:
 
@@ -375,7 +376,17 @@ If you just want install the packages that are given by the current `Manifest.to
 (HelloWorld) pkg> up --manifest --fixed
 ```
 
-### Preview mode
+## Precompiling the project
+
+The REPL command `precompile` can be used to precompile all the dependencies in the project. You can for example do
+
+```
+(HelloWorld) pkg> update; precompile
+```
+
+do update the dependencies and then precompile them.
+
+## Preview mode
 
 If you just want to see the effects of running a command, but not change your state you can `preview` a command.
 For example:
@@ -393,7 +404,7 @@ or
 will show you the effects adding `Plots`, or doing a full upgrade, respectively, would have on your project.
 However, nothing would be installed and your `Project.toml` and `Manfiest.toml` are untouched.
 
-### Using someone elses project
+## Using someone elses project
 
 Simple clone their project using e.g. `git clone`, `cd` to the project directory and call
 
@@ -402,3 +413,5 @@ Simple clone their project using e.g. `git clone`, `cd` to the project directory
 ```
 
 This will install the packages at the same state that the project you cloned was using.
+
+
