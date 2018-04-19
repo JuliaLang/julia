@@ -745,6 +745,8 @@ end
 for op in (:+, :-, :*, :&, :|, :xor)
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
-        return $op(a % T, b % T)
+        aT, bT = a % T, b % T
+        not_sametype((a, b), (aT, bT))
+        return $op(aT, bT)
     end
 end
