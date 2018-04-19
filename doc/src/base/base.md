@@ -146,6 +146,7 @@ Base.fieldname
 Base.sizeof(::Type)
 Base.isconcretetype
 Base.isbits
+Base.isbitstype
 Core.fieldtype
 Base.fieldcount
 Base.fieldoffset

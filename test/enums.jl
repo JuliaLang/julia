@@ -22,7 +22,8 @@ end
 
 @enum Fruit apple orange kiwi
 @test typeof(Fruit) == DataType
-@test isbits(Fruit)
+@test isbitstype(Fruit)
+@test isbits(apple)
 @test typeof(apple) <: Fruit <: Enum
 @test Int(apple) == 0
 @test Int(orange) == 1

@@ -1609,6 +1609,9 @@ end
 # To remove this deprecation, remove the `keep` argument from the function signatures as well as
 # the internal logic that deals with the renaming. These live in base/strings/util.jl.
 
+# when this is removed, `isbitstype(typeof(x))` can be replaced with `isbits(x)`
+@deprecate isbits(@nospecialize(t::Type)) isbitstype(t)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

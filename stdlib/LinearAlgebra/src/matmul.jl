@@ -526,7 +526,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     end
 
     tile_size = 0
-    if isbits(R) && isbits(T) && isbits(S) && (tA == 'N' || tB != 'N')
+    if isbitstype(R) && isbitstype(T) && isbitstype(S) && (tA == 'N' || tB != 'N')
         tile_size = floor(Int, sqrt(tilebufsize / max(sizeof(R), sizeof(S), sizeof(T))))
     end
     @inbounds begin

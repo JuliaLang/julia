@@ -42,17 +42,21 @@ test_code_reflections(test_ast_reflection, code_typed)
 
 end # module ReflectionTest
 
-# isbits
+# isbits, isbitstype
 
-@test !isbits(Array{Int})
-@test isbits(Float32)
-@test isbits(Int)
-@test !isbits(AbstractString)
-@test isbits(Tuple{Int, Vararg{Int, 2}})
-@test !isbits(Tuple{Int, Vararg{Int}})
-@test !isbits(Tuple{Integer, Vararg{Int, 2}})
-@test isbits(Tuple{Int, Vararg{Any, 0}})
-@test isbits(Tuple{Vararg{Any, 0}})
+@test !isbitstype(Array{Int})
+@test isbitstype(Float32)
+@test isbitstype(Int)
+@test !isbitstype(AbstractString)
+@test isbitstype(Tuple{Int, Vararg{Int, 2}})
+@test !isbitstype(Tuple{Int, Vararg{Int}})
+@test !isbitstype(Tuple{Integer, Vararg{Int, 2}})
+@test isbitstype(Tuple{Int, Vararg{Any, 0}})
+@test isbitstype(Tuple{Vararg{Any, 0}})
+@test isbits(1)
+@test isbits((1,2))
+@test !isbits([1])
+@test isbits(nothing)
 
 # issue #16670
 @test isconcretetype(Int)

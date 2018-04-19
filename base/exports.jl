@@ -731,6 +731,7 @@ export
     fieldcount,
     # propertynames,
     isabstracttype,
+    isbitstype,
     isprimitivetype,
     isstructtype,
     isconcretetype,

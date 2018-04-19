@@ -126,7 +126,7 @@ function syms_2b_sent(s::ClusterSerializer, identifier)
     for sym in check_syms
         v = getfield(Main, sym)
 
-        if isbits(v)
+        if isbitstype(typeof(v))
             push!(lst, sym)
         else
             oid = objectid(v)
@@ -146,7 +146,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
 
     oid = objectid(v)
     record_v = true
-    if isbits(v)
+    if isbitstype(typeof(v))
         record_v = false
     elseif !haskey(s.glbs_sent, oid)
         # set up a finalizer the first time this object is sent
