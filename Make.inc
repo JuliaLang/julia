@@ -210,7 +210,6 @@ build_private_libdir := $(build_libdir)/julia
 # Calculate relative paths to libdir, private_libdir, datarootdir, and sysconfdir
 build_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
 libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
-build_private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
 private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 datarootdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
 docdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
