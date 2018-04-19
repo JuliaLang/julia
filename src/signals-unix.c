@@ -71,11 +71,14 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.arm_sp;
+#elif defined(_OS_LINUX_) && defined(_CPU_PPC64_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.regs->gpr[PT_R1];
 #elif defined(_OS_DARWIN_)
     const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
     return ctx->uc_mcontext64->__ss.__rsp;
 #else
-    // TODO Add support for FreeBSD and PowerPC(64)?
+    // TODO Add support for FreeBSD?
     return 0;
 #endif
 }
@@ -139,6 +142,11 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ctx->uc_mcontext.arm_sp = rsp;
     ctx->uc_mcontext.arm_lr = 0; // Clear link register
     ctx->uc_mcontext.arm_pc = target;
+#elif definde(_OS_LINUX_) && defined(_CPU_PPC64_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    ctx->uc_mcontext.regs->gpr[PT_R1] = rsp;
+    ctx->uc_mcontext.regs->gpr[PT_R12] = fptr; // setup TOC
+    ctx->uc_mcontext.regs->nip = (uintptr_t)fptr;
 #elif defined(_OS_DARWIN_)
     // Only used for SIGFPE.
     // This doesn't seems to be reliable when the SIGFPE is generated
@@ -152,7 +160,6 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ctx->uc_mcontext64->__ss.__rip = (uintptr_t)fptr;
 #else
 #warning "julia: throw-in-context not supported on this platform"
-    // TODO Add support for PowerPC(64)?
     sigset_t sset;
     sigemptyset(&sset);
     sigaddset(&sset, sig);
