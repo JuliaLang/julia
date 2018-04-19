@@ -481,6 +481,7 @@ $(eval $(call LLVM_PATCH,llvm-6.0.0_D27296-libssp)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0-D44650)) # mingw32 build fix
 $(eval $(call LLVM_PATCH,llvm-D45008)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D45070)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-6.0.0-ifconv-D45819)) # remove for 7.0
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build
