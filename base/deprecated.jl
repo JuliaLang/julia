@@ -1586,6 +1586,9 @@ end
 @deprecate ones(::Type{T}, dims::NTuple{N, Any}) where {T, N}   ones(T, convert(Dims, dims))
 @deprecate ones(dims::Tuple)                                    ones(convert(Dims, dims))
 
+# Deprecate varargs size: PR #26862
+@deprecate size(x, d1::Integer, d2::Integer) (size(x, d1), size(x, d2))
+@deprecate size(x, d1::Integer, d2::Integer, dx::Integer...) map(dim->size(x, dim), (d1, d2, dx...))
 
 @deprecate showcompact(x) show(IOContext(stdout, :compact => true), x)
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)
