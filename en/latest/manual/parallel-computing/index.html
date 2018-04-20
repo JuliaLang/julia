@@ -522,7 +522,9 @@ julia&gt; srand(1); g() # the result for a single thread is 1000
 f_fix (generic function with 1 method)
 
 julia&gt; f_fix()
-1000</code></pre><p>We now use <code>Regex(&quot;1&quot;)</code> instead of <code>r&quot;1&quot;</code> to make sure that Julia creates separate instances of <code>Regex</code> object for each entry of <code>rx</code> vector.</p><p>The case of <code>rand</code> is a bit more complex as we have to ensure that each thread uses non-overlapping pseudorandom number sequences. This can be simply ensured by using <a href="../../stdlib/Random/#Random.randjump"><code>randjump</code></a> function:</p><pre><code class="language-julia-repl">julia&gt; function g_fix(r)
+1000</code></pre><p>We now use <code>Regex(&quot;1&quot;)</code> instead of <code>r&quot;1&quot;</code> to make sure that Julia creates separate instances of <code>Regex</code> object for each entry of <code>rx</code> vector.</p><p>The case of <code>rand</code> is a bit more complex as we have to ensure that each thread uses non-overlapping pseudorandom number sequences. This can be simply ensured by using <a href="../../stdlib/Random/#Random.randjump"><code>randjump</code></a> function:</p><pre><code class="language-julia-repl">julia&gt; using Random
+
+julia&gt; function g_fix(r)
            a = zeros(1000)
            @threads for i in 1:1000
                a[i] = rand(r[threadid()])
