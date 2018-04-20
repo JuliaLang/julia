@@ -156,14 +156,6 @@ BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
 #    y = copy(Broadcasted(*, x, Broadcasted(+, x, 1)))
 # `broadcast!` results in `copyto!(dest, Broadcasted(...))`.
 
-# Besides the function `f` and the input `args`, `Broadcasted`
-# includes two other fields (`axes` and `indexing`) that, once
-# initialized, improve performance when extracting values.  However,
-# in some cases (e.g., StaticArrays.jl) these are not used, and for
-# performance it's important to be able to bypass their
-# initialization. We use `Nothing` type parameters when these have not
-# been intialized.
-
 # The use of `Nothing` in place of a `BroadcastStyle` has a different
 # application, in the fallback method
 #    copyto!(dest, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
@@ -173,28 +165,27 @@ BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
 # methods that instead specialize on `BroadcastStyle`,
 #    copyto!(dest::AbstractArray, bc::Broadcasted{MyStyle})
 
-struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, Indexing<:Union{Nothing,Tuple}, F, Args<:Tuple}
+struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple}
     f::F
     args::Args
     axes::Axes          # the axes of the resulting object (may be bigger than implied by `args` if this is nested inside a larger `Broadcasted`)
-    indexing::Indexing  # index-replacement info computed from `newindexer` below
 end
 
-Broadcasted(f::F, args::Args, axes=nothing, indexing=nothing) where {F, Args<:Tuple} =
-    Broadcasted{typeof(combine_styles(args...))}(f, args, axes, indexing)
-Broadcasted{Nothing}(f::F, args::Args, axes=nothing, indexing=nothing) where {F, Args<:Tuple} =
-    Broadcasted{typeof(combine_styles(args...))}(f, args, axes, indexing)
-function Broadcasted{Style}(f::F, args::Args, axes=nothing, indexing=nothing) where {Style<:BroadcastStyle, F, Args<:Tuple}
+Broadcasted(f::F, args::Args, axes=nothing) where {F, Args<:Tuple} =
+    Broadcasted{typeof(combine_styles(args...))}(f, args, axes)
+Broadcasted{Nothing}(f::F, args::Args, axes=nothing) where {F, Args<:Tuple} =
+    Broadcasted{typeof(combine_styles(args...))}(f, args, axes)
+function Broadcasted{Style}(f::F, args::Args, axes=nothing) where {Style<:BroadcastStyle, F, Args<:Tuple}
     # using Core.Typeof rather than F preserves inferrability when f is a type
-    Broadcasted{Style, typeof(axes), typeof(indexing), Core.Typeof(f), Args}(f, args, axes, indexing)
+    Broadcasted{Style, typeof(axes), Core.Typeof(f), Args}(f, args, axes)
 end
 
-Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{Style,Axes,Indexing,F,Args}) where {NewStyle,Style,Axes,Indexing,F,Args} =
-    Broadcasted{NewStyle,Axes,Indexing,F,Args}(bc.f, bc.args, bc.axes, bc.indexing)
+Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{Style,Axes,F,Args}) where {NewStyle,Style,Axes,F,Args} =
+    Broadcasted{NewStyle,Axes,F,Args}(bc.f, bc.args, bc.axes)
 
 # Fully-instantiatiated Broadcasted
 const BroadcastedF{Style<:Union{Nothing,BroadcastStyle}, N, F, Args<:Tuple} =
-    Broadcasted{Style, <:Indices{N}, <:Tuple, F, Args}
+    Broadcasted{Style, <:Indices{N}, F, Args}
 
 ## Allocating the output container
 """
@@ -218,9 +209,9 @@ broadcast_similar(::ArrayConflict, ::Type{Bool}, inds::Indices, bc) =
 broadcast_indices() = ()
 broadcast_indices(::Type{T}) where T = ()
 broadcast_indices(A) = broadcast_indices(combine_styles(A), A)
-broadcast_indices(::Style{Tuple}, A) = (OneTo(length(A)),)
+broadcast_indices(::Style{Tuple}, A::Tuple) = (OneTo(length(A)),)
 broadcast_indices(::AbstractArrayStyle{0}, A) = ()
-broadcast_indices(::BroadcastStyle, A) = Base.axes(A)
+broadcast_indices(::BroadcastStyle, A) = axes(A)
 """
     Base.broadcast_indices(::SrcStyle, A)
 
@@ -243,7 +234,7 @@ BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
 BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
     throw(ArgumentError("Broadcasted{Unknown} wrappers do not have a style assigned"))
 
-argtype(::Type{Broadcasted{Style,Axes,Indexing,F,Args}}) where {Style,Axes,Indexing,F,Args} = Args
+argtype(::Type{Broadcasted{Style,Axes,F,Args}}) where {Style,Axes,F,Args} = Args
 argtype(bc::Broadcasted) = argtype(typeof(bc))
 
 const NestedTuple = Tuple{<:Broadcasted,Vararg{Any}}
@@ -273,8 +264,7 @@ they must provide their own `Base.axes(::Broadcasted{Style})` and
     else
         axes = broadcast_shape(bc.axes, combine_indices(args...))
     end
-    indexing = map_newindexer(axes, args)
-    return Broadcasted{Style}(bc.f, args, axes, indexing)
+    return Broadcasted{Style}(bc.f, args, axes)
 end
 
 instantiate(bc::Broadcasted{<:Union{AbstractArrayStyle{0}, Style{Tuple}}}) = bc
@@ -318,19 +308,7 @@ function flatten(bc::Broadcasted{Style}) where {Style}
         newf = @inline function(args::Vararg{Any,N}) where N
             bc.f(makeargs(args...)...)
         end
-        return Broadcasted{Style}(newf, args)
-    end
-end
-
-function flatten(bc::BroadcastedF{Style}) where {Style}
-    isflat(bc.args) && return bc
-    # Since bc is instantiated, let's preserve the instatiation in the result
-    args, indexing = cat_nested(x->x.args, bc), cat_nested(x->x.indexing, bc)
-    let makeargs = make_makeargs(bc)
-        newf = @inline function(args::Vararg{Any,N}) where N
-            bc.f(makeargs(args...)...)
-        end
-        return Broadcasted{Style}(newf, args, axes(bc), indexing)
+        return Broadcasted{Style}(newf, args, bc.axes)
     end
 end
 
@@ -485,7 +463,6 @@ check_broadcast_indices(shp, A) = check_broadcast_shape(shp, broadcast_indices(A
 end
 
 ## Indexing manipulations
-
 # newindex(I, keep, Idefault) replaces a CartesianIndex `I` with something that
 # is appropriate for a particular broadcast array/scalar. `keep` is a
 # NTuple{N,Bool}, where keep[d] == true means that one should preserve
@@ -508,10 +485,13 @@ end
     keep, Idefault = shapeindexer(tail(shape), tail(indsA))
     (shape[1] == ind1, keep...), (first(ind1), Idefault...)
 end
-
-# Equivalent to map(x->newindexer(shape, x), As) (but see #17126)
-map_newindexer(shape, ::Tuple{}) = ()
-@inline map_newindexer(shape, As) = (newindexer(shape, As[1]), map_newindexer(shape, tail(As))...)
+# Depending upon the size of the argument, replace singleton dimensions with the singleton
+@inline newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(broadcast_indices(arg), I.I))
+@inline newindex(arg, I::Int) = CartesianIndex(_newindex(broadcast_indices(arg), (I,)))
+@inline _newindex(ax::Tuple, I::Tuple) = (ifelse(Base.unsafe_length(ax[1])==1, first(ax[1]), I[1]), _newindex(tail(ax), tail(I))...)
+@inline _newindex(ax::Tuple{}, I::Tuple) = (1, _newindex((), tail(I))...)
+@inline _newindex(ax::Tuple, I::Tuple{}) = (first(ax[1]), _newindex(tail(ax), ())...)
+@inline _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 @inline function Base.getindex(bc::Broadcasted, I)
     @boundscheck checkbounds(bc, I)
@@ -532,32 +512,24 @@ Base.@propagate_inbounds __broadcast_getindex(::Style{Tuple}, A::Tuple{Any}, I) 
 
 # For Broadcasted
 Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted, I)
-    bc.indexing isa Nothing && throw(ArgumentError("a Broadcasted{$Style} wrapper skipped instantiation but has not defined _broadcast_getindex"))
     args = _getindex(bc.args, I)
     return _broadcast_getindex_evalf(bc.f, args...)
 end
-
+# For some styles we know we don't need to worry about changing the index — _broadcast_getindex does that for us.
 Base.@propagate_inbounds _broadcast_getindex(bc::Broadcasted{<:Union{Style{Tuple}, AbstractArrayStyle{0}}}, I) =
     _broadcast_getindex_evalf(bc.f, _getindex_noreindexer(bc.args, I)...)
 
 # Utilities for _broadcast_getindex
 # For most styles
 Base.@propagate_inbounds _getindex(args::Tuple, I) =
-    (_broadcast_getindex(args[1], newnewindex(args[1], I)), _getindex(tail(args), I)...)
+    (_broadcast_getindex(args[1], newindex(args[1], I)), _getindex(tail(args), I)...)
 Base.@propagate_inbounds _getindex(args::Tuple{Any}, I) =
-    (_broadcast_getindex(args[1], newnewindex(args[1], I)),)
+    (_broadcast_getindex(args[1], newindex(args[1], I)),)
 Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 # For styles skipping reindexers
 Base.@propagate_inbounds _getindex_noreindexer(args::Tuple, I) = (_broadcast_getindex(args[1], I), _getindex(tail(args), I)...)
 Base.@propagate_inbounds _getindex_noreindexer(args::Tuple{Any}, I) = (_broadcast_getindex(args[1], I),)
 Base.@propagate_inbounds _getindex_noreindexer(args::Tuple{}, I) = ()
-
-@inline newnewindex(arg, I::CartesianIndex) = CartesianIndex(_newnewindex(broadcast_indices(arg), I.I))
-@inline newnewindex(arg, I::Int) = CartesianIndex(_newnewindex(broadcast_indices(arg), (I,)))
-@inline _newnewindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1])==1, 1, I[1]), _newnewindex(tail(ax), tail(I))...)
-@inline _newnewindex(ax::Tuple{}, I::Tuple) = (1, _newnewindex((), tail(I))...)
-@inline _newnewindex(ax::Tuple, I::Tuple{}) = (1, _newnewindex(tail(ax), ())...)
-@inline _newnewindex(ax::Tuple{}, I::Tuple{}) = ()
 
 """
     broadcastable(x)
@@ -788,7 +760,7 @@ end
 # syntax it's fairly common for an argument to be `===` a source.
 broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
 
-@inline map_broadcast_unalias(dest, bc::Broadcasted) = typeof(bc)(bc.f, map_broadcast_unalias_args(dest, bc.args), bc.axes, bc.indexing)
+@inline map_broadcast_unalias(dest, bc::Broadcasted) = typeof(bc)(bc.f, map_broadcast_unalias_args(dest, bc.args), bc.axes)
 map_broadcast_unalias(dest, x) = broadcast_unalias(dest, x)
 
 @inline map_broadcast_unalias_args(dest, args::Tuple) = (map_broadcast_unalias(dest, args[1]), map_broadcast_unalias_args(dest, tail(args))...)
@@ -845,7 +817,7 @@ end
 # We could eventually allow for all broadcasting and other array types, but that
 # requires very careful consideration of all the edge effects.
 const ChunkableOp = Union{typeof(&), typeof(|), typeof(xor), typeof(~)}
-const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, Axes, Indexing<:Union{Nothing,Tuple}, F<:ChunkableOp, Args<:Tuple} = Broadcasted{Style,Axes,Indexing,F,Args}
+const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, Axes, F<:ChunkableOp, Args<:Tuple} = Broadcasted{Style,Axes,F,Args}
 ischunkedbroadcast(R, bc::BroadcastedChunkableOp) = ischunkedbroadcast(R, bc.args)
 ischunkedbroadcast(R, args) = false
 ischunkedbroadcast(R, args::Tuple{<:BitArray,Vararg{Any}}) = size(R) == size(args[1]) && ischunkedbroadcast(R, tail(args))

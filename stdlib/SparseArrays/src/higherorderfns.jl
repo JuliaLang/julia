@@ -92,12 +92,12 @@ is_supported_sparse_broadcast(x, rest...) = axes(x) === () && is_supported_spars
 is_supported_sparse_broadcast(x::Ref, rest...) = is_supported_sparse_broadcast(rest...)
 
 # Dispatch on broadcast operations by number of arguments
-const Broadcasted0{Style<:Union{Nothing,BroadcastStyle},Axes,Indexing<:Union{Nothing,Tuple{}},F} =
-    Broadcasted{Style,Axes,Indexing,F,Tuple{}}
-const SpBroadcasted1{Style<:SPVM,Axes,Indexing<:Union{Nothing,Tuple},F,Args<:Tuple{SparseVecOrMat}} =
-    Broadcasted{Style,Axes,Indexing,F,Args}
-const SpBroadcasted2{Style<:SPVM,Axes,Indexing<:Union{Nothing,Tuple},F,Args<:Tuple{SparseVecOrMat,SparseVecOrMat}} =
-    Broadcasted{Style,Axes,Indexing,F,Args}
+const Broadcasted0{Style<:Union{Nothing,BroadcastStyle},Axes,F} =
+    Broadcasted{Style,Axes,F,Tuple{}}
+const SpBroadcasted1{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat}} =
+    Broadcasted{Style,Axes,F,Args}
+const SpBroadcasted2{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat,SparseVecOrMat}} =
+    Broadcasted{Style,Axes,F,Args}
 
 # (1) The definitions below provide a common interface to sparse vectors and matrices
 # sufficient for the purposes of map[!]/broadcast[!]. This interface treats sparse vectors
