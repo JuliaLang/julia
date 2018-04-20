@@ -385,12 +385,12 @@ end
 #####################################
 
 function clone(pkg::String...)
-    Base.depwarn("Pkg.clone is only kept for legacy CI script reasons, please use `add`", :clone)
+    @warn "Pkg.clone is only kept for legacy CI script reasons, please use `add`" maxlog=1
     add(joinpath(pkg...))
 end
 
 function dir(pkg::String, paths::String...)
-    Base.depwarn("Pkg.dir is only kept for legacy CI script reasons", :dir)
+    @warn "Pkg.dir is only kept for legacy CI script reasons" maxlog=1
     pkgid = Base.identify_package(pkg)
     pkgid == nothing && return nothing
     path = Base.locate_package(pkgid)
