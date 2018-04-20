@@ -1077,7 +1077,6 @@ else
     # fixpoint.
     function fixpoint_iter_type(itrT::Type, valT::Type, stateT::Type)
         nextvalstate = Base._return_type(next, Tuple{itrT, stateT})
-        nextvalstate === Union{} && return Any
         nextvalstate <: Tuple{Any, Any} || return Any
         nextvalstate = Tuple{
             typejoin(valT, fieldtype(nextvalstate, 1)),
