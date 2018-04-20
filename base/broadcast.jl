@@ -523,43 +523,41 @@ Base.@propagate_inbounds Base.getindex(bc::Broadcasted{Nothing}, I) =
 @inline Base.checkbounds(bc::Broadcasted, I) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
 
-Base.@propagate_inbounds _broadcast_getindex(::Base.RefValue{Type{T}}, I) where {T} = T
-Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
-Base.@propagate_inbounds _broadcast_getindex(A::Tuple, I) = A[I[1]]
-Base.@propagate_inbounds _broadcast_getindex(A::Ref, I) = A[]
-Base.@propagate_inbounds _broadcast_getindex(A::Number, I) = A
-Base.@propagate_inbounds _broadcast_getindex(A::AbstractArray{<:Any,0}, I) = A[]
 Base.@propagate_inbounds _broadcast_getindex(A, I) = __broadcast_getindex(combine_styles(A), A, I)
 Base.@propagate_inbounds __broadcast_getindex(::Any, A, I) = A[I]
 Base.@propagate_inbounds __broadcast_getindex(::AbstractArrayStyle{0}, A, I) = A[]
+Base.@propagate_inbounds __broadcast_getindex(::AbstractArrayStyle{0}, ::Base.RefValue{Type{T}}, I) where {T} = T
+Base.@propagate_inbounds __broadcast_getindex(::Style{Tuple}, A::Tuple, I) = A[I[1]]
+Base.@propagate_inbounds __broadcast_getindex(::Style{Tuple}, A::Tuple{Any}, I) = A[1]
 
 # For Broadcasted
 Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted, I)
     bc.indexing isa Nothing && throw(ArgumentError("a Broadcasted{$Style} wrapper skipped instantiation but has not defined _broadcast_getindex"))
-    args = _getindex(bc.args, I, bc.indexing)
+    args = _getindex(bc.args, I)
     return _broadcast_getindex_evalf(bc.f, args...)
 end
 
 Base.@propagate_inbounds _broadcast_getindex(bc::Broadcasted{<:Union{Style{Tuple}, AbstractArrayStyle{0}}}, I) =
-    _broadcast_getindex_evalf(bc.f, _getindex(bc.args, I)...)
+    _broadcast_getindex_evalf(bc.f, _getindex_noreindexer(bc.args, I)...)
 
 # Utilities for _broadcast_getindex
 # For most styles
-Base.@propagate_inbounds _getindex(args::Tuple, I, indexing) =
-    (_broadcast_getindex(args[1], newindex(I, indexing[1][1], indexing[1][2])), _getindex(tail(args), I, tail(indexing))...)
-Base.@propagate_inbounds _getindex(args::Tuple{Any}, I, indexing) =
-    (_broadcast_getindex(args[1], newindex(I, indexing[1][1], indexing[1][2])),)
-Base.@propagate_inbounds _getindex(args::Tuple{Any,Any}, I, indexing) =
-    (_broadcast_getindex(args[1], newindex(I, indexing[1][1], indexing[1][2])),
-     _broadcast_getindex(args[2], newindex(I, indexing[2][1], indexing[2][2])))
-Base.@propagate_inbounds _getindex(args::Tuple{}, I, indexing) = ()
-# For styles skipping reindexers
-Base.@propagate_inbounds _getindex(args::Tuple, I) = (_broadcast_getindex(args[1], I), _getindex(tail(args), I)...)
-Base.@propagate_inbounds _getindex(args::Tuple{Any}, I) = (_broadcast_getindex(args[1], I),)
-Base.@propagate_inbounds _getindex(args::Tuple{Any,Any}, I) =
-    (_broadcast_getindex(args[1], I), _broadcast_getindex(args[2], I))
+Base.@propagate_inbounds _getindex(args::Tuple, I) =
+    (_broadcast_getindex(args[1], newnewindex(args[1], I)), _getindex(tail(args), I)...)
+Base.@propagate_inbounds _getindex(args::Tuple{Any}, I) =
+    (_broadcast_getindex(args[1], newnewindex(args[1], I)),)
 Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
+# For styles skipping reindexers
+Base.@propagate_inbounds _getindex_noreindexer(args::Tuple, I) = (_broadcast_getindex(args[1], I), _getindex(tail(args), I)...)
+Base.@propagate_inbounds _getindex_noreindexer(args::Tuple{Any}, I) = (_broadcast_getindex(args[1], I),)
+Base.@propagate_inbounds _getindex_noreindexer(args::Tuple{}, I) = ()
 
+@inline newnewindex(arg, I::CartesianIndex) = CartesianIndex(_newnewindex(broadcast_indices(arg), I.I))
+@inline newnewindex(arg, I::Int) = CartesianIndex(_newnewindex(broadcast_indices(arg), (I,)))
+@inline _newnewindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1])==1, 1, I[1]), _newnewindex(tail(ax), tail(I))...)
+@inline _newnewindex(ax::Tuple{}, I::Tuple) = (1, _newnewindex((), tail(I))...)
+@inline _newnewindex(ax::Tuple, I::Tuple{}) = (1, _newnewindex(tail(ax), ())...)
+@inline _newnewindex(ax::Tuple{}, I::Tuple{}) = ()
 
 """
     broadcastable(x)
