@@ -490,6 +490,10 @@ end
         @test String(take!(io)) == "pairs(::Array{$Int,1})"
         Base.showarg(io, pairs((a=1, b=2)), true)
         @test String(take!(io)) == "pairs(::NamedTuple)"
+        Base.showarg(io, pairs(IndexLinear(), zeros(3,3)), true)
+        @test String(take!(io)) == "pairs(IndexLinear(), ::Array{Float64,2})"
+        Base.showarg(io, pairs(IndexCartesian(), zeros(3)), true)
+        @test String(take!(io)) == "pairs(IndexCartesian(), ::Array{Float64,1})"
     end
 end
 

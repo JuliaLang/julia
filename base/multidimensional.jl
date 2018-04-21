@@ -1503,6 +1503,6 @@ function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any,
     print(io, "pairs(::$T)")
 end
 
-function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, <:AbstractVector}, toplevel)
+function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T}, toplevel) where T<:AbstractVector
     print(io, "pairs(IndexCartesian(), ::$T)")
 end
