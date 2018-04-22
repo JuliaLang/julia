@@ -40,6 +40,7 @@ git-tree-sha1 = &quot;e808e36a5d7173974b90a15a353b564f3494092f&quot;
 version = &quot;3.4.2&quot;</code></pre><p>This manifest file describes a possible complete dependency graph for the <code>App</code> project:</p><ul><li>There are two different <code>Priv</code> packages that the application needs—a private one which is a direct dependency and a public one which is an indirect dependency through <code>Pub</code>:<ul><li>The private <code>Priv</code> depends on the <code>Pub</code> and <code>Zebra</code> packages.</li><li>The public <code>Priv</code> has no dependencies.</li></ul></li><li>The application also depends on the <code>Pub</code> package, which in turn depends on the public <code>Priv</code> and the same <code>Zebra</code> package which the private <code>Priv</code> package depends on.</li></ul><p>A materialized representation of this dependency <code>graph</code> looks like this:</p><pre><code class="language-julia">graph = Dict{UUID,Dict{Symbol,UUID}}(
     # Priv – the private one:
     UUID(&quot;ba13f791-ae1d-465a-978b-69c3ad90f72b&quot;) =&gt; Dict{Symbol,UUID}(
+        :Pub   =&gt; UUID(&quot;ba13f791-ae1d-465a-978b-69c3ad90f72b&quot;),
         :Zebra =&gt; UUID(&quot;f7a24cb4-21fc-4002-ac70-f0e3a0dd3f62&quot;),
     ),
     # Priv – the public one:
@@ -105,12 +106,12 @@ Dingo/
 )</code></pre><p>Here is the corresponding <code>graph</code> structure, materialized as a dictionary:</p><pre><code class="language-julia">graph = Dict{UUID,Dict{Symbol,UUID}}(
     # Bobcat:
     UUID(&quot;85ad11c7-31f6-5d08-84db-0a4914d4cadf&quot;) =&gt; Dict{Symbol,UUID}(
-        :Cobra    =&gt; UUID(&quot;4725e24d-f727-424b-bca0-c4307a3456fa&quot;),
-        :Dingo    =&gt; UUID(&quot;7a7925be-828c-4418-bbeb-bac8dfc843bc&quot;),
+        :Cobra =&gt; UUID(&quot;4725e24d-f727-424b-bca0-c4307a3456fa&quot;),
+        :Dingo =&gt; UUID(&quot;7a7925be-828c-4418-bbeb-bac8dfc843bc&quot;),
     ),
     # Cobra:
     UUID(&quot;4725e24d-f727-424b-bca0-c4307a3456fa&quot;) =&gt; Dict{Symbol,UUID}(
-        :Dingo    =&gt; UUID(&quot;7a7925be-828c-4418-bbeb-bac8dfc843bc&quot;),
+        :Dingo =&gt; UUID(&quot;7a7925be-828c-4418-bbeb-bac8dfc843bc&quot;),
     ),
     # Dingo:
     UUID(&quot;7a7925be-828c-4418-bbeb-bac8dfc843bc&quot;) =&gt; Dict{Symbol,UUID}(),
