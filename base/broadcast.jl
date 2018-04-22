@@ -173,9 +173,7 @@ end
 
 Broadcasted(f::F, args::Args, axes=nothing) where {F, Args<:Tuple} =
     Broadcasted{typeof(combine_styles(args...))}(f, args, axes)
-Broadcasted{Nothing}(f::F, args::Args, axes=nothing) where {F, Args<:Tuple} =
-    Broadcasted{typeof(combine_styles(args...))}(f, args, axes)
-function Broadcasted{Style}(f::F, args::Args, axes=nothing) where {Style<:BroadcastStyle, F, Args<:Tuple}
+function Broadcasted{Style}(f::F, args::Args, axes=nothing) where {Style, F, Args<:Tuple}
     # using Core.Typeof rather than F preserves inferrability when f is a type
     Broadcasted{Style, typeof(axes), Core.Typeof(f), Args}(f, args, axes)
 end
@@ -462,6 +460,27 @@ check_broadcast_indices(shp, A) = check_broadcast_shape(shp, broadcast_indices(A
     check_broadcast_indices(shp, As...)
 end
 
+struct Extruded{T, K, D}
+    x::T
+    keeps::K
+    defaults::D
+end
+BroadcastStyle(::Type{<:Extruded{T}}) where {T} = BroadcastStyle(T)
+Base.ndims(::Type{<:Extruded{T}}) where {T} = ndims(T)
+@inline broadcast_indices(b::Extruded) = broadcast_indices(b.x)
+Base.@propagate_inbounds _broadcast_getindex(b::Extruded, i) = b.x[newindex(i, b.keeps, b.defaults)]
+extrude(x::AbstractArray) = Extruded(x, newerindexer(x)...)
+extrude(x) = x
+
+@inline newerindexer(A) = _newerindexer(broadcast_indices(A))
+@inline _newerindexer(indsA::Tuple{}) = (), ()
+@inline function _newerindexer(indsA::Tuple)
+    ind1 = indsA[1]
+    keep, Idefault = _newerindexer(tail(indsA))
+    (length(ind1)!=1, keep...), (first(ind1), Idefault...)
+end
+
+
 ## Indexing manipulations
 # newindex(I, keep, Idefault) replaces a CartesianIndex `I` with something that
 # is appropriate for a particular broadcast array/scalar. `keep` is a
@@ -485,13 +504,6 @@ end
     keep, Idefault = shapeindexer(tail(shape), tail(indsA))
     (shape[1] == ind1, keep...), (first(ind1), Idefault...)
 end
-# Depending upon the size of the argument, replace singleton dimensions with the singleton
-@inline newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(broadcast_indices(arg), I.I))
-@inline newindex(arg, I::Int) = CartesianIndex(_newindex(broadcast_indices(arg), (I,)))
-@inline _newindex(ax::Tuple, I::Tuple) = (ifelse(Base.unsafe_length(ax[1])==1, first(ax[1]), I[1]), _newindex(tail(ax), tail(I))...)
-@inline _newindex(ax::Tuple{}, I::Tuple) = (1, _newindex((), tail(I))...)
-@inline _newindex(ax::Tuple, I::Tuple{}) = (first(ax[1]), _newindex(tail(ax), ())...)
-@inline _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 @inline function Base.getindex(bc::Broadcasted, I)
     @boundscheck checkbounds(bc, I)
@@ -503,33 +515,38 @@ Base.@propagate_inbounds Base.getindex(bc::Broadcasted{Nothing}, I) =
 @inline Base.checkbounds(bc::Broadcasted, I) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
 
-Base.@propagate_inbounds _broadcast_getindex(A, I) = __broadcast_getindex(combine_styles(A), A, I)
-Base.@propagate_inbounds __broadcast_getindex(::Any, A, I) = A[I]
-Base.@propagate_inbounds __broadcast_getindex(::AbstractArrayStyle{0}, A, I) = A[]
-Base.@propagate_inbounds __broadcast_getindex(::AbstractArrayStyle{0}, ::Base.RefValue{Type{T}}, I) where {T} = T
-Base.@propagate_inbounds __broadcast_getindex(::Style{Tuple}, A::Tuple, I) = A[I[1]]
-Base.@propagate_inbounds __broadcast_getindex(::Style{Tuple}, A::Tuple{Any}, I) = A[1]
+
+#
+#    _broadcast_getindex(A, I)
+#
+# Index into `A` with `I`, collapsing broadcasted indices to singleton indices as appropriate
+# Scalar-likes can just ignore all indices
+Base.@propagate_inbounds _broadcast_getindex(A::Union{Ref,AbstractArray{<:Any,0},Number}, I) = A[]
+Base.@propagate_inbounds _broadcast_getindex(::Ref{Type{T}}, I) where {T} = T
+# Tuples are statically known to be singleton or vector-like
+Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
+Base.@propagate_inbounds _broadcast_getindex(A::Tuple, I) = A[I[1]]
+# Everything else falls back to dynamically comparing against its axes
+Base.@propagate_inbounds _broadcast_getindex(A, I) = A[newindex(A, I)]
+
+# Depending upon the size of the argument, replace singleton dimensions with the singleton
+Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(broadcast_indices(arg), I.I))
+Base.@propagate_inbounds newindex(arg, I::Int) = CartesianIndex(_newindex(broadcast_indices(arg), (I,)))
+Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(Base.unsafe_length(ax[1])==1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
+Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
+Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
+Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # For Broadcasted
 Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted, I)
     args = _getindex(bc.args, I)
     return _broadcast_getindex_evalf(bc.f, args...)
 end
-# For some styles we know we don't need to worry about changing the index — _broadcast_getindex does that for us.
-Base.@propagate_inbounds _broadcast_getindex(bc::Broadcasted{<:Union{Style{Tuple}, AbstractArrayStyle{0}}}, I) =
-    _broadcast_getindex_evalf(bc.f, _getindex_noreindexer(bc.args, I)...)
 
 # Utilities for _broadcast_getindex
-# For most styles
-Base.@propagate_inbounds _getindex(args::Tuple, I) =
-    (_broadcast_getindex(args[1], newindex(args[1], I)), _getindex(tail(args), I)...)
-Base.@propagate_inbounds _getindex(args::Tuple{Any}, I) =
-    (_broadcast_getindex(args[1], newindex(args[1], I)),)
+Base.@propagate_inbounds _getindex(args::Tuple, I) = (_broadcast_getindex(args[1], I), _getindex(tail(args), I)...)
+Base.@propagate_inbounds _getindex(args::Tuple{Any}, I) = (_broadcast_getindex(args[1], I),)
 Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
-# For styles skipping reindexers
-Base.@propagate_inbounds _getindex_noreindexer(args::Tuple, I) = (_broadcast_getindex(args[1], I), _getindex(tail(args), I)...)
-Base.@propagate_inbounds _getindex_noreindexer(args::Tuple{Any}, I) = (_broadcast_getindex(args[1], I),)
-Base.@propagate_inbounds _getindex_noreindexer(args::Tuple{}, I) = ()
 
 """
     broadcastable(x)
@@ -760,8 +777,8 @@ end
 # syntax it's fairly common for an argument to be `===` a source.
 broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
 
-@inline map_broadcast_unalias(dest, bc::Broadcasted) = typeof(bc)(bc.f, map_broadcast_unalias_args(dest, bc.args), bc.axes)
-map_broadcast_unalias(dest, x) = broadcast_unalias(dest, x)
+@inline map_broadcast_unalias(dest, bc::Broadcasted{Style}) where {Style} = Broadcasted{Style}(bc.f, map_broadcast_unalias_args(dest, bc.args), bc.axes)
+map_broadcast_unalias(dest, x) = extrude(broadcast_unalias(dest, x))
 
 @inline map_broadcast_unalias_args(dest, args::Tuple) = (map_broadcast_unalias(dest, args[1]), map_broadcast_unalias_args(dest, tail(args))...)
 map_broadcast_unalias_args(dest, args::Tuple{Any}) = (map_broadcast_unalias(dest, args[1]),)
