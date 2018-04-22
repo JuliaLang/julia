@@ -708,13 +708,13 @@ end
 end
 
 ## general `copy` methods
-copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc[CartesianIndex()]
+@inline copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc[CartesianIndex()]
 copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
     throw(ArgumentError("broadcasting requires an assigned BroadcastStyle"))
 
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
-function copy(bc::Broadcasted{Style}) where {Style}
+@inline function copy(bc::Broadcasted{Style}) where {Style}
     ElType = combine_eltypes(bc.f, bc.args)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
