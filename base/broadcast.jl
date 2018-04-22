@@ -219,12 +219,11 @@ broadcast_indices
 
 ### End of methods that users will typically have to specialize ###
 
-Base.axes(bc::Broadcasted{Style}) where {Style} = _axes(bc, bc.axes)
-_axes(::Broadcasted{Style}, axes) where {Style} = axes
-_axes(::Broadcasted{Style}, ::Nothing) where {Style} =
-    throw(ArgumentError("a Broadcasted{$Style} wrapper skipped instantiation but has not defined `Base.axes`"))
-Base.axes(bc::Broadcasted{<:AbstractArrayStyle{0}}) = ()
-Base.axes(bc::Broadcasted{Style{Tuple}, Nothing}) = (Base.OneTo(length(longest_tuple(nothing, bc.args))),)
+Base.axes(bc::Broadcasted) = _axes(bc, bc.axes)
+_axes(::Broadcasted, axes::Tuple) = axes
+_axes(bc::Broadcasted, ::Nothing)  = combine_indices(bc.args...)
+_axes(bc::Broadcasted{Style{Tuple}}, ::Nothing) = (Base.OneTo(length(longest_tuple(nothing, bc.args))),)
+_axes(bc::Broadcasted{<:AbstractArrayStyle{0}}, ::Nothing) = ()
 
 BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
 BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
@@ -254,19 +253,15 @@ they must provide their own `Base.axes(::Broadcasted{Style})` and
 `Base.getindex(::Broadcasted{Style}, I::Union{Int,CartesianIndex})` methods as appropriate.
 """
 @inline function instantiate(bc::Broadcasted{Style}) where {Style}
-    args = instantiate_args(bc.args)
-    if bc.axes isa Nothing
-        axes = combine_indices(args...)
+    if bc.axes isa Nothing # Not done via dispatch to make it easier to extend instantiate(::Broadcasted{Style})
+        axes = combine_indices(bc.args...)
     else
-        axes = broadcast_shape(bc.axes, combine_indices(args...))
+        axes = bc.axes
+        check_broadcast_indices(axes, bc.args...)
     end
-    return Broadcasted{Style}(bc.f, args, axes)
+    return Broadcasted{Style}(bc.f, bc.args, axes)
 end
-
 instantiate(bc::Broadcasted{<:Union{AbstractArrayStyle{0}, Style{Tuple}}}) = bc
-
-@inline instantiate_args(args::Tuple) = (instantiate(args[1]), instantiate_args(Base.tail(args))...)
-instantiate_args(args::Tuple{}) = ()
 
 ## Flattening
 
@@ -484,7 +479,7 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = CartesianIndex(_newindex(I.I, keep, Idefault))
-@inline newindex(i::Int, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault)
+@inline newindex(i::Int, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
 @inline _newindex(I, keep, Idefault) =
     (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
 @inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I
