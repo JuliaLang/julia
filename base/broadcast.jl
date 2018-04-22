@@ -533,9 +533,28 @@ extrude(x::AbstractArray) = Extruded(x, newindexer(x)...)
 extrude(x) = x
 
 # For Broadcasted
-Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted, I)
+Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted{<:Any,<:Any,<:Any,<:Any}, I)
     args = _getindex(bc.args, I)
     return _broadcast_getindex_evalf(bc.f, args...)
+end
+# Hack around losing Type{T} information in the final args tuple. Julia actually
+# knows (in `code_typed`) the _value_ of these types, statically displaying them,
+# but inference is currently skipping inferring the type of the types as they are
+# transiently placed in a tuple as the argument list is lispily constructed. These
+# additional methods recover type stability when a `Type` appears in one of the
+# first two arguments of a function.
+Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted{<:Any,<:Any,<:Any,<:Tuple{Ref{Type{T}},Vararg{Any}}}, I) where {T}
+    args = _getindex(tail(bc.args), I)
+    return _broadcast_getindex_evalf(bc.f, T, args...)
+end
+Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted{<:Any,<:Any,<:Any,<:Tuple{Any,Ref{Type{T}},Vararg{Any}}}, I) where {T}
+    arg1 = _broadcast_getindex(bc.args[1], I)
+    args = _getindex(tail(tail(bc.args)), I)
+    return _broadcast_getindex_evalf(bc.f, arg1, T, args...)
+end
+Base.@propagate_inbounds function _broadcast_getindex(bc::Broadcasted{<:Any,<:Any,<:Any,<:Tuple{Ref{Type{T}},Ref{Type{S}},Vararg{Any}}}, I) where {T,S}
+    args = _getindex(tail(tail(bc.args)), I)
+    return _broadcast_getindex_evalf(bc.f, T, S, args...)
 end
 
 # Utilities for _broadcast_getindex
@@ -889,7 +908,7 @@ end
 
 @inline copy(bc::Broadcasted{Style{Tuple}}) =
     tuplebroadcast(longest_tuple(nothing, bc.args), bc)
-@inline tuplebroadcast(::NTuple{N,Any}, bc) where {N} = ntuple(k -> @inbounds(bc[k]), Val(N))
+@inline tuplebroadcast(::NTuple{N,Any}, bc) where {N} = ntuple(k -> @inbounds(_broadcast_getindex(bc, k)), Val(N))
 # This is a little tricky: find the longest tuple (first arg) within the list of arguments (second arg)
 # Start with nothing as a placeholder and go until we find the first tuple in the argument list
 longest_tuple(::Nothing, t::Tuple{Tuple,Vararg{Any}}) = longest_tuple(t[1], tail(t))
