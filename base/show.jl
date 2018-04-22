@@ -1651,6 +1651,7 @@ dump(io::IOContext, x::Module, n::Int, indent) = print(io, "Module ", x)
 dump(io::IOContext, x::String, n::Int, indent) = (print(io, "String "); show(io, x))
 dump(io::IOContext, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
 dump(io::IOContext, x::Union,  n::Int, indent) = print(io, x)
+dump(io::IOContext, x::Ptr,    n::Int, indent) = print(io, x)
 
 function dump_elts(io::IOContext, x::Array, n::Int, indent, i0, i1)
     for i in i0:i1
