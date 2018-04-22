@@ -19,8 +19,9 @@ branches:
 
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("Pkg3"); Pkg.test("Pkg3"; coverage=true)'
+  - julia --check-bounds=yes -e 'using UUIDs; write("Project.toml", replace(read("Project.toml", String), r"uuid = .*?\n" =>"uuid = \"$(uuid4())\"")); import Pkg3; Pkg3.build(); Pkg3.test(; coverage=true)'
 
 after_success:
-  - julia -e 'cd(Pkg.dir("Pkg3")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+  - julia -e 'import Pkg3; Pkg3.add("Documenter"); include("docs/make.jl")'
+  - julia -e 'import Pkg3; Pkg3.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
 

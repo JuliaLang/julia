@@ -40,6 +40,10 @@ include("REPLMode.jl")
 
 import .API: add, rm, up, test, gc, init, build, installed, pin, free, checkout, develop, generate
 const update = up
+# legacy CI script support
+import .API: clone, dir
+
+
 import .REPLMode: @pkg_str
 export @pkg_str
 
