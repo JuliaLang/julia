@@ -206,7 +206,7 @@ broadcast_similar(::ArrayConflict, ::Type{Bool}, inds::Indices, bc) =
 broadcast_axes() = ()
 broadcast_axes(A::Tuple) = (OneTo(length(A)),)
 broadcast_axes(A::Ref) = ()
-broadcast_axes(A) = axes(A)
+@inline broadcast_axes(A) = axes(A)
 """
     Base.broadcast_axes(A)
 
@@ -218,9 +218,9 @@ broadcast_axes
 
 ### End of methods that users will typically have to specialize ###
 
-Base.axes(bc::Broadcasted) = _axes(bc, bc.axes)
+@inline Base.axes(bc::Broadcasted) = _axes(bc, bc.axes)
 _axes(::Broadcasted, axes::Tuple) = axes
-_axes(bc::Broadcasted, ::Nothing)  = combine_axes(bc.args...)
+@inline _axes(bc::Broadcasted, ::Nothing)  = combine_axes(bc.args...)
 _axes(bc::Broadcasted{Style{Tuple}}, ::Nothing) = (Base.OneTo(length(longest_tuple(nothing, bc.args))),)
 _axes(bc::Broadcasted{<:AbstractArrayStyle{0}}, ::Nothing) = ()
 
@@ -412,7 +412,7 @@ One of these should be undefined (and thus return Broadcast.Unknown).""")
 end
 
 # Indices utilities
-combine_axes(A, B...) = broadcast_shape(broadcast_axes(A), combine_axes(B...))
+@inline combine_axes(A, B...) = broadcast_shape(broadcast_axes(A), combine_axes(B...))
 combine_axes(A) = broadcast_axes(A)
 
 # shape (i.e., tuple-of-indices) inputs
