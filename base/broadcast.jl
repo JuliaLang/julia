@@ -742,19 +742,20 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     # When ElType is not concrete, use narrowing. Use the first output
     # value to determine the starting output eltype; copyto_nonleaf!
     # will widen `dest` as needed to accommodate later values.
-    iter = CartesianIndices(axes(bc))
+    bc′ = preprocess(nothing, bc)
+    iter = CartesianIndices(axes(bc′))
     state = start(iter)
     if done(iter, state)
         # if empty, take the ElType at face value
-        return broadcast_similar(Style(), ElType, axes(bc), bc)
+        return broadcast_similar(Style(), ElType, axes(bc′), bc′)
     end
     # Initialize using the first value
     I, state = next(iter, state)
-    @inbounds val = bc[I]
-    dest = broadcast_similar(Style(), typeof(val), axes(bc), bc)
+    @inbounds val = bc′[I]
+    dest = broadcast_similar(Style(), typeof(val), axes(bc′), bc′)
     @inbounds dest[I] = val
     # Now handle the remaining values
-    return copyto_nonleaf!(dest, bc, iter, state, 1)
+    return copyto_nonleaf!(dest, bc′, iter, state, 1)
 end
 
 ## general `copyto!` methods
@@ -787,6 +788,7 @@ end
 # LHS and RHS will always match. This is not true in general, but with the `.op=`
 # syntax it's fairly common for an argument to be `===` a source.
 broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
+broadcast_unalias(::Nothing, src) = src
 
 # Preprocessing a `Broadcasted` does two things:
 # * unaliases any arguments from `dest`
