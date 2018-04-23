@@ -421,12 +421,6 @@ This section lists changes that do not have deprecation warnings.
     See the [Interfaces chapter](https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1)
     for more information.
 
-  * `find` now returns the same type of indices as `keys`/`pairs` for `AbstractArray`,
-    `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774]).
-    In particular, this means that it returns `CartesianIndex` objects for matrices
-    and higher-dimensional arrays instead of linear indices as was previously the case.
-    Use `Int[LinearIndices(size(a))[i] for i in find(f, a)]` to compute linear indices.
-
   * `find` has been renamed to `findall`. `findall`, `findfirst`, `findlast`, `findnext`
     now take and/or return the same type of indices as `keys`/`pairs` for `AbstractArray`,
     `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774], [#25545]).
