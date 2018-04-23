@@ -566,6 +566,30 @@ end
     @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
+@testset "issue #26833, deletion from IdDict" begin
+    d = IdDict()
+    i = 1
+    # generate many hash collisions
+    while length(d) < 32 # expected to occur at i <≈ 2^16 * 2^5
+        if objectid(i) % UInt16 == 0x1111
+            push!(d, i => true)
+        end
+        i += 1
+    end
+    k = collect(keys(d))
+    @test haskey(d, k[1])
+    delete!(d, k[1])
+    @test length(d) == 31
+    @test !haskey(d, k[1])
+    @test haskey(d, k[end])
+    push!(d, k[end] => false)
+    @test length(d) == 31
+    @test haskey(d, k[end])
+    @test !pop!(d, k[end])
+    @test !haskey(d, k[end])
+    @test length(d) == 30
+end
+
 
 @testset "Issue #7944" begin
     d = Dict{Int,Int}()
