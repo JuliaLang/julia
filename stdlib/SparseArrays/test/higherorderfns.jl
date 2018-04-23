@@ -125,9 +125,9 @@ end
         @test broadcast!(cos, Z, X) == sparse(broadcast!(cos, fZ, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether
-        # check_broadcast_indices throws to determine whether sparse broadcast should throw
+        # check_broadcast_axes throws to determine whether sparse broadcast should throw
         try
-            Base.Broadcast.check_broadcast_indices(axes(Z), spzeros((shapeX .- 1)...))
+            Base.Broadcast.check_broadcast_axes(axes(Z), spzeros((shapeX .- 1)...))
         catch
             @test_throws DimensionMismatch broadcast!(sin, Z, spzeros((shapeX .- 1)...))
         end
@@ -149,9 +149,9 @@ end
         @test broadcast!(cos, V, X) == sparse(broadcast!(cos, fV, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether
-        # check_broadcast_indices throws to determine whether sparse broadcast should throw
+        # check_broadcast_axes throws to determine whether sparse broadcast should throw
         try
-            Base.Broadcast.check_broadcast_indices(axes(V), spzeros((shapeX .- 1)...))
+            Base.Broadcast.check_broadcast_axes(axes(V), spzeros((shapeX .- 1)...))
         catch
             @test_throws DimensionMismatch broadcast!(sin, V, spzeros((shapeX .- 1)...))
         end
@@ -184,9 +184,9 @@ end
             @test broadcast(*, X, Y) == sparse(broadcast(*, fX, fY))
             @test broadcast(f, X, Y) == sparse(broadcast(f, fX, fY))
             # TODO strengthen this test, avoiding dependence on checking whether
-            # check_broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_axes throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.combine_indices(spzeros((shapeX .- 1)...), Y)
+                Base.Broadcast.combine_axes(spzeros((shapeX .- 1)...), Y)
             catch
                 @test_throws DimensionMismatch broadcast(+, spzeros((shapeX .- 1)...), Y)
             end
@@ -207,9 +207,9 @@ end
             @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZ, fX, fY))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
-            # check_broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_axes throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.check_broadcast_indices(axes(Z), spzeros((shapeX .- 1)...), Y)
+                Base.Broadcast.check_broadcast_axes(axes(Z), spzeros((shapeX .- 1)...), Y)
             catch
                 @test_throws DimensionMismatch broadcast!(f, Z, spzeros((shapeX .- 1)...), Y)
             end
@@ -247,9 +247,9 @@ end
             @test broadcast(*, X, Y, Z) == sparse(broadcast(*, fX, fY, fZ))
             @test broadcast(f, X, Y, Z) == sparse(broadcast(f, fX, fY, fZ))
             # TODO strengthen this test, avoiding dependence on checking whether
-            # check_broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_axes throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.combine_indices(spzeros((shapeX .- 1)...), Y, Z)
+                Base.Broadcast.combine_axes(spzeros((shapeX .- 1)...), Y, Z)
             catch
                 @test_throws DimensionMismatch broadcast(+, spzeros((shapeX .- 1)...), Y, Z)
             end
@@ -279,9 +279,9 @@ end
             @test broadcast!(f, Q, X, Y, Z) == sparse(broadcast!(f, fQ, fX, fY, fZ))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
-            # check_broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_axes throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.check_broadcast_indices(axes(Q), spzeros((shapeX .- 1)...), Y, Z)
+                Base.Broadcast.check_broadcast_axes(axes(Q), spzeros((shapeX .- 1)...), Y, Z)
             catch
                 @test_throws DimensionMismatch broadcast!(f, Q, spzeros((shapeX .- 1)...), Y, Z)
             end

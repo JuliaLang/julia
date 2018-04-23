@@ -2,7 +2,7 @@
 
 module TestBroadcastInternals
 
-using Base.Broadcast: check_broadcast_indices, check_broadcast_shape, newindex, _bcs
+using Base.Broadcast: check_broadcast_axes, check_broadcast_shape, newindex, _bcs
 using Base: OneTo
 using Test, Random
 
@@ -19,22 +19,22 @@ using Test, Random
 @test_throws DimensionMismatch _bcs((-1:1, 2:6), (-1:1, 2:5))
 @test_throws DimensionMismatch _bcs((-1:1, 2:5), (2, 2:5))
 
-@test @inferred(Broadcast.combine_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(Broadcast.combine_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
-@test @inferred(Broadcast.combine_indices(zeros(3),   zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(Broadcast.combine_indices(zeros(3), zeros(1,4), zeros(1))) == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_axes(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_axes(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_axes(zeros(3),   zeros(3,4))) == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_axes(zeros(3), zeros(1,4), zeros(1))) == (OneTo(3),OneTo(4))
 
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,1))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(3))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), 1)
-check_broadcast_indices((OneTo(3),OneTo(5)), 5, 2)
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(2,5))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4,2))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(2))
-check_broadcast_indices((-1:1, 6:9), 1)
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,5))
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,1))
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3))
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,5), zeros(3))
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,5), 1)
+check_broadcast_axes((OneTo(3),OneTo(5)), 5, 2)
+@test_throws DimensionMismatch check_broadcast_axes((OneTo(3),OneTo(5)), zeros(2,5))
+@test_throws DimensionMismatch check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,4))
+@test_throws DimensionMismatch check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,4,2))
+@test_throws DimensionMismatch check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,5), zeros(2))
+check_broadcast_axes((-1:1, 6:9), 1)
 
 check_broadcast_shape((-1:1, 6:9), (-1:1, 6:9))
 check_broadcast_shape((-1:1, 6:9), (-1:1, 1))
@@ -678,7 +678,7 @@ struct T22053
     t
 end
 Broadcast.BroadcastStyle(::Type{T22053}) = Broadcast.Style{T22053}()
-Broadcast.broadcast_indices(::T22053) = ()
+Broadcast.broadcast_axes(::T22053) = ()
 Broadcast.broadcastable(t::T22053) = t
 function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{T22053}})
     all(x->isa(x, T22053), bc.args) && return 1

@@ -183,7 +183,7 @@ function _diffshape_broadcast(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMa
     fpreszeros = _iszero(fofzeros)
     indextypeC = _promote_indtype(A, Bs...)
     entrytypeC = Base.Broadcast.combine_eltypes(f, (A, Bs...))
-    shapeC = to_shape(Base.Broadcast.combine_indices(A, Bs...))
+    shapeC = to_shape(Base.Broadcast.combine_axes(A, Bs...))
     maxnnzC = fpreszeros ? _checked_maxnnzbcres(shapeC, A, Bs...) : _densennz(shapeC)
     C = _allocres(shapeC, indextypeC, entrytypeC, maxnnzC)
     return fpreszeros ? _broadcast_zeropres!(f, C, A, Bs...) :
@@ -984,7 +984,7 @@ end
 
 @inline function _copyto!(f, dest, As::SparseVecOrMat...)
     _aresameshape(dest, As...) && return _noshapecheck_map!(f, dest, As...)
-    Base.Broadcast.check_broadcast_indices(axes(dest), As...)
+    Base.Broadcast.check_broadcast_axes(axes(dest), As...)
     fofzeros = f(_zeros_eltypes(As...)...)
     if _iszero(fofzeros)
         return _broadcast_zeropres!(f, dest, As...)
