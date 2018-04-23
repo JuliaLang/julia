@@ -40,7 +40,10 @@ function temp_pkg_dir(fn::Function, tmp_dir=joinpath(tempdir(), randstring()),
             end
             fn()
         finally
-            remove_tmp_dir && rm(tmp_dir, recursive=true)
+            if remove_tmp_dir
+                Sys.iswindows() && GC.gc() # to make sure handles are closed on Windows
+                rm(tmp_dir, recursive=true)
+            end
         end
     end
 end
