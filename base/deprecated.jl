@@ -1116,7 +1116,7 @@ end
 @deprecate indices(a, d) axes(a, d)
 
 # And similar _indices names in Broadcast
-@eval Broadcast Base.@deprecate_binding broadcast_indices broadcast_axes false
+@eval Broadcast Base.@deprecate_binding broadcast_indices broadcast_axes true
 @eval Broadcast Base.@deprecate_binding check_broadcast_indices check_broadcast_axes false
 
 # PR #25046

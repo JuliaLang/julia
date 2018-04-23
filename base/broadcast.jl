@@ -185,11 +185,12 @@ Base.show(io::IO, bc::Broadcasted{Style}) where {Style} = print(io, Broadcasted,
 
 ## Allocating the output container
 """
-    broadcast_similar(::BroadcastStyle, ::Type{ElType}, inds, As...)
+    broadcast_similar(::BroadcastStyle, ::Type{ElType}, inds, bc)
 
 Allocate an output object for [`broadcast`](@ref), appropriate for the indicated
 [`Broadcast.BroadcastStyle`](@ref). `ElType` and `inds` specify the desired element type and axes of the
-container. `As...` are the input arguments supplied to `broadcast`.
+container. The final `bc` argument is the `Broadcasted` object representing the fused broadcast operation
+and its arguments.
 """
 broadcast_similar(::DefaultArrayStyle{N}, ::Type{ElType}, inds::Indices{N}, bc) where {N,ElType} =
     similar(Array{ElType}, inds)
