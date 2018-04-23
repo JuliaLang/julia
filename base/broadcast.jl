@@ -737,8 +737,7 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     ElType = combine_eltypes(bc.f, bc.args)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
-        dest = broadcast_similar(Style(), ElType, axes(bc), bc)
-        return copyto!(dest, bc)
+        return copyto!(broadcast_similar(Style(), ElType, axes(bc), bc), bc)
     end
     # When ElType is not concrete, use narrowing. Use the first output
     # value to determine the starting output eltype; copyto_nonleaf!
