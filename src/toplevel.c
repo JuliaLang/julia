@@ -641,9 +641,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
             jl_error("syntax: malformed \".\" expression");
         jl_value_t *lhs = jl_exprarg(ex, 0);
         jl_value_t *rhs = jl_exprarg(ex, 1);
-        // ('.' f (tuple args...)) is a broadcast instead, which doesn't
-        // go through this fast path.
-        if (!jl_is_expr(rhs) || ((jl_expr_t*)rhs)->head != tuple_sym)
+        // only handle `a.b` syntax here
+        if (jl_is_quotenode(rhs) && jl_is_symbol(jl_fieldref(rhs,0)))
             return jl_eval_dot_expr(m, lhs, rhs, fast);
     }
     if (ptls->in_pure_callback) {
