@@ -126,6 +126,7 @@ A materialized representation of this dependency `graph` looks like this:
 graph = Dict{UUID,Dict{Symbol,UUID}}(
     # Priv – the private one:
     UUID("ba13f791-ae1d-465a-978b-69c3ad90f72b") => Dict{Symbol,UUID}(
+        :Pub   => UUID("ba13f791-ae1d-465a-978b-69c3ad90f72b"),
         :Zebra => UUID("f7a24cb4-21fc-4002-ac70-f0e3a0dd3f62"),
     ),
     # Priv – the public one:
@@ -262,12 +263,12 @@ Here is the corresponding `graph` structure, materialized as a dictionary:
 graph = Dict{UUID,Dict{Symbol,UUID}}(
     # Bobcat:
     UUID("85ad11c7-31f6-5d08-84db-0a4914d4cadf") => Dict{Symbol,UUID}(
-        :Cobra    => UUID("4725e24d-f727-424b-bca0-c4307a3456fa"),
-        :Dingo    => UUID("7a7925be-828c-4418-bbeb-bac8dfc843bc"),
+        :Cobra => UUID("4725e24d-f727-424b-bca0-c4307a3456fa"),
+        :Dingo => UUID("7a7925be-828c-4418-bbeb-bac8dfc843bc"),
     ),
     # Cobra:
     UUID("4725e24d-f727-424b-bca0-c4307a3456fa") => Dict{Symbol,UUID}(
-        :Dingo    => UUID("7a7925be-828c-4418-bbeb-bac8dfc843bc"),
+        :Dingo => UUID("7a7925be-828c-4418-bbeb-bac8dfc843bc"),
     ),
     # Dingo:
     UUID("7a7925be-828c-4418-bbeb-bac8dfc843bc") => Dict{Symbol,UUID}(),

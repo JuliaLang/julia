@@ -1,3 +1,4 @@
+__precompile__()
 module UnregisteredWithoutProject
 
 if !isfile(joinpath(@__DIR__, "..", "deps", "deps.jl"))

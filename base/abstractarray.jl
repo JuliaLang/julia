@@ -24,11 +24,10 @@ end
 end
 
 """
-    size(A::AbstractArray, [dim...])
+    size(A::AbstractArray, [dim])
 
-Return a tuple containing the dimensions of `A`. Optionally you can specify the
-dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
-lengths of dimensions you asked for.
+Return a tuple containing the dimensions of `A`. Optionally you can specify a
+dimension to just get the length of that dimension.
 
 Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
@@ -45,8 +44,6 @@ julia> size(A, 3, 2)
 ```
 """
 size(t::AbstractArray{T,N}, d) where {T,N} = d <= N ? size(t)[d] : 1
-size(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) where {N} =
-    (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val(N))...)
 
 """
     axes(A, d)

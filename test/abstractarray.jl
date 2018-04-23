@@ -732,8 +732,8 @@ A = TSlowNIndexes(rand(2,2))
 @test first(A) == A.data[1]
 
 @testset "#16381" begin
-    @inferred size(rand(3,2,1), 2, 1)
-    @inferred size(rand(3,2,1), 2, 1, 3)
+    @inferred size(rand(3,2,1))
+    @inferred size(rand(3,2,1), 2)
 
     @test @inferred(axes(rand(3,2)))    == (1:3,1:2)
     @test @inferred(axes(rand(3,2,1)))  == (1:3,1:2,1:1)

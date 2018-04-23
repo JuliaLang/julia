@@ -144,7 +144,8 @@
     end
 end
 @testset "join()" begin
-    @test join([]) == ""
+    @test join([]) == join([],",") == ""
+    @test_broken join(()) == join((),",") == ""
     @test join(["a"],"?") == "a"
     @test join("HELLO",'-') == "H-E-L-L-O"
     @test join(1:5, ", ", " and ") == "1, 2, 3, 4 and 5"

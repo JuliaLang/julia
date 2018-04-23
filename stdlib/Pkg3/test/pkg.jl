@@ -143,6 +143,21 @@ temp_pkg_dir() do project_path
     end
 
     Pkg3.rm(TEST_PKG.name)
+
+    @testset "legacy CI script" begin
+        mktempdir() do dir
+            LibGit2.with(LibGit2.clone("https://github.com/JuliaLang/Example.jl", joinpath(dir, "Example.jl"))) do r
+                cd(joinpath(dir, "Example.jl")) do
+                    let Pkg = Pkg3
+                        Pkg.clone(pwd())
+                        Pkg.build("Example")
+                        Pkg.test("Example"; coverage=true)
+                        @test isfile(Pkg.dir("Example", "src", "Example.jl"))
+                    end
+                end
+            end
+        end
+    end
 end
 
 temp_pkg_dir() do project_path

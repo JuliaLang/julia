@@ -862,16 +862,6 @@
                  (if (not (symbol? v))
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
-     (for-each (lambda (t)
-                 (if (expr-contains-p (lambda (e)
-                                        (and (pair? e) (eq? (car e) 'call)
-                                             (expr-contains-p (lambda (a) (memq a params))
-                                                              e)))
-                                      t)
-                     (error (string "unsupported field type expression \""
-                                    (deparse t)
-                                    "\""))))
-               field-types)
      `(block
        (scope-block
         (block
@@ -1705,7 +1695,7 @@
         (if top (cons 'fuse make) make)))
     (if (and (pair? e) (eq? (car e) '|.|))
         (let ((f (cadr e)) (x (caddr e)))
-          (cond ((or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
+          (cond ((or (atom? x) (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
                  `(call (top getproperty) ,f ,x))
                 ((eq? (car x) 'tuple)
                  (if (and (eq? f '^) (length= x 3) (integer? (caddr x)))
@@ -1713,7 +1703,7 @@
                     (list '^ (cadr x) (expand-forms `(call (call (core apply_type) (top Val) ,(caddr x))))))
                   (make-fuse f (cdr x))))
                 (else
-                 (error (string "invalid syntax " (deparse e))))))
+                 (error (string "invalid syntax \"" (deparse e) "\"")))))
         (if (and (pair? e) (eq? (car e) 'call) (dotop? (cadr e)))
             (let ((f (undotop (cadr e))) (x (cddr e)))
                 (if (and (eq? f '^) (length= x 2) (integer? (cadr x)))

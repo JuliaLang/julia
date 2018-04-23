@@ -354,6 +354,7 @@ INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
+include("accumulate.jl")
 
 # basic data structures
 include("ordering.jl")
@@ -796,8 +797,8 @@ end
     @deprecate_stdlib triu        LinearAlgebra true
     @deprecate_stdlib vecdot      LinearAlgebra true
     @deprecate_stdlib vecnorm     LinearAlgebra true
-    # @deprecate_stdlib ⋅           LinearAlgebra true
-    # @deprecate_stdlib ×           LinearAlgebra true
+    @deprecate_stdlib $(:⋅)       LinearAlgebra true
+    @deprecate_stdlib $(:×)       LinearAlgebra true
 
     ## types that were re-exported from Base
     @deprecate_stdlib Diagonal        LinearAlgebra true

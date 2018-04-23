@@ -189,6 +189,22 @@ end
     end
 end
 
+struct Z26163 <: AbstractArray{Int,0}; end
+Base.size(::Z26163) = ()
+Base.getindex(::Z26163) = 0
+struct V26163 <: AbstractArray{Int,1}; end
+Base.size(::V26163) = (1,)
+Base.getindex(::V26163, ::Int) = 0
+@testset "reshape of custom zero- and one-dimensional arrays" begin
+    z = Z26163()
+    v = V26163()
+    @test z == reshape(v, ()) == fill(0, ())
+    @test reshape(z, 1) == v == [0]
+    @test reshape(z, 1, 1) == reshape(v, 1, 1) == fill(0, 1, 1)
+    @test occursin("1-element reshape", summary(reshape(z, 1)))
+    @test_broken occursin("0-dimensional reshape", summary(reshape(v, ())))
+end
+
 @test reshape(1:5, (5,)) === 1:5
 @test reshape(1:5, 5) === 1:5
 
@@ -1478,15 +1494,14 @@ end
 let a = Array{Float64}(undef, 10)
     @test size(a) == (10,)
     @test size(a, 1) == 10
-    @test size(a,2,1) == (1,10)
+    @test (size(a,2), size(a,1)) == (1,10)
     aa = Array{Float64}(undef, 2,3)
     @test size(aa) == (2,3)
-    @test size(aa,4,3,2,1) == (1,1,3,2)
-    @test size(aa,1,2) == (2,3)
+    @test (size(aa,4), size(aa,3), size(aa,2), size(aa,1)) == (1,1,3,2)
     aaa = Array{Float64}(undef, 9,8,7,6,5,4,3,2,1)
-    @test size(aaa,1,1) == (9,9)
+    @test size(aaa,1) == 9
     @test size(aaa,4) == 6
-    @test size(aaa,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
+    @test size(aaa) == (9,8,7,6,5,4,3,2,1)
 
     #18459 Test Array{T, N} constructor
     b = Vector{Float64}(undef, 10)
@@ -2059,9 +2074,12 @@ end
 # issue #18363
 @test_throws DimensionMismatch cumsum!([0,0], 1:4)
 @test cumsum(Any[])::Vector{Any} == Any[]
-@test cumsum(Any[1, 2.3])::Vector{Any} == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
+@test cumsum(Any[1, 2.3]) == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
 @test cumsum([true,true,true]) == [1,2,3]
-@test cumsum(0x00:0xff)[end] === 0x80 # overflow
+@test cumsum(0x00:0xff)[end] === UInt(255*(255+1)÷2) # no overflow
+@test accumulate(+, 0x00:0xff)[end] === 0x80         # overflow
+@test_throws InexactError cumsum!(similar(0x00:0xff), 0x00:0xff) # overflow
+
 @test cumsum([[true], [true], [false]])::Vector{Vector{Int}} == [[1], [2], [2]]
 
 #issue #18336
@@ -2176,19 +2194,16 @@ end
     b = Vector{Float64}(undef, 10)
     @test size(a) == (10,)
     @test size(a, 1) == 10
-    @test size(a,2,1) == (1,10)
     @test size(a) == size(b)
     a = Array{Float64}(undef, 2,3)
     b = Matrix{Float64}(undef, 2,3)
     @test size(a) == (2,3)
-    @test size(a,4,3,2,1) == (1,1,3,2)
-    @test size(a,1,2) == (2,3)
+    @test (size(a, 1), size(a, 2), size(a, 3)) == (2,3,1)
     @test size(a) == size(b)
     a = Array{Float64}(undef, 9,8,7,6,5,4,3,2,1)
     b = Array{Float64,9}(undef, 9,8,7,6,5,4,3,2,1)
-    @test size(a,1,1) == (9,9)
     @test size(a,4) == 6
-    @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
+    @test size(a) == (9,8,7,6,5,4,3,2,1)
     @test size(a) == size(b)
 end
 
@@ -2278,6 +2293,13 @@ end
     op(x,y) = 2x+y
     @test accumulate(op, [10,20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
     @test accumulate(op, [10 20 30], dims=2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
+
+    #25506
+    @test accumulate((acc, x) -> acc+x[1], 0, [(1,2), (3,4), (5,6)]) == [1, 4, 9]
+    @test accumulate(*, ['a', 'b']) == ["a", "ab"]
+    @inferred accumulate(*, String[])
+    @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=1) == ["a" "b"; "ac" "bd"]
+    @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=2) == ["a" "ab"; "c" "cd"]
 end
 
 struct F21666{T <: Base.ArithmeticStyle}

@@ -56,7 +56,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     @test Pkg3.installed()[TEST_PKG.name] > v
     pkg = "UnregisteredWithoutProject"
     p = git_init_package(tmp_pkg_path, joinpath(@__DIR__, "test_packages/$pkg"))
-    Pkg3.REPLMode.pkgstr("add $p")
+    Pkg3.REPLMode.pkgstr("add $p; precompile")
     @eval import $(Symbol(pkg))
     @test Pkg3.installed()[pkg] == v"0.0"
     Pkg3.test("UnregisteredWithoutProject")
@@ -138,7 +138,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
                     cp(p2_path, p2_new_path)
                     Pkg3.REPLMode.pkgstr("develop $(p1_new_path)")
                     Pkg3.REPLMode.pkgstr("develop $(p2_new_path)")
-                    Pkg3.REPLMode.pkgstr("build")
+                    Pkg3.REPLMode.pkgstr("build; precompile")
                     @test locate_name("UnregisteredWithProject") == joinpath(p1_new_path, "src", "UnregisteredWithProject.jl")
                     @test locate_name("UnregisteredWithoutProject") == joinpath(p2_new_path, "src", "UnregisteredWithoutProject.jl")
                     @test Pkg3.installed()["UnregisteredWithProject"] == v"0.1.0"

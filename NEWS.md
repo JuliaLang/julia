@@ -468,6 +468,12 @@ This section lists changes that do not have deprecation warnings.
   * `parse(::Type, ::Char)` now uses a default base of 10, like other number parsing
     methods, instead of 36 ([#26576]).
 
+  * `isequal` for `Ptr`s now compares element types; `==` still compares only addresses
+    ([#26858]).
+
+  * `widen` on 8- and 16-bit integer types now widens to the platform word size (`Int`)
+    instead of to a 32-bit type ([#26859]).
+
 Library improvements
 --------------------
 
@@ -776,6 +782,9 @@ Deprecated or removed
     implicitly converting them to `Int`s.  This is now deprecated; only `Integer`s or
     `AbstractUnitRange`s are accepted as arguments.  Instead, convert the arguments before
     calling `ones` or `zeros` ([#26733]).
+
+  * The variadic `size(A, dim1, dim2, dims...)` method to return a tuple of multiple
+    dimension lengths of `A` has been deprecated ([#26862]).
 
   * The `Operators` module is deprecated. Instead, import required operators explicitly
     from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
