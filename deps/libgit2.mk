@@ -71,6 +71,10 @@ $(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied: $(LIBGIT2_SRC_PATH)/source-e
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-ssh-loop.patch
 	echo 1 > $@
+$(LIBGIT2_SRC_PATH)/libgit2-bundled_zlib.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-bundled_zlib.patch
+	echo 1 > $@
 
 $(build_datarootdir)/julia/cert.pem:
 	$(JLDOWNLOAD) $(shell pwd)/cacert-2018-01-17.pem https://curl.haxx.se/ca/cacert-2018-01-17.pem
@@ -85,6 +89,7 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-bundled_zlib.patch-applied \
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted $(build_datarootdir)/julia/cert.pem
 	mkdir -p $(dir $@)
