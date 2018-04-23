@@ -181,9 +181,7 @@ end
 Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{Style,Axes,F,Args}) where {NewStyle,Style,Axes,F,Args} =
     Broadcasted{NewStyle,Axes,F,Args}(bc.f, bc.args, bc.axes)
 
-# Fully-instantiatiated Broadcasted
-const BroadcastedF{Style<:Union{Nothing,BroadcastStyle}, N, F, Args<:Tuple} =
-    Broadcasted{Style, <:Indices{N}, F, Args}
+Base.show(io::IO, bc::Broadcasted{Style}) where {Style} = print(io, Broadcasted, '{', Style, "}(", bc.f, ", ", bc.args, ')')
 
 ## Allocating the output container
 """
@@ -233,10 +231,10 @@ argtype(::Type{Broadcasted{Style,Axes,F,Args}}) where {Style,Axes,F,Args} = Args
 argtype(bc::Broadcasted) = argtype(typeof(bc))
 
 const NestedTuple = Tuple{<:Broadcasted,Vararg{Any}}
-not_nested(bc::Broadcasted)          = not_nested(bc.args)
-not_nested(t::Tuple)      = not_nested(tail(t))
-not_nested(::NestedTuple) = false
-not_nested(::Tuple{})     = true
+not_nested(bc::Broadcasted) = _not_nested(bc.args)
+_not_nested(t::Tuple)       = _not_nested(tail(t))
+_not_nested(::NestedTuple)  = false
+_not_nested(::Tuple{})      = true
 
 ## Instantiation fills in the "missing" fields in Broadcasted.
 instantiate(x) = x
@@ -563,11 +561,6 @@ Base.@propagate_inbounds _getindex(args::Tuple{Any}, I) = (_broadcast_getindex(a
 Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 
 @inline _broadcast_getindex_evalf(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)  # not propagate_inbounds
-
-@noinline function broadcast_getindex_error(bc, I)
-    isa(bc, BroadcastedF) && error("axes $(axes(bc)) does not match $I")
-    error("indexing requires complete instantiation")
-end
 
 """
     broadcastable(x)
@@ -1186,8 +1179,6 @@ julia> @. y = x + 3 * sin(x)
 macro __dot__(x)
     esc(__dot__(x))
 end
-
-Base.show(io::IO, bc::Broadcasted) = print(io, "Broadcasted(", bc.f, ", ", bc.args, ')')
 
 @inline make_kwsyntax(f, args...; kwargs...) = make((args...)->f(args...; kwargs...), args...)
 @inline function make(f, args...)
