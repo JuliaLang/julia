@@ -106,7 +106,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
 
         uuid_to_pkg[pkg.uuid] = pkg
         uuid_to_name[pkg.uuid] = pkg.name
-        found_project = collect_project!(ctx, pkg, path, fix_deps_map)
+        found_project = collect_project!(pkg, path, fix_deps_map)
         if !found_project
             collect_require!(ctx, pkg, path, fix_deps_map)
         end
@@ -127,7 +127,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
     return fixed
 end
 
-function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
+function collect_project!(pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
     project_file = joinpath(path, "Project.toml")
     fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
     !isfile(project_file) && return false
@@ -137,12 +137,7 @@ function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
         deppkg = PackageSpec(deppkg_name, UUID(uuid), vspec)
         push!(fix_deps_map[pkg.uuid], deppkg)
     end
-    if haskey(project, "version")
-        pkg.version = VersionNumber(project["version"])
-    else
-        @warn "project file for $(pkg.name) is missing a `version` entry"
-        set_maximum_version_registry!(ctx.env, pkg)
-    end
+    pkg.version = VersionNumber(get(project, "version", "0.0"))
     return true
 end
 

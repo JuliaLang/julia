@@ -628,7 +628,7 @@ end
 
 
 const refspecs = ["+refs/*:refs/remotes/cache/*"]
-const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?(?:\/)?$"
+const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$"
 
 # Windows sometimes throw on `isdir`...
 function isdir_windows_workaround(path::String)
@@ -775,17 +775,12 @@ end
 function parse_package!(env, pkg, project_path)
     found_project_file = false
     for projname in project_names
-        if isfile(joinpath(project_path, projname))
+        if isfile(joinpath(project_path, "Project.toml"))
             found_project_file = true
             project_data = parse_toml(project_path, "Project.toml")
             pkg.uuid = UUID(project_data["uuid"])
             pkg.name = project_data["name"]
-            if haskey(project_data, "version")
-                pkg.version = VersionNumber(project_data["version"])
-            else
-                @warn "project file for $(pkg.name) is missing a `version` entry"
-                Pkg3.Operations.set_maximum_version_registry!(env, pkg)
-            end
+            pkg.version = VersionNumber(get(project_data, "version", "0.0"))
             break
         end
     end
