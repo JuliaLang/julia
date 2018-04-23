@@ -189,6 +189,22 @@ end
     end
 end
 
+struct Z26163 <: AbstractArray{Int,0}; end
+Base.size(::Z26163) = ()
+Base.getindex(::Z26163) = 0
+struct V26163 <: AbstractArray{Int,1}; end
+Base.size(::V26163) = (1,)
+Base.getindex(::V26163, ::Int) = 0
+@testset "reshape of custom zero- and one-dimensional arrays" begin
+    z = Z26163()
+    v = V26163()
+    @test z == reshape(v, ()) == fill(0, ())
+    @test reshape(z, 1) == v == [0]
+    @test reshape(z, 1, 1) == reshape(v, 1, 1) == fill(0, 1, 1)
+    @test occursin("1-element reshape", summary(reshape(z, 1)))
+    @test_broken occursin("0-dimensional reshape", summary(reshape(v, ())))
+end
+
 @test reshape(1:5, (5,)) === 1:5
 @test reshape(1:5, 5) === 1:5
 

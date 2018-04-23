@@ -168,6 +168,11 @@ function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
     ReshapedArray(parent, dims, reverse(mi))
 end
 
+function __reshape(p::Tuple{AbstractArray{<:Any,0},IndexCartesian}, dims::Dims)
+    parent = p[1]
+    ReshapedArray(parent, dims, ())
+end
+
 function __reshape(p::Tuple{AbstractArray,IndexLinear}, dims::Dims)
     parent = p[1]
     ReshapedArray(parent, dims, ())
