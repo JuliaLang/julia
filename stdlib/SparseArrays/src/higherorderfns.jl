@@ -4,15 +4,16 @@ module HigherOrderFns
 
 # This module provides higher order functions specialized for sparse arrays,
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
-import Base: map, map!, broadcast, broadcast!
+import Base: map, map!, broadcast, copy, copyto!
 
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange
-using Base.Broadcast: BroadcastStyle
+using Base.Broadcast: BroadcastStyle, Broadcasted, flatten
 using LinearAlgebra
 
 # This module is organized as follows:
+# (0) Define BroadcastStyle rules and convenience types for dispatch
 # (1) Define a common interface to SparseVectors and SparseMatrixCSCs sufficient for
 #       map[!]/broadcast[!]'s purposes. The methods below are written against this interface.
 # (2) Define entry points for map[!] (short children of _map_[not]zeropres!).
@@ -29,11 +30,79 @@ using LinearAlgebra
 # (12) Define map[!] methods handling combinations of sparse and structured matrices.
 
 
+# (0) BroadcastStyle rules and convenience types for dispatch
+
+SparseVecOrMat = Union{SparseVector,SparseMatrixCSC}
+
+# broadcast container type promotion for combinations of sparse arrays and other types
+struct SparseVecStyle <: Broadcast.AbstractArrayStyle{1} end
+struct SparseMatStyle <: Broadcast.AbstractArrayStyle{2} end
+Broadcast.BroadcastStyle(::Type{<:SparseVector}) = SparseVecStyle()
+Broadcast.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatStyle()
+const SPVM = Union{SparseVecStyle,SparseMatStyle}
+
+# SparseVecStyle handles 0-1 dimensions, SparseMatStyle 0-2 dimensions.
+# SparseVecStyle promotes to SparseMatStyle for 2 dimensions.
+# Fall back to DefaultArrayStyle for higher dimensionality.
+SparseVecStyle(::Val{0}) = SparseVecStyle()
+SparseVecStyle(::Val{1}) = SparseVecStyle()
+SparseVecStyle(::Val{2}) = SparseMatStyle()
+SparseVecStyle(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
+SparseMatStyle(::Val{0}) = SparseMatStyle()
+SparseMatStyle(::Val{1}) = SparseMatStyle()
+SparseMatStyle(::Val{2}) = SparseMatStyle()
+SparseMatStyle(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
+
+Broadcast.BroadcastStyle(::SparseMatStyle, ::SparseVecStyle) = SparseMatStyle()
+
+# Tuples promote to dense
+Broadcast.BroadcastStyle(::SparseVecStyle, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{1}()
+Broadcast.BroadcastStyle(::SparseMatStyle, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{2}()
+
+struct PromoteToSparse <: Broadcast.AbstractArrayStyle{2} end
+PromoteToSparse(::Val{0}) = PromoteToSparse()
+PromoteToSparse(::Val{1}) = PromoteToSparse()
+PromoteToSparse(::Val{2}) = PromoteToSparse()
+PromoteToSparse(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
+
+const StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
+Broadcast.BroadcastStyle(::Type{<:Adjoint{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
+Broadcast.BroadcastStyle(::Type{<:Transpose{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
+
+Broadcast.BroadcastStyle(s::SPVM, ::Broadcast.AbstractArrayStyle{0}) = s
+Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()
+Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{2}) = PromoteToSparse()
+
+Broadcast.BroadcastStyle(::SPVM, ::LinearAlgebra.StructuredMatrixStyle{<:StructuredMatrix}) = PromoteToSparse()
+Broadcast.BroadcastStyle(::PromoteToSparse, ::LinearAlgebra.StructuredMatrixStyle{<:StructuredMatrix}) = PromoteToSparse()
+
+Broadcast.BroadcastStyle(::PromoteToSparse, ::SPVM) = PromoteToSparse()
+Broadcast.BroadcastStyle(::PromoteToSparse, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{2}()
+
+# FIXME: currently sparse broadcasts are only well-tested on known array types, while any AbstractArray
+# could report itself as a DefaultArrayStyle().
+# See https://github.com/JuliaLang/julia/pull/23939#pullrequestreview-72075382 for more details
+is_supported_sparse_broadcast() = true
+is_supported_sparse_broadcast(::AbstractArray, rest...) = false
+is_supported_sparse_broadcast(::AbstractSparseArray, rest...) = is_supported_sparse_broadcast(rest...)
+is_supported_sparse_broadcast(::StructuredMatrix, rest...) = is_supported_sparse_broadcast(rest...)
+is_supported_sparse_broadcast(::Array, rest...) = is_supported_sparse_broadcast(rest...)
+is_supported_sparse_broadcast(t::Union{Transpose, Adjoint}, rest...) = is_supported_sparse_broadcast(t.parent, rest...)
+is_supported_sparse_broadcast(x, rest...) = axes(x) === () && is_supported_sparse_broadcast(rest...)
+is_supported_sparse_broadcast(x::Ref, rest...) = is_supported_sparse_broadcast(rest...)
+
+# Dispatch on broadcast operations by number of arguments
+const Broadcasted0{Style<:Union{Nothing,BroadcastStyle},Axes,F} =
+    Broadcasted{Style,Axes,F,Tuple{}}
+const SpBroadcasted1{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat}} =
+    Broadcasted{Style,Axes,F,Args}
+const SpBroadcasted2{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat,SparseVecOrMat}} =
+    Broadcasted{Style,Axes,F,Args}
+
 # (1) The definitions below provide a common interface to sparse vectors and matrices
 # sufficient for the purposes of map[!]/broadcast[!]. This interface treats sparse vectors
 # as n-by-one sparse matrices which, though technically incorrect, is how broacast[!] views
 # sparse vectors in practice.
-SparseVecOrMat = Union{SparseVector,SparseMatrixCSC}
 @inline numrows(A::SparseVector) = A.n
 @inline numrows(A::SparseMatrixCSC) = A.m
 @inline numcols(A::SparseVector) = 1
@@ -85,18 +154,18 @@ function _noshapecheck_map(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
     maxnnzC = fpreszeros ? min(length(A), _sumnnzs(A, Bs...)) : length(A)
-    entrytypeC = Base.Broadcast.combine_eltypes(f, A, Bs...)
+    entrytypeC = Base.Broadcast.combine_eltypes(f, (A, Bs...))
     indextypeC = _promote_indtype(A, Bs...)
     C = _allocres(size(A), indextypeC, entrytypeC, maxnnzC)
     return fpreszeros ? _map_zeropres!(f, C, A, Bs...) :
                         _map_notzeropres!(f, fofzeros, C, A, Bs...)
 end
 # (3) broadcast[!] entry points
-broadcast(f::Tf, A::SparseVector) where {Tf} = _noshapecheck_map(f, A)
-broadcast(f::Tf, A::SparseMatrixCSC) where {Tf} = _noshapecheck_map(f, A)
+copy(bc::SpBroadcasted1) = _noshapecheck_map(bc.f, bc.args[1])
 
-@inline function broadcast!(f::Tf, C::SparseVecOrMat, ::Nothing) where Tf
+@inline function copyto!(C::SparseVecOrMat, bc::Broadcasted0{Nothing})
     isempty(C) && return _finishempty!(C)
+    f = bc.f
     fofnoargs = f()
     if _iszero(fofnoargs) # f() is zero, so empty C
         trimstorage!(C, 0)
@@ -109,19 +178,12 @@ broadcast(f::Tf, A::SparseMatrixCSC) where {Tf} = _noshapecheck_map(f, A)
     return C
 end
 
-# the following three similar defs are necessary for type stability in the mixed vector/matrix case
-broadcast(f::Tf, A::SparseVector, Bs::Vararg{SparseVector,N}) where {Tf,N} =
-    _aresameshape(A, Bs...) ? _noshapecheck_map(f, A, Bs...) : _diffshape_broadcast(f, A, Bs...)
-broadcast(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N}) where {Tf,N} =
-    _aresameshape(A, Bs...) ? _noshapecheck_map(f, A, Bs...) : _diffshape_broadcast(f, A, Bs...)
-broadcast(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N} =
-    _diffshape_broadcast(f, A, Bs...)
 function _diffshape_broadcast(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
     indextypeC = _promote_indtype(A, Bs...)
-    entrytypeC = Base.Broadcast.combine_eltypes(f, A, Bs...)
-    shapeC = to_shape(Base.Broadcast.combine_indices(A, Bs...))
+    entrytypeC = Base.Broadcast.combine_eltypes(f, (A, Bs...))
+    shapeC = to_shape(Base.Broadcast.combine_axes(A, Bs...))
     maxnnzC = fpreszeros ? _checked_maxnnzbcres(shapeC, A, Bs...) : _densennz(shapeC)
     C = _allocres(shapeC, indextypeC, entrytypeC, maxnnzC)
     return fpreszeros ? _broadcast_zeropres!(f, C, A, Bs...) :
@@ -141,6 +203,10 @@ end
 @inline _aresameshape(A, B) = size(A) == size(B)
 @inline _aresameshape(A, B, Cs...) = _aresameshape(A, B) ? _aresameshape(B, Cs...) : false
 @inline _checksameshape(As...) = _aresameshape(As...) || throw(DimensionMismatch("argument shapes must match"))
+@inline _all_args_isa(t::Tuple{Any}, ::Type{T}) where T = isa(t[1], T)
+@inline _all_args_isa(t::Tuple{Any,Vararg{Any}}, ::Type{T}) where T = isa(t[1], T) & _all_args_isa(tail(t), T)
+@inline _all_args_isa(t::Tuple{Broadcasted}, ::Type{T}) where T = _all_args_isa(t[1].args, T)
+@inline _all_args_isa(t::Tuple{Broadcasted,Vararg{Any}}, ::Type{T}) where T = _all_args_isa(t[1].args, T) & _all_args_isa(tail(t), T)
 @inline _densennz(shape::NTuple{1}) = shape[1]
 @inline _densennz(shape::NTuple{2}) = shape[1] * shape[2]
 _maxnnzfrom(shape::NTuple{1}, A) = nnz(A) * div(shape[1], A.n)
@@ -887,37 +953,56 @@ end
 
 # (10) broadcast over combinations of broadcast scalars and sparse vectors/matrices
 
-# broadcast container type promotion for combinations of sparse arrays and other types
-struct SparseVecStyle <: Broadcast.AbstractArrayStyle{1} end
-struct SparseMatStyle <: Broadcast.AbstractArrayStyle{2} end
-Broadcast.BroadcastStyle(::Type{<:SparseVector}) = SparseVecStyle()
-Broadcast.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatStyle()
-const SPVM = Union{SparseVecStyle,SparseMatStyle}
-
-# SparseVecStyle handles 0-1 dimensions, SparseMatStyle 0-2 dimensions.
-# SparseVecStyle promotes to SparseMatStyle for 2 dimensions.
-# Fall back to DefaultArrayStyle for higher dimensionality.
-SparseVecStyle(::Val{0}) = SparseVecStyle()
-SparseVecStyle(::Val{1}) = SparseVecStyle()
-SparseVecStyle(::Val{2}) = SparseMatStyle()
-SparseVecStyle(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
-SparseMatStyle(::Val{0}) = SparseMatStyle()
-SparseMatStyle(::Val{1}) = SparseMatStyle()
-SparseMatStyle(::Val{2}) = SparseMatStyle()
-SparseMatStyle(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
-
-Broadcast.BroadcastStyle(::SparseMatStyle, ::SparseVecStyle) = SparseMatStyle()
-
-# Tuples promote to dense
-Broadcast.BroadcastStyle(::SparseVecStyle, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{1}()
-Broadcast.BroadcastStyle(::SparseMatStyle, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{2}()
-
 # broadcast entry points for combinations of sparse arrays and other (scalar) types
-function broadcast(f, ::SPVM, ::Nothing, ::Nothing, mixedargs::Vararg{Any,N}) where N
-    parevalf, passedargstup = capturescalars(f, mixedargs)
-    return broadcast(parevalf, passedargstup...)
+@inline function copy(bc::Broadcasted{<:SPVM})
+    bcf = flatten(bc)
+    return _copy(bcf.f, bcf.args...)
 end
-# for broadcast! see (11)
+
+_copy(f, args::SparseVector...) = _shapecheckbc(f, args...)
+_copy(f, args::SparseMatrixCSC...) = _shapecheckbc(f, args...)
+_copy(f, args::SparseVecOrMat...) = _diffshape_broadcast(f, args...)
+# Otherwise, we incorporate scalars into the function and re-dispatch
+function _copy(f, args...)
+    parevalf, passedargstup = capturescalars(f, args)
+    return _copy(parevalf, passedargstup...)
+end
+
+function _shapecheckbc(f, args...)
+    _aresameshape(args...) ? _noshapecheck_map(f, args...) : _diffshape_broadcast(f, args...)
+end
+
+
+@inline function copyto!(dest::SparseVecOrMat, bc::Broadcasted{<:SPVM})
+    if bc.f === identity && bc isa SpBroadcasted1 && Base.axes(dest) == (A = bc.args[1]; Base.axes(A))
+        return copyto!(dest, A)
+    end
+    bcf = flatten(bc)
+    As = map(arg->Base.unalias(dest, arg), bcf.args)
+    return _copyto!(bcf.f, dest, As...)
+end
+
+@inline function _copyto!(f, dest, As::SparseVecOrMat...)
+    _aresameshape(dest, As...) && return _noshapecheck_map!(f, dest, As...)
+    Base.Broadcast.check_broadcast_axes(axes(dest), As...)
+    fofzeros = f(_zeros_eltypes(As...)...)
+    if _iszero(fofzeros)
+        return _broadcast_zeropres!(f, dest, As...)
+    else
+        return _broadcast_notzeropres!(f, fofzeros, dest, As...)
+    end
+end
+
+@inline function _copyto!(f, dest, args...)
+    # args contains nothing but SparseVecOrMat and scalars
+    # See below for capturescalars
+    parevalf, passedsrcargstup = capturescalars(f, args)
+    _copyto!(parevalf, dest, passedsrcargstup...)
+end
+
+struct CapturedScalars{F, Args, Order}
+    args::Args
+end
 
 # capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
 # broadcast scalar arguments (mixedargs), and returns a function (parevalf, i.e. partially
@@ -930,6 +1015,13 @@ end
         return (parevalf, passedsrcargstup)
     end
 end
+# Work around losing Type{T}s as DataTypes within the tuple that makeargs creates
+@inline capturescalars(f, mixedargs::Tuple{Ref{Type{T}}, Vararg{Any}}) where {T} =
+    capturescalars((args...)->f(T, args...), Base.tail(mixedargs))
+@inline capturescalars(f, mixedargs::Tuple{SparseVecOrMat, Ref{Type{T}}, Vararg{Any}}) where {T} =
+    capturescalars((a1, args...)->f(a1, T, args...), (mixedargs[1], Base.tail(Base.tail(mixedargs))...))
+@inline capturescalars(f, mixedargs::Tuple{Union{Ref,AbstractArray{0}}, Ref{Type{T}}, Vararg{Any}}) where {T} =
+    capturescalars((args...)->f(mixedargs[1], T, args...), Base.tail(Base.tail(mixedargs)))
 
 nonscalararg(::SparseVecOrMat) = true
 nonscalararg(::Any) = false
@@ -942,11 +1034,17 @@ end
 @inline function _capturescalars(arg, mixedargs...)
     let (rest, f) = _capturescalars(mixedargs...)
         if nonscalararg(arg)
-            return (arg, rest...), (head, tail...) -> (head, f(tail...)...) # pass-through to broadcast
+            return (arg, rest...), @inline function(head, tail...)
+                (head, f(tail...)...)
+            end # pass-through to broadcast
         elseif scalarwrappedarg(arg)
-            return rest, (tail...) -> (arg[], f(tail...)...) # unwrap and add back scalararg after (in makeargs)
+            return rest, @inline function(tail...)
+                (arg[], f(tail...)...) # TODO: This can put a Type{T} in a tuple
+            end # unwrap and add back scalararg after (in makeargs)
         else
-            return rest, (tail...) -> (arg, f(tail...)...) # add back scalararg after (in makeargs)
+            return rest, @inline function(tail...)
+                (arg, f(tail...)...)
+            end # add back scalararg after (in makeargs)
         end
     end
 end
@@ -972,69 +1070,18 @@ broadcast(f::Tf, A::SparseMatrixCSC, ::Type{T}) where {Tf,T} = broadcast(x -> f(
 # vectors/matrices, promote all structured matrices and dense vectors/matrices to sparse
 # and rebroadcast. otherwise, divert to generic AbstractArray broadcast code.
 
-struct PromoteToSparse <: Broadcast.AbstractArrayStyle{2} end
-PromoteToSparse(::Val{0}) = PromoteToSparse()
-PromoteToSparse(::Val{1}) = PromoteToSparse()
-PromoteToSparse(::Val{2}) = PromoteToSparse()
-PromoteToSparse(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
-
-const StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
-Broadcast.BroadcastStyle(::Type{<:StructuredMatrix}) = PromoteToSparse()
-Broadcast.BroadcastStyle(::Type{<:Adjoint{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
-Broadcast.BroadcastStyle(::Type{<:Transpose{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
-
-Broadcast.BroadcastStyle(s::SPVM, ::Broadcast.AbstractArrayStyle{0}) = s
-Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()
-Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{2}) = PromoteToSparse()
-
-Broadcast.BroadcastStyle(::PromoteToSparse, ::SPVM) = PromoteToSparse()
-Broadcast.BroadcastStyle(::PromoteToSparse, ::Broadcast.Style{Tuple}) = Broadcast.DefaultArrayStyle{2}()
-
-# FIXME: currently sparse broadcasts are only well-tested on known array types, while any AbstractArray
-# could report itself as a DefaultArrayStyle().
-# See https://github.com/JuliaLang/julia/pull/23939#pullrequestreview-72075382 for more details
-is_supported_sparse_broadcast() = true
-is_supported_sparse_broadcast(::AbstractArray, rest...) = false
-is_supported_sparse_broadcast(::AbstractSparseArray, rest...) = is_supported_sparse_broadcast(rest...)
-is_supported_sparse_broadcast(::StructuredMatrix, rest...) = is_supported_sparse_broadcast(rest...)
-is_supported_sparse_broadcast(::Array, rest...) = is_supported_sparse_broadcast(rest...)
-is_supported_sparse_broadcast(t::Union{Transpose, Adjoint}, rest...) = is_supported_sparse_broadcast(t.parent, rest...)
-is_supported_sparse_broadcast(x, rest...) = axes(x) === () && is_supported_sparse_broadcast(rest...)
-is_supported_sparse_broadcast(x::Ref, rest...) = is_supported_sparse_broadcast(rest...)
-function broadcast(f, s::PromoteToSparse, ::Nothing, ::Nothing, As::Vararg{Any,N}) where {N}
-    if is_supported_sparse_broadcast(As...)
-        return broadcast(f, map(_sparsifystructured, As)...)
+function copy(bc::Broadcasted{PromoteToSparse})
+    bcf = flatten(bc)
+    if is_supported_sparse_broadcast(bcf.args...)
+        broadcast(bcf.f, map(_sparsifystructured, bcf.args)...)
     else
-        return broadcast(f, Broadcast.ArrayConflict(), nothing, nothing, As...)
+        return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{2}}, bc))
     end
 end
 
-# For broadcast! with ::Any inputs, we need a layer of indirection to determine whether
-# the inputs can be promoted to SparseVecOrMat. If it's just SparseVecOrMat and scalars,
-# we can handle it here, otherwise see below for the promotion machinery.
-function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
-    if f isa typeof(identity) && N == 0 && Base.axes(dest) == Base.axes(A)
-        return copyto!(dest, A)
-    end
-    A′ = Base.unalias(dest, A)
-    Bs′ = map(B->Base.unalias(dest, B), Bs)
-    _aresameshape(dest, A′, Bs′...) && return _noshapecheck_map!(f, dest, A′, Bs′...)
-    Base.Broadcast.check_broadcast_indices(axes(dest), A′, Bs′...)
-    fofzeros = f(_zeros_eltypes(A′, Bs′...)...)
-    fpreszeros = _iszero(fofzeros)
-    fpreszeros ? _broadcast_zeropres!(f, dest, A′, Bs′...) :
-                        _broadcast_notzeropres!(f, fofzeros, dest, A′, Bs′...)
-    return dest
-end
-function broadcast!(f::Tf, dest::SparseVecOrMat, ::SPVM, mixedsrcargs::Vararg{Any,N}) where {Tf,N}
-    # mixedsrcargs contains nothing but SparseVecOrMat and scalars
-    parevalf, passedsrcargstup = capturescalars(f, mixedsrcargs)
-    broadcast!(parevalf, dest, passedsrcargstup...)
-    return dest
-end
-function broadcast!(f::Tf, dest::SparseVecOrMat, ::PromoteToSparse, mixedsrcargs::Vararg{Any,N}) where {Tf,N}
-    broadcast!(f, dest, map(_sparsifystructured, mixedsrcargs)...)
-    return dest
+@inline function copyto!(dest::SparseVecOrMat, bc::Broadcasted{PromoteToSparse})
+    bcf = flatten(bc)
+    broadcast!(bcf.f, dest, map(_sparsifystructured, bcf.args)...)
 end
 
 _sparsifystructured(M::AbstractMatrix) = SparseMatrixCSC(M)
@@ -1047,8 +1094,7 @@ _sparsifystructured(x) = x
 
 
 # (12) map[!] over combinations of sparse and structured matrices
-SparseOrStructuredMatrix = Union{SparseMatrixCSC,StructuredMatrix}
-map(f::Tf, A::StructuredMatrix) where {Tf} = _noshapecheck_map(f, _sparsifystructured(A))
+SparseOrStructuredMatrix = Union{SparseMatrixCSC,LinearAlgebra.StructuredMatrix}
 map(f::Tf, A::SparseOrStructuredMatrix, Bs::Vararg{SparseOrStructuredMatrix,N}) where {Tf,N} =
     (_checksameshape(A, Bs...); _noshapecheck_map(f, _sparsifystructured(A), map(_sparsifystructured, Bs)...))
 map!(f::Tf, C::SparseMatrixCSC, A::SparseOrStructuredMatrix, Bs::Vararg{SparseOrStructuredMatrix,N}) where {Tf,N} =

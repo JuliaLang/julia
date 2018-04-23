@@ -95,8 +95,11 @@ issorted(itr;
 function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     inds = axes(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
-    @views v[k]
+    maybeview(v, k)
 end
+
+maybeview(v, k) = view(v, k)
+maybeview(v, k::Integer) = v[k]
 
 """
     partialsort!(v, k; by=<transform>, lt=<comparison>, rev=false)
@@ -716,7 +719,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     # do partial quicksort
     sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
 
-    @views ix[k]
+    maybeview(ix, k)
 end
 
 ## sortperm: the permutation to sort an array ##

@@ -19,6 +19,8 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat
+using Base.Broadcast: Broadcasted
+
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
 
@@ -327,6 +329,7 @@ include("special.jl")
 include("bitarray.jl")
 include("ldlt.jl")
 include("schur.jl")
+include("structuredbroadcast.jl")
 include("deprecated.jl")
 
 const ⋅ = dot

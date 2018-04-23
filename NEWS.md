@@ -388,11 +388,6 @@ This section lists changes that do not have deprecation warnings.
     Its return value has been removed. Use the `process_running` function
     to determine if a process has already exited.
 
-  * Broadcasting has been redesigned with an extensible public interface. The new API is
-    documented at https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1.
-    `AbstractArray` types that specialized broadcasting using the old internal API will
-    need to switch to the new API. ([#20740])
-
   * The logging system has been redesigned - `info` and `warn` are deprecated
     and replaced with the logging macros `@info`, `@warn`, `@debug` and
     `@error`.  The `logging` function is also deprecated and replaced with
@@ -417,6 +412,14 @@ This section lists changes that do not have deprecation warnings.
 
   * `findn(x::AbstractArray)` has been deprecated in favor of `findall(!iszero, x)`, which
     now returns cartesian indices for multidimensional arrays (see below, [#25532]).
+
+  * Broadcasting operations are no longer fused into a single operation by Julia's parser.
+    Instead, a lazy `Broadcasted` wrapper is created, and the parser will call
+    `copy(bc::Broadcasted)` or `copyto!(dest, bc::Broadcasted)`
+    to evaluate the wrapper. Consequently, package authors generally need to specialize
+    `copy` and `copyto!` methods rather than `broadcast` and `broadcast!`.
+    See the [Interfaces chapter](https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1)
+    for more information.
 
   * `find` has been renamed to `findall`. `findall`, `findfirst`, `findlast`, `findnext`
     now take and/or return the same type of indices as `keys`/`pairs` for `AbstractArray`,
