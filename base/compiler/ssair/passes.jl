@@ -189,7 +189,7 @@ is_tuple_call(ir, def) = isa(def, Expr) && is_known_call(def, tuple, ir, ir.mod)
 
 function process_immutable_preserve(new_preserves::Vector{Any}, compact::IncrementalCompact, def::Expr)
     for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
-        if !isbitstype(compact_exprtype(compact, arg))
+        if !isbitstype(widenconst(compact_exprtype(compact, arg)))
             push!(new_preserves, arg)
         end
     end
