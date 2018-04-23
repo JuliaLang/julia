@@ -797,8 +797,8 @@ end
     @deprecate_stdlib triu        LinearAlgebra true
     @deprecate_stdlib vecdot      LinearAlgebra true
     @deprecate_stdlib vecnorm     LinearAlgebra true
-    # @deprecate_stdlib ⋅           LinearAlgebra true
-    # @deprecate_stdlib ×           LinearAlgebra true
+    @deprecate_stdlib $(:⋅)       LinearAlgebra true
+    @deprecate_stdlib $(:×)       LinearAlgebra true
 
     ## types that were re-exported from Base
     @deprecate_stdlib Diagonal        LinearAlgebra true
