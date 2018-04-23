@@ -342,11 +342,13 @@ end
 @test [fetch(rr) for rr in rr_list] == [:OK for x in 1:ntasks]
 
 function test_channel(c)
+    @test isopen(c) == true
     put!(c, 1)
     put!(c, "Hello")
     put!(c, 5.0)
 
     @test isready(c) == true
+    @test isopen(c) == true
     @test fetch(c) == 1
     @test fetch(c) == 1   # Should not have been popped previously
     @test take!(c) == 1
@@ -354,7 +356,9 @@ function test_channel(c)
     @test fetch(c) == 5.0
     @test take!(c) == 5.0
     @test isready(c) == false
+    @test isopen(c) == true
     close(c)
+    @test isopen(c) == false
 end
 
 test_channel(Channel(10))
@@ -369,13 +373,13 @@ function test_iteration(in_c, out_c)
         put!(out_c, v)
     end
 
-    isa(in_c, Channel) && @test isopen(in_c) == true
+    @test isopen(in_c) == true
     put!(in_c, 1)
     @test take!(out_c) == 1
     put!(in_c, "Hello")
     close(in_c)
     @test take!(out_c) == "Hello"
-    isa(in_c, Channel) && @test isopen(in_c) == false
+    @test isopen(in_c) == false
     @test_throws InvalidStateException put!(in_c, :foo)
     yield()
     @test istaskdone(t) == true
