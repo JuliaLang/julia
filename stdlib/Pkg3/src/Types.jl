@@ -719,7 +719,12 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
         pinned = (info != nothing && get(info, "pinned", false))
         if upgrade_or_add && !pinned && !just_cloned
             rev = pkg.repo.rev
-            GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+            try
+                GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+            catch e
+                e isa LibGit2.GitError || rethrow(e)
+                cmderror("failed to fetch from $(pkg.repo.url), error: $e")
+            end
         end
         if upgrade_or_add && !pinned
             rev = pkg.repo.rev
