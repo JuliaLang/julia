@@ -701,3 +701,10 @@ let X = zeros(2, 3)
     X .= (1, 2)
     @test X == [1 1 1; 2 2 2]
 end
+
+# Issue #26127: multiple splats in a fused dot-expression
+let f(args...) = *(args...)
+    x, y, z = (1,2), 3, (4, 5)
+    @test f.(x..., y, z...) == broadcast(f, x..., y, z...) == 120
+    @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
+end
