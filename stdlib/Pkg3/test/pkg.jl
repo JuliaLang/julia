@@ -158,6 +158,21 @@ temp_pkg_dir() do project_path
             end
         end
     end
+
+    @testset "up in Project without manifest" begin
+        mktempdir() do dir
+            cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
+            cd(joinpath(dir, "UnregisteredWithProject")) do
+                try
+                    pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                    Pkg3.up()
+                    @test haskey(Pkg3.installed(), "Example")
+                finally
+                    popfirst!(LOAD_PATH)
+                end
+            end
+        end
+    end
 end
 
 temp_pkg_dir() do project_path

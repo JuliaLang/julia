@@ -961,20 +961,24 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
         pkg.version isa UpgradeLevel || continue
         level = pkg.version
         info = manifest_info(ctx.env, pkg.uuid)
-        if haskey(info, "repo-url")
+        if info !== nothing && haskey(info, "repo-url")
             pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
             new = handle_repos_add!(ctx, [pkg]; upgrade_or_add = (level == UPLEVEL_MAJOR))
             append!(new_git, new)
         else
-            ver = VersionNumber(info["version"])
-            if level == UPLEVEL_FIXED
-                pkg.version = VersionNumber(info["version"])
+            if info !== nothing
+                ver = VersionNumber(info["version"])
+                if level == UPLEVEL_FIXED
+                    pkg.version = VersionNumber(info["version"])
+                else
+                    r = level == UPLEVEL_PATCH ? VersionRange(ver.major, ver.minor) :
+                        level == UPLEVEL_MINOR ? VersionRange(ver.major) :
+                        level == UPLEVEL_MAJOR ? VersionRange() :
+                            error("unexpected upgrade level: $level")
+                    pkg.version = VersionSpec(r)
+                end
             else
-                r = level == UPLEVEL_PATCH ? VersionRange(ver.major, ver.minor) :
-                    level == UPLEVEL_MINOR ? VersionRange(ver.major) :
-                    level == UPLEVEL_MAJOR ? VersionRange() :
-                        error("unexpected upgrade level: $level")
-                pkg.version = VersionSpec(r)
+                pkg.version = VersionSpec()
             end
         end
     end
