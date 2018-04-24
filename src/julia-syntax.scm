@@ -1691,7 +1691,7 @@
              (kws (car kws+args))
              (kws (if (null? kws) kws (list (cons 'parameters kws))))
              (args (map dot-to-fuse (cdr kws+args)))
-             (make `(call (|.| (top Broadcast) ,(if (null? kws) ''make ''make_kwsyntax)) ,@kws ,f ,@args)))
+             (make `(call (|.| (top Broadcast) ,(if (null? kws) ''broadcasted ''broadcasted_kwsyntax)) ,@kws ,f ,@args)))
         (if top (cons 'fuse make) make)))
     (if (and (pair? e) (eq? (car e) '|.|))
         (let ((f (cadr e)) (x (caddr e)))

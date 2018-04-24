@@ -449,8 +449,8 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | `Base.copy(bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast` |
 | `Base.copyto!(dest, bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast!`, specializing on `DestStyle` |
 | `Base.copyto!(dest::DestType, bc::Broadcasted{Nothing})` | Custom implementation of `broadcast!`, specializing on `DestType` |
-| `Base.Broadcast.make(f, args...)` | Override the default lazy behavior within a fused expression |
-| `Base.Broadcast.instantiate(bc::Broadcasted{DestStyle})` | Override the computation of the wrapper's axes and indexers |
+| `Base.Broadcast.broadcasted(f, args...)` | Override the default lazy behavior within a fused expression |
+| `Base.Broadcast.instantiate(bc::Broadcasted{DestStyle})` | Override the computation of the lazy broadcast's axes |
 
 [Broadcasting](@ref) is triggered by an explicit call to `broadcast` or `broadcast!`, or implicitly by
 "dot" operations like `A .+ b` or `f.(x, y)`. Any object that has [`axes`](@ref) and supports
@@ -615,22 +615,22 @@ need or want to evaluate `x .* (x .+ 1)` as if it had been
 written `broadcast(*, x, broadcast(+, x, 1))`, where the inner operation is evaluated before
 tackling the outer operation. This sort of eager operation is directly supported by a bit
 of indirection; instead of directly constructing `Broadcasted` objects, Julia lowers the
-fused expression `x .* (x .+ 1)` to `Broadcast.make(*, x, Broadcast.make(+, x, 1))`. Now,
-by default, `make` just calls the `Broadcasted` constructor to create the lazy representation
+fused expression `x .* (x .+ 1)` to `Broadcast.broadcasted(*, x, Broadcast.broadcasted(+, x, 1))`. Now,
+by default, `broadcasted` just calls the `Broadcasted` constructor to create the lazy representation
 of the fused expression tree, but you can choose to override it for a particular combination
 of function and arguments.
 
 As an example, the builtin `AbstractRange` objects use this machinery to optimize pieces
 of broadcasted expressions that can be eagerly evaluated purely in terms of the start,
 step, and length (or stop) instead of computing every single element. Just like all the
-other machinery, `make` also computes and exposes the combined broadcast style of its
-arguments, so instead of specializing on `make(f, args...)`, you can specialize on
-`make(::DestStyle, f, args...)` for any combination of style, function, and arguments.
+other machinery, `broadcasted` also computes and exposes the combined broadcast style of its
+arguments, so instead of specializing on `broadcasted(f, args...)`, you can specialize on
+`broadcasted(::DestStyle, f, args...)` for any combination of style, function, and arguments.
 
 For example, the following definition supports the negation of ranges:
 
 ```julia
-make(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
 ```
 
 ### [Extending in-place broadcasting](@id extending-in-place-broadcast)
