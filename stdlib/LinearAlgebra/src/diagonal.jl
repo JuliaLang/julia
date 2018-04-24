@@ -112,7 +112,6 @@ isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
 
 factorize(D::Diagonal) = D
 
-broadcast(::typeof(abs), D::Diagonal) = Diagonal(abs.(D.diag))
 real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 

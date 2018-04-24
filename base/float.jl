@@ -875,13 +875,3 @@ float(r::StepRangeLen{T}) where {T} =
 function float(r::LinRange)
     LinRange(float(r.start), float(r.stop), length(r))
 end
-
-# big, broadcast over arrays
-# TODO: do the definitions below primarily pertaining to integers belong in float.jl?
-function big end # no prior definitions of big in sysimg.jl, necessitating this
-broadcast(::typeof(big), r::UnitRange) = big(r.start):big(last(r))
-broadcast(::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
-broadcast(::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
-function broadcast(::typeof(big), r::LinRange)
-    LinRange(big(r.start), big(r.stop), length(r))
-end
