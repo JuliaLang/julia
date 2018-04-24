@@ -1453,7 +1453,7 @@ function precise_container_type(arg::ANY, typ::ANY, vtypes::VarTable, sv::Infere
     if isa(typ, Const)
         val = typ.val
         if isa(val, SimpleVector) || isa(val, Tuple)
-            return Any[ abstract_eval_constant(x) for x in val ]
+            return Any[ abstract_eval_constant(val[i]) for i in 1:length(val) ]
         end
     end
 
@@ -1898,7 +1898,7 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
 end
 
 function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
-    argtypes = Any[abstract_eval(a, vtypes, sv) for a in e.args]
+    argtypes = Any[abstract_eval(e.args[i], vtypes, sv) for i in 1:length(e.args)]
     #print("call ", e.args[1], argtypes, "\n\n")
     for x in argtypes
         x === Bottom && return Bottom
@@ -4459,12 +4459,12 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                     newargs[i-2] = aarg.args[2:end]
                 elseif isa(argt,Const) && (isa(argt.val, Tuple) || isa(argt.val, SimpleVector)) &&
                         effect_free(aarg, sv.src, sv.mod, true)
-                    newargs[i-2] = Any[ QuoteNode(x) for x in argt.val ]
+                    newargs[i-2] = Any[ QuoteNode(argt.val[i]) for i in 1:length(argt.val) ]
                 elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && (isa(aarg.value, Tuple) || isa(aarg.value, SimpleVector)))
                     if isa(aarg, QuoteNode)
                         aarg = aarg.value
                     end
-                    newargs[i-2] = Any[ QuoteNode(x) for x in aarg ]
+                    newargs[i-2] = Any[ QuoteNode(aarg[i]) for i in 1:length(aarg) ]
                 elseif isa(t, DataType) && t.name === Tuple.name && !isvatuple(t) &&
                          length(t.parameters) <= sv.params.MAX_TUPLE_SPLAT
                     for k = (effect_free_upto+1):(i-3)
