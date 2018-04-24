@@ -80,23 +80,29 @@ function Base.show(io::IO, code::IRCode)
     used = IdSet{Int}()
     Base.println(io, "Code")
     foreach(stmt->scan_ssa_use!(used, stmt), code.stmts)
+    cfg = code.cfg
+    max_bb_idx_size = length(string(length(cfg.blocks)))
+    bb_idx = 1
+    if any(i->!isassigned(code.new_nodes, i), 1:length(code.new_nodes))
+        printstyled(io, :red, "ERROR: New node array has unset entry\n")
+    end
+    new_nodes = code.new_nodes[filter(i->isassigned(code.new_nodes, i), 1:length(code.new_nodes))]
     foreach(nn -> scan_ssa_use!(used, nn.node), new_nodes)
+    perm = sortperm(new_nodes, by = x->x[1])
+    new_nodes_perm = Iterators.Stateful(perm)
+
     if isempty(used)
         maxsize = 0
     else
         maxused = maximum(used)
         maxsize = length(string(maxused))
     end
-    cfg = code.cfg
-    max_bb_idx_size = length(string(length(cfg.blocks)))
-    bb_idx = 1
-    perm = sortperm(code.new_nodes, by = x->x[1])
-    new_nodes_perm = Iterators.Stateful(perm)
+
     for idx in eachindex(code.stmts)
         if !isassigned(code.stmts, idx)
             # This is invalid, but do something useful rather
             # than erroring, to make debugging easier
-            printstyled(:red, "UNDEF\n")
+            printstyled(io, :red, "UNDEF\n")
             continue
         end
         stmt = code.stmts[idx]
@@ -116,9 +122,9 @@ function Base.show(io::IO, code::IRCode)
             print_sep = true
         end
         floop = true
-        while !isempty(new_nodes_perm) && code.new_nodes[peek(new_nodes_perm)][1] == idx
+        while !isempty(new_nodes_perm) && new_nodes[peek(new_nodes_perm)][1] == idx
             node_idx = popfirst!(new_nodes_perm)
-            new_node = code.new_nodes[node_idx]
+            new_node = new_nodes[node_idx]
             node_idx += length(code.stmts)
             if print_sep
                 if floop
