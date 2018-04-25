@@ -49,9 +49,6 @@ endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in char
 startswith(a::String, b::String) = sizeof(a) ≥ sizeof(b) &&
     ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0
 
-startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
-    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0
-
 # TODO: fast endswith
 
 """
