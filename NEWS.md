@@ -414,11 +414,12 @@ This section lists changes that do not have deprecation warnings.
     now returns cartesian indices for multidimensional arrays (see below, [#25532]).
 
   * Broadcasting operations are no longer fused into a single operation by Julia's parser.
-    Instead, a lazy `Broadcasted` wrapper is created, and the parser will call
-    `copy(bc::Broadcasted)` or `copyto!(dest, bc::Broadcasted)`
+    Instead, a lazy `Broadcasted` object is created to represent the fused expression and
+    then realized with `copy(bc::Broadcasted)` or `copyto!(dest, bc::Broadcasted)`
     to evaluate the wrapper. Consequently, package authors generally need to specialize
-    `copy` and `copyto!` methods rather than `broadcast` and `broadcast!`.
-    See the [Interfaces chapter](https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1)
+    `copy` and `copyto!` methods rather than `broadcast` and `broadcast!`. This also allows
+    for more customization and control of fused broadcasts. See the
+    [Interfaces chapter](https://docs.julialang.org/en/latest/manual/interfaces/#man-interfaces-broadcasting-1)
     for more information.
 
   * `find` has been renamed to `findall`. `findall`, `findfirst`, `findlast`, `findnext`
