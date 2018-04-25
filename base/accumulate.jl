@@ -125,7 +125,7 @@ Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
 cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
-    accumulate!(add_sum, B, A, dims=dims)
+    accumulate!(mul_prod, B, A, dims=dims)
 
 """
     cumprod!(y::AbstractVector, x::AbstractVector)
