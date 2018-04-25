@@ -1095,7 +1095,6 @@ function (-)(B::BitArray)
     end
     return A
 end
-broadcast(::typeof(sign), B::BitArray) = copy(B)
 
 """
     flipbits!(B::BitArray{N}) -> BitArray{N}

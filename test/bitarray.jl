@@ -1535,3 +1535,25 @@ timesofar("I/O")
     b[:] = view(trues(10), [1,3,7])
     @test b == trues(3)
 end
+
+@testset "chunked broadcast" begin
+    for (f,g,h) in ((&,|,!),(*,xor,identity),(|,xor,sign),(&,&,~),(|,|,!))
+        fg = (A, B, C)->f.(A, g.(B, C))
+        fgh = (A, B, C)->f.(A, g.(B, h.(C)))
+        for n in (1, 63, 64, 65, 127, 128, 129)
+            for ((A,B,C),T) in ((bitrand.((n,n,n)), BitVector), (bitrand.((n,n,n), 2), BitMatrix))
+                @check_bit_operation broadcast(f, A) T
+                @check_bit_operation broadcast(g, A) T
+                @check_bit_operation broadcast(h, A) T
+                @check_bit_operation fg(A, B, C) T
+                @check_bit_operation fg(true, B, C) T
+                @check_bit_operation fg(A, false, C) T
+                @check_bit_operation fg(A, B, true) T
+                @check_bit_operation fgh(A, B, C) T
+                @check_bit_operation fgh(true, B, C) T
+                @check_bit_operation fgh(A, false, C) T
+                @check_bit_operation fgh(A, B, true) T
+            end
+        end
+    end
+end

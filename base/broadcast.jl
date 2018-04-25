@@ -5,8 +5,8 @@ module Broadcast
 using .Base.Cartesian
 using .Base: Indices, OneTo, linearindices, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
-import .Base: broadcast, broadcast!, copy, copyto!
-export BroadcastStyle, broadcast_axes, broadcast_similar, broadcastable,
+import .Base: copy, copyto!
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcast_similar, broadcastable,
        broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
@@ -813,7 +813,7 @@ end
 
 # Performance optimization: for BitArray outputs, we cache the result
 # in a "small" Vector{Bool}, and then copy in chunks into the output
-function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
+@inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
     tmp = Vector{Bool}(undef, bitcache_size)
@@ -839,12 +839,13 @@ end
 # For some BitArray operations, we can work at the level of chunks. The trivial
 # implementation just walks over the UInt64 chunks in a linear fashion.
 # This requires three things:
-#   1. The function must be known to work at the level of chunks
-#   2. The only arrays involved must be BitArrays or scalars
+#   1. The function must be known to work at the level of chunks (or can be converted to do so)
+#   2. The only arrays involved must be BitArrays or scalar Bools
 #   3. There must not be any broadcasting beyond scalar — all array sizes must match
 # We could eventually allow for all broadcasting and other array types, but that
 # requires very careful consideration of all the edge effects.
-const ChunkableOp = Union{typeof(&), typeof(|), typeof(xor), typeof(~)}
+const ChunkableOp = Union{typeof(&), typeof(|), typeof(xor), typeof(~), typeof(identity),
+    typeof(!), typeof(*), typeof(==)} # these are convertable to chunkable ops by liftfuncs
 const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, Axes, F<:ChunkableOp, Args<:Tuple} = Broadcasted{Style,Axes,F,Args}
 ischunkedbroadcast(R, bc::BroadcastedChunkableOp) = ischunkedbroadcast(R, bc.args)
 ischunkedbroadcast(R, args) = false
@@ -853,6 +854,14 @@ ischunkedbroadcast(R, args::Tuple{<:Bool,Vararg{Any}}) = ischunkedbroadcast(R, t
 ischunkedbroadcast(R, args::Tuple{<:BroadcastedChunkableOp,Vararg{Any}}) = ischunkedbroadcast(R, args[1]) && ischunkedbroadcast(R, tail(args))
 ischunkedbroadcast(R, args::Tuple{}) = true
 
+# Convert compatible functions to chunkable ones. They must also be green-lighted as ChunkableOps
+liftfuncs(bc::Broadcasted{Style}) where {Style} = Broadcasted{Style}(bc.f, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted{Style,<:Any,typeof(sign)}) where {Style} = Broadcasted{Style}(identity, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted{Style,<:Any,typeof(!)}) where {Style} = Broadcasted{Style}(~, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted{Style,<:Any,typeof(*)}) where {Style} = Broadcasted{Style}(&, map(liftfuncs, bc.args), bc.axes)
+liftfuncs(bc::Broadcasted{Style,<:Any,typeof(==)}) where {Style} = Broadcasted{Style}((~)∘(xor), map(liftfuncs, bc.args), bc.axes)
+liftfuncs(x) = x
+
 liftchunks(::Tuple{}) = ()
 liftchunks(args::Tuple{<:BitArray,Vararg{Any}}) = (args[1].chunks, liftchunks(tail(args))...)
 # Transform scalars to repeated scalars the size of a chunk
@@ -860,9 +869,9 @@ liftchunks(args::Tuple{<:Bool,Vararg{Any}}) = (ifelse(args[1], typemax(UInt64), 
 ithchunk(i) = ()
 Base.@propagate_inbounds ithchunk(i, c::Vector{UInt64}, args...) = (c[i], ithchunk(i, args...)...)
 Base.@propagate_inbounds ithchunk(i, b::UInt64, args...) = (b, ithchunk(i, args...)...)
-function chunkedcopyto!(dest::BitArray, bc::Broadcasted)
+@inline function chunkedcopyto!(dest::BitArray, bc::Broadcasted)
     isempty(dest) && return dest
-    f = flatten(bc)
+    f = flatten(liftfuncs(bc))
     args = liftchunks(f.args)
     dc = dest.chunks
     @simd for i in eachindex(dc)

@@ -135,13 +135,6 @@ using .Checked
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
-# Define the broadcast function, which is mostly implemented in
-# broadcast.jl, so that we can overload broadcast methods for
-# specific array types etc.
-#  --Here, just define fallback routines for broadcasting with no arguments
-broadcast(f) = f()
-broadcast!(f, X::AbstractArray) = (@inbounds for I in eachindex(X); X[I] = f(); end; X)
-
 # array structures
 include("indices.jl")
 include("array.jl")
