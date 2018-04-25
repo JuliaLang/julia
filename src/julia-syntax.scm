@@ -1721,7 +1721,7 @@
         ; expanded to something else (like a getfield)
         (if (null? lhs)
             (expand-forms e)
-            (expand-forms `(call (top broadcast!) (top identity) ,lhs-view ,e))))))
+            (expand-forms `(call (|.| (top Broadcast) 'materialize!) ,lhs-view (call (|.| (top Broadcast) 'broadcasted) (top identity) ,e)))))))
 
 
 (define (expand-where body var)
