@@ -118,10 +118,10 @@ function update_registry(ctx)
     return
 end
 
-up(;kwargs...)                           = up(PackageSpec[]; kwargs...)
-up(pkg::Union{String, PackageSpec}; kwargs...)               = up([pkg]; kwargs...)
-up(pkgs::Vector{String}; kwargs...)      = up([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
-up(pkgs::Vector{PackageSpec}; kwargs...) = up(Context(), pkgs; kwargs...)
+up(;kwargs...)                                 = up(PackageSpec[]; kwargs...)
+up(pkg::Union{String, PackageSpec}; kwargs...) = up([pkg]; kwargs...)
+up(pkgs::Vector{String}; kwargs...)            = up([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
+up(pkgs::Vector{PackageSpec}; kwargs...)       = up(Context(), pkgs; kwargs...)
 
 function up(ctx::Context, pkgs::Vector{PackageSpec};
             level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, kwargs...)
@@ -383,10 +383,13 @@ end
 #####################################
 # Backwards compatibility with Pkg2 #
 #####################################
-
-function clone(pkg::String...)
+function clone(url::String, name::String = "")
     @warn "Pkg.clone is only kept for legacy CI script reasons, please use `add`" maxlog=1
-    add(joinpath(pkg...))
+    ctx = Context()
+    if !isempty(name)
+        ctx.old_pkg2_clone_name = name
+    end
+    develop(ctx, [parse_package(url)])
 end
 
 function dir(pkg::String, paths::String...)
