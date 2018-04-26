@@ -159,6 +159,10 @@ temp_pkg_dir() do project_path
         end
     end
 
+    @testset "add julia" begin
+        @test_throws CommandError Pkg3.add("julia")
+    end
+
     @testset "up in Project without manifest" begin
         mktempdir() do dir
             cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))

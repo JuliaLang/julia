@@ -42,10 +42,10 @@ end
 uuid5(namespace::UUID, key::AbstractString) = uuid5(namespace, String(key))
 
 const uuid_dns = UUID(0x6ba7b810_9dad_11d1_80b4_00c04fd430c8)
-const uuid_julia = uuid5(uuid_dns, "julialang.org")
-const uuid_package = uuid5(uuid_julia, "package")
-const uuid_registry = uuid5(uuid_julia, "registry")
-
+const uuid_julia_project = uuid5(uuid_dns, "julialang.org")
+const uuid_package = uuid5(uuid_julia_project, "package")
+const uuid_registry = uuid5(uuid_julia_project, "registry")
+const uuid_julia = uuid5(uuid_package, "julia")
 
 ## user-friendly representation of package IDs ##
 function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
