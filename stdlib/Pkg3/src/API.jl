@@ -176,7 +176,22 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     registry_resolve!(ctx.env, pkgs)
-    ensure_resolved(ctx.env, pkgs; registry=true)
+    uuids_in_registry = UUID[]
+    for pkg in pkgs
+        pkg.mode = PKGMODE_MANIFEST
+    end
+    for pkg in pkgs
+        has_uuid(pkg) && push!(uuids_in_registry, pkg.uuid)
+    end
+    manifest_resolve!(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs)
+    # Every non pinned package that is freed need to be in a registry
+    for pkg in pkgs
+        info = manifest_info(ctx.env, pkg.uuid)
+        if !get(info, "pinned", false) && !(pkg.uuid in uuids_in_registry)
+            cmderror("cannot free an unpinned package that does not exist in a registry")
+        end
+    end
     Operations.free(ctx, pkgs)
     return
 end

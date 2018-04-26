@@ -339,7 +339,7 @@ What action you want the package manager to take:
 
 `develop`: clone the full package repo locally for development
 
-`free`: undoes a `pin` or `develop`
+`free`: undoes a `pin`, `develop`, or stops tracking a repo.
 
 `precompile`: precompile all the project dependencies
 """

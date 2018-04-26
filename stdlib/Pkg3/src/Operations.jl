@@ -80,7 +80,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
     for pkg in pkgs
         local path
         info = manifest_info(ctx.env, pkg.uuid)
-        if pkg.special_action == PKGSPEC_FREED
+        if pkg.special_action == PKGSPEC_FREED && !haskey(info, "pinned")
             continue
         elseif pkg.special_action == PKGSPEC_DEVELOPED
             @assert pkg.path !== nothing
@@ -596,17 +596,25 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
     info["version"] = string(version)
     hash == nothing ? delete!(info, "git-tree-sha1") : (info["git-tree-sha1"] = string(hash))
     path == nothing ? delete!(info, "path")          : (info["path"]          = relative_project_path_if_in_project(ctx, path))
-    if special_action in (PKGSPEC_FREED, PKGSPEC_DEVELOPED)
+    if special_action == PKGSPEC_DEVELOPED
         delete!(info, "pinned")
         delete!(info, "repo-url")
         delete!(info, "repo-rev")
+    elseif special_action == PKGSPEC_FREED
+        if get(info, "pinned", false)
+           delete!(info, "pinned")
+        else
+            delete!(info, "repo-url")
+            delete!(info, "repo-rev")
+        end
     elseif special_action == PKGSPEC_PINNED
         info["pinned"] = true
     elseif special_action == PKGSPEC_REPO_ADDED
         info["repo-url"] = repo.url
         info["repo-rev"] = repo.rev
         path = find_installed(name, uuid, hash)
-    elseif haskey(info, "repo-url")
+    end
+    if haskey(info, "repo-url")
         path = find_installed(name, uuid, hash)
     end
 
