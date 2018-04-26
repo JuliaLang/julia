@@ -2071,6 +2071,16 @@ end
 @test cumsum([1 2; 3 4], dims=2) == [1 3; 3 7]
 @test cumsum([1 2; 3 4], dims=3) == [1 2; 3 4]
 
+@test cumprod!(Vector{Int}(undef, 1), [5], dims=2) == [5]
+@test cumprod!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+@test cumprod!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 3 8]
+@test cumprod!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 2; 3 12]
+
+@test cumsum!(Vector{Int}(undef, 1), [5], dims=2) == [5]
+@test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=1) == [1 2; 4 6]
+@test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=2) == [1 3; 3 7]
+@test cumsum!(Matrix{Int}(undef, 2, 2), [1 2; 3 4], dims=3) == [1 2; 3 4]
+
 # issue #18363
 @test_throws DimensionMismatch cumsum!([0,0], 1:4)
 @test cumsum(Any[])::Vector{Any} == Any[]
