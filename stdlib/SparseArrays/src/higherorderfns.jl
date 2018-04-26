@@ -522,11 +522,16 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
         end
     # Cases with vertical expansion
     else # numrows(A) != numrows(C) (=> numrows(A) == 1)
+        svA, svC = storedvals(A), storedvals(C)
         @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
-            Ax = Ak < stopAk ? storedvals(A)[Ak] : zero(eltype(A))
+            Ax = Ak < stopAk ? svA[Ak] : zero(eltype(A))
             fofAx = f(Ax)
-            fofAx != fillvalue && (storedvals(C)[(jo + 1):(jo + numrows(C))] = fofAx)
+            if fofAx != fillvalue
+                for i in (jo + 1):(jo + numrows(C))
+                    svC[i] = fofAx
+                end
+            end
         end
     end
     return C

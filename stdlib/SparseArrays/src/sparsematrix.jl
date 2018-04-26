@@ -969,7 +969,7 @@ end
 function _ispermutationvalid_permute!(perm::AbstractVector{<:Integer},
         checkspace::Vector{<:Integer})
     n = length(perm)
-    checkspace[1:n] = 0
+    checkspace[1:n] .= 0
     for k in perm
         (0 < k ≤ n) && ((checkspace[k] ⊻= 1) == 1) || return false
     end
@@ -2326,10 +2326,10 @@ getindex(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Boo
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = A[findall(I),J]
 
 ## setindex!
-function setindex!(A::SparseMatrixCSC{Tv,Ti}, v, i::Integer, j::Integer) where Tv where Ti
-    setindex!(A, convert(Tv, v), convert(Ti, i), convert(Ti, j))
-end
-function setindex!(A::SparseMatrixCSC{Tv,Ti}, v::Tv, i::Ti, j::Ti) where Tv where Ti<:Integer
+function setindex!(A::SparseMatrixCSC{Tv,Ti}, _v, _i::Integer, _j::Integer) where Tv where Ti
+    v = convert(Tv, _v)
+    i = convert(Ti, _i)
+    j = convert(Ti, _j)
     if !((1 <= i <= A.m) & (1 <= j <= A.n))
         throw(BoundsError(A, (i,j)))
     end
@@ -2353,20 +2353,14 @@ function setindex!(A::SparseMatrixCSC{Tv,Ti}, v::Tv, i::Ti, j::Ti) where Tv wher
     return A
 end
 
-setindex!(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector{<:Integer}) = setindex!(A, v, [i], J)
-setindex!(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector{<:Integer}, j::Integer) = setindex!(A, v, I, [j])
+setindex!(A::SparseMatrixCSC, x::AbstractArray, ::Colon)          = setindex!(A, x, 1:length(A))
+setindex!(A::SparseMatrixCSC, x::AbstractArray, ::Colon, ::Colon) = setindex!(A, x, 1:size(A, 1), 1:size(A,2))
+setindex!(A::SparseMatrixCSC, x::AbstractArray, ::Colon, j::Union{Integer, AbstractVector}) = setindex!(A, x, 1:size(A, 1), j)
+setindex!(A::SparseMatrixCSC, x::AbstractArray, i::Union{Integer, AbstractVector}, ::Colon) = setindex!(A, x, i, 1:size(A, 2))
 
-setindex!(A::SparseMatrixCSC, x::Number, i::Integer, J::AbstractVector{<:Integer}) = setindex!(A, x, [i], J)
-setindex!(A::SparseMatrixCSC, x::Number, I::AbstractVector{<:Integer}, j::Integer) = setindex!(A, x, I, [j])
-
-# Colon translation
-setindex!(A::SparseMatrixCSC, x, ::Colon)          = setindex!(A, x, 1:length(A))
-setindex!(A::SparseMatrixCSC, x, ::Colon, ::Colon) = setindex!(A, x, 1:size(A, 1), 1:size(A,2))
-setindex!(A::SparseMatrixCSC, x, ::Colon, j::Union{Integer, AbstractVector}) = setindex!(A, x, 1:size(A, 1), j)
-setindex!(A::SparseMatrixCSC, x, i::Union{Integer, AbstractVector}, ::Colon) = setindex!(A, x, i, 1:size(A, 2))
-
-function setindex!(A::SparseMatrixCSC{Tv}, x::Number,
-        I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer}) where Tv
+function Base.fill!(V::SubArray{Tv, <:Any, <:SparseMatrixCSC, Tuple{Vararg{Union{Integer, AbstractVector{<:Integer}},2}}}, x) where Tv
+    A = V.parent
+    I, J = V.indices
     if isempty(I) || isempty(J); return A; end
     # lt=≤ to check for strict sorting
     if !issorted(I, lt=≤); I = sort!(unique(I)); end
@@ -2385,7 +2379,7 @@ Helper method for immediately preceding setindex! method. For all (i,j) such tha
 j in J, assigns zero to A[i,j] if A[i,j] is a presently-stored entry, and otherwise does nothing.
 """
 function _spsetz_setindex!(A::SparseMatrixCSC,
-        I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
+        I::Union{Integer, AbstractVector{<:Integer}}, J::Union{Integer, AbstractVector{<:Integer}})
     lengthI = length(I)
     for j in J
         coljAfirstk = A.colptr[j]
@@ -2421,7 +2415,7 @@ and j in J, assigns x to A[i,j] if A[i,j] is a presently-stored entry, and alloc
 assigns x to A[i,j] if A[i,j] is not presently stored.
 """
 function _spsetnz_setindex!(A::SparseMatrixCSC{Tv}, x::Tv,
-        I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer}) where Tv
+        I::Union{Integer, AbstractVector{<:Integer}}, J::Union{Integer, AbstractVector{<:Integer}}) where Tv
     m, n = size(A)
     lenI = length(I)
 
@@ -2526,16 +2520,18 @@ function _spsetnz_setindex!(A::SparseMatrixCSC{Tv}, x::Tv,
     return A
 end
 
-setindex!(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) where {Tv,Ti,T<:Integer} =
-      setindex!(A, convert(SparseMatrixCSC{Tv,Ti}, S), I, J)
+setindex!(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::Integer, J::Integer) where {Tv,Ti} = setindex!(A, convert(Tv, S), I, J)
+setindex!(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::Union{Integer, AbstractVector{<:Integer}}, J::Union{Integer, AbstractVector{<:Integer}}) where {Tv,Ti} =
+    setindex!(A, convert(SparseMatrixCSC{Tv,Ti}, S), I, J)
 
-setindex!(A::SparseMatrixCSC, v::AbstractVector, I::AbstractVector{<:Integer}, j::Integer) = setindex!(A, v, I, [j])
-setindex!(A::SparseMatrixCSC, v::AbstractVector, i::Integer, J::AbstractVector{<:Integer}) = setindex!(A, v, [i], J)
-setindex!(A::SparseMatrixCSC, v::AbstractVector, I::AbstractVector{T}, J::AbstractVector{T}) where {T<:Integer} =
-      setindex!(A, reshape(v, length(I), length(J)), I, J)
+setindex!(A::SparseMatrixCSC, v::AbstractVector, I::Integer, J::Integer) = setindex!(A, convert(Tv, v), I, J)
+setindex!(A::SparseMatrixCSC, v::AbstractVector, I::Union{Integer, AbstractVector{<:Integer}}, J::Union{Integer, AbstractVector{<:Integer}}) =
+    setindex!(A, reshape(v, length(I), length(J)), I, J)
 
-# A[I,J] = B
-function setindex!(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector{T}, J::AbstractVector{T}) where {Tv,Ti,T<:Integer}
+# Nonscalar A[I,J] = B
+setindex!(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::Integer, J::Integer) where {Tv,Ti} =
+    setindex!(A, convert(Tv, I, J), I, J)
+function setindex!(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::Union{Integer, AbstractVector{<:Integer}}, J::Union{Integer, AbstractVector{<:Integer}}) where {Tv,Ti}
     if size(B,1) != length(I) || size(B,2) != length(J)
         throw(DimensionMismatch(""))
     end
@@ -2585,7 +2581,7 @@ function setindex!(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::Abst
     asgn_col = J[colB]
 
     I_asgn = falses(m)
-    I_asgn[I] = true
+    I_asgn[I] .= true
 
     ptrS = 1
 
@@ -2674,8 +2670,8 @@ setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVec
 setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, findall(J))
 setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, Array(x), findall(I), J)
 
-setindex!(A::SparseMatrixCSC, x, I::AbstractVector{Bool}) = throw(BoundsError())
-function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})
+setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractVector{Bool}) = setindex!(A, x, findall(I))
+function setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractMatrix{Bool})
     checkbounds(A, I)
     n = sum(I)
     (n == 0) && (return A)
@@ -2692,7 +2688,7 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})
 
         for row in 1:A.m
             if I[row, col]
-                v = isa(x, AbstractArray) ? x[xidx] : x
+                v = x[xidx]
                 xidx += 1
 
                 if r1 <= r2
@@ -2775,7 +2771,7 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})
     A
 end
 
-function setindex!(A::SparseMatrixCSC, x, I::AbstractVector{<:Real})
+function setindex!(A::SparseMatrixCSC, x::AbstractArray, I::AbstractVector{<:Real})
     n = length(I)
     (n == 0) && (return A)
 
@@ -2800,7 +2796,7 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractVector{<:Real})
         (sxidx < n) && (I[sxidx] == I[sxidx+1]) && continue
 
         row,col = Base._ind2sub(szA, I[sxidx])
-        v = isa(x, AbstractArray) ? x[sxidx] : x
+        v = x[sxidx]
 
         if col > lastcol
             r1 = Int(colptrA[col])

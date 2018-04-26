@@ -34,7 +34,7 @@ function check_pids_all(S::SharedArray)
             parentindices(D.loc_subarr_1d)[1]
         end
         @test all(sdata(S)[idxes_in_p] .== p)
-        pidtested[idxes_in_p] = true
+        pidtested[idxes_in_p] .= true
     end
     @test all(pidtested)
 end
@@ -124,7 +124,7 @@ finalize(S)
 
 # Creating a new file
 fn2 = tempname()
-S = SharedArray{Int,2}(fn2, sz, init=D->D[localindices(D)] = myid())
+S = SharedArray{Int,2}(fn2, sz, init=D->(for i in localindices(D); D[i] = myid(); end))
 @test S == filedata
 filedata2 = similar(Atrue)
 read!(fn2, filedata2)
@@ -134,7 +134,7 @@ finalize(S)
 # Appending to a file
 fn3 = tempname()
 write(fn3, fill(0x1, 4))
-S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindices(D)]=0x02)
+S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->(for i in localindices(D); D[i] = 0x02; end))
 len = prod(sz)+4
 @test filesize(fn3) == len
 filedata = Vector{UInt8}(undef, len)
@@ -190,25 +190,25 @@ s = copy(sdata(d))
 ds = deepcopy(d)
 @test ds == d
 pids_d = procs(d)
-remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)::Int], d, 1.0, 1:10)
+@everywhere bcast_setindex!(S, v, I) = (for i in I; S[i] = v; end; S)
+remotecall_fetch(bcast_setindex!, pids_d[findfirst(id->(id != myid()), pids_d)::Int], d, 1.0, 1:10)
 @test ds != d
 @test s != d
 copyto!(d, s)
-@everywhere setid!(A) = A[localindices(A)] = myid()
+@everywhere setid!(A) = (for i in localindices(A); A[i] = myid(); end; A)
 @everywhere procs(ds) setid!($ds)
 @test d == s
 @test ds != s
 @test first(ds) == first(procs(ds))
 @test last(ds)  ==  last(procs(ds))
 
-
 # SharedArray as an array
 # Since the data in d will depend on the nprocs, just test that these operations work
 a = d[1:5]
 @test_throws BoundsError d[-1:5]
 a = d[1,1,1:3:end]
-d[2:4] = 7
-d[5,1:2:4,8] = 19
+d[2:4] .= 7
+d[5,1:2:4,8] .= 19
 
 AA = rand(4,2)
 A = @inferred(convert(SharedArray, AA))

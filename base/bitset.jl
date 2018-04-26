@@ -114,12 +114,16 @@ end
 @inline function _growend0!(b::Bits, nchunks::Int)
     len = length(b)
     _growend!(b, nchunks)
-    @inbounds b[len+1:end] = CHK0 # resize! gives dirty memory
+    for i in len+1:length(b)
+        @inbounds b[i] = CHK0 # resize! gives dirty memory
+    end
 end
 
 @inline function _growbeg0!(b::Bits, nchunks::Int)
     _growbeg!(b, nchunks)
-    @inbounds b[1:nchunks] = CHK0
+    for i in 1:nchunks
+        @inbounds b[i] = CHK0
+    end
 end
 
 function _matched_map!(f, s1::BitSet, s2::BitSet)

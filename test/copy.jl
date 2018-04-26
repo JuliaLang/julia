@@ -61,7 +61,7 @@ end
         RA = CartesianIndices(axes(A))
         copyto!(B, CartesianIndices((5:7,2:3)), A, RA)
         @test B[5:7,2:3] == A
-        B[5:7,2:3] = 0
+        B[5:7,2:3] .= 0
         @test all(x->x==0, B)
     end
 end

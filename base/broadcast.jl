@@ -830,7 +830,7 @@ end
         end
     end
     if ind > 1
-        @inbounds tmp[ind:bitcache_size] = false
+        @inbounds tmp[ind:bitcache_size] .= false
         dumpbitcache(destc, cind, tmp)
     end
     return dest
@@ -1105,6 +1105,39 @@ See [`broadcast_getindex`](@ref) for examples of the treatment of `inds`.
         A
     end
 end
+
+## In specific instances, we can broadcast masked BitArrays whole chunks at a time
+# Very intentionally do not support much functionality here: scalar indexing would be O(n)
+struct BitMaskedBitArray{N,M}
+    parent::BitArray{N}
+    mask::BitArray{M}
+    BitMaskedBitArray{N,M}(parent, mask) where {N,M} = new(parent, mask)
+end
+@inline function BitMaskedBitArray(parent::BitArray{N}, mask::BitArray{M}) where {N,M}
+    @boundscheck checkbounds(parent, mask)
+    BitMaskedBitArray{N,M}(parent, mask)
+end
+Base.@propagate_inbounds dotview(B::BitArray, i::BitArray) = BitMaskedBitArray(B, i)
+Base.show(io::IO, B::BitMaskedBitArray) = foreach(arg->show(io, arg), (typeof(B), (B.parent, B.mask)))
+# Override materialize! to prevent the BitMaskedBitArray from escaping to an overrideable method
+@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any,<:Any,typeof(identity),Tuple{Bool}}) = fill!(B, bc.args[1])
+@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!(SubArray(B.parent, to_indices(B.parent, (B.mask,))), bc)
+function Base.fill!(B::BitMaskedBitArray, b::Bool)
+    Bc = B.parent.chunks
+    Ic = B.mask.chunks
+    @inbounds if b
+        for i = 1:length(Bc)
+            Bc[i] |= Ic[i]
+        end
+    else
+        for i = 1:length(Bc)
+            Bc[i] &= ~Ic[i]
+        end
+    end
+    return B
+end
+
+
 
 ############################################################
 

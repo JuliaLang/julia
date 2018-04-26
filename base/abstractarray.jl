@@ -1181,8 +1181,8 @@ function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{AbstractRange,Abst
     # Linear indexing
     ind = findall(in(1:length(A)), I)
     X[ind] = A[I[ind]]
-    X[1:first(ind)-1] = default
-    X[last(ind)+1:length(X)] = default
+    fill!(view(X, 1:first(ind)-1), default)
+    fill!(view(X, last(ind)+1:length(X)), default)
     X
 end
 
@@ -1380,7 +1380,11 @@ function _cat(A, shape::NTuple{N}, catdims, X...) where N
             end
         end
         I::NTuple{N, UnitRange{Int}} = (inds...,)
-        A[I...] = x
+        if x isa AbstractArray
+            A[I...] = x
+        else
+            fill!(view(A, I...), x)
+        end
     end
     return A
 end
@@ -1930,10 +1934,10 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
         ridx[d] = axes(R,d)
     end
 
-    R[ridx...] = r1
+    concatenate_setindex!(R, r1, ridx...)
 
     nidx = length(otherdims)
-    indices = Iterators.drop(CartesianIndices(itershape), 1)
+    indices = Iterators.drop(CartesianIndices(itershape), 1) # skip the first element, we already handled it
     inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
 end
 
@@ -1941,16 +1945,16 @@ end
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
-        for I in indices # skip the first element, we already handled it
+        for I in indices
             replace_tuples!(nidx, idx, ridx, otherdims, I)
             _unsafe_getindex!(Aslice, A, idx...)
-            R[ridx...] = f(Aslice)
+            concatenate_setindex!(R, f(Aslice), ridx...)
         end
     else
         # we can't guarantee safety (#18524), so allocate new storage for each slice
         for I in indices
             replace_tuples!(nidx, idx, ridx, otherdims, I)
-            R[ridx...] = f(A[idx...])
+            concatenate_setindex!(R, f(A[idx...]), ridx...)
         end
     end
 
@@ -1963,6 +1967,8 @@ function replace_tuples!(nidx, idx, ridx, otherdims, I)
     end
 end
 
+concatenate_setindex!(R, v, I...) = (R[I...] .= (v,); R)
+concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
 ## 1 argument
 
