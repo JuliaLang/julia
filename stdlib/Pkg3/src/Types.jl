@@ -569,6 +569,8 @@ Base.@kwdef mutable struct Context
     num_concurrent_downloads::Int = 8
     graph_verbose::Bool = false
     stdlibs::Dict{UUID,String} = gather_stdlib_uuids()
+    # Remove next field when support for Pkg2 CI scripts is removed
+    old_pkg2_clone_name::String = ""
 end
 
 function Context!(ctx::Context; kwargs...)
@@ -652,7 +654,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             pkg.path = abspath(pkg.repo.url)
             folder_already_downloaded = true
             project_path = pkg.repo.url
-            parse_package!(env, pkg, project_path)
+            parse_package!(ctx, pkg, project_path)
         else
             # We save the repo in case another environement wants to
             # develop from the same repo, this avoids having to reclone it
@@ -675,11 +677,17 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             cp(repo_path, project_path; force=true)
             repo = LibGit2.GitRepo(project_path)
             rev = pkg.repo.rev
-            isempty(rev) && (rev = LibGit2.branch(repo))
+            if isempty(rev)
+                if LibGit2.isattached(repo)
+                    rev = LibGit2.branch(repo)
+                else
+                    rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                end
+            end
             gitobject, isbranch = checkout_rev!(repo, rev)
             close(repo); close(gitobject)
 
-            parse_package!(env, pkg, project_path)
+            parse_package!(ctx, pkg, project_path)
             dev_pkg_path = joinpath(Pkg3.devdir(), pkg.name)
             if isdir(dev_pkg_path)
                 if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
@@ -719,7 +727,12 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
         pinned = (info != nothing && get(info, "pinned", false))
         if upgrade_or_add && !pinned && !just_cloned
             rev = pkg.repo.rev
-            GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+            try
+                GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+            catch e
+                e isa LibGit2.GitError || rethrow(e)
+                cmderror("failed to fetch from $(pkg.repo.url), error: $e")
+            end
         end
         if upgrade_or_add && !pinned
             rev = pkg.repo.rev
@@ -730,7 +743,13 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
         end
 
         # see if we can get rev as a branch
-        isempty(rev) && (rev = LibGit2.branch(repo); pkg.repo.rev = rev)
+        if isempty(rev)
+            if LibGit2.isattached(repo)
+                rev = LibGit2.branch(repo)
+            else
+                rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+            end
+        end
         gitobject, isbranch = checkout_rev!(repo, rev)
         if !isbranch
             # If the user gave a shortened commit SHA, might as well update it to the full one
@@ -760,7 +779,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             LibGit2.checkout_tree(repo, git_tree, options=opts)
         end
         close(repo); close(git_tree); close(gitobject)
-        parse_package!(env, pkg, project_path)
+        parse_package!(ctx, pkg, project_path)
         if !folder_already_downloaded
             version_path = Pkg3.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
             mkpath(version_path)
@@ -772,7 +791,8 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
     return new_uuids
 end
 
-function parse_package!(env, pkg, project_path)
+function parse_package!(ctx, pkg, project_path)
+    env = ctx.env
     found_project_file = false
     for projname in project_names
         if isfile(joinpath(project_path, projname))
@@ -791,10 +811,14 @@ function parse_package!(env, pkg, project_path)
     end
     if !found_project_file
         @warn "packages will require to have a [Julia]Project.toml file in the future"
-        # This is an old style package, get the name from the url.
-        m = match(reg_pkg, pkg.repo.url)
-        m === nothing && cmderror("cannot determine package name from URL: $(pkg.repo.url)")
-        pkg.name = m.captures[1]
+        if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
+            pkg.name = ctx.old_pkg2_clone_name
+        else
+            # This is an old style package, get the name from src/PackageName
+            m = match(reg_pkg, pkg.repo.url)
+            m === nothing && cmderror("cannot determine package name from URL: $(pkg.repo.url)")
+            pkg.name = m.captures[1]
+        end
         reg_uuids = registered_uuids(env, pkg.name)
         is_registered = !isempty(reg_uuids)
         if !is_registered

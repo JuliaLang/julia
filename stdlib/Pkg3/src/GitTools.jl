@@ -36,7 +36,6 @@ function showprogress(io::IO, p::MiniProgressBar)
 end
 
 function transfer_progress(progress::Ptr{LibGit2.TransferProgress}, p::Any)
-
     progress = unsafe_load(progress)
     @assert haskey(p, :transfer_progress)
     bar = p[:transfer_progress]
