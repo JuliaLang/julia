@@ -208,10 +208,10 @@ end
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
-broadcast(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
-broadcast(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
+Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
+Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
 
-broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
+Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 

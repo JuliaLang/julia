@@ -1095,20 +1095,6 @@ function (-)(B::BitArray)
     end
     return A
 end
-broadcast(::typeof(sign), B::BitArray) = copy(B)
-
-function broadcast(::typeof(~), B::BitArray)
-    C = similar(B)
-    Bc = B.chunks
-    if !isempty(Bc)
-        Cc = C.chunks
-        for i = 1:length(Bc)
-            Cc[i] = ~Bc[i]
-        end
-        Cc[end] &= _msk_end(B)
-    end
-    return C
-end
 
 """
     flipbits!(B::BitArray{N}) -> BitArray{N}
@@ -1165,33 +1151,6 @@ for f in (:/, :\)
 end
 (/)(B::BitArray, x::Number) = (/)(Array(B), x)
 (/)(x::Number, B::BitArray) = (/)(x, Array(B))
-
-# broadcast specializations for &, |, and xor/⊻
-broadcast(::typeof(&), B::BitArray, x::Bool) = x ? copy(B) : falses(size(B))
-broadcast(::typeof(&), x::Bool, B::BitArray) = broadcast(&, B, x)
-broadcast(::typeof(|), B::BitArray, x::Bool) = x ? trues(size(B)) : copy(B)
-broadcast(::typeof(|), x::Bool, B::BitArray) = broadcast(|, B, x)
-broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? .~B : copy(B)
-broadcast(::typeof(xor), x::Bool, B::BitArray) = broadcast(xor, B, x)
-for f in (:&, :|, :xor)
-    @eval begin
-        function broadcast(::typeof($f), A::BitArray, B::BitArray)
-            F = BitArray(undef, promote_shape(size(A),size(B))...)
-            Fc = F.chunks
-            Ac = A.chunks
-            Bc = B.chunks
-            (isempty(Ac) || isempty(Bc)) && return F
-            for i = 1:length(Fc)
-                Fc[i] = ($f)(Ac[i], Bc[i])
-            end
-            Fc[end] &= _msk_end(F)
-            return F
-        end
-        broadcast(::typeof($f), A::DenseArray{Bool}, B::BitArray) = broadcast($f, BitArray(A), B)
-        broadcast(::typeof($f), B::BitArray, A::DenseArray{Bool}) = broadcast($f, B, BitArray(A))
-    end
-end
-
 
 ## promotion to complex ##
 

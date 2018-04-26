@@ -477,15 +477,15 @@ end
     @test sum(0:0.1:10) == 505.
 end
 @testset "broadcasted operations with scalars" begin
-    @test broadcast(-, 1:3, 2) == -1:1
-    @test broadcast(-, 1:3, 0.25) == 1-0.25:3-0.25
-    @test broadcast(+, 1:3, 2) == 3:5
-    @test broadcast(+, 1:3, 0.25) == 1+0.25:3+0.25
-    @test broadcast(+, 1:2:6, 1) == 2:2:6
-    @test broadcast(+, 1:2:6, 0.3) == 1+0.3:2:5+0.3
-    @test broadcast(-, 1:2:6, 1) == 0:2:4
-    @test broadcast(-, 1:2:6, 0.3) == 1-0.3:2:5-0.3
-    @test broadcast(-, 2, 1:3) == 1:-1:-1
+    @test broadcast(-, 1:3, 2) === -1:1
+    @test broadcast(-, 1:3, 0.25) === 1-0.25:3-0.25
+    @test broadcast(+, 1:3, 2) === 3:5
+    @test broadcast(+, 1:3, 0.25) === 1+0.25:3+0.25
+    @test broadcast(+, 1:2:6, 1) === 2:2:6
+    @test broadcast(+, 1:2:6, 0.3) === 1+0.3:2:5+0.3
+    @test broadcast(-, 1:2:6, 1) === 0:2:4
+    @test broadcast(-, 1:2:6, 0.3) === 1-0.3:2:5-0.3
+    @test broadcast(-, 2, 1:3) === 1:-1:-1
 end
 @testset "operations between ranges and arrays" begin
     @test all(([1:5;] + (5:-1:1)) .== 6)
@@ -551,27 +551,33 @@ end
     @test [0.0:prevfloat(0.1):0.3;] == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
     @test [0.0:nextfloat(0.1):0.3;] == [0.0, nextfloat(0.1), nextfloat(0.2)]
 end
-@testset "issue #7420 for type $T" for T = (Float32, Float64,), # BigFloat),
-    a = -5:25,
-    s = [-5:-1; 1:25; ],
-    d = 1:25,
-    n = -1:15
 
-    denom = convert(T, d)
-    strt = convert(T, a)/denom
-    Δ     = convert(T, s)/denom
-    stop  = convert(T, (a + (n - 1) * s)) / denom
-    vals  = T[a:s:(a + (n - 1) * s); ] ./ denom
-    r = strt:Δ:stop
-    @test [r;] == vals
-    @test [range(strt, stop=stop, length=length(r));] == vals
-    n = length(r)
-    @test [r[1:n];] == [r;]
-    @test [r[2:n];] == [r;][2:end]
-    @test [r[1:3:n];] == [r;][1:3:n]
-    @test [r[2:2:n];] == [r;][2:2:n]
-    @test [r[n:-1:2];] == [r;][n:-1:2]
-    @test [r[n:-2:1];] == [r;][n:-2:1]
+function loop_range_values(::Type{T}) where T
+    for a = -5:25,
+        s = [-5:-1; 1:25; ],
+        d = 1:25,
+        n = -1:15
+
+        denom = convert(T, d)
+        strt = convert(T, a)/denom
+        Δ     = convert(T, s)/denom
+        stop  = convert(T, (a + (n - 1) * s)) / denom
+        vals  = T[a:s:(a + (n - 1) * s); ] ./ denom
+        r = strt:Δ:stop
+        @test [r;] == vals
+        @test [range(strt, stop=stop, length=length(r));] == vals
+        n = length(r)
+        @test [r[1:n];] == [r;]
+        @test [r[2:n];] == [r;][2:end]
+        @test [r[1:3:n];] == [r;][1:3:n]
+        @test [r[2:2:n];] == [r;][2:2:n]
+        @test [r[n:-1:2];] == [r;][n:-1:2]
+        @test [r[n:-2:1];] == [r;][n:-2:1]
+    end
+end
+
+@testset "issue #7420 for type $T" for T = (Float32, Float64,) # BigFloat),
+    loop_range_values(T)
 end
 
 @testset "issue #20373 (unliftable ranges with exact end points)" begin
@@ -990,7 +996,10 @@ end
     for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
                range(1, stop=100, length=10), range(1f0, stop=100f0, length=10))
         float_r = float(_r)
-        big_r = big.(_r)
+        big_r = broadcast(big, _r)
+        big_rdot = big.(_r)
+        @test big_rdot == big_r
+        @test typeof(big_r) == typeof(big_rdot)
         @test typeof(big_r).name === typeof(_r).name
         if eltype(_r) <: AbstractFloat
             @test isa(float_r, typeof(_r))
@@ -1215,6 +1224,22 @@ end
     @test map(Float32, x) === -5.0f0:1.0f0:5.0f0
     @test map(Float16, x) === Float16(-5.0):Float16(1.0):Float16(5.0)
     @test map(BigFloat, x) === x
+end
+
+@testset "broadcasting returns ranges" begin
+    x, r = 2, 1:5
+    @test @inferred(x .+ r) === 3:7
+    @test @inferred(r .+ x) === 3:7
+    @test @inferred(r .- x) === -1:3
+    @test @inferred(x .- r) === 1:-1:-3
+    @test @inferred(x .* r) === 2:2:10
+    @test @inferred(r .* x) === 2:2:10
+    @test @inferred(r ./ x) === 0.5:0.5:2.5
+    @test @inferred(x ./ r) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
+    @test @inferred(r .\ x) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
+    @test @inferred(x .\ r) === 0.5:0.5:2.5
+
+    @test @inferred(2 .* (r .+ 1) .+ 2) === 6:2:14
 end
 
 @testset "Bad range calls" begin

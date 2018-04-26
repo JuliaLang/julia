@@ -1014,6 +1014,41 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, b1, 1im)    Matrix{ComplexF64}
         @check_bit_operation broadcast(^, b1, 0x1*im)  Matrix{ComplexF64}
     end
+
+    @testset "Matrix/Vector" begin
+        b1 = bitrand(n1, n2)
+        b2 = bitrand(n1)
+        b3 = bitrand(n2)
+
+        @check_bit_operation broadcast(&, b1, b2)             BitMatrix
+        @check_bit_operation broadcast(&, b1, transpose(b3))  BitMatrix
+        @check_bit_operation broadcast(&, b2, b1)             BitMatrix
+        @check_bit_operation broadcast(&, transpose(b3), b1)  BitMatrix
+        @check_bit_operation broadcast(|, b1, b2)             BitMatrix
+        @check_bit_operation broadcast(|, b1, transpose(b3))  BitMatrix
+        @check_bit_operation broadcast(|, b2, b1)             BitMatrix
+        @check_bit_operation broadcast(|, transpose(b3), b1)  BitMatrix
+        @check_bit_operation broadcast(xor, b1, b2)             BitMatrix
+        @check_bit_operation broadcast(xor, b1, transpose(b3))  BitMatrix
+        @check_bit_operation broadcast(xor, b2, b1)             BitMatrix
+        @check_bit_operation broadcast(xor, transpose(b3), b1)  BitMatrix
+        @check_bit_operation broadcast(+, b1, b2)             Matrix{Int}
+        @check_bit_operation broadcast(+, b1, transpose(b3))  Matrix{Int}
+        @check_bit_operation broadcast(+, b2, b1)             Matrix{Int}
+        @check_bit_operation broadcast(+, transpose(b3), b1)  Matrix{Int}
+        @check_bit_operation broadcast(-, b1, b2)             Matrix{Int}
+        @check_bit_operation broadcast(-, b1, transpose(b3))  Matrix{Int}
+        @check_bit_operation broadcast(-, b2, b1)             Matrix{Int}
+        @check_bit_operation broadcast(-, transpose(b3), b1)  Matrix{Int}
+        @check_bit_operation broadcast(*, b1, b2)             BitMatrix
+        @check_bit_operation broadcast(*, b1, transpose(b3))  BitMatrix
+        @check_bit_operation broadcast(*, b2, b1)             BitMatrix
+        @check_bit_operation broadcast(*, transpose(b3), b1)  BitMatrix
+        @check_bit_operation broadcast(/, b1, b2)             Matrix{Float64}
+        @check_bit_operation broadcast(/, b1, transpose(b3))  Matrix{Float64}
+        @check_bit_operation broadcast(/, b2, b1)             Matrix{Float64}
+        @check_bit_operation broadcast(/, transpose(b3), b1)  Matrix{Float64}
+    end
 end
 
 timesofar("binary arithmetic")
@@ -1499,4 +1534,26 @@ timesofar("I/O")
     b = falses(3)
     b[:] = view(trues(10), [1,3,7])
     @test b == trues(3)
+end
+
+@testset "chunked broadcast" begin
+    for (f,g,h) in ((&,|,!),(*,xor,identity),(|,xor,sign),(&,&,~),(|,|,!))
+        fg = (A, B, C)->f.(A, g.(B, C))
+        fgh = (A, B, C)->f.(A, g.(B, h.(C)))
+        for n in (1, 63, 64, 65, 127, 128, 129)
+            for ((A,B,C),T) in ((bitrand.((n,n,n)), BitVector), (bitrand.((n,n,n), 2), BitMatrix))
+                @check_bit_operation broadcast(f, A) T
+                @check_bit_operation broadcast(g, A) T
+                @check_bit_operation broadcast(h, A) T
+                @check_bit_operation fg(A, B, C) T
+                @check_bit_operation fg(true, B, C) T
+                @check_bit_operation fg(A, false, C) T
+                @check_bit_operation fg(A, B, true) T
+                @check_bit_operation fgh(A, B, C) T
+                @check_bit_operation fgh(true, B, C) T
+                @check_bit_operation fgh(A, false, C) T
+                @check_bit_operation fgh(A, B, true) T
+            end
+        end
+    end
 end
