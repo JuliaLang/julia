@@ -294,6 +294,78 @@ end
     """
 end
 
+@testset "DefaultLogger" begin
+    # Log level limiting
+    @test min_enabled_level(CoreLogging.DefaultLogger()) == Info
+
+    # Log limiting
+    logger = CoreLogging.DefaultLogger()
+    @test shouldlog(logger, Info, Base, :group, :asdf) === true
+    old = stdout
+    redirect_stdout()
+    handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
+    redirect_stdout(old)
+    @test shouldlog(logger, Info, Base, :group, :asdf) === true
+    redirect_stdout()
+    handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
+    redirect_stdout(old)
+    @test shouldlog(logger, Info, Base, :group, :asdf) === false
+    @test catch_exceptions(logger) === false
+
+    # Log formatting
+    function genmsg_out(level, message, _module, filepath, line; kws...)
+        fname = tempname()
+        f = open(fname, "w")
+        logger = CoreLogging.DefaultLogger()
+        redirect_stdout(f) do
+            handle_message(logger, level, message, _module, :group, :id,
+                           filepath, line; kws...)
+        end
+	close(f)
+	buf = read(fname)
+	rm(fname)
+        String(buf)
+    end
+
+    function genmsg_err(level, message, _module, filepath, line; kws...)
+        fname = tempname()
+        f = open(fname, "w")
+        logger = CoreLogging.DefaultLogger()
+        redirect_stderr(f) do
+            handle_message(logger, level, message, _module, :group, :id,
+                           filepath, line; kws...)
+        end
+	close(f)
+	buf = read(fname)
+	rm(fname)
+        String(buf)
+    end
+
+    # Simple
+    @test genmsg_out(Info, "msg", Main, "some/path.jl", 101) ==
+        """
+    ┌ Info: msg
+    └ @ Main some/path.jl:101
+    """
+
+    # Multiline message
+    @test genmsg_err(Warn, "line1\nline2", Main, "some/path.jl", 101) ==
+        """
+    ┌ Warning: line1
+    │ line2
+    └ @ Main some/path.jl:101
+    """
+
+    # Keywords
+    @test genmsg_err(Error, "msg", Base, "other.jl", 101, a=1, b="asdf") ==
+        """
+    ┌ Error: msg
+    │   a = 1
+    │   b = asdf
+    └ @ Base other.jl:101
+    """
+end
+
 # Issue #26273
 let m = Module(:Bare26273i, false)
     eval(m, :(import Base: @error))
