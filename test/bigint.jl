@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random, Serialization
+
 a = parse(BigInt,"123456789012345678901234567890")
 b = parse(BigInt,"123456789012345678901234567891")
 c = parse(BigInt,"246913578024691357802469135780")
@@ -250,7 +252,7 @@ end
 # from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633
 function mul(a::Vector{BigInt}, b::Vector{BigInt})
    x = a[2]*b[2]
-   c = Vector{BigInt}(uninitialized, 3)
+   c = Vector{BigInt}(undef, 3)
    c[1] = a[1]*b[1] + x
    c[2] = a[1]*b[2] + a[2]*b[3]
    c[3] = x + a[3]*b[3]
@@ -311,7 +313,7 @@ end
 @test Base.ndigits0zpb(big(0), big(rand(2:100))) == 0
 
 # digits with BigInt bases (#16844)
-@test digits(big(2)^256, big(2)^128) == [0, 0, 1]
+@test digits(big(2)^256, base = big(2)^128) == [0, 0, 1]
 
 @testset "conversion from float" begin
     @test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2
@@ -334,10 +336,10 @@ end
     @test_throws InexactError floor(BigInt,Inf)
     @test_throws InexactError ceil(BigInt,Inf)
 
-    @test bin(big(3)) == "11"
-    @test oct(big(9)) == "11"
-    @test oct(-big(9)) == "-11"
-    @test hex(big(12)) == "c"
+    @test string(big(3), base = 2) == "11"
+    @test string(big(9), base = 8) == "11"
+    @test string(-big(9), base = 8) == "-11"
+    @test string(big(12), base = 16) == "c"
 end
 @testset "Issue #18849" begin
     # bin, oct, dec, hex should not call sizeof on BigInts
@@ -345,33 +347,33 @@ end
     padding = 4
     low = big(4)
     high = big(2^20)
-    @test bin(low, padding) == "0100"
-    @test oct(low, padding) == "0004"
-    @test dec(low, padding) == "0004"
-    @test hex(low, padding) == "0004"
+    @test string(low, pad = padding, base = 2) == "0100"
+    @test string(low, pad = padding, base = 8) == "0004"
+    @test string(low, pad = padding, base = 10) == "0004"
+    @test string(low, pad = padding, base = 16) == "0004"
 
-    @test bin(high, padding) == "100000000000000000000"
-    @test oct(high, padding) == "4000000"
-    @test dec(high, padding) == "1048576"
-    @test hex(high, padding) == "100000"
+    @test string(high, pad = padding, base = 2) == "100000000000000000000"
+    @test string(high, pad = padding, base = 8) == "4000000"
+    @test string(high, pad = padding, base = 10) == "1048576"
+    @test string(high, pad = padding, base = 16) == "100000"
 
-    @test bin(-low, padding) == "-0100" # handle negative numbers correctly
-    @test oct(-low, padding) == "-0004"
-    @test dec(-low, padding) == "-0004"
-    @test hex(-low, padding) == "-0004"
+    @test string(-low, pad = padding, base = 2) == "-0100" # handle negative numbers correctly
+    @test string(-low, pad = padding, base = 8) == "-0004"
+    @test string(-low, pad = padding, base = 10) == "-0004"
+    @test string(-low, pad = padding, base = 16) == "-0004"
 
-    @test bin(-high, padding) == "-100000000000000000000"
-    @test oct(-high, padding) == "-4000000"
-    @test dec(-high, padding) == "-1048576"
-    @test hex(-high, padding) == "-100000"
+    @test string(-high, pad = padding, base = 2) == "-100000000000000000000"
+    @test string(-high, pad = padding, base = 8) == "-4000000"
+    @test string(-high, pad = padding, base = 10) == "-1048576"
+    @test string(-high, pad = padding, base = 16) == "-100000"
 end
 
 # respect 0-padding on big(0)
-for f in (bin, oct, dec, hex)
-    local f
-    @test f(big(0), 0) == ""
+for base in (2, 8, 10, 16)
+    local base
+    @test string(big(0), base=base, pad=0) == ""
 end
-@test base(rand(2:62), big(0), 0) == ""
+@test string(big(0), base = rand(2:62), pad = 0) == ""
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2

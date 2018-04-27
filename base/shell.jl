@@ -4,6 +4,18 @@
 
 const shell_special = "#{}()[]<>|&*?~;"
 
+# strips the end but respects the space when the string ends with "\\ "
+function rstrip_shell(s::AbstractString)
+    c_old = nothing
+    for (i, c) in Iterators.reverse(pairs(s))
+        ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
+        c in _default_delims || return SubString(s, 1, i)
+        c_old = c
+    end
+    SubString(s, 1, 0)
+end
+
+
 # needs to be factored out so depwarn only warns once
 # when removed, also need to update shell_escape for a Cmd to pass shell_special
 # and may want to use it in the test for #10120 (currently the implementation is essentially copied there)
@@ -12,24 +24,10 @@ const shell_special = "#{}()[]<>|&*?~;"
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
-    s = lstrip(str)
-    # strips the end but respects the space when the string ends with "\\ "
-    r = reverse(s)
-    i = start(r)
-    c_old = nothing
-    while !done(r,i)
-        c, j = next(r,i)
-        if c == '\\' && c_old == ' '
-            i -= 1
-            break
-        elseif !(c in _default_delims)
-            break
-        end
-        i = j
-        c_old = c
-    end
-    s = s[1:end-i+1]
+    s::SubString = SubString(str, firstindex(str))
+    s = rstrip_shell(lstrip(s))
 
+    # N.B.: This is used by REPLCompletions
     last_parse = 0:-1
     isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
 
@@ -38,13 +36,17 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
 
     args::Vector{Any} = []
     arg::Vector{Any} = []
-    i = start(s)
-    j = i
+    i = firstindex(s)
+    st = Iterators.Stateful(pairs(s))
 
     function update_arg(x)
         if !isa(x,AbstractString) || !isempty(x)
             push!(arg, x)
         end
+    end
+    function consume_upto(j)
+        update_arg(s[i:prevind(s, j)])
+        i = coalesce(peek(st), (lastindex(s)+1,'\0'))[1]
     end
     function append_arg()
         if isempty(arg); arg = Any["",]; end
@@ -52,59 +54,51 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         arg = []
     end
 
-    while !done(s,j)
-        c, k = next(s,j)
-        if !in_single_quotes && !in_double_quotes && Unicode.isspace(c)
-            update_arg(s[i:prevind(s, j)])
+    for (j, c) in st
+        if !in_single_quotes && !in_double_quotes && isspace(c)
+            consume_upto(j)
             append_arg()
-            j = k
-            while !done(s,j)
-                c, k = next(s,j)
-                if !Unicode.isspace(c)
-                    i = j
-                    break
-                end
-                j = k
+            while !isempty(st)
+                # We've made sure above that we don't end in whitespace,
+                # so updateing `i` here is ok
+                (i, c) = peek(st)
+                isspace(c) || break
+                popfirst!(st)
             end
         elseif interpolate && !in_single_quotes && c == '$'
-            update_arg(s[i:prevind(s, j)]); i = k; j = k
-            if done(s,k)
-                error("\$ right before end of command")
-            end
-            if Unicode.isspace(s[k])
-                error("space not allowed right after \$")
-            end
-            stpos = j
-            ex, j = Meta.parse(s,j,greedy=false)
-            last_parse = stpos:j
-            update_arg(ex); i = j
+            consume_upto(j)
+            isempty(st) && error("\$ right before end of command")
+            stpos, c = popfirst!(st)
+            isspace(c) && error("space not allowed right after \$")
+            ex, j = Meta.parse(s,stpos,greedy=false)
+            last_parse = (stpos:prevind(s, j)) .+ s.offset
+            update_arg(ex);
+            s = SubString(s, j)
+            Iterators.reset!(st, pairs(s))
+            i = firstindex(s)
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
-                update_arg(s[i:prevind(s, j)]); i = k
+                consume_upto(j)
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
-                update_arg(s[i:prevind(s, j)]); i = k
+                consume_upto(j)
             elseif c == '\\'
                 if in_double_quotes
-                    if done(s,k)
-                        error("unterminated double quote")
-                    end
-                    if s[k] == '"' || s[k] == '$' || s[k] == '\\'
-                        update_arg(s[i:prevind(s, j)]); i = k
-                        c, k = next(s,k)
+                    isempty(st) && error("unterminated double quote")
+                    k, c′ = peek(st)
+                    if c′ == '"' || c′ == '$' || c′ == '\\'
+                        consume_upto(j)
+                        _ = popfirst!(st)
                     end
                 elseif !in_single_quotes
-                    if done(s,k)
-                        error("dangling backslash")
-                    end
-                    update_arg(s[i:prevind(s, j)]); i = k
-                    c, k = next(s,k)
+                    isempty(st) && error("dangling backslash")
+                    consume_upto(j)
+                    _ = popfirst!(st)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special
                 warn_shell_special(special) # noinline depwarn
             end
-            j = k
         end
     end
 
@@ -140,7 +134,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
     has_single = false
     has_special = false
     for c in word
-        if Unicode.isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$' || c in special
+        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$' || c in special
             has_special = true
             if c == '\''
                 has_single = true
@@ -203,7 +197,7 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         # that any (reasonable) shell will definitely never consider them to be special
         have_single = false
         have_double = false
-        function isword(c::Char)
+        function isword(c::AbstractChar)
             if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
                 # word characters
             elseif c == '_' || c == '/' || c == '+' || c == '-'

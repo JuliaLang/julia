@@ -87,7 +87,7 @@ function digitgen(w,buffer,requested_digits=1000)
     return r, kappa, len
 end
 
-function fastprecision(v, requested_digits, buffer = Vector{UInt8}(uninitialized, 100))
+function fastprecision(v, requested_digits, buffer = Vector{UInt8}(undef, 100))
     f = normalize(Float64(v))
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)
     ten_mk_max_exp = kMaxExp - (f.e + FloatSignificandSize)

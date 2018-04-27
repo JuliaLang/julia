@@ -1,0 +1,5 @@
+name = "LinearAlgebra"
+uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"

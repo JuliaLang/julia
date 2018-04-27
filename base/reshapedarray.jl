@@ -52,7 +52,7 @@ the specified dimensions is equal to the length of the original array
 `A`. The total number of elements must not change.
 
 ```jldoctest
-julia> A = collect(1:16)
+julia> A = Vector(1:16)
 16-element Array{Int64,1}:
   1
   2
@@ -142,7 +142,7 @@ _reshape(parent::Array, dims::Dims) = reshape(parent, dims)
 # When reshaping Vector->Vector, don't wrap with a ReshapedArray
 function _reshape(v::AbstractVector, dims::Dims{1})
     len = dims[1]
-    len == length(v) || _throw_dmrs(n, "length", len)
+    len == length(v) || _throw_dmrs(_length(v), "length", len)
     v
 end
 # General reshape
@@ -168,6 +168,11 @@ function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
     ReshapedArray(parent, dims, reverse(mi))
 end
 
+function __reshape(p::Tuple{AbstractArray{<:Any,0},IndexCartesian}, dims::Dims)
+    parent = p[1]
+    ReshapedArray(parent, dims, ())
+end
+
 function __reshape(p::Tuple{AbstractArray,IndexLinear}, dims::Dims)
     parent = p[1]
     ReshapedArray(parent, dims, ())
@@ -179,6 +184,10 @@ IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
+elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
+
+unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
+dataids(A::ReshapedArray) = dataids(A.parent)
 
 @inline ind2sub_rs(::Tuple{}, i::Int) = i
 @inline ind2sub_rs(strds, i) = _ind2sub_rs(strds, i - 1)

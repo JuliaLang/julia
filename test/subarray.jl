@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Random
 
 ######## Utilities ###########
 
@@ -24,7 +24,7 @@ function Agen_slice(A::AbstractArray, I...)
             push!(sd, i)
         end
     end
-    squeeze(B, sd)
+    squeeze(B, dims=sd)
 end
 
 _Agen(A, i1) = [A[j1] for j1 in i1]
@@ -33,7 +33,7 @@ _Agen(A, i1, i2, i3) = [A[j1,j2,j3] for j1 in i1, j2 in i2, j3 in i3]
 _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 in i4]
 
 function replace_colon(A::AbstractArray, I)
-    Iout = Vector{Any}(uninitialized, length(I))
+    Iout = Vector{Any}(undef, length(I))
     I == (:,) && return (1:length(A),)
     for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
@@ -52,7 +52,7 @@ tup2val(::NTuple{N}) where {N} = Val(N)
 # it's good to copy the contents to an Array. This version protects against
 # `similar` ever changing its meaning.
 function copy_to_array(A::AbstractArray)
-    Ac = Array{eltype(A)}(uninitialized, size(A))
+    Ac = Array{eltype(A)}(undef, size(A))
     copyto!(Ac, A)
 end
 
@@ -347,7 +347,7 @@ x11289 = randn(5,5)
 # Tests where non-trailing dimensions are preserved
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2:2, 1:5, :)
-@test strides(sA) == (1, 3, 15)
+@test @inferred(strides(sA)) == (1, 3, 15)
 @test parent(sA) == A
 @test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
 @test Base.parentdims(sA) == [1:3;]
@@ -357,7 +357,7 @@ sA = view(A, 2:2, 1:5, :)
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
-@test strides(sA) == (1,3,15)
+@test @inferred(strides(sA)) == (1,3,15)
 @test stride(sA,3) == 15
 @test stride(sA,4) == 120
 test_bounds(sA)
@@ -367,7 +367,7 @@ sA[1:3,1:5] = -2
 @test all(A[:,:,5] .== -2)
 sA[:] = -3
 @test all(A[:,:,5] .== -3)
-@test strides(sA) == (1,3)
+@test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
 @test Base.parentdims(sA) == [1:3;]
@@ -378,7 +378,7 @@ sA = view(A, 1:3, 3:3, 2:5)
 test_bounds(sA)
 sA = view(A, 1:2:3, 1:3:5, 1:2:8)
 @test Base.parentdims(sA) == [1:3;]
-@test strides(sA) == (2,9,30)
+@test @inferred(strides(sA)) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 # issue #8807
 @test view(view([1:5;], 1:5), 1:5) == [1:5;]
@@ -409,7 +409,7 @@ sA = view(A, 2, :, 1:8)
 @test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test axes(sA) === (Base.OneTo(5), Base.OneTo(8))
-@test strides(sA) == (3,15)
+@test @inferred(strides(sA)) == (3,15)
 @test sA[2, 1:8][:] == [5:15:120;]
 @test sA[:,1] == [2:3:14;]
 @test sA[2:5:end] == [5:15:110;]
@@ -421,13 +421,13 @@ sA = view(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == [1:2;]
 @test size(sA) == (3,5)
 @test axes(sA) === (Base.OneTo(3),Base.OneTo(5))
-@test strides(sA) == (1,3)
+@test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:2:3, 3, 1:2:8)
 @test Base.parentdims(sA) == [1,3]
 @test size(sA) == (2,4)
 @test axes(sA) === (Base.OneTo(2), Base.OneTo(4))
-@test strides(sA) == (2,30)
+@test @inferred(strides(sA)) == (2,30)
 @test sA[:] == A[sA.indices...][:]
 test_bounds(sA)
 
@@ -438,11 +438,11 @@ end
 
 # issue #6218 - logical indexing
 A = rand(2, 2, 3)
-msk = ones(Bool, 2, 2)
+msk = fill(true, 2, 2)
 msk[2,1] = false
 sA = view(A, :, :, 1)
 sA[msk] = 1.0
-@test sA[msk] == ones(count(msk))
+@test sA[msk] == fill(1, count(msk))
 
 # bounds checking upon construction; see #4044, #10296
 @test_throws BoundsError view(1:10, 8:11)
@@ -459,13 +459,13 @@ A = reshape(1:120, 3, 5, 8)
 sA = view(A, :, :, :)
 @test sA[[72 17; 107 117]] == [72 17; 107 117]
 @test sA[[99 38 119 14 76 81]] == [99 38 119 14 76 81]
-@test sA[[ones(Int, 2, 2, 2); 2ones(Int, 2, 2, 2)]] == [ones(Int, 2, 2, 2); 2ones(Int, 2, 2, 2)]
+@test sA[[fill(1, (2, 2, 2)); fill(2, (2, 2, 2))]] == [fill(1, (2, 2, 2)); fill(2, (2, 2, 2))]
 sA = view(A, 1:2, 2:3, 3:4)
 @test sA[(1:8)'] == [34 35 37 38 49 50 52 53]
 @test sA[[1 2 4 4; 6 1 1 4]] == [34 35 38 38; 50 34 34 38]
 
 # issue #11871
-let a = ones(Float64, (2,2)),
+let a = fill(1., (2,2)),
     b = view(a, 1:2, 1:2)
     b[2] = 2
     @test b[2] === 2.0
@@ -486,12 +486,12 @@ end
 # issue #15168
 let A = rand(10), sA = view(copy(A), :)
     @test sA[Int16(1)] === sA[Int32(1)] === sA[Int64(1)] === A[1]
-    permute!(sA, collect(Int16, 1:10))
+    permute!(sA, Vector{Int16}(1:10))
     @test A == sA
 end
 
 # the following segfaults with LLVM 3.8 on Windows, ref #15417
-@test collect(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
+@test Array(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
     cat(3,[68,70,72],[406,408,410],[744,746,748])
 
 # tests @view (and replace_ref_end!)
@@ -577,13 +577,32 @@ let
 end
 
 # ref issue #17351
-@test @inferred(flipdim(view([1 2; 3 4], :, 1), 1)) == [3, 1]
+@test @inferred(reverse(view([1 2; 3 4], :, 1), dims=1)) == [3, 1]
 
 let
     s = view(reshape(1:6, 2, 3), 1:2, 1:2)
     @test @inferred(s[2,2,1]) === 4
 end
 
+# issue #18581: slices with OneTo axes can be linear
+let
+    A18581 = rand(5, 5)
+    B18581 = view(A18581, :, axes(A18581,2))
+    @test IndexStyle(B18581) === IndexLinear()
+end
+
 @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4
 @test sizeof(view(zeros(UInt8, 10), 1:3)) == 3
 @test sizeof(view(zeros(Float64, 10, 10), 1:3, 2:6)) == 120
+
+# PR #25321
+# checks that issue in type inference is resolved
+A = rand(5,5,5,5)
+V = view(A, 1:1 ,:, 1:3, :)
+@test @inferred(strides(V)) == (1, 5, 25, 125)
+
+# Issue #26263 — ensure that unaliascopy properly trims the array
+A = rand(5,5,5,5)
+V = view(A, 2:5, :, 2:5, 1:2:5)
+@test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
+@test @inferred(sum(Base.unaliascopy(V))) == sum(V) == sum(A[2:5, :, 2:5, 1:2:5])

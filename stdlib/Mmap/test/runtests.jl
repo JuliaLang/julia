@@ -1,25 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Mmap
+using Test, Mmap, Random
 
 file = tempname()
 write(file, "Hello World\n")
 t = b"Hello World"
 @test Mmap.mmap(file, Array{UInt8,3}, (11,1,1)) == reshape(t,(11,1,1))
-gc(); gc()
+GC.gc(); GC.gc()
 @test Mmap.mmap(file, Array{UInt8,3}, (1,11,1)) == reshape(t,(1,11,1))
-gc(); gc()
+GC.gc(); GC.gc()
 @test Mmap.mmap(file, Array{UInt8,3}, (1,1,11)) == reshape(t,(1,1,11))
-gc(); gc()
-@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(uninitialized, (0,0,0))
+GC.gc(); GC.gc()
+@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(undef, (0,0,0))
 @test Mmap.mmap(file, Vector{UInt8}, (11,)) == t
-gc(); gc()
+GC.gc(); GC.gc()
 @test Mmap.mmap(file, Array{UInt8,2}, (1,11)) == t'
-gc(); gc()
-@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(uninitialized, (0,0))
+GC.gc(); GC.gc()
+@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(undef, (0,0))
 m = Mmap.mmap(file, Array{UInt8,3}, (1,2,1))
 @test m == reshape(b"He",(1,2,1))
-finalize(m); m=nothing; gc()
+finalize(m); m=nothing; GC.gc()
 
 # constructors
 @test length(@inferred Mmap.mmap(file)) == 12
@@ -45,7 +45,7 @@ s = open(file)
 @test length(@inferred Mmap.mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
 close(s)
 @test_throws ErrorException Mmap.mmap(file, Vector{Ref}) # must be bit-type
-gc(); gc()
+GC.gc(); GC.gc()
 
 s = open(f->f,file,"w")
 @test Mmap.mmap(file) == Vector{UInt8}() # requested len=0 on empty file
@@ -54,7 +54,7 @@ s = open(file, "r+")
 m = Mmap.mmap(s,Vector{UInt8},12)
 m[:] = b"Hello World\n"
 Mmap.sync!(m)
-close(s); finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; GC.gc()
 @test open(x->read(x, String),file) == "Hello World\n"
 
 s = open(file, "r")
@@ -71,39 +71,39 @@ close(s)
 for i = 0x01:0x0c
     @test length(Mmap.mmap(file, Vector{UInt8}, i)) == Int(i)
 end
-gc(); gc()
+GC.gc(); GC.gc()
 
 sz = filesize(file)
 s = open(file, "r+")
 m = Mmap.mmap(s, Vector{UInt8}, sz+1)
 @test length(m) == sz+1 # test growing
 @test m[end] == 0x00
-close(s); finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; GC.gc()
 sz = filesize(file)
 s = open(file, "r+")
 m = Mmap.mmap(s, Vector{UInt8}, 1, sz)
 @test length(m) == 1
 @test m[1] == 0x00
-close(s); finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; GC.gc()
 sz = filesize(file)
 # test where offset is actually > than size of file; file is grown with zeroed bytes
 s = open(file, "r+")
 m = Mmap.mmap(s, Vector{UInt8}, 1, sz+1)
 @test length(m) == 1
 @test m[1] == 0x00
-close(s); finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; GC.gc()
 
 s = open(file, "r")
 m = Mmap.mmap(s)
 @test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
-finalize(m); m=nothing; gc()
+finalize(m); m=nothing; GC.gc()
 
 write(file, "Hello World\n")
 
 s = open(file, "r")
 m = Mmap.mmap(s)
 close(s)
-finalize(m); m=nothing; gc()
+finalize(m); m=nothing; GC.gc()
 m = Mmap.mmap(file)
 s = open(file, "r+")
 c = Mmap.mmap(s)
@@ -114,7 +114,7 @@ close(s)
 @test m[1] == UInt8('J')
 @test d[1] == UInt8('J')
 finalize(m); finalize(c); finalize(d)
-m=nothing; c=nothing; d=nothing; gc()
+m=nothing; c=nothing; d=nothing; GC.gc()
 
 write(file, "Hello World\n")
 
@@ -122,10 +122,10 @@ s = open(file, "r")
 @test isreadonly(s) == true
 c = Mmap.mmap(s, Vector{UInt8}, (11,))
 @test c == b"Hello World"
-finalize(c); c=nothing; gc()
+finalize(c); c=nothing; GC.gc()
 c = Mmap.mmap(s, Vector{UInt8}, (UInt16(11),))
 @test c == b"Hello World"
-finalize(c); c=nothing; gc()
+finalize(c); c=nothing; GC.gc()
 @test_throws ArgumentError Mmap.mmap(s, Vector{UInt8}, (Int16(-11),))
 @test_throws ArgumentError Mmap.mmap(s, Vector{UInt8}, (typemax(UInt),))
 close(s)
@@ -139,22 +139,22 @@ s = open(file, "r")
 str = readline(s)
 close(s)
 @test startswith(str, "Hellx World")
-finalize(c); c=nothing; gc()
+finalize(c); c=nothing; GC.gc()
 
 c = Mmap.mmap(file)
 @test c == b"Hellx World\n"
-finalize(c); c=nothing; gc()
+finalize(c); c=nothing; GC.gc()
 c = Mmap.mmap(file, Vector{UInt8}, 3)
 @test c == b"Hel"
-finalize(c); c=nothing; gc()
+finalize(c); c=nothing; GC.gc()
 s = open(file, "r")
 c = Mmap.mmap(s, Vector{UInt8}, 6)
 @test c == b"Hellx "
 close(s)
-finalize(c); c=nothing; gc()
+finalize(c); c=nothing; GC.gc()
 c = Mmap.mmap(file, Vector{UInt8}, 5, 6)
 @test c == b"World"
-finalize(c); c=nothing; gc()
+finalize(c); c=nothing; GC.gc()
 
 s = open(file, "w")
 write(s, "Hello World\n")
@@ -167,7 +167,7 @@ for i = 1:12
     @test m[i] == tdata[i]
 end
 @test_throws BoundsError m[13]
-finalize(m); m=nothing; gc()
+finalize(m); m=nothing; GC.gc()
 
 m = Mmap.mmap(file,Vector{UInt8},6)
 @test m[1] == b"H"[1]
@@ -177,13 +177,13 @@ m = Mmap.mmap(file,Vector{UInt8},6)
 @test m[5] == b"o"[1]
 @test m[6] == b" "[1]
 @test_throws BoundsError m[7]
-finalize(m); m=nothing; gc()
+finalize(m); m=nothing; GC.gc()
 
 m = Mmap.mmap(file,Vector{UInt8},2,6)
 @test m[1] == b"W"[1]
 @test m[2] == b"o"[1]
 @test_throws BoundsError m[3]
-finalize(m); m = nothing; gc()
+finalize(m); m = nothing; GC.gc()
 
 s = open(file, "w")
 write(s, [0xffffffffffffffff,
@@ -194,27 +194,27 @@ close(s)
 s = open(file, "r")
 @test isreadonly(s)
 b = @inferred Mmap.mmap(s, BitArray, (17,13))
-@test Base._check_bitarray_consistency(b)
+@test Test._check_bitarray_consistency(b)
 @test b == trues(17,13)
 @test_throws ArgumentError Mmap.mmap(s, BitArray, (7,3))
 close(s)
 s = open(file, "r+")
 b = Mmap.mmap(s, BitArray, (17,19))
-@test Base._check_bitarray_consistency(b)
+@test Test._check_bitarray_consistency(b)
 rand!(b)
 Mmap.sync!(b)
 b0 = copy(b)
-@test Base._check_bitarray_consistency(b0)
+@test Test._check_bitarray_consistency(b0)
 close(s)
 s = open(file, "r")
 @test isreadonly(s)
 b = Mmap.mmap(s, BitArray, (17,19))
-@test Base._check_bitarray_consistency(b)
+@test Test._check_bitarray_consistency(b)
 @test b == b0
 close(s)
 finalize(b); finalize(b0)
 b = nothing; b0 = nothing
-gc()
+GC.gc()
 
 open(file,"w") do f
     write(f,UInt64(1))
@@ -223,9 +223,9 @@ end
 @test filesize(file) == 9
 s = open(file, "r+")
 m = Mmap.mmap(s, BitArray, (72,))
-@test Base._check_bitarray_consistency(m)
+@test Test._check_bitarray_consistency(m)
 @test length(m) == 72
-close(s); finalize(m); m = nothing; gc()
+close(s); finalize(m); m = nothing; GC.gc()
 rm(file)
 
 # Mmap.mmap with an offset
@@ -249,7 +249,7 @@ A4 = Mmap.mmap(s, Matrix{Int}, (m,150), convert(Int64, (2+150*m)*sizeof(Int)))
 close(s)
 finalize(A2); finalize(A3); finalize(A4)
 A2 = A3 = A4 = nothing
-gc()
+GC.gc()
 rm(fname)
 
 # Mmap.Anonymous
@@ -289,7 +289,7 @@ n = similar(m, (2,2))
 n = similar(m, 12)
 @test length(n) == 12
 @test size(n) == (12,)
-finalize(m); m = nothing; gc()
+finalize(m); m = nothing; GC.gc()
 
 # test #14885
 file = tempname()
@@ -297,9 +297,9 @@ touch(file)
 open(file, "r+") do s
     A = Mmap.mmap(s, Vector{UInt8}, (10,), 0)
     Mmap.sync!(A)
-    finalize(A); A = nothing; gc()
+    finalize(A); A = nothing; GC.gc()
     A = Mmap.mmap(s, Vector{UInt8}, (10,), 1)
     Mmap.sync!(A)
-    finalize(A); A = nothing; gc()
+    finalize(A); A = nothing; GC.gc()
 end
 rm(file)

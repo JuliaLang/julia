@@ -21,7 +21,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
-                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
                     throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
@@ -31,7 +31,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
-                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && length(bld)!=1
                     throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
@@ -67,6 +67,8 @@ function print(io::IO, v::VersionNumber)
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
+Broadcast.broadcastable(v::VersionNumber) = Ref(v)
+
 const VERSION_REGEX = r"^
     v?                                      # prefix        (optional)
     (\d+)                                   # major         (required)
@@ -83,7 +85,7 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        ismatch(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
+        occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
     end
 end
 
@@ -231,7 +233,7 @@ end
 
 const libllvm_version = VersionNumber(libllvm_version_string)
 
-function banner(io::IO = STDOUT)
+function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
     elseif isempty(GIT_VERSION_INFO.commit)

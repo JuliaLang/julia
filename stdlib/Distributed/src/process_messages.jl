@@ -57,7 +57,7 @@ function run_work_thunk(thunk, print_error)
     catch err
         ce = CapturedException(err, catch_backtrace())
         result = RemoteException(ce)
-        print_error && showerror(STDERR, ce)
+        print_error && showerror(stderr, ce)
     end
     return result
 end
@@ -89,7 +89,7 @@ function deliver_result(sock::IO, msg, oid, value)
     catch e
         # terminate connection in case of serialization error
         # otherwise the reading end would hang
-        @error "Fatal error on process $(myid())" exception=e
+        @error "Fatal error on process $(myid())" exception=e,catch_backtrace()
         wid = worker_id_from_socket(sock)
         close(sock)
         if myid()==1
@@ -200,8 +200,8 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
         end
 
         if wpid < 1
-            println(STDERR, e, CapturedException(e, catch_backtrace()))
-            println(STDERR, "Process($(myid())) - Unknown remote, closing connection.")
+            println(stderr, e, CapturedException(e, catch_backtrace()))
+            println(stderr, "Process($(myid())) - Unknown remote, closing connection.")
         elseif !(wpid in map_del_wrkr)
             werr = worker_from_id(wpid)
             oldstate = werr.state
@@ -210,7 +210,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             # If unhandleable error occurred talking to pid 1, exit
             if wpid == 1
                 if isopen(w_stream)
-                    @error "Fatal error on process $(myid())" exception=e
+                    @error "Fatal error on process $(myid())" exception=e,catch_backtrace()
                 end
                 exit(1)
             end
@@ -226,7 +226,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
 
         if (myid() == 1) && (wpid > 1)
             if oldstate != W_TERMINATING
-                println(STDERR, "Worker $wpid terminated.")
+                println(stderr, "Worker $wpid terminated.")
                 rethrow(e)
             end
         end
@@ -327,7 +327,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
         end
     end
 
-    for wt in wait_tasks; wait(wt); end
+    for wt in wait_tasks; Base._wait(wt); end
 
     send_connection_hdr(controller, false)
     send_msg_now(controller, MsgHeader(RRID(0,0), header.notify_oid), JoinCompleteMsg(Sys.CPU_CORES, getpid()))
@@ -341,7 +341,7 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
         send_connection_hdr(w, true)
         send_msg_now(w, MsgHeader(), IdentifySocketMsg(myid()))
     catch e
-        @error "Error on $(myid()) while connecting to peer $rpid, exiting" exception=e
+        @error "Error on $(myid()) while connecting to peer $rpid, exiting" exception=e,catch_backtrace()
         exit(1)
     end
 end

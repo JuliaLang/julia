@@ -2,7 +2,7 @@
 
 module ARPACK
 
-import ..LinAlg: BlasInt, ARPACKException
+import LinearAlgebra: BlasInt, ARPACKException
 
 ## aupd and eupd wrappers
 
@@ -14,13 +14,13 @@ function aupd_wrapper(T, matvecA!::Function, matvecB::Function, solveSI::Functio
     TR = cmplx ? T.types[1] : T
     TOL = Ref{TR}(tol)
 
-    v     = Matrix{T}(uninitialized, n, ncv)
-    workd = Vector{T}(uninitialized, 3*n)
-    workl = Vector{T}(uninitialized, lworkl)
-    rwork = cmplx ? Vector{TR}(uninitialized, ncv) : Vector{TR}()
+    v     = Matrix{T}(undef, n, ncv)
+    workd = Vector{T}(undef, 3*n)
+    workl = Vector{T}(undef, lworkl)
+    rwork = cmplx ? Vector{TR}(undef, ncv) : Vector{TR}()
 
     if isempty(v0)
-        resid = Vector{T}(uninitialized, n)
+        resid = Vector{T}(undef, n)
         info  = Ref{BlasInt}(0)
     else
         resid = deepcopy(v0)
@@ -108,7 +108,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
                       TOL::Ref, resid, ncv::Integer, v, ldv, sigma, iparam, ipntr,
                       workd, workl, lworkl, rwork)
     howmny = "A"
-    select = Vector{BlasInt}(uninitialized, ncv)
+    select = Vector{BlasInt}(undef, ncv)
     info   = Ref{BlasInt}(0)
 
     dmap = x -> abs.(x)
@@ -125,9 +125,9 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
     end
 
     if cmplx
-        d = Vector{T}(uninitialized, nev+1)
+        d = Vector{T}(undef, nev+1)
         sigmar = Ref{T}(sigma)
-        workev = Vector{T}(uninitialized, 2ncv)
+        workev = Vector{T}(undef, 2ncv)
         neupd(ritzvec, howmny, select, d, v, ldv, sigmar, workev,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, rwork, info)
@@ -138,7 +138,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
         p = sortperm(dmap(d[1:nev]), rev=true)
         return ritzvec ? (d[p], v[1:n, p],iparam[5],iparam[3],iparam[9],resid) : (d[p],iparam[5],iparam[3],iparam[9],resid)
     elseif sym
-        d = Vector{T}(uninitialized, nev)
+        d = Vector{T}(undef, nev)
         sigmar = Ref{T}(sigma)
         seupd(ritzvec, howmny, select, d, v, ldv, sigmar,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
@@ -150,20 +150,20 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
         p = sortperm(dmap(d), rev=true)
         return ritzvec ? (d[p], v[1:n, p],iparam[5],iparam[3],iparam[9],resid) : (d[p],iparam[5],iparam[3],iparam[9],resid)
     else
-        dr = Vector{T}(uninitialized, nev+1)
-        di = Vector{T}(uninitialized, nev+1)
+        dr = Vector{T}(undef, nev+1)
+        di = Vector{T}(undef, nev+1)
         fill!(dr,NaN)
         fill!(di,NaN)
         sigmar = Ref{T}(real(sigma))
         sigmai = Ref{T}(imag(sigma))
-        workev = Vector{T}(uninitialized, 3*ncv)
+        workev = Vector{T}(undef, 3*ncv)
         neupd(ritzvec, howmny, select, dr, di, v, ldv, sigmar, sigmai,
               workev, bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info)
         if info[] != 0
             throw(ARPACKException(info[]))
         end
-        evec = complex.(Matrix{T}(uninitialized, n, nev+1), Matrix{T}(uninitialized, n, nev+1))
+        evec = complex.(Matrix{T}(undef, n, nev+1), Matrix{T}(undef, n, nev+1))
 
         j = 1
         while j <= nev

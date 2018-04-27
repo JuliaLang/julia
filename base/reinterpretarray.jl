@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
 Gives a reinterpreted view (of element type T) of the underlying array (of element type S).
 If the size of `T` differs from the size of `S`, the array will be compressed/expanded in
@@ -22,8 +24,8 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
                 The resulting array would have non-integral first dimension.
             """))
         end
-        isbits(T) || throwbits(S, T, T)
-        isbits(S) || throwbits(S, T, S)
+        isbitstype(T) || throwbits(S, T, T)
+        isbitstype(S) || throwbits(S, T, S)
         (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T)
         if N != 0 && sizeof(S) != sizeof(T)
             dim = size(a)[1]
@@ -34,14 +36,15 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
 end
 
 parent(a::ReinterpretArray) = a.parent
+dataids(a::ReinterpretArray) = dataids(a.parent)
 
-eltype(a::ReinterpretArray{T}) where {T} = T
 function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
     size1 = div(psize[1]*sizeof(S), sizeof(T))
     tuple(size1, tail(psize)...)
 end
 
+elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
 @inline @propagate_inbounds getindex(a::ReinterpretArray{T,0}) where {T} = reinterpret(T, a.parent[])
@@ -55,7 +58,7 @@ unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} =
         ind_start, sidx = divrem((inds[1]-1)*sizeof(T), sizeof(S))
         t = Ref{T}()
         s = Ref{S}()
-        @gc_preserve t s begin
+        GC.@preserve t s begin
             tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
             sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
             i = 1
@@ -90,7 +93,7 @@ end
         ind_start, sidx = divrem((inds[1]-1)*sizeof(T), sizeof(S))
         t = Ref{T}(v)
         s = Ref{S}()
-        @gc_preserve t s begin
+        GC.@preserve t s begin
             tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
             sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
             nbytes_copied = 0

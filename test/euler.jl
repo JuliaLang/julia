@@ -70,8 +70,8 @@ function euler11(grid,n)
         j = n:size(grid,2)-n+1,
         di = -1:1, dj = -1:1
         di == dj == 0 && continue
-        i_idxs = di==0 ? fill(i,n) : range(i,di,n)
-        j_idxs = dj==0 ? fill(j,n) : range(j,dj,n)
+        i_idxs = di==0 ? fill(i,n) : range(i, step=di, length=n)
+        j_idxs = dj==0 ? fill(j,n) : range(j, step=dj, length=n)
         idx = tolinear[CartesianIndex.(i_idxs, j_idxs)]
         m = max(m,prod(grid[idx]))
     end
@@ -227,7 +227,7 @@ function euler14(m)
             d -= 1
         end
     end
-    indmax(c)
+    argmax(c)
 end
 @test euler14(999999) == 837799
 

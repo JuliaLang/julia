@@ -55,7 +55,7 @@ for idx in [0, 1, 4]
     @test SubString("∀∀", 4, idx) == "∀∀"[4:idx]
 end
 
-# index beyond endof("∀∀")
+# index beyond lastindex("∀∀")
 for idx in [2:3; 5:6]
     @test_throws StringIndexError SubString("∀∀", 1, idx)
 end
@@ -64,10 +64,10 @@ for idx in 7:8
 end
 
 let str="tempus fugit"              #length(str)==12
-    ss=SubString(str,1,endof(str)) #match source string
+    ss=SubString(str,1,lastindex(str)) #match source string
     @test length(ss)==length(str)
 
-    ss=SubString(str,1:endof(str))
+    ss=SubString(str,1:lastindex(str))
     @test length(ss)==length(str)
 
     ss=SubString(str,1,0)    #empty SubString
@@ -118,9 +118,9 @@ end
 # search and SubString (issue #5679)
 let str = "Hello, world!"
     u = SubString(str, 1, 5)
-    @test rsearch(u, "World") == 0:-1
-    @test rsearch(u, 'z') == 0
-    @test rsearch(u, "ll") == 3:4
+    @test findlast("World", u) == nothing
+    @test findlast(isequal('z'), u) == nothing
+    @test findlast("ll", u) == 3:4
 end
 
 # SubString created from SubString
@@ -154,8 +154,8 @@ end
 @test parse(Float32, SubString("10",1,1)) === 1.0f0
 
 # issue #5870
-@test !ismatch(Regex("aa"), SubString("",1,0))
-@test ismatch(Regex(""), SubString("",1,0))
+@test !occursin(Regex("aa"), SubString("",1,0))
+@test occursin(Regex(""), SubString("",1,0))
 
 # isvalid, length, prevind, nextind for SubString{String}
 let s = "lorem ipsum", sdict = Dict(
@@ -185,6 +185,43 @@ let s = "lorem ipsum", sdict = Dict(
         @test_throws BoundsError prevind(ss, 0)
         @test_throws BoundsError nextind(s, ncodeunits(ss)+1)
         @test_throws BoundsError nextind(ss, ncodeunits(ss)+1)
+    end
+end
+
+# proper nextind/prevind/thisind for SubString{String}
+let rng = MersenneTwister(1), strs = ["∀∃∀"*String(rand(rng, UInt8, 40))*"∀∃∀",
+                                      String(rand(rng, UInt8, 50))]
+    for s in strs
+        a = 0
+        while !done(s, a)
+            a = nextind(s, a)
+            b = a - 1
+            while !done(s, b)
+                ss = SubString(s, a:b)
+                s2 = s[a:b]
+                @test ncodeunits(ss) == ncodeunits(s2)
+                for i in 0:ncodeunits(ss)+1
+                    @test thisind(ss, i) == thisind(s2, i)
+                end
+                for i in 0:ncodeunits(ss)
+                    @test nextind(ss, i) == nextind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test nextind(ss, i, j) == nextind(s2, i, j)
+                        end
+                    end
+                end
+                for i in 1:ncodeunits(ss)+1
+                    @test prevind(ss, i) == prevind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test prevind(ss, i, j) == prevind(s2, i, j)
+                        end
+                    end
+                end
+                b = nextind(s, b)
+            end
+        end
     end
 end
 
@@ -237,14 +274,14 @@ end
             for c in ('X', 'δ', '\U0001d6a5')
                 s = convert(T, string(prefix, c, suffix))
                 r = reverse(s)
-                ri = search(r, c)
+                ri = findfirst(isequal(c), r)
                 @test c == s[reverseind(s, ri)] == r[ri]
                 s = convert(T, string(prefix, prefix, c, suffix, suffix))
                 pre = convert(T, prefix)
-                sb = SubString(s, nextind(pre, endof(pre)),
-                               endof(convert(T, string(prefix, prefix, c, suffix))))
+                sb = SubString(s, nextind(pre, lastindex(pre)),
+                               lastindex(convert(T, string(prefix, prefix, c, suffix))))
                 r = reverse(sb)
-                ri = search(r, c)
+                ri = findfirst(isequal(c), r)
                 @test c == sb[reverseind(sb, ri)] == r[ri]
             end
         end

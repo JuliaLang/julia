@@ -3,7 +3,7 @@
 module SPQR
 
 import Base: \
-using Base.LinAlg: Adjoint, Transpose
+using LinearAlgebra
 
 # ordering options */
 const ORDERING_FIXED   = Int32(0)
@@ -22,7 +22,7 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # tried.  If there is a high fill-in with AMD then try METIS(A'A) and take
 # the best of AMD and METIS. METIS is not tried if it isn't installed.
 
-using ..SparseArrays: SparseMatrixCSC
+using SparseArrays: SparseMatrixCSC
 using ..SuiteSparse.CHOLMOD
 using ..SuiteSparse.CHOLMOD: change_stype!, free!
 
@@ -71,7 +71,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
     if e == C_NULL
         _E = Vector{CHOLMOD.SuiteSparse_long}()
     else
-        _E = Vector{CHOLMOD.SuiteSparse_long}(uninitialized, n)
+        _E = Vector{CHOLMOD.SuiteSparse_long}(undef, n)
         for i in 1:n
             @inbounds _E[i] = unsafe_load(e, i) + 1
         end
@@ -86,7 +86,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
     if hpinv == C_NULL
         _HPinv = Vector{CHOLMOD.SuiteSparse_long}()
     else
-        _HPinv = Vector{CHOLMOD.SuiteSparse_long}(uninitialized, m)
+        _HPinv = Vector{CHOLMOD.SuiteSparse_long}(undef, m)
         for i in 1:m
             @inbounds _HPinv[i] = unsafe_load(hpinv, i) + 1
         end
@@ -104,7 +104,7 @@ end
 # Struct for storing sparse QR from SPQR such that
 # A[invperm(rpivinv), cpiv] = (I - factors[:,1]*τ[1]*factors[:,1]')*...*(I - factors[:,k]*τ[k]*factors[:,k]')*R
 # with k = size(factors, 2).
-struct QRSparse{Tv,Ti} <: LinAlg.Factorization{Tv}
+struct QRSparse{Tv,Ti} <: LinearAlgebra.Factorization{Tv}
     factors::SparseMatrixCSC{Tv,Ti}
     τ::Vector{Tv}
     R::SparseMatrixCSC{Tv,Ti}
@@ -125,7 +125,7 @@ function Base.size(F::QRSparse, i::Integer)
     end
 end
 
-struct QRSparseQ{Tv<:CHOLMOD.VTypes,Ti<:Integer} <: LinAlg.AbstractQ{Tv}
+struct QRSparseQ{Tv<:CHOLMOD.VTypes,Ti<:Integer} <: LinearAlgebra.AbstractQ{Tv}
     factors::SparseMatrixCSC{Tv,Ti}
     τ::Vector{Tv}
 end
@@ -134,9 +134,9 @@ Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 
 # From SPQR manual p. 6
 _default_tol(A::SparseMatrixCSC) =
-    20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i))^2 for i in 1:size(A, 2))
+    20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
 
-function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
+function LinearAlgebra.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
     E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
     H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
@@ -148,9 +148,10 @@ function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where
         C_NULL, C_NULL, C_NULL, C_NULL,
         R, E, H, HPinv, HTau)
 
+    R_ = SparseMatrixCSC(Sparse(R[]))
     return QRSparse(SparseMatrixCSC(Sparse(H[])),
                     vec(Array(CHOLMOD.Dense(HTau[]))),
-                    SparseMatrixCSC(Sparse(R[])),
+                    SparseMatrixCSC(min(size(A)...), R_.n, R_.colptr, R_.rowval, R_.nzval),
                     p, hpinv)
 end
 
@@ -163,7 +164,7 @@ solve least squares or underdetermined problems with [`\\`](@ref). The function 
 
 # Examples
 ```jldoctest
-julia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))
+julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
 4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
   [1, 1]  =  1.0
   [2, 1]  =  1.0
@@ -194,11 +195,11 @@ Column permutation:
  2
 ```
 """
-Base.LinAlg.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
+LinearAlgebra.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
 
-Base.LinAlg.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
+LinearAlgebra.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
 
-function Base.LinAlg.mul!(Q::QRSparseQ, A::StridedVecOrMat)
+function LinearAlgebra.lmul!(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -207,13 +208,13 @@ function Base.LinAlg.mul!(Q::QRSparseQ, A::StridedVecOrMat)
         h = view(Q.factors, :, l)
         for j in 1:size(A, 2)
             a = view(A, :, j)
-            LinAlg.axpy!(τl*dot(h, a), h, a)
+            LinearAlgebra.axpy!(τl*dot(h, a), h, a)
         end
     end
     return A
 end
 
-function Base.LinAlg.mul!(A::StridedMatrix, Q::QRSparseQ)
+function LinearAlgebra.rmul!(A::StridedMatrix, Q::QRSparseQ)
     if size(A, 2) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
     end
@@ -221,13 +222,13 @@ function Base.LinAlg.mul!(A::StridedMatrix, Q::QRSparseQ)
     for l in 1:size(Q.factors, 2)
         τl = -Q.τ[l]
         h = view(Q.factors, :, l)
-        Base.LinAlg.mul!(tmp, A, h)
-        LinAlg.lowrankupdate!(A, tmp, h, τl)
+        LinearAlgebra.mul!(tmp, A, h)
+        LinearAlgebra.lowrankupdate!(A, tmp, h, τl)
     end
     return A
 end
 
-function Base.LinAlg.mul!(adjQ::Adjoint{<:Any,<:QRSparseQ}, A::StridedVecOrMat)
+function LinearAlgebra.lmul!(adjQ::Adjoint{<:Any,<:QRSparseQ}, A::StridedVecOrMat)
     Q = adjQ.parent
     if size(A, 1) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
@@ -237,13 +238,13 @@ function Base.LinAlg.mul!(adjQ::Adjoint{<:Any,<:QRSparseQ}, A::StridedVecOrMat)
         h = view(Q.factors, :, l)
         for j in 1:size(A, 2)
             a = view(A, :, j)
-            LinAlg.axpy!(τl'*dot(h, a), h, a)
+            LinearAlgebra.axpy!(τl'*dot(h, a), h, a)
         end
     end
     return A
 end
 
-function Base.LinAlg.mul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRSparseQ})
+function LinearAlgebra.rmul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRSparseQ})
     Q = adjQ.parent
     if size(A, 2) != size(Q, 1)
         throw(DimensionMismatch("size(Q) = $(size(Q)) but size(A) = $(size(A))"))
@@ -252,8 +253,8 @@ function Base.LinAlg.mul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRSparseQ})
     for l in size(Q.factors, 2):-1:1
         τl = -Q.τ[l]
         h = view(Q.factors, :, l)
-        Base.LinAlg.mul!(tmp, A, h)
-        LinAlg.lowrankupdate!(A, tmp, h, τl')
+        LinearAlgebra.mul!(tmp, A, h)
+        LinearAlgebra.lowrankupdate!(A, tmp, h, τl')
     end
     return A
 end
@@ -335,19 +336,21 @@ end
 _ret_size(F::QRSparse, b::AbstractVector) = (size(F, 2),)
 _ret_size(F::QRSparse, B::AbstractMatrix) = (size(F, 2), size(B, 2))
 
+LinearAlgebra.rank(F::QRSparse) = maximum(F.R.rowval)
+
 function (\)(F::QRSparse{Float64}, B::VecOrMat{Complex{Float64}})
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    c2r = reshape(transpose(reinterpret(Float64, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
+    c2r = reshape(copy(transpose(reinterpret(Float64, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = F\c2r
 
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      <-       |y1|y2|y3|y4|     <-      |x2|y2|     <-    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    return collect(reshape(reinterpret(Complex{Float64}, transpose(reshape(x, (length(x) >> 1), 2))), _ret_size(F, B)))
+    return collect(reshape(reinterpret(Complex{Float64}, copy(transpose(reshape(x, (length(x) >> 1), 2)))), _ret_size(F, B)))
 end
 
 function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
@@ -355,8 +358,8 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
         throw(DimensionMismatch("size(F) = $(size(F)) but size(B) = $(size(B))"))
     end
 
-    # The rank of F equal to the number of rows in R
-    rnk = size(F.R, 1)
+    # The rank of F equal might be reduced
+    rnk = rank(F)
 
     # allocate an array for the return value large enough to hold B and X
     # For overdetermined problem, B is larger than X and vice versa
@@ -375,13 +378,14 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     X0 = view(X, 1:size(B, 1), :)
 
     # Apply Q' to B
-    Base.LinAlg.mul!(Adjoint(F.Q), X0)
+    LinearAlgebra.lmul!(adjoint(F.Q), X0)
 
     # Zero out to get basic solution
     X[rnk + 1:end, :] = 0
 
     # Solve R*X = B
-    Base.LinAlg.ldiv!(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
+    LinearAlgebra.ldiv!(UpperTriangular(view(F.R, Base.OneTo(rnk), Base.OneTo(rnk))),
+                        view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from X
     return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val(ndims(B)))...)
@@ -397,13 +401,13 @@ when the problem is underdetermined.
 
 # Examples
 ```jldoctest
-julia> A = sparse([1,2,4], [1,1,1], ones(3), 4, 2)
+julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
 4×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
   [1, 1]  =  1.0
   [2, 1]  =  1.0
   [4, 1]  =  1.0
 
-julia> qrfact(A)\\ones(4)
+julia> qrfact(A)\\fill(1.0, 4)
 2-element Array{Float64,1}:
  1.0
  0.0

@@ -94,14 +94,17 @@
 
 (define *in-expand* #f)
 
+(define (toplevel-only-expr? e)
+  (and (pair? e)
+       (or (memq (car e) '(toplevel line module import importall using export
+                                    error incomplete))
+           (and (eq? (car e) 'global) (every symbol? (cdr e))
+                (every (lambda (x) (not (memq x '(true false)))) (cdr e))))))
+
 (define (expand-toplevel-expr e)
-  (cond ((or (atom? e)
-             (and (pair? e)
-                  (or (memq (car e) '(toplevel line module import importall using export
-                                               error incomplete))
-                      (and (eq? (car e) 'global) (every symbol? (cdr e))))))
+  (cond ((or (atom? e) (toplevel-only-expr? e))
          (if (underscore-symbol? e)
-             (syntax-deprecation #f "underscores as an rvalue" ""))
+             (syntax-deprecation "underscores as an rvalue" "" #f))
          e)
         (else
          (let ((last *in-expand*))
@@ -202,22 +205,15 @@
    (jl-parse-all (open-input-file filename) filename)
    (lambda (e) #f)))
 
-(define *depwarn* #t)
-(define (jl-parser-depwarn w)
-  (let ((prev *depwarn*))
-    (set! *depwarn* (eq? w #t))
-    prev))
-
-(define *deperror* #f)
-(define (jl-parser-deperror e)
-  (let ((prev *deperror*))
-    (set! *deperror* (eq? e #t))
-    prev))
-
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)
   (parser-wrap (lambda ()
                  (expand-toplevel-expr expr))))
+
+(define (jl-expand-to-thunk-stmt expr)
+  (jl-expand-to-thunk (if (toplevel-only-expr? expr)
+                          expr
+                          `(block ,expr (null)))))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)
@@ -229,3 +225,45 @@
            (newline)
            (prn e))
    (lambda () (profile s))))
+
+
+; --- logging ---
+; Utilities for logging messages from the frontend, in a way which can be
+; controlled from julia code.
+
+; Log a general deprecation message at line node location `lno`
+(define (deprecation-message msg lno)
+  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
+    (frontend-depwarn msg file line)))
+
+; Log a syntax deprecation from line node location `lno`
+(define (syntax-deprecation what instead lno)
+  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
+    (deprecation-message (format-syntax-deprecation what instead file line #f) lno)))
+
+; Extract line and file from a line number node, defaulting to (0, none)
+; respectively if lno is absent (`#f`) or doesn't contain a file
+(define (extract-line-file lno)
+  (cond ((or (not lno) (null? lno)) '(0 none))
+        ((not (eq? (car lno) 'line)) (error "lno is not a line number node"))
+        ((length= lno 2) `(,(cadr lno) none))
+        (else (cdr lno))))
+
+(define (format-syntax-deprecation what instead file line exactloc)
+  (string "Deprecated syntax `" what "`"
+          (if (or (= line 0) (eq? file 'none))
+            ""
+            (string (if exactloc " at " " around ") file ":" line))
+          "."
+          (if (equal? instead "") ""
+            (string #\newline "Use `" instead "` instead."))))
+
+; Corresponds to --depwarn 0="no", 1="yes", 2="error"
+(define *depwarn-opt* 1)
+
+; Emit deprecation warning via julia logging layer.
+(define (frontend-depwarn msg file line)
+  ; (display (string msg "; file = " file "; line = " line #\newline)))
+  (case *depwarn-opt*
+    (1 (julia-logmsg 1000 'depwarn (symbol (string file line)) file line msg))
+    (2 (error msg))))

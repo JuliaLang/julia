@@ -3,9 +3,10 @@
 module Libc
 @doc """
 Interface to libc, the C standard library.
-""" -> Libc
+""" Libc
 
 import Base: transcode
+import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
     errno, strerror, flush_cstdio, systemsleep, time, transcode
@@ -18,41 +19,39 @@ include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # inc
 ## RawFD ##
 
 # Wrapper for an OS file descriptor (on both Unix and Windows)
-struct RawFD
-    fd::Int32
-    RawFD(fd::Integer) = new(fd)
-    RawFD(fd::RawFD) = fd
-end
+primitive type RawFD 32 end
+RawFD(fd::Integer) = bitcast(RawFD, Cint(fd))
+RawFD(fd::RawFD) = fd
+Base.cconvert(::Type{Cint}, fd::RawFD) = bitcast(Cint, fd)
 
-Base.cconvert(::Type{Int32}, fd::RawFD) = fd.fd
-
-dup(x::RawFD) = RawFD(ccall((@static Sys.iswindows() ? :_dup : :dup), Int32, (Int32,), x.fd))
+dup(x::RawFD) = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,), x)
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
-                (Int32, Int32), src.fd, target.fd))
+                (RawFD, RawFD), src, target))
 
 # Wrapper for an OS file descriptor (for Windows)
 if Sys.iswindows()
-    struct WindowsRawSocket
-        handle::Ptr{Cvoid}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
-    end
-    Base.cconvert(::Type{Ptr{Cvoid}}, fd::WindowsRawSocket) = fd.handle
-    _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle, Ptr{Cvoid}, (Cint,), fd.fd))
+    primitive type WindowsRawSocket sizeof(Ptr) * 8 end # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
+    WindowsRawSocket(handle::Ptr{Cvoid}) = bitcast(WindowsRawSocket, handle)
+    WindowsRawSocket(handle::WindowsRawSocket) = handle
+
+    Base.cconvert(::Type{Ptr{Cvoid}}, fd::WindowsRawSocket) = bitcast(Ptr{Cvoid}, fd)
+    _get_osfhandle(fd::RawFD) = ccall(:_get_osfhandle, WindowsRawSocket, (RawFD,), fd)
     _get_osfhandle(fd::WindowsRawSocket) = fd
     function dup(src::WindowsRawSocket)
-        new_handle = Ref{Ptr{Cvoid}}(-1)
+        new_handle = Ref(WindowsRawSocket(Ptr{Cvoid}(-1)))
         my_process = ccall(:GetCurrentProcess, stdcall, Ptr{Cvoid}, ())
         DUPLICATE_SAME_ACCESS = 0x2
         status = ccall(:DuplicateHandle, stdcall, Int32,
-            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, UInt32, Int32, UInt32),
-            my_process, src.handle, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
+            (Ptr{Cvoid}, WindowsRawSocket, Ptr{Cvoid}, Ptr{WindowsRawSocket}, UInt32, Int32, UInt32),
+            my_process, src, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
         status == 0 && error("dup failed: $(FormatMessage())")
         return new_handle[]
     end
     function dup(src::WindowsRawSocket, target::RawFD)
-        fd = ccall(:_open_osfhandle, Int32, (Ptr{Cvoid}, Int32), dup(src), 0)
-        dup(RawFD(fd), target)
-        ccall(:_close, Int32, (Int32,), fd)
+        fd = ccall(:_open_osfhandle, RawFD, (WindowsRawSocket, Int32), dup(src), 0)
+        dup(fd, target)
+        ccall(:_close, Int32, (RawFD,), fd)
         nothing
     end
 
@@ -204,7 +203,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !ismatch(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
+        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -244,14 +243,14 @@ getpid() = ccall(:jl_getpid, Int32, ())
 Get the local machine's host name.
 """
 function gethostname()
-    hn = Vector{UInt8}(uninitialized, 256)
+    hn = Vector{UInt8}(undef, 256)
     err = @static if Sys.iswindows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else
         ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
     end
     systemerror("gethostname", err != 0)
-    return Base.@gc_preserve hn unsafe_string(pointer(hn))
+    return GC.@preserve hn unsafe_string(pointer(hn))
 end
 
 ## system error handling ##
@@ -306,8 +305,8 @@ if Sys.iswindows()
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
         len == 0 && return ""
-        buf = Vector{UInt16}(uninitialized, len)
-        Base.@gc_preserve buf unsafe_copyto!(pointer(buf), p, len)
+        buf = Vector{UInt16}(undef, len)
+        GC.@preserve buf unsafe_copyto!(pointer(buf), p, len)
         ccall(:LocalFree, stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), p)
         return transcode(String, buf)
     end
@@ -351,5 +350,27 @@ calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize
 
 free(p::Cstring) = free(convert(Ptr{UInt8}, p))
 free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
+
+## Random numbers ##
+
+# To limit dependency on rand functionality implemented in the Random module,
+# Libc.rand is used in file.jl, and could be used in error.jl (but it breaks a test)
+"""
+    rand([T::Type])
+
+Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
+by composing two calls to `rand()`. `T` can be `UInt32` or `Float64`.
+"""
+rand() = ccall(:rand, Cint, ())
+# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
+rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
+rand(::Type{Float64}) = rand(UInt32) / 2^32
+
+"""
+    srand([seed])
+
+Interface to the C `srand(seed)` function.
+"""
+srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 end # module

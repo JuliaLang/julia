@@ -4,7 +4,7 @@ mutable struct GenericIterator{N} end
 Base.start(::GenericIterator{N}) where {N} = 1
 Base.next(::GenericIterator{N}, i) where {N} = (i, i + 1)
 Base.done(::GenericIterator{N}, i) where {N} = i > N ? true : false
-Base.iteratorsize(::Type{GenericIterator{N}}) where {N} = Base.SizeUnknown()
+Base.IteratorSize(::Type{GenericIterator{N}}) where {N} = Base.SizeUnknown()
 
 function generic_map_tests(mapf, inplace_mapf=nothing)
     for typ in (Float16, Float32, Float64,
@@ -36,7 +36,7 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
     end
 
     # AbstractArray map for N-arg case
-    A = Array{Int}(uninitialized, 10)
+    A = Array{Int}(undef, 10)
     f(x, y, z) = x + y + z
     D = Float64[1:10...]
 
@@ -61,7 +61,7 @@ function testmap_equivalence(mapf, f, c...)
     x1 = mapf(f,c...)
     x2 = map(f,c...)
 
-    if Base.iteratorsize == Base.HasShape()
+    if Base.IteratorSize isa Base.HasShape
         @test size(x1) == size(x2)
     else
         @test length(x1) == length(x2)
@@ -76,9 +76,8 @@ end
 
 function run_map_equivalence_tests(mapf)
     testmap_equivalence(mapf, identity, (1,2,3,4))
-    testmap_equivalence(mapf, x->x>0 ? 1.0 : 0.0, sparse(sparse(1.0I, 5, 5)))
     testmap_equivalence(mapf, (x,y,z)->x+y+z, 1,2,3)
-    testmap_equivalence(mapf, x->x ? false : true, BitMatrix(uninitialized, 10,10))
-    testmap_equivalence(mapf, x->"foobar", BitMatrix(uninitialized, 10,10))
-    testmap_equivalence(mapf, (x,y,z)->string(x,y,z), BitVector(uninitialized, 10), ones(10), "1234567890")
+    testmap_equivalence(mapf, x->x ? false : true, BitMatrix(undef, 10,10))
+    testmap_equivalence(mapf, x->"foobar", BitMatrix(undef, 10,10))
+    testmap_equivalence(mapf, (x,y,z)->string(x,y,z), BitVector(undef, 10), fill(1.0, 10), "1234567890")
 end

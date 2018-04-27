@@ -9,11 +9,6 @@ struct BitPerm_19352
     BitPerm_19352(xs::Vararg{Any,8}) = BitPerm(map(UInt8, xs))
 end
 
-# #17198
-@test_throws BoundsError convert(Tuple{Int}, (1.0, 2.0, 3.0))
-# #21238
-@test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
-
 @testset "conversion and construction" begin
     @test convert(Tuple, ()) === ()
     @test convert(Tuple, (1, 2)) === (1, 2)
@@ -41,17 +36,23 @@ end
     @test convert(NTuple{3, Int}, (1.0, 2, 0x3)) === (1, 2, 3)
     @test convert(Tuple{Int, Int, Float64}, (1.0, 2, 0x3)) === (1, 2, 3.0)
 
-    # TODO: seems like these all should throw BoundsError?
     @test_throws MethodError convert(Tuple{Int}, ())
+    @test_throws MethodError convert(Tuple{Any}, ())
     @test_throws MethodError convert(Tuple{Int, Vararg{Int}}, ())
-    @test_throws BoundsError convert(Tuple{}, (1, 2, 3))
-    @test_throws BoundsError convert(Tuple{}, (1.0, 2, 3))
+    @test_throws MethodError convert(Tuple{}, (1, 2, 3))
+    @test_throws MethodError convert(Tuple{}, (1.0, 2, 3))
     @test_throws MethodError convert(NTuple{3, Int}, ())
     @test_throws MethodError convert(NTuple{3, Int}, (1, 2))
-    @test_throws BoundsError convert(NTuple{3, Int}, (1, 2, 3, 4))
+    @test_throws MethodError convert(NTuple{3, Int}, (1, 2, 3, 4))
     @test_throws MethodError convert(Tuple{Int, Int, Float64}, ())
     @test_throws MethodError convert(Tuple{Int, Int, Float64}, (1, 2))
-    @test_throws BoundsError convert(Tuple{Int, Int, Float64}, (1, 2, 3, 4))
+    @test_throws MethodError convert(Tuple{Int, Int, Float64}, (1, 2, 3, 4))
+    # #17198
+    @test_throws MethodError convert(Tuple{Int}, (1.0, 2.0, 3.0))
+    # #21238
+    @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
+    # issue #26589
+    @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
 
     # PR #15516
     @test Tuple{Char,Char}("za") === ('z','a')
@@ -64,8 +65,8 @@ end
     @test Tuple{Vararg{Float32}}(Float64[1,2,3]) === (1.0f0, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Float32}}(Float64[1,2,3]) === (1, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
-    @test Tuple(ones(5)) === (1.0,1.0,1.0,1.0,1.0)
-    @test_throws MethodError convert(Tuple, ones(5))
+    @test Tuple(fill(1.,5)) === (1.0,1.0,1.0,1.0,1.0)
+    @test_throws MethodError convert(Tuple, fill(1.,5))
 
     @testset "ambiguity between tuple constructors #20990" begin
         Tuple16Int = Tuple{Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int}
@@ -95,9 +96,9 @@ end
     @test_throws ArgumentError Base.front(())
     @test_throws ArgumentError first(())
 
-    @test endof(()) === 0
-    @test endof((1,)) === 1
-    @test endof((1,2)) === 2
+    @test lastindex(()) === 0
+    @test lastindex((1,)) === 1
+    @test lastindex((1,2)) === 2
 
     @test size((), 1) === 0
     @test size((1,), 1) === 1
@@ -181,6 +182,20 @@ end
         typejoin(Int, AbstractFloat, Bool)
     @test eltype(Union{Tuple{Int, Float64}, Tuple{Vararg{Bool}}}) ===
         typejoin(Int, Float64, Bool)
+    @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
+    @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+end
+
+@testset "map with Nothing and Missing" begin
+    for T in (Nothing, Missing)
+        x = [(1, T()), (1, 2)]
+        y = map(v -> (v[1], v[2]), [(1, T()), (1, 2)])
+        @test y isa Vector{Tuple{Int, Any}}
+        @test isequal(x, y)
+    end
+    y = map(v -> (v[1], v[1] + v[2]), [(1, missing), (1, 2)])
+    @test y isa Vector{Tuple{Int, Any}}
+    @test isequal(y, [(1, missing), (1, 3)])
 end
 
 @testset "mapping" begin
@@ -219,7 +234,7 @@ end
     end
 end
 
-@testset "comparison" begin
+@testset "comparison and hash" begin
     @test isequal((), ())
     @test isequal((1,2,3), (1,2,3))
     @test !isequal((1,2,3), (1,2,4))
@@ -239,8 +254,33 @@ end
     @test isless((1,), (1,2))
     @test !isless((1,2), (1,2))
     @test !isless((2,1), (1,2))
-end
 
+    @test hash(()) === Base.tuplehash_seed
+    @test hash((1,)) === hash(1, Base.tuplehash_seed)
+    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed))
+
+    # Test Any16 methods
+    t = ntuple(identity, 16)
+    @test isequal((t...,1,2,3), (t...,1,2,3))
+    @test !isequal((t...,1,2,3), (t...,1,2,4))
+    @test !isequal((t...,1,2,3), (t...,1,2))
+
+    @test ==((t...,1,2,3), (t...,1,2,3))
+    @test !==((t...,1,2,3), (t...,1,2,4))
+    @test !==((t...,1,2,3), (t...,1,2))
+
+    @test (t...,1,2) < (t...,1,3)
+    @test (t...,1,) < (t...,1,2)
+    @test !((t...,1,2) < (t...,1,2))
+    @test (t...,2,1) > (t...,1,2)
+
+    @test isless((t...,1,2), (t...,1,3))
+    @test isless((t...,1,), (t...,1,2))
+    @test !isless((t...,1,2), (t...,1,2))
+    @test !isless((t...,2,1), (t...,1,2))
+
+    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,(),UInt(0)])
+end
 
 @testset "functions" begin
     @test isempty(())
@@ -363,4 +403,27 @@ end
 
 @testset "issue 24707" begin
     @test eltype(Tuple{Vararg{T}} where T<:Integer) >: Integer
+end
+
+@testset "find" begin
+    @test findall(isequal(1), (1, 2)) == [1]
+    @test findall(isequal(1), (1, 1)) == [1, 2]
+    @test isempty(findall(isequal(1), ()))
+    @test isempty(findall(isequal(1), (2, 3)))
+
+    @test findfirst(isequal(1), (1, 2)) == 1
+    @test findlast(isequal(1), (1, 2)) == 1
+    @test findfirst(isequal(1), (1, 1)) == 1
+    @test findlast(isequal(1), (1, 1)) == 2
+    @test findfirst(isequal(1), ()) === nothing
+    @test findlast(isequal(1), ()) === nothing
+    @test findfirst(isequal(1), (2, 3)) === nothing
+    @test findlast(isequal(1), (2, 3)) === nothing
+
+    @test findnext(isequal(1), (1, 2), 1) == 1
+    @test findprev(isequal(1), (1, 2), 2) == 1
+    @test findnext(isequal(1), (1, 1), 2) == 2
+    @test findprev(isequal(1), (1, 1), 1) == 1
+    @test findnext(isequal(1), (2, 3), 1) === nothing
+    @test findprev(isequal(1), (2, 3), 2) === nothing
 end

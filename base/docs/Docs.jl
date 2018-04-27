@@ -60,9 +60,9 @@ function.
 
 include("bindings.jl")
 
-import Base.Markdown: @doc_str, MD
-import Base.Meta: quot, isexpr
-import Base: Callable
+import .Base.Meta: quot, isexpr
+import .Base: Callable, with_output_color
+using .Base: RefValue
 import ..CoreDocs: lazy_iterpolate
 
 export doc
@@ -72,11 +72,11 @@ export doc
 const modules = Module[]
 const META    = gensym(:meta)
 
-meta(m::Module) = isdefined(m, META) ? getfield(m, META) : ObjectIdDict()
+meta(m::Module) = isdefined(m, META) ? getfield(m, META) : IdDict()
 
 function initmeta(m::Module)
     if !isdefined(m, META)
-        eval(m, :(const $META = $(ObjectIdDict())))
+        eval(m, :(const $META = $(IdDict())))
         push!(modules, m)
     end
     nothing
@@ -174,25 +174,6 @@ end
 
 docexpr(__source__, __module__, args...) = Expr(:call, docstr, args...)
 
-function formatdoc(d::DocStr)
-    buffer = IOBuffer()
-    for part in d.text
-        formatdoc(buffer, d, part)
-    end
-    Markdown.parse(seekstart(buffer))
-end
-@noinline formatdoc(buffer, d, part) = print(buffer, part)
-
-function parsedoc(d::DocStr)
-    if d.object === nothing
-        md = formatdoc(d)
-        md.meta[:module] = d.data[:module]
-        md.meta[:path]   = d.data[:path]
-        d.object = md
-    end
-    d.object
-end
-
 """
     MultiDoc
 
@@ -216,9 +197,9 @@ mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
     order::Vector{Type}
     "Documentation for each object. Keys are signatures."
-    docs::ObjectIdDict
+    docs::IdDict{Any,Any}
 
-    MultiDoc() = new(Type[], ObjectIdDict())
+    MultiDoc() = new(Type[], IdDict())
 end
 
 # Docstring registration.
@@ -270,167 +251,6 @@ function getdoc end
 getdoc(x, sig) = getdoc(x)
 getdoc(x) = nothing
 
-"""
-    Docs.doc(binding, sig)
-
-Return all documentation that matches both `binding` and `sig`.
-
-If `getdoc` returns a non-`nothing` result on the value of the binding, then a
-dynamic docstring is returned instead of one based on the binding itself.
-"""
-function doc(binding::Binding, sig::Type = Union{})
-    if defined(binding)
-        result = getdoc(resolve(binding), sig)
-        result === nothing || return result
-    end
-    results, groups = DocStr[], MultiDoc[]
-    # Lookup `binding` and `sig` for matches in all modules of the docsystem.
-    for mod in modules
-        dict = meta(mod)
-        if haskey(dict, binding)
-            multidoc = dict[binding]
-            push!(groups, multidoc)
-            for msig in multidoc.order
-                sig <: msig && push!(results, multidoc.docs[msig])
-            end
-        end
-    end
-    if isempty(groups)
-        # When no `MultiDoc`s are found that match `binding` then we check whether `binding`
-        # is an alias of some other `Binding`. When it is we then re-run `doc` with that
-        # `Binding`, otherwise if it's not an alias then we generate a summary for the
-        # `binding` and display that to the user instead.
-        alias = aliasof(binding)
-        alias == binding ? summarize(alias, sig) : doc(alias, sig)
-    else
-        # There was at least one match for `binding` while searching. If there weren't any
-        # matches for `sig` then we concatenate *all* the docs from the matching `Binding`s.
-        if isempty(results)
-            for group in groups, each in group.order
-                push!(results, group.docs[each])
-            end
-        end
-        # Get parsed docs and concatenate them.
-        md = catdoc(map(parsedoc, results)...)
-        # Save metadata in the generated markdown.
-        if isa(md, Markdown.MD)
-            md.meta[:results] = results
-            md.meta[:binding] = binding
-            md.meta[:typesig] = sig
-        end
-        return md
-    end
-end
-
-# Some additional convenience `doc` methods that take objects rather than `Binding`s.
-doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
-doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
-doc(object, sig...)              = doc(object, Tuple{sig...})
-
-"""
-    Docs.fielddoc(binding, field)
-
-Return documentation for a particular `field` of a type if it exists.
-"""
-function fielddoc(binding::Binding, field::Symbol)
-    for mod in modules
-        dict = meta(mod)
-        if haskey(dict, binding)
-            multidoc = dict[binding]
-            if haskey(multidoc.docs, Union{})
-                fields = multidoc.docs[Union{}].data[:fields]
-                if haskey(fields, field)
-                    doc = fields[field]
-                    return isa(doc, Markdown.MD) ? doc : Markdown.parse(doc)
-                end
-            end
-        end
-    end
-    fields = join(["`$f`" for f in fieldnames(resolve(binding))], ", ", ", and ")
-    fields = isempty(fields) ? "no fields" : "fields $fields"
-    Markdown.parse("`$(resolve(binding))` has $fields.")
-end
-
-# As with the additional `doc` methods, this converts an object to a `Binding` first.
-fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), field)
-
-# Object Summaries.
-# =================
-
-function summarize(binding::Binding, sig)
-    io = IOBuffer()
-    println(io, "No documentation found.\n")
-    if defined(binding)
-        summarize(io, resolve(binding), binding)
-    else
-        println(io, "Binding `", binding, "` does not exist.")
-    end
-    md = Markdown.parse(seekstart(io))
-    # Save metadata in the generated markdown.
-    md.meta[:results] = DocStr[]
-    md.meta[:binding] = binding
-    md.meta[:typesig] = sig
-    return md
-end
-
-function summarize(io::IO, λ::Function, binding)
-    kind = startswith(string(binding.var), '@') ? "macro" : "`Function`"
-    println(io, "`", binding, "` is a ", kind, ".")
-    println(io, "```\n", methods(λ), "\n```")
-end
-
-function summarize(io::IO, T::DataType, binding)
-    println(io, "# Summary")
-    println(io, "```")
-    println(io,
-            T.abstract ? "abstract type" :
-            T.mutable  ? "mutable struct" :
-            Base.isstructtype(T) ? "struct" : "primitive type",
-            " ", T, " <: ", supertype(T)
-            )
-    println(io, "```")
-    if !T.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
-        println(io, "# Fields")
-        println(io, "```")
-        pad = maximum(length(string(f)) for f in fieldnames(T))
-        for (f, t) in zip(fieldnames(T), T.types)
-            println(io, rpad(f, pad), " :: ", t)
-        end
-        println(io, "```")
-    end
-    if !isempty(subtypes(T))
-        println(io, "# Subtypes")
-        println(io, "```")
-        for t in subtypes(T)
-            println(io, t)
-        end
-        println(io, "```")
-    end
-    if supertype(T) != Any
-        println(io, "# Supertype Hierarchy")
-        println(io, "```")
-        Base.show_supertypes(io, T)
-        println(io)
-        println(io, "```")
-    end
-end
-
-function summarize(io::IO, m::Module, binding)
-    readme = Pkg.dir(string(m), "README.md")
-    if isfile(readme)
-        println(io, "Displaying the `README.md` for the module instead.\n")
-        println(io, "---\n")
-        println(io, read(readme, String))
-    else
-        println(io, "No docstring or `README.md` found for module `", m, "`.\n")
-    end
-end
-
-function summarize(io::IO, ::T, binding) where T
-    println(io, "`", binding, "` is of type `", T, "`.\n")
-    summarize(io, T, binding)
-end
-
 # Utilities.
 # ==========
 
@@ -442,12 +262,6 @@ catdoc(xs...) = vcat(xs...)
 
 const keywords = Dict{Symbol, DocStr}()
 
-isdoc(s::AbstractString) = true
-
-isdoc(x) = isexpr(x, :string) ||
-    (isexpr(x, :macrocall) && x.args[1] === Symbol("@doc_str")) ||
-    (isexpr(x, :call) && x.args[1] === Base.Markdown.doc_str)
-
 function unblock(ex)
     isexpr(ex, :block) || return ex
     exs = filter(ex -> !(isa(ex, LineNumberNode) || isexpr(ex, :line)), ex.args)
@@ -457,19 +271,22 @@ end
 
 uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
-namify(x) = nameof(x, isexpr(x, :macro))
+namify(x) = astname(x, isexpr(x, :macro))
 
-function nameof(x::Expr, ismacro)
+function astname(x::Expr, ismacro)
     if isexpr(x, :.)
         ismacro ? macroname(x) : x
+    # Call overloading, e.g. `(a::A)(b) = b` or `function (a::A)(b) b end` should document `A(b)`
+    elseif (isexpr(x, :function) || isexpr(x, :(=))) && isexpr(x.args[1], :call) && isexpr(x.args[1].args[1], :(::))
+        return astname(x.args[1].args[1].args[2], ismacro)
     else
         n = isexpr(x, (:module, :struct)) ? 2 : 1
-        nameof(x.args[n], ismacro)
+        astname(x.args[n], ismacro)
     end
 end
-nameof(q::QuoteNode, ismacro) = nameof(q.value, ismacro)
-nameof(s::Symbol, ismacro)    = ismacro ? macroname(s) : s
-nameof(other, ismacro)        = other
+astname(q::QuoteNode, ismacro) = astname(q.value, ismacro)
+astname(s::Symbol, ismacro)    = ismacro ? macroname(s) : s
+astname(other, ismacro)        = other
 
 macroname(s::Symbol) = Symbol('@', s)
 macroname(x::Expr)   = Expr(x.head, x.args[1], macroname(x.args[end].value))
@@ -508,13 +325,20 @@ function metadata(__source__, __module__, expr, ismodule)
     if isexpr(expr, :struct)
         # Field docs for concrete types.
         fields = []
-        tmp = nothing
+        last_docstr = nothing
         for each in expr.args[3].args
-            if isdoc(each)
-                tmp = each
-            elseif tmp !== nothing && (isa(each, Symbol) || isexpr(each, :(::)))
-                push!(fields, (namify(each), tmp))
-                tmp = nothing
+            if isa(each, Symbol) || isexpr(each, :(::))
+                # a field declaration
+                if last_docstr !== nothing
+                    push!(fields, (namify(each), last_docstr))
+                    last_docstr = nothing
+                end
+            elseif isexpr(each, :function) || isexpr(each, :(=))
+                break
+            elseif isa(each, String) || isexpr(each, :string) || isexpr(each, :call) ||
+                (isexpr(each, :macrocall) && each.args[1] === Symbol("@doc_str"))
+                # forms that might be doc strings
+                last_docstr = each
             end
         end
         dict = :($(Dict)($([:($(Pair)($(quot(f)), $d)) for (f, d) in fields]...)))
@@ -567,7 +391,7 @@ end
 function multidoc(__source__, __module__, meta, ex, define)
     out = Expr(:toplevel)
     str = docexpr(__source__, __module__, lazy_iterpolate(meta), metadata(__source__, __module__, ex, false))
-    ref = Ref{DocStr}()
+    ref = RefValue{DocStr}()
     for (n, arg) in enumerate(ex.args)
         # The first `arg` to be documented needs to also create the docstring for the group.
         # Subsequent `arg`s just need `ref` to be able to find the docstring without having
@@ -641,7 +465,7 @@ finddoc(λ, def) = false
 # Predicates and helpers for `docm` expression selection:
 
 const FUNC_HEADS    = [:function, :macro, :(=)]
-const BINDING_HEADS = [:typealias, :const, :global, :(=)]  # deprecation: remove `typealias` post-0.6
+const BINDING_HEADS = [:const, :global, :(=)]
 # For the special `:@mac` / `:(Base.@mac)` syntax for documenting a macro after definition.
 isquotedmacrocall(x) =
     isexpr(x, :copyast, 1) &&
@@ -650,6 +474,16 @@ isquotedmacrocall(x) =
 # Simple expressions / atoms the may be documented.
 isbasicdoc(x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
 is_signature(x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)
+
+function docm(source::LineNumberNode, mod::Module, ex)
+    if isexpr(ex, :->) && length(ex.args) > 1
+        docm(source, mod, ex.args...)
+    else
+        # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
+        REPL = Base.root_module(Base, :REPL)
+        return REPL.lookup_doc(ex)
+    end
+end
 
 function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
     # Some documented expressions may be decorated with macro calls which obscure the actual
@@ -712,7 +546,7 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
 
     # All other expressions are undocumentable and should be handled on a case-by-case basis
     # with `@__doc__`. Unbound string literals are also undocumentable since they cannot be
-    # retrieved from the module's metadata `ObjectIdDict` without a reference to the string.
+    # retrieved from the module's metadata `IdDict` without a reference to the string.
     docerror(ex)
 end
 
@@ -726,27 +560,6 @@ function docerror(ex)
     end
     :($(error)($txt, "\n"))
 end
-
-function docm(source::LineNumberNode, mod::Module, ex)
-    if isexpr(ex, :->)
-        docm(source, mod, ex.args...)
-    elseif haskey(keywords, ex)
-        parsedoc(keywords[ex])
-    elseif isa(ex, Union{Expr, Symbol})
-        binding = esc(bindingexpr(namify(ex)))
-        if isexpr(ex, :call) || isexpr(ex, :macrocall)
-            sig = esc(signature(ex))
-            :($(doc)($binding, $sig))
-        else
-            :($(doc)($binding))
-        end
-    else
-        :($(doc)($(typeof)($(esc(ex)))))
-    end
-end
-
-# MD support
-catdoc(md::MD...) = MD(md...)
 
 include("utils.jl")
 
@@ -771,5 +584,10 @@ function loaddocs(docs)
     end
     empty!(docs)
 end
+
+function formatdoc end
+function parsedoc end
+function apropos end
+function doc end
 
 end

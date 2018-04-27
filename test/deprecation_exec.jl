@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Tests for deprecated functionality.
 #
 # These can't be run with --depwarn=error, so currently require special
@@ -5,6 +7,8 @@
 
 using Test
 using Logging
+
+using Base: remove_linenums!
 
 module DeprecationTests # to test @deprecate
     f() = true
@@ -101,13 +105,110 @@ f25130()
 testlogs = testlogger.logs
 @test length(testlogs) == 2
 @test testlogs[1].id != testlogs[2].id
-@test testlogs[1].kwargs.caller.func == Symbol("top-level scope")
+@test testlogs[1].kwargs[:caller].func == Symbol("top-level scope")
 @test all(l.message == "f25130 message" for l in testlogs)
 global_logger(prev_logger)
 
 
 #-------------------------------------------------------------------------------
 # BEGIN 0.7 deprecations
+
+@testset "parser syntax deprecations" begin
+    # Test empty logs for meta.parse depwarn argument.
+    @test_logs Meta.parse("1.+2", depwarn=false)
+
+    # #19089
+    @test (@test_deprecated Meta.parse("1.+2")) == :(1 .+ 2)
+
+    # #16356
+    @test (@test_deprecated Meta.parse("0xapi")) == :(0xa * pi)
+
+    # #22523 #22712
+    @test (@test_deprecated Meta.parse("a?b:c"))    == :(a ? b : c)
+    @test (@test_deprecated Meta.parse("a ?b:c"))   == :(a ? b : c)
+    @test (@test_deprecated Meta.parse("a ? b:c"))  == :(a ? b : c)
+    @test (@test_deprecated Meta.parse("a ? b :c")) == :(a ? b : c)
+    @test (@test_deprecated Meta.parse("?")) == Symbol("?")
+
+    # #13079
+    @test (@test_deprecated Meta.parse("1<<2*3")) == :(1<<(2*3))
+
+    # ([#19157], [#20418]).
+    @test remove_linenums!(@test_deprecated Meta.parse("immutable A; end")) ==
+          remove_linenums!(:(struct A; end))
+    @test remove_linenums!(@test_deprecated Meta.parse("type A; end")) ==
+          remove_linenums!(:(mutable struct A; end))
+
+    # #19987
+    @test remove_linenums!(@test_deprecated Meta.parse("try ; catch f() ; end")) ==
+          remove_linenums!(:(try ; catch; f() ; end))
+
+    # #15524
+    # @test (@test_deprecated Meta.parse("for a=b f() end")) == :(for a=b; f() end)
+    @test_broken length(Test.collect_test_logs(()->Meta.parse("for a=b f() end"))[1]) > 0
+
+    # #23076
+    @test (@test_deprecated Meta.parse("[a,b;]")) == :([a;b])
+
+    # #24452
+    @test (@test_deprecated Meta.parse("(a...)")) == :((a...,))
+end
+
+
+@testset "lowering syntax deprecations" begin
+    # #16295
+    @test_deprecated Meta.lower(@__MODULE__, :(A.(:+)(a,b) = 1))
+
+    # #11310
+    @test_deprecated r"parametric method syntax" Meta.lower(@__MODULE__, :(f{T}(x::T) = 1))
+
+    # #17623
+    @test_deprecated r"Deprecated syntax `function .+(...)`" Meta.lower(@__MODULE__, :(function .+(a,b) ; end))
+
+    # #21774 (more uniform let expressions)
+    @test_deprecated Meta.lower(@__MODULE__, Expr(:let, :a))
+    @test_deprecated Meta.lower(@__MODULE__, Expr(:let, :a, :(a=1), :(b=1)))
+
+    # #23157 (Expression heads for types renamed)
+    @test_deprecated Meta.lower(@__MODULE__, Expr(:type, true, :A, Expr(:block)))
+    @test_deprecated Meta.lower(@__MODULE__, Expr(:bitstype, 32, :A))
+
+    # #15032
+    @test_deprecated Meta.lower(@__MODULE__, :(a.(b) = 1))
+
+    # #5332
+    @test_deprecated Meta.lower(@__MODULE__, :(a.'))
+
+    # #19324
+    @test_deprecated r"implicit assignment to global" eval(
+           :(module M19324
+                 x=1
+                 for i=1:10
+                     x += i
+                 end
+             end))
+
+    # #24221
+    @test_deprecated r"underscores as an rvalue" Meta.lower(@__MODULE__, :(a=_))
+
+    # #22314
+    @test_deprecated r"Use of final value of loop variable `i`.*is deprecated. In the future the variable will be local to the loop instead." Meta.lower(@__MODULE__, :(
+        function f()
+            i=0
+            for i=1:10
+            end
+            i
+        end))
+    @test_deprecated r"Loop variable `i` overwrites a variable in an enclosing scope" eval(:(
+        module M22314
+            i=10
+            for i=1:10
+            end
+        end))
+
+    # #6080
+    @test_deprecated r"Syntax `&argument`.*is deprecated" Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x)))
+end
 
 module LogTest
     function bar(io)
@@ -133,119 +234,119 @@ with_logger(NullLogger()) do
 @testset "Deprecated logging" begin
 
 # Test info
-@test contains(sprint(info, "test"), "INFO:")
-@test contains(sprint(info, "test"), "INFO: test")
-@test contains(sprint(info, "test ", 1, 2, 3), "INFO: test 123")
-@test contains(sprint(io->info(io,"test", prefix="MYINFO: ")), "MYINFO: test")
+@test occursin("INFO:", sprint(info, "test"))
+@test occursin("INFO: test", sprint(info, "test"))
+@test occursin("INFO: test 123", sprint(info, "test ", 1, 2, 3))
+@test occursin("MYINFO: test", sprint(io->info(io,"test", prefix="MYINFO: ")))
 
 # Test warn
-@test contains(sprint(Base.warn_once, "test"), "WARNING: test")
+@test occursin("WARNING: test", sprint(Base.warn_once, "test"))
 @test isempty(sprint(Base.warn_once, "test"))
 
-@test contains(sprint(warn), "WARNING:")
-@test contains(sprint(warn, "test"), "WARNING: test")
-@test contains(sprint(warn, "test ", 1, 2, 3), "WARNING: test 123")
-@test contains(sprint(io->warn(io, "test", prefix="MYWARNING: ")), "MYWARNING: test")
-@test contains(sprint(io->warn(io, "testonce", once=true)), "WARNING: testonce")
+@test occursin("WARNING:", sprint(warn))
+@test occursin("WARNING: test", sprint(warn, "test"))
+@test occursin("WARNING: test 123", sprint(warn, "test ", 1, 2, 3))
+@test occursin("MYWARNING: test", sprint(io->warn(io, "test", prefix="MYWARNING: ")))
+@test occursin("WARNING: testonce", sprint(io->warn(io, "testonce", once=true)))
 @test isempty(sprint(io->warn(io, "testonce", once=true)))
 @test !isempty(sprint(io->warn(io, "testonce", once=true, key=hash("testonce",hash("testanother")))))
 let bt = backtrace()
     ws = split(chomp(sprint(io->warn(io, "test", bt = bt))), '\n')
     bs = split(chomp(sprint(Base.show_backtrace, bt)), '\n')
-    @test contains(ws[1],"WARNING: test")
+    @test occursin("WARNING: test", ws[1])
     for (l,b) in zip(ws[2:end],bs[2:end])
-        @test contains(l, b)
+        @test occursin(b, l)
     end
 end
 
 # PR #16213
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+@test all(occursin.(["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 
-logging(DevNull, LogTest, :bar;  kind=:info)
-@test all(contains.(sprint(LogTest.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+logging(devnull, LogTest, :bar;  kind=:info)
+@test all(occursin.(["WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(DevNull, LogTest;  kind=:info)
-@test all(contains.(sprint(LogTest.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+logging(devnull, LogTest;  kind=:info)
+@test all(occursin.(["WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(DevNull;  kind=:info)
-@test all(contains.(sprint(LogTest.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["WARNING: foowarn", "ERROR: \"fooerror\""]))
+logging(devnull;  kind=:info)
+@test all(occursin.(["WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 logging(kind=:info)
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+@test all(occursin.(["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 
-logging(DevNull, LogTest, :bar;  kind=:warn)
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+logging(devnull, LogTest, :bar;  kind=:warn)
+@test all(occursin.(["INFO: barinfo", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(DevNull, LogTest;  kind=:warn)
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+logging(devnull, LogTest;  kind=:warn)
+@test all(occursin.(["INFO: barinfo", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(DevNull;  kind=:warn)
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "ERROR: \"fooerror\""]))
+logging(devnull;  kind=:warn)
+@test all(occursin.(["INFO: barinfo", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "ERROR: \"fooerror\""], sprint(foo)))
 
 logging(kind=:warn)
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+@test all(occursin.(["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 
-logging(DevNull, LogTest, :bar;  kind=:error)
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn"]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+logging(devnull, LogTest, :bar;  kind=:error)
+@test all(occursin.(["INFO: barinfo", "WARNING: barwarn"], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(DevNull, LogTest;  kind=:error)
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn"]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn"]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+logging(devnull, LogTest;  kind=:error)
+@test all(occursin.(["INFO: barinfo", "WARNING: barwarn"], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn"], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(DevNull;  kind=:error)
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn"]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn"]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn"]))
+logging(devnull;  kind=:error)
+@test all(occursin.(["INFO: barinfo", "WARNING: barwarn"], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn"], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn"], sprint(foo)))
 
 logging(kind=:error)
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+@test all(occursin.(["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 
-logging(DevNull, LogTest, :bar)
+logging(devnull, LogTest, :bar)
 @test sprint(LogTest.bar) == ""
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(DevNull, LogTest)
+logging(devnull, LogTest)
 @test sprint(LogTest.bar) == ""
 @test sprint(LogTest.pooh) == ""
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
-logging(DevNull)
+logging(devnull)
 @test sprint(LogTest.bar) == ""
 @test sprint(LogTest.pooh) == ""
 @test sprint(foo) == ""
 
 logging()
-@test all(contains.(sprint(LogTest.bar), ["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""]))
-@test all(contains.(sprint(LogTest.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
-@test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
+@test all(occursin.(["INFO: barinfo", "WARNING: barwarn", "ERROR: \"barerror\""], sprint(LogTest.bar)))
+@test all(occursin.(["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""], sprint(LogTest.pooh)))
+@test all(occursin.(["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""], sprint(foo)))
 
 end # @testset
 

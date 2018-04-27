@@ -19,7 +19,7 @@ the symbol).
 #
 # Generate a table containing all LaTeX and Emoji tab completions available in the REPL.
 #
-
+import REPL, Markdown
 const NBSP = '\u00A0'
 
 function tab_completions(symbols...)
@@ -37,7 +37,7 @@ function unicode_data()
         for line in readlines(unidata)
             id, name, desc = split(line, ";")[[1, 2, 11]]
             codepoint = parse(UInt32, "0x$id")
-            names[codepoint] = Base.Unicode.titlecase(Base.Unicode.lowercase(
+            names[codepoint] = titlecase(lowercase(
                 name == "" ? desc : desc == "" ? name : "$name / $desc"))
         end
     end
@@ -61,7 +61,7 @@ function table_entries(completions, unicode_dict)
     for (chars, inputs) in sort!(collect(completions), by = first)
         code_points, unicode_names, characters = String[], String[], String[]
         for char in chars
-            push!(code_points, "U+$(Base.Unicode.uppercase(hex(char, 5)))")
+            push!(code_points, "U+$(uppercase(string(UInt32(char), base = 16, pad = 5)))")
             push!(unicode_names, get(unicode_dict, UInt32(char), "(No Unicode name)"))
             push!(characters, isempty(characters) ? fix_combining_chars(char) : "$char")
         end
@@ -75,8 +75,8 @@ end
 
 table_entries(
     tab_completions(
-        Base.REPLCompletions.latex_symbols,
-        Base.REPLCompletions.emoji_symbols
+        REPL.REPLCompletions.latex_symbols,
+        REPL.REPLCompletions.emoji_symbols
     ),
     unicode_data()
 )

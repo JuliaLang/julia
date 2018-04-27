@@ -1,25 +1,28 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#tests for /base/char.jl
+@testset "basic properties" begin
 
-@test typemin(Char) == Char(0)
-@test ndims(Char) == 0
-@test getindex('a', 1) == 'a'
-@test_throws BoundsError getindex('a', 2)
-# This is current behavior, but it seems questionable
-@test getindex('a', 1, 1, 1) == 'a'
-@test_throws BoundsError getindex('a', 1, 1, 2)
+    @test typemin(Char) == Char(0)
+    @test ndims(Char) == 0
+    @test getindex('a', 1) == 'a'
+    @test_throws BoundsError getindex('a', 2)
+    # This is current behavior, but it seems questionable
+    @test getindex('a', 1, 1, 1) == 'a'
+    @test_throws BoundsError getindex('a', 1, 1, 2)
 
-@test 'b' + 1 == 'c'
-@test typeof('b' + 1) == Char
-@test 1 + 'b' == 'c'
-@test typeof(1 + 'b') == Char
-@test 'b' - 1 == 'a'
-@test typeof('b' - 1) == Char
+    @test 'b' + 1 == 'c'
+    @test typeof('b' + 1) == Char
+    @test 1 + 'b' == 'c'
+    @test typeof(1 + 'b') == Char
+    @test 'b' - 1 == 'a'
+    @test typeof('b' - 1) == Char
 
-@test widen('a') === 'a'
+    @test widen('a') === 'a'
+    # just check this works
+    @test_throws Base.CodePointError Base.code_point_err(UInt32(1))
+end
 
-let
+@testset "ASCII conversion to/from Integer" begin
     numberchars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
     lowerchars = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
     upperchars = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
@@ -88,9 +91,9 @@ let
         @test length(x) == 1
     end
 
-    #endof(c::Char) = 1
+    #lastindex(c::Char) = 1
     for x in testarrays
-        @test endof(x) == 1
+        @test lastindex(x) == 1
     end
 
     #getindex(c::Char) = c
@@ -173,13 +176,13 @@ let
     for x in plane2_cjkpart1
         @test isless(Char(131071), x) == true
     end
+
+    @test !isequal('x', 120)
+    @test convert(Signed, 'A') === Int32(65)
+    @test convert(Unsigned, 'A') === UInt32(65)
 end #end of let block
 
-@test convert(Signed, 'A') === Int32(65)
-@test convert(Unsigned, 'A') === UInt32(65)
-
-# issue #14573
-let
+@testset "issue #14573" begin
     array = ['a', 'b', 'c'] + [1, 2, 3]
     @test array == ['b', 'd', 'f']
     @test eltype(array) == Char
@@ -193,15 +196,15 @@ let
     @test eltype(array) == Char
 end
 
-@test !isequal('x', 120)
-
-@test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
-@test repr('$') == "'\$'"
+@testset "sprint, repr" begin
+    @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
+    @test repr('$') == "'\$'"
+end
 
 @testset "read incomplete character at end of stream or file" begin
     local file = tempname()
     local iob = IOBuffer([0xf0])
-    local bytes(c::Char) = Vector{UInt8}(string(c))
+    local bytes(c::Char) = codeunits(string(c))
     @test bytes(read(iob, Char)) == [0xf0]
     @test eof(iob)
     try
@@ -220,21 +223,49 @@ end
     end
 end
 
-function test_overlong(c::Char, n::Integer, rep::String)
-    @test Int(c) == n
-    @test sprint(show, c) == rep
+@testset "overlong codes" begin
+    function test_overlong(c::Char, n::Integer, rep::String)
+        if isvalid(c)
+            @test Int(c) == n
+        else
+            @test_throws Base.InvalidCharError UInt32(c)
+        end
+        @test sprint(show, c) == rep
+        if Base.isoverlong(c)
+            @test occursin(rep*": [overlong]", sprint(show, "text/plain", c))
+        end
+    end
+
+    # TODO: use char syntax once #25072 is fixed
+    test_overlong('\0', 0, "'\\0'")
+    test_overlong("\xc0\x80"[1], 0, "'\\xc0\\x80'")
+    test_overlong("\xe0\x80\x80"[1], 0, "'\\xe0\\x80\\x80'")
+    test_overlong("\xf0\x80\x80\x80"[1], 0, "'\\xf0\\x80\\x80\\x80'")
+
+    test_overlong('\x30', 0x30, "'0'")
+    test_overlong("\xc0\xb0"[1], 0x30, "'\\xc0\\xb0'")
+    test_overlong("\xe0\x80\xb0"[1], 0x30, "'\\xe0\\x80\\xb0'")
+    test_overlong("\xf0\x80\x80\xb0"[1], 0x30, "'\\xf0\\x80\\x80\\xb0'")
+
+    test_overlong('\u8430', 0x8430, "'萰'")
+    test_overlong("\xf0\x88\x90\xb0"[1], 0x8430, "'\\xf0\\x88\\x90\\xb0'")
 end
 
-# TODO: use char syntax once #25072 is fixed
-test_overlong('\0', 0, "'\\0'")
-test_overlong("\xc0\x80"[1], 0, "'\\xc0\\x80'")
-test_overlong("\xe0\x80\x80"[1], 0, "'\\xe0\\x80\\x80'")
-test_overlong("\xf0\x80\x80\x80"[1], 0, "'\\xf0\\x80\\x80\\x80'")
+# create a new AbstractChar type to test the fallbacks
+primitive type ASCIIChar <: AbstractChar 8 end
+ASCIIChar(c::UInt8) = reinterpret(ASCIIChar, c)
+ASCIIChar(c::UInt32) = ASCIIChar(UInt8(c))
+Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
 
-test_overlong('\x30', 0x30, "'0'")
-test_overlong("\xc0\xb0"[1], 0x30, "'\\xc0\\xb0'")
-test_overlong("\xe0\x80\xb0"[1], 0x30, "'\\xe0\\x80\\xb0'")
-test_overlong("\xf0\x80\x80\xb0"[1], 0x30, "'\\xf0\\x80\\x80\\xb0'")
+@testset "abstractchar" begin
+    @test AbstractChar('x') === AbstractChar(UInt32('x')) === 'x'
 
-test_overlong('\u8430', 0x8430, "'萰'")
-test_overlong("\xf0\x88\x90\xb0"[1], 0x8430, "'\\xf0\\x88\\x90\\xb0'")
+    @test isascii(ASCIIChar('x'))
+    @test ASCIIChar('x') < 'y'
+    @test ASCIIChar('x') == 'x' === Char(ASCIIChar('x')) === convert(Char, ASCIIChar('x'))
+    @test ASCIIChar('x')^3 == "xxx"
+    @test repr(ASCIIChar('x')) == "'x'"
+    @test string(ASCIIChar('x')) == "x"
+    @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
+    @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
+end

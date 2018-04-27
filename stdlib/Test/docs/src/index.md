@@ -1,9 +1,7 @@
 # Unit Testing
 
 ```@meta
-DocTestSetup = quote
-    using Test
-end
+DocTestSetup = :(using Test)
 ```
 
 ## Testing Base Julia
@@ -125,7 +123,7 @@ julia> @testset "Foo Tests" begin
            end
            @testset "Arrays $i" for i in 1:3
                @test foo(zeros(i)) == i^2
-               @test foo(ones(i)) == i^2
+               @test foo(fill(1.0, i)) == i^2
            end
        end;
 Test Summary: | Pass  Total
@@ -147,12 +145,12 @@ julia> @testset "Foo Tests" begin
            end
            @testset "Arrays" begin
                @test foo(zeros(2)) == 4
-               @test foo(ones(4)) == 15
+               @test foo(fill(1.0, 4)) == 15
            end
        end
 
 Arrays: Test Failed
-  Expression: foo(ones(4)) == 15
+  Expression: foo(fill(1.0, 4)) == 15
    Evaluated: 16 == 15
 [...]
 Test Summary: | Pass  Fail  Total

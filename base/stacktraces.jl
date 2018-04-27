@@ -7,10 +7,10 @@ module StackTraces
 
 
 import Base: hash, ==, show
-import Base.Serializer: serialize, deserialize
-using Base.Printf.@printf
+using Base.Printf: @printf
+using Base: coalesce
 
-export StackTrace, StackFrame, stacktrace, catch_stacktrace
+export StackTrace, StackFrame, stacktrace
 
 """
     StackFrame
@@ -54,7 +54,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     "the line number in the file containing the execution context"
     line::Int
     "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{Core.MethodInstance, CodeInfo, Nothing}
+    linfo::Union{Core.MethodInstance, Core.CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -70,7 +70,7 @@ StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
     StackTrace
 
 An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
-`stacktrace` and `catch_stacktrace`.
+`stacktrace`.
 """
 const StackTrace = Vector{StackFrame}
 
@@ -95,29 +95,6 @@ function hash(frame::StackFrame, h::UInt)
     h = hash(frame.inlined, h)
 end
 
-# provide a custom serializer that skips attempting to serialize the `outer_linfo`
-# which is likely to contain complex references, types, and module references
-# that may not exist on the receiver end
-function serialize(s::AbstractSerializer, frame::StackFrame)
-    Serializer.serialize_type(s, typeof(frame))
-    serialize(s, frame.func)
-    serialize(s, frame.file)
-    write(s.io, frame.line)
-    write(s.io, frame.from_c)
-    write(s.io, frame.inlined)
-    write(s.io, frame.pointer)
-end
-
-function deserialize(s::AbstractSerializer, ::Type{StackFrame})
-    func = deserialize(s)
-    file = deserialize(s)
-    line = read(s.io, Int)
-    from_c = read(s.io, Bool)
-    inlined = read(s.io, Bool)
-    pointer = read(s.io, UInt64)
-    return StackFrame(func, file, line, nothing, from_c, inlined, pointer)
-end
-
 
 """
     lookup(pointer::Union{Ptr{Cvoid}, UInt}) -> Vector{StackFrame}
@@ -129,7 +106,7 @@ inlined at that point, innermost function first.
 function lookup(pointer::Ptr{Cvoid})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer - 1, false)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, convert(UInt64, pointer))]
-    res = Vector{StackFrame}(uninitialized, length(infos))
+    res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
         info = infos[i]
         @assert(length(info) == 7)
@@ -156,7 +133,7 @@ function lookup(ip::Base.InterpreterIP)
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     else
-        assert(ip.code isa CodeInfo)
+        @assert ip.code isa Core.CodeInfo
         codeinfo = ip.code
         func = top_level_scope_sym
         file = empty_sym
@@ -261,14 +238,6 @@ end
 stacktrace(c_funcs::Bool=false) = stacktrace(backtrace(), c_funcs)
 
 """
-    catch_stacktrace([c_funcs::Bool=false]) -> StackTrace
-
-Returns the stack trace for the most recent error thrown, rather than the current execution
-context.
-"""
-catch_stacktrace(c_funcs::Bool=false) = stacktrace(catch_backtrace(), c_funcs)
-
-"""
     remove_frames!(stack::StackTrace, name::Symbol)
 
 Takes a `StackTrace` (a vector of `StackFrames`) and a function name (a `Symbol`) and
@@ -277,12 +246,12 @@ all frames above the specified function). Primarily used to remove `StackTraces`
 from the `StackTrace` prior to returning it.
 """
 function remove_frames!(stack::StackTrace, name::Symbol)
-    splice!(stack, 1:findlast(frame -> frame.func == name, stack))
+    splice!(stack, 1:coalesce(findlast(frame -> frame.func == name, stack), 0))
     return stack
 end
 
 function remove_frames!(stack::StackTrace, names::Vector{Symbol})
-    splice!(stack, 1:findlast(frame -> frame.func in names, stack))
+    splice!(stack, 1:coalesce(findlast(frame -> frame.func in names, stack), 0))
     return stack
 end
 
@@ -296,7 +265,7 @@ function remove_frames!(stack::StackTrace, m::Module)
     return stack
 end
 
-is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
+is_top_level_frame(f::StackFrame) = f.linfo isa Core.CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
 
 function show_spec_linfo(io::IO, frame::StackFrame)
     if frame.linfo == nothing
@@ -305,7 +274,10 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
-            print_with_color(get(io, :color, false) && get(io, :backtrace, false) ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
+            color = get(io, :color, false) && get(io, :backtrace, false) ?
+                        Base.stackframe_function_color() :
+                        :nothing
+            printstyled(io, string(frame.func), color=color)
         end
     elseif frame.linfo isa Core.MethodInstance
         if isa(frame.linfo.def, Method)
@@ -313,7 +285,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         else
             Base.show(io, frame.linfo)
         end
-    elseif frame.linfo isa CodeInfo
+    elseif frame.linfo isa Core.CodeInfo
         print(io, "top-level scope")
     end
 end
@@ -349,7 +321,7 @@ function from(frame::StackFrame, m::Module)
     if finfo isa Core.MethodInstance
         frame_m = finfo.def
         isa(frame_m, Method) && (frame_m = frame_m.module)
-        result = module_name(frame_m) === module_name(m)
+        result = nameof(frame_m) === nameof(m)
     end
 
     return result

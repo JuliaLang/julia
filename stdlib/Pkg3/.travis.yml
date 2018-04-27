@@ -1,0 +1,27 @@
+language: julia
+
+julia:
+  - nightly
+
+os:
+  - linux
+  - osx
+
+notifications:
+  email: false
+
+before_script:
+  - export PATH=$HOME/.local/bin:$PATH
+
+branches:
+  only:
+    - master
+
+script:
+  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+  - julia --check-bounds=yes -e 'using UUIDs; write("Project.toml", replace(read("Project.toml", String), r"uuid = .*?\n" =>"uuid = \"$(uuid4())\"")); import Pkg3; Pkg3.build(); Pkg3.test(; coverage=true)'
+
+after_success:
+  - julia -e 'import Pkg3; Pkg3.add("Documenter"); include("docs/make.jl")'
+  - julia -e 'import Pkg3; Pkg3.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+

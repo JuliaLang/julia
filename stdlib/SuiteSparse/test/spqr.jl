@@ -2,7 +2,7 @@
 
 using SuiteSparse.SPQR
 using SuiteSparse.CHOLMOD
-using Base.LinAlg: mul!, Adjoint, Transpose
+using LinearAlgebra: rmul!, lmul!, Adjoint, Transpose
 
 @testset "Sparse QR" begin
 m, n = 100, 10
@@ -43,10 +43,10 @@ nn = 100
         @test norm(R0[n + 1:end, :], 1) < 1e-12
 
         offsizeA = Matrix{Float64}(I, m+1, m+1)
-        @test_throws DimensionMismatch mul!(Q, offsizeA)
-        @test_throws DimensionMismatch mul!(Adjoint(Q), offsizeA)
-        @test_throws DimensionMismatch mul!(offsizeA, Q)
-        @test_throws DimensionMismatch mul!(offsizeA, Adjoint(Q))
+        @test_throws DimensionMismatch lmul!(Q, offsizeA)
+        @test_throws DimensionMismatch lmul!(adjoint(Q), offsizeA)
+        @test_throws DimensionMismatch rmul!(offsizeA, Q)
+        @test_throws DimensionMismatch rmul!(offsizeA, adjoint(Q))
     end
 
     @testset "element type of B: $eltyB" for eltyB in (Int, Float64, Complex{Float64})
@@ -62,11 +62,12 @@ nn = 100
         @test A\B[:,1] ≈ Array(A)\B[:,1]
         @test A\B ≈ Array(A)\B
         @test_throws DimensionMismatch A\B[1:m-1,:]
-        @test A[1:9,:]*(A[1:9,:]\ones(eltyB, 9)) ≈ ones(9) # Underdetermined system
+        C, x = A[1:9, :], fill(eltyB(1), 9)
+        @test C*(C\x) ≈ x # Underdetermined system
     end
 
     # Make sure that conversion to Sparse doesn't use SuiteSparse's symmetric flag
-    @test qrfact(SparseMatrixCSC{eltyA}(I, 5, 5)) \ ones(eltyA, 5) == ones(5)
+    @test qrfact(SparseMatrixCSC{eltyA}(I, 5, 5)) \ fill(eltyA(1), 5) == fill(1, 5)
 end
 
 @testset "basic solution of rank deficient ls" begin
@@ -78,6 +79,12 @@ end
     # check that basic solution has more zeros
     @test count(!iszero, xs) < count(!iszero, xd)
     @test A*xs ≈ A*xd
+end
+
+@testset "Issue 26368" begin
+    A = sparse([0.0 1 0 0; 0 0 0 0])
+    F = qrfact(A)
+    @test F.Q*F.R == A[F.prow,F.pcol]
 end
 
 end

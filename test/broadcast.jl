@@ -2,9 +2,9 @@
 
 module TestBroadcastInternals
 
-using Base.Broadcast: check_broadcast_indices, check_broadcast_shape, newindex, _bcs
+using Base.Broadcast: check_broadcast_axes, check_broadcast_shape, newindex, _bcs
 using Base: OneTo
-using Test
+using Test, Random
 
 @test @inferred(_bcs((3,5), (3,5))) == (3,5)
 @test @inferred(_bcs((3,1), (3,5))) == (3,5)
@@ -19,22 +19,22 @@ using Test
 @test_throws DimensionMismatch _bcs((-1:1, 2:6), (-1:1, 2:5))
 @test_throws DimensionMismatch _bcs((-1:1, 2:5), (2, 2:5))
 
-@test @inferred(Broadcast.combine_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(Broadcast.combine_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
-@test @inferred(Broadcast.combine_indices(zeros(3),   zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(Broadcast.combine_indices(zeros(3), zeros(1,4), zeros(1))) == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_axes(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_axes(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_axes(zeros(3),   zeros(3,4))) == (OneTo(3),OneTo(4))
+@test @inferred(Broadcast.combine_axes(zeros(3), zeros(1,4), zeros(1))) == (OneTo(3),OneTo(4))
 
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,1))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(3))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), 1)
-check_broadcast_indices((OneTo(3),OneTo(5)), 5, 2)
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(2,5))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4,2))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(2))
-check_broadcast_indices((-1:1, 6:9), 1)
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,5))
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,1))
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3))
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,5), zeros(3))
+check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,5), 1)
+check_broadcast_axes((OneTo(3),OneTo(5)), 5, 2)
+@test_throws DimensionMismatch check_broadcast_axes((OneTo(3),OneTo(5)), zeros(2,5))
+@test_throws DimensionMismatch check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,4))
+@test_throws DimensionMismatch check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,4,2))
+@test_throws DimensionMismatch check_broadcast_axes((OneTo(3),OneTo(5)), zeros(3,5), zeros(2))
+check_broadcast_axes((-1:1, 6:9), 1)
 
 check_broadcast_shape((-1:1, 6:9), (-1:1, 6:9))
 check_broadcast_shape((-1:1, 6:9), (-1:1, 1))
@@ -134,7 +134,7 @@ for arr in (identity, as_sub)
     @test A == fill(7, 2, 2)
     A = arr(zeros(3,3))
     broadcast_setindex!(A, 10:12, 1:3, 1:3)
-    @test A == diagm(0 => 10:12)
+    @test A == [10 0 0; 0 11 0; 0 0 12]
     @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
 
     for f in ((==), (<) , (!=), (<=))
@@ -167,7 +167,9 @@ rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Floa
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 
 # f.(args...) syntax (#15032)
-let x = [1,3.2,4.7], y = [3.5, pi, 1e-4], α = 0.2342
+let x = [1, 3.2, 4.7],
+    y = [3.5, pi, 1e-4],
+    α = 0.2342
     @test sin.(x) == broadcast(sin, x)
     @test sin.(α) == broadcast(sin, α)
     @test sin.(3.2) == broadcast(sin, 3.2) == sin(3.2)
@@ -213,7 +215,7 @@ end
 # PR #17300: loop fusion
 @test (x->x+1).((x->x+2).((x->x+3).(1:10))) == 7:16
 let A = [sqrt(i)+j for i = 1:3, j=1:4]
-    @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
+    @test atan2.(log.(A), sum(A, dims=1)) == broadcast(atan2, broadcast(log, A), sum(A, dims=1))
 end
 let x = sin.(1:10)
     @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x.+1, x.+2)
@@ -237,12 +239,12 @@ let x = sin.(1:10), a = [x]
     @test atan2.(x, cos.(x)) == atan2.(a..., cos.(x)) == broadcast(atan2, x, cos.(a...)) == broadcast(atan2, a..., cos.(a...))
     @test ((args...)->cos(args[1])).(x) == cos.(x) == ((y,args...)->cos(y)).(x)
 end
-@test atan2.(3,4) == atan2(3,4) == (() -> atan2(3,4)).()
+@test atan2.(3, 4) == atan2(3, 4) == (() -> atan2(3, 4)).()
 # fusion with keyword args:
 let x = [1:4;]
     f17300kw(x; y=0) = x + y
     @test f17300kw.(x) == x
-    @test f17300kw.(x, y=1) == f17300kw.(x; y=1) == f17300kw.(x; [(:y,1)]...) == x .+ 1
+    @test f17300kw.(x, y=1) == f17300kw.(x; y=1) == f17300kw.(x; [(:y,1)]...) == x .+ 1 == [2, 3, 4, 5]
     @test f17300kw.(sin.(x), y=1) == f17300kw.(sin.(x); y=1) == sin.(x) .+ 1
     @test sin.(f17300kw.(x, y=1)) == sin.(f17300kw.(x; y=1)) == sin.(x .+ 1)
 end
@@ -272,6 +274,12 @@ end
 let x = [1,2,3]
     @. f(x) = x^2
     @test f(x) == [1,4,9]
+end
+
+# Issue #23622: @. with chained comparisons
+let x = [1,2,3]
+    @test (1 .< x .< 3) == @.(1 < x < 3) == (@. 1 .< x .< 3) == [false, true, false]
+    @test (x .=== 1:3 .=== [1,2,3]) == @.(x === 1:3 === [1,2,3]) == [true, true, true]
 end
 
 # PR #17510: Fused in-place assignment
@@ -402,14 +410,14 @@ StrangeType18623(x,y) = (x,y)
 let
     f(A, n) = broadcast(x -> +(x, n), A)
     @test @inferred(f([1.0], 1)) == [2.0]
-    g() = (a = 1; Broadcast.combine_eltypes(x -> x + a, 1.0))
+    g() = (a = 1; Broadcast.combine_eltypes(x -> x + a, (1.0,)))
     @test @inferred(g()) === Float64
 end
 
 # Ref as 0-dimensional array for broadcast
 @test (-).(C_NULL, C_NULL)::UInt == 0
-@test (+).(1, Ref(2)) == fill(3)
-@test (+).(Ref(1), Ref(2)) == fill(3)
+@test (+).(1, Ref(2)) == 3
+@test (+).(Ref(1), Ref(2)) == 3
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
@@ -422,8 +430,8 @@ abstract type ArrayData{T,N} <: AbstractArray{T,N} end
 Base.getindex(A::ArrayData, i::Integer...) = A.data[i...]
 Base.setindex!(A::ArrayData, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::ArrayData) = size(A.data)
-Base.broadcast_similar(f, ::Broadcast.ArrayStyle{A}, ::Type{T}, inds::Tuple, As...) where {A,T} =
-    A(Array{T}(uninitialized, length.(inds)))
+Base.broadcast_similar(::Broadcast.ArrayStyle{A}, ::Type{T}, inds::Tuple, bc) where {A,T} =
+    A(Array{T}(undef, length.(inds)))
 
 struct Array19745{T,N} <: ArrayData{T,N}
     data::Array{T,N}
@@ -482,14 +490,21 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
 @testset "broadcasting for custom AbstractArray" begin
     a  = randn(10)
     aa = Array19745(a)
-    @test a .+ 1  == @inferred(aa .+ 1)
-    @test a .* a' == @inferred(aa .* aa')
+    fadd(aa) = aa .+ 1
+    fadd2(aa) = aa .+ 1 .* 2
+    fprod(aa) = aa .* aa'
+    @test a .+ 1  == @inferred(fadd(aa))
+    @test a .+ 1 .* 2  == @inferred(fadd2(aa))
+    @test a .* a' == @inferred(fprod(aa))
     @test isa(aa .+ 1, Array19745)
+    @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
     a1 = AD1(rand(2,3))
     a2 = AD2(rand(2))
     @test a1 .+ 1 isa AD1
     @test a2 .+ 1 isa AD2
+    @test a1 .+ 1 .* 2 isa AD1
+    @test a2 .+ 1 .* 2 isa AD2
     @test a1 .+ a2 isa Array
     @test a2 .+ a1 isa Array
     @test a1 .+ a2 .+ a1 isa Array
@@ -498,6 +513,8 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
     a2 = AD2P(rand(2))
     @test a1 .+ 1 isa AD1P
     @test a2 .+ 1 isa AD2P
+    @test a1 .+ 1 .* 2 isa AD1P
+    @test a2 .+ 1 .* 2 isa AD2P
     @test a1 .+ a2 isa AD1P
     @test a2 .+ a1 isa AD1P
     @test a1 .+ a2 .+ a1 isa AD1P
@@ -506,6 +523,8 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
     a2 = AD2B(rand(2))
     @test a1 .+ 1 isa AD1B
     @test a2 .+ 1 isa AD2B
+    @test a1 .+ 1 .* 2 isa AD1B
+    @test a2 .+ 1 .* 2 isa AD2B
     @test a1 .+ a2 isa AD1B
     @test a2 .+ a1 isa AD1B
     @test a1 .+ a2 .+ a1 isa AD1B
@@ -514,6 +533,8 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
     a2 = AD2C(rand(2))
     @test a1 .+ 1 isa AD1C
     @test a2 .+ 1 isa AD2C
+    @test a1 .+ 1 .* 2 isa AD1C
+    @test a2 .+ 1 .* 2 isa AD2C
     @test_throws ErrorException a1 .+ a2
 end
 
@@ -526,7 +547,7 @@ end
 
 # Test that broadcast's promotion mechanism handles closures accepting more than one argument.
 # (See issue #19641 and referenced issues and pull requests.)
-let f() = (a = 1; Broadcast.combine_eltypes((x, y) -> x + y + a, 1.0, 1.0))
+let f() = (a = 1; Broadcast.combine_eltypes((x, y) -> x + y + a, (1.0, 1.0)))
     @test @inferred(f()) == Float64
 end
 
@@ -545,7 +566,7 @@ end
 # Test that broadcast treats type arguments as scalars, i.e. containertype yields Any,
 # even for subtypes of abstract array. (https://github.com/JuliaStats/DataArrays.jl/issues/229)
 @testset "treat type arguments as scalars, DataArrays issue 229" begin
-    @test Broadcast.combine_styles(AbstractArray) == Broadcast.Scalar()
+    @test Broadcast.combine_styles(Broadcast.broadcastable(AbstractArray)) == Base.Broadcast.DefaultArrayStyle{0}()
     @test broadcast(==, [1], AbstractArray) == BitArray([false])
     @test broadcast(==, 1, AbstractArray) == false
 end
@@ -553,16 +574,16 @@ end
 # Test that broadcasting identity where the input and output Array shapes do not match
 # yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
 let N = 5
-    @test iszero(ones(N, N) .= zeros(N, N))
-    @test iszero(ones(N, N) .= zeros(N, 1))
-    @test iszero(ones(N, N) .= zeros(1, N))
-    @test iszero(ones(N, N) .= zeros(1, 1))
+    @test iszero(fill(1, N, N) .= zeros(N, N))
+    @test iszero(fill(1, N, N) .= zeros(N, 1))
+    @test iszero(fill(1, N, N) .= zeros(1, N))
+    @test iszero(fill(1, N, N) .= zeros(1, 1))
 end
 
 @testset "test broadcast for matrix of matrices" begin
-    A = fill(zeros(2,2), 4, 4)
-    A[1:3,1:3] .= [ones(2,2)]
-    @test all(A[1:3,1:3] .== [ones(2,2)])
+    A = fill([0 0; 0 0], 4, 4)
+    A[1:3,1:3] .= [[1 1; 1 1]]
+    @test all(A[1:3,1:3] .== [[1 1; 1 1]])
 end
 
 # Test that broadcast does not confuse eltypes. See also
@@ -573,8 +594,27 @@ end
     @test broadcast(foo, "x", [1, 2, 3]) == ["hello", "hello", "hello"]
 
     @test isequal(
-        [Set([1]), Set([2])] .∪ Set([3]),
+        [Set([1]), Set([2])] .∪ Ref(Set([3])),
         [Set([1, 3]), Set([2, 3])])
+end
+
+# A bare bones custom type that supports broadcast
+struct Foo26601{T}
+    data::T
+end
+Base.axes(f::Foo26601) = axes(f.data)
+Base.getindex(f::Foo26601, i...) = getindex(f.data, i...)
+Base.ndims(::Type{Foo26601{T}}) where {T} = ndims(T)
+Base.Broadcast.broadcastable(f::Foo26601) = f
+@testset "barebones custom object broadcasting" begin
+    for d in (rand(Float64, ()), rand(5), rand(5,5), rand(5,5,5))
+        f = Foo26601(d)
+        @test f .* 2 == d .* 2
+        @test f .* (1:5) == d .* (1:5)
+        @test f .* reshape(1:25,5,5) == d .* reshape(1:25,5,5)
+        @test sqrt.(f) == sqrt.(d)
+        @test f .* (1,2,3,4,5) == d .* (1,2,3,4,5)
+    end
 end
 
 @testset "broadcast resulting in tuples" begin
@@ -611,4 +651,60 @@ end
 let n = 1
     @test ceil.(Int, n ./ (1,)) == (1,)
     @test ceil.(Int, 1 ./ (1,)) == (1,)
+end
+
+
+# lots of splatting!
+let x = [[1, 4], [2, 5], [3, 6]]
+    y = .+(x..., .*(x..., x...)..., x[1]..., x[2]..., x[3]...)
+    @test y == [14463, 14472]
+
+    z = zeros(2)
+    z .= .+(x..., .*(x..., x...)..., x[1]..., x[2]..., x[3]...)
+    @test z == Float64[14463, 14472]
+end
+
+# Issue #21094
+@generated function foo21094(out, x)
+    quote
+        out .= x .+ x
+        out
+    end
+end
+@test foo21094([0.0], [1.0]) == [2.0]
+
+# Issue #22053
+struct T22053
+    t
+end
+Broadcast.BroadcastStyle(::Type{T22053}) = Broadcast.Style{T22053}()
+Broadcast.broadcast_axes(::T22053) = ()
+Broadcast.broadcastable(t::T22053) = t
+function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{T22053}})
+    all(x->isa(x, T22053), bc.args) && return 1
+    return 0
+end
+Base.:*(::T22053, ::T22053) = 2
+let x = T22053(1)
+    @test x*x == 2
+    @test x.*x == 1
+end
+
+# Issue https://github.com/JuliaLang/julia/pull/25377#discussion_r159956996
+let X = Any[1,2]
+    X .= nothing
+    @test X[1] == X[2] == nothing
+end
+
+# Ensure that broadcast styles with custom indexing work
+let X = zeros(2, 3)
+    X .= (1, 2)
+    @test X == [1 1 1; 2 2 2]
+end
+
+# Issue #26127: multiple splats in a fused dot-expression
+let f(args...) = *(args...)
+    x, y, z = (1,2), 3, (4, 5)
+    @test f.(x..., y, z...) == broadcast(f, x..., y, z...) == 120
+    @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
 end

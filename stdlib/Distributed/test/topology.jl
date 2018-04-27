@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 pids = addprocs_with_testenv(4; topology="master_worker")
 
 let p1 = pids[1], p2 = pids[2]
@@ -51,7 +53,7 @@ function launch(manager::TopoTestManager, params::Dict, launched::Array, c::Cond
         wconfig.process = io
         wconfig.io = io.out
         wconfig.ident = i
-        wconfig.connect_idents = collect(i+2:2:manager.np)
+        wconfig.connect_idents = Vector(i+2:2:manager.np)
         push!(launched, wconfig)
     end
 

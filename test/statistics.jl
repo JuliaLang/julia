@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Random, LinearAlgebra
 
 @testset "middle" begin
     @test middle(3) === 3.0
@@ -32,15 +32,15 @@ end
     @test isnan(median([-Inf,Inf]))
 
     X = [2 3 1 -1; 7 4 5 -4]
-    @test all(median(X, 2) .== [1.5, 4.5])
-    @test all(median(X, 1) .== [4.5 3.5 3.0 -2.5])
+    @test all(median(X, dims=2) .== [1.5, 4.5])
+    @test all(median(X, dims=1) .== [4.5 3.5 3.0 -2.5])
     @test X == [2 3 1 -1; 7 4 5 -4] # issue #17153
 
     @test_throws ArgumentError median([])
     @test isnan(median([NaN]))
     @test isnan(median([0.0,NaN]))
     @test isnan(median([NaN,0.0]))
-    @test isequal(median([NaN 0.0; 1.2 4.5], 2), reshape([NaN; 2.85], 2, 1))
+    @test isequal(median([NaN 0.0; 1.2 4.5], dims=2), reshape([NaN; 2.85], 2, 1))
 
     @test median!([1 2 3 4]) == 2.5
     @test median!([1 2; 3 4]) == 2.5
@@ -55,8 +55,8 @@ end
     @test mean([1.]) === 1.
     @test mean([1.,3]) == 2.
     @test mean([1,2,3]) == 2.
-    @test mean([0 1 2; 4 5 6], 1) == [2.  3.  4.]
-    @test mean([1 2 3; 4 5 6], 1) == [2.5 3.5 4.5]
+    @test mean([0 1 2; 4 5 6], dims=1) == [2.  3.  4.]
+    @test mean([1 2 3; 4 5 6], dims=1) == [2.5 3.5 4.5]
     @test mean(i->i+1, 0:2) === 2.
     @test mean(isodd, [3]) === 1.
     @test mean(x->3x, (1,1)) === 3.
@@ -68,7 +68,16 @@ end
     @test isnan(mean([0.,Inf,-Inf]))
     @test isnan(mean([1.,-1.,Inf,-Inf]))
     @test isnan(mean([-Inf,Inf]))
-    @test isequal(mean([NaN 0.0; 1.2 4.5], 2), reshape([NaN; 2.85], 2, 1))
+    @test isequal(mean([NaN 0.0; 1.2 4.5], dims=2), reshape([NaN; 2.85], 2, 1))
+
+    # Check that small types are accumulated using wider type
+    for T in (Int8, UInt8)
+        x = [typemax(T) typemax(T)]
+        g = (v for v in x)
+        @test mean(x) == mean(g) == typemax(T)
+        @test mean(identity, x) == mean(identity, g) == typemax(T)
+        @test mean(x, dims=2) == [typemax(T)]'
+    end
 end
 
 @testset "var & std" begin
@@ -84,10 +93,10 @@ end
     @test isnan(var(Int[]; mean=2))
     @test isnan(var(Int[]; mean=2, corrected=false))
     # reduction across dimensions
-    @test isequal(var(Int[], 1), [NaN])
-    @test isequal(var(Int[], 1; corrected=false), [NaN])
-    @test isequal(var(Int[], 1; mean=[2]), [NaN])
-    @test isequal(var(Int[], 1; mean=[2], corrected=false), [NaN])
+    @test isequal(var(Int[], dims=1), [NaN])
+    @test isequal(var(Int[], dims=1; corrected=false), [NaN])
+    @test isequal(var(Int[], dims=1; mean=[2]), [NaN])
+    @test isequal(var(Int[], dims=1; mean=[2], corrected=false), [NaN])
 
     # edge case: one-element vector
     # iterable
@@ -101,25 +110,25 @@ end
     @test var([1]; mean=2) === Inf
     @test var([1]; mean=2, corrected=false) === 1.0
     # reduction across dimensions
-    @test isequal(@inferred(var([1], 1)), [NaN])
-    @test var([1], 1; corrected=false) ≈ [0.0]
-    @test var([1], 1; mean=[2]) ≈ [Inf]
-    @test var([1], 1; mean=[2], corrected=false) ≈ [1.0]
+    @test isequal(@inferred(var([1], dims=1)), [NaN])
+    @test var([1], dims=1; corrected=false) ≈ [0.0]
+    @test var([1], dims=1; mean=[2]) ≈ [Inf]
+    @test var([1], dims=1; mean=[2], corrected=false) ≈ [1.0]
 
     @test var(1:8) == 6.
-    @test varm(1:8,1) == varm(collect(1:8),1)
+    @test varm(1:8,1) == varm(Vector(1:8),1)
     @test isnan(varm(1:1,1))
     @test isnan(var(1:1))
     @test isnan(var(1:-1))
 
     @test @inferred(var(1.0:8.0)) == 6.
-    @test varm(1.0:8.0,1.0) == varm(collect(1.0:8.0),1)
+    @test varm(1.0:8.0,1.0) == varm(Vector(1.0:8.0),1)
     @test isnan(varm(1.0:1.0,1.0))
     @test isnan(var(1.0:1.0))
     @test isnan(var(1.0:-1.0))
 
     @test @inferred(var(1.0f0:8.0f0)) === 6.f0
-    @test varm(1.0f0:8.0f0,1.0f0) == varm(collect(1.0f0:8.0f0),1)
+    @test varm(1.0f0:8.0f0,1.0f0) == varm(Vector(1.0f0:8.0f0),1)
     @test isnan(varm(1.0f0:1.0f0,1.0f0))
     @test isnan(var(1.0f0:1.0f0))
     @test isnan(var(1.0f0:-1.0f0))
@@ -137,8 +146,8 @@ end
     @test var((1,2,3); mean=0, corrected=false) ≈ 14.0/3
     @test_throws ArgumentError var((1,2,3); mean=())
 
-    @test var([1 2 3 4 5; 6 7 8 9 10], 2) ≈ adjoint([2.5 2.5])
-    @test var([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ adjoint([2.0 2.0])
+    @test var([1 2 3 4 5; 6 7 8 9 10], dims=2) ≈ [2.5 2.5]'
+    @test var([1 2 3 4 5; 6 7 8 9 10], dims=2; corrected=false) ≈ [2.0 2.0]'
 
     @test stdm([1,2,3], 2) ≈ 1.
     @test std([1,2,3]) ≈ 1.
@@ -146,19 +155,36 @@ end
     @test std([1,2,3]; mean=0) ≈ sqrt(7.0)
     @test std([1,2,3]; mean=0, corrected=false) ≈ sqrt(14.0/3)
 
+    @test stdm([1.0,2,3], 2) ≈ 1.
+    @test std([1.0,2,3]) ≈ 1.
+    @test std([1.0,2,3]; corrected=false) ≈ sqrt(2.0/3)
+    @test std([1.0,2,3]; mean=0) ≈ sqrt(7.0)
+    @test std([1.0,2,3]; mean=0, corrected=false) ≈ sqrt(14.0/3)
+
+    @test std([1.0,2,3]; dims=1)[] ≈ 1.
+    @test std([1.0,2,3]; dims=1, corrected=false)[] ≈ sqrt(2.0/3)
+    @test std([1.0,2,3]; dims=1, mean=[0])[] ≈ sqrt(7.0)
+    @test std([1.0,2,3]; dims=1, mean=[0], corrected=false)[] ≈ sqrt(14.0/3)
+
     @test stdm((1,2,3), 2) ≈ 1.
     @test std((1,2,3)) ≈ 1.
     @test std((1,2,3); corrected=false) ≈ sqrt(2.0/3)
     @test std((1,2,3); mean=0) ≈ sqrt(7.0)
     @test std((1,2,3); mean=0, corrected=false) ≈ sqrt(14.0/3)
 
-    @test std([1 2 3 4 5; 6 7 8 9 10], 2) ≈ sqrt.(adjoint([2.5 2.5]))
-    @test std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ sqrt.(adjoint([2.0 2.0]))
+    @test std([1 2 3 4 5; 6 7 8 9 10], dims=2) ≈ sqrt.([2.5 2.5]')
+    @test std([1 2 3 4 5; 6 7 8 9 10], dims=2; corrected=false) ≈ sqrt.([2.0 2.0]')
 
     let A = ComplexF64[exp(i*im) for i in 1:10^4]
         @test varm(A, 0.) ≈ sum(map(abs2, A)) / (length(A) - 1)
         @test varm(A, mean(A)) ≈ var(A)
     end
+
+    @test var([1//1, 2//1]) isa Rational{Int}
+    @test var([1//1, 2//1], dims=1) isa Vector{Rational{Int}}
+
+    @test std([1//1, 2//1]) isa Float64
+    @test std([1//1, 2//1], dims=1) isa Vector{Float64}
 end
 
 function safe_cov(x, y, zm::Bool, cr::Bool)
@@ -169,8 +195,16 @@ function safe_cov(x, y, zm::Bool, cr::Bool)
     end
     dot(vec(x), vec(y)) / (n - Int(cr))
 end
-X = adjoint([1. 2. 3. 4. 5.; 5. 4. 6. 2. 1.])
-Y = adjoint([6. 1. 5. 3. 2.; 2. 7. 8. 4. 3.])
+X = [1.0  5.0;
+     2.0  4.0;
+     3.0  6.0;
+     4.0  2.0;
+     5.0  1.0]
+Y = [6.0  2.0;
+     1.0  7.0;
+     5.0  8.0;
+     3.0  4.0;
+     2.0  3.0]
 
 @testset "covariance" begin
     for vd in [1, 2], zm in [true, false], cr in [true, false]
@@ -203,12 +237,12 @@ Y = adjoint([6. 1. 5. 3. 2.; 2. 7. 8. 4. 3.])
         @test c ≈ Cxx[1,1]
         @inferred cov(x1, corrected=cr)
 
-        @test cov(X) == Base.covm(X, mean(X, 1))
+        @test cov(X) == Base.covm(X, mean(X, dims=1))
         C = zm ? Base.covm(X, 0, vd, corrected=cr) :
-                 cov(X, vd, corrected=cr)
+                 cov(X, dims=vd, corrected=cr)
         @test size(C) == (k, k)
         @test C ≈ Cxx
-        @inferred cov(X, vd, corrected=cr)
+        @inferred cov(X, dims=vd, corrected=cr)
 
         @test cov(x1, y1) == Base.covm(x1, mean(x1), y1, mean(y1))
         c = zm ? Base.covm(x1, 0, y1, 0, corrected=cr) :
@@ -218,29 +252,29 @@ Y = adjoint([6. 1. 5. 3. 2.; 2. 7. 8. 4. 3.])
         @inferred cov(x1, y1, corrected=cr)
 
         if vd == 1
-            @test cov(x1, Y) == Base.covm(x1, mean(x1), Y, mean(Y, 1))
+            @test cov(x1, Y) == Base.covm(x1, mean(x1), Y, mean(Y, dims=1))
         end
         C = zm ? Base.covm(x1, 0, Y, 0, vd, corrected=cr) :
-                 cov(x1, Y, vd, corrected=cr)
+                 cov(x1, Y, dims=vd, corrected=cr)
         @test size(C) == (1, k)
         @test vec(C) ≈ Cxy[1,:]
-        @inferred cov(x1, Y, vd, corrected=cr)
+        @inferred cov(x1, Y, dims=vd, corrected=cr)
 
         if vd == 1
-            @test cov(X, y1) == Base.covm(X, mean(X, 1), y1, mean(y1))
+            @test cov(X, y1) == Base.covm(X, mean(X, dims=1), y1, mean(y1))
         end
         C = zm ? Base.covm(X, 0, y1, 0, vd, corrected=cr) :
-                 cov(X, y1, vd, corrected=cr)
+                 cov(X, y1, dims=vd, corrected=cr)
         @test size(C) == (k, 1)
         @test vec(C) ≈ Cxy[:,1]
-        @inferred cov(X, y1, vd, corrected=cr)
+        @inferred cov(X, y1, dims=vd, corrected=cr)
 
-        @test cov(X, Y) == Base.covm(X, mean(X, 1), Y, mean(Y, 1))
+        @test cov(X, Y) == Base.covm(X, mean(X, dims=1), Y, mean(Y, dims=1))
         C = zm ? Base.covm(X, 0, Y, 0, vd, corrected=cr) :
-                 cov(X, Y, vd, corrected=cr)
+                 cov(X, Y, dims=vd, corrected=cr)
         @test size(C) == (k, k)
         @test C ≈ Cxy
-        @inferred cov(X, Y, vd, corrected=cr)
+        @inferred cov(X, Y, dims=vd, corrected=cr)
     end
 end
 
@@ -283,11 +317,11 @@ end
         @test c ≈ Cxx[1,1]
         @inferred cor(x1)
 
-        @test cor(X) == Base.corm(X, mean(X, 1))
-        C = zm ? Base.corm(X, 0, vd) : cor(X, vd)
+        @test cor(X) == Base.corm(X, mean(X, dims=1))
+        C = zm ? Base.corm(X, 0, vd) : cor(X, dims=vd)
         @test size(C) == (k, k)
         @test C ≈ Cxx
-        @inferred cor(X, vd)
+        @inferred cor(X, dims=vd)
 
         @test cor(x1, y1) == Base.corm(x1, mean(x1), y1, mean(y1))
         c = zm ? Base.corm(x1, 0, y1, 0) : cor(x1, y1)
@@ -296,33 +330,33 @@ end
         @inferred cor(x1, y1)
 
         if vd == 1
-            @test cor(x1, Y) == Base.corm(x1, mean(x1), Y, mean(Y, 1))
+            @test cor(x1, Y) == Base.corm(x1, mean(x1), Y, mean(Y, dims=1))
         end
-        C = zm ? Base.corm(x1, 0, Y, 0, vd) : cor(x1, Y, vd)
+        C = zm ? Base.corm(x1, 0, Y, 0, vd) : cor(x1, Y, dims=vd)
         @test size(C) == (1, k)
         @test vec(C) ≈ Cxy[1,:]
-        @inferred cor(x1, Y, vd)
+        @inferred cor(x1, Y, dims=vd)
 
         if vd == 1
-            @test cor(X, y1) == Base.corm(X, mean(X, 1), y1, mean(y1))
+            @test cor(X, y1) == Base.corm(X, mean(X, dims=1), y1, mean(y1))
         end
-        C = zm ? Base.corm(X, 0, y1, 0, vd) : cor(X, y1, vd)
+        C = zm ? Base.corm(X, 0, y1, 0, vd) : cor(X, y1, dims=vd)
         @test size(C) == (k, 1)
         @test vec(C) ≈ Cxy[:,1]
-        @inferred cor(X, y1, vd)
+        @inferred cor(X, y1, dims=vd)
 
-        @test cor(X, Y) == Base.corm(X, mean(X, 1), Y, mean(Y, 1))
-        C = zm ? Base.corm(X, 0, Y, 0, vd) : cor(X, Y, vd)
+        @test cor(X, Y) == Base.corm(X, mean(X, dims=1), Y, mean(Y, dims=1))
+        C = zm ? Base.corm(X, 0, Y, 0, vd) : cor(X, Y, dims=vd)
         @test size(C) == (k, k)
         @test C ≈ Cxy
-        @inferred cor(X, Y, vd)
+        @inferred cor(X, Y, dims=vd)
     end
 
-    @test cor(repmat(1:17, 1, 17))[2] <= 1.0
+    @test cor(repeat(1:17, 1, 17))[2] <= 1.0
     @test cor(1:17, 1:17) <= 1.0
     @test cor(1:17, 18:34) <= 1.0
-    let tmp = linspace(1, 85, 100)
-        tmp2 = collect(tmp)
+    let tmp = range(1, stop=85, length=100)
+        tmp2 = Vector(tmp)
         @test cor(tmp, tmp) <= 1.0
         @test cor(tmp, tmp2) <= 1.0
     end
@@ -332,9 +366,9 @@ end
     @test quantile([1,2,3,4],0.5) == 2.5
     @test quantile([1,2,3,4],[0.5]) == [2.5]
     @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
-    @test quantile(100.0:-1.0:0.0, 0.0:0.1:1.0) == collect(0.0:10.0:100.0)
-    @test quantile(0.0:100.0, 0.0:0.1:1.0, sorted=true) == collect(0.0:10.0:100.0)
-    @test quantile(100f0:-1f0:0.0, 0.0:0.1:1.0) == collect(0f0:10f0:100f0)
+    @test quantile(100.0:-1.0:0.0, 0.0:0.1:1.0) == 0.0:10.0:100.0
+    @test quantile(0.0:100.0, 0.0:0.1:1.0, sorted=true) == 0.0:10.0:100.0
+    @test quantile(100f0:-1f0:0.0, 0.0:0.1:1.0) == 0f0:10f0:100f0
     @test quantile([Inf,Inf],0.5) == Inf
     @test quantile([-Inf,1],0.5) == -Inf
     @test quantile([0,1],1e-18) == 1e-18
@@ -346,16 +380,16 @@ end
 
 # StatsBase issue 164
 let y = [0.40003674665581906, 0.4085630862624367, 0.41662034698690303, 0.41662034698690303, 0.42189053966652057, 0.42189053966652057, 0.42553514344518345, 0.43985732442991354]
-    @test issorted(quantile(y, linspace(0.01, 0.99, 17)))
+    @test issorted(quantile(y, range(0.01, stop=0.99, length=17)))
 end
 
 @testset "variance of complex arrays (#13309)" begin
     z = rand(ComplexF64, 10)
-    @test var(z) ≈ invoke(var, Tuple{Any}, z) ≈ cov(z) ≈ var(z,1)[1] ≈ sum(abs2, z .- mean(z))/9
+    @test var(z) ≈ invoke(var, Tuple{Any}, z) ≈ cov(z) ≈ var(z,dims=1)[1] ≈ sum(abs2, z .- mean(z))/9
     @test isa(var(z), Float64)
     @test isa(invoke(var, Tuple{Any}, z), Float64)
     @test isa(cov(z), Float64)
-    @test isa(var(z,1), Vector{Float64})
+    @test isa(var(z,dims=1), Vector{Float64})
     @test varm(z, 0.0) ≈ invoke(varm, Tuple{Any,Float64}, z, 0.0) ≈ sum(abs2, z)/9
     @test isa(varm(z, 0.0), Float64)
     @test isa(invoke(varm, Tuple{Any,Float64}, z, 0.0), Float64)
@@ -386,32 +420,31 @@ end
 
 @testset "Issue #17153 and PR #17154" begin
     a = rand(10,10)
-    b = deepcopy(a)
-    x = median(a, 1)
-
+    b = copy(a)
+    x = median(a, dims=1)
     @test b == a
-    x = median(a, 2)
+    x = median(a, dims=2)
     @test b == a
-    x = mean(a, 1)
+    x = mean(a, dims=1)
     @test b == a
-    x = mean(a, 2)
+    x = mean(a, dims=2)
     @test b == a
-    x = var(a, 1)
+    x = var(a, dims=1)
     @test b == a
-    x = var(a, 2)
+    x = var(a, dims=2)
     @test b == a
-    x = std(a, 1)
+    x = std(a, dims=1)
     @test b == a
-    x = std(a, 2)
+    x = std(a, dims=2)
     @test b == a
 end
 
 # dimensional correctness
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers.Furlong
+using .Main.TestHelpers: Furlong
 @testset "Unitful elements" begin
     r = Furlong(1):Furlong(1):Furlong(2)
-    a = collect(r)
+    a = Vector(r)
     @test sum(r) == sum(a) == Furlong(3)
     @test cumsum(r) == Furlong.([1,3])
     @test mean(r) == mean(a) == median(a) == median(r) == Furlong(1.5)
@@ -420,9 +453,9 @@ using Main.TestHelpers.Furlong
 
     # Issue #21786
     A = [Furlong{1}(rand(-5:5)) for i in 1:2, j in 1:2]
-    @test mean(mean(A, 1), 2)[1] === mean(A)
-    @test var(A, 1)[1] === var(A[:, 1])
-    @test_broken std(A, 1)[1] === std(A[:, 1])
+    @test mean(mean(A, dims=1), dims=2)[1] === mean(A)
+    @test var(A, dims=1)[1] === var(A[:, 1])
+    @test std(A, dims=1)[1] === std(A[:, 1])
 end
 
 # Issue #22901
@@ -438,9 +471,9 @@ end
 
 @testset "Promotion in covzm. Issue #8080" begin
     A = [1 -1 -1; -1 1 1; -1 1 -1; 1 -1 -1; 1 -1 1]
-    @test Base.covzm(A) - mean(A, 1)'*mean(A, 1)*size(A, 1)/(size(A, 1) - 1) ≈ cov(A)
+    @test Base.covzm(A) - mean(A, dims=1)'*mean(A, dims=1)*size(A, 1)/(size(A, 1) - 1) ≈ cov(A)
     A = [1//1 -1 -1; -1 1 1; -1 1 -1; 1 -1 -1; 1 -1 1]
-    @test (A'A - size(A, 1)*Base.mean(A, 1)'*Base.mean(A, 1))/4 == cov(A)
+    @test (A'A - size(A, 1)*Base.mean(A, dims=1)'*Base.mean(A, dims=1))/4 == cov(A)
 end
 
 @testset "Mean along dimension of empty array" begin
@@ -448,15 +481,15 @@ end
     a00 = zeros(0, 0)
     a01 = zeros(0, 1)
     a10 = zeros(1, 0)
-    @test isequal(mean(a0, 1)      , fill(NaN, 1))
-    @test isequal(mean(a00, (1, 2)), fill(NaN, 1, 1))
-    @test isequal(mean(a01, 1)     , fill(NaN, 1, 1))
-    @test isequal(mean(a10, 2)     , fill(NaN, 1, 1))
+    @test isequal(mean(a0, dims=1)      , fill(NaN, 1))
+    @test isequal(mean(a00, dims=(1, 2)), fill(NaN, 1, 1))
+    @test isequal(mean(a01, dims=1)     , fill(NaN, 1, 1))
+    @test isequal(mean(a10, dims=2)     , fill(NaN, 1, 1))
 end
 
 @testset "cov/var/std of Vector{Vector}" begin
     x = [[2,4,6],[4,6,8]]
-    @test var(x) ≈ vec(var([x[1] x[2]], 2))
-    @test std(x) ≈ vec(std([x[1] x[2]], 2))
-    @test cov(x) ≈ cov([x[1] x[2]], 2)
+    @test var(x) ≈ vec(var([x[1] x[2]], dims=2))
+    @test std(x) ≈ vec(std([x[1] x[2]], dims=2))
+    @test cov(x) ≈ cov([x[1] x[2]], dims=2)
 end

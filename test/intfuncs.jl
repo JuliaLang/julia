@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 @testset "gcd/lcm" begin
     # Int32 and Int64 take different code paths -- test both
     for T in (Int32, Int64)
@@ -33,6 +35,31 @@
         @test lcm(-typemax(T), T(1)) === typemax(T)
         @test_throws OverflowError lcm(typemin(T), T(1))
         @test_throws OverflowError lcm(typemin(T), typemin(T))
+    end
+end
+@testset "gcd/lcm for arrays" begin
+    for T in (Int32, Int64)
+        @test gcd(T[]) === T(0)
+        @test gcd(T[3, 5]) === T(1)
+        @test gcd(T[3, 15]) === T(3)
+        @test gcd(T[0, 15]) === T(15)
+        @test gcd(T[3,-15]) === T(3)
+        @test gcd(T[-3,-15]) === T(3)
+        @test gcd(T[0, 0]) === T(0)
+
+        @test gcd(T[2, 4, 6]) === T(2)
+        @test gcd(T[2, 4, 3, 5]) === T(1)
+
+        @test lcm(T[]) === T(1)
+        @test lcm(T[2]) === T(2)
+        @test lcm(T[2, 3]) === T(6)
+        @test lcm(T[4, 6]) === T(12)
+        @test lcm(T[3, 0]) === T(0)
+        @test lcm(T[0, 0]) === T(0)
+        @test lcm(T[4, -6]) === T(12)
+        @test lcm(T[-4, -6]) === T(12)
+
+        @test lcm(T[2, 4, 6]) === T(12)
     end
 end
 @testset "gcdx" begin
@@ -115,23 +142,23 @@ end
     @test all(n -> n == 1, ndigits(x, b) for b in [-20:-2;2:20] for x in [true, false])
 end
 @testset "bin/oct/dec/hex/bits" begin
-    @test bin('3') == "110011"
-    @test bin('3',7) == "0110011"
-    @test bin(3) == "11"
-    @test bin(3, 2) == "11"
-    @test bin(3, 3) == "011"
-    @test bin(-3) == "-11"
-    @test bin(-3, 3) == "-011"
+    @test string(UInt32('3'), base = 2) == "110011"
+    @test string(UInt32('3'), pad = 7, base = 2) == "0110011"
+    @test string(3, base = 2) == "11"
+    @test string(3, pad = 2, base = 2) == "11"
+    @test string(3, pad = 3, base = 2) == "011"
+    @test string(-3, base = 2) == "-11"
+    @test string(-3, pad = 3, base = 2) == "-011"
 
-    @test oct(9) == "11"
-    @test oct(-9) == "-11"
+    @test string(9, base = 8) == "11"
+    @test string(-9, base = 8) == "-11"
 
-    @test dec(121) == "121"
+    @test string(121, base = 10) == "121"
 
-    @test hex(12) == "c"
-    @test hex(-12, 3) == "-00c"
+    @test string(12, base = 16) == "c"
+    @test string(-12, pad = 3, base = 16) == "-00c"
 
-    @test base(2, 5, 7) == "0000101"
+    @test string(5, pad = 7, base = 2) == "0000101"
 
     @test bitstring(Int16(3)) == "0000000000000011"
     @test bitstring('3') == "00110011000000000000000000000000"
@@ -140,17 +167,17 @@ end
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 @testset "digits/base" begin
-    @test digits(4, 2) == [0, 0, 1]
-    @test digits(5, 3) == [2, 1]
+    @test digits(4, base = 2) == [0, 0, 1]
+    @test digits(5, base = 3) == [2, 1]
 
     @testset "digits/base with negative bases" begin
-        @testset "digits(n::$T, b)" for T in (Int, UInt, BigInt, Int32)
-            @test digits(T(8163), -10) == [3, 4, 2, 2, 1]
+        @testset "digits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32)
+            @test digits(T(8163), base = -10) == [3, 4, 2, 2, 1]
             if !(T<:Unsigned)
-                @test digits(T(-8163), -10) == [7, 7, 9, 9]
+                @test digits(T(-8163), base = -10) == [7, 7, 9, 9]
             end
         end
-        @test [base(b, n)
+        @test [string(n, base = b)
                for n = [-10^9, -10^5, -2^20, -2^10, -100, -83, -50, -34, -27, -16, -7, -3, -2, -1,
                         0, 1, 2, 3, 4, 7, 16, 27, 34, 50, 83, 100, 2^10, 2^20, 10^5, 10^9]
                for b = [-2, -3, -7, -10, -60]] ==

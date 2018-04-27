@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Printf.@sprintf
+using Base.Printf: @sprintf
+using Random
 
 @generated function staged_t1(a,b)
     if a == Int
@@ -58,7 +59,7 @@ splat2(3, 3:5)
 @test String(take!(stagediobuf)) == "($intstr, UnitRange{$intstr})"
 
 # varargs specialization with parametric @generated functions (issue #8944)
-@generated function splat3(A::AbstractArray{T,N}, indx::RangeIndex...) where {T,N}
+@generated function splat3(A::AbstractArray{T,N}, indx::Base.RangeIndex...) where {T,N}
     print(stagediobuf, indx)
     :(nothing)
 end
@@ -76,7 +77,7 @@ B = view(A, 1:3, 2, 1:3)
     end
     Ip = I.parameters
     NP = length(Ip)
-    indexexprs = Vector{Expr}(uninitialized, NP)
+    indexexprs = Vector{Expr}(undef, NP)
     j = 1
     for i = 1:NP
         if Ip[i] == Int
@@ -140,18 +141,21 @@ end
 
 # @generated functions that throw (shouldn't segfault or throw)
 module TestGeneratedThrow
-    using Test
+    using Test, Random
 
     @generated function bar(x)
         error("I'm not happy with type $x")
     end
 
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
+    inited = false
     function __init__()
-        code_typed(foo,(); optimize = false)
-        cfunction(foo,Cvoid,Tuple{})
+        code_typed(foo, (); optimize = false)
+        @cfunction(foo, Cvoid, ())
+        global inited = true
     end
 end
+@test TestGeneratedThrow.inited
 
 # @generated functions including inner functions
 @generated function _g_f_with_inner(x)
@@ -190,9 +194,7 @@ let gf_err2
         return nothing
     end
     @test_throws ErrorException gf_err2(code_typed)
-    @test_throws ErrorException gf_err2(code_llvm)
-    @test_throws ErrorException gf_err2(code_native)
-    @test gf_err_ref[] == 12
+    @test gf_err_ref[] == 4
     @test gf_err2(code_lowered) === nothing
 end
 
@@ -242,7 +244,7 @@ f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
     sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
     code_info = Base.uncompressed_ast(method)
     body = Expr(:block, code_info.code...)
-    Base.Core.Inference.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
+    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
     return code_info
 end
 
@@ -275,10 +277,10 @@ end
 let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int))), "x + x")
-    @test contains(string(Base.uncompressed_ast(first(methods(f23168)))), "2 * x")
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int), false)), "2 * x")
-    @test contains(string(code_typed(f23168, (Vector{Any},Int))), "(Base.add_int)(x, x)")
+    @test occursin("x + x", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("2 * x", string(Base.uncompressed_ast(first(methods(f23168)))))
+    @test occursin("2 * x", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("(Base.add_int)(x, x)", string(code_typed(f23168, (Vector{Any},Int))))
 end
 
 # issue #18747

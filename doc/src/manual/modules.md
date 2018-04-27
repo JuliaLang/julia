@@ -42,11 +42,13 @@ the system will search for it among variables exported by `Lib` and import it if
 This means that all uses of that global within the current module will resolve to the definition
 of that variable in `Lib`.
 
-The statement `using BigLib: thing1, thing2` is a syntactic shortcut for `using BigLib.thing1, BigLib.thing2`.
+The statement `using BigLib: thing1, thing2` brings just the identifiers `thing1` and `thing2`
+into scope from module `BigLib`. If these names refer to functions, adding methods to them
+will not be allowed (you may only "use" them, not extend them).
 
-The `import` keyword supports all the same syntax as `using`, but only operates on a single name
+The `import` keyword supports the same syntax as `using`, but only operates on a single name
 at a time. It does not add modules to be searched the way `using` does. `import` also differs
-from `using` in that functions must be imported using `import` to be extended with new methods.
+from `using` in that functions imported using `import` can be extended with new methods.
 
 In `MyModule` above we wanted to add a method to the standard `show` function, so we had to write
 `import Base.show`. Functions whose names are only visible via `using` cannot be extended.
@@ -79,7 +81,6 @@ functions into the current workspace:
 | Import Command                  | What is brought into scope                                                      | Available for method extension              |
 |:------------------------------- |:------------------------------------------------------------------------------- |:------------------------------------------- |
 | `using MyModule`                | All `export`ed names (`x` and `y`), `MyModule.x`, `MyModule.y` and `MyModule.p` | `MyModule.x`, `MyModule.y` and `MyModule.p` |
-| `using MyModule.x, MyModule.p`  | `x` and `p`                                                                     |                                             |
 | `using MyModule: x, p`          | `x` and `p`                                                                     |                                             |
 | `import MyModule`               | `MyModule.x`, `MyModule.y` and `MyModule.p`                                     | `MyModule.x`, `MyModule.y` and `MyModule.p` |
 | `import MyModule.x, MyModule.p` | `x` and `p`                                                                     | `x` and `p`                                 |
@@ -125,7 +126,7 @@ Core contains all identifiers considered "built in" to the language, i.e. part o
 and not libraries. Every module implicitly specifies `using Core`, since you can't do anything
 without those definitions.
 
-Base is the standard library (the contents of base/). All modules implicitly contain `using Base`,
+Base is a module that contains basic functionality (the contents of base/). All modules implicitly contain `using Base`,
 since this is needed in the vast majority of cases.
 
 ### Default top-level definitions and bare modules
@@ -190,8 +191,9 @@ The global variable [`LOAD_PATH`](@ref) contains the directories Julia searches 
 push!(LOAD_PATH, "/Path/To/My/Module/")
 ```
 
-Putting this statement in the file `~/.juliarc.jl` will extend [`LOAD_PATH`](@ref) on every Julia startup.
-Alternatively, the module load path can be extended by defining the environment variable `JULIA_LOAD_PATH`.
+Putting this statement in the file `~/.julia/config/startup.jl` will extend [`LOAD_PATH`](@ref) on
+every Julia startup. Alternatively, the module load path can be extended by defining the environment
+variable `JULIA_LOAD_PATH`.
 
 ### Namespace miscellanea
 
@@ -220,7 +222,7 @@ versions of modules to reduce this time.
 To create an incremental precompiled module file, add `__precompile__()` at the top of your module
 file (before the `module` starts). This will cause it to be automatically compiled the first time
 it is imported. Alternatively, you can manually call `Base.compilecache(modulename)`. The resulting
-cache files will be stored in `Base.LOAD_CACHE_PATH[1]`. Subsequently, the module is automatically
+cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
 recompiled upon `import` whenever any of its dependencies change; dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by `include_dependency(path)`
 in the module file(s).
@@ -298,9 +300,9 @@ are a trickier case.  In the common case where the keys are numbers, strings, sy
 `Expr`, or compositions of these types (via arrays, tuples, sets, pairs, etc.) they are safe to
 precompile.  However, for a few other key types, such as `Function` or `DataType` and generic
 user-defined types where you haven't defined a `hash` method, the fallback `hash` method depends
-on the memory address of the object (via its `object_id`) and hence may change from run to run.
+on the memory address of the object (via its `objectid`) and hence may change from run to run.
 If you have one of these key types, or if you aren't sure, to be safe you can initialize this
-dictionary from within your `__init__` function. Alternatively, you can use the `ObjectIdDict`
+dictionary from within your `__init__` function. Alternatively, you can use the `IdDict`
 dictionary type, which is specially handled by precompilation so that it is safe to initialize
 at compile-time.
 
@@ -327,7 +329,7 @@ Other known potential failure scenarios include:
    at the end of compilation. All subsequent usages of this incrementally compiled module will start
    from that same counter value.
 
-   Note that `object_id` (which works by hashing the memory pointer) has similar issues (see notes
+   Note that `objectid` (which works by hashing the memory pointer) has similar issues (see notes
    on `Dict` usage below).
 
    One alternative is to use a macro to capture [`@__MODULE__`](@ref) and store it alone with the current `counter` value,
@@ -341,11 +343,11 @@ Other known potential failure scenarios include:
    of via its lookup path. For example, (in global scope):
 
    ```julia
-   #mystdout = Base.STDOUT #= will not work correctly, since this will copy Base.STDOUT into this module =#
+   #mystdout = Base.stdout #= will not work correctly, since this will copy Base.stdout into this module =#
    # instead use accessor functions:
-   getstdout() = Base.STDOUT #= best option =#
+   getstdout() = Base.stdout #= best option =#
    # or move the assignment into the runtime:
-   __init__() = global mystdout = Base.STDOUT #= also works =#
+   __init__() = global mystdout = Base.stdout #= also works =#
    ```
 
 Several additional restrictions are placed on the operations that can be done while precompiling

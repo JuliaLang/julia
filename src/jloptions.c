@@ -35,7 +35,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // image_file (will be filled in below)
                             NULL, // cpu_target ("native", "core2", etc...)
                             0,    // nprocs
-                            NULL, // machinefile
+                            NULL, // machine_file
                             0,    // isinteractive
                             0,    // color
                             JL_OPTIONS_HISTORYFILE_ON, // history file
@@ -50,7 +50,7 @@ jl_options_t jl_options = { 0,    // quiet
                             1,    // debug_level [release build]
 #endif
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
-                            1,    // deprecation warning
+                            JL_OPTIONS_DEPWARN_ON,    // deprecation warning
                             0,    // method overwrite warning
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
@@ -78,7 +78,7 @@ static const char opts[]  =
     // startup options
     " -J, --sysimage <file>     Start up with the given system image file\n"
     " -H, --home <dir>          Set location of `julia` executable\n"
-    " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
+    " --startup-file={yes|no}   Load `~/.julia/config/startup.jl`\n"
     " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes|no}\n"
     "                           Use native code from system image if available\n"
@@ -93,13 +93,13 @@ static const char opts[]  =
     // parallel options
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local cores\n"
-    " --machinefile <file>      Run processes on hosts listed in <file>\n\n"
+    " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
     " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
     " -q, --quiet               Quiet startup: no banner, suppress REPL warnings\n"
-    " --banner={yes|no}         Enable or disable startup banner\n"
-    " --color={yes|no}          Enable or disable color text\n"
+    " --banner={yes|no|auto}    Enable or disable startup banner\n"
+    " --color={yes|no|auto}     Enable or disable color text\n"
     " --history-file={yes|no}   Load or save history\n\n"
 
     // error and warning options
@@ -169,7 +169,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_incremental,
            opt_banner,
            opt_sysimage_native_code,
-           opt_compiled_modules
+           opt_compiled_modules,
+           opt_machine_file,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:";
     static const struct option longopts[] = {
@@ -191,7 +192,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "compiled-modules",    required_argument, 0, opt_compiled_modules },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
-        { "machinefile",     required_argument, 0, opt_machinefile },
+        { "machinefile",     required_argument, 0, opt_machinefile },   // deprecated
+        { "machine-file",    required_argument, 0, opt_machine_file },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
         { "startup-file",    required_argument, 0, opt_startup_file },
@@ -341,12 +343,14 @@ restart_switch:
                 jl_options.banner = 0;
             break;
         case opt_banner: // banner
-            if (!strcmp(optarg,"yes"))
+            if (!strcmp(optarg, "yes"))
                 jl_options.banner = 1;
-            else if (!strcmp(optarg,"no"))
+            else if (!strcmp(optarg, "no"))
                 jl_options.banner = 0;
+            else if (!strcmp(optarg, "auto"))
+                jl_options.banner = -1;
             else
-                jl_errorf("julia: invalid argument to --banner={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --banner={yes|no|auto} (%s)", optarg);
             break;
         case opt_use_precompiled:
             jl_printf(JL_STDOUT, "WARNING: julia --precompiled option is deprecated, use --sysimage-native-code instead.\n");
@@ -388,17 +392,22 @@ restart_switch:
             }
             break;
         case opt_machinefile:
-            jl_options.machinefile = strdup(optarg);
-            if (!jl_options.machinefile)
+            jl_printf(JL_STDOUT, "WARNING: julia --machinefile option is deprecated, use --machine-file instead.\n");
+            // fall through
+        case opt_machine_file:
+            jl_options.machine_file = strdup(optarg);
+            if (!jl_options.machine_file)
                 jl_error("julia: failed to allocate memory");
             break;
         case opt_color:
-            if (!strcmp(optarg,"yes"))
+            if (!strcmp(optarg, "yes"))
                 jl_options.color = JL_OPTIONS_COLOR_ON;
-            else if (!strcmp(optarg,"no"))
+            else if (!strcmp(optarg, "no"))
                 jl_options.color = JL_OPTIONS_COLOR_OFF;
+            else if (!strcmp(optarg, "auto"))
+                jl_options.color = JL_OPTIONS_COLOR_AUTO;
             else
-                jl_errorf("julia: invalid argument to --color={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --color={yes|no|auto} (%s)", optarg);
             break;
         case opt_history_file:
             if (!strcmp(optarg,"yes"))

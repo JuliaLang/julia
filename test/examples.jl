@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 dir = joinpath(Sys.BINDIR, Base.DOCDIR, "examples")
 
 include(joinpath(dir, "bubblesort.jl"))
@@ -21,12 +23,12 @@ y = inv(x)
 @test_throws DomainError inv(ModInts.ModInt{8}(4))
 
 include(joinpath(dir, "ndgrid.jl"))
-r = repmat(1:10,1,10)
+r = repeat(1:10,1,10)
 r1, r2 = ndgrid(1:10, 1:10)
 @test r1 == r
-@test r2 == adjoint(r)
+@test r2 == r'
 r3, r4 = meshgrid(1:10,1:10)
-@test r3 == adjoint(r)
+@test r3 == r'
 @test r4 == r
 
 include(joinpath(dir, "queens.jl"))
@@ -40,7 +42,7 @@ include(joinpath(dir, "queens.jl"))
 if Sys.isunix()
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
     cmd = `$(Base.julia_cmd()) --startup-file=no $script`
-    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR)) && ccall(:jl_running_on_valgrind,Cint,()) == 0
+    if !success(pipeline(cmd; stdout=stdout, stderr=stderr)) && ccall(:jl_running_on_valgrind,Cint,()) == 0
         error("UnixDomainCM failed test, cmd : $cmd")
     end
 end

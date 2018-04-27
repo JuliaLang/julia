@@ -48,7 +48,7 @@ function serialize(S::AbstractSerializer, pool::WorkerPool)
     # initialize the `ref` to point to self and only send the ref.
     # Other workers will forward all put!, take!, calls to the process owning
     # the ref (and hence the pool).
-    Serializer.serialize_type(S, typeof(pool))
+    Serialization.serialize_type(S, typeof(pool))
     serialize(S, pool.ref)
 end
 
@@ -218,11 +218,11 @@ mutable struct CachingPool <: AbstractWorkerPool
     channel::Channel{Int}
     workers::Set{Int}
 
-    # Mapping between a tuple (worker_id, f) and a remote_ref
-    map_obj2ref::Dict{Tuple{Int, Function}, RemoteChannel}
+    # Mapping between a tuple (worker_id, f) and a RemoteChannel
+    map_obj2ref::IdDict{Tuple{Int, Function}, RemoteChannel}
 
     function CachingPool()
-        wp = new(Channel{Int}(typemax(Int)), Set{Int}(), Dict{Int, Function}())
+        wp = new(Channel{Int}(typemax(Int)), Set{Int}(), IdDict{Tuple{Int, Function}, RemoteChannel}())
         finalizer(clear!, wp)
         wp
     end

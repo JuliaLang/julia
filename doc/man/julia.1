@@ -77,7 +77,7 @@ Set location of julia executable
 
 .TP
 --startup-file={yes|no}
-Load ~/.juliarc.jl
+Load ~/.julia/config/startup.jl
 
 .TP
 --handle-signals={yes|no}
@@ -100,7 +100,7 @@ Load <file> immediately on all processors
 Run n local processes
 
 .TP
---machinefile <file>
+--machine-file <file>
 Run processes on hosts listed in <file>
 
 .TP
@@ -108,11 +108,11 @@ Run processes on hosts listed in <file>
 Interactive mode; REPL runs and isinteractive() is true
 
 .TP
---banner={yes|no}
+--banner={yes|no|auto}
 Enable or disable startup banner
 
 .TP
---color={yes|no}
+--color={yes|no|auto}
 Enable or disable color text
 
 .TP
@@ -189,12 +189,12 @@ Count executions of source lines (omitting setting is equivalent to 'user')
 Count bytes allocated by each source line
 
 .SH FILES
-.I ~/.juliarc.jl
+.I ~/.julia/config/startup.jl
 .RS
 Per user startup file.
 .RE
 
-.I /etc/julia/juliarc.jl
+.I /etc/julia/startup.jl
 .RS
 System-wide startup file.
 .RE

@@ -209,18 +209,25 @@
 
 ;; arg names, looking only at positional args
 (define (safe-llist-positional-args lst (escaped #f))
-  (safe-arg-names
-   (filter (lambda (a) (not (and (pair? a)
-                                 (eq? (car a) 'parameters))))
-           lst)
-   escaped))
+  (receive
+   (params normal) (separate (lambda (a) (and (pair? a)
+                                              (eq? (car a) 'parameters)))
+                             lst)
+   (safe-arg-names
+    (append normal
+            ;; rest keywords name is not a keyword
+            (apply append (map (lambda (a) (filter vararg? a))
+                               params)))
+    escaped)))
 
 ;; arg names from keyword arguments, and positional arguments with escaped names
 (define (safe-llist-keyword-args lst)
-  (let ((kwargs (apply nconc
-                       (map cdr
-                            (filter (lambda (a) (and (pair? a) (eq? (car a) 'parameters)))
-                                    lst)))))
+  (let* ((kwargs (apply nconc
+                        (map cdr
+                             (filter (lambda (a) (and (pair? a) (eq? (car a) 'parameters)))
+                                     lst))))
+         ;; rest keywords name is not a keyword
+         (kwargs (filter (lambda (x) (not (vararg? x))) kwargs)))
     (append
      (safe-arg-names kwargs #f)
      (safe-arg-names kwargs #t)
@@ -279,7 +286,7 @@
    m parent-scope inarg))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
          e)
         ((symbol? e)
          (let ((a (assq e env)))

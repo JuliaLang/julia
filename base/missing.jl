@@ -23,12 +23,18 @@ nonmissingtype(::Type{Missing}) = Union{}
 nonmissingtype(::Type{T}) where {T} = T
 nonmissingtype(::Type{Any}) = Any
 
-promote_rule(::Type{Missing}, ::Type{T}) where {T} = Union{T, Missing}
-promote_rule(::Type{Union{S,Missing}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), Missing}
-promote_rule(::Type{Any}, ::Type{T}) where {T} = Any
-promote_rule(::Type{Any}, ::Type{Missing}) = Any
-promote_rule(::Type{Missing}, ::Type{Any}) = Any
-promote_rule(::Type{Missing}, ::Type{Missing}) = Missing
+for U in (:Nothing, :Missing)
+    @eval begin
+        promote_rule(::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
+        promote_rule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), $U}
+        promote_rule(::Type{Any}, ::Type{$U}) = Any
+        promote_rule(::Type{$U}, ::Type{Any}) = Any
+        promote_rule(::Type{$U}, ::Type{$U}) = U
+    end
+end
+promote_rule(::Type{Union{Nothing, Missing}}, ::Type{Any}) = Any
+promote_rule(::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
+    Union{Nothing, Missing, T}
 
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities
@@ -57,16 +63,16 @@ isless(::Missing, ::Any) = false
 isless(::Any, ::Missing) = true
 
 # Unary operators/functions
-for f in (:(!), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
-          :(abs), :(abs2), :(sign),
+for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
+          :(abs), :(abs2), :(sign), :(real), :(imag),
           :(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
           :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
-          :(log2), :(exponent), :(sqrt), :(gamma), :(lgamma),
+          :(log2), :(Math.exponent), :(sqrt), :(Math.gamma), :(Math.lgamma),
           :(iseven), :(ispow2), :(isfinite), :(isinf), :(isodd),
-          :(isinteger), :(isreal), :(isnan), :(isempty),
-          :(iszero), :(transpose), :(float))
-    @eval Math.$(f)(::Missing) = missing
+          :(isinteger), :(isreal), :(isnan),
+          :(iszero), :(transpose), :(adjoint), :(float), :(conj))
+    @eval $(f)(::Missing) = missing
 end
 
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
@@ -77,15 +83,21 @@ for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
 end
 
 # Binary operators/functions
-for f in (:(+), :(-), :(*), :(/), :(^),
-          :(div), :(mod), :(fld), :(rem), :(min), :(max))
+for f in (:(+), :(-), :(*), :(/), :(^), :(div), :(mod), :(fld), :(rem))
     @eval begin
         # Scalar with missing
         ($f)(::Missing, ::Missing) = missing
-        ($f)(d::Missing, x::Number) = missing
-        ($f)(d::Number, x::Missing) = missing
+        ($f)(::Missing, ::Number)  = missing
+        ($f)(::Number,  ::Missing) = missing
     end
 end
+
+min(::Missing, ::Missing) = missing
+min(::Missing, ::Any)     = missing
+min(::Any,     ::Missing) = missing
+max(::Missing, ::Missing) = missing
+max(::Missing, ::Any)     = missing
+max(::Any,     ::Missing) = missing
 
 # Rounding and related functions
 for f in (:(ceil), :(floor), :(round), :(trunc))
@@ -93,7 +105,11 @@ for f in (:(ceil), :(floor), :(round), :(trunc))
         ($f)(::Missing, digits::Integer=0, base::Integer=0) = missing
         ($f)(::Type{>:Missing}, ::Missing) = missing
         ($f)(::Type{T}, ::Missing) where {T} =
-            throw(MissingException("cannot convert a missing value to type $T"))
+            throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
+        ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype(T), x)
+        # to fix ambiguities
+        ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype(T), x)
+        ($f)(::Type{T}, x::Rational{Bool}) where {T>:Missing} = $f(nonmissingtype(T), x)
     end
 end
 
@@ -143,14 +159,13 @@ julia> sum(skipmissing([1, missing, 2]))
 
 julia> collect(skipmissing([1, missing, 2]))
 2-element Array{Int64,1}:
-1
-2
+ 1
+ 2
 
 julia> collect(skipmissing([1 missing; 2 missing]))
 2-element Array{Int64,1}:
-1
-2
-
+ 1
+ 2
 ```
 """
 skipmissing(itr) = SkipMissing(itr)
@@ -158,9 +173,9 @@ skipmissing(itr) = SkipMissing(itr)
 struct SkipMissing{T}
     x::T
 end
-iteratorsize(::Type{<:SkipMissing}) = SizeUnknown()
-iteratoreltype(::Type{SkipMissing{T}}) where {T} = iteratoreltype(T)
-eltype(itr::SkipMissing) = nonmissingtype(eltype(itr.x))
+IteratorSize(::Type{<:SkipMissing}) = SizeUnknown()
+IteratorEltype(::Type{SkipMissing{T}}) where {T} = IteratorEltype(T)
+eltype(::Type{SkipMissing{T}}) where {T} = nonmissingtype(eltype(T))
 # Fallback implementation for general iterables: we cannot access a value twice,
 # so after finding the next non-missing element in start() or next(), we have to
 # pass it in the iterator state, which introduces a type instability since the value

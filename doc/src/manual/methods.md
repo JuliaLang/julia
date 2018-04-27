@@ -509,12 +509,12 @@ julia> f(1)
 julia> g(1)
 "definition for Int"
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "original definition"
 
 julia> t = @async f(wait()); yield();
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "definition for Int"
 ```
 
@@ -593,7 +593,7 @@ The subtypes of `AbstractArray` typically implement two methods to
 achieve this:
 A method to convert the input array to a subtype of a specific `AbstractArray{T, N}` abstract type;
 and a method to make a new uninitialized array with a specific element type.
-Sample implementations of these can be found in the standard library.
+Sample implementations of these can be found in Julia Base.
 Here is a basic example usage of them, guaranteeing that `input` and
 `output` are of the same type:
 

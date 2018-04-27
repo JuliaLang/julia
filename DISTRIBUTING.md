@@ -81,7 +81,7 @@ and other environment variables you can pass when calling `make` and
 `make install`. See Make.inc for their list. `DESTDIR` can also be used
 to force the installation into a temporary directory.
 
-By default, Julia loads `$prefix/etc/julia/juliarc.jl` as an
+By default, Julia loads `$prefix/etc/julia/startup.jl` as an
 installation-wide initialization file. This file can be used by
 distribution managers to set up custom paths or initialization code.
 For Linux distribution packages, if `$prefix` is
@@ -89,8 +89,8 @@ set to `/usr`, there is no `/usr/etc` to look into. This requires
 the path to Julia's private `etc` directory to be changed.  This can
 be done via the `sysconfdir` make variable when building.  Simply
 pass `sysconfdir=/etc` to `make` when building and Julia will first
-check `/etc/julia/juliarc.jl` before trying
-`$prefix/etc/julia/juliarc.jl`.
+check `/etc/julia/startup.jl` before trying
+`$prefix/etc/julia/startup.jl`.
 
 OS X
 ----
@@ -364,18 +364,18 @@ for result in eachrow(results)
     b = result[:backport]
     if (isna(a) && !isna(b)) || (isna(b) && !isna(a))
         color = :yellow
-    elseif a != b && contains(b, "pass")
+    elseif a != b && occursin("pass", b)
         color = :green
     elseif a != b
         color = :red
     else
         continue
     end
-    print_with_color(color, result[:package], ": Release ", a, " -> Backport ", b, "\n")
+    printstyled(result[:package], ": Release ", a, " -> Backport ", b, "\n", color=color)
 end
 ```
 
-This will write color-coded lines to STDOUT.
+This will write color-coded lines to `stdout`.
 All lines in red must be investigated as they signify potential breakages caused by the
 backport version.
 Lines in yellow should be looked into since it means a package ran on one version but

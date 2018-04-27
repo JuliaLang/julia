@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed
+using Test, Distributed, Random, Serialization, Sockets
 import Distributed: launch, manage
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
@@ -11,14 +11,14 @@ include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
 @test pmap(identity, 1:100) == [1:100...]
-@test 100 == @parallel (+) for i in 1:100
+@test 100 == @distributed (+) for i in 1:100
         1
     end
 
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
-@everywhere using Test
+@everywhere using Test, Random, LinearAlgebra
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
@@ -180,6 +180,25 @@ testval = remotecall_fetch(wid2, fstore) do x
 end
 @test testval == 1
 
+# Issue number #25847
+@everywhere function f25847(ref)
+    fetch(ref)
+    return true
+end
+
+f = remotecall_wait(identity, id_other, ones(10))
+rrid = Distributed.RRID(f.whence, f.id)
+remotecall_fetch(f25847, id_other, f)
+@test BitSet([id_me]) == remotecall_fetch(()->Distributed.PGRP.refs[rrid].clientset, id_other)
+
+remotecall_fetch(f25847, id_other, f)
+@test BitSet([id_me]) == remotecall_fetch(()->Distributed.PGRP.refs[rrid].clientset, id_other)
+
+finalize(f)
+yield() # flush gc msgs
+@test false == remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid)
+
+
 # Distributed GC tests for RemoteChannels
 function test_remoteref_dgc(id)
     rr = RemoteChannel(id)
@@ -272,24 +291,24 @@ end
 test_regular_io_ser(Future())
 test_regular_io_ser(RemoteChannel())
 
-# Test @parallel load balancing - all processors should get either M or M+1
+# Test @distributed load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
-ids = @parallel((a,b)->[a;b], for i=1:7; myid(); end)
+ids = @distributed((a,b)->[a;b], for i=1:7; myid(); end)
 workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 @test maximum(workloads) - minimum(workloads) <= 1
 
-# @parallel reduction should work even with very short ranges
-@test @parallel(+, for i=1:2; i; end) == 3
+# @distributed reduction should work even with very short ranges
+@test @distributed(+, for i=1:2; i; end) == 3
 
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
 # specify pids for pmap
-@test sort(workers()[1:2]) == sort(unique(pmap(WorkerPool(workers()[1:2]), x->(sleep(0.1);myid()), 1:10)))
+@test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), WorkerPool(workers()[1:2]), 1:10)))
 
 # Testing buffered  and unbuffered reads
 # This large array should write directly to the socket
-a = ones(10^6)
+a = fill(1, 10^6)
 @test a == remotecall_fetch((x)->x, id_other, a)
 
 # Not a bitstype, should be buffered
@@ -434,7 +453,7 @@ let ex
     @test ((ex.captured::CapturedException).ex::ErrorException).msg == "A.error"
     bt = ex.captured.processed_bt::Array{Any,1}
     @test length(bt) > 1
-    frame, repeated = bt[1]::Tuple{StackFrame, Int}
+    frame, repeated = bt[1]::Tuple{Base.StackTraces.StackFrame, Int}
     @test frame.func == :foo
     @test frame.linfo == nothing
     @test repeated == 1
@@ -527,12 +546,11 @@ walk_args(1)
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "generic_map_tests.jl"))
 empty_pool = WorkerPool([myid()])
-pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
+pmap_fallback = (f, c...) -> pmap(f, empty_pool, c...)
 generic_map_tests(pmap_fallback)
 
 # pmap with various types. Test for equivalence with map
 run_map_equivalence_tests(pmap)
-using Base.Unicode: uppercase
 @test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
 
 
@@ -571,13 +589,13 @@ pmap(_->myid(), 1:nworkers())  # priming run
 
 # Same tests with custom worker pools.
 wp = WorkerPool(workers())
-@test nworkers() == length(unique(pmap(wp, _->myid(), 1:100)))
-@test nworkers() == length(unique(remotecall_fetch(wp->pmap(wp, _->myid(), 1:100), id_other, wp)))
+@test nworkers() == length(unique(pmap(_->myid(), wp, 1:100)))
+@test nworkers() == length(unique(remotecall_fetch(wp->pmap(_->myid(), wp, 1:100), id_other, wp)))
 
 
 # CachingPool tests
 wp = CachingPool(workers())
-@test [1:100...] == pmap(wp, x->x, 1:100)
+@test [1:100...] == pmap(x->x, wp, 1:100)
 
 clear!(wp)
 @test length(wp.map_obj2ref) == 0
@@ -694,12 +712,12 @@ end # full-test
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
-    @test_throws ErrorException wait(t)
+    @test_throws ErrorException Base._wait(t)
 end
 
 # issue #8207
 let A = Any[]
-    @parallel (+) for i in (push!(A,1); 1:2)
+    @distributed (+) for i in (push!(A,1); 1:2)
         i
     end
     @test length(A) == 1
@@ -717,7 +735,7 @@ let t = schedule(@task f13168(100))
     yield()
     @test t.state == :done
     @test_throws ErrorException schedule(t)
-    @test isa(wait(t),Float64)
+    @test isa(fetch(t),Float64)
 end
 
 # issue #13122
@@ -818,13 +836,13 @@ end
 
 # issue #16451
 rng=RandomDevice()
-retval = @parallel (+) for _ in 1:10
+retval = @distributed (+) for _ in 1:10
     rand(rng)
 end
 @test retval > 0.0 && retval < 10.0
 
 rand(rng)
-retval = @parallel (+) for _ in 1:10
+retval = @distributed (+) for _ in 1:10
     rand(rng)
 end
 @test retval > 0.0 && retval < 10.0
@@ -917,7 +935,7 @@ end
 # Test addprocs enable_threaded_blas parameter
 
 const get_num_threads = function() # anonymous so it will be serialized when called
-    blas = BLAS.vendor()
+    blas = LinearAlgebra.BLAS.vendor()
     # Wrap in a try to catch unsupported blas versions
     try
         if blas == :openblas
@@ -930,7 +948,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
 
         # OSX BLAS looks at an environment variable
         if Sys.isapple()
-            return ENV["VECLIB_MAXIMUM_THREADS"]
+            return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
         end
     end
 
@@ -951,11 +969,12 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    if get_num_threads() === nothing
+    master_blas_thread_count = get_num_threads()
+    if master_blas_thread_count === nothing
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    master_blas_thread_count = get_num_threads()
+    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)
@@ -1005,7 +1024,7 @@ for i in 1:5
     p = addprocs_with_testenv(1)[1]
     np = nprocs()
     @spawnat p sleep(5)
-    wait(rmprocs(p; waitfor=0))
+    Base._wait(rmprocs(p; waitfor=0))
     for pid in procs()
         @test pid == remotecall_fetch(myid, pid)
     end
@@ -1017,7 +1036,7 @@ if DoFullTest
     pids=addprocs_with_testenv(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
     # wait for workers to be removed
-    while any(x -> (x in procs()), pids)
+    while any(in(procs()), pids)
         sleep(0.1)
     end
 end
@@ -1037,8 +1056,8 @@ end
 # Test the following addprocs error conditions
 # - invalid host name - github issue #20372
 # - julia exe exiting with an error
-# - timeout reading host:port from worker STDOUT
-# - host:port not found in worker STDOUT in the first 1000 lines
+# - timeout reading host:port from worker stdout
+# - host:port not found in worker stdout in the first 1000 lines
 
 struct ErrorSimulator <: ClusterManager
     mode
@@ -1080,7 +1099,7 @@ append!(testruns, [
 ])
 
 for (addp_testf, expected_errstr, env) in testruns
-    old_stdout = STDOUT
+    old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
     stdout_txt = @schedule filter!(readlines(stdout_out)) do s
             return !startswith(s, "\tFrom failed worker startup:\t")
@@ -1093,7 +1112,7 @@ for (addp_testf, expected_errstr, env) in testruns
     catch ex
         redirect_stdout(old_stdout)
         close(stdout_in)
-        @test isempty(wait(stdout_txt))
+        @test isempty(fetch(stdout_txt))
         @test isa(ex, CompositeException)
         @test ex.exceptions[1].ex.msg == expected_errstr
     end
@@ -1118,7 +1137,7 @@ for i in 1:5
 end
 
 # Different global bindings to the same object
-global v3 = ones(10)
+global v3 = fill(1., 10)
 global v4 = v3
 @test remotecall_fetch(()->v3, id_other) == remotecall_fetch(()->v4, id_other)
 @test remotecall_fetch(()->isdefined(Main, :v3), id_other)
@@ -1150,6 +1169,7 @@ v6 = FooModEverywhere
 # b) hash value has not changed.
 
 @everywhere begin
+    using Serialization
     global testsercnt_d = Dict()
     mutable struct TestSerCnt
         v
@@ -1158,15 +1178,15 @@ v6 = FooModEverywhere
     hash(x::TestSerCnt, h::UInt) = hash(hash(x.v), h)
     ==(x1::TestSerCnt, x2::TestSerCnt) = (x1.v == x2.v)
 
-    function Base.serialize(s::AbstractSerializer, t::TestSerCnt)
-        Base.Serializer.serialize_type(s, TestSerCnt)
+    function Serialization.serialize(s::AbstractSerializer, t::TestSerCnt)
+        Serialization.serialize_type(s, TestSerCnt)
         serialize(s, t.v)
         global testsercnt_d
-        cnt = get!(testsercnt_d, object_id(t), 0)
-        testsercnt_d[object_id(t)] = cnt+1
+        cnt = get!(testsercnt_d, objectid(t), 0)
+        testsercnt_d[objectid(t)] = cnt+1
     end
 
-    Base.deserialize(s::AbstractSerializer, ::Type{TestSerCnt}) = TestSerCnt(deserialize(s))
+    Serialization.deserialize(s::AbstractSerializer, ::Type{TestSerCnt}) = TestSerCnt(deserialize(s))
 end
 
 # hash value of tsc is not changed
@@ -1175,22 +1195,22 @@ for i in 1:5
     remotecall_fetch(()->tsc, id_other)
 end
 # should have been serialized only once
-@test testsercnt_d[object_id(tsc)] == 1
+@test testsercnt_d[objectid(tsc)] == 1
 
 # hash values are changed
 n=5
-testsercnt_d[object_id(tsc)] = 0
+testsercnt_d[objectid(tsc)] = 0
 for i in 1:n
     tsc.v[i] = i
     remotecall_fetch(()->tsc, id_other)
 end
 # should have been serialized as many times as the loop
-@test testsercnt_d[object_id(tsc)] == n
+@test testsercnt_d[objectid(tsc)] == n
 
 # Multiple references in a closure should be serialized only once.
-global mrefs = TestSerCnt(ones(10))
-@test remotecall_fetch(()->(mrefs.v, 2*mrefs.v, 3*mrefs.v), id_other) == (ones(10), 2*ones(10), 3*ones(10))
-@test testsercnt_d[object_id(mrefs)] == 1
+global mrefs = TestSerCnt(fill(1.,10))
+@test remotecall_fetch(()->(mrefs.v, 2*mrefs.v, 3*mrefs.v), id_other) == (fill(1.,10), fill(2.,10), fill(3.,10))
+@test testsercnt_d[objectid(mrefs)] == 1
 
 
 # nested anon functions
@@ -1201,7 +1221,7 @@ v = rand()
 @test remotecall_fetch(x->f2(x), id_other, v) == v
 
 # consts
-const c1 = ones(10)
+const c1 = fill(1., 10)
 @test remotecall_fetch(()->c1, id_other) == c1
 @test remotecall_fetch(()->isconst(Main, :c1), id_other)
 
@@ -1234,15 +1254,15 @@ end
 wrapped_var_ser_tests()
 
 # Test internal data structures being cleaned up upon gc.
-global ids_cleanup = ones(6)
+global ids_cleanup = fill(1., 6)
 global ids_func = ()->ids_cleanup
 
 clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 @test remotecall_fetch(ids_func, id_other) == ids_cleanup
 
-@test haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+@test haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
 finalize(ids_cleanup)
-@test !haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+@test !haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
 
 # TODO Add test for cleanup from `clust_ser.glbs_in_tnobj`
 
@@ -1268,7 +1288,7 @@ foreach(wait, refs)
 #6760
 if true
     a = 2
-    x = @parallel (vcat) for k=1:2
+    x = @distributed (vcat) for k=1:2
         sin(a)
     end
 end
@@ -1281,7 +1301,7 @@ let thrown = false
         thrown = true
         local b = IOBuffer()
         showerror(b, e)
-        @test contains(String(take!(b)), "sqrt will only return")
+        @test occursin("sqrt will only return", String(take!(b)))
     end
     @test thrown
 end
@@ -1355,28 +1375,9 @@ try
     error("unexpected")
 catch ex
     @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
-    @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test occursin("BoundsError", ex.captured.ex.exceptions[1].ex.msg)
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
-
-@test let
-    # creates a new worker in the same folder and tries to include file
-    tmp_file, temp_file_stream = mktemp()
-    close(temp_file_stream)
-    tmp_file = relpath(tmp_file, @__DIR__)
-    try
-        proc = addprocs_with_testenv(1)
-        include(tmp_file)
-        remotecall_fetch(include, proc[1], tmp_file)
-        rmprocs(proc)
-        rm(tmp_file)
-        return true
-    catch e
-        println(e)
-        rm(tmp_file, force=true)
-        return false
-    end
-end == true
 
 let
     # creates a new worker in a different folder and tries to include file
@@ -1394,7 +1395,7 @@ let
         @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile2"))"),
                      include("testfile2"))
         @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "2", "testfile"))"),
-                     include(joinpath("2", "testfile")))
+                     include("2/testfile"))
         @test include(tmp_file) == 58.32
         @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
     finally
@@ -1402,7 +1403,7 @@ let
         rm(tmp_file, force=true)
         rm(tmp_file2, force=true)
         rm(tmp_dir2, force=true)
-        rm(tmp_dir, force=true)
+        #rm(tmp_dir, force=true)
     end
 end
 # cookie and comand line option `--worker` tests. remove workers, set cookie and test
@@ -1449,8 +1450,8 @@ npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 # Must be run on a new cluster, i.e., all workers must be in the same state.
 rmprocs(workers())
 p1,p2 = addprocs_with_testenv(2)
-@everywhere f22865(p) = remotecall_fetch(x->x.*2, p, ones(2))
-@test ones(2).*2 == remotecall_fetch(f22865, p1, p2)
+@everywhere f22865(p) = remotecall_fetch(x->x.*2, p, fill(1.,2))
+@test fill(2.,2) == remotecall_fetch(f22865, p1, p2)
 
 function reuseport_tests()
     # Run the test on all processes.
@@ -1460,7 +1461,7 @@ function reuseport_tests()
             ports_higher = []       # ports of pids higher than myid()
             for w in Distributed.PGRP.workers
                 w.id == myid() && continue
-                port = Base._sockname(w.r_stream, true)[2]
+                port = Sockets._sockname(w.r_stream, true)[2]
                 if (w.id == 1)
                     # master connects to workers
                     push!(ports_higher, port)
@@ -1482,7 +1483,7 @@ function reuseport_tests()
     end
 
     # Ensure that the code has indeed been successfully executed everywhere
-    @test all(p -> p in results, procs())
+    @test all(in(results), procs())
 end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
@@ -1499,4 +1500,3 @@ end
 # cluster at any time only supports a single topology.
 rmprocs(workers())
 include("topology.jl")
-

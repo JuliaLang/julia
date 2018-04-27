@@ -4,10 +4,10 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
+import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
-             sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
+             sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              hastypemax
@@ -110,7 +110,7 @@ module MPZ
 # - a method modifying its input has a "!" appendend to its name, according to Julia's conventions
 # - some convenient methods are added (in addition to the pure MPZ ones), e.g. `add(a, b) = add!(BigInt(), a, b)`
 #   and `add!(x, a) = add!(x, x, a)`.
-using Base.GMP: BigInt, Limb
+using .Base.GMP: BigInt, Limb
 
 const mpz_t = Ref{BigInt}
 const bitcnt_t = Culong
@@ -238,9 +238,9 @@ hastypemax(::Type{BigInt}) = false
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     # don't make a copy in the common case where we are parsing a whole String
-    bstr = startpos == start(s) && endpos == endof(s) ? String(s) : String(SubString(s,startpos,endpos))
+    bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
 
-    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,start(bstr),endof(bstr))
+    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),lastindex(bstr))
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return nothing
@@ -253,7 +253,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     if Base.containsnul(bstr)
         err = -1 # embedded NUL char (not handled correctly by GMP)
     else
-        err = Base.@gc_preserve bstr MPZ.set_str!(z, pointer(bstr)+(i-start(bstr)), base)
+        err = GC.@preserve bstr MPZ.set_str!(z, pointer(bstr)+(i-firstindex(bstr)), base)
     end
     if err != 0
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
@@ -492,7 +492,7 @@ cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? throw(DomainError(y, "`y` cannot be NaN.")) : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : MPZ.cmp_d(x, y)
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)
@@ -593,27 +593,16 @@ flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 # above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
 
-string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
 
-bin(n::BigInt) = base( 2, n)
-oct(n::BigInt) = base( 8, n)
-dec(n::BigInt) = base(10, n)
-hex(n::BigInt) = base(16, n)
-
-bin(n::BigInt, pad::Int) = base( 2, n, pad)
-oct(n::BigInt, pad::Int) = base( 8, n, pad)
-dec(n::BigInt, pad::Int) = base(10, n, pad)
-hex(n::BigInt, pad::Int) = base(16, n, pad)
-
-function base(b::Integer, n::BigInt, pad::Integer=1)
-    b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
-    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
+function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
+    base < 0 && return Base._base(Int(base), n, pad, (base>0) & (n.size<0))
+    2 <= base <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $base"))
     iszero(n) && pad < 1 && return ""
-    nd1 = ndigits(n, b)
+    nd1 = ndigits(n, base)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
-    Base.@gc_preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
     @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end
@@ -663,7 +652,7 @@ Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
 Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
 Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
-function Base.deepcopy_internal(x::BigInt, stackdict::ObjectIdDict)
+function Base.deepcopy_internal(x::BigInt, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]
     end

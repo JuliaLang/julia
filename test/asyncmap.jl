@@ -1,13 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 # Test asyncmap
-@test allunique(asyncmap(x->(sleep(1.0);object_id(current_task())), 1:10))
+@test allunique(asyncmap(x->(sleep(1.0);objectid(current_task())), 1:10))
 
 # num tasks
-@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:20; ntasks=5))) == 5
+@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:20; ntasks=5))) == 5
 
 # default num tasks
-@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200))) == 100
+@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200))) == 100
 
 # ntasks as a function
 let nt=0
@@ -16,7 +18,7 @@ let nt=0
                                            # nt_func() will be called initally once and then for every
                                            # iteration
 end
-@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200; ntasks=nt_func))) == 7
+@test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200; ntasks=nt_func))) == 7
 
 # batch mode tests
 let ctr=0
@@ -44,7 +46,7 @@ b=asyncmap(identity, c)
 
 # check with an iterator that has only implements length()
 len_only_iterable = (1,2,3,4,5)
-@test Base.iteratorsize(len_only_iterable) == Base.HasLength()
+@test Base.IteratorSize(len_only_iterable) == Base.HasLength()
 @test asyncmap(identity, len_only_iterable) == map(identity, len_only_iterable)
 
 # Error conditions

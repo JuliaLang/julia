@@ -105,22 +105,21 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 """
 systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
 
-## assertion functions and macros ##
+## assertion macro ##
 
-
-"""
-    assert(cond)
-
-Throw an [`AssertionError`](@ref) if `cond` is `false`.
-Also available as the macro [`@assert`](@ref).
-"""
-assert(x) = x ? nothing : throw(AssertionError())
 
 """
     @assert cond [text]
 
 Throw an [`AssertionError`](@ref) if `cond` is `false`. Preferred syntax for writing assertions.
 Message `text` is optionally displayed upon assertion failure.
+
+!!! warning
+    An assert might be disabled at various optimization levels.
+    Assert should therefore only be used as a debugging tool
+    and not used for authentication verification (e.g., verifying passwords),
+    nor should side effects needed for the function to work correctly
+    be used inside of asserts.
 
 # Examples
 ```jldoctest
@@ -172,7 +171,7 @@ start(ebo::ExponentialBackOff) = (ebo.n, min(ebo.first_delay, ebo.max_delay))
 function next(ebo::ExponentialBackOff, state)
     next_n = state[1]-1
     curr_delay = state[2]
-    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand() * 2.0 * ebo.jitter)))
+    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter)))
     (curr_delay, (next_n, next_delay))
 end
 done(ebo::ExponentialBackOff, state) = state[1]<1
@@ -204,7 +203,8 @@ function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
             catch e
                 done(delays, state) && rethrow(e)
                 if check !== nothing
-                    state, retry_or_not = check(state, e)
+                    result = check(state, e)
+                    state, retry_or_not = length(result) == 2 ? result : (state, result)
                     retry_or_not || rethrow(e)
                 end
             end

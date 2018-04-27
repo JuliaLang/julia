@@ -71,7 +71,7 @@ uintptr_t __stop_jl_interpreter_frame = (uintptr_t)&__stop_jl_interpreter_frame_
 //               sizeof(struct interpreter_state). Additionally, make sure that
 //               MAX_INTERP_STATE_SIZE+STACK_PADDING+8 is a multiple of 16 to
 //               ensure the proper stack alignment.
-#define MAX_INTERP_STATE_SIZE 56
+#define MAX_INTERP_STATE_SIZE 72
 #define STACK_PADDING 0
 
 static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE, "Stack layout invariants violated.");
@@ -257,7 +257,7 @@ asm(
 
 #elif defined(_CPU_ARM_)
 
-#define MAX_INTERP_STATE_SIZE 32
+#define MAX_INTERP_STATE_SIZE 48
 
 // Check that the interpreter state can fit
 static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE,
@@ -293,6 +293,77 @@ asm(
     "\tsub sp, fp, #4\n"
     "\tpop {fp, pc}\n"
     "\t.fnend\n"
+    ASM_END
+    );
+
+#define CALLBACK_ABI
+
+#elif defined(_CPU_PPC64_)
+/**
+ * Implementation notes:
+ *
+ * This needs to follow the PPC ELFv2 ABI. Which means that there is a localentry
+ * and a global entry. The local entry expects r2/TOC to be set correctly, while
+ * the global entry expects r12 to be set to the function address, and from there
+ * restores r2/TOC. The function pointer we are getting passed point to the global
+ * entry and thus we need to set r12 correctly.
+ *
+ * - LR is stored in the caller
+ * - r1/SP is a back-chain that needs to be atomically updated
+ */
+
+#define MAX_INTERP_STATE_SIZE 64
+#define MIN_STACK 32
+#define STACK_PADDING 0
+#define STACK_SIZE (MIN_STACK + MAX_INTERP_STATE_SIZE + STACK_PADDING)
+
+size_t TOTAL_STACK_PADDING = MIN_STACK;
+
+// Check that the interpreter state can fit
+static_assert(sizeof(interpreter_state) <= MAX_INTERP_STATE_SIZE,
+              "Stack layout invariants violated.");
+// Check that the alignment of the type is satisfied
+static_assert(alignof(interpreter_state) <= 16, "Stack layout invariants violated");
+// Check that ABI stack alignment requirement is maintained.
+static_assert(STACK_SIZE % 16 == 0, "Stack layout invariants violated");
+static_assert(MIN_STACK  % 16 == 0, "Stack layout invariants violated");
+
+asm(
+    ASM_ENTRY
+    MANGLE("enter_interpreter_frame") ":\n"
+    "\taddis 2, 12, .TOC.-enter_interpreter_frame@ha\n"
+    "\taddi 2, 2, .TOC.-enter_interpreter_frame@l\n"
+    "\t.localentry enter_interpreter_frame, .-enter_interpreter_frame\n"
+    ".cfi_startproc\n"
+    // store LR
+    "\tmflr 0\n"
+    "\tstd 0, 16(1)\n"
+    ".cfi_offset lr, 16\n"
+    // set up stack frame
+    "\tstdu 1, -" XSTR(STACK_SIZE) "(1)\n"
+    ".cfi_adjust_cfa_offset " XSTR(STACK_SIZE) "\n"
+    "\tmtctr 3\n" // move arg1 (func pointer) to ctr
+    "\tmr 12, 3\n" // move func pointer to r12 if we jump to global entry point
+    "\tcal 3, " XSTR(MIN_STACK) "(1)\n" // move pointer to INTERP_STATE to arg1
+    // zero out src and mi field
+    "\tli 6, 0\n"
+    "\tstd 6, 0(3)\n"
+    "\tstd 6, 8(3)\n"
+    // store TOC
+    "\tstd 2, 24(1)\n"
+    "Lenter_interpreter_frame_start_val:\n"
+    "\tbctrl\n"
+    "Lenter_interpreter_frame_end_val:\n"
+    // restore TOC
+    "\tld 2, 24(1)\n"
+    // restore stack frame
+    "\tld 1, 0(1)\n"
+    // restore LR
+    "\tld 0, 16(1)\n"
+    "\tmtlr 0\n"
+    ".cfi_same_value lr\n"
+    "\tblr\n"
+    ".cfi_endproc\n"
     ASM_END
     );
 

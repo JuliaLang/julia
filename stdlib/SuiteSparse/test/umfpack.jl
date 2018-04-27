@@ -2,13 +2,13 @@
 
 @testset "UMFPACK wrappers" begin
     se33 = sparse(1.0I, 3, 3)
-    do33 = ones(3)
+    do33 = fill(1., 3)
     @test isequal(se33 \ do33, do33)
 
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
-    using SuiteSparse.increment!
-    using Base.LinAlg: Adjoint, Transpose
+    using SuiteSparse: increment!
+    using LinearAlgebra: Adjoint, Transpose
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
@@ -32,11 +32,11 @@
 
             @test A*x ≈ b
             z = complex.(b)
-            x = SuiteSparse.ldiv!(lua, z)
+            x = LinearAlgebra.ldiv!(lua, z)
             @test x ≈ float([1:5;])
             @test z === x
             y = similar(z)
-            Base.LinAlg.ldiv!(y, lua, complex.(b))
+            LinearAlgebra.ldiv!(y, lua, complex.(b))
             @test y ≈ x
 
             @test A*x ≈ b
@@ -47,28 +47,28 @@
 
             @test A'*x ≈ b
             z = complex.(b)
-            x = SuiteSparse.ldiv!(Adjoint(lua), z)
+            x = LinearAlgebra.ldiv!(adjoint(lua), z)
             @test x ≈ float([1:5;])
             @test x === z
             y = similar(x)
-            SuiteSparse.ldiv!(y, Adjoint(lua), complex.(b))
+            LinearAlgebra.ldiv!(y, adjoint(lua), complex.(b))
             @test y ≈ x
 
             @test A'*x ≈ b
-            x = Transpose(lua) \ b
+            x = transpose(lua) \ b
             @test x ≈ float([1:5;])
 
-            @test Transpose(A) * x ≈ b
-            x = SuiteSparse.ldiv!(Transpose(lua), complex.(b))
+            @test transpose(A) * x ≈ b
+            x = LinearAlgebra.ldiv!(transpose(lua), complex.(b))
             @test x ≈ float([1:5;])
             y = similar(x)
-            SuiteSparse.ldiv!(y, Transpose(lua), complex.(b))
+            LinearAlgebra.ldiv!(y, transpose(lua), complex.(b))
             @test y ≈ x
 
-            @test Transpose(A) * x ≈ b
+            @test transpose(A) * x ≈ b
 
             # Element promotion and type inference
-            @inferred lua\ones(Int, size(A, 2))
+            @inferred lua\fill(1, size(A, 2))
         end
     end
 
@@ -76,7 +76,7 @@
         Ac0 = complex.(A0,A0)
         for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
             Ac = convert(SparseMatrixCSC{ComplexF64,Ti}, Ac0)
-            x  = complex.(ones(size(Ac, 1)), ones(size(Ac,1)))
+            x  = fill(1.0 + im, size(Ac,1))
             lua = lufact(Ac)
             L,U,p,q,Rs = lua.:(:)
             @test (Diagonal(Rs) * Ac)[p,q] ≈ L * U
@@ -84,8 +84,8 @@
             @test Ac\b ≈ x
             b  = Ac'*x
             @test Ac'\b ≈ x
-            b  = Transpose(Ac)*x
-            @test Transpose(Ac)\b ≈ x
+            b  = transpose(Ac)*x
+            @test transpose(Ac)\b ≈ x
         end
     end
 
@@ -99,8 +99,8 @@
     end
 
     @testset "Issue #4523 - complex sparse \\" begin
-        x = sparse((1.0 + 1.0im)I, 2, 2)
-        @test (x*(lufact(x) \ ones(2))) ≈ ones(2)
+        A, b = sparse((1.0 + im)I, 2, 2), fill(1., 2)
+        @test A * (lufact(A)\b) ≈ b
 
         @test det(sparse([1,3,3,1], [1,1,3,3], [1,1,1,1])) == 0
     end
@@ -119,8 +119,8 @@
             (Int, Float64),
         )
 
-        F = lufact(sparse(ones(Tin, 1, 1)))
-        L = sparse(ones(Tout, 1, 1))
+        F = lufact(sparse(fill(Tin(1), 1, 1)))
+        L = sparse(fill(Tout(1), 1, 1))
         @test F.p == F.q == [1]
         @test F.Rs == [1.0]
         @test F.L == F.U == L
@@ -128,12 +128,12 @@
     end
 
     @testset "BigFloat not supported" for T in (BigFloat, Complex{BigFloat})
-        @test_throws ArgumentError lufact(sparse(ones(T, 1, 1)))
+        @test_throws ArgumentError lufact(sparse(fill(T(1), 1, 1)))
     end
 
     @testset "size(::UmfpackLU)" begin
         m = n = 1
-        F = lufact(sparse(ones(m, n)))
+        F = lufact(sparse(fill(1., m, n)))
         @test size(F) == (m, n)
         @test size(F, 1) == m
         @test size(F, 2) == n
@@ -162,9 +162,9 @@
         X = zeros(Complex{Float64}, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lufact(A), lufact(Array(A))
-        @test Base.LinAlg.ldiv!(copy(X), luA, B) ≈ Base.LinAlg.ldiv!(copy(X), lufA, B)
-        @test Base.LinAlg.ldiv!(copy(X), Adjoint(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), Adjoint(lufA), B)
-        @test Base.LinAlg.ldiv!(copy(X), Transpose(luA), B) ≈ Base.LinAlg.ldiv!(copy(X), Transpose(lufA), B)
+        @test LinearAlgebra.ldiv!(copy(X), luA, B) ≈ LinearAlgebra.ldiv!(copy(X), lufA, B)
+        @test LinearAlgebra.ldiv!(copy(X), adjoint(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), adjoint(lufA), B)
+        @test LinearAlgebra.ldiv!(copy(X), transpose(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), transpose(lufA), B)
     end
 
 end

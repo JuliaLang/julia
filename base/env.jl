@@ -81,7 +81,7 @@ pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 delete!(::EnvDict, k::AbstractString) = (_unsetenv(k); ENV)
 setindex!(::EnvDict, v, k::AbstractString) = _setenv(k,string(v))
-push!(::EnvDict, k::AbstractString, v) = setindex!(ENV, v, k)
+push!(::EnvDict, kv::Pair{<:AbstractString}) = setindex!(ENV, kv.second, kv.first)
 
 if Sys.iswindows()
     start(hash::EnvDict) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
@@ -96,8 +96,8 @@ if Sys.iswindows()
         pos = block[1]
         blk = block[2]
         len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
-        buf = Vector{UInt16}(uninitialized, len)
-        @gc_preserve buf unsafe_copyto!(pointer(buf), pos, len)
+        buf = Vector{UInt16}(undef, len)
+        GC.@preserve buf unsafe_copyto!(pointer(buf), pos, len)
         env = transcode(String, buf)
         m = match(r"^(=?[^=]+)=(.*)$"s, env)
         if m === nothing

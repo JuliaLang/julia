@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using IterativeEigensolvers
-using Test
+using Test, LinearAlgebra, SparseArrays, Random
 
 @testset "eigs" begin
     srand(1234)
@@ -23,17 +23,17 @@ using Test
         end
         a_evs = eigvals(Array(a))
         a     = convert(SparseMatrixCSC{elty}, a)
-        asym  = adjoint(a) + a                  # symmetric indefinite
+        asym  = copy(a') + a                  # symmetric indefinite
         apd   = a'*a                    # symmetric positive-definite
 
         b     = convert(SparseMatrixCSC{elty}, b)
-        bsym  = adjoint(b) + b
+        bsym  = copy(b') + b
         bpd   = b'*b
 
         (d,v) = eigs(a, nev=3)
         @test a*v[:,2] ≈ d[2]*v[:,2]
         @test norm(v) > testtol # eigenvectors cannot be null vectors
-        (d,v) = eigs(a, I, nev=3) # test eigs(A, B; kwargs...)
+        (d,v) = eigs(a, LinearAlgebra.I, nev=3) # test eigs(A, B; kwargs...)
         @test a*v[:,2] ≈ d[2]*v[:,2]
         @test norm(v) > testtol # eigenvectors cannot be null vectors
         @test_logs (:warn,"Use symbols instead of strings for specifying which eigenvalues to compute") eigs(a, which="LM")
@@ -42,17 +42,17 @@ using Test
         # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
         # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
         # @test norm(v) > testtol # eigenvectors cannot be null vectors
-        if elty <: Base.LinAlg.BlasComplex
-            sr_ind = indmin(real.(a_evs))
+        if elty <: LinearAlgebra.BlasComplex
+            sr_ind = argmin(real.(a_evs))
             (d, v) = eigs(a, nev=1, which=:SR)
             @test d[1] ≈ a_evs[sr_ind]
-            si_ind = indmin(imag.(a_evs))
+            si_ind = argmin(imag.(a_evs))
             (d, v) = eigs(a, nev=1, which=:SI)
             @test d[1] ≈ a_evs[si_ind]
-            lr_ind = indmax(real.(a_evs))
+            lr_ind = argmax(real.(a_evs))
             (d, v) = eigs(a, nev=1, which=:LR)
             @test d[1] ≈ a_evs[lr_ind]
-            li_ind = indmax(imag.(a_evs))
+            li_ind = argmax(imag.(a_evs))
             (d, v) = eigs(a, nev=1, which=:LI)
             @test d[1] ≈ a_evs[li_ind]
         end
@@ -88,8 +88,8 @@ using Test
             @test_throws DimensionMismatch eigs(a, v0=zeros(elty,n+2))
             @test_throws ArgumentError eigs(a, v0=zeros(Int,n))
             if elty == Float64
-                @test_throws ArgumentError eigs(a + transpose(a), which=:SI)
-                @test_throws ArgumentError eigs(a + transpose(a), which=:LI)
+                @test_throws ArgumentError eigs(a + copy(transpose(a)), which=:SI)
+                @test_throws ArgumentError eigs(a + copy(transpose(a)), which=:LI)
                 @test_throws ArgumentError eigs(a, sigma = rand(ComplexF32))
             end
         end
@@ -130,15 +130,15 @@ let A6965 = [
 end
 
 # Example from Quantum Information Theory
-import Base: size, issymmetric, ishermitian
+import Base: size
 
-mutable struct CPM{T<:Base.LinAlg.BlasFloat} <: AbstractMatrix{T} # completely positive map
+mutable struct CPM{T<:LinearAlgebra.BlasFloat} <: AbstractMatrix{T} # completely positive map
     kraus::Array{T,3} # kraus operator representation
 end
 size(Phi::CPM) = (size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
-issymmetric(Phi::CPM) = false
-ishermitian(Phi::CPM) = false
-function Base.LinAlg.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat}
+LinearAlgebra.issymmetric(Phi::CPM) = false
+LinearAlgebra.ishermitian(Phi::CPM) = false
+function LinearAlgebra.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:LinearAlgebra.BlasFloat}
     rho = reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
     rho1 = zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
     for s = 1:size(Phi.kraus,2)
@@ -147,7 +147,7 @@ function Base.LinAlg.mul!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{
     end
     return copyto!(rho2,rho1)
 end
-Base.LinAlg.A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat} = Base.LinAlg.mul!(rho2, Phi, rho)
+LinearAlgebra.A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:LinearAlgebra.BlasFloat} = LinearAlgebra.mul!(rho2, Phi, rho)
 # after the A_mul_B! deprecation, remove this A_mul_B! def
 
 let
@@ -162,25 +162,25 @@ let
 
     @test d[1] ≈ 1. # largest eigenvalue should be 1.
     v = reshape(v,(50,50)) # reshape to matrix
-    v /= trace(v) # factor out arbitrary phase
+    v /= tr(v) # factor out arbitrary phase
     @test vecnorm(imag(v)) ≈ 0. # it should be real
     v = real(v)
     # @test vecnorm(v-v')/2 ≈ 0. # it should be Hermitian
     # Since this fails sometimes (numerical precision error),this test is commented out
-    v = (v+adjoint(v))/2
+    v = (v + v')/2
     @test isposdef(v)
 
     # Repeat with starting vector
     (d2,v2,nconv2,numiter2,numop2,resid2) = eigs(Phi,nev=1,which=:LM,v0=reshape(v,(2500,)))
     v2 = reshape(v2,(50,50))
-    v2 /= trace(v2)
+    v2 /= tr(v2)
     @test numiter2 < numiter
     @test v ≈ v2
 
     # Adjust the tolerance a bit since matrices with repeated eigenvalues
     # can be very stressful to ARPACK and this may therefore fail with
     # info = 3 if the tolerance is too small
-    @test eigs(sparse(1.0I, 50, 50), nev=10, tol = 5e-16)[1] ≈ ones(10) #Issue 4246
+    @test eigs(sparse(1.0I, 50, 50), nev=10, tol = 5e-16)[1] ≈ fill(1., 10) #Issue 4246
 end
 
 @testset "real svds" begin

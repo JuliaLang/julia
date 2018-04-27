@@ -19,7 +19,7 @@ haskey(d::AbstractDict, k) = in(k, keys(d))
 function in(p::Pair, a::AbstractDict, valcmp=(==))
     v = get(a,p[1],secret_table_token)
     if v !== secret_table_token
-        valcmp(v, p[2]) && return true
+        return valcmp(v, p[2])
     end
     return false
 end
@@ -30,9 +30,10 @@ function in(p, a::AbstractDict)
              function if you are looking for a key or value respectively.""")
 end
 
-function summary(t::AbstractDict)
+function summary(io::IO, t::AbstractDict)
     n = length(t)
-    return string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
+    showarg(io, t, true)
+    print(io, " with ", n, (n==1 ? " entry" : " entries"))
 end
 
 struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
@@ -89,15 +90,15 @@ return the elements in the same order.
 
 # Examples
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> collect(keys(a))
+julia> collect(keys(D))
 2-element Array{Char,1}:
- 'b'
  'a'
+ 'b'
 ```
 """
 keys(a::AbstractDict) = KeySet(a)
@@ -114,15 +115,15 @@ return the elements in the same order.
 
 # Examples
 ```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
+julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
-  'b' => 3
   'a' => 2
+  'b' => 3
 
-julia> collect(values(a))
+julia> collect(values(D))
 2-element Array{Int64,1}:
- 3
  2
+ 3
 ```
 """
 values(a::AbstractDict) = ValueIterator(a)
@@ -241,9 +242,8 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype(::Type{AbstractDict{K,V}}) where {K,V} = K
+keytype(::Type{<:AbstractDict{K,V}}) where {K,V} = K
 keytype(a::AbstractDict) = keytype(typeof(a))
-keytype(::Type{A}) where {A<:AbstractDict} = keytype(supertype(A))
 
 """
     valtype(type)
@@ -256,8 +256,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype(::Type{AbstractDict{K,V}}) where {K,V} = V
-valtype(::Type{A}) where {A<:AbstractDict} = valtype(supertype(A))
+valtype(::Type{<:AbstractDict{K,V}}) where {K,V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 
 """
@@ -446,11 +445,23 @@ function filter(f, d::AbstractDict)
     return df
 end
 
-eltype(::Type{AbstractDict{K,V}}) where {K,V} = Pair{K,V}
+function eltype(::Type{<:AbstractDict{K,V}}) where {K,V}
+    if @isdefined(K)
+        if @isdefined(V)
+            return Pair{K,V}
+        else
+            return Pair{K}
+        end
+    elseif @isdefined(V)
+        return Pair{k,V} where k
+    else
+        return Pair
+    end
+end
 
 function isequal(l::AbstractDict, r::AbstractDict)
     l === r && return true
-    if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
+    if isa(l,IdDict) != isa(r,IdDict)
         return false
     end
     if length(l) != length(r) return false end
@@ -464,16 +475,20 @@ end
 
 function ==(l::AbstractDict, r::AbstractDict)
     l === r && return true
-    if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
+    if isa(l,IdDict) != isa(r,IdDict)
         return false
     end
-    if length(l) != length(r) return false end
+    length(l) != length(r) && return false
+    anymissing = false
     for pair in l
-        if !in(pair, r, ==)
+        isin = in(pair, r, ==)
+        if ismissing(isin)
+            anymissing = true
+        elseif !isin
             return false
         end
     end
-    true
+    return anymissing ? missing : true
 end
 
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
@@ -514,107 +529,191 @@ function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
 end
 
 # hashing objects by identity
+_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 
 """
-    ObjectIdDict([itr])
+    IdDict([itr])
 
-`ObjectIdDict()` constructs a hash table where the keys are (always)
-object identities.  Unlike `Dict` it is not parameterized on its key
-and value type and thus its `eltype` is always `Pair{Any,Any}`.
+`IdDict{K,V}()` constructs a hash table using object-id as hash and
+`===` as equality with keys of type `K` and values of type `V`.
 
 See [`Dict`](@ref) for further help.
 """
-mutable struct ObjectIdDict <: AbstractDict{Any,Any}
+mutable struct IdDict{K,V} <: AbstractDict{K,V}
     ht::Vector{Any}
+    count::Int
     ndel::Int
-    ObjectIdDict() = new(Vector{Any}(uninitialized, 32), 0)
+    IdDict{K,V}() where {K, V} = new{K,V}(Vector{Any}(undef, 32), 0, 0)
 
-    function ObjectIdDict(itr)
-        d = ObjectIdDict()
+    function IdDict{K,V}(itr) where {K, V}
+        d = IdDict{K,V}()
         for (k,v) in itr; d[k] = v; end
         d
     end
 
-    function ObjectIdDict(pairs::Pair...)
-        d = ObjectIdDict()
+    function IdDict{K,V}(pairs::Pair...) where {K, V}
+        d = IdDict{K,V}()
+        sizehint!(d, length(pairs))
         for (k,v) in pairs; d[k] = v; end
         d
     end
 
-    ObjectIdDict(o::ObjectIdDict) = new(copy(o.ht))
+    IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new{K,V}(copy(d.ht), d.count, d.ndel)
 end
 
-empty(d::ObjectIdDict, ::Type{Any}, ::Type{Any}) = ObjectIdDict()
+IdDict() = IdDict{Any,Any}()
+IdDict(kv::Tuple{}) = IdDict()
 
-function rehash!(t::ObjectIdDict, newsz = length(t.ht))
-    t.ht = ccall(:jl_idtable_rehash, Any, (Any, Csize_t), t.ht, newsz)
-    t
+IdDict(ps::Pair{K,V}...)           where {K,V} = IdDict{K,V}(ps)
+IdDict(ps::Pair{K}...)             where {K}   = IdDict{K,Any}(ps)
+IdDict(ps::(Pair{K,V} where K)...) where {V}   = IdDict{Any,V}(ps)
+IdDict(ps::Pair...)                            = IdDict{Any,Any}(ps)
+
+TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
+
+dict_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+dict_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+dict_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
+dict_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
+dict_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(dict_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
+function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
+    T = @default_eltype(kv)
+    if T <: Union{Pair, Tuple{Any, Any}} && isconcretetype(T)
+        return dict_with_eltype(DT_apply, kv, T)
+    end
+    return grow_to!(dict_with_eltype(DT_apply, T), kv)
 end
 
-function sizehint!(t::ObjectIdDict, newsz)
+function IdDict(kv)
+    try
+        dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
+    catch e
+        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+            throw(ArgumentError(
+                "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
+        else
+            rethrow(e)
+        end
+    end
+end
+
+empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
+
+function rehash!(d::IdDict, newsz = length(d.ht))
+    d.ht = ccall(:jl_idtable_rehash, Any, (Any, Csize_t), d.ht, newsz)
+    d
+end
+
+function sizehint!(d::IdDict, newsz)
     newsz = _tablesz(newsz*2)  # *2 for keys and values in same array
-    oldsz = length(t.ht)
+    oldsz = length(d.ht)
     # grow at least 25%
     if newsz < (oldsz*5)>>2
-        return t
+        return d
     end
-    rehash!(t, newsz)
+    rehash!(d, newsz)
 end
 
-function setindex!(t::ObjectIdDict, @nospecialize(v), @nospecialize(k))
-    if t.ndel >= ((3*length(t.ht))>>2)
-        rehash!(t, max(length(t.ht)>>1, 32))
-        t.ndel = 0
+function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
+    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    val = convert(V, val)
+    if d.ndel >= ((3*length(d.ht))>>2)
+        rehash!(d, max(length(d.ht)>>1, 32))
+        d.ndel = 0
     end
-    t.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any), t.ht, k, v)
-    return t
+    inserted = RefValue{Cint}(0)
+    d.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
+    d.count += inserted[]
+    return d
 end
 
-get(t::ObjectIdDict, @nospecialize(key), @nospecialize(default)) =
-    ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
-
-function pop!(t::ObjectIdDict, @nospecialize(key), @nospecialize(default))
-    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
-    # TODO: this can underestimate `ndel`
-    val === default || (t.ndel += 1)
-    return val
+function get(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
+    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, default)
+    val === default ? default : val::V
+end
+function getindex(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    val = get(d, key, secret_table_token)
+    val === secret_table_token && throw(KeyError(key))
+    return val::V
 end
 
-function pop!(t::ObjectIdDict, @nospecialize(key))
-    val = pop!(t, key, secret_table_token)
-    val !== secret_table_token ? val : throw(KeyError(key))
-end
-
-function delete!(t::ObjectIdDict, @nospecialize(key))
-    pop!(t, key, secret_table_token)
-    t
-end
-
-function empty!(t::ObjectIdDict)
-    resize!(t.ht, 32)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), t.ht, 0, sizeof(t.ht))
-    t.ndel = 0
-    return t
-end
-
-_oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
-
-start(t::ObjectIdDict) = _oidd_nextind(t.ht, 0)
-done(t::ObjectIdDict, i) = (i == -1)
-next(t::ObjectIdDict, i) = (Pair{Any,Any}(t.ht[i+1],t.ht[i+2]), _oidd_nextind(t.ht, i+2))
-
-function length(d::ObjectIdDict)
-    n = 0
-    for pair in d
-        n+=1
+function pop!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
+    found = RefValue{Cint}(0)
+    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any, Ptr{Cint}), d.ht, key, default, found)
+    if found[] === Cint(0)
+        return default
+    else
+        d.count -= 1
+        d.ndel += 1
+        return val::V
     end
-    n
 end
 
-copy(o::ObjectIdDict) = ObjectIdDict(o)
+function pop!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    val = pop!(d, key, secret_table_token)
+    val === secret_table_token && throw(KeyError(key))
+    return val::V
+end
 
-get!(o::ObjectIdDict, key, default) = (o[key] = get(o, key, default))
+function delete!(d::IdDict{K}, @nospecialize(key)) where K
+    pop!(d, key, secret_table_token)
+    d
+end
+
+function empty!(d::IdDict)
+    resize!(d.ht, 32)
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), d.ht, 0, sizeof(d.ht))
+    d.ndel = 0
+    d.count = 0
+    return d
+end
+
+_oidd_nextind(a, i) = reinterpret(Int, ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
+
+start(d::IdDict) = _oidd_nextind(d.ht, 0)
+done(d::IdDict, i) = (i == -1)
+next(d::IdDict{K, V}, i) where {K, V} = (Pair{K, V}(d.ht[i + 1]::K, d.ht[i + 2]::V), _oidd_nextind(d.ht, i + 2))
+
+length(d::IdDict) = d.count
+
+copy(d::IdDict) = typeof(d)(d)
+
+get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
 
 # For some AbstractDict types, it is safe to implement filter!
 # by deleting keys during iteration.
-filter!(f, d::ObjectIdDict) = filter_in_one_pass!(f, d)
+filter!(f, d::IdDict) = filter_in_one_pass!(f, d)
+
+# Like Set, but using IdDict
+mutable struct IdSet{T} <: AbstractSet{T}
+    dict::IdDict{T,Nothing}
+
+    IdSet{T}() where {T} = new(IdDict{T,Nothing}())
+    IdSet{T}(s::IdSet{T}) where {T} = new(copy(s.dict))
+end
+
+IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
+IdSet() = IdSet{Any}()
+
+copymutable(s::IdSet) = typeof(s)(s)
+copy(s::IdSet) = typeof(s)(s)
+
+isempty(s::IdSet) = isempty(s.dict)
+length(s::IdSet)  = length(s.dict)
+in(x, s::IdSet) = haskey(s.dict, x)
+push!(s::IdSet, x) = (s.dict[x] = nothing; s)
+pop!(s::IdSet, x) = (pop!(s.dict, x); x)
+pop!(s::IdSet, x, deflt) = x in s ? pop!(s, x) : deflt
+delete!(s::IdSet, x) = (delete!(s.dict, x); s)
+
+sizehint!(s::IdSet, newsz) = (sizehint!(s.dict, newsz); s)
+empty!(s::IdSet) = (empty!(s.dict); s)
+
+filter!(f, d::IdSet) = unsafe_filter!(f, d)
+
+start(s::IdSet)       = start(s.dict)
+done(s::IdSet, state) = done(s.dict, state)
+function next(s::IdSet, state)
+    ((k, _), i) = next(s.dict, state)
+    return (k, i)
+end

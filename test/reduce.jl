@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
 @test foldl(+, Int16[]) === Int16(0) # In reference to issues #21536
@@ -43,10 +45,10 @@
 @test mapreduce(-, +, [-10]) == 10
 @test mapreduce(abs2, +, [-9, -3]) == 81 + 9
 @test mapreduce(-, +, [-9, -3, -4, 8, -2]) == (9 + 3 + 4 - 8 + 2)
-@test mapreduce(-, +, collect(linspace(1.0, 10000.0, 10000))) == -50005000.0
+@test mapreduce(-, +, Vector(range(1.0, stop=10000.0, length=10000))) == -50005000.0
 # empty mr
 @test mapreduce(abs2, +, Float64[]) === 0.0
-@test mapreduce(abs2, Base.scalarmax, Float64[]) === 0.0
+@test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
 @test_throws ArgumentError mapreduce(abs2, &, Float64[])
 @test_throws ArgumentError mapreduce(abs2, |, Float64[])
@@ -209,7 +211,7 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test minimum(abs2, 3:7) == 9
 
 @test maximum(Int16[1]) === Int16(1)
-@test maximum(collect(Int16(1):Int16(100))) === Int16(100)
+@test maximum(Vector(Int16(1):Int16(100))) === Int16(100)
 @test maximum(Int32[1,2]) === Int32(2)
 
 A = circshift(reshape(1:24,2,3,4), (0,1,1))
@@ -220,9 +222,9 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test extrema(A,(1,3)) == reshape([(5,24),(1,20),(3,22)],1,3,1)
 @test extrema(A,(2,3)) == reshape([(1,23),(2,24)],2,1,1)
 @test extrema(A,(1,2,3)) == reshape([(1,24)],1,1,1)
-@test size(extrema(A,1)) == size(maximum(A,1))
-@test size(extrema(A,(1,2))) == size(maximum(A,(1,2)))
-@test size(extrema(A,(1,2,3))) == size(maximum(A,(1,2,3)))
+@test size(extrema(A,1)) == size(maximum(A,dims=1))
+@test size(extrema(A,(1,2))) == size(maximum(A,dims=(1,2)))
+@test size(extrema(A,(1,2,3))) == size(maximum(A,dims=(1,2,3)))
 
 # any & all
 
@@ -321,10 +323,10 @@ struct SomeFunctor end
 @test in(1, 1:3) == true
 @test in(2, 1:3) == true
 
-# contains
+# occursin
 
-@test contains("quick fox", "fox") == true
-@test contains("quick fox", "lazy dog") == false
+@test occursin("fox", "quick fox") == true
+@test occursin("lazy dog", "quick fox") == false
 
 # count
 
@@ -357,8 +359,8 @@ let es = sum(BigFloat.(z)), es2 = sum(BigFloat.(z[1:10^5]))
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
 
-@test sum(collect(map(UInt8,0:255))) == 32640
-@test sum(collect(map(UInt8,254:255))) == 509
+@test sum(Vector(map(UInt8,0:255))) == 32640
+@test sum(Vector(map(UInt8,254:255))) == 509
 
 A = reshape(map(UInt8, 101:109), (3,3))
 @test @inferred(sum(A)) == 945
@@ -373,8 +375,8 @@ A = reshape(map(UInt8, 1:100), (10,10))
 @test sum([-0.0, -0.0]) === -0.0
 @test prod([-0.0, -0.0]) === 0.0
 
-#contains
-let A = collect(1:10)
+# containment
+let A = Vector(1:10)
     @test A ∋ 5
     @test A ∌ 11
     @test any(y->y==6,A)
@@ -391,3 +393,8 @@ test18695(r) = sum( t^2 for t in r )
 # test neutral element not picked incorrectly for &, |
 @test @inferred(foldl(&, Int[1])) === 1
 @test_throws ArgumentError foldl(&, Int[])
+
+# prod on Chars
+@test prod(Char[]) == ""
+@test prod(Char['a']) == "a"
+@test prod(Char['a','b']) == "ab"

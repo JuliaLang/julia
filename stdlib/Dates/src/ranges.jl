@@ -40,5 +40,5 @@ Base.done(r::StepRange{<:TimeType,<:Period}, i::Integer) = length(r) <= i
 -(r::AbstractRange{<:TimeType}, x::Period) = (first(r)-x):step(r):(last(r)-x)
 
 # Combinations of types and periods for which the range step is regular
-Base.TypeRangeStep(::Type{<:OrdinalRange{<:TimeType, <:FixedPeriod}}) =
+Base.RangeStepStyle(::Type{<:OrdinalRange{<:TimeType, <:FixedPeriod}}) =
     Base.RangeStepRegular()

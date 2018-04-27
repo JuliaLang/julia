@@ -5,7 +5,7 @@ __precompile__(true)
 module SuiteSparse
 
 import Base: \
-import Base.LinAlg: ldiv!, rdiv!
+import LinearAlgebra: ldiv!, rdiv!
 
 ## Functions to switch to 0-based indexing to call external sparse solvers
 

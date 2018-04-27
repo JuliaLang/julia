@@ -63,7 +63,7 @@ julia> rm("delim_file.txt")
 readdlm(input, T::Type; opts...) = readdlm(input, invalid_dlm(Char), T, '\n'; opts...)
 
 """
-    readdlm(source, delim::Char, T::Type; options...)
+    readdlm(source, delim::AbstractChar, T::Type; options...)
 
 The end of line delimiter is taken as `\\n`.
 
@@ -89,7 +89,7 @@ julia> readdlm("delim_file.txt", ',', Float64)
 julia> rm("delim_file.txt")
 ```
 """
-readdlm(input, dlm::Char, T::Type; opts...) = readdlm(input, dlm, T, '\n'; opts...)
+readdlm(input, dlm::AbstractChar, T::Type; opts...) = readdlm(input, dlm, T, '\n'; opts...)
 
 """
     readdlm(source; options...)
@@ -124,7 +124,7 @@ julia> rm("delim_file.txt")
 readdlm(input; opts...) = readdlm(input, invalid_dlm(Char), '\n'; opts...)
 
 """
-    readdlm(source, delim::Char; options...)
+    readdlm(source, delim::AbstractChar; options...)
 
 The end of line delimiter is taken as `\\n`. If all data is numeric, the result will be a
 numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of
@@ -167,19 +167,19 @@ julia> readdlm("delim_file.txt", ',')
 julia> rm("delim_file.txt")
 ```
 """
-readdlm(input, dlm::Char; opts...) = readdlm(input, dlm, '\n'; opts...)
+readdlm(input, dlm::AbstractChar; opts...) = readdlm(input, dlm, '\n'; opts...)
 
 """
-    readdlm(source, delim::Char, eol::Char; options...)
+    readdlm(source, delim::AbstractChar, eol::AbstractChar; options...)
 
 If all data is numeric, the result will be a numeric array. If some elements cannot be
 parsed as numbers, a heterogeneous array of numbers and strings is returned.
 """
-readdlm(input, dlm::Char, eol::Char; opts...) =
+readdlm(input, dlm::AbstractChar, eol::AbstractChar; opts...) =
     readdlm_auto(input, dlm, Float64, eol, true; opts...)
 
 """
-    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')
+    readdlm(source, delim::AbstractChar, T::Type, eol::AbstractChar; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=false, comment_char='#')
 
 Read a matrix from the source where each line (separated by `eol`) gives one row, with
 elements separated by the given delimiter. The source can be a text file, stream or byte
@@ -228,14 +228,14 @@ julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
  4  8
 ```
 """
-readdlm(input, dlm::Char, T::Type, eol::Char; opts...) =
+readdlm(input, dlm::AbstractChar, T::Type, eol::AbstractChar; opts...) =
     readdlm_auto(input, dlm, T, eol, false; opts...)
 
-readdlm_auto(input::Vector{UInt8}, dlm::Char, T::Type, eol::Char, auto::Bool; opts...) =
+readdlm_auto(input::Vector{UInt8}, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...) =
     readdlm_string(String(input), dlm, T, eol, auto, val_opts(opts))
-readdlm_auto(input::IO, dlm::Char, T::Type, eol::Char, auto::Bool; opts...) =
+readdlm_auto(input::IO, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...) =
     readdlm_string(read(input, String), dlm, T, eol, auto, val_opts(opts))
-function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
+function readdlm_auto(input::AbstractString, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...)
     isfile(input) || throw(ArgumentError("Cannot open \'$input\': not a file"))
     optsd = val_opts(opts)
     use_mmap = get(optsd, :use_mmap, Sys.iswindows() ? false : true)
@@ -247,7 +247,7 @@ function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto
         # TODO: It would be nicer to use String(a) without making a copy,
         # but because the mmap'ed array is not NUL-terminated this causes
         # jl_try_substrtod to segfault below.
-        return readdlm_string(Base.@gc_preserve(a, unsafe_string(pointer(a),length(a))), dlm, T, eol, auto, optsd)
+        return readdlm_string(GC.@preserve(a, unsafe_string(pointer(a),length(a))), dlm, T, eol, auto, optsd)
     else
         return readdlm_string(read(input, String), dlm, T, eol, auto, optsd)
     end
@@ -268,8 +268,8 @@ mutable struct DLMOffsets <: DLMHandler
     bufflen::Int
 
     function DLMOffsets(sbuff::String)
-        offsets = Vector{Vector{Int}}(uninitialized, 1)
-        offsets[1] = Vector{Int}(uninitialized, offs_chunk_size)
+        offsets = Vector{Vector{Int}}(undef, 1)
+        offsets[1] = Vector{Int}(undef, offs_chunk_size)
         thresh = ceil(min(typemax(UInt), Base.Sys.total_memory()) / sizeof(Int) / 5)
         new(offsets, 1, thresh, sizeof(sbuff))
     end
@@ -293,7 +293,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int,
                 return
             end
         end
-        offsets = Vector{Int}(uninitialized, offs_chunk_size)
+        offsets = Vector{Int}(undef, offs_chunk_size)
         push!(oarr, offsets)
         offidx = 1
     end
@@ -327,17 +327,17 @@ mutable struct DLMStore{T} <: DLMHandler
 end
 
 function DLMStore(::Type{T}, dims::NTuple{2,Integer},
-                  has_header::Bool, sbuff::String, auto::Bool, eol::Char) where T
+                  has_header::Bool, sbuff::String, auto::Bool, eol::AbstractChar) where T
     (nrows,ncols) = dims
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Matrix{T}(uninitialized, nrows-hdr_offset, ncols),
-        nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
+    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Matrix{T}(undef, nrows-hdr_offset, ncols),
+        nrows, ncols, 0, 0, hdr_offset, sbuff, auto, Char(eol))
 end
 
 _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) =
-    Base.@gc_preserve sbuff (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
+    GC.@preserve sbuff (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
     (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff)+startpos-1, chr, endpos-startpos+1))
 
 function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
@@ -369,7 +369,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
             for cidx in (lastcol+1):ncols
                 if (T <: AbstractString) || (T == Any)
                     cells[lastrow, cidx] = SubString(sbuff, 1, 0)
-                elseif ((T <: Number) || (T <: Char)) && dlmstore.auto
+                elseif ((T <: Number) || (T <: AbstractChar)) && dlmstore.auto
                     throw(TypeError(:store_cell, "", Any, T))
                 else
                     error("missing value at row $lastrow column $cidx")
@@ -381,7 +381,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill data
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            fail = colval(unescaped, 1, endof(unescaped), cells, drow, col)
+            fail = colval(unescaped, 1, lastindex(unescaped), cells, drow, col)
         else
             fail = colval(sbuff, startpos, endpos, cells, drow, col)
         end
@@ -400,7 +400,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill header
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"" => "\"")
-            colval(unescaped, 1, endof(unescaped), dlmstore.hdr, 1, col)
+            colval(unescaped, 1, lastindex(unescaped), dlmstore.hdr, 1, col)
         else
             colval(sbuff, startpos, endpos, dlmstore.hdr, 1, col)
         end
@@ -423,7 +423,7 @@ function result(dlmstore::DLMStore{T}) where T
             for cidx in (lastcol+1):ncols
                 if (T <: AbstractString) || (T == Any)
                     cells[lastrow, cidx] = SubString(sbuff, 1, 0)
-                elseif ((T <: Number) || (T <: Char)) && dlmstore.auto
+                elseif ((T <: Number) || (T <: AbstractChar)) && dlmstore.auto
                     throw(TypeError(:store_cell, "", Any, T))
                 else
                     error("missing value at row $lastrow column $cidx")
@@ -439,10 +439,10 @@ function result(dlmstore::DLMStore{T}) where T
 end
 
 
-function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
+function readdlm_string(sbuff::String, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool, optsd::Dict)
     ign_empty = (dlm == invalid_dlm(Char))
     quotes = get(optsd, :quotes, true)
-    comments = get(optsd, :comments, true)
+    comments = get(optsd, :comments, false)
     comment_char = get(optsd, :comment_char, '#')
     dims = get(optsd, :dims, nothing)
 
@@ -483,11 +483,11 @@ const valid_opts = [:header, :has_header, :use_mmap, :quotes, :comments, :dims, 
 const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
 
 function val_opts(opts)
-    d = Dict{Symbol,Union{Bool,NTuple{2,Integer},Char,Integer}}()
-    for (opt_name, opt_val) in pairs(opts)
+    d = Dict{Symbol, Union{Bool, NTuple{2, Integer}, Char, Integer}}()
+    for (opt_name, opt_val) in opts
         in(opt_name, valid_opts) ||
             throw(ArgumentError("unknown option $opt_name"))
-        opt_typ = valid_opt_types[findfirst(equalto(opt_name), valid_opts)]
+        opt_typ = valid_opt_types[findfirst(isequal(opt_name), valid_opts)::Int]
         isa(opt_val, opt_typ) ||
             throw(ArgumentError("$opt_name should be of type $opt_typ, got $(typeof(opt_val))"))
         d[opt_name] = opt_val
@@ -495,7 +495,7 @@ function val_opts(opts)
     return d
 end
 
-function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::String, auto::Bool, eol::Char)
+function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::String, auto::Bool, eol::AbstractChar)
     idx = 1
     offidx = 1
     offsets = offarr[1]
@@ -560,7 +560,7 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Any,2}, 
     cells[row, col] = SubString(sbuff, startpos, endpos)
     false
 end
-function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:Char,2}, row::Int, col::Int)
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:AbstractChar,2}, row::Int, col::Int)
     if startpos == endpos
         cells[row, col] = next(sbuff, startpos)[1]
         return false
@@ -730,9 +730,9 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
 end
 
 # todo: keyword argument for # of digits to print
-writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print_shortest(io, elt)
+writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print(io, elt)
 function writedlm_cell(io::IO, elt::AbstractString, dlm::T, quotes::Bool) where T
-    if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
+    if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: AbstractChar) ? (dlm in elt) : occursin(dlm, elt)))
         print(io, '"', replace(elt, r"\"" => "\"\""), '"')
     else
         print(io, elt)
@@ -747,9 +747,9 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
     for i = axes(a, 1)
         for j = axes(a, 2)
             writedlm_cell(pb, a[i, j], dlm, quotes)
-            j == lastc ? write(pb,'\n') : print(pb,dlm)
+            j == lastc ? print(pb,'\n') : print(pb,dlm)
         end
-        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
+        (bytesavailable(pb) > (16*1024)) && write(io, take!(pb))
     end
     write(io, take!(pb))
     nothing
@@ -763,7 +763,7 @@ function writedlm_row(io::IO, row, dlm, quotes)
     while !done(row, state)
         (x, state) = next(row, state)
         writedlm_cell(io, x, dlm, quotes)
-        done(row, state) ? write(io,'\n') : print(io,dlm)
+        done(row, state) ? print(io,'\n') : print(io,dlm)
     end
 end
 
@@ -773,7 +773,7 @@ end
 # purely as an optimization.
 function writedlm_row(io::IO, row::Union{Number,AbstractString}, dlm, quotes)
     writedlm_cell(io, row, dlm, quotes)
-    write(io, '\n')
+    print(io, '\n')
 end
 
 # write an iterable collection of iterable rows
@@ -783,7 +783,7 @@ function writedlm(io::IO, itr, dlm; opts...)
     pb = PipeBuffer()
     for row in itr
         writedlm_row(pb, row, dlm, quotes)
-        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
+        (bytesavailable(pb) > (16*1024)) && write(io, take!(pb))
     end
     write(io, take!(pb))
     nothing
@@ -824,6 +824,8 @@ julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
  2  6
  3  7
  4  8
+
+julia> rm("delim_file.txt")
 ```
 """
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)

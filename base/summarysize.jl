@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct SummarySize
-    seen::ObjectIdDict
+    seen::IdDict{Any,Any}
     frontier_x::Vector{Any}
     frontier_i::Vector{Int}
     exclude::Any
@@ -21,10 +21,10 @@ Compute the amount of memory used by all unique objects reachable from the argum
   fields, even if those fields would normally be excluded.
 """
 function summarysize(obj;
-                     exclude = Union{DataType, TypeName, Method},
-                     chargeall = Union{TypeMapEntry, Core.MethodInstance})
+                     exclude = Union{DataType, Core.TypeName, Core.MethodInstance},
+                     chargeall = Union{Core.TypeMapEntry, Method})
     @nospecialize obj exclude chargeall
-    ss = SummarySize(ObjectIdDict(), Any[], Int[], exclude, chargeall)
+    ss = SummarySize(IdDict(), Any[], Int[], exclude, chargeall)
     size::Int = ss(obj)
     while !isempty(ss.frontier_x)
         # DFS heap traversal of everything without a specialization
@@ -45,7 +45,7 @@ function summarysize(obj;
         else
             nf = _nfields(x)
             ft = typeof(x).types
-            if !isbits(ft[i]) && isdefined(x, i)
+            if !isbitstype(ft[i]) && isdefined(x, i)
                 val = getfield(x, i)
             end
         end
@@ -65,7 +65,9 @@ end
 (ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj)
 # define the general case separately to make sure it is not specialized for every type
 @noinline function _summarysize(ss::SummarySize, @nospecialize obj)
-    key = pointer_from_objref(obj)
+    # NOTE: this attempts to discover multiple copies of the same immutable value,
+    # and so is somewhat approximate.
+    key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     if _nfields(obj) > 0
         push!(ss.frontier_x, obj)
@@ -92,7 +94,7 @@ function (ss::SummarySize)(obj::DataType)
     return size
 end
 
-function (ss::SummarySize)(obj::TypeName)
+function (ss::SummarySize)(obj::Core.TypeName)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     return Core.sizeof(obj) + (isdefined(obj, :mt) ? ss(obj.mt) : 0)
@@ -100,11 +102,16 @@ end
 
 function (ss::SummarySize)(obj::Array)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    # TODO: add size of jl_array_t
-    if !isbits(eltype(obj)) && !isempty(obj)
-        push!(ss.frontier_x, obj)
-        push!(ss.frontier_i, 1)
+    headersize = 4*sizeof(Int) + 8 + max(0, ndims(obj)-2)*sizeof(Int)
+    size::Int = headersize
+    datakey = unsafe_convert(Ptr{Cvoid}, obj)
+    if !haskey(ss.seen, datakey)
+        ss.seen[datakey] = true
+        size += Core.sizeof(obj)
+        if !isbitstype(eltype(obj)) && !isempty(obj)
+            push!(ss.frontier_x, obj)
+            push!(ss.frontier_i, 1)
+        end
     end
     return size
 end
@@ -123,10 +130,10 @@ end
 function (ss::SummarySize)(obj::Module)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     size::Int = Core.sizeof(obj)
-    for binding in names(obj, true)
+    for binding in names(obj, all = true)
         if isdefined(obj, binding) && !isdeprecated(obj, binding)
             value = getfield(obj, binding)
-            if !isa(value, Module) || module_parent(value) === obj
+            if !isa(value, Module) || parentmodule(value) === obj
                 size += ss(value)::Int
                 if isa(value, UnionAll)
                     value = unwrap_unionall(value)

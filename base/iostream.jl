@@ -48,7 +48,7 @@ iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Cvoid},), s.ios)!=
 isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Cvoid},), s.ios)!=0
 
 """
-    truncate(file,n)
+    truncate(file, n)
 
 Resize the file or buffer given by the first argument to exactly `n` bytes, filling
 previously unallocated space with '\\0' if the file or buffer is grown.
@@ -73,7 +73,7 @@ julia> write(io, "JuliaLang is a GitHub organization.");
 julia> truncate(io, 40);
 
 julia> String(take!(io))
-"JuliaLang is a GitHub organization.\0\0\0\0\0"
+"JuliaLang is a GitHub organization.\\0\\0\\0\\0\\0"
 ```
 """
 function truncate(s::IOStream, n::Integer)
@@ -211,25 +211,84 @@ function fdio(name::AbstractString, fd::Integer, own::Bool=false)
 end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
+"""
+    open_flags(; keywords...) -> NamedTuple
+
+Compute the `read`, `write`, `create`, `truncate`, `append` flag value for
+a given set of keyword arguments to [`open`](@ref) a [`NamedTuple`](@ref).
+"""
+function open_flags(;
+    read     :: Union{Bool,Nothing} = nothing,
+    write    :: Union{Bool,Nothing} = nothing,
+    create   :: Union{Bool,Nothing} = nothing,
+    truncate :: Union{Bool,Nothing} = nothing,
+    append   :: Union{Bool,Nothing} = nothing,
+)
+    if write === true && read !== true && append !== true
+        create   === nothing && (create   = true)
+        truncate === nothing && (truncate = true)
+    end
+
+    if truncate === true || append === true
+        write  === nothing && (write  = true)
+        create === nothing && (create = true)
+    end
+
+    write    === nothing && (write    = false)
+    read     === nothing && (read     = !write)
+    create   === nothing && (create   = false)
+    truncate === nothing && (truncate = false)
+    append   === nothing && (append   = false)
+
+    return (
+        read = read,
+        write = write,
+        create = create,
+        truncate = truncate,
+        append = append,
+    )
+end
 
 """
-    open(filename::AbstractString, [read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool]) -> IOStream
+    open(filename::AbstractString; keywords...) -> IOStream
 
-Open a file in a mode specified by five boolean arguments. The default is to open files for
-reading only. Return a stream for accessing the file.
+Open a file in a mode specified by five boolean keyword arguments:
+
+| Keyword    | Desciption             | Default                                 |
+|:-----------|:-----------------------|:----------------------------------------|
+| `read`     | open for reading       | `!write`                                |
+| `write`    | open for writing       | `truncate \\| append`                   |
+| `create`   | create if non-existent | `!read & write \\| truncate \\| append` |
+| `truncate` | truncate to zero size  | `!read & write`                         |
+| `append`   | seek to end            | `false`                                 |
+
+The default when no keywords are passed is to open files for reading only.
+Returns a stream for accessing the opened file.
 """
-function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
+function open(fname::AbstractString;
+    read     :: Union{Bool,Nothing} = nothing,
+    write    :: Union{Bool,Nothing} = nothing,
+    create   :: Union{Bool,Nothing} = nothing,
+    truncate :: Union{Bool,Nothing} = nothing,
+    append   :: Union{Bool,Nothing} = nothing,
+)
+    flags = open_flags(
+        read = read,
+        write = write,
+        create = create,
+        truncate = truncate,
+        append = append,
+    )
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $fname",
                 ccall(:ios_file, Ptr{Cvoid},
                       (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, rd, wr, cr, tr) == C_NULL)
-    if ff
+                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
+    if flags.append
         systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
     end
     return s
 end
-open(fname::AbstractString) = open(fname, true, false, false, false, false)
 
 """
     open(filename::AbstractString, [mode::AbstractString]) -> IOStream
@@ -238,14 +297,14 @@ Alternate syntax for open, where a string-based mode specifier is used instead o
 booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
 equivalent to setting the following boolean groups:
 
-| Mode | Description                   |
-|:-----|:------------------------------|
-| r    | read                          |
-| r+   | read, write                   |
-| w    | write, create, truncate       |
-| w+   | read, write, create, truncate |
-| a    | write, create, append         |
-| a+   | read, write, create, append   |
+| Mode | Description                   | Keywords                            |
+|:-----|:------------------------------|:------------------------------------|
+| `r`  | read                          | none                                |
+| `w`  | write, create, truncate       | `write = true`                      |
+| `a`  | write, create, append         | `append = true`                     |
+| `r+` | read, write                   | `read = true, write = true`         |
+| `w+` | read, write, create, truncate | `truncate = true, read = true`      |
+| `a+` | read, write, create, append   | `append = true, read = true`        |
 
 # Examples
 ```jldoctest
@@ -277,26 +336,26 @@ julia> rm("myfile.txt")
 ```
 """
 function open(fname::AbstractString, mode::AbstractString)
-    mode == "r"  ? open(fname, true , false, false, false, false) :
-    mode == "r+" ? open(fname, true , true , false, false, false) :
-    mode == "w"  ? open(fname, false, true , true , true , false) :
-    mode == "w+" ? open(fname, true , true , true , true , false) :
-    mode == "a"  ? open(fname, false, true , true , false, true ) :
-    mode == "a+" ? open(fname, true , true , true , false, true ) :
+    mode == "r"  ? open(fname, read = true)                  :
+    mode == "r+" ? open(fname, read = true, write = true)    :
+    mode == "w"  ? open(fname, truncate = true)              :
+    mode == "w+" ? open(fname, truncate = true, read = true) :
+    mode == "a"  ? open(fname, append = true)                :
+    mode == "a+" ? open(fname, append = true, read = true)   :
     throw(ArgumentError("invalid open mode: $mode"))
 end
 
 """
-    open(f::Function, args...)
+    open(f::Function, args...; kwargs....)
 
-Apply the function `f` to the result of `open(args...)` and close the resulting file
+Apply the function `f` to the result of `open(args...; kwargs...)` and close the resulting file
 descriptor upon completion.
 
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
-       end
+           write(io, "Hello world!")
+       end;
 
 julia> open(f->read(f, String), "myfile.txt")
 "Hello world!"
@@ -304,8 +363,8 @@ julia> open(f->read(f, String), "myfile.txt")
 julia> rm("myfile.txt")
 ```
 """
-function open(f::Function, args...)
-    io = open(args...)
+function open(f::Function, args...; kwargs...)
+    io = open(args...; kwargs...)
     try
         f(io)
     finally
@@ -326,9 +385,9 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
 end
 
 # num bytes available without blocking
-nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+bytesavailable(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
 
-readavailable(s::IOStream) = read!(s, Vector{UInt8}(uninitialized, nb_available(s)))
+readavailable(s::IOStream) = read!(s, Vector{UInt8}(undef, bytesavailable(s)))
 
 function read(s::IOStream, ::Type{UInt8})
     b = ccall(:ios_getc, Cint, (Ptr{Cvoid},), s.ios)
@@ -357,23 +416,27 @@ end
 take!(s::IOStream) =
     ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Cvoid},), s.ios)
 
-function readuntil(s::IOStream, delim::UInt8)
-    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, 0)
+function readuntil(s::IOStream, delim::UInt8; keep::Bool=false)
+    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, !keep)
 end
 
 # like readuntil, above, but returns a String without requiring a copy
-function readuntil_string(s::IOStream, delim::UInt8)
-    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, false)
+function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 
-function readline(s::IOStream; chomp::Bool=true)
-    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, chomp)
+function readline(s::IOStream; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
+    end
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0
-    @gc_preserve b while nr < nb
+    GC.@preserve b while nr < nb
         if lb < nr+1
             lb = max(65536, (nr+1) * 2)
             resize!(b, lb)
@@ -393,7 +456,7 @@ function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
     if nb > lb
         resize!(b, nb)
     end
-    nr = @gc_preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+    nr = GC.@preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
                                   s.ios, pointer(b), nb))
     if lb > olb && lb > nr
         resize!(b, nr)
@@ -439,7 +502,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Vector{UInt8}(uninitialized, nb)
+    b = Vector{UInt8}(undef, nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
 end

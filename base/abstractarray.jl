@@ -12,9 +12,10 @@ Supertype for `N`-dimensional arrays (or array-like types) with elements of type
 AbstractArray
 
 convert(::Type{T}, a::T) where {T<:AbstractArray} = a
-convert(::Type{T}, a::AbstractArray) where {T<:AbstractArray} = T(a)
+convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)
+convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)
 
-if module_name(@__MODULE__) === :Base  # avoid method overwrite
+if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # catch undefined constructors before the deprecation kicks in
 # TODO: remove when deprecation is removed
 function (::Type{T})(arg) where {T<:AbstractArray}
@@ -23,37 +24,39 @@ end
 end
 
 """
-    size(A::AbstractArray, [dim...])
+    size(A::AbstractArray, [dim])
 
-Return a tuple containing the dimensions of `A`. Optionally you can specify the
-dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
-lengths of dimensions you asked for.
+Return a tuple containing the dimensions of `A`. Optionally you can specify a
+dimension to just get the length of that dimension.
+
+Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
+may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
 
 # Examples
 ```jldoctest
-julia> A = ones(2,3,4);
+julia> A = fill(1, (2,3,4));
 
 julia> size(A, 2)
 3
 
-julia> size(A,3,2)
+julia> size(A, 3, 2)
 (4, 3)
 ```
 """
 size(t::AbstractArray{T,N}, d) where {T,N} = d <= N ? size(t)[d] : 1
-size(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) where {N} =
-    (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val(N))...)
 
 """
     axes(A, d)
 
 Return the valid range of indices for array `A` along dimension `d`.
 
+See also [`size`](@ref), and the manual chapter on [arrays with custom indices](@ref man-custom-indices).
+
 # Examples
 ```jldoctest
-julia> A = ones(5,6,7);
+julia> A = fill(1, (5,6,7));
 
-julia> axes(A,2)
+julia> axes(A, 2)
 Base.OneTo(6)
 ```
 """
@@ -69,7 +72,7 @@ Return the tuple of valid indices for array `A`.
 
 # Examples
 ```jldoctest
-julia> A = ones(5,6,7);
+julia> A = fill(1, (5,6,7));
 
 julia> axes(A)
 (Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))
@@ -104,7 +107,7 @@ exploit linear indexing.
 
 # Examples
 ```jldoctest
-julia> A = ones(5,6,7);
+julia> A = fill(1, (5,6,7));
 
 julia> b = linearindices(A);
 
@@ -122,7 +125,7 @@ prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
 eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
-elsize(::AbstractArray{T}) where {T} = sizeof(T)
+elsize(A::AbstractArray) = elsize(typeof(A))
 
 """
     ndims(A::AbstractArray) -> Integer
@@ -131,22 +134,21 @@ Return the number of dimensions of `A`.
 
 # Examples
 ```jldoctest
-julia> A = ones(3,4,5);
+julia> A = fill(1, (3,4,5));
 
 julia> ndims(A)
 3
 ```
 """
 ndims(::AbstractArray{T,N}) where {T,N} = N
-ndims(::Type{AbstractArray{T,N}}) where {T,N} = N
-ndims(::Type{T}) where {T<:AbstractArray} = ndims(supertype(T))
+ndims(::Type{<:AbstractArray{T,N}}) where {T,N} = N
 
 """
     length(collection) -> Integer
 
 Return the number of elements in the collection.
 
-Use [`endof`](@ref) to get the last valid index of an indexable collection.
+Use [`lastindex`](@ref) to get the last valid index of an indexable collection.
 
 # Examples
 ```jldoctest
@@ -165,17 +167,43 @@ _length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, axes(A)))) #
 _length(A) = (@_inline_meta; length(A))
 
 """
-    endof(collection) -> Integer
+    lastindex(collection) -> Integer
+    lastindex(collection, d) -> Integer
 
-Return the last index of the collection.
+Return the last index of `collection`. If `d` is given, return the last index of `collection` along dimension `d`.
+
+The syntaxes `A[end]` and `A[end, end]` lower to `A[lastindex(A)]` and
+`A[lastindex(A, 1), lastindex(A, 2)]`, respectively.
 
 # Examples
 ```jldoctest
-julia> endof([1,2,4])
+julia> lastindex([1,2,4])
 3
+
+julia> lastindex(rand(3,4,5), 2)
+4
 ```
 """
-endof(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
+lastindex(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
+lastindex(a::AbstractArray, d) = (@_inline_meta; last(axes(a, d)))
+
+"""
+    firstindex(collection) -> Integer
+    firstindex(collection, d) -> Integer
+
+Return the first index of `collection`. If `d` is given, return the first index of `collection` along dimension `d`.
+
+# Examples
+```jldoctest
+julia> firstindex([1,2,4])
+1
+
+julia> firstindex(rand(3,4,5), 2)
+1
+```
+"""
+firstindex(a::AbstractArray) = (@_inline_meta; first(linearindices(a)))
+firstindex(a::AbstractArray, d) = (@_inline_meta; first(axes(a, d)))
 
 first(a::AbstractArray) = a[first(eachindex(a))]
 
@@ -204,7 +232,7 @@ end
     last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
-accomplished by calling [`endof`](@ref) to get the last index. Return the end
+accomplished by calling [`lastindex`](@ref) to get the last index. Return the end
 point of an `AbstractRange` even if it is empty.
 
 # Examples
@@ -219,13 +247,28 @@ julia> last([1; 2; 3; 4])
 last(a) = a[end]
 
 """
+    strides(A)
+
+Return a tuple of the memory strides in each dimension.
+
+# Examples
+```jldoctest
+julia> A = fill(1, (3,4,5));
+
+julia> strides(A)
+(1, 3, 12)
+```
+"""
+function strides end
+
+"""
     stride(A, k::Integer)
 
 Return the distance in memory (in number of elements) between adjacent elements in dimension `k`.
 
 # Examples
 ```jldoctest
-julia> A = ones(3,4,5);
+julia> A = fill(1, (3,4,5));
 
 julia> stride(A,2)
 3
@@ -234,31 +277,8 @@ julia> stride(A,3)
 12
 ```
 """
-function stride(a::AbstractArray, i::Integer)
-    if i > ndims(a)
-        return length(a)
-    end
-    s = 1
-    for n = 1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
+stride(A::AbstractArray, k::Integer) = strides(A)[k]
 
-"""
-    strides(A)
-
-Return a tuple of the memory strides in each dimension.
-
-# Examples
-```jldoctest
-julia> A = ones(3,4,5);
-
-julia> strides(A)
-(1, 3, 12)
-```
-"""
-strides(A::AbstractArray) = size_to_strides(1, size(A)...)
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
@@ -496,7 +516,7 @@ argument or as a series of integer arguments.
 
 Custom AbstractArray subtypes may choose which specific array type is best-suited to return
 for the given element type and dimensionality. If they do not specialize this method, the
-default is an `Array{element_type}(uninitialized, dims...)`.
+default is an `Array{element_type}(undef, dims...)`.
 
 For example, `similar(1:10, 1, 4)` returns an uninitialized `Array{Int,2}` since ranges are
 neither mutable nor support 2 dimensions:
@@ -535,7 +555,7 @@ similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, 
 similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
 similar(a::AbstractArray, ::Type{T}, dims::NeedsShaping) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
-similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(uninitialized, dims)
+similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
@@ -547,10 +567,10 @@ to_shape(r::OneTo) = Int(last(r))
 to_shape(r::AbstractUnitRange) = r
 
 """
-    similar(storagetype, indices)
+    similar(storagetype, axes)
 
 Create an uninitialized mutable array analogous to that specified by
-`storagetype`, but with `indices` specified by the last
+`storagetype`, but with `axes` specified by the last
 argument. `storagetype` might be a type or a function.
 
 **Examples**:
@@ -560,21 +580,16 @@ argument. `storagetype` might be a type or a function.
 creates an array that "acts like" an `Array{Int}` (and might indeed be
 backed by one), but which is indexed identically to `A`. If `A` has
 conventional indexing, this will be identical to
-`Array{Int}(uninitialized, size(A))`, but if `A` has unconventional indexing then the
+`Array{Int}(undef, size(A))`, but if `A` has unconventional indexing then the
 indices of the result will match `A`.
 
     similar(BitArray, (axes(A, 2),))
 
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
-
-    similar(dims->zeros(Int, dims), axes(A))
-
-would create an array of `Int`, initialized to zero, matching the
-indices of `A`.
 """
-similar(f, shape::Tuple) = f(to_shape(shape))
-similar(f, dims::DimOrInd...) = similar(f, dims)
+similar(::Type{T}, shape::Tuple) where {T} = T(to_shape(shape))
+similar(::Type{T}, dims::DimOrInd...) where {T} = similar(T, dims)
 
 """
     empty(v::AbstractVector, [eltype])
@@ -595,6 +610,7 @@ empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 
 ## from general iterable to any array
 
@@ -745,7 +761,7 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     for jsrc in jr_src
         idest = first(ir_dest)
         for isrc in ir_src
-            B[idest,jdest] = A[isrc,jsrc]
+            @inbounds B[idest,jdest] = A[isrc,jsrc]
             idest += step(ir_dest)
         end
         jdest += step(jr_dest)
@@ -808,39 +824,31 @@ range to efficiently index into the array with indices specified for every dimen
 other iterables, including strings and dictionaries, return an iterator object
 supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
 
-Example for a sparse 2-d array:
-
-```jldoctest
-julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-2×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
-  [1, 1]  =  1
-  [2, 1]  =  -5
-  [1, 3]  =  2
-
-julia> for iter in eachindex(A)
-           @show iter.I[1], iter.I[2]
-           @show A[iter]
-       end
-(iter.I[1], iter.I[2]) = (1, 1)
-A[iter] = 1
-(iter.I[1], iter.I[2]) = (2, 1)
-A[iter] = -5
-(iter.I[1], iter.I[2]) = (1, 2)
-A[iter] = 0
-(iter.I[1], iter.I[2]) = (2, 2)
-A[iter] = 0
-(iter.I[1], iter.I[2]) = (1, 3)
-A[iter] = 2
-(iter.I[1], iter.I[2]) = (2, 3)
-A[iter] = 0
-```
-
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a `UnitRange`
 if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
 iterable that spans the largest range along each dimension.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4];
+
+julia> for i in eachindex(A) # linear indexing
+           println(i)
+       end
+1
+2
+3
+4
+
+julia> for i in eachindex(view(A, 1:2, 1:1)) # Cartesian indexing
+           println(i)
+       end
+CartesianIndex(1, 1)
+CartesianIndex(2, 1)
+```
 """
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(IndexStyle(A), A))
 
@@ -856,30 +864,27 @@ eachindex(::IndexLinear, A::AbstractArray) = linearindices(A)
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     indsA = linearindices(A)
-    all(x->linearindices(x) == indsA, B) || throw_eachindex_mismatch(IndexLinear(), A, B...)
+    _all_match_first(linearindices, indsA, B...) || throw_eachindex_mismatch(IndexLinear(), A, B...)
     indsA
 end
+function _all_match_first(f::F, inds, A, B...) where F<:Function
+    @_inline_meta
+    (inds == f(A)) & _all_match_first(f, inds, B...)
+end
+_all_match_first(f::F, inds) where F<:Function = true
 
 isempty(a::AbstractArray) = (_length(a) == 0)
 
 # keys with an IndexStyle
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
 
-"""
-   of_indices(x, y)
-
-Represents the array `y` as an array having the same indices type as `x`.
-"""
-of_indices(x, y) = similar(dims->y, oftype(axes(x), axes(y)))
-
-
 ## range conversions ##
 
 map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
 map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(last(r))
 map(::Type{T}, r::StepRangeLen) where {T<:AbstractFloat} = convert(StepRangeLen{T}, r)
-function map(::Type{T}, r::LinSpace) where T<:AbstractFloat
-    LinSpace(T(r.start), T(r.stop), length(r))
+function map(::Type{T}, r::LinRange) where T<:AbstractFloat
+    LinRange(T(r.start), T(r.stop), length(r))
 end
 
 ## unsafe/pointer conversions ##
@@ -933,7 +938,7 @@ julia> getindex(A, 2:4)
 """
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
-    error_if_canonical_indexing(IndexStyle(A), A, I...)
+    error_if_canonical_getindex(IndexStyle(A), A, I...)
     _getindex(IndexStyle(A), A, to_indices(A, I)...)
 end
 function unsafe_getindex(A::AbstractArray, I...)
@@ -942,15 +947,15 @@ function unsafe_getindex(A::AbstractArray, I...)
     r
 end
 
-error_if_canonical_indexing(::IndexLinear, A::AbstractArray, ::Int) =
-    error("indexing not defined for ", typeof(A))
-error_if_canonical_indexing(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
-    error("indexing not defined for ", typeof(A))
-error_if_canonical_indexing(::IndexStyle, ::AbstractArray, ::Any...) = nothing
+error_if_canonical_getindex(::IndexLinear, A::AbstractArray, ::Int) =
+    error("getindex not defined for ", typeof(A))
+error_if_canonical_getindex(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
+    error("getindex not defined for ", typeof(A))
+error_if_canonical_getindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
 _getindex(::IndexStyle, A::AbstractArray, I...) =
-    error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+    error("getindex for $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## IndexLinear Scalar indexing: canonical method is one Int
 _getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
@@ -1010,7 +1015,7 @@ Store values from array `X` within some subset of `A` as specified by `inds`.
 """
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
-    error_if_canonical_indexing(IndexStyle(A), A, I...)
+    error_if_canonical_setindex(IndexStyle(A), A, I...)
     _setindex!(IndexStyle(A), A, v, to_indices(A, I)...)
 end
 function unsafe_setindex!(A::AbstractArray, v, I...)
@@ -1018,9 +1023,16 @@ function unsafe_setindex!(A::AbstractArray, v, I...)
     @inbounds r = setindex!(A, v, I...)
     r
 end
+
+error_if_canonical_setindex(::IndexLinear, A::AbstractArray, ::Int) =
+    error("setindex! not defined for ", typeof(A))
+error_if_canonical_setindex(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
+    error("setindex! not defined for ", typeof(A))
+error_if_canonical_setindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
+
 ## Internal defitions
 _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
-    error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+    error("setindex! for $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## IndexLinear Scalar indexing
 _setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
@@ -1043,6 +1055,110 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
+"""
+    parent(A)
+
+Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
+it is not a view.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> V = view(A, 1:2, :)
+2×2 view(::Array{Int64,2}, 1:2, :) with eltype Int64:
+ 1  2
+ 3  4
+
+julia> parent(V)
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
+"""
+parent(a::AbstractArray) = a
+
+## rudimentary aliasing detection ##
+"""
+    Base.unalias(dest, A)
+
+Return either `A` or a copy of `A` in a rough effort to prevent modifications to `dest` from
+affecting the returned object. No guarantees are provided.
+
+Custom arrays that wrap or use fields containing arrays that might alias against other
+external objects should provide a [`Base.dataids`](@ref) implementation.
+
+This function must return an object of exactly the same type as `A` for performance and type
+stability. Mutable custom arrays for which [`copy(A)`](@ref) is not `typeof(A)` should
+provide a [`Base.unaliascopy`](@ref) implementation.
+
+See also [`Base.mightalias`](@ref).
+"""
+unalias(dest, A::AbstractArray) = mightalias(dest, A) ? unaliascopy(A) : A
+unalias(dest, A::AbstractRange) = A
+unalias(dest, A) = A
+
+"""
+    Base.unaliascopy(A)
+
+Make a preventative copy of `A` in an operation where `A` [`Base.mightalias`](@ref) against
+another array in order to preserve consistent semantics as that other array is mutated.
+
+This must return an object of the same type as `A` to preserve optimal performance in the
+much more common case where aliasing does not occur. By default,
+`unaliascopy(A::AbstractArray)` will attempt to use [`copy(A)`](@ref), but in cases where
+`copy(A)` is not a `typeof(A)`, then the array should provide a custom implementation of
+`Base.unaliascopy(A)`.
+"""
+unaliascopy(A::Array) = copy(A)
+unaliascopy(A::AbstractArray)::typeof(A) = (@_noinline_meta; _unaliascopy(A, copy(A)))
+_unaliascopy(A::T, C::T) where {T} = C
+_unaliascopy(A, C) = throw(ArgumentError("""
+    an array of type `$(typeof(A).name)` shares memory with another argument and must
+    make a preventative copy of itself in order to maintain consistent semantics,
+    but `copy(A)` returns a new array of type `$(typeof(C))`. To fix, implement:
+        `Base.unaliascopy(A::$(typeof(A).name))::typeof(A)`"""))
+unaliascopy(A) = A
+
+"""
+    Base.mightalias(A::AbstractArray, B::AbstractArray)
+
+Perform a conservative test to check if arrays `A` and `B` might share the same memory.
+
+By default, this simply checks if either of the arrays reference the same memory
+regions, as identified by their [`Base.dataids`](@ref).
+"""
+mightalias(A::AbstractArray, B::AbstractArray) = !_isdisjoint(dataids(A), dataids(B))
+mightalias(x, y) = false
+
+_isdisjoint(as::Tuple{}, bs::Tuple{}) = true
+_isdisjoint(as::Tuple{}, bs::Tuple{Any}) = true
+_isdisjoint(as::Tuple{}, bs::Tuple) = true
+_isdisjoint(as::Tuple{Any}, bs::Tuple{}) = true
+_isdisjoint(as::Tuple{Any}, bs::Tuple{Any}) = as[1] != bs[1]
+_isdisjoint(as::Tuple{Any}, bs::Tuple) = !(as[1] in bs)
+_isdisjoint(as::Tuple, bs::Tuple{}) = true
+_isdisjoint(as::Tuple, bs::Tuple{Any}) = !(bs[1] in as)
+_isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
+
+"""
+    Base.dataids(A::AbstractArray)
+
+Return a tuple of `UInt`s that represent the mutable data segments of an array.
+
+Custom arrays that would like to opt-in to aliasing detection of their component
+parts can specialize this method to return the concatenation of the `dataids` of
+their component parts.  A typical definition for an array that wraps a parent is
+`Base.dataids(C::CustomArray) = dataids(C.parent)`.
+"""
+dataids(A::AbstractArray) = (UInt(objectid(A)),)
+dataids(A::Array) = (UInt(pointer(A)),)
+dataids(::AbstractRange) = ()
+dataids(x) = ()
+
 ## get (getindex with a default value) ##
 
 RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{AbstractRange, AbstractVector{Int}}}},
@@ -1054,7 +1170,7 @@ get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] :
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
-    ind = findin(I, indices1(A))
+    ind = findall(in(indices1(A)), I)
     X[ind] = A[I[ind]]
     Xind = indices1(X)
     X[first(Xind):first(ind)-1] = default
@@ -1063,7 +1179,7 @@ function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,Ab
 end
 function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # Linear indexing
-    ind = findin(I, 1:length(A))
+    ind = findall(in(1:length(A)), I)
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default
     X[last(ind)+1:length(X)] = default
@@ -1108,10 +1224,10 @@ vcat(X::T...) where {T<:Number} = T[ X[i] for i=1:length(X) ]
 hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
 hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
 
-vcat(X::Number...) = hvcat_fill(Vector{promote_typeof(X...)}(uninitialized, length(X)), X)
-hcat(X::Number...) = hvcat_fill(Matrix{promote_typeof(X...)}(uninitialized, 1,length(X)), X)
-typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Vector{T}(uninitialized, length(X)), X)
-typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Matrix{T}(uninitialized, 1,length(X)), X)
+vcat(X::Number...) = hvcat_fill(Vector{promote_typeof(X...)}(undef, length(X)), X)
+hcat(X::Number...) = hvcat_fill(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
+typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Vector{T}(undef, length(X)), X)
+typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Matrix{T}(undef, 1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
@@ -1169,10 +1285,10 @@ function typed_hcat(::Type{T}, A::AbstractVecOrMat...) where T
     return B
 end
 
-vcat(A::AbstractMatrix...) = typed_vcat(promote_eltype(A...), A...)
-vcat(A::AbstractMatrix{T}...) where {T} = typed_vcat(T, A...)
+vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
+vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
-function typed_vcat(::Type{T}, A::AbstractMatrix...) where T
+function typed_vcat(::Type{T}, A::AbstractVecOrMat...) where T
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
@@ -1203,7 +1319,7 @@ cat_size(A::AbstractArray, d) = size(A, d)
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
 
-cat_similar(A, T, shape) = Array{T}(uninitialized, shape)
+cat_similar(A, T, shape) = Array{T}(undef, shape)
 cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
 
 cat_shape(dims, shape::Tuple) = shape
@@ -1236,7 +1352,7 @@ _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
 dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
-dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
+dims2cat(dims) = ntuple(in(dims), maximum(dims))
 
 cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
 
@@ -1252,7 +1368,7 @@ end
 
 function _cat(A, shape::NTuple{N}, catdims, X...) where N
     offsets = zeros(Int, N)
-    inds = Vector{UnitRange{Int}}(uninitialized, N)
+    inds = Vector{UnitRange{Int}}(undef, N)
     concat = copyto!(zeros(Bool, N), catdims)
     for x in X
         for i = 1:N
@@ -1482,7 +1598,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     nr = length(rows)
     nc = rows[1]
 
-    a = Matrix{T}(uninitialized, nr, nc)
+    a = Matrix{T}(undef, nr, nc)
     if length(a) != length(xs)
         throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
     end
@@ -1526,12 +1642,12 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
     if nr*nc != len
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
-    hvcat_fill(Matrix{T}(uninitialized, nr, nc), xs)
+    hvcat_fill(Matrix{T}(undef, nr, nc), xs)
 end
 
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     nbr = length(rows)  # number of block rows
-    rs = Vector{Any}(uninitialized, nbr)
+    rs = Vector{Any}(undef, nbr)
     a = 1
     for i = 1:nbr
         rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
@@ -1555,13 +1671,16 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-function lexcmp(A::AbstractArray, B::AbstractArray)
+function cmp(A::AbstractVector, B::AbstractVector)
     for (a, b) in zip(A, B)
-        res = lexcmp(a, b)
-        res == 0 || return res
+        if !isequal(a, b)
+            return isless(a, b) ? -1 : 1
+        end
     end
     return cmp(length(A), length(B))
 end
+
+isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
@@ -1731,7 +1850,7 @@ for all `i` and `j`.
 
 # Examples
 ```jldoctest
-julia> a = reshape(collect(1:16),(2,2,2,2))
+julia> a = reshape(Vector(1:16),(2,2,2,2))
 2×2×2×2 Array{Int64,4}:
 [:, :, 1, 1] =
  1  3
@@ -1958,7 +2077,7 @@ end
 
 function hash(a::AbstractArray{T}, h::UInt) where T
     # O(1) hashing for types with regular step
-    if isa(a, AbstractRange) && isa(TypeRangeStep(a), RangeStepRegular)
+    if isa(a, AbstractRange) && isa(RangeStepStyle(a), RangeStepRegular)
         return hash_range(a, h)
     end
 
@@ -1984,7 +2103,7 @@ function hash(a::AbstractArray{T}, h::UInt) where T
             # to a range with more than two elements because more extreme values
             # cannot be represented. We must still hash the two first values as a
             # range since they can always be considered as such (in a wider type)
-            if isconcrete(T)
+            if isconcretetype(T)
                 try
                     step = x2 - x1
                 catch err
@@ -1994,6 +2113,7 @@ function hash(a::AbstractArray{T}, h::UInt) where T
                 # If true, wraparound overflow happened
                 sign(step) == cmp(x2, x1) || break
             else
+                applicable(-, x2, x1) || break
                 # widen() is here to ensure no overflow can happen
                 step = widen(x2) - widen(x1)
             end

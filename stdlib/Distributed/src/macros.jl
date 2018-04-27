@@ -221,7 +221,7 @@ function splitrange(N::Int, np::Int)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
-    chunks = Vector{UnitRange{Int}}(uninitialized, nchunks)
+    chunks = Vector{UnitRange{Int}}(undef, nchunks)
     lo = 1
     for i in 1:nchunks
         hi = lo + each - 1
@@ -246,7 +246,7 @@ function preduce(reducer, f, R)
         schedule(t)
         push!(w_exec, t)
     end
-    reduce(reducer, [wait(t) for t in w_exec])
+    reduce(reducer, [fetch(t) for t in w_exec])
 end
 
 function pfor(f, R)
@@ -279,27 +279,27 @@ function make_pfor_body(var, body)
 end
 
 """
-    @parallel
+    @distributed
 
-A parallel for loop of the form :
+A distributed memory, parallel for loop of the form :
 
-    @parallel [reducer] for var = range
+    @distributed [reducer] for var = range
         body
     end
 
 The specified range is partitioned and locally executed across all workers. In case an
-optional reducer function is specified, `@parallel` performs local reductions on each worker
+optional reducer function is specified, `@distributed` performs local reductions on each worker
 with a final reduction on the calling process.
 
-Note that without a reducer function, `@parallel` executes asynchronously, i.e. it spawns
+Note that without a reducer function, `@distributed` executes asynchronously, i.e. it spawns
 independent tasks on all available workers and returns immediately without waiting for
 completion. To wait for completion, prefix the call with [`@sync`](@ref), like :
 
-    @sync @parallel for var = range
+    @sync @distributed for var = range
         body
     end
 """
-macro parallel(args...)
+macro distributed(args...)
     na = length(args)
     if na==1
         loop = args[1]
@@ -307,10 +307,10 @@ macro parallel(args...)
         reducer = args[1]
         loop = args[2]
     else
-        throw(ArgumentError("wrong number of arguments to @parallel"))
+        throw(ArgumentError("wrong number of arguments to @distributed"))
     end
     if !isa(loop,Expr) || loop.head !== :for
-        error("malformed @parallel loop")
+        error("malformed @distributed loop")
     end
     var = loop.args[1].args[1]
     r = loop.args[1].args[2]

@@ -7,7 +7,10 @@ Arnoldi and Lanczos iteration for computing eigenvalues
 """
 module IterativeEigensolvers
 
-using Base.LinAlg: BlasFloat, BlasInt, SVD, checksquare, mul!, Adjoint, Transpose
+using LinearAlgebra: BlasFloat, BlasInt, Diagonal, I, SVD, UniformScaling,
+                     checksquare, factorize,ishermitian, issymmetric, mul!,
+                     rmul!, qr
+import LinearAlgebra
 
 export eigs, svds
 
@@ -205,14 +208,14 @@ function SVDAugmented(A::AbstractMatrix{T}) where T
     SVDAugmented{Tnew,typeof(Anew)}(Anew)
 end
 
-function Base.LinAlg.mul!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
+function LinearAlgebra.mul!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
     m, mn = size(A.X, 1), length(x)
     mul!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
-    mul!(view(y, m + 1:mn), Adjoint(A.X), view(x, 1:m)) # right singular vector
+    mul!(view(y, m + 1:mn), adjoint(A.X), view(x, 1:m)) # right singular vector
     return y
 end
 Base.size(A::SVDAugmented)  = ((+)(size(A.X)...), (+)(size(A.X)...))
-Base.ishermitian(A::SVDAugmented) = true
+LinearAlgebra.ishermitian(A::SVDAugmented) = true
 
 struct AtA_or_AAt{T,S} <: AbstractArray{T, 2}
     A::S
@@ -222,20 +225,20 @@ end
 function AtA_or_AAt(A::AbstractMatrix{T}) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     Anew = convert(AbstractMatrix{Tnew}, A)
-    AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(uninitialized, max(size(A)...)))
+    AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(undef, max(size(A)...)))
 end
 
-function Base.LinAlg.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
+function LinearAlgebra.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
     if size(A.A, 1) >= size(A.A, 2)
         mul!(A.buffer, A.A, x)
-        return mul!(y, Adjoint(A.A), A.buffer)
+        return mul!(y, adjoint(A.A), A.buffer)
     else
-        mul!(A.buffer, Adjoint(A.A), x)
+        mul!(A.buffer, adjoint(A.A), x)
         return mul!(y, A.A, A.buffer)
     end
 end
 Base.size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
-Base.ishermitian(s::AtA_or_AAt) = true
+LinearAlgebra.ishermitian(s::AtA_or_AAt) = true
 
 
 svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)
@@ -275,7 +278,7 @@ iterations derived from [`eigs`](@ref).
 * `resid`: Final residual vector.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"2-element Array{Float64,1}:\\n.*\\n.*"
 julia> A = Diagonal(1:4);
 
 julia> s = svds(A, nsv = 2)[1];
@@ -314,14 +317,14 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
         # left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign.(ex[1][ind]')
         if size(X, 1) >= size(X, 2)
             V = ex[2]
-            U = qr(scale!(X*V, inv.(svals)))[1]
+            U = qr(rmul!(X*V, Diagonal(inv.(svals))))[1]
         else
             U = ex[2]
-            V = qr(scale!(X'U, inv.(svals)))[1]
+            V = qr(rmul!(X'U, Diagonal(inv.(svals))))[1]
         end
 
         # right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
-        return (SVD(U, svals, adjoint(V)), ex[3], ex[4], ex[5], ex[6])
+        return (SVD(U, svals, copy(V')), ex[3], ex[4], ex[5], ex[6])
     else
         #The sort is necessary to work around #10329
         return (SVD(zeros(eltype(svals), n, 0),

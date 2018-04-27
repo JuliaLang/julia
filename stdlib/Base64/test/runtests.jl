@@ -1,11 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Random
 import Base64:
     Base64EncodePipe,
     base64encode,
     Base64DecodePipe,
-    base64decode
+    base64decode,
+    stringmime
 
 const inputText = "Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure."
 const encodedMaxLine76 = """
@@ -74,4 +75,12 @@ end
         data = rand(mt, UInt8, rand(0:300))
         @test hash(base64decode(base64encode(data))) == hash(data)
     end
+end
+
+@testset "stringmime" begin
+    @test stringmime("text/plain", [1 2;3 4]) == repr("text/plain", [1 2;3 4])
+    @test stringmime("text/html", "raw html data") == "raw html data"
+    @test stringmime("text/plain", "string") == "\"string\""
+    @test stringmime("image/png", UInt8[2,3,4,7]) == "AgMEBw=="
+    @test stringmime("text/plain", 3.141592653589793, context=:compact=>true) == "3.14159"
 end

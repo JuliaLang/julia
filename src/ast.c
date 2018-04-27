@@ -36,6 +36,7 @@ jl_sym_t *top_sym;     jl_sym_t *colons_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
+jl_sym_t *unreachable_sym; jl_sym_t *tuple_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *body_sym;    jl_sym_t *globalref_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
@@ -44,8 +45,11 @@ jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *underscore_sym;
-jl_sym_t *abstracttype_sym; jl_sym_t *primtype_sym;
-jl_sym_t *structtype_sym; jl_sym_t *foreigncall_sym;
+jl_sym_t *abstracttype_sym;
+jl_sym_t *primtype_sym;
+jl_sym_t *structtype_sym;
+jl_sym_t *foreigncall_sym;
+jl_sym_t *cfunction_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
@@ -54,7 +58,8 @@ jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
 jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
 jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
-jl_sym_t *polly_sym; jl_sym_t *inline_sym;
+jl_sym_t *inline_sym; jl_sym_t *noinline_sym;
+jl_sym_t *polly_sym;
 jl_sym_t *propagate_inbounds_sym; jl_sym_t *generated_sym;
 jl_sym_t *generated_only_sym;
 jl_sym_t *isdefined_sym; jl_sym_t *nospecialize_sym;
@@ -62,6 +67,7 @@ jl_sym_t *macrocall_sym; jl_sym_t *colon_sym;
 jl_sym_t *hygienicscope_sym;
 jl_sym_t *escape_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
+jl_sym_t *throw_undef_if_not_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -169,15 +175,55 @@ value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return fl_ctx->F;
 }
 
+static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
+
+value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    int kwargs_len = (int)nargs - 6;
+    if (nargs < 6 || kwargs_len % 2 != 0) {
+        lerror(fl_ctx, fl_ctx->ArgError, "julia-logmsg: bad argument list - expected "
+               "level (symbol) group (symbol) id file line msg . kwargs");
+    }
+    value_t arg_level = args[0];
+    value_t arg_group = args[1];
+    value_t arg_id    = args[2];
+    value_t arg_file  = args[3];
+    value_t arg_line  = args[4];
+    value_t arg_msg   = args[5];
+    value_t *arg_kwargs = args + 6;
+    if (!isfixnum(arg_level) || !issymbol(arg_group) || !issymbol(arg_id) ||
+        !issymbol(arg_file) || !isfixnum(arg_line) || !fl_isstring(fl_ctx, arg_msg)) {
+        lerror(fl_ctx, fl_ctx->ArgError,
+               "julia-logmsg: Unexpected type in argument list");
+    }
+
+    // Abuse scm_to_julia here to convert arguments.  This is meant for `Expr`s
+    // but should be good enough provided we're only passing simple numbers,
+    // symbols and strings.
+    jl_value_t *group=NULL, *id=NULL, *file=NULL, *line=NULL, *msg=NULL;
+    jl_array_t *kwargs=NULL;
+    JL_GC_PUSH6(&group, &id, &file, &line, &msg, &kwargs);
+    group = scm_to_julia(fl_ctx, arg_group, NULL);
+    id    = scm_to_julia(fl_ctx, arg_id, NULL);
+    file  = scm_to_julia(fl_ctx, arg_file, NULL);
+    line  = scm_to_julia(fl_ctx, arg_line, NULL);
+    msg   = scm_to_julia(fl_ctx, arg_msg, NULL);
+    kwargs = jl_alloc_vec_any(kwargs_len);
+    for (int i = 0; i < kwargs_len; ++i) {
+        jl_array_ptr_set(kwargs, i, scm_to_julia(fl_ctx, arg_kwargs[i], NULL));
+    }
+    jl_log(numval(arg_level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
+    JL_GC_POP();
+    return fl_ctx->T;
+}
+
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
+    { "julia-logmsg", fl_julia_logmsg },
     { NULL, NULL }
 };
-
-static int jl_parse_deperror(fl_context_t *fl_ctx, int err);
-static int jl_parse_depwarn_(fl_context_t *fl_ctx, int warn);
 
 static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
 {
@@ -202,12 +248,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
     ctx->slot_sym = symbol(fl_ctx, "slot");
     ctx->task = NULL;
     ctx->module = NULL;
-
-    // Enable / disable syntax deprecation warnings
-    if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
-        jl_parse_deperror(fl_ctx, 1);
-    else
-        jl_parse_depwarn_(fl_ctx, (int)jl_options.depwarn);
+    set(symbol(fl_ctx, "*depwarn-opt*"), fixnum(jl_options.depwarn));
 }
 
 // There should be no GC allocation while holding this lock
@@ -283,6 +324,7 @@ void jl_init_frontend(void)
     call_sym = jl_symbol("call");
     invoke_sym = jl_symbol("invoke");
     foreigncall_sym = jl_symbol("foreigncall");
+    cfunction_sym = jl_symbol("cfunction");
     quote_sym = jl_symbol("quote");
     inert_sym = jl_symbol("inert");
     top_sym = jl_symbol("top");
@@ -295,6 +337,8 @@ void jl_init_frontend(void)
     goto_ifnot_sym = jl_symbol("gotoifnot");
     label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
+    unreachable_sym = jl_symbol("unreachable");
+    tuple_sym = jl_symbol("tuple");
     lambda_sym = jl_symbol("lambda");
     module_sym = jl_symbol("module");
     export_sym = jl_symbol("export");
@@ -334,8 +378,9 @@ void jl_init_frontend(void)
     slot_sym = jl_symbol("slot");
     static_parameter_sym = jl_symbol("static_parameter");
     compiler_temp_sym = jl_symbol("#temp#");
-    polly_sym = jl_symbol("polly");
     inline_sym = jl_symbol("inline");
+    noinline_sym = jl_symbol("noinline");
+    polly_sym = jl_symbol("polly");
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
     isdefined_sym = jl_symbol("isdefined");
     nospecialize_sym = jl_symbol("nospecialize");
@@ -346,6 +391,7 @@ void jl_init_frontend(void)
     gc_preserve_end_sym = jl_symbol("gc_preserve_end");
     generated_sym = jl_symbol("generated");
     generated_only_sym = jl_symbol("generated_only");
+    throw_undef_if_not_sym = jl_symbol("throw_undef_if_not");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -399,8 +445,6 @@ static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
     }
     return jl_symbol(symbol_name(fl_ctx, s));
 }
-
-static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod)
 {
@@ -649,7 +693,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_linenumbernode_type)) {
-        jl_value_t *file = jl_fieldref(v,1); // non-allocating
+        jl_value_t *file = jl_fieldref_noalloc(v,1); // non-allocating
         jl_value_t *line = jl_fieldref(v,0); // allocating
         value_t args = julia_to_list2(fl_ctx, line, file);
         fl_gc_handle(fl_ctx, &args);
@@ -792,7 +836,11 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                     form = jl_expand_macros(form, inmodule, NULL, 0);
                     expression = julia_to_scm(fl_ctx, form);
                 }
-                expression = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), expression);
+                // expand non-final expressions in statement position (value unused)
+                expression =
+                    fl_applyn(fl_ctx, 1,
+                              symbol_value(symbol(fl_ctx, iscons(cdr_(ast)) ? "jl-expand-to-thunk-stmt" : "jl-expand-to-thunk")),
+                              expression);
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expression, inmodule);
@@ -832,28 +880,6 @@ JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                              char *filename, jl_module_t *inmodule)
 {
     return jl_parse_eval_all(filename, text, len, inmodule);
-}
-
-JL_DLLEXPORT int jl_parse_depwarn(int warn)
-{
-    jl_ast_context_t *ctx = jl_ast_ctx_enter();
-    int res = jl_parse_depwarn_(&ctx->fl, warn);
-    jl_ast_ctx_leave(ctx);
-    return res;
-}
-
-static int jl_parse_depwarn_(fl_context_t *fl_ctx, int warn)
-{
-    value_t prev = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parser-depwarn")),
-                             warn ? fl_ctx->T : fl_ctx->F);
-    return prev == fl_ctx->T ? 1 : 0;
-}
-
-static int jl_parse_deperror(fl_context_t *fl_ctx, int err)
-{
-    value_t prev = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parser-deperror")),
-                             err ? fl_ctx->T : fl_ctx->F);
-    return prev == fl_ctx->T ? 1 : 0;
 }
 
 // returns either an expression or a thunk
@@ -972,7 +998,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             // unreachable
         }
         *ctx = mfunc->def.method->module;
-        result = jl_call_method_internal(mfunc, margs, nargs);
+        result = mfunc->invoke(mfunc, margs, nargs);
     }
     JL_CATCH {
         if (jl_loaderror_type == NULL) {
@@ -1096,6 +1122,18 @@ JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0);
     expr = jl_call_scm_on_ast("jl-expand-to-thunk", expr, inmodule);
+    JL_GC_POP();
+    return expr;
+}
+
+// expand in a context where the expression value is unused
+JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
+{
+    JL_TIMING(LOWERING);
+    JL_GC_PUSH1(&expr);
+    expr = jl_copy_ast(expr);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0);
+    expr = jl_call_scm_on_ast("jl-expand-to-thunk-stmt", expr, inmodule);
     JL_GC_POP();
     return expr;
 }

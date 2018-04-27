@@ -46,6 +46,7 @@ namespace llvm {
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/IR/IRPrintingPasses.h>
 #include <llvm/Transforms/Utils/Cloning.h>
+#include "llvm/Object/ArchiveWriter.h"
 
 // target support
 #include <llvm/ADT/Triple.h>
@@ -336,14 +337,14 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
 #if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
-// Resolve non-lock free atomic functions in the libatomic library.
+// Resolve non-lock free atomic functions in the libatomic1 library.
 // This is the library that provides support for c11/c++11 atomic operations.
 static uint64_t resolve_atomic(const char *name)
 {
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-    static const char *const libatomic = "libatomic";
+    static const char *const libatomic = "libatomic.so.1";
 #elif defined(_OS_WINDOWS_)
-    static const char *const libatomic = "libatomic-1";
+    static const char *const libatomic = "libatomic-1.dll";
 #endif
     static void *atomic_hdl = jl_load_dynamic_library_e(libatomic,
                                                         JL_RTLD_LOCAL);
@@ -1019,40 +1020,49 @@ static void emit_offset_table(Module *mod, const std::vector<GlobalValue*> &vars
                        name);
 }
 
-
-static void jl_gen_llvm_globaldata(Module *mod, const char *sysimg_data, size_t sysimg_len)
+static void emit_result(std::vector<NewArchiveMember> &Archive, SmallVectorImpl<char> &OS,
+        StringRef Name, std::vector<std::string> &outputs)
 {
-    emit_offset_table(mod, jl_sysimg_gvars, "jl_sysimg_gvars");
-    emit_offset_table(mod, jl_sysimg_fvars, "jl_sysimg_fvars");
-    addComdat(new GlobalVariable(*mod,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, globalUnique+1),
-                                 "jl_globalUnique"));
-
-    // reflect the address of the jl_RTLD_DEFAULT_handle variable
-    // back to the caller, so that we can check for consistency issues
-    GlobalValue *jlRTLD_DEFAULT_var = mod->getNamedValue("jl_RTLD_DEFAULT_handle");
-    addComdat(new GlobalVariable(*mod,
-                                 jlRTLD_DEFAULT_var->getType(),
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 jlRTLD_DEFAULT_var,
-                                 "jl_RTLD_DEFAULT_handle_pointer"));
-
-    if (sysimg_data) {
-        Constant *data = ConstantDataArray::get(jl_LLVMContext,
-            ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-        addComdat(new GlobalVariable(*mod, data->getType(), false,
-                                     GlobalVariable::ExternalLinkage,
-                                     data, "jl_system_image_data"))->setAlignment(64);
-        Constant *len = ConstantInt::get(T_size, sysimg_len);
-        addComdat(new GlobalVariable(*mod, len->getType(), true,
-                                     GlobalVariable::ExternalLinkage,
-                                     len, "jl_system_image_size"));
-    }
+    outputs.push_back({ OS.data(), OS.size() });
+    Archive.push_back(NewArchiveMember(MemoryBufferRef(outputs.back(), Name)));
+    OS.clear();
 }
+
+static object::Archive::Kind getDefaultForHost(Triple &triple) {
+      if (triple.isOSDarwin())
+#if JL_LLVM_VERSION >= 50000
+          return object::Archive::K_DARWIN;
+#else
+          return object::Archive::K_BSD;
+#endif
+      return object::Archive::K_GNU;
+}
+
+#if JL_LLVM_VERSION >= 60000
+typedef Error ArchiveWriterError;
+#else
+typedef std::pair<StringRef, std::error_code> ArchiveWriterError;
+template<typename HandlerT>
+static void handleAllErrors(ArchiveWriterError E, HandlerT Handler) {
+    if (E.second)
+        Handler(E);
+}
+#endif
+#if JL_LLVM_VERSION >= 60000
+static void reportWriterError(const ErrorInfoBase &E) {
+    std::string err = E.message();
+    jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
+}
+#else
+static void reportWriterError(ArchiveWriterError E) {
+    std::string ContextStr = E.first.str();
+    std::string err;
+    if (!ContextStr.empty())
+        err += ContextStr + ": ";
+    err += E.second.message();
+    jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
+}
+#endif
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
@@ -1082,8 +1092,13 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
 #else
         Optional<Reloc::Model>(),
 #endif
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+        // On PPC the small model is limited to 16bit offsets
+        CodeModel::Medium,
+#else
         // Use small model so that we can use signed 32bits offset in the function and GV tables
         CodeModel::Small,
+#endif
         CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
         ));
 
@@ -1091,59 +1106,26 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     addTargetPasses(&PM, TM.get());
 
     // set up optimization passes
-    std::unique_ptr<raw_fd_ostream> unopt_bc_OS;
-    std::unique_ptr<raw_fd_ostream> bc_OS;
-    std::unique_ptr<raw_fd_ostream> obj_OS;
+    SmallVector<char, 128> bc_Buffer;
+    SmallVector<char, 128> obj_Buffer;
+    SmallVector<char, 128> unopt_bc_Buffer;
+    raw_svector_ostream bc_OS(bc_Buffer);
+    raw_svector_ostream obj_OS(obj_Buffer);
+    raw_svector_ostream unopt_bc_OS(unopt_bc_Buffer);
+    std::vector<NewArchiveMember> bc_Archive;
+    std::vector<NewArchiveMember> obj_Archive;
+    std::vector<NewArchiveMember> unopt_bc_Archive;
+    std::vector<std::string> outputs;
 
-    if (unopt_bc_fname) {
-        // call output handler directly to avoid special case handling of `-` filename
-        int FD;
-        std::error_code EC = sys::fs::openFileForWrite(unopt_bc_fname, FD, sys::fs::F_None);
-        unopt_bc_OS.reset(new raw_fd_ostream(FD, true));
-        std::string err;
-        if (EC)
-            err = "ERROR: failed to open --output-unopt-bc file '" + std::string(unopt_bc_fname) + "': " + EC.message();
-        if (!err.empty())
-            jl_safe_printf("%s\n", err.c_str());
-        else {
-            PM.add(createBitcodeWriterPass(*unopt_bc_OS.get()));
-        }
-    }
-
+    if (unopt_bc_fname)
+        PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname)
         addOptimizationPasses(&PM, jl_options.opt_level, true);
-
-    if (bc_fname) {
-        // call output handler directly to avoid special case handling of `-` filename
-        int FD;
-        std::error_code EC = sys::fs::openFileForWrite(bc_fname, FD, sys::fs::F_None);
-        bc_OS.reset(new raw_fd_ostream(FD, true));
-        std::string err;
-        if (EC)
-            err = "ERROR: failed to open --output-bc file '" + std::string(bc_fname) + "': " + EC.message();
-        if (!err.empty())
-            jl_safe_printf("%s\n", err.c_str());
-        else {
-            PM.add(createBitcodeWriterPass(*bc_OS.get()));
-        }
-    }
-
-    if (obj_fname) {
-        // call output handler directly to avoid special case handling of `-` filename
-        int FD;
-        std::error_code EC = sys::fs::openFileForWrite(obj_fname, FD, sys::fs::F_None);
-        obj_OS.reset(new raw_fd_ostream(FD, true));
-        std::string err;
-        if (EC)
-            err = "ERROR: failed to open --output-o file '" + std::string(obj_fname) + "': " + EC.message();
-        if (!err.empty())
-            jl_safe_printf("%s\n", err.c_str());
-        else {
-            if (TM->addPassesToEmitFile(PM, *obj_OS.get(), TargetMachine::CGFT_ObjectFile, false)) {
-                jl_safe_printf("ERROR: target does not support generation of object files\n");
-            }
-        }
-    }
+    if (bc_fname)
+        PM.add(createBitcodeWriterPass(bc_OS));
+    if (obj_fname)
+        if (TM->addPassesToEmitFile(PM, obj_OS, TargetMachine::CGFT_ObjectFile, false))
+            jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     // Reset the target triple to make sure it matches the new target machine
     shadow_output->setTargetTriple(TM->getTargetTriple().str());
@@ -1156,11 +1138,70 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
 #endif
 
     // add metadata information
-    if (imaging_mode)
-        jl_gen_llvm_globaldata(shadow_output, sysimg_data, sysimg_len);
+    if (imaging_mode) {
+        emit_offset_table(shadow_output, jl_sysimg_gvars, "jl_sysimg_gvars");
+        emit_offset_table(shadow_output, jl_sysimg_fvars, "jl_sysimg_fvars");
+
+        // reflect the address of the jl_RTLD_DEFAULT_handle variable
+        // back to the caller, so that we can check for consistency issues
+        GlobalValue *jlRTLD_DEFAULT_var = shadow_output->getNamedValue("jl_RTLD_DEFAULT_handle");
+        addComdat(new GlobalVariable(*shadow_output,
+                                     jlRTLD_DEFAULT_var->getType(),
+                                     true,
+                                     GlobalVariable::ExternalLinkage,
+                                     jlRTLD_DEFAULT_var,
+                                     "jl_RTLD_DEFAULT_handle_pointer"));
+    }
 
     // do the actual work
-    PM.run(*shadow_output);
+    auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name) {
+        PM.run(M);
+        if (unopt_bc_fname)
+            emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
+        if (bc_fname)
+            emit_result(bc_Archive, bc_Buffer, bc_Name, outputs);
+        if (obj_fname)
+            emit_result(obj_Archive, obj_Buffer, obj_Name, outputs);
+    };
+
+    add_output(*shadow_output, "unopt.bc", "text.bc", "text.o");
+
+    LLVMContext &Context = shadow_output->getContext();
+    std::unique_ptr<Module> sysimage(new Module("sysimage", Context));
+    sysimage->setTargetTriple(shadow_output->getTargetTriple());
+    sysimage->setDataLayout(shadow_output->getDataLayout());
+
+    addComdat(new GlobalVariable(*sysimage,
+                                 T_size,
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 ConstantInt::get(T_size, globalUnique + 1),
+                                 "jl_globalUnique"));
+
+    if (sysimg_data) {
+        Constant *data = ConstantDataArray::get(Context,
+            ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
+        addComdat(new GlobalVariable(*sysimage, data->getType(), false,
+                                     GlobalVariable::ExternalLinkage,
+                                     data, "jl_system_image_data"))->setAlignment(64);
+        Constant *len = ConstantInt::get(T_size, sysimg_len);
+        addComdat(new GlobalVariable(*sysimage, len->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     len, "jl_system_image_size"));
+    }
+    add_output(*sysimage, "data.bc", "data.bc", "data.o");
+
+    object::Archive::Kind Kind = getDefaultForHost(TheTriple);
+    if (unopt_bc_fname)
+        handleAllErrors(writeArchive(unopt_bc_fname, unopt_bc_Archive, true,
+                    Kind, true, false), reportWriterError);
+    if (bc_fname)
+        handleAllErrors(writeArchive(bc_fname, bc_Archive, true,
+                    Kind, true, false), reportWriterError);
+    if (obj_fname)
+        handleAllErrors(writeArchive(obj_fname, obj_Archive, true,
+                    Kind, true, false), reportWriterError);
+
     imaging_mode = false;
 }
 

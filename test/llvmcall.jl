@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.llvmcall
+using Base: llvmcall
+using InteractiveUtils: code_llvm
 
 #function add1234(x::Tuple{Int32,Int32,Int32,Int32})
 #    llvmcall("""%3 = add <4 x i32> %1, %0
@@ -48,7 +49,7 @@ end
 
 # Test whether llvmcall escapes the function name correctly
 baremodule PlusTest
-    using Base.llvmcall
+    using Base: llvmcall
     using Test
     using Base
 
@@ -86,7 +87,7 @@ function declared_floor(x::Float64)
 end
 @test declared_floor(4.2) ≈ 4.
 ir = sprint(code_llvm, declared_floor, Tuple{Float64})
-@test contains(ir, "call double @llvm.floor.f64") # should be inlined
+@test occursin("call double @llvm.floor.f64", ir) # should be inlined
 
 function doubly_declared_floor(x::Float64)
     llvmcall(
@@ -188,7 +189,7 @@ if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so ju
             ret void""",
         Cvoid, Tuple{})
     end
-    code_llvm(DevNull, foo, ())
+    code_llvm(devnull, foo, ())
 else
     @info "Skipping gep parentage test on llvm < 3.6"
 end

@@ -74,6 +74,15 @@ USE_BLAS_FFLAGS += -fdefault-integer-8
 endif
 endif
 
+ifeq ($(USE_INTEL_MKL),1)
+# We want to test if gfortran is used but currently only gfortran and ifort are supported
+# so not ifort is the same as gfortran. If support for new Fortran compilers is added
+# then this should be adjusted
+ifneq ($(USEIFC),1)
+USE_BLAS_FFLAGS += -ff2c
+endif
+endif
+
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)

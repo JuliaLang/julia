@@ -1,5 +1,9 @@
 # [Iterative Eigensolvers](@id lib-itereigen)
 
+```@meta
+DocTestSetup = :(using IterativeEigensolvers, LinearAlgebra, SparseArrays)
+```
+
 Julia provides bindings to [ARPACK](http://www.caam.rice.edu/software/ARPACK/), which
 can be used to perform iterative solutions for eigensystems (using [`eigs`](@ref))
 or singular value decompositions (using [`svds`](@ref)).
@@ -49,9 +53,7 @@ the following keyword arguments are supported:
 * `v0`: starting vector from which to start the iterations
 
 We can see the various keywords in action in the following examples:
-```jldoctest
-julia> using IterativeEigensolvers
-
+```jldoctest; filter = r"(1|2)-element Array{(Float64|Complex{Float64}),1}:\n (.|\s)*$"
 julia> A = Diagonal(1:4);
 
 julia> λ, ϕ = eigs(A, nev = 2, which=:SM);
@@ -61,42 +63,37 @@ julia> λ
  1.0000000000000002
  2.0
 
-julia> B = Diagonal([1., 2., -3im, 4im])
-4×4 Diagonal{Complex{Float64},Array{Complex{Float64},1}}:
- 1.0+0.0im      ⋅          ⋅          ⋅
-     ⋅      2.0+0.0im      ⋅          ⋅
-     ⋅          ⋅      0.0-3.0im      ⋅
-     ⋅          ⋅          ⋅      0.0+4.0im
+julia> B = Diagonal([1., 2., -3im, 4im]);
 
 julia> λ, ϕ = eigs(B, nev=1, which=:LI);
 
 julia> λ
 1-element Array{Complex{Float64},1}:
- -4.440892098500626e-16 + 3.999999999999998im
+ 1.3322676295501878e-15 + 4.0im
 
 julia> λ, ϕ = eigs(B, nev=1, which=:SI);
 
 julia> λ
 1-element Array{Complex{Float64},1}:
- 1.3877787807814457e-16 - 2.999999999999999im
+ -2.498001805406602e-16 - 3.0000000000000018im
 
 julia> λ, ϕ = eigs(B, nev=1, which=:LR);
 
 julia> λ
 1-element Array{Complex{Float64},1}:
- 2.0 + 4.242754940683747e-17im
+ 2.0000000000000004 + 4.0615212488780827e-17im
 
 julia> λ, ϕ = eigs(B, nev=1, which=:SR);
 
 julia> λ
 1-element Array{Complex{Float64},1}:
- 4.440892098500626e-16 + 4.0000000000000036im
+ -8.881784197001252e-16 + 3.999999999999997im
 
 julia> λ, ϕ = eigs(B, nev=1, sigma=1.5);
 
 julia> λ
 1-element Array{Complex{Float64},1}:
- 1.9999999999999996 + 2.4290457684137336e-17im
+ 1.0000000000000004 + 4.0417078924070745e-18im
 ```
 
 !!! note
@@ -164,31 +161,29 @@ iterations `niter` and the number of matrix vector multiplications `nmult`, as w
 final residual vector `resid`.
 
 We can see the various keywords in action in the following examples:
-```jldoctest
-julia> using IterativeEigensolvers
-
+```jldoctest; filter = r"(1|2)-element Array{(Float64|Complex{Float64}),1}:\n (.|\s)*$"
 julia> A = sparse(1.0I, 4, 4); B = Diagonal(1:4);
 
 julia> λ, ϕ = eigs(A, B, nev = 2);
 
 julia> λ
 2-element Array{Float64,1}:
- 1.0
- 0.4999999999999999
+ 1.0000000000000002
+ 0.5
 
-julia> A = sparse(1.0I, 4, 4); B = Diagonal([1, -2im, 3, 4im]);
+julia> A = Diagonal([1, -2im, 3, 4im]); B = sparse(1.0I, 4, 4);
 
 julia> λ, ϕ = eigs(A, B, nev=1, which=:SI);
 
 julia> λ
 1-element Array{Complex{Float64},1}:
- 0.03291282838780993 - 2.0627621271174514im
+ -1.5720931501039814e-16 - 1.9999999999999984im
 
 julia> λ, ϕ = eigs(A, B, nev=1, which=:LI);
 
 julia> λ
 1-element Array{Complex{Float64},1}:
- -0.6428551411711136 + 2.1820633510068994im
+ 0.0 + 4.000000000000002im
 ```
 
 !!! note
@@ -206,4 +201,8 @@ julia> λ
 IterativeEigensolvers.eigs(::Any)
 IterativeEigensolvers.eigs(::Any, ::Any)
 IterativeEigensolvers.svds
+```
+
+```@meta
+DocTestSetup = nothing
 ```

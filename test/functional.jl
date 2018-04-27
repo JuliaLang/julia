@@ -14,14 +14,14 @@ end
 @test isequal(map(sqrt, 2:6), [sqrt(i) for i in 2:6])
 
 # map on ranges should evaluate first value only once (#4453)
-let io=IOBuffer(3)
+let io=IOBuffer(maxsize=3)
     map(x->print(io,x), 1:2)
     @test String(take!(io))=="12"
 end
 
 # map over Bottom[] should return Bottom[]
 # issue #6719
-@test isequal(typeof(map(x -> x, Vector{Union{}}(uninitialized, 0))), Vector{Union{}})
+@test isequal(typeof(map(x -> x, Vector{Union{}}(undef, 0))), Vector{Union{}})
 
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @test map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
@@ -35,6 +35,9 @@ end
 # issue #10633
 @test isa(map(Integer, Any[1, 2]), Vector{Int})
 @test isa(map(Integer, Any[]), Vector{Integer})
+
+# issue #25433
+@test @inferred(collect(v for v in [1] if v > 0)) isa Vector{Int}
 
 # filter -- array.jl
 @test isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
@@ -80,10 +83,10 @@ end
 let gens_dims = [((i for i = 1:5),                    1),
                  ((i for i = 1:5, j = 1:5),           2),
                  ((i for i = 1:5, j = 1:5, k = 1:5),  3),
-                 ((i for i = Array{Int,0}(uninitialized)),           0),
-                 ((i for i = Vector{Int}(uninitialized, 1)),          1),
-                 ((i for i = Matrix{Int}(uninitialized, 1, 2)),       2),
-                 ((i for i = Array{Int}(uninitialized, 1, 2, 3)),    3)]
+                 ((i for i = Array{Int,0}(undef)),           0),
+                 ((i for i = Vector{Int}(undef, 1)),          1),
+                 ((i for i = Matrix{Int}(undef, 1, 2)),       2),
+                 ((i for i = Array{Int}(undef, 1, 2, 3)),    3)]
     for (gen, dim) in gens_dims
         @test ndims(gen) == ndims(collect(gen)) == dim
     end
@@ -111,7 +114,7 @@ let gen = (x for x in 1:10)
 end
 
 let gen = (x * y for x in 1:10, y in 1:10)
-    @test collect(gen) == collect(1:10) .* collect(1:10)'
+    @test collect(gen) == Vector(1:10) .* Vector(1:10)'
     @test first(gen) == 1
     @test collect(gen)[1:10] == 1:10
 end
@@ -141,9 +144,60 @@ end
 
 @test [(i,j) for i=1:3 for j=1:i if j>1] == [(2,2), (3,2), (3,3)]
 
+# issue #330
+@test [(t=(i,j); i=nothing; t) for i = 1:3 for j = 1:i] ==
+    [(1, 1), (2, 1), (2, 2), (3, 1), (3, 2), (3, 3)]
+
+@test map(collect, (((t=(i,j); i=nothing; t) for j = 1:i) for i = 1:3)) ==
+    [[(1, 1)],
+     [(2, 1), (nothing, 2)],
+     [(3, 1), (nothing, 2), (nothing, 3)]]
+
+let a = []
+    for x = 1:3, y = 1:3
+        push!(a, x)
+        x = 0
+    end
+    @test a == [1,1,1,2,2,2,3,3,3]
+end
+
+let i, j
+    for outer i = 1:2, j = 1:0
+    end
+    @test i == 2
+    @test !@isdefined(j)
+end
+
 # issue #18707
 @test [(q,d,n,p) for q = 0:25:100
                  for d = 0:10:100-q
                  for n = 0:5:100-q-d
                  for p = 100-q-d-n
                  if p < n < d < q] == [(50,30,15,5), (50,30,20,0), (50,40,10,0), (75,20,5,0)]
+
+@testset "map/collect return type on generators with $T" for T in (Nothing, Missing)
+    x = ["a", "b"]
+    res = @inferred collect(s for s in x)
+    @test res isa Vector{String}
+    res = @inferred map(identity, x)
+    @test res isa Vector{String}
+    res = @inferred collect(s isa T for s in x)
+    @test res isa Vector{Bool}
+    res = @inferred map(s -> s isa T, x)
+    @test res isa Vector{Bool}
+    y = Union{String, T}["a", T()]
+    f(s::Union{Nothing, Missing}) = s
+    f(s::String) = s == "a"
+    res = collect(s for s in y)
+    @test res isa Vector{Union{String, T}}
+    res = map(identity, y)
+    @test res isa Vector{Union{String, T}}
+    res = @inferred collect(s isa T for s in y)
+    @test res isa Vector{Bool}
+    res = @inferred map(s -> s isa T, y)
+    @test res isa Vector{Bool}
+    res = collect(f(s) for s in y)
+    @test res isa Vector{Union{Bool, T}}
+    res = map(f, y)
+    @test res isa Vector{Union{Bool, T}}
+end

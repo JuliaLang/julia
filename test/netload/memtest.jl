@@ -22,7 +22,7 @@ struct RUsage
 end
 
 function get_vmsize()
-    ru = Vector{RUsage}(uninitialized, 1)
+    ru = Vector{RUsage}(undef, 1)
     ccall(:getrusage, Cint, (Cint, Ptr{Cvoid}), 0, ru)
     return ru[1].ru_maxrss
 end
@@ -48,14 +48,14 @@ function mtest_create_strings()
     for i in 1:10^8
         string("$i")
     end
-    gc()
+    GC.gc()
 end
 
 function mtest_remotecall_fetch()
     for i in 1:10^5
         remotecall_fetch(myid, 1)
     end
-    gc()
+    GC.gc()
 end
 
 run_mtest("create_strings", () -> mtest_create_strings())

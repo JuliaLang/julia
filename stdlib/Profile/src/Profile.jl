@@ -7,9 +7,9 @@ Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
 module Profile
 
-import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
+import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 using Base: iszero
-using Base.Printf.@sprintf
+using Printf: @sprintf
 
 export @profile
 
@@ -101,9 +101,9 @@ struct ProfileFormat
 end
 
 """
-    print([io::IO = STDOUT,] [data::Vector]; kwargs...)
+    print([io::IO = stdout,] [data::Vector]; kwargs...)
 
-Prints profiling results to `io` (by default, `STDOUT`). If you do not
+Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
 will be used.
 
@@ -156,7 +156,7 @@ function print(io::IO, data::Vector{<:Unsigned}, lidict::LineInfoDict, fmt::Prof
 end
 
 """
-    print([io::IO = STDOUT,] data::Vector, lidict::LineInfoDict; kwargs...)
+    print([io::IO = stdout,] data::Vector, lidict::LineInfoDict; kwargs...)
 
 Prints profiling results to `io`. This variant is used to examine results exported by a
 previous call to [`retrieve`](@ref). Supply the vector `data` of backtraces and
@@ -165,7 +165,7 @@ a dictionary `lidict` of line information.
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
 print(data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
-    print(STDOUT, data, lidict; kwargs...)
+    print(stdout, data, lidict; kwargs...)
 
 """
     retrieve() -> data, lidict
@@ -442,7 +442,7 @@ end
 ## A tree representation
 # Identify and counts repetitions of all unique backtraces
 function tree_aggregate(data::Vector{UInt64})
-    iz = find(iszero, data)  # find the breaks between backtraces
+    iz = findall(iszero, data)  # find the breaks between backtraces
     treecount = Dict{Vector{UInt64},Int}()
     istart = 1 + btskip
     for iend in iz
@@ -470,7 +470,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
     ntext = cols - nindent - ndigcounts - ndigline - 5
     widthfile = floor(Integer, 0.4ntext)
     widthfunc = floor(Integer, 0.6ntext)
-    strs = Vector{String}(uninitialized, length(lilist))
+    strs = Vector{String}(undef, length(lilist))
     showextra = false
     if level > nindent
         nextra = level - nindent
@@ -489,7 +489,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                     rpad(string(counts[i]), ndigcounts, " "),
                     " ",
                     "unknown function (pointer: 0x",
-                    hex(li.pointer,2*sizeof(Ptr{Cvoid})),
+                    string(li.pointer, base = 16, pad = 2*sizeof(Ptr{Cvoid})),
                     ")")
             else
                 fname = string(li.func)
@@ -534,9 +534,9 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
         end
         # Generate counts
         dlen = length(d)
-        lilist = Vector{StackFrame}(uninitialized, dlen)
-        group = Vector{Vector{Int}}(uninitialized, dlen)
-        n = Vector{Int}(uninitialized, dlen)
+        lilist = Vector{StackFrame}(undef, dlen)
+        group = Vector{Vector{Int}}(undef, dlen)
+        n = Vector{Int}(undef, dlen)
         i = 1
         for (key, v) in d
             lilist[i] = key
@@ -557,9 +557,9 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
         end
         # Generate counts, and do the code lookup
         dlen = length(d)
-        lilist = Vector{StackFrame}(uninitialized, dlen)
-        group = Vector{Vector{Int}}(uninitialized, dlen)
-        n = Vector{Int}(uninitialized, dlen)
+        lilist = Vector{StackFrame}(undef, dlen)
+        group = Vector{Vector{Int}}(undef, dlen)
+        n = Vector{Int}(undef, dlen)
         i = 1
         for (key, v) in d
             lilist[i] = lidict[key]
@@ -662,7 +662,7 @@ truncto(str::Symbol, w::Int) = truncto(string(str), w)
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
-    comb = Vector{String}(uninitialized, length(lilist))
+    comb = Vector{String}(undef, length(lilist))
     for i = 1:length(lilist)
         li = lilist[i]
         if li != UNKNOWN

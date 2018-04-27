@@ -3,7 +3,7 @@
 using Logging
 import Logging: Info,
     shouldlog, handle_message, min_enabled_level, catch_exceptions
-import Base: ismatch
+import Base: occursin
 
 #-------------------------------------------------------------------------------
 # Log records
@@ -64,9 +64,9 @@ mutable struct LogTestFailure <: Result
     logs
 end
 function Base.show(io::IO, t::LogTestFailure)
-    print_with_color(Base.error_color(), io, "Log Test Failed"; bold = true)
+    printstyled(io, "Log Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
-    print_with_color(:default, io, t.source.file, ":", t.source.line, "\n"; bold = true)
+    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
     println(io, "  Expression: ", t.orig_expr)
     println(io, "  Log Pattern: ", join(t.patterns, " "))
     println(io, "  Captured Logs: ")
@@ -84,9 +84,9 @@ end
 
 function record(ts::DefaultTestSet, t::LogTestFailure)
     if myid() == 1
-        print_with_color(:white, ts.description, ": ")
+        printstyled(ts.description, ": ", color=:white)
         print(t)
-        Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+        Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
         println()
     end
     # Hack: convert to `Fail` so that test summarization works correctly
@@ -113,7 +113,7 @@ corresponding to the arguments to passed to `AbstractLogger` via the
 Elements which are present will be matched pairwise with the log record fields
 using `==` by default, with the special cases that `Symbol`s may be used for
 the standard log levels, and `Regex`s in the pattern will match string or
-Symbol fields using `ismatch`.
+Symbol fields using `occursin`.
 
 # Examples
 
@@ -181,9 +181,9 @@ function match_logs(f, patterns...; match_mode::Symbol=:all, kwargs...)
     logs,value = collect_test_logs(f; kwargs...)
     if match_mode == :all
         didmatch = length(logs) == length(patterns) &&
-            all(ismatch(p,l) for (p,l) in zip(patterns, logs))
+            all(occursin(p, l) for (p,l) in zip(patterns, logs))
     elseif match_mode == :any
-        didmatch = all(any(ismatch(p,l) for l in logs) for p in patterns)
+        didmatch = all(any(occursin(p, l) for l in logs) for p in patterns)
     end
     didmatch,logs,value
 end
@@ -201,15 +201,15 @@ function parse_level(level::Symbol)
     end
 end
 
-logfield_ismatch(a, b) = a == b
-logfield_ismatch(r::Regex, b) = ismatch(r, b)
-logfield_ismatch(r::Regex, b::Symbol) = ismatch(r, String(b))
-logfield_ismatch(a::Symbol, b::LogLevel) = parse_level(a) == b
-logfield_ismatch(a::Ignored, b) = true
+logfield_contains(a, b) = a == b
+logfield_contains(a, r::Regex) = occursin(r, a)
+logfield_contains(a::Symbol, r::Regex) = occursin(r, String(a))
+logfield_contains(a::LogLevel, b::Symbol) = a == parse_level(b)
+logfield_contains(a, b::Ignored) = true
 
-function ismatch(pattern::Tuple, r::LogRecord)
+function occursin(pattern::Tuple, r::LogRecord)
     stdfields = (r.level, r.message, r._module, r.group, r.id, r.file, r.line)
-    all(logfield_ismatch(p,f) for (p,f) in zip(pattern, stdfields[1:length(pattern)]))
+    all(logfield_contains(f, p) for (f, p) in zip(stdfields[1:length(pattern)], pattern))
 end
 
 """

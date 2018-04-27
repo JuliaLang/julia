@@ -471,14 +471,14 @@ JL_DLLEXPORT void jl_flush_cstdio(void)
 JL_DLLEXPORT jl_value_t *jl_stdout_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
-    jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
+    jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("stdout"));
     return stdout_obj;
 }
 
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
-    jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
+    jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("stderr"));
     return stderr_obj;
 }
 
@@ -821,8 +821,16 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
     }
     else if (jl_is_array_type(vt)) {
-        n += jl_static_show_x(out, (jl_value_t*)vt, depth);
-        n += jl_printf(out, "[");
+        n += jl_printf(out, "Array{");
+        n += jl_static_show_x(out, (jl_value_t*)jl_tparam0(vt), depth);
+        n += jl_printf(out, ", (");
+        size_t i, ndims = jl_array_ndims(v);
+        if (ndims == 1)
+            n += jl_printf(out, "%" PRIdPTR ",", jl_array_dim0(v));
+        else
+            for (i = 0; i < ndims; i++)
+                n += jl_printf(out, (i > 0 ? ", %" PRIdPTR : "%" PRIdPTR), jl_array_dim(v, i));
+        n += jl_printf(out, ")}[");
         size_t j, tlen = jl_array_len(v);
         jl_array_t *av = (jl_array_t*)v;
         jl_datatype_t *el_type = (jl_datatype_t*)jl_tparam0(vt);
@@ -873,11 +881,16 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (jl_is_datatype(vt)) {
         int istuple = jl_is_tuple_type(vt), isnamedtuple = jl_is_namedtuple_type(vt);
-        if (!istuple && !isnamedtuple)
+        size_t tlen = jl_datatype_nfields(vt);
+        if (isnamedtuple) {
+            if (tlen == 0)
+                n += jl_printf(out, "NamedTuple");
+        }
+        else if (!istuple) {
             n += jl_static_show_x(out, (jl_value_t*)vt, depth);
+        }
         n += jl_printf(out, "(");
         size_t nb = jl_datatype_size(vt);
-        size_t tlen = jl_datatype_nfields(vt);
         if (nb > 0 && tlen == 0) {
             uint8_t *data = (uint8_t*)v;
             n += jl_printf(out, "0x");
@@ -913,7 +926,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             }
             if (vt == jl_typemap_entry_type) {
                 n += jl_printf(out, ", next=↩︎\n  ");
-                n += jl_static_show_x(out, jl_fieldref(v, 0), depth);
+                n += jl_static_show_x(out, jl_fieldref_noalloc(v, 0), depth);
             }
         }
         n += jl_printf(out, ")");
@@ -1027,6 +1040,63 @@ JL_DLLEXPORT void jl_(void *jl_value)
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
     // put a breakpoint in your debugger here
+}
+
+// logging tools --------------------------------------------------------------
+
+void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
+            jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
+            jl_value_t *msg)
+{
+    static jl_value_t *logmsg_func = NULL;
+    if (!logmsg_func && jl_base_module) {
+        jl_value_t *corelogging = jl_get_global(jl_base_module, jl_symbol("CoreLogging"));
+        if (corelogging && jl_is_module(corelogging)) {
+            logmsg_func = jl_get_global((jl_module_t*)corelogging, jl_symbol("logmsg_shim"));
+        }
+    }
+    if (!logmsg_func) {
+        ios_t str_;
+        ios_mem(&str_, 300);
+        uv_stream_t* str = (uv_stream_t*)&str_;
+        if (jl_is_string(msg)) {
+            jl_uv_puts(str, jl_string_data(msg), jl_string_len(msg));
+        }
+        else if (jl_is_symbol(msg)) {
+            jl_printf(str, "%s", jl_symbol_name((jl_sym_t*)msg));
+        }
+        jl_printf(str, "\n@ ");
+        if (jl_is_string(file)) {
+            jl_uv_puts(str, jl_string_data(file), jl_string_len(file));
+        }
+        else if (jl_is_symbol(file)) {
+            jl_printf(str, "%s", jl_symbol_name((jl_sym_t*)file));
+        }
+        jl_printf(str, ":");
+        jl_static_show(str, line);
+        jl_safe_printf("%s [Fallback logging]: %.*s\n",
+                       level < JL_LOGLEVEL_INFO ? "Debug" :
+                       level < JL_LOGLEVEL_WARN ? "Info" :
+                       level < JL_LOGLEVEL_ERROR ? "Warning" : "Error",
+                       (int)str_.size, str_.buf);
+        ios_close(&str_);
+        return;
+    }
+    jl_value_t **args;
+    const int nargs = 9;
+    JL_GC_PUSHARGS(args, nargs);
+    args[0] = logmsg_func;
+    args[1] = jl_box_long(level);
+    args[2] = msg;
+    // Would some of the jl_nothing here be better as `missing` instead?
+    args[3] = module ? module  : jl_nothing;
+    args[4] = group  ? group   : jl_nothing;
+    args[5] = id     ? id      : jl_nothing;
+    args[6] = file   ? file    : jl_nothing;
+    args[7] = line   ? line    : jl_nothing;
+    args[8] = kwargs ? kwargs  : (jl_value_t*)jl_alloc_vec_any(0);
+    jl_apply(args, nargs);
+    JL_GC_POP();
 }
 
 void jl_depwarn(const char *msg, jl_value_t *sym)

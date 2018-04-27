@@ -102,7 +102,7 @@ function digitgen(low,w,high,buffer)
     end
 end
 
-function fastshortest(v, buffer = Vector{UInt8}(uninitialized, 17))
+function fastshortest(v, buffer = Vector{UInt8}(undef, 17))
     f = normalize(Float64(v))
     bound_minus, bound_plus = normalizedbound(v)
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)

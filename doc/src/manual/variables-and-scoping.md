@@ -25,7 +25,7 @@ constructs introducing scope blocks are:
 
     - local scope (don't allow nesting)
 
-      + type, immutable, macro
+      + (mutable) struct, macro
 
   * Scope blocks which may nest anywhere (in global or local scope):
 
@@ -251,15 +251,15 @@ which have a private state, for instance the ``state`` variable in the
 following example:
 
 ```jldoctest
-    julia> let state = 0
-               global counter() = (state += 1)
-           end;
+julia> let state = 0
+           global counter() = (state += 1)
+       end;
 
-    julia> counter()
-    1
+julia> counter()
+1
 
-    julia> counter()
-    2
+julia> counter()
+2
 ```
 
 See also the closures in the examples in the next two sections.
@@ -359,11 +359,11 @@ something like `let x = x` since the two `x` variables are distinct and have sep
 Here is an example where the behavior of `let` is needed:
 
 ```jldoctest
-julia> Fs = Vector{Any}(uninitialized, 2); i = 1;
+julia> Fs = Vector{Any}(undef, 2); i = 1;
 
 julia> while i <= 2
            Fs[i] = ()->i
-           i += 1
+           global i += 1
        end
 
 julia> Fs[1]()
@@ -378,13 +378,13 @@ variable `i`, so the two closures behave identically. We can use `let` to create
 for `i`:
 
 ```jldoctest
-julia> Fs = Vector{Any}(uninitialized, 2); i = 1;
+julia> Fs = Vector{Any}(undef, 2); i = 1;
 
 julia> while i <= 2
            let i = i
                Fs[i] = ()->i
            end
-           i += 1
+           global i += 1
        end
 
 julia> Fs[1]()
@@ -418,7 +418,7 @@ introduced in their body scopes are freshly allocated for each loop iteration, a
 were surrounded by a `let` block:
 
 ```jldoctest
-julia> Fs = Vector{Any}(uninitialized, 2);
+julia> Fs = Vector{Any}(undef, 2);
 
 julia> for j = 1:2
            Fs[j] = ()->j
@@ -489,5 +489,85 @@ not supported.
 Special top-level assignments, such as those performed by the `function` and `struct` keywords,
 are constant by default.
 
-Note that `const` only affects the variable binding; the variable may be bound to a mutable object
-(such as an array), and that object may still be modified.
+Note that `const` only affects the variable binding; the variable may be bound to a mutable
+object (such as an array), and that object may still be modified. Additionally when one tries
+to assign a value a variable that is declared constant the following scenarios are possible:
+
+* if a new value has a different type than the type of the constant then an error is thrown:
+```jldoctest
+julia> const x = 1.0
+1.0
+
+julia> x = 1
+ERROR: invalid redefinition of constant x
+```
+* if a new value has the same type as the constant then a warning is printed:
+```jldoctest
+julia> const y = 1.0
+1.0
+
+julia> y = 2.0
+WARNING: redefining constant y
+2.0
+```
+* if an assignment would not result in the change of variable value no message is given:
+```jldoctest
+julia> const z = 100
+100
+
+julia> z = 100
+100
+```
+The last rule applies for immutable objects even if the vairable binding would change, e.g.:
+```julia-repl
+julia> const s1 = "1"
+"1"
+
+julia> s2 = "1"
+"1"
+
+julia> pointer.([s1, s2], 1)
+2-element Array{Ptr{UInt8},1}:
+ Ptr{UInt8} @0x00000000132c9638
+ Ptr{UInt8} @0x0000000013dd3d18
+
+julia> s1 = s2
+"1"
+
+julia> pointer.([s1, s2], 1)
+2-element Array{Ptr{UInt8},1}:
+ Ptr{UInt8} @0x0000000013dd3d18
+ Ptr{UInt8} @0x0000000013dd3d18
+```
+However, for mutable objects the warning is printed as expected:
+```jldoctest
+julia> const a = [1]
+1-element Array{Int64,1}:
+ 1
+
+julia> a = [1]
+WARNING: redefining constant a
+1-element Array{Int64,1}:
+ 1
+```
+
+Note that although possible, changing the value of a variable that is declared as constant
+is strongly discouraged. For instance, if a method references a constant and is already
+compiled before the constant is changed then it might keep using the old value:
+```jldoctest
+julia> const x = 1
+1
+
+julia> f() = x
+f (generic function with 1 method)
+
+julia> f()
+1
+
+julia> x = 2
+WARNING: redefining constant x
+2
+
+julia> f()
+1
+```

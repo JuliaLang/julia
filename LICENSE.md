@@ -3,7 +3,7 @@ of the compiler (the contents of src/), most of the standard library (base/),
 and some utilities (most of the rest of the files in this repository). See below
 for exceptions.
 
-> Copyright (c) 2009-2016: Jeff Bezanson, Stefan Karpinski, Viral B. Shah,
+> Copyright (c) 2009-2018: Jeff Bezanson, Stefan Karpinski, Viral B. Shah,
 > and other contributors:
 >
 > https://github.com/JuliaLang/julia/contributors
@@ -36,7 +36,6 @@ Julia includes code from the following projects, which have their own licenses:
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](http://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
 - [Python](https://docs.python.org/2/license.html) (for strtod implementation on Windows) [BSD-3, effectively]
-- [randmtzig.c](https://github.com/JuliaLang/julia/blob/master/test/perf/micro/randmtzig.c) for Gaussian random number generation (for C benchmarks only) [BSD-3]
 
 The Julia language links to the following external libraries, which have their
 own licenses:
@@ -73,6 +72,7 @@ The following components of Julia's standard library have separate licenses:
 - base/sparse/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 - base/special/exp.jl (see [FDLIBM](http://www.netlib.org/fdlibm/e_exp.c) [Freely distributable with preserved copyright notice])
 - base/special/rem_pio2.jl (see [FDLIBM](http://www.netlib.org/fdlibm/e_rem_pio2.c) [Freely distributable with preserved copyright notice])
+- base/special/hyperbolic.jl (see [FDLIBM]) [Freely distributable with preserved copyright notice])
 
 
 Julia's build process uses the following external tools:

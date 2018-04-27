@@ -10,11 +10,11 @@ julia> `echo hello`
 
 differs in several aspects from the behavior in various shells, Perl, or Ruby:
 
-  * Instead of immediately running the command, backticks create a `Cmd` object to represent the command.
-    You can use this object to connect the command to others via pipes, run it, and read or write
+  * Instead of immediately running the command, backticks create a [`Cmd`](@ref) object to represent the command.
+    You can use this object to connect the command to others via pipes, [`run`](@ref) it, and [`read`](@ref) or [`write`](@ref)
     to it.
   * When the command is run, Julia does not capture its output unless you specifically arrange for
-    it to. Instead, the output of the command by default goes to [`STDOUT`](@ref) as it would using
+    it to. Instead, the output of the command by default goes to [`stdout`](@ref) as it would using
     `libc`'s `system` call.
   * The command is never run with a shell. Instead, Julia parses the command syntax directly, appropriately
     interpolating variables and splitting on words as the shell would, respecting shell quoting syntax.
@@ -29,11 +29,11 @@ julia> mycommand = `echo hello`
 julia> typeof(mycommand)
 Cmd
 
-julia> run(mycommand)
+julia> run(mycommand);
 hello
 ```
 
-The `hello` is the output of the `echo` command, sent to [`STDOUT`](@ref). The run method itself
+The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). The run method itself
 returns `nothing`, and throws an [`ErrorException`](@ref) if the external command fails to run
 successfully.
 
@@ -50,7 +50,7 @@ true
 More generally, you can use [`open`](@ref) to read from or write to an external command.
 
 ```jldoctest
-julia> open(`less`, "w", STDOUT) do io
+julia> open(`less`, "w", stdout) do io
            for i = 1:3
                println(io, i)
            end
@@ -209,7 +209,7 @@ values. Let's try the above two examples in Julia:
 julia> A = `perl -le '$|=1; for (0..3) { print }'`
 `perl -le '$|=1; for (0..3) { print }'`
 
-julia> run(A)
+julia> run(A);
 0
 1
 2
@@ -220,7 +220,7 @@ julia> first = "A"; second = "B";
 julia> B = `perl -le 'print for @ARGV' "1: $first" "2: $second"`
 `perl -le 'print for @ARGV' '1: A' '2: B'`
 
-julia> run(B)
+julia> run(B);
 1: A
 2: B
 ```
@@ -236,10 +236,10 @@ easily and safely just examine its interpretation without doing any damage.
 Shell metacharacters, such as `|`, `&`, and `>`, need to be quoted (or escaped) inside of Julia's backticks:
 
 ```jldoctest
-julia> run(`echo hello '|' sort`)
+julia> run(`echo hello '|' sort`);
 hello | sort
 
-julia> run(`echo hello \| sort`)
+julia> run(`echo hello \| sort`);
 hello | sort
 ```
 
@@ -248,7 +248,7 @@ The result is that a single line is printed: `hello | sort`. How, then, does one
 pipeline? Instead of using `'|'` inside of backticks, one uses [`pipeline`](@ref):
 
 ```jldoctest
-julia> run(pipeline(`echo hello`, `sort`))
+julia> run(pipeline(`echo hello`, `sort`));
 hello
 ```
 
@@ -273,19 +273,19 @@ that shells cannot.
 
 Julia can run multiple commands in parallel:
 
-```julia-repl
-julia> run(`echo hello` & `echo world`)
+```jldoctest; filter = r"(world\nhello|hello\nworld)"
+julia> run(`echo hello` & `echo world`);
 world
 hello
 ```
 
 The order of the output here is non-deterministic because the two `echo` processes are started
-nearly simultaneously, and race to make the first write to the [`STDOUT`](@ref) descriptor they
+nearly simultaneously, and race to make the first write to the [`stdout`](@ref) descriptor they
 share with each other and the `julia` parent process. Julia lets you pipe the output from both
 of these processes to another program:
 
 ```jldoctest
-julia> run(pipeline(`echo world` & `echo hello`, `sort`))
+julia> run(pipeline(`echo world` & `echo hello`, `sort`));
 hello
 world
 ```
@@ -294,7 +294,7 @@ In terms of UNIX plumbing, what's happening here is that a single UNIX pipe obje
 and written to by both `echo` processes, and the other end of the pipe is read from by the `sort`
 command.
 
-IO redirection can be accomplished by passing keyword arguments stdin, stdout, and stderr to the
+IO redirection can be accomplished by passing keyword arguments `stdin`, `stdout`, and `stderr` to the
 `pipeline` function:
 
 ```julia
@@ -310,7 +310,7 @@ For example, when reading all of the output from a command, call `read(out, Stri
 since the former will actively consume all of the data written by the process, whereas the latter
 will attempt to store the data in the kernel's buffers while waiting for a reader to be connected.
 
-Another common solution is to separate the reader and writer of the pipeline into separate Tasks:
+Another common solution is to separate the reader and writer of the pipeline into separate [`Task`](@ref)s:
 
 ```julia
 writer = @async write(process, "data")
@@ -326,46 +326,38 @@ setup of pipes between processes is a powerful one. To give some sense of the co
 that can be created easily, here are some more sophisticated examples, with apologies for the
 excessive use of Perl one-liners:
 
-```julia-repl
+```jldoctest prefixer; filter = r"([A-B] [0-5])"
 julia> prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`;
 
-julia> run(pipeline(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`, prefixer("A",2) & prefixer("B",2)))
-A 0
-B 1
-A 2
-B 3
-A 4
-B 5
-A 6
-B 7
-A 8
-B 9
+julia> run(pipeline(`perl -le '$|=1; for(0..5){ print; sleep 1 }'`, prefixer("A",2) & prefixer("B",2)));
+B 0
+A 1
+B 2
+A 3
+B 4
+A 5
 ```
 
 This is a classic example of a single producer feeding two concurrent consumers: one `perl` process
-generates lines with the numbers 0 through 9 on them, while two parallel processes consume that
+generates lines with the numbers 0 through 5 on them, while two parallel processes consume that
 output, one prefixing lines with the letter "A", the other with the letter "B". Which consumer
 gets the first line is non-deterministic, but once that race has been won, the lines are consumed
 alternately by one process and then the other. (Setting `$|=1` in Perl causes each print statement
-to flush the [`STDOUT`](@ref) handle, which is necessary for this example to work. Otherwise all
+to flush the [`stdout`](@ref) handle, which is necessary for this example to work. Otherwise all
 the output is buffered and printed to the pipe at once, to be read by just one consumer process.)
 
 Here is an even more complex multi-stage producer-consumer example:
 
-```julia-repl
-julia> run(pipeline(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`,
+```jldoctest prefixer; filter = r"[A-B] [X-Z] [0-5]"
+julia> run(pipeline(`perl -le '$|=1; for(0..5){ print; sleep 1 }'`,
            prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3),
-           prefixer("A",2) & prefixer("B",2)))
+           prefixer("A",2) & prefixer("B",2)));
 A X 0
 B Y 1
 A Z 2
 B X 3
 A Y 4
 B Z 5
-A X 6
-B Y 7
-A Z 8
-B X 9
 ```
 
 This example is similar to the previous one, except there are two stages of consumers, and the

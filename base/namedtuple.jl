@@ -1,6 +1,53 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if module_name(@__MODULE__) === :Base
+"""
+    NamedTuple
+
+`NamedTuple`s are, as their name suggests, named [`Tuple`](@ref)s. That is, they're a
+tuple-like collection of values, where each entry has a unique name, represented as a
+`Symbol`. Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
+can be modified in place after construction.
+
+Accessing the value associated with a name in a named tuple can be done using field
+access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]`. A tuple of the
+names can be obtained using [`keys`](@ref), and a tuple of the values can be obtained
+using [`values`](@ref).
+
+!!! note
+    Iteration over `NamedTuple`s produces the *values* without the names. (See example
+    below.) To iterate over the name-value pairs, use the [`pairs`](@ref) function.
+
+# Examples
+```jldoctest
+julia> x = (a=1, b=2)
+(a = 1, b = 2)
+
+julia> x.a
+1
+
+julia> x[:a]
+1
+
+julia> keys(x)
+(:a, :b)
+
+julia> values(x)
+(1, 2)
+
+julia> collect(x)
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> collect(pairs(x))
+2-element Array{Pair{Symbol,Int64},1}:
+ :a => 1
+ :b => 2
+```
+"""
+Core.NamedTuple
+
+if nameof(@__MODULE__) === :Base
 
 """
     NamedTuple{names,T}(args::Tuple)
@@ -48,18 +95,30 @@ length(t::NamedTuple) = nfields(t)
 start(t::NamedTuple) = 1
 done(t::NamedTuple, iter) = iter > nfields(t)
 next(t::NamedTuple, iter) = (getfield(t, iter), iter + 1)
-endof(t::NamedTuple) = nfields(t)
+firstindex(t::NamedTuple) = 1
+lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
 indexed_next(t::NamedTuple, i::Int, state) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 
-convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T} = nt
+convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
 
-function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T}
+function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
     NamedTuple{names,T}(T(nt))
+end
+
+if nameof(@__MODULE__) === :Base
+    function Tuple(nt::NamedTuple{names}) where {names}
+        if @generated
+            return Expr(:tuple, Any[:(getfield(nt, $(QuoteNode(n)))) for n in names]...)
+        else
+            return tuple(nt...)
+        end
+    end
+    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = convert(T, Tuple(nt))
 end
 
 function show(io::IO, t::NamedTuple)
@@ -101,7 +160,7 @@ isequal(a::NamedTuple, b::NamedTuple) = false
 _nt_names(::NamedTuple{names}) where {names} = names
 _nt_names(::Type{T}) where {names,T<:NamedTuple{names}} = names
 
-hash(x::NamedTuple, h::UInt) = xor(object_id(_nt_names(x)), hash(Tuple(x), h))
+hash(x::NamedTuple, h::UInt) = xor(objectid(_nt_names(x)), hash(Tuple(x), h))
 
 isless(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = isless(Tuple(a), Tuple(b))
 # TODO: case where one argument's names are a prefix of the other's
@@ -175,6 +234,8 @@ end
 
 merge(a::NamedTuple{()}, b::NamedTuple) = b
 
+merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
+
 """
     merge(a::NamedTuple, iterable)
 
@@ -188,7 +249,7 @@ julia> merge((a=1, b=2, c=3), [:b=>4, :d=>5])
 function merge(a::NamedTuple, itr)
     names = Symbol[]
     vals = Any[]
-    inds = ObjectIdDict()
+    inds = IdDict()
     for (k,v) in itr
         oldind = get(inds, k, 0)
         if oldind > 0

@@ -5,6 +5,8 @@ Convenience functions for metaprogramming.
 """
 module Meta
 
+using ..CoreLogging
+
 export quot,
        isexpr,
        show_sexpr,
@@ -21,7 +23,7 @@ isexpr(ex,       head, n::Int)  = isexpr(ex, head) && length(ex.args) == n
 
 # ---- show_sexpr: print an AST as an S-expression ----
 
-show_sexpr(ex) = show_sexpr(STDOUT, ex)
+show_sexpr(ex) = show_sexpr(stdout, ex)
 show_sexpr(io::IO, ex) = show_sexpr(io, ex, 0)
 show_sexpr(io::IO, ex, indent::Int) = show(io, ex)
 
@@ -93,7 +95,7 @@ struct ParseError <: Exception
 end
 
 """
-    parse(str, start; greedy=true, raise=true)
+    parse(str, start; greedy=true, raise=true, depwarn=true)
 
 Parse the expression string and return an expression (which could later be passed to eval
 for execution). `start` is the index of the first character to start parsing. If `greedy` is
@@ -101,7 +103,8 @@ for execution). `start` is the index of the first character to start parsing. If
 stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically
 valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is `true`
 (default), syntax errors other than incomplete expressions will raise an error. If `raise`
-is `false`, `parse` will return an expression that will raise an error upon evaluation.
+is `false`, `parse` will return an expression that will raise an error upon evaluation. If
+`depwarn` is `false`, deprecation warnings will be suppressed.
 
 ```jldoctest
 julia> Meta.parse("x = 3, y = 5", 7)
@@ -111,13 +114,17 @@ julia> Meta.parse("x = 3, y = 5", 5)
 (:((3, y) = 5), 13)
 ```
 """
-function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
+function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true,
+               depwarn::Bool=true)
     # pos is one based byte offset.
     # returns (expr, end_pos). expr is () in case of parse error.
     bstr = String(str)
-    ex, pos = ccall(:jl_parse_string, Any,
-                    (Ptr{UInt8}, Csize_t, Int32, Int32),
-                    bstr, sizeof(bstr), pos-1, greedy ? 1 : 0)
+    # For now, assume all parser warnings are depwarns
+    ex, pos = with_logger(depwarn ? current_logger() : NullLogger()) do
+        ccall(:jl_parse_string, Any,
+              (Ptr{UInt8}, Csize_t, Int32, Int32),
+              bstr, sizeof(bstr), pos-1, greedy ? 1 : 0)
+    end
     if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
     end
@@ -129,12 +136,13 @@ function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=tru
 end
 
 """
-    parse(str; raise=true)
+    parse(str; raise=true, depwarn=true)
 
 Parse the expression string greedily, returning a single expression. An error is thrown if
 there are additional characters after the first expression. If `raise` is `true` (default),
 syntax errors will raise an error; otherwise, `parse` will return an expression that will
-raise an error upon evaluation.
+raise an error upon evaluation.  If `depwarn` is `false`, deprecation warnings will be
+suppressed.
 
 ```jldoctest
 julia> Meta.parse("x = 3")
@@ -144,7 +152,7 @@ julia> Meta.parse("x = ")
 :($(Expr(:incomplete, "incomplete: premature end of input")))
 
 julia> Meta.parse("1.0.2")
-ERROR: ParseError("invalid numeric constant \\\"1.0.\\\"")
+ERROR: Base.Meta.ParseError("invalid numeric constant \\\"1.0.\\\"")
 Stacktrace:
 [...]
 
@@ -152,8 +160,8 @@ julia> Meta.parse("1.0.2"; raise = false)
 :($(Expr(:error, "invalid numeric constant \"1.0.\"")))
 ```
 """
-function parse(str::AbstractString; raise::Bool=true)
-    ex, pos = parse(str, 1, greedy=true, raise=raise)
+function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
+    ex, pos = parse(str, 1, greedy=true, raise=raise, depwarn=depwarn)
     if isa(ex,Expr) && ex.head === :error
         return ex
     end

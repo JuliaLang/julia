@@ -4,12 +4,14 @@
 
 module PCRE
 
+import ..RefValue
+
 include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))  # include($BUILDROOT/base/pcre_h.jl)
 
 const PCRE_LIB = "libpcre2-8"
 
-const JIT_STACK = Ref{Ptr{Cvoid}}(C_NULL)
-const MATCH_CONTEXT = Ref{Ptr{Cvoid}}(C_NULL)
+const JIT_STACK = RefValue{Ptr{Cvoid}}(C_NULL)
+const MATCH_CONTEXT = RefValue{Ptr{Cvoid}}(C_NULL)
 
 function __init__()
     try
@@ -70,7 +72,7 @@ const OPTIONS_MASK = COMPILE_MASK | EXECUTE_MASK
 const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
 function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
-    buf = Ref{T}()
+    buf = RefValue{T}()
     ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Int32,
                 (Ptr{Cvoid}, Int32, Ptr{Cvoid}),
                 regex, what, buf)
@@ -88,12 +90,12 @@ function get_ovec(match_data)
                 (Ptr{Cvoid},), match_data)
     n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
               (Ptr{Cvoid},), match_data)
-    unsafe_wrap(Array, ptr, 2n, false)
+    unsafe_wrap(Array, ptr, 2n, own = false)
 end
 
 function compile(pattern::AbstractString, options::Integer)
-    errno = Ref{Cint}(0)
-    erroff = Ref{Csize_t}(0)
+    errno = RefValue{Cint}(0)
+    erroff = RefValue{Csize_t}(0)
     re_ptr = ccall((:pcre2_compile_8, PCRE_LIB), Ptr{Cvoid},
                    (Ptr{UInt8}, Csize_t, UInt32, Ref{Cint}, Ref{Csize_t}, Ptr{Cvoid}),
                    pattern, sizeof(pattern), options, errno, erroff, C_NULL)
@@ -120,10 +122,10 @@ free_match_context(context) =
     ccall((:pcre2_match_context_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), context)
 
 function err_message(errno)
-    buffer = Vector{UInt8}(uninitialized, 256)
+    buffer = Vector{UInt8}(undef, 256)
     ccall((:pcre2_get_error_message_8, PCRE_LIB), Cvoid,
           (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
-    Base.@gc_preserve buffer unsafe_string(pointer(buffer))
+    GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
 function exec(re,subject,offset,options,match_data)
@@ -146,7 +148,7 @@ function substring_number_from_name(re, name)
 end
 
 function substring_length_bynumber(match_data, number)
-    s = Ref{Csize_t}()
+    s = RefValue{Csize_t}()
     rc = ccall((:pcre2_substring_length_bynumber_8, PCRE_LIB), Cint,
           (Ptr{Cvoid}, UInt32, Ref{Csize_t}), match_data, number, s)
     rc < 0 && error("PCRE error: $(err_message(rc))")
@@ -154,7 +156,7 @@ function substring_length_bynumber(match_data, number)
 end
 
 function substring_copy_bynumber(match_data, number, buf, buf_size)
-    s = Ref{Csize_t}(buf_size)
+    s = RefValue{Csize_t}(buf_size)
     rc = ccall((:pcre2_substring_copy_bynumber_8, PCRE_LIB), Cint,
                (Ptr{Cvoid}, UInt32, Ptr{UInt8}, Ref{Csize_t}),
                match_data, number, buf, s)
