@@ -45,9 +45,12 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-# FIXME: check that end of `b` doesn't match a partial character in `a`
-startswith(a::String, b::String) = sizeof(a) ≥ sizeof(b) &&
-    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0
+function startswith(a::String, b::String)
+    cub = ncodeunits(b)
+    (ncodeunits(a) < cub || ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+                                   a, b, sizeof(b)) ≠ 0) && return false
+    nextind(a, cub) == cub + 1
+end
 
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
     ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0

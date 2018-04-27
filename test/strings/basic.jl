@@ -51,6 +51,15 @@ end
     @test !endswith("cd", "abcd")
     @test startswith("ab\0cd", "ab\0c")
     @test !startswith("ab\0cd", "ab\0d")
+    x = "∀"
+    y = String(codeunits(x)[1:2])
+    z = String(codeunits(x)[1:1])
+    @test !startswith(x, y)
+    @test !startswith(x, z)
+    @test !startswith(y, z)
+    @test startswith(x, x)
+    @test startswith(y, y)
+    @test startswith(z, z)
 end
 
 @test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
