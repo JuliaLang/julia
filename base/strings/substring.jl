@@ -82,14 +82,6 @@ end
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
-function cmp(a::SubString{String}, b::SubString{String})
-    na = sizeof(a)
-    nb = sizeof(b)
-    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              pointer(a), pointer(b), min(na, nb))
-    return c < 0 ? -1 : c > 0 ? +1 : cmp(na, nb)
-end
-
 # don't make unnecessary copies when passing substrings to C functions
 cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
 cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s

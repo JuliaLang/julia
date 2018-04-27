@@ -23,6 +23,12 @@ using Random
     @test eltype(GenericString) == Char
     @test firstindex("abc") == 1
     @test cmp("ab","abc") == -1
+    @test cmp(String([0xc4, 0xfd, 0x27, 0x25]),
+              String([0xc4, 0xb0, 0xcf, 0x86])) == -1
+    @test cmp(SubString(String([0xc4, 0xfd, 0x27, 0x25])),
+              String([0xc4, 0xb0, 0xcf, 0x86])) == -1
+    @test cmp(SubString(String([0xc4, 0xfd, 0x27, 0x25])),
+              SubString(String([0xc4, 0xb0, 0xcf, 0x86]))) == -1
     @test typemin(String) === ""
     @test typemin("abc") === ""
     @test "abc" === "abc"
