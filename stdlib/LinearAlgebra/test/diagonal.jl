@@ -433,4 +433,11 @@ end
     @test Diagonal(transpose([1, 2, 3])) == Diagonal([1 2 3])
 end
 
+@testset "Multiplication with Adjoint and Transpose vectors (#26863)" begin
+    x = rand(5)
+    D = Diagonal(rand(5))
+    @test x'*D*x == (x'*D)*x == (x'*Array(D))*x
+    @test Transpose(x)*D*x == (Transpose(x)*D)*x == (Transpose(x)*Array(D))*x
+end
+
 end # module TestDiagonal

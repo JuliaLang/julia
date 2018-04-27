@@ -154,9 +154,9 @@ end
 (*)(D::Diagonal, B::AbstractTriangular) = lmul!(D, copy(B))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
+    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A), D)
 (*)(D::Diagonal, A::AbstractMatrix) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
+    lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
     A .= A .* transpose(D.diag)
@@ -270,14 +270,6 @@ mul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector) = 
 mul!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .* in
 mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= adjoint.(A.parent.diag) .* in
 mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= transpose.(A.parent.diag) .* in
-
-mul!(C::AbstractMatrix, A::Diagonal, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Diagonal, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-
 
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
@@ -478,8 +470,10 @@ function svdfact(D::Diagonal)
 end
 
 # dismabiguation methods: * of Diagonal and Adj/Trans AbsVec
-*(A::Diagonal, B::Adjoint{<:Any,<:AbstractVector}) = A * copy(B)
-*(A::Diagonal, B::Transpose{<:Any,<:AbstractVector}) = A * copy(B)
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Diagonal) = copy(A) * B
-*(A::Transpose{<:Any,<:AbstractVector}, B::Diagonal) = copy(A) * B
+*(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
+*(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
+    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
+*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map(*, D.diag, parent(x)))
+*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
+    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
 # TODO: these methods will yield row matrices, rather than adjoint/transpose vectors

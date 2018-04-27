@@ -51,12 +51,8 @@ end
 # these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
 *(a::AbstractVector, transB::Transpose{<:Any,<:AbstractMatrix}) =
     (B = transB.parent; *(reshape(a,length(a),1), transpose(B)))
-*(A::AbstractMatrix, transb::Transpose{<:Any,<:AbstractVector}) =
-    (b = transb.parent; *(A, transpose(reshape(b,length(b),1))))
 *(a::AbstractVector, adjB::Adjoint{<:Any,<:AbstractMatrix}) =
     (B = adjB.parent; *(reshape(a,length(a),1), adjoint(B)))
-*(A::AbstractMatrix, adjb::Adjoint{<:Any,<:AbstractVector}) =
-    (b = adjb.parent; *(A, adjoint(reshape(b,length(b),1))))
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a,length(a),1)*B
 
 mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
