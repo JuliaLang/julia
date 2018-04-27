@@ -697,6 +697,18 @@ Deprecated or removed
     `Matrix{Int}(undef, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
     `Array{Float32,3}(undef, 11, 13, 17)` ([#24781]).
 
+  * Previously `setindex!(A, x, I...)` (and the syntax `A[I...] = x`) supported two
+    different modes of operation when supplied with a set of non-scalar indices `I`
+    (e.g., at least one index is an `AbstractArray`) depending upon the value of `x`
+    on the right hand side. If `x` is an `AbstractArray`, its _contents_ are copied
+    elementwise into the locations in `A` selected by `I` and it must have the same
+    number of elements as `I` selects locations. Otherwise, if `x` is not an
+    `AbstractArray`, then its _value_ is implicitly broadcast to all locations to
+    all locations in `A` selected by `I`. This latter behavior—implicitly broadcasting
+    "scalar"-like values across many locations—is now deprecated in favor of explicitly
+    using the broadcasted assignment syntax `A[I...] .= x` or `fill!(view(A, I...), x)`
+    ([#26347]).
+
   * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
 
   * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
