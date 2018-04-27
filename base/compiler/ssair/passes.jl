@@ -1,12 +1,3 @@
-function compact_exprtype(compact::IncrementalCompact, @nospecialize(value))
-    if isa(value, Union{SSAValue, OldSSAValue})
-        return types(compact)[value]
-    elseif isa(value, Argument)
-        return compact.ir.argtypes[value.n]
-    end
-    return exprtype(value, compact.ir, compact.ir.mod)
-end
-
 """
     This struct keeps track of all uses of some mutable struct allocated
     in the current function. `uses` are all instances of `getfield` on the
@@ -185,8 +176,6 @@ function walk_to_def(compact::IncrementalCompact, @nospecialize(def), intermedia
     found_def ? (def, defidx) : nothing
 end
 
-is_tuple_call(ir, def) = isa(def, Expr) && is_known_call(def, tuple, ir, ir.mod)
-
 function process_immutable_preserve(new_preserves::Vector{Any}, compact::IncrementalCompact, def::Expr)
     for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
         if !isbitstype(widenconst(compact_exprtype(compact, arg)))
@@ -209,9 +198,9 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         is_getfield = false
         is_ccall = false
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
-        if is_known_call(stmt, setfield!, ir, ir.mod)
+        if is_known_call(stmt, setfield!, compact)
             is_setfield = true
-        elseif is_known_call(stmt, getfield, ir, ir.mod)
+        elseif is_known_call(stmt, getfield, compact)
             is_getfield = true
         elseif isexpr(stmt, :foreigncall)
             nccallargs = stmt.args[5]
@@ -223,7 +212,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
                 def = walk_to_def(compact, preserved_arg, intermediaries, false)
                 def !== nothing || continue
                 (def, defidx) = def
-                if is_tuple_call(ir, def)
+                if is_tuple_call(compact, def)
                     process_immutable_preserve(new_preserves, compact, def)
                     old_preserves[pidx] = nothing
                     continue
@@ -276,7 +265,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         end
         # Step 3: Check if the definition we eventually end up at is either
         # a tuple(...) call or Expr(:new) and perform replacement.
-        if is_tuple_call(ir, def) && isa(field, Int) && 1 <= field < length(def.args)
+        if is_tuple_call(compact, def) && isa(field, Int) && 1 <= field < length(def.args)
             forwarded = def.args[1+field]
         elseif isexpr(def, :new)
             typ = def.typ
