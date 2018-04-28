@@ -47,10 +47,16 @@ endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in char
 
 function startswith(a::String, b::String)
     cub = ncodeunits(b)
-    (ncodeunits(a) < cub || ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                                   a, b, sizeof(b)) ≠ 0) && return false
-    nextind(a, cub) == cub + 1
+    if ncodeunits(a) < cub
+        false
+    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0
+        nextind(a, cub) == cub + 1
+    else
+        false
+    end
 end
+
+# TODO: fast startswith for SubString{String}
 
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
     ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0
