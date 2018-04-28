@@ -141,6 +141,22 @@ See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
 start(s::AbstractString) = 1
 done(s::AbstractString, i::Integer) = i > ncodeunits(s)
 eltype(::Type{<:AbstractString}) = Char # some string types may use another AbstractChar
+
+"""
+    sizeof(str::AbstractString)
+
+Size, in bytes, of the string `s`. Equal to the number of code units in `s` multiplied by
+the size, in bytes, of one code unit in `s`.
+
+# Examples
+```jldoctest
+julia> sizeof("")
+0
+
+julia> sizeof("∀")
+3
+```
+"""
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
 firstindex(s::AbstractString) = 1
 lastindex(s::AbstractString) = thisind(s, ncodeunits(s))
