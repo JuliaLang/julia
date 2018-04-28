@@ -302,13 +302,17 @@ end
     logger = CoreLogging.DefaultLogger()
     @test shouldlog(logger, Info, Base, :group, :asdf) === true
     old = stdout
-    redirect_stdout()
+    fname = tempname()
+    f = open(fname, "w")
+    redirect_stdout(f)
     handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     redirect_stdout(old)
     @test shouldlog(logger, Info, Base, :group, :asdf) === true
-    redirect_stdout()
+    redirect_stdout(f)
     handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     redirect_stdout(old)
+    close(f)
+    rm(fname)
     @test shouldlog(logger, Info, Base, :group, :asdf) === false
     @test catch_exceptions(logger) === false
 
