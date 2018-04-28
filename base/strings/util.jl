@@ -603,3 +603,17 @@ julia> ascii("abcdefgh")
 ```
 """
 ascii(x::AbstractString) = ascii(String(x))
+
+function cmp(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
+    a === b && return 0
+    al, bl = ncodeunits(a), ncodeunits(b)
+    al == 0 && return bl == 0 ? 0 : -1
+    bl == 0 && return 1
+    i = 0
+    @inbounds for outer i in 1:min(al, bl)
+        codeunit(a, i) ≠ codeunit(b, i) && break
+    end
+    @inbounds iv = min(thisind(a, i), thisind(b, i))
+    @inbounds c = cmp(a[iv], b[iv])
+    c == 0 ? cmp(al, bl) : c
+end
