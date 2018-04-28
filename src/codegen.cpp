@@ -5501,9 +5501,7 @@ static std::unique_ptr<Module> emit_function(
     AttrBuilder *attr = new AttrBuilder();
     attr->addStackAlignmentAttr(16);
 #if JL_LLVM_VERSION >= 50000
-    f->addAttributes(AttributeList::FunctionIndex,
-        AttributeList::get(f->getContext(),
-            AttributeList::FunctionIndex, *attr));
+    f->addAttributes(AttributeList::FunctionIndex, *attr);
 #else
     f->addAttributes(AttributeSet::FunctionIndex,
         AttributeSet::get(f->getContext(),
