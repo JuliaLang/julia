@@ -232,7 +232,7 @@ false
 """
 isbits(t::DataType) = (@_pure_meta; !t.mutable & (t.layout != C_NULL) && datatype_pointerfree(t))
 isbits(t::Type) = (@_pure_meta; false)
-isbits(x) = (@_pure_meta; isbits(typeof(x)))
+isbits(x::ANY) = (@_pure_meta; isbits(typeof(x)))
 
 """
     isleaftype(T)

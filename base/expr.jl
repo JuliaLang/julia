@@ -40,7 +40,7 @@ copy(e::Expr) = (n = Expr(e.head);
 # copy parts of an AST that the compiler mutates
 copy_exprs(x::Expr) = copy(x)
 copy_exprs(x::ANY) = x
-copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
