@@ -33,9 +33,7 @@ function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, 
 end
 
 # REPL Symbol Completions
-function complete_symbol(sym, ffunc)
-    # Maybe be smarter in the future
-    context_module = Main
+function complete_symbol(sym, ffunc, context_module=Main)
     mod = context_module
     name = sym
 
@@ -76,7 +74,7 @@ function complete_symbol(sym, ffunc)
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
-            mods = ccall(:jl_module_usings, Any, (Any,), Main)
+            mods = ccall(:jl_module_usings, Any, (Any,), context_module)
             for m in mods
                 append!(suggestions, filtered_mod_names(p, m, name))
             end
@@ -368,12 +366,12 @@ function get_type(sym, fn::Module)
 end
 
 # Method completion on function call expression that look like :(max(1))
-function complete_methods(ex_org::Expr)
+function complete_methods(ex_org::Expr, context_module=Main)
     args_ex = Any[]
-    func, found = get_value(ex_org.args[1], Main)
+    func, found = get_value(ex_org.args[1], context_module)
     !found && return String[]
     for ex in ex_org.args[2:end]
-        val, found = get_type(ex, Main)
+        val, found = get_type(ex, context_module)
         push!(args_ex, val)
     end
     out = String[]
@@ -486,7 +484,7 @@ end
     return matches
 end
 
-function completions(string, pos)
+function completions(string, pos, context_module=Main)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
@@ -537,7 +535,7 @@ function completions(string, pos)
         frange, method_name_end = find_start_brace(partial)
         ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
         if isa(ex, Expr) && ex.head==:call
-            return complete_methods(ex), start(frange):method_name_end, false
+            return complete_methods(ex, context_module), start(frange):method_name_end, false
         end
     elseif inc_tag == :comment
         return String[], 0:-1, false
@@ -616,7 +614,7 @@ function completions(string, pos)
             s = string[startpos:pos]
         end
     end
-    append!(suggestions, complete_symbol(s, ffunc))
+    append!(suggestions, complete_symbol(s, ffunc, context_module))
     return sort!(unique(suggestions)), (dotpos+1):pos, true
 end
 
