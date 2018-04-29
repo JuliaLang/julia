@@ -681,7 +681,7 @@ of the substring that matches, but perhaps we want to capture any non-blank text
 character. We could do the following:
 
 ```jldoctest
-julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
+julia> m = match(r"^\s*(?:#\s*(.*?)\s*$)", "# a comment ")
 RegexMatch("# a comment ", 1="a comment")
 ```
 
@@ -830,10 +830,10 @@ x   Tells the regular expression parser to ignore most whitespace
 For example, the following regex has all three flags turned on:
 
 ```jldoctest
-julia> r"a+.*b+.*?d$"ism
+julia> r"a+.*b+.*d$"ism
 r"a+.*b+.*?d$"ims
 
-julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
+julia> match(r"a+.*b+.*d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
 RegexMatch("angry,\nBad world")
 ```
 
