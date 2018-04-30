@@ -398,6 +398,7 @@ static void init_started_thread()
     seed_cong(&ptls->rngseed);
     ptls->sticky_taskq = &sticky_taskqs[ptls->tid];
     ptls->sticky_taskq->head = NULL;
+    JL_MUTEX_INIT(&ptls->sticky_taskq->lock);
 }
 
 
