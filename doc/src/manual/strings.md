@@ -831,7 +831,7 @@ For example, the following regex has all three flags turned on:
 
 ```jldoctest
 julia> r"a+.*b+.*d$"ism
-r"a+.*b+.*?d$"ims
+r"a+.*b+.*d$"ims
 
 julia> match(r"a+.*b+.*d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
 RegexMatch("angry,\nBad world")
