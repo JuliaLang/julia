@@ -18,7 +18,7 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
 endif
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifneq ($(ARCH),x86_64)
@@ -104,6 +104,11 @@ $(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied: $(LIBGIT2_SRC_PATH)/
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-remote-push-NULL.patch
 	echo 1 > $@
 
+$(LIBGIT2_SRC_PATH)/libgit2-bundled_zlib.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-bundled_zlib.patch
+	echo 1 > $@
+
 $(build_datarootdir)/julia/cert.pem: $(CERTFILE)
 	mkdir -p $(build_datarootdir)/julia
 	-cp $(CERTFILE) $@
@@ -116,7 +121,8 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-gitconfig-symlink.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-free-config.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied
+	$(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-bundled_zlib.patch-applied
 
 ifneq ($(CERTFILE),)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem
