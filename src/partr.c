@@ -24,7 +24,7 @@ extern jl_sym_t *failed_sym;
 extern jl_sym_t *runnable_sym;
 
 // task/stack switch functions used
-extern void init_task_entry(void (*task_entry)(void), jl_task_t *t, char *stack);
+extern void init_task_entry(jl_task_t *t, char *stack);
 
 // multiq
 // ---
@@ -514,7 +514,7 @@ static void sync_grains(jl_task_t *task)
 
 
 // all tasks except the root task start and exit here
-static void NOINLINE JL_NORETURN task_wrapper()
+void NOINLINE JL_NORETURN task_wrapper()
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *task = ptls->current_task;
@@ -733,7 +733,7 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
         stk += jl_page_size;
 
         // set up entry point for this task
-        init_task_entry(task_wrapper, task, stk);
+        init_task_entry(task, stk);
 
         // for task cleanup
         jl_gc_add_finalizer((jl_value_t *)task, jl_unprotect_stack_func);

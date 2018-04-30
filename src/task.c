@@ -148,6 +148,8 @@ extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
 #ifdef JULIA_ENABLE_PARTR
 jl_datatype_t *jl_condition_type;
+
+void NOINLINE JL_NORETURN task_wrapper();
 #endif
 
 #ifdef COPY_STACKS
@@ -520,10 +522,14 @@ static void rebase_state(jl_jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 #endif
 }
 
-void init_task_entry(void (*task_entry)(void), jl_task_t *t, char *stack)
+void init_task_entry(jl_task_t *t, char *stack)
 {
     if (jl_setjmp(t->ctx, 0)) {
-        (*task_entry)();
+#ifdef JULIA_ENABLE_PARTR
+        task_wrapper();
+#else
+        start_task();
+#endif
     }
     // this runs when the task is created
     intptr_t local_sp = (intptr_t)&t;
@@ -650,7 +656,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
         jl_errorf("mprotect: %s", strerror(errno));
     stk += pagesz;
 
-    init_task_entry(start_task, t, stk);
+    init_task_entry(t, stk);
     jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
     JL_GC_POP();
 #endif
