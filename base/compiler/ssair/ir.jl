@@ -146,8 +146,18 @@ function first_insert_for_bb(code, cfg::CFG, block::Int)
     end
 end
 
-
-const NewNode = Tuple{Int, #= reverse affinity =#Bool, Any, Any, #=LineNumber=#Int}
+struct NewNode
+    # Insertion position (interpretation depends on which array this is in)
+    pos::Int
+    # Place the new instruction after this instruction (but in the same BB if this is an implicit terminator)
+    attach_after::Bool
+    # The type of the instruction to insert
+    typ::Any
+    # The node itself
+    node::Any
+    # The index into the line number table of this entry
+    line::Int
+end
 
 struct IRCode
     stmts::Vector{Any}
@@ -174,7 +184,7 @@ function getindex(x::IRCode, s::SSAValue)
     if s.id <= length(x.stmts)
         return x.stmts[s.id]
     else
-        return x.new_nodes[s.id - length(x.stmts)][4]
+        return x.new_nodes[s.id - length(x.stmts)].node
     end
 end
 
@@ -374,9 +384,9 @@ function foreachssa(f, @nospecialize(stmt))
     end
 end
 
-function insert_node!(ir::IRCode, pos::Int, @nospecialize(typ), @nospecialize(val), reverse_affinity::Bool=false)
+function insert_node!(ir::IRCode, pos::Int, @nospecialize(typ), @nospecialize(val), attach_after::Bool=false)
     line = ir.lines[pos]
-    push!(ir.new_nodes, (pos, reverse_affinity, typ, val, line))
+    push!(ir.new_nodes, NewNode(pos, attach_after, typ, val, line))
     return SSAValue(length(ir.stmts) + length(ir.new_nodes))
 end
 
@@ -407,8 +417,8 @@ mutable struct IncrementalCompact
     result_idx::Int
     active_result_bb::Int
     function IncrementalCompact(code::IRCode)
-        # Sort by position with reverse affinity nodes before regular ones
-        perm = my_sortperm(Int[(code.new_nodes[i][1]*2 + Int(!code.new_nodes[i][2])) for i in 1:length(code.new_nodes)])
+        # Sort by position with attach after nodes affter regular ones
+        perm = my_sortperm(Int[(code.new_nodes[i].pos*2 + Int(code.new_nodes[i].attach_after)) for i in 1:length(code.new_nodes)])
         new_len = length(code.stmts) + length(code.new_nodes)
         result = Array{Any}(undef, new_len)
         result_types = Array{Any}(undef, new_len)
@@ -422,7 +432,7 @@ mutable struct IncrementalCompact
 
     # For inlining
     function IncrementalCompact(parent::IncrementalCompact, code::IRCode, result_offset)
-        perm = my_sortperm(Int[code.new_nodes[i][1] for i in 1:length(code.new_nodes)])
+        perm = my_sortperm(Int[code.new_nodes[i].pos for i in 1:length(code.new_nodes)])
         new_len = length(code.stmts) + length(code.new_nodes)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         used_ssas = fill(0, new_len)
@@ -509,7 +519,7 @@ function getindex(view::TypesView, idx)
     if idx <= length(ir.types)
         return ir.types[idx]
     else
-        return ir.new_nodes[idx - length(ir.types)][3]
+        return ir.new_nodes[idx - length(ir.types)].typ
     end
 end
 
@@ -603,10 +613,27 @@ function finish_current_bb!(compact, old_result_idx=compact.result_idx)
     end
 end
 
-function reverse_affinity_stmt_after(compact::IncrementalCompact, idx::Int)
+function attach_after_stmt_after(compact::IncrementalCompact, idx::Int)
     compact.new_nodes_idx > length(compact.perm) && return false
     entry = compact.ir.new_nodes[compact.perm[compact.new_nodes_idx]]
-    entry[1] == idx + 1 && entry[2]
+    entry.pos == idx && entry.attach_after
+end
+
+function process_newnode!(compact, new_idx, new_node_entry, idx, active_bb)
+    old_result_idx = compact.result_idx
+    bb = compact.ir.cfg.blocks[active_bb]
+    compact.result_types[old_result_idx] = new_node_entry.typ
+    compact.result_lines[old_result_idx] = new_node_entry.line
+    result_idx = process_node!(compact, old_result_idx, new_node_entry.node, new_idx, idx)
+    compact.result_idx = result_idx
+    # If this instruction has reverse affinity and we were at the end of a basic block,
+    # finish it now.
+    if new_node_entry.attach_after && idx == last(bb.stmts)+1 && !attach_after_stmt_after(compact, idx-1)
+        active_bb += 1
+        finish_current_bb!(compact, old_result_idx)
+    end
+    (old_result_idx == result_idx) && return next(compact, (idx, active_bb))
+    return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb)
 end
 
 function next(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
@@ -615,24 +642,14 @@ function next(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
         resize!(compact, old_result_idx)
     end
     bb = compact.ir.cfg.blocks[active_bb]
-    if compact.new_nodes_idx <= length(compact.perm) && compact.ir.new_nodes[compact.perm[compact.new_nodes_idx]][1] == idx
+    if compact.new_nodes_idx <= length(compact.perm) &&
+        (entry =  compact.ir.new_nodes[compact.perm[compact.new_nodes_idx]];
+         entry.attach_after ? entry.pos == idx - 1 : entry.pos == idx)
         new_idx = compact.perm[compact.new_nodes_idx]
         compact.new_nodes_idx += 1
-        _, reverse_affinity, typ, new_node, new_line = compact.ir.new_nodes[new_idx]
+        new_node_entry = compact.ir.new_nodes[new_idx]
         new_idx += length(compact.ir.stmts)
-        compact.result_types[old_result_idx] = typ
-        compact.result_lines[old_result_idx] = new_line
-        compact.result_flags[old_result_idx] = 0x00
-        result_idx = process_node!(compact, old_result_idx, new_node, new_idx, idx)
-        compact.result_idx = result_idx
-        # If this instruction has reverse affinity and we were at the end of a basic block,
-        # finish it now.
-        if reverse_affinity && idx == last(bb.stmts)+1 && !reverse_affinity_stmt_after(compact, idx-1)
-            active_bb += 1
-            finish_current_bb!(compact, old_result_idx)
-        end
-        (old_result_idx == result_idx) && return next(compact, (idx, active_bb))
-        return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb)
+        return process_newnode!(compact, new_idx, new_node_entry, idx, active_bb)
     end
     # This will get overwritten in future iterations if
     # result_idx is not, incremented, but that's ok and expected
@@ -642,7 +659,7 @@ function next(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
     result_idx = process_node!(compact, old_result_idx, compact.ir.stmts[idx], idx, idx)
     stmt_if_any = old_result_idx == result_idx ? nothing : compact.result[old_result_idx]
     compact.result_idx = result_idx
-    if idx == last(bb.stmts) && !reverse_affinity_stmt_after(compact, idx)
+    if idx == last(bb.stmts) && !attach_after_stmt_after(compact, idx)
         active_bb += 1
         finish_current_bb!(compact, old_result_idx)
     end

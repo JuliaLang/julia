@@ -11,13 +11,13 @@ end
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
-            def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id - length(ir.stmts)][1])
+            def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id - length(ir.stmts)].pos)
         else
             def_bb = block_for_inst(ir.cfg, op.id)
         end
         if (def_bb == use_bb)
             if op.id > length(ir.stmts)
-                @assert ir.new_nodes[op.id - length(ir.stmts)][1] <= use_idx
+                @assert ir.new_nodes[op.id - length(ir.stmts)].pos <= use_idx
             else
                 @assert op.id < use_idx
             end
