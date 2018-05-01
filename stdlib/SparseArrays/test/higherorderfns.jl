@@ -310,6 +310,7 @@ end
 end
 
 @testset "broadcast[!] over combinations of scalars and sparse vectors/matrices" begin
+for _ in 1:10000
     N, M, p = 10, 12, 0.5
     elT = Float64
     s = Float32(2.0)
@@ -345,41 +346,42 @@ end
                 ((spargsl..., s, s, spargsr..., s), (dargsl..., s, s, dargsr..., s)),
                 ((spargsl..., s, s, s, spargsr...), (dargsl..., s, s, s, dargsr...)), )
             # test broadcast entry point
-            @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
-            @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
-            # test broadcast! entry point
+            # @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
+            # @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
+            # # test broadcast! entry point
             fX = broadcast(*, sparseargs...); X = sparse(fX)
             @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
-            @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
-            X = sparse(fX) # reset / warmup for @allocated test
-            # It'd be nice for this to be zero, but there's currently some constant overhead
-            @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
-            X = sparse(fX) # reset / warmup for @allocated test
+            # @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
+            # X = sparse(fX) # reset / warmup for @allocated test
+            # # It'd be nice for this to be zero, but there's currently some constant overhead
+            # @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
+            # X = sparse(fX) # reset / warmup for @allocated test
             # And broadcasting over Transposes currently requires making a CSC copy, so we must account for that in the bounds
-            @test (@allocated broadcast!(*, X, sparseargs...)) <= (sum(x->isa(x, Transpose) ? Base.summarysize(x)*2+128 : 0, sparseargs) + 128)
+            @test (@allocated broadcast!(*, X, sparseargs...)) <= (sum(x->isa(x, Transpose) ? @allocated(SparseMatrixCSC(x))+128 : 0, sparseargs) + 128)
         end
     end
-    # test combinations at the limit of inference (eight arguments net)
-    for (sparseargs, denseargs) in (
-            ((s, s, s, A, s, s, s, s), (s, s, s, fA, s, s, s, s)), # seven scalars, one sparse matrix
-            ((s, s, V, s, s, A, s, s), (s, s, fV, s, s, fA, s, s)), # six scalars, two sparse vectors/matrices
-            ((s, s, V, s, A, s, V, s), (s, s, fV, s, fA, s, fV, s)), # five scalars, three sparse vectors/matrices
-            ((s, V, s, A, s, V, s, A), (s, fV, s, fA, s, fV, s, fA)), # four scalars, four sparse vectors/matrices
-            ((s, V, A, s, V, A, s, A), (s, fV, fA, s, fV, fA, s, fA)), # three scalars, five sparse vectors/matrices
-            ((V, A, V, s, A, V, A, s), (fV, fA, fV, s, fA, fV, fA, s)), # two scalars, six sparse vectors/matrices
-            ((V, A, V, A, s, V, A, V), (fV, fA, fV, fA, s, fV, fA, fV)) ) # one scalar, seven sparse vectors/matrices
-        # test broadcast entry point
-        @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
-        @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
-        # test broadcast! entry point
-        fX = broadcast(*, sparseargs...); X = sparse(fX)
-        @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
-        @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
-        X = sparse(fX) # reset / warmup for @allocated test
-        @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
-        X = sparse(fX) # reset / warmup for @allocated test
-        @test (@allocated broadcast!(*, X, sparseargs...)) <= 128
-    end
+end
+    # # test combinations at the limit of inference (eight arguments net)
+    # for (sparseargs, denseargs) in (
+    #         ((s, s, s, A, s, s, s, s), (s, s, s, fA, s, s, s, s)), # seven scalars, one sparse matrix
+    #         ((s, s, V, s, s, A, s, s), (s, s, fV, s, s, fA, s, s)), # six scalars, two sparse vectors/matrices
+    #         ((s, s, V, s, A, s, V, s), (s, s, fV, s, fA, s, fV, s)), # five scalars, three sparse vectors/matrices
+    #         ((s, V, s, A, s, V, s, A), (s, fV, s, fA, s, fV, s, fA)), # four scalars, four sparse vectors/matrices
+    #         ((s, V, A, s, V, A, s, A), (s, fV, fA, s, fV, fA, s, fA)), # three scalars, five sparse vectors/matrices
+    #         ((V, A, V, s, A, V, A, s), (fV, fA, fV, s, fA, fV, fA, s)), # two scalars, six sparse vectors/matrices
+    #         ((V, A, V, A, s, V, A, V), (fV, fA, fV, fA, s, fV, fA, fV)) ) # one scalar, seven sparse vectors/matrices
+    #     # test broadcast entry point
+    #     @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
+    #     @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
+    #     # test broadcast! entry point
+    #     fX = broadcast(*, sparseargs...); X = sparse(fX)
+    #     @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
+    #     @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
+    #     X = sparse(fX) # reset / warmup for @allocated test
+    #     @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
+    #     X = sparse(fX) # reset / warmup for @allocated test
+    #     @test (@allocated broadcast!(*, X, sparseargs...)) <= 128
+    # end
 end
 
 @testset "broadcast[!] over combinations of scalars, sparse arrays, structured matrices, and dense vectors/matrices" begin
