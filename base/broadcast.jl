@@ -84,7 +84,7 @@ Broadcast styles created this way lose track of dimensionality; if keeping track
 for your type, you should create your own custom [`Broadcast.AbstractArrayStyle`](@ref).
 """
 struct ArrayStyle{A<:AbstractArray} <: AbstractArrayStyle{Any} end
-(::Type{<:ArrayStyle{A}})(::Val) where A = A()
+ArrayStyle{A}(::Val) where A = ArrayStyle{A}()
 
 """
 `Broadcast.DefaultArrayStyle{N}()` is a [`BroadcastStyle`](@ref) indicating that an object
@@ -95,7 +95,8 @@ overrides from other `broadcast` arguments the resulting output type is `Array`.
 When there are multiple inputs to `broadcast`, `DefaultArrayStyle` "loses" to any other [`Broadcast.ArrayStyle`](@ref).
 """
 struct DefaultArrayStyle{N} <: AbstractArrayStyle{N} end
-(::Type{<:DefaultArrayStyle})(::Val{N}) where N = DefaultArrayStyle{N}()
+DefaultArrayStyle(::Val{N}) where N = DefaultArrayStyle{N}()
+DefaultArrayStyle{M}(::Val{N}) where {N,M} = DefaultArrayStyle{N}()
 const DefaultVectorStyle = DefaultArrayStyle{1}
 const DefaultMatrixStyle = DefaultArrayStyle{2}
 BroadcastStyle(::Type{<:AbstractArray{T,N}}) where {T,N} = DefaultArrayStyle{N}()
@@ -108,6 +109,7 @@ BroadcastStyle(::Type{T}) where {T} = DefaultArrayStyle{ndims(T)}()
 # produced by `DefaultArrayStyle`, `ArrayConflict` "poisons" the BroadcastStyle so that
 # 3 or more arguments still return an `ArrayConflict`.
 struct ArrayConflict <: AbstractArrayStyle{Any} end
+ArrayConflict(::Val) = ArrayConflict()
 
 ### Binary BroadcastStyle rules
 """

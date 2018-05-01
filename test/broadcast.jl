@@ -487,6 +487,17 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2C} = Broadcast.ArrayStyle{AD2C}()
 Base.BroadcastStyle(a1::Broadcast.ArrayStyle{AD1C}, a2::Broadcast.ArrayStyle{AD2C}) = a1
 Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1C}) = a2
 
+# A Custom type with specific dimensionality
+struct AD2Dim{T} <: ArrayData{T,2}
+    data::Array{T,2}
+end
+struct AD2DimStyle <: Broadcast.AbstractArrayStyle{2}; end
+AD2DimStyle(::Val{2}) = AD2DimStyle()
+AD2DimStyle(::Val{N}) where {N} = Broadcast.DefaultArrayStyle{N}()
+Base.broadcast_similar(::AD2DimStyle, ::Type{T}, inds::Tuple, bc) where {T} =
+    AD2Dim(Array{T}(undef, length.(inds)))
+Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
+
 @testset "broadcasting for custom AbstractArray" begin
     a  = randn(10)
     aa = Array19745(a)
@@ -536,6 +547,13 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
     @test a1 .+ 1 .* 2 isa AD1C
     @test a2 .+ 1 .* 2 isa AD2C
     @test_throws ErrorException a1 .+ a2
+    a2d = AD2Dim(rand(2, 3))
+    a2 = AD2(rand(2))
+    @test a2d .+ 1 isa AD2Dim
+    @test a2d .+ a2 isa Matrix
+    @test a2d .+ (1:2) isa AD2Dim
+    @test a2d .+ ones(2, 3) isa AD2Dim
+    @test a2d .+ ones(2, 3, 4) isa Array{Float64, 3}
 end
 
 # broadcast should only "peel off" one container layer
