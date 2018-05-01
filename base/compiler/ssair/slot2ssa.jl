@@ -477,6 +477,30 @@ function compute_live_ins(cfg::CFG, defuse)
     BlockLiveness(bb_defs, bb_uses)
 end
 
+function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode)
+    new_typ = Union{}
+    for i = 1:length(node.values)
+        if isa(node, PhiNode) && !isassigned(node.values, i)
+            if !isa(new_typ, MaybeUndef)
+                new_typ = MaybeUndef(new_typ)
+            end
+            continue
+        end
+        typ = typ_for_val(node.values[i], ci)
+        was_maybe_undef = false
+        if isa(typ, MaybeUndef)
+            typ = typ.typ
+            was_maybe_undef = true
+        end
+        @assert !isa(typ, MaybeUndef)
+        while isa(typ, DelayedTyp)
+            typ = ir.new_nodes[typ.phi.id - length(ir.stmts)].typ
+        end
+        new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
+    end
+    return new_typ
+end
+
 function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::DomTree, defuse, nargs::Int)
     cfg = ir.cfg
     left = Int[]
@@ -720,6 +744,8 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
     for (_, nodes) in phicnodes
         for (_, ssa, node) in nodes
             new_typ = Union{}
+            # TODO: This could just be the ones that depend on other phis
+            push!(type_refine_phi, ssa.id)
             new_idx = ssa.id - length(ir.stmts)
             node = ir.new_nodes[new_idx]
             for i = 1:length(node.node.values)
@@ -742,26 +768,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         for phi in type_refine_phi
             new_idx = phi - length(ir.stmts)
             node = ir.new_nodes[new_idx]
-            new_typ = Union{}
-            for i = 1:length(node.node.values)
-                if !isassigned(node.node.values, i)
-                    if !isa(new_typ, MaybeUndef)
-                        new_typ = MaybeUndef(new_typ)
-                    end
-                    continue
-                end
-                typ = typ_for_val(node.node.values[i], ci)
-                was_maybe_undef = false
-                if isa(typ, MaybeUndef)
-                    typ = typ.typ
-                    was_maybe_undef = true
-                end
-                @assert !isa(typ, MaybeUndef)
-                while isa(typ, DelayedTyp)
-                    typ = ir.new_nodes[typ.phi.id - length(ir.stmts)].typ
-                end
-                new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
-            end
+            new_typ = recompute_type(node.node, ci, ir)
             if !(node.typ ⊑ new_typ) || !(new_typ ⊑ node.typ)
                 ir.new_nodes[new_idx] = NewNode(node.pos, node.attach_after, new_typ, node.node, node.line)
                 changed = true
