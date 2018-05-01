@@ -348,6 +348,35 @@ x
 y
 ```
 
+Strings in Julia can contain invalid UTF-8 code unit sequences. This is rule allows to accept
+any byte sequence as a string. In such situations a rule is that characters are formed by longest
+possibly valid sequences of code points. This rule is best explained by an example:
+
+```jldoctest unicodestring
+julia> s = "\xc0\xa0\xe2\x88\xe2|"
+"\xc0\xa0\xe2\x88\xe2|"
+
+julia> foreach(display, s)
+'\xc0\xa0': [overlong] ASCII/Unicode U+0020 (category Zs: Separator, space)
+'\xe2\x88': Malformed UTF-8 (category Ma: Malformed, bad data)
+'\xe2': Malformed UTF-8 (category Ma: Malformed, bad data)
+'|': ASCII/Unicode U+007c (category Sm: Symbol, math)
+
+julia> isvalid.(collect(s))
+4-element BitArray{1}:
+ false
+ false
+ false
+  true
+```
+
+We can see that first two code units in `s` form an overlong encoding of space character.
+It is invalid, but is accepted in a string as a single character.
+Next two code units form a valid start of a three byte UTF-8 sequence. However, fifth code unit
+`\xe2` is not its valid continuation. Therefore code units 3 and 4 form a second malformed
+character in this string. Similarly code unit 5 forms a malformed character because
+because `|` is not a valid continuation.
+
 Julia uses the UTF-8 encoding by default, and support for new encodings can be added by packages.
 For example, the [LegacyStrings.jl](https://github.com/JuliaArchive/LegacyStrings.jl) package
 implements `UTF16String` and `UTF32String` types. Additional discussion of other encodings and
@@ -370,6 +399,34 @@ julia> whom = "world"
 julia> string(greet, ", ", whom, ".\n")
 "Hello, world.\n"
 ```
+
+An important to be aware of situation is when invalid UTF-8 strings are concatenated.
+In that case string may contain different characters than those that constitute concatenated
+stings and number of characters in such string may be lower than sum of numbers of characters
+of the concatenated strings, e.g.:
+
+```jldoctest stringconcat
+julia> a, b = "\xe2\x88", "\x80"
+("\xe2\x88", "\x80")
+
+julia> c = a*b
+"∀"
+
+julia> collect.([a, b, c])
+3-element Array{Array{Char,1},1}:
+ ['\xe2\x88']
+ ['\x80']
+ ['∀']
+
+julia> length.([a, b, c])
+3-element Array{Int64,1}:
+ 1
+ 1
+ 1
+```
+
+This situation can happen only for invalid UTF-8 strings. For valid UTF-8 strings
+concatenation preserves all characters in strings and additivity of string lengths.
 
 Julia also provides `*` for string concatenation:
 
