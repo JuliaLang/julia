@@ -564,7 +564,7 @@ function analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, 
         isa(methsp[i], TypeVar) && return nothing
     end
 
-    # Find the linfo for this methods (Generated functions are expanded here if necessary)
+    # Find the linfo for this methods
     linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Nothing, MethodInstance}
     if !isa(linfo, MethodInstance)
         return spec_lambda(atype_unlimited, sv, invoke_data)
