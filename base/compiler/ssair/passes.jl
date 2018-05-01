@@ -426,7 +426,7 @@ function type_lift_pass!(ir::IRCode)
             # undef can only show up by being introduced in a phi
             # node (or an UpsilonNode() argument to a PhiC node),
             # so lift all these nodes that have maybe undef values
-            processed = IdDict{Int, SSAValue}()
+            processed = IdDict{Int, Union{SSAValue, Bool}}()
             if !isa(val, SSAValue)
                 if stmt.head === :undefcheck
                     ir.stmts[idx] = nothing
