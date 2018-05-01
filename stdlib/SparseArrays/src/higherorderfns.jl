@@ -37,8 +37,8 @@ SparseVecOrMat = Union{SparseVector,SparseMatrixCSC}
 # broadcast container type promotion for combinations of sparse arrays and other types
 struct SparseVecStyle <: Broadcast.AbstractArrayStyle{1} end
 struct SparseMatStyle <: Broadcast.AbstractArrayStyle{2} end
-Broadcast.BroadcastStyle(::Type{<:SparseVector}) = SparseVecStyle()
-Broadcast.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatStyle()
+Broadcast.BroadcastStyle(::SparseVector) = SparseVecStyle()
+Broadcast.BroadcastStyle(::SparseMatrixCSC) = SparseMatStyle()
 const SPVM = Union{SparseVecStyle,SparseMatStyle}
 
 # SparseVecStyle handles 0-1 dimensions, SparseMatStyle 0-2 dimensions.
@@ -66,8 +66,8 @@ PromoteToSparse(::Val{2}) = PromoteToSparse()
 PromoteToSparse(::Val{N}) where N = Broadcast.DefaultArrayStyle{N}()
 
 const StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
-Broadcast.BroadcastStyle(::Type{<:Adjoint{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
-Broadcast.BroadcastStyle(::Type{<:Transpose{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
+Broadcast.BroadcastStyle(::Adjoint{T,<:Union{SparseVector,SparseMatrixCSC}} where T) = PromoteToSparse()
+Broadcast.BroadcastStyle(::Transpose{T,<:Union{SparseVector,SparseMatrixCSC}} where T) = PromoteToSparse()
 
 Broadcast.BroadcastStyle(s::SPVM, ::Broadcast.AbstractArrayStyle{0}) = s
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()

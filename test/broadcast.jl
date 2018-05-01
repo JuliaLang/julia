@@ -436,27 +436,27 @@ Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{A}}, ::Type{T}) wher
 struct Array19745{T,N} <: ArrayData{T,N}
     data::Array{T,N}
 end
-Base.BroadcastStyle(::Type{T}) where {T<:Array19745} = Broadcast.ArrayStyle{Array19745}()
+Base.BroadcastStyle(::Array19745) = Broadcast.ArrayStyle{Array19745}()
 
 # Two specialized broadcast rules with no declared precedence
 struct AD1{T,N} <: ArrayData{T,N}
     data::Array{T,N}
 end
-Base.BroadcastStyle(::Type{T}) where {T<:AD1} = Broadcast.ArrayStyle{AD1}()
+Base.BroadcastStyle(::AD1) = Broadcast.ArrayStyle{AD1}()
 struct AD2{T,N} <: ArrayData{T,N}
     data::Array{T,N}
 end
-Base.BroadcastStyle(::Type{T}) where {T<:AD2} = Broadcast.ArrayStyle{AD2}()
+Base.BroadcastStyle(::AD2) = Broadcast.ArrayStyle{AD2}()
 
 # Two specialized broadcast rules with explicit precedence
 struct AD1P{T,N} <: ArrayData{T,N}
     data::Array{T,N}
 end
-Base.BroadcastStyle(::Type{T}) where {T<:AD1P} = Broadcast.ArrayStyle{AD1P}()
+Base.BroadcastStyle(::AD1P) = Broadcast.ArrayStyle{AD1P}()
 struct AD2P{T,N} <: ArrayData{T,N}
     data::Array{T,N}
 end
-Base.BroadcastStyle(::Type{T}) where {T<:AD2P} = Broadcast.ArrayStyle{AD2P}()
+Base.BroadcastStyle(::AD2P) = Broadcast.ArrayStyle{AD2P}()
 
 Base.BroadcastStyle(a1::Broadcast.ArrayStyle{AD1P}, ::Broadcast.ArrayStyle{AD2P}) = a1
 
@@ -465,11 +465,11 @@ Base.BroadcastStyle(a1::Broadcast.ArrayStyle{AD1P}, ::Broadcast.ArrayStyle{AD2P}
 struct AD1B{T,N} <: ArrayData{T,N}
     data::Array{T,N}
 end
-Base.BroadcastStyle(::Type{T}) where {T<:AD1B} = Broadcast.ArrayStyle{AD1B}()
+Base.BroadcastStyle(::AD1B) = Broadcast.ArrayStyle{AD1B}()
 struct AD2B{T,N} <: ArrayData{T,N}
     data::Array{T,N}
 end
-Base.BroadcastStyle(::Type{T}) where {T<:AD2B} = Broadcast.ArrayStyle{AD2B}()
+Base.BroadcastStyle(::AD2B) = Broadcast.ArrayStyle{AD2B}()
 
 Base.BroadcastStyle(a1::Broadcast.ArrayStyle{AD1B}, a2::Broadcast.ArrayStyle{AD2B}) = a1
 Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2B}, a1::Broadcast.ArrayStyle{AD1B}) = a1
@@ -478,11 +478,11 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2B}, a1::Broadcast.ArrayStyle{AD1
 struct AD1C{T,N} <: ArrayData{T,N}
     data::Array{T,N}
 end
-Base.BroadcastStyle(::Type{T}) where {T<:AD1C} = Broadcast.ArrayStyle{AD1C}()
+Base.BroadcastStyle(::AD1C) = Broadcast.ArrayStyle{AD1C}()
 struct AD2C{T,N} <: ArrayData{T,N}
     data::Array{T,N}
 end
-Base.BroadcastStyle(::Type{T}) where {T<:AD2C} = Broadcast.ArrayStyle{AD2C}()
+Base.BroadcastStyle(::AD2C) = Broadcast.ArrayStyle{AD2C}()
 
 Base.BroadcastStyle(a1::Broadcast.ArrayStyle{AD1C}, a2::Broadcast.ArrayStyle{AD2C}) = a1
 Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1C}) = a2
@@ -496,7 +496,7 @@ AD2DimStyle(::Val{2}) = AD2DimStyle()
 AD2DimStyle(::Val{N}) where {N} = Broadcast.DefaultArrayStyle{N}()
 Base.similar(bc::Broadcast.Broadcasted{AD2DimStyle}, ::Type{T}) where {T} =
     AD2Dim(Array{T}(undef, length.(axes(bc))))
-Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
+Base.BroadcastStyle(::AD2Dim) = AD2DimStyle()
 
 @testset "broadcasting for custom AbstractArray" begin
     a  = randn(10)
@@ -622,7 +622,7 @@ struct Foo26601{T}
 end
 Base.axes(f::Foo26601) = axes(f.data)
 Base.getindex(f::Foo26601, i...) = getindex(f.data, i...)
-Base.ndims(::Type{Foo26601{T}}) where {T} = ndims(T)
+Base.ndims(::Foo26601{T}) where {T} = ndims(T)
 Base.Broadcast.broadcastable(f::Foo26601) = f
 @testset "barebones custom object broadcasting" begin
     for d in (rand(Float64, ()), rand(5), rand(5,5), rand(5,5,5))
@@ -695,7 +695,7 @@ end
 struct T22053
     t
 end
-Broadcast.BroadcastStyle(::Type{T22053}) = Broadcast.Style{T22053}()
+Broadcast.BroadcastStyle(::T22053) = Broadcast.Style{T22053}()
 Broadcast.broadcast_axes(::T22053) = ()
 Broadcast.broadcastable(t::T22053) = t
 function Base.copy(bc::Broadcast.Broadcasted{Broadcast.Style{T22053}})

@@ -430,7 +430,7 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 
 | Methods to implement | Brief description |
 |:-------------------- |:----------------- |
-| `Base.BroadcastStyle(::Type{SrcType}) = SrcStyle()` | Broadcasting behavior of `SrcType` |
+| `Base.BroadcastStyle(::SrcType) = SrcStyle()` | Broadcasting behavior of `SrcType` |
 | `Base.similar(bc::Broadcasted{DestStyle}, ::Type{ElType})` | Allocation of output container |
 | **Optional methods** | | |
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
@@ -483,15 +483,15 @@ To override these defaults, you can define a custom `BroadcastStyle` for your ob
 
 ```julia
 struct MyStyle <: Broadcast.BroadcastStyle end
-Base.BroadcastStyle(::Type{<:MyType}) = MyStyle()
+Base.BroadcastStyle(::MyType) = MyStyle()
 ```
 
 In some cases it might be convenient not to have to define `MyStyle`, in which case you can
 leverage one of the general broadcast wrappers:
 
-  - `Base.BroadcastStyle(::Type{<:MyType}) = Broadcast.Style{MyType}()` can be
+  - `Base.BroadcastStyle(::MyType) = Broadcast.Style{MyType}()` can be
     used for arbitrary types.
-  - `Base.BroadcastStyle(::Type{<:MyType}) = Broadcast.ArrayStyle{MyType}()` is preferred
+  - `Base.BroadcastStyle(::MyType) = Broadcast.ArrayStyle{MyType}()` is preferred
     if `MyType` is an `AbstractArray`.
   - For `AbstractArrays` that only support a certain dimensionality, create a subtype of `Broadcast.AbstractArrayStyle{N}` (see below).
 
@@ -541,7 +541,7 @@ Base.showarg(io::IO, A::ArrayAndChar, toplevel) = print(io, typeof(A), " with ch
 You might want broadcasting to preserve the `char` "metadata." First we define
 
 ```jldoctest ArrayAndChar
-Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()
+Base.BroadcastStyle(::ArrayAndChar) = Broadcast.ArrayStyle{ArrayAndChar}()
 # output
 
 ```
@@ -702,13 +702,13 @@ rules unless you want to establish precedence for
 two or more non-`DefaultArrayStyle` types.
 
 If your array type does have fixed dimensionality requirements, then you should
-subtype `AbstractArrayStyle`. For example, the sparse array code has the following definitions:
+subtype `AbstractArrayStyle`. For example, the SparseArrays standard library has the following definitions:
 
 ```julia
 struct SparseVecStyle <: Broadcast.AbstractArrayStyle{1} end
 struct SparseMatStyle <: Broadcast.AbstractArrayStyle{2} end
-Base.BroadcastStyle(::Type{<:SparseVector}) = SparseVecStyle()
-Base.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatStyle()
+Base.BroadcastStyle(::SparseVector) = SparseVecStyle()
+Base.BroadcastStyle(::SparseMatrixCSC) = SparseMatStyle()
 ```
 
 Whenever you subtype `AbstractArrayStyle`, you also need to define rules for combining

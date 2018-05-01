@@ -214,11 +214,6 @@ using LinearAlgebra: Adjoint, Transpose
 \(::Adjoint{<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 \(::Transpose{<:Any,<:SparseMatrixCSC}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
-# methods involving RowVector from base/sparse/higherorderfns.jl, to deprecate
-@eval SparseArrays.HigherOrderFns begin
-    BroadcastStyle(::Type{<:RowVector{T,<:Vector}}) where T = Broadcast.MatrixStyle()
-end
-
 import Base: asyncmap
 @deprecate asyncmap(f, s::AbstractSparseArray...; kwargs...) sparse(asyncmap(f, map(Array, s)...; kwargs...))
 
