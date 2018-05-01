@@ -657,3 +657,9 @@ end
     r = T(1):T(108)
     @test rand(RNG, SamplerRangeFast(r)) ∈ r
 end
+
+@testset "eltype for UniformBits" begin
+    @test eltype(Random.UInt52()) == UInt64
+    @test eltype(Random.UInt52(UInt128)) == UInt128
+    @test eltype(Random.UInt104()) == UInt128
+end
