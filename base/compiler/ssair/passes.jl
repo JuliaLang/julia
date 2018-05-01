@@ -17,17 +17,11 @@ struct SSADefUse
 end
 SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
-function try_compute_fieldidx(@nospecialize(typ), @nospecialize(use_expr))
+function try_compute_fieldidx_expr(@nospecialize(typ), @nospecialize(use_expr))
     field = use_expr.args[3]
     isa(field, QuoteNode) && (field = field.value)
     isa(field, Union{Int, Symbol}) || return nothing
-    if isa(field, Symbol)
-        field = fieldindex(typ, field, false)
-        field == 0 && return nothing
-    elseif isa(field, Integer)
-        (1 <= field <= fieldcount(typ)) || return nothing
-    end
-    return field
+    return try_compute_fieldidx(typ, field)
 end
 
 function lift_defuse(cfg::CFG, ssa::SSADefUse)
@@ -280,7 +274,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
                 union!(mid, intermediaries)
                 continue
             end
-            field = try_compute_fieldidx(typ, stmt)
+            field = try_compute_fieldidx_expr(typ, stmt)
             field === nothing && continue
             forwarded = def.args[1+field]
         else
@@ -288,7 +282,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
             isa(obj, Const) || continue
             obj = obj.val
             isimmutable(obj) || continue
-            field = try_compute_fieldidx(typeof(obj), stmt)
+            field = try_compute_fieldidx_expr(typeof(obj), stmt)
             field === nothing && continue
             isdefined(obj, field) || continue
             val = getfield(obj, field)
@@ -330,13 +324,13 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
         ok = true
         for use in defuse.uses
-            field = try_compute_fieldidx(typ, ir[SSAValue(use)])
+            field = try_compute_fieldidx_expr(typ, ir[SSAValue(use)])
             field === nothing && (ok = false; break)
             push!(fielddefuse[field].uses, use)
         end
         ok || continue
         for use in defuse.defs
-            field = try_compute_fieldidx(typ, ir[SSAValue(use)])
+            field = try_compute_fieldidx_expr(typ, ir[SSAValue(use)])
             field === nothing && (ok = false; break)
             push!(fielddefuse[field].defs, use)
         end
