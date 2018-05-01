@@ -433,7 +433,7 @@ function type_lift_pass!(ir::IRCode)
                 end
                 continue
             end
-            worklist = Tuple{Int, SSAValue, Int}[(val.id, SSAValue(0), 0)]
+            worklist = Tuple{Int, Int, SSAValue, Int}[(val.id, 0, SSAValue(0), 0)]
             stmt_id = val.id
             while isa(ir.stmts[stmt_id], PiNode)
                 stmt_id = ir.stmts[stmt_id].val.id
@@ -450,7 +450,7 @@ function type_lift_pass!(ir::IRCode)
             if !haskey(lifted_undef, stmt_id)
                 first = true
                 while !isempty(worklist)
-                    item, which, use = pop!(worklist)
+                    item, w_up_id, which, use = pop!(worklist)
                     def = ir.stmts[item]
                     if isa(def, PhiNode)
                         edges = copy(def.edges)
@@ -495,7 +495,7 @@ function type_lift_pass!(ir::IRCode)
                                         if haskey(processed, id)
                                             val = processed[id]
                                         else
-                                            push!(worklist, (id, new_phi, i))
+                                            push!(worklist, (id, up_id, new_phi, i))
                                             continue
                                         end
                                     else
@@ -511,7 +511,13 @@ function type_lift_pass!(ir::IRCode)
                         end
                     end
                     if which !== SSAValue(0)
-                        ir[which].values[use] = new_phi
+                        phi = ir[which]
+                        if isa(phi, PhiNode)
+                            phi.values[use] = new_phi
+                        else
+                            phi = phi::PhiCNode
+                            ir[which].values[use] = insert_node!(ir, w_up_id, Bool, UpsilonNode(new_phi))
+                        end
                     end
                 end
             end
