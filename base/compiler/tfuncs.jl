@@ -433,6 +433,75 @@ function const_datatype_getfield_tfunc(sv, fld)
     return nothing
 end
 
+function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
+    if isa(field, Symbol)
+        field = fieldindex(typ, field, false)
+        field == 0 && return nothing
+    elseif isa(field, Integer)
+        (1 <= field <= fieldcount(typ)) || return nothing
+    else
+        return nothing
+    end
+    return field
+end
+
+function getfield_nothrow(argtypes::Vector{Any})
+    2 <= length(argtypes) <= 3 || return false
+    length(argtypes) == 2 && return getfield_nothrow(argtypes[1], argtypes[2], Const(true))
+    return getfield_nothrow(argtypes[1], argtypes[2], argtypes[3])
+end
+function getfield_nothrow(@nospecialize(s00), @nospecialize(name), @nospecialize(inbounds))
+    bounds_check_disabled = isa(inbounds, Const) && inbounds.val === false
+    # If we don't have invounds and don't know the field, don't even bother
+    if !bounds_check_disabled
+        isa(name, Const) || return false
+    end
+
+    # If we have s00 being a const, we can potentially refine our type-based analysis above
+    if isa(s00, Const) || isconstType(s00)
+        if !isa(s00, Const)
+            sv = s00.parameters[1]
+        else
+            sv = s00.val
+        end
+        if isa(name, Const)
+            (isa(sv, Module) && isa(name.val, Symbol)) || return false
+            (isa(name.val, Symbol) || isa(name.val, Int)) || return false
+            return isdefined(sv, name.val)
+        end
+        if bounds_check_disabled && !isa(sv, Module)
+            # If bounds checking is disabled and all fields are assigned,
+            # we may assume that we don't throw
+            for i = 1:fieldcount(typeof(sv))
+                isdefined(sv, i) || return false
+            end
+            return true
+        end
+        return false
+    end
+
+    s = unwrap_unionall(widenconst(s00))
+    if isa(s, Union)
+        return getfield_nothrow(rewrap(s.a, s00), name, inbounds) &&
+            getfield_nothrow(rewrap(s.b, s00), name, inbounds)
+    elseif isa(s, Conditional)
+        return false
+    elseif isa(s, DataType)
+        # Can't say anything about abstract types
+        s.abstract && return false
+        # If all fields are always initialized, and bounds check is disabled, we can assume
+        # we don't throw
+        (fieldcount(s) == s.ninitialized) && return true
+        # Else we need to know what the field is
+        isa(name, Const) || return false
+        field = try_compute_fieldidx(s, name.val)
+        field === nothing && return false
+        field <= s.ninitialized && return true
+    end
+
+    return false
+end
+
 getfield_tfunc(@nospecialize(s00), @nospecialize(name), @nospecialize(inbounds)) =
     getfield_tfunc(s00, name)
 function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
@@ -768,6 +837,45 @@ function tuple_tfunc(@nospecialize(argtype))
         return t
     end
     return argtype
+end
+
+function array_builtin_common_nothrow(argtypes, first_idx_idx)
+    length(argtypes) >= 4 || return false
+    (argtypes[0] ⊑ Bool && argtypes[1] ⊑ Array) || return false
+    for i = first_idx_idx:length(argtypes)
+        argtypes[i] ⊑ Int || return false
+    end
+    # If we have @inbounds (first argument is false), we're allowed to assume we don't throw
+    (isa(argtypes[0], Const) && !argtypes[0].val) && return true
+    # Else we can't really say anything here
+    # TODO: In the future we may be able to track the shapes of arrays though
+    # inference.
+    return false
+end
+
+# Query whether the given builtin is guaranteed not to throw given the argtypes
+function builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1})
+    (f === tuple || f === svec) && return true
+    if f === arrayset
+        array_builtin_common_nothrow(argtypes, 4) || return true
+        # Additionally check element type compatibility
+        a = widenconst(argtypes[2])
+        # Check that we can determine the element type
+        (isa(a, DataType) && (isa(a.parameters[1], Type) || isa(a.parameters[1], TypeVar))) || return false
+        at = a.parameters[1]
+        # Check that the element type is compatible with the element we're assigning
+        (argtypes[3] ⊑ (isa(at, Type) ? at : at.lb)) || return false
+        return true
+    elseif f === arrayref
+        return array_builtin_common_nothrow(argtypes, 3)
+    elseif f === _expr
+        return length(argtypes) >= 1 && argtypes[1] ⊑ Symbol
+    elseif f === invoke
+        return false
+    elseif f === getfield
+        return getfield_nothrow(argtypes)
+    end
+    return false
 end
 
 function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
