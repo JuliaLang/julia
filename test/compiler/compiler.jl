@@ -18,6 +18,48 @@ let comparison = Tuple{X, X} where X<:Tuple
     @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  10) == sig
 end
 
+# PR 22120
+function tmerge_test(a, b, r, commutative=true)
+    @test r == Core.Compiler.tuplemerge(a, b)
+    if commutative
+        @test r == Core.Compiler.tuplemerge(b, a)
+    else
+        @test_broken r == Core.Compiler.tuplemerge(b, a)
+    end
+end
+tmerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
+tmerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
+tmerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
+tmerge_test(Tuple{Int}, Tuple{Int, Int},
+    Tuple{Vararg{Int}})
+tmerge_test(Tuple{Integer}, Tuple{Int, Int},
+    Tuple{Vararg{Integer}})
+tmerge_test(Tuple{}, Tuple{Int, Int},
+    Tuple{Vararg{Int}})
+tmerge_test(Tuple{}, Tuple{Complex},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Complex}}, false)
+tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Complex}})
+@test Core.Compiler.tmerge(Tuple{}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Int32, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Int32, Nothing, Tuple{ComplexF32, ComplexF32}}
+@test Core.Compiler.tmerge(Union{Int32, Nothing, Tuple{ComplexF32}}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Int32, Nothing, Tuple{Vararg{ComplexF32}}}
 
 # issue 9770
 @noinline x9770() = false

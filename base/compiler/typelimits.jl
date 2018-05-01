@@ -305,7 +305,7 @@ end
 # pick a wider type that contains both typea and typeb,
 # with some limits on how "large" it can get,
 # but without losing too much precision in common cases
-# and also trying to be associative and commutative
+# and also trying to be mostly associative and commutative
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
     typea ⊑ typeb && return typeb
     typeb ⊑ typea && return typea
@@ -384,15 +384,14 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                     types[j] = Union{}
                     typenames[j] = Any.name
                 else
-                    widen = typenames[i].wrapper
                     if typenames[i] === Tuple.name
                         # try to widen Tuple slower: make a single non-concrete Tuple containing both
                         # converge the Tuple element-wise if they are the same length
                         # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
-                        if nothing !== tuplelen(ti) === tuplelen(tj)
-                            widen = tuplemerge(ti, tj)
-                        end
-                        # TODO: else, try to merge them into a single Tuple{Vararg{T}} instead (#22120)?
+                        widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
+                        widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
+                    else
+                        widen = typenames[i].wrapper
                     end
                     types[i] = Union{}
                     types[j] = widen
@@ -411,30 +410,77 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
 end
 
 # the inverse of switchtupleunion, with limits on max element union size
-function tuplemerge(@nospecialize(a), @nospecialize(b))
-    if isa(a, UnionAll)
-        return UnionAll(a.var, tuplemerge(a.body, b))
-    elseif isa(b, UnionAll)
-        return UnionAll(b.var, tuplemerge(a, b.body))
-    elseif isa(a, Union)
-        return tuplemerge(tuplemerge(a.a, a.b), b)
-    elseif isa(b, Union)
-        return tuplemerge(a, tuplemerge(b.a, b.b))
-    end
-    a = a::DataType
-    b = b::DataType
+function tuplemerge(a::DataType, b::DataType)
+    @assert a.name === b.name === Tuple.name "assertion failure"
     ap, bp = a.parameters, b.parameters
     lar = length(ap)::Int
     lbr = length(bp)::Int
-    @assert lar === lbr && a.name === b.name === Tuple.name "assertion failure"
-    p = Vector{Any}(undef, lar)
-    for i = 1:lar
+    va = lar > 0 && isvarargtype(ap[lar])
+    vb = lbr > 0 && isvarargtype(bp[lbr])
+    if lar == lbr && !va && !vb
+        lt = lar
+        vt = false
+    else
+        lt = 0 # or min(lar - va, lbr - vb)
+        vt = true
+    end
+    # combine the common elements
+    p = Vector{Any}(undef, lt + vt)
+    for i = 1:lt
         ui = Union{ap[i], bp[i]}
         if unionlen(ui) < MAX_TYPEUNION_LEN
             p[i] = ui
         else
             p[i] = Any
         end
+    end
+    # merge the remaining tail into a single, simple Tuple{Vararg{T}} (#22120)
+    if vt
+        tail = Union{}
+        for loop_b = (false, true)
+            for i = (lt + 1):(loop_b ? lbr : lar)
+                ti = unwrapva(loop_b ? bp[i] : ap[i])
+                # compare (ti <-> tail), (wrapper ti <-> tail), (ti <-> wrapper tail), then (wrapper ti <-> wrapper tail)
+                # until we find the first element that contains the other in the pair
+                # TODO: this result would be more stable (and more associative and more commutative)
+                #   if we either joined all of the element wrappers first into a wide-tail, then picked between that or an exact tail,
+                #   or (equivalently?) iteratively took super-types until reaching a common wrapper
+                #   e.g. consider the results of `tuplemerge(Tuple{Complex}, Tuple{Number, Int})` and of
+                #   `tuplemerge(Tuple{Int}, Tuple{String}, Tuple{Int, String})`
+                if !(ti <: tail)
+                    if tail <: ti
+                        tail = ti # widen to ti
+                    else
+                        uw = unwrap_unionall(tail)
+                        if uw isa DataType && tail <: uw.name.wrapper
+                            # widen tail to wrapper(tail)
+                            tail = uw.name.wrapper
+                            if !(ti <: tail)
+                                #assert !(tail <: ti)
+                                uw = unwrap_unionall(ti)
+                                if uw isa DataType && ti <: uw.name.wrapper
+                                    # widen ti to wrapper(ti)
+                                    ti = uw.name.wrapper
+                                    #assert !(ti <: tail)
+                                    if tail <: ti
+                                        tail = ti
+                                    else
+                                        tail = Any # couldn't find common super-type
+                                    end
+                                else
+                                    tail = Any # couldn't analyze type
+                                end
+                            end
+                        else
+                            tail = Any # couldn't analyze type
+                        end
+                    end
+                end
+                tail === Any && return Tuple # short-circuit loop
+            end
+        end
+        @assert !(tail === Union{})
+        p[lt + 1] = Vararg{tail}
     end
     return Tuple{p...}
 end
