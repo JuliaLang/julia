@@ -6643,11 +6643,12 @@ static std::unique_ptr<Module> emit_function(
                 terminator->eraseFromParent();
                 ctx.builder.SetInsertPoint(FromBB);
             }
-            if (!jl_is_uniontype(phiType)) {
+            if (!jl_is_uniontype(phiType) || !TindexN) {
                 if (val.typ == (jl_value_t*)jl_bottom_type) {
                     V = undef_value_for_type(phiType, VN->getType());
                 }
                 else if (VN->getType() == T_prjlvalue) {
+                    // Includes the jl_is_uniontype(phiType) && !TindexN case
                     V = boxed(ctx, val);
                 }
                 else if (VN->getType()->isPointerTy()) {
@@ -6660,9 +6661,6 @@ static std::unique_ptr<Module> emit_function(
                 }
                 VN->addIncoming(V, ctx.builder.GetInsertBlock());
                 assert(!TindexN);
-            }
-            else if (!TindexN) {
-                VN->addIncoming(boxed(ctx, val), ctx.builder.GetInsertBlock());
             }
             else {
                 Value *RTindex = NULL;
