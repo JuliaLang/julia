@@ -618,7 +618,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
 
     # Generate the block matrix
     X = Matrix{Ti}(undef, n, t)
-    X[1:n,1] = 1
+    X[1:n,1] .= 1
     for j = 2:t
         while true
             _rand_pm1!(view(X,1:n,j))

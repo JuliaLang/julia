@@ -16,7 +16,12 @@ end
 @testset "iszero specialization for SparseMatrixCSC" begin
     @test !iszero(sparse(I, 3, 3))                  # test failure
     @test iszero(spzeros(3, 3))                     # test success with no stored entries
-    @test iszero(setindex!(sparse(I, 3, 3), 0, :))  # test success with stored zeros
+    S = sparse(I, 3, 3)
+    S[:] .= 0
+    @test iszero(S)  # test success with stored zeros via broadcasting
+    S = sparse(I, 3, 3)
+    fill!(S, 0)
+    @test iszero(S)  # test success with stored zeros via fill!
     @test iszero(SparseMatrixCSC(2, 2, [1,2,3], [1,2], [0,0,1])) # test success with nonzeros beyond data range
 end
 @testset "isone specialization for SparseMatrixCSC" begin
@@ -148,8 +153,8 @@ let
 
     @testset "sparse assignment" begin
         p = [4, 1, 3]
-        a116[p, p] = -1
-        s116[p, p] = -1
+        a116[p, p] .= -1
+        s116[p, p] .= -1
         @test a116 == s116
 
         p = [2, 1, 4]
@@ -747,10 +752,10 @@ end
 @testset "setindex" begin
     a = spzeros(Int, 10, 10)
     @test count(!iszero, a) == 0
-    a[1,:] = 1
+    a[1,:] .= 1
     @test count(!iszero, a) == 10
     @test a[1,:] == sparse(fill(1,10))
-    a[:,2] = 2
+    a[:,2] .= 2
     @test count(!iszero, a) == 19
     @test a[:,2] == sparse(fill(2,10))
     b = copy(a)
@@ -764,20 +769,20 @@ end
     @test count(!iszero, a) == 18
 
     # Zero-assignment behavior of setindex!(A, v, I, J)
-    a[1,:] = 0
+    a[1,:] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 9
-    a[2,:] = 0
+    a[2,:] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 8
-    a[:,1] = 0
+    a[:,1] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 8
-    a[:,2] = 0
+    a[:,2] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 0
     a = copy(b)
-    a[:,:] = 0
+    a[:,:] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 0
 
@@ -806,13 +811,13 @@ end
     @test a[1,:] == sparse([1; 1; 3:10])
     a[1:0,2] = []
     @test a[:,2] == sparse([1:10;])
-    a[1,1:0] = 0
+    a[1,1:0] .= 0
     @test a[1,:] == sparse([1; 1; 3:10])
-    a[1:0,2] = 0
+    a[1:0,2] .= 0
     @test a[:,2] == sparse([1:10;])
-    a[1,1:0] = 1
+    a[1,1:0] .= 1
     @test a[1,:] == sparse([1; 1; 3:10])
-    a[1:0,2] = 1
+    a[1:0,2] .= 1
     @test a[:,2] == sparse([1:10;])
 
     @test_throws BoundsError a[:,11] = spzeros(10,1)
@@ -820,16 +825,16 @@ end
     @test_throws BoundsError a[:,-1] = spzeros(10,1)
     @test_throws BoundsError a[-1,:] = spzeros(1,10)
     @test_throws BoundsError a[0:9] = spzeros(1,10)
-    @test_throws BoundsError a[:,11] = 0
-    @test_throws BoundsError a[11,:] = 0
-    @test_throws BoundsError a[:,-1] = 0
-    @test_throws BoundsError a[-1,:] = 0
-    @test_throws BoundsError a[0:9] = 0
-    @test_throws BoundsError a[:,11] = 1
-    @test_throws BoundsError a[11,:] = 1
-    @test_throws BoundsError a[:,-1] = 1
-    @test_throws BoundsError a[-1,:] = 1
-    @test_throws BoundsError a[0:9] = 1
+    @test_throws BoundsError (a[:,11] .= 0; a)
+    @test_throws BoundsError (a[11,:] .= 0; a)
+    @test_throws BoundsError (a[:,-1] .= 0; a)
+    @test_throws BoundsError (a[-1,:] .= 0; a)
+    @test_throws BoundsError (a[0:9] .= 0; a)
+    @test_throws BoundsError (a[:,11] .= 1; a)
+    @test_throws BoundsError (a[11,:] .= 1; a)
+    @test_throws BoundsError (a[:,-1] .= 1; a)
+    @test_throws BoundsError (a[-1,:] .= 1; a)
+    @test_throws BoundsError (a[0:9] .= 1; a)
 
     @test_throws DimensionMismatch a[1:2,1:2] = 1:3
     @test_throws DimensionMismatch a[1:2,1] = 1:3
@@ -837,16 +842,16 @@ end
     @test_throws DimensionMismatch a[1:2] = 1:3
 
     A = spzeros(Int, 10, 20)
-    A[1:5,1:10] = 10
-    A[1:5,1:10] = 10
+    A[1:5,1:10] .= 10
+    A[1:5,1:10] .= 10
     @test count(!iszero, A) == 50
     @test A[1:5,1:10] == fill(10, 5, 10)
-    A[6:10,11:20] = 0
+    A[6:10,11:20] .= 0
     @test count(!iszero, A) == 50
-    A[6:10,11:20] = 20
+    A[6:10,11:20] .= 20
     @test count(!iszero, A) == 100
     @test A[6:10,11:20] == fill(20, 5, 10)
-    A[4:8,8:16] = 15
+    A[4:8,8:16] .= 15
     @test count(!iszero, A) == 121
     @test A[4:8,8:16] == fill(15, 5, 9)
 
@@ -857,13 +862,13 @@ end
     nA = count(!iszero, A)
     x = A[1:TSZ, 1:(2*TSZ)]
     nx = count(!iszero, x)
-    A[1:TSZ, 1:(2*TSZ)] = 0
+    A[1:TSZ, 1:(2*TSZ)] .= 0
     nB = count(!iszero, A)
     @test nB == (nA - nx)
     A[1:TSZ, 1:(2*TSZ)] = x
     @test count(!iszero, A) == nA
     @test A == B
-    A[1:TSZ, 1:(2*TSZ)] = 10
+    A[1:TSZ, 1:(2*TSZ)] .= 10
     @test count(!iszero, A) == nB + 2*TSZ*TSZ
     A[1:TSZ, 1:(2*TSZ)] = x
     @test count(!iszero, A) == nA
@@ -902,22 +907,22 @@ end
         sumS1 = sum(S)
         sumFI = sum(S[FI])
         nnzS1 = nnz(S)
-        S[FI] = 0
+        S[FI] .= 0
         sumS2 = sum(S)
         cnzS2 = count(!iszero, S)
         @test sum(S[FI]) == 0
         @test nnz(S) == nnzS1
         @test (sum(S) + sumFI) == sumS1
 
-        S[FI] = 10
+        S[FI] .= 10
         nnzS3 = nnz(S)
         @test sum(S) == sumS2 + 10*sum(FI)
-        S[FI] = 0
+        S[FI] .= 0
         @test sum(S) == sumS2
         @test nnz(S) == nnzS3
         @test count(!iszero, S) == cnzS2
 
-        S[FI] = [1:sum(FI);]
+        S[FI] .= [1:sum(FI);]
         @test sum(S) == sumS2 + sum(1:sum(FI))
 
         S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
@@ -926,9 +931,9 @@ end
         J = randperm(N)
         sumS1 = sum(S)
         sumS2 = sum(S[I])
-        S[I] = 0
+        S[I] .= 0
         @test sum(S) == (sumS1 - sumS2)
-        S[I] = J
+        S[I] .= J
         @test sum(S) == (sumS1 - sumS2 + sum(J))
     end
 end
@@ -936,8 +941,8 @@ end
 @testset "dropstored!" begin
     A = spzeros(Int, 10, 10)
     # Introduce nonzeros in row and column two
-    A[1,:] = 1
-    A[:,2] = 2
+    A[1,:] .= 1
+    A[:,2] .= 2
     @test nnz(A) == 19
 
     # Test argument bounds checking for dropstored!(A, i, j)
@@ -968,8 +973,8 @@ end
     SparseArrays.dropstored!(A, :, 2)
     @test nnz(A) == 0
     # --> Introduce nonzeros in rows one and two and columns two and three
-    A[1:2,:] = 1
-    A[:,2:3] = 2
+    A[1:2,:] .= 1
+    A[:,2:3] .= 2
     @test nnz(A) == 36
     # --> Test dropping multiple rows containing stored and nonstored entries
     SparseArrays.dropstored!(A, 1:3, :)
@@ -978,7 +983,7 @@ end
     SparseArrays.dropstored!(A, :, 2:4)
     @test nnz(A) == 0
     # --> Introduce nonzeros in every other row
-    A[1:2:9, :] = 1
+    A[1:2:9, :] .= 1
     @test nnz(A) == 50
     # --> Test dropping a block of the matrix towards the upper left
     SparseArrays.dropstored!(A, 2:5, 2:5)
@@ -1419,9 +1424,12 @@ end
         struczerosA = findall(x -> x == 0, A)
         poszerosinds = unique(rand(struczerosA, targetnumposzeros))
         negzerosinds = unique(rand(struczerosA, targetnumnegzeros))
-        Aposzeros = setindex!(copy(A), 2, poszerosinds)
-        Anegzeros = setindex!(copy(A), -2, negzerosinds)
-        Abothsigns = setindex!(copy(Aposzeros), -2, negzerosinds)
+        Aposzeros = copy(A)
+        Aposzeros[poszerosinds] .= 2
+        Anegzeros = copy(A)
+        Anegzeros[negzerosinds] .= -2
+        Abothsigns = copy(Aposzeros)
+        Abothsigns[negzerosinds] .= -2
         map!(x -> x == 2 ? 0.0 : x, Aposzeros.nzval, Aposzeros.nzval)
         map!(x -> x == -2 ? -0.0 : x, Anegzeros.nzval, Anegzeros.nzval)
         map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, Abothsigns.nzval, Abothsigns.nzval)
@@ -1598,21 +1606,21 @@ end
     @test A1!=A2
     nonzeros(A1)[end]=1
     @test A1==A2
-    A1[1:4,end] = 1
+    A1[1:4,end] .= 1
     @test A1!=A2
-    nonzeros(A1)[end-4:end-1]=0
+    nonzeros(A1)[end-4:end-1].=0
     @test A1==A2
-    A2[1:4,end-1] = 1
+    A2[1:4,end-1] .= 1
     @test A1!=A2
-    nonzeros(A2)[end-5:end-2]=0
+    nonzeros(A2)[end-5:end-2].=0
     @test A1==A2
-    A2[2:3,1] = 1
+    A2[2:3,1] .= 1
     @test A1!=A2
-    nonzeros(A2)[2:3]=0
+    nonzeros(A2)[2:3].=0
     @test A1==A2
-    A1[2:5,1] = 1
+    A1[2:5,1] .= 1
     @test A1!=A2
-    nonzeros(A1)[2:5]=0
+    nonzeros(A1)[2:5].=0
     @test A1==A2
     @test sparse([1,1,0])!=sparse([0,1,1])
 end
@@ -1946,11 +1954,11 @@ end
 @testset "setindex issue #20657" begin
     local A = spzeros(3, 3)
     I = [1, 1, 1]; J = [1, 1, 1]
-    A[I, 1] = 1
+    A[I, 1] .= 1
     @test nnz(A) == 1
-    A[1, J] = 1
+    A[1, J] .= 1
     @test nnz(A) == 1
-    A[I, J] = 1
+    A[I, J] .= 1
     @test nnz(A) == 1
 end
 

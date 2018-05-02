@@ -54,13 +54,13 @@ using Random, LinearAlgebra
     b = copy(a')
     @test a[1,1] == 1. && a[1,2] == 2. && a[2,1] == 3. && a[2,2] == 4.
     @test b[1,1] == 1. && b[2,1] == 2. && b[1,2] == 3. && b[2,2] == 4.
-    a[[1 2 3 4]] = 0
+    a[[1 2 3 4]] .= 0
     @test a == zeros(2,2)
-    a[[1 2], [1 2]] = 1
+    a[[1 2], [1 2]] .= 1
     @test a == fill(1.,2,2)
-    a[[1 2], 1] = 0
+    a[[1 2], 1] .= 0
     @test a[1,1] == 0. && a[1,2] == 1. && a[2,1] == 0. && a[2,2] == 1.
-    a[:, [1 2]] = 2
+    a[:, [1 2]] .= 2
     @test a == fill(2.,2,2)
 
     a = Array{Float64}(undef, 2, 2, 2, 2, 2)
@@ -301,7 +301,7 @@ end
     @test B == [0 0 1 0 0; 11 12 13 14 15; 0 0 3 0 0; 0 0 4 0 0]
     B[[3,1],[2,4]] = [21 22; 23 24]
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 0 4 0 0]
-    B[4,[2,3]] = 7
+    B[4,[2,3]] .= 7
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
     @test isequal(reshape(reshape(1:27, 3, 3, 3), Val(2))[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
@@ -916,7 +916,7 @@ end
     @test_throws BoundsError [1:5;][[true,false,true,false]]
     @test_throws BoundsError [1:5;][[true,false,true,false,true,false]]
     a = [1:5;]
-    a[[true,false,true,false,true]] = 6
+    a[[true,false,true,false,true]] .= 6
     @test a == [6,2,6,4,6]
     a[[true,false,true,false,true]] = [7,8,9]
     @test a == [7,2,8,4,9]
@@ -933,7 +933,7 @@ end
     @test A == [1 1 1 1 1; 2 1 3 4 1; 1 1 1 1 1]
     @test_throws DimensionMismatch A[[true,false,true], 5] = [19]
     @test_throws DimensionMismatch A[[true,false,true], 5] = 19:21
-    A[[true,false,true], 5] = 7
+    A[[true,false,true], 5] .= 7
     @test A == [1 1 1 1 7; 2 1 3 4 1; 1 1 1 1 7]
 
     B = cat(3, 1, 2, 3)
@@ -1050,7 +1050,7 @@ end
     end
     a = [1,3,5]
     b = [1 3]
-    a[b] = 8
+    a[b] .= 8
     @test a == [8,3,8]
 end
 
@@ -1642,7 +1642,7 @@ end
         @test a[1,CartesianIndex{2}(3,4)] == -2
         a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
         @test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
-        a[[CartesianIndex(1,3),CartesianIndex(2,4)],3:3] = -4
+        a[[CartesianIndex(1,3),CartesianIndex(2,4)],3:3] .= -4
         @test a[1,3,3] == -4
         @test a[2,4,3] == -4
     end
@@ -1983,7 +1983,7 @@ copyto!(S, A)
 
 # issue #13250
 x13250 = zeros(3)
-x13250[UInt(1):UInt(2)] = 1.0
+x13250[UInt(1):UInt(2)] .= 1.0
 @test x13250[1] == 1.0
 @test x13250[2] == 1.0
 @test x13250[3] == 0.0
@@ -2323,7 +2323,7 @@ Float64(x::F21666) = Float64(x.x)
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic
     # we make v pretty large, because stable algorithm may have a large base case
-    v = zeros(300); v[1] = 2; v[200:end] = eps(Float32)
+    v = zeros(300); v[1] = 2; v[200:end] .= eps(Float32)
 
     f_rounds = Float64.(cumsum(F21666{Base.ArithmeticRounds}.(v)))
     f_unknown = Float64.(cumsum(F21666{Base.ArithmeticUnknown}.(v)))

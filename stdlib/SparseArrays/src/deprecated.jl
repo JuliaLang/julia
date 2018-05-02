@@ -222,6 +222,15 @@ end
 import Base: asyncmap
 @deprecate asyncmap(f, s::AbstractSparseArray...; kwargs...) sparse(asyncmap(f, map(Array, s)...; kwargs...))
 
+# PR 26347: implicit scalar broadcasting within setindex!
+@deprecate setindex!(A::SparseMatrixCSC, x::Number, i::Integer, J::AbstractVector{<:Integer}) (A[i, J] .= x; A)
+@deprecate setindex!(A::SparseMatrixCSC, x::Number, I::AbstractVector{<:Integer}, j::Integer) (A[I, j] .= x; A)
+@deprecate setindex!(A::SparseMatrixCSC, x, ::Colon)          fill!(A, x)
+@deprecate setindex!(A::SparseMatrixCSC, x, ::Colon, ::Colon) fill!(A, x)
+@deprecate setindex!(A::SparseMatrixCSC, x, ::Colon, j::Union{Integer, AbstractVector}) (A[:, j] .= x; A)
+@deprecate setindex!(A::SparseMatrixCSC, x, i::Union{Integer, AbstractVector}, ::Colon) (A[i, :] .= x; A)
+@deprecate setindex!(A::SparseMatrixCSC, x::Number, I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer}) (A[I, J] .= x; A)
+
 #25395 keywords unlocked
 @deprecate dropzeros(x, trim)     dropzeros(x, trim = trim)
 @deprecate dropzeros!(x, trim)    dropzeros!(x, trim = trim)

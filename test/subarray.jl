@@ -354,7 +354,7 @@ sA = view(A, 2:2, 1:5, :)
 @test size(sA) == (1, 5, 8)
 @test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
 @test sA[1, 2, 1:8][:] == [5:15:120;]
-sA[2:5:end] = -1
+sA[2:5:end] .= -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 @test @inferred(strides(sA)) == (1,3,15)
@@ -363,10 +363,12 @@ sA[2:5:end] = -1
 test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == [1:2;]
-sA[1:3,1:5] = -2
+sA[1:3,1:5] .= -2
 @test all(A[:,:,5] .== -2)
-sA[:] = -3
+fill!(sA, -3)
 @test all(A[:,:,5] .== -3)
+sA[:] .= 4
+@test all(A[:,:,5] .== 4)
 @test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
@@ -413,7 +415,7 @@ sA = view(A, 2, :, 1:8)
 @test sA[2, 1:8][:] == [5:15:120;]
 @test sA[:,1] == [2:3:14;]
 @test sA[2:5:end] == [5:15:110;]
-sA[2:5:end] = -1
+sA[2:5:end] .= -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 test_bounds(sA)
@@ -441,7 +443,7 @@ A = rand(2, 2, 3)
 msk = fill(true, 2, 2)
 msk[2,1] = false
 sA = view(A, :, :, 1)
-sA[msk] = 1.0
+sA[msk] .= 1.0
 @test sA[msk] == fill(1, count(msk))
 
 # bounds checking upon construction; see #4044, #10296
@@ -531,7 +533,7 @@ end
     @test x[1:3] isa SubArray
     @test x[2] === 11
     @test Dict((1:3) => 4)[1:3] === 4
-    x[1:2] = 0
+    x[1:2] .= 0
     @test x == [0,0,19,4]
     x[1:2] .= 5:6
     @test x == [5,6,19,4]

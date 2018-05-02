@@ -1266,7 +1266,7 @@ function build_eq_classes_soft1!(graph::Graph, p0::Int)
 
     # disable the other versions by introducing additional constraints
     fill!(gconstr0, false)
-    gconstr0[repr_vers] = true
+    gconstr0[repr_vers] .= true
 
     return
 end

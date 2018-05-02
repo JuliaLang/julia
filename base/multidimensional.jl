@@ -662,12 +662,11 @@ function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractA
     A
 end
 
-_iterable(v::AbstractArray) = v
-_iterable(v) = Iterators.repeated(v)
+_iterable(X::AbstractArray, I...) = X
 @generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
     N = length(I)
     quote
-        x′ = _iterable(unalias(A, x))
+        x′ = unalias(A, _iterable(x, I...))
         @nexprs $N d->(I_d = unalias(A, I[d]))
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
@@ -1204,19 +1203,26 @@ end
     end
 end
 
-@inline function setindex!(B::BitArray, x,
-        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
-    J = to_indices(B, (I0, I...))
-    @boundscheck checkbounds(B, J...)
-    _unsafe_setindex!(B, x, J...)
-end
 @propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
         I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
 
-@generated function _unsafe_setindex!(B::BitArray, x,
-        I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)
+## fill! contiguous views of BitArrays with a single value
+function fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}}}, x)
+    B = V.parent
+    I0 = V.indices[1]
+    l0 = length(I0)
+    l0 == 0 && return V
+    fill_chunks!(B.chunks, Bool(x), first(I0), l0)
+    return V
+end
+
+fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, x) =
+    _unsafe_fill_indices!(V.parent, x, V.indices...)
+
+@generated function _unsafe_fill_indices!(B::BitArray, x,
+        I0::AbstractUnitRange{Int}, I::Union{Int,AbstractUnitRange{Int}}...)
     N = length(I)
     quote
         y = Bool(x)
@@ -1469,7 +1475,9 @@ julia> extrema(A, (1,2))
 """
 function extrema(A::AbstractArray, dims)
     sz = [size(A)...]
-    sz[[dims...]] = 1
+    for d in dims
+        sz[d] = 1
+    end
     B = Array{Tuple{eltype(A),eltype(A)}}(undef, sz...)
     return extrema!(B, A)
 end

@@ -1799,7 +1799,7 @@ function _densifyfirstnztoend!(x::SparseVector)
         nzi = x.nzind[oldpos]
         nzv = x.nzval[oldpos]
         newpos = nzi - x.nzind[1] + 1
-        newpos < nextpos && (x.nzval[newpos+1:nextpos] = 0)
+        newpos < nextpos && (x.nzval[newpos+1:nextpos] .= 0)
         newpos == oldpos && break
         x.nzval[newpos] = nzv
         nextpos = newpos - 1
@@ -1821,12 +1821,12 @@ function _densifystarttolastnz!(x::SparseVector)
     @inbounds for oldpos in oldnnz:-1:1
         nzi = x.nzind[oldpos]
         nzv = x.nzval[oldpos]
-        nzi < nextpos && (x.nzval[nzi+1:nextpos] = 0)
+        nzi < nextpos && (x.nzval[nzi+1:nextpos] .= 0)
         nzi == oldpos && (nextpos = 0; break)
         x.nzval[nzi] = nzv
         nextpos = nzi - 1
     end
-    nextpos > 0 && (x.nzval[1:nextpos] = 0)
+    nextpos > 0 && (x.nzval[1:nextpos] .= 0)
     # finally update lengthened nzinds
     x.nzind[1:newnnz] = 1:newnnz
     x
