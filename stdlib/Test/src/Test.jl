@@ -1470,7 +1470,7 @@ for (G, A) in ((GenericSet, AbstractSet),
     @eval begin
         Base.iterate(s::$G, state...) = iterate(s.s, state...)
     end
-    for f in (:isempty, :length, :start)
+    for f in (:isempty, :length)
         @eval begin
             Base.$f(s::$G) = $f(s.s)
         end

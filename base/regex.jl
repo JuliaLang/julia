@@ -343,7 +343,7 @@ function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
                     offset = mat.offset
                 end
             else
-                offset = mat.offset + lastindex(mat.match)
+                offset = mat.offset + ncodeunits(mat.match)
             end
             return (mat, (offset, isempty(mat.match)))
         end
