@@ -6530,6 +6530,7 @@ static std::unique_ptr<Module> emit_function(
                 undef_alloca_align = align;
             VNUndef = UndefAlloca;
             // It's legal to decay our addrspace(0) alloca to any of our addrspaces
+            InsertPoint IP = ctx.builder.saveIP();
             ctx.builder.SetInsertPoint(ctx.ptlsStates);
             if (UndefType->getPointerAddressSpace() !=
                 VNUndef->getType()->getPointerAddressSpace()) {
@@ -6539,6 +6540,7 @@ static std::unique_ptr<Module> emit_function(
                     /*InsertBefore=*/ ctx.ptlsStates);
             }
             VNUndef = maybe_bitcast(ctx, VNUndef, UndefType);
+            ctx.builder.restoreIP(IP);
         } else {
             VNUndef = (llvm::Value*)UndefValue::get(UndefType);
         }
