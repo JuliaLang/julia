@@ -159,7 +159,7 @@ function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
             if pkg_name == "julia"
                 if !(VERSION in vspec)
-                    error("julia version requirement for package $pkg not satisfied")
+                    @warn("julia version requirement for package $pkg not satisfied")
                 end
             else
                 deppkg = PackageSpec(pkg_name, vspec)
@@ -198,6 +198,7 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
         isempty(unseen) && break
         for uuid in unseen
             push!(seen, uuid)
+            uuid in keys(fixed) && continue
             all_versions_u = get_or_make!(all_versions, uuid)
             all_deps_u     = get_or_make!(all_deps,     uuid)
             all_compat_u   = get_or_make!(all_compat,   uuid)
