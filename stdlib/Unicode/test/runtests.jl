@@ -24,6 +24,7 @@ using Unicode: normalize, isassigned
     @test isempty(normalize("\u00ad", stripignore=true))
     @test normalize("\t\r", stripcc=true) == "  "
     @test normalize("\t\r", stripcc=true, newline2ls=true) == " \u2028"
+    @test normalize("\u0072\u0307\u0323", :NFC) == "\u1E5B\u0307" #26917
 end
 
 @testset "unicode sa#15" begin
