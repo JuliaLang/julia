@@ -8,6 +8,7 @@ struct InliningTodo
     na::Int
     method::Method  # The method being inlined
     sparams::Vector{Any} # The static parameters we computed for this call site
+    metharg::Any
     # The LineTable and IR of the inlinee
     linetable::Vector{LineInfoNode}
     ir::IRCode
@@ -15,6 +16,29 @@ struct InliningTodo
     # simpler inlining algorithm. This flag determines whether that's allowed
     linear_inline_eligible::Bool
 end
+
+struct ConstantCase
+    val::Any
+    method::Method
+    sparams::Vector{Any}
+    metharg::Any
+end
+
+struct DynamicCase
+    method::Method
+    sparams::Vector{Any}
+    metharg::Any
+end
+
+struct UnionSplit
+    idx::Int # The statement to replace
+    fully_covered::Bool
+    atype::Any
+    isinvoke::Bool
+    cases::Vector{Pair{Type, Any}}
+    bbs::Vector{Int}
+end
+UnionSplit(idx, fully_covered, atype, isinvoke, cases) = UnionSplit(idx, fully_covered, atype, isinvoke, cases, Int[])
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # Go through the function, perfoming simple ininlingin (e.g. replacing call by constants
@@ -26,169 +50,406 @@ function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::Opt
     return ir
 end
 
-function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
-    # Compute the new CFG first (modulo statement ranges, which will be computed below)
-    new_cfg_blocks = BasicBlock[]
-    inserted_block_ranges = UnitRange{Int}[]
-    todo_bbs = Tuple{Int, Int}[]
-    first_bb = 0
-    bb_rename = zeros(Int, length(ir.cfg.blocks))
-    split_targets = BitSet()
-    merged_orig_blocks = BitSet()
-    boundscheck = inbounds_option()
-    if boundscheck === :default && sv.src.propagate_inbounds
-        boundscheck = :propagate
+mutable struct CFGInliningState
+    new_cfg_blocks::Vector{BasicBlock}
+    inserted_block_ranges::Vector{UnitRange{Int}}
+    todo_bbs::Vector{Tuple{Int, Int}}
+    first_bb::Int
+    bb_rename::Vector{Int}
+    split_targets::BitSet
+    merged_orig_blocks::BitSet
+    cfg::CFG
+end
+
+function CFGInliningState(ir::IRCode)
+    CFGInliningState(
+        BasicBlock[],
+        UnitRange{Int}[],
+        Tuple{Int, Int}[],
+        0,
+        zeros(Int, length(ir.cfg.blocks)),
+        BitSet(),
+        BitSet(),
+        ir.cfg
+    )
+end
+
+# Tells the inliner that we're now inlining into block `block`, meaning
+# all previous blocks have been proceesed and can be added to the new cfg
+function inline_into_block!(state::CFGInliningState, block::Int)
+    if state.first_bb != block
+        new_range = state.first_bb+1:block
+        l = length(state.new_cfg_blocks)
+        state.bb_rename[new_range] = (l+1:l+length(new_range))
+        append!(state.new_cfg_blocks, map(copy, state.cfg.blocks[new_range]))
+        push!(state.merged_orig_blocks, last(new_range))
     end
-    for item in todo
-        local idx, ir2, lie
-        # A linear inline does not modify the CFG
-        item.linear_inline_eligible && continue
-        inlinee_cfg = item.ir.cfg
-        # Figure out if we need to split the BB
-        need_split_before = false
-        need_split = true
-        block = block_for_inst(ir.cfg, item.idx)
-        last_block_idx = last(ir.cfg.blocks[block].stmts)
+    state.first_bb = block
+    return
+end
 
-        if !isempty(inlinee_cfg.blocks[1].preds)
-            need_split_before = true
-        end
+function cfg_inline_item!(item::InliningTodo, state::CFGInliningState, from_unionsplit::Bool=false)
+    inlinee_cfg = item.ir.cfg
+    # Figure out if we need to split the BB
+    need_split_before = false
+    need_split = true
+    block = block_for_inst(state.cfg, item.idx)
+    inline_into_block!(state, block)
 
-        if first_bb != block
-            new_range = first_bb+1:block
-            bb_rename[new_range] = (1+length(new_cfg_blocks)):(length(new_range)+length(new_cfg_blocks))
-            append!(new_cfg_blocks, map(copy, ir.cfg.blocks[new_range]))
-            push!(merged_orig_blocks, last(new_range))
-        end
-        first_bb = block
-        if false # TODO: ((idx+1) == last_block_idx && isa(ir[SSAValue(last_block_idx)], GotoNode))
-            need_split = false
-            post_bb_id = -ir[SSAValue(last_block_idx)].label
-        else
-            post_bb_id = length(new_cfg_blocks) + length(inlinee_cfg.blocks) + (need_split_before ? 1 : 0)
-            need_split = true #!(idx == last_block_idx)
-        end
+    if !isempty(inlinee_cfg.blocks[1].preds)
+        need_split_before = true
+    end
 
-        if !need_split
-            delete!(merged_orig_blocks, last(new_range))
-        end
+    last_block_idx = last(state.cfg.blocks[block].stmts)
+    if false # TODO: ((idx+1) == last_block_idx && isa(ir[SSAValue(last_block_idx)], GotoNode))
+        need_split = false
+        post_bb_id = -ir[SSAValue(last_block_idx)].label
+    else
+        post_bb_id = length(state.new_cfg_blocks) + length(inlinee_cfg.blocks) + (need_split_before ? 1 : 0)
+        need_split = true #!(idx == last_block_idx)
+    end
 
-        push!(todo_bbs, (length(new_cfg_blocks) - 1 + (need_split_before ? 1 : 0), post_bb_id))
+    if !need_split
+        delete!(state.merged_orig_blocks, last(new_range))
+    end
 
-        delete!(split_targets, length(new_cfg_blocks))
-        orig_succs = copy(new_cfg_blocks[end].succs)
-        empty!(new_cfg_blocks[end].succs)
-        if need_split_before
-            bb_rename_range = (1+length(new_cfg_blocks)):(length(inlinee_cfg.blocks)+length(new_cfg_blocks))
-            push!(new_cfg_blocks[end].succs, length(new_cfg_blocks)+1)
-            append!(new_cfg_blocks, inlinee_cfg.blocks)
-        else
-            # Merge the last block that was already there with the first block we're adding
-            bb_rename_range = length(new_cfg_blocks):(length(inlinee_cfg.blocks)+length(new_cfg_blocks)-1)
-            append!(new_cfg_blocks[end].succs, inlinee_cfg.blocks[1].succs)
-            append!(new_cfg_blocks, inlinee_cfg.blocks[2:end])
-        end
-        if need_split
-            push!(new_cfg_blocks, BasicBlock(ir.cfg.blocks[block].stmts,
-                Int[], orig_succs))
-            push!(split_targets, length(new_cfg_blocks))
-        end
-        new_block_range = (length(new_cfg_blocks)-length(inlinee_cfg.blocks)+1):length(new_cfg_blocks)
-        push!(inserted_block_ranges, new_block_range)
+    push!(state.todo_bbs, (length(state.new_cfg_blocks) - 1 + (need_split_before ? 1 : 0), post_bb_id))
 
-        # Fixup the edges of the newely added blocks
-        for (old_block, new_block) in enumerate(bb_rename_range)
-            if old_block != 1 || need_split_before
-                p = new_cfg_blocks[new_block].preds
-                map!(p, p) do old_pred_block
-                    return bb_rename_range[old_pred_block]
-                end
-            end
-            if new_block != last(new_block_range)
-                s = new_cfg_blocks[new_block].succs
-                map!(s, s) do old_succ_block
-                    return bb_rename_range[old_succ_block]
-                end
+    from_unionsplit || delete!(state.split_targets, length(state.new_cfg_blocks))
+    orig_succs = copy(state.new_cfg_blocks[end].succs)
+    empty!(state.new_cfg_blocks[end].succs)
+    if need_split_before
+        l = length(state.new_cfg_blocks)
+        bb_rename_range = (1+l:length(inlinee_cfg.blocks)+l)
+        push!(state.new_cfg_blocks[end].succs, length(state.new_cfg_blocks)+1)
+        append!(state.new_cfg_blocks, inlinee_cfg.blocks)
+    else
+        # Merge the last block that was already there with the first block we're adding
+        l = length(state.new_cfg_blocks)
+        bb_rename_range = (l:length(inlinee_cfg.blocks)+l-1)
+        append!(state.new_cfg_blocks[end].succs, inlinee_cfg.blocks[1].succs)
+        append!(state.new_cfg_blocks, inlinee_cfg.blocks[2:end])
+    end
+    if need_split
+        push!(state.new_cfg_blocks, BasicBlock(state.cfg.blocks[block].stmts,
+            Int[], orig_succs))
+        from_unionsplit || push!(state.split_targets, length(state.new_cfg_blocks))
+    end
+    new_block_range = (length(state.new_cfg_blocks)-length(inlinee_cfg.blocks)+1):length(state.new_cfg_blocks)
+    push!(state.inserted_block_ranges, new_block_range)
+
+    # Fixup the edges of the newely added blocks
+    for (old_block, new_block) in enumerate(bb_rename_range)
+        if old_block != 1 || need_split_before
+            p = state.new_cfg_blocks[new_block].preds
+            map!(p, p) do old_pred_block
+                return bb_rename_range[old_pred_block]
             end
         end
-
-        if need_split_before
-            push!(new_cfg_blocks[first(bb_rename_range)].preds, first(bb_rename_range)-1)
+        if new_block != last(new_block_range)
+            s = state.new_cfg_blocks[new_block].succs
+            map!(s, s) do old_succ_block
+                return bb_rename_range[old_succ_block]
+            end
         end
+    end
 
-        for (old_block, new_block) in enumerate(bb_rename_range)
-            if (length(new_cfg_blocks[new_block].succs) == 0)
-                terminator_idx = last(inlinee_cfg.blocks[old_block].stmts)
-                terminator = item.ir[SSAValue(terminator_idx)]
-                if isa(terminator, ReturnNode) && isdefined(terminator, :val)
-                    push!(new_cfg_blocks[new_block].succs, post_bb_id)
-                    if need_split
-                        push!(new_cfg_blocks[post_bb_id].preds, new_block)
-                    end
+    if need_split_before
+        push!(state.new_cfg_blocks[first(bb_rename_range)].preds, first(bb_rename_range)-1)
+    end
+
+    for (old_block, new_block) in enumerate(bb_rename_range)
+        if (length(state.new_cfg_blocks[new_block].succs) == 0)
+            terminator_idx = last(inlinee_cfg.blocks[old_block].stmts)
+            terminator = item.ir[SSAValue(terminator_idx)]
+            if isa(terminator, ReturnNode) && isdefined(terminator, :val)
+                push!(state.new_cfg_blocks[new_block].succs, post_bb_id)
+                if need_split
+                    push!(state.new_cfg_blocks[post_bb_id].preds, new_block)
                 end
             end
         end
     end
-    new_range = (first_bb + 1):length(ir.cfg.blocks)
-    bb_rename[new_range] = (1+length(new_cfg_blocks)):(length(new_range)+length(new_cfg_blocks))
-    append!(new_cfg_blocks, ir.cfg.blocks[new_range])
+end
+
+function cfg_inline_unionsplit!(item::UnionSplit, state::CFGInliningState)
+    block = block_for_inst(state.cfg, item.idx)
+    inline_into_block!(state, block)
+    from_bbs = Int[]
+    delete!(state.split_targets, length(state.new_cfg_blocks))
+    orig_succs = copy(state.new_cfg_blocks[end].succs)
+    empty!(state.new_cfg_blocks[end].succs)
+    for (i, (_, case)) in enumerate(item.cases)
+        # The condition gets sunk into the previous block
+        # Add a block for the union-split body
+        push!(state.new_cfg_blocks, BasicBlock(StmtRange(item.idx, item.idx)))
+        cond_bb = length(state.new_cfg_blocks)-1
+        push!(state.new_cfg_blocks[end].preds, cond_bb)
+        push!(state.new_cfg_blocks[cond_bb].succs, cond_bb+1)
+        if isa(case, InliningTodo) && !case.linear_inline_eligible
+            cfg_inline_item!(case, state, true)
+        end
+        bb = length(state.new_cfg_blocks)
+        push!(from_bbs, bb)
+        # TODO: Right now we unconditionally generate a fallback block
+        # in case of subtyping errors - This is probably unnecessary.
+        if true # i != length(item.cases) || !item.fully_covered
+            # This block will have the next condition or the final else case
+            push!(state.new_cfg_blocks, BasicBlock(StmtRange(item.idx, item.idx)))
+            push!(state.new_cfg_blocks[cond_bb].succs, length(state.new_cfg_blocks))
+            push!(state.new_cfg_blocks[end].preds, cond_bb)
+            push!(item.bbs, length(state.new_cfg_blocks))
+        end
+    end
+    # The edge from the fallback block.
+    if !item.fully_covered
+        push!(from_bbs, length(state.new_cfg_blocks))
+    end
+    # This block will be the block everyone returns to
+    push!(state.new_cfg_blocks, BasicBlock(StmtRange(item.idx, item.idx), from_bbs, orig_succs))
+    join_bb = length(state.new_cfg_blocks)
+    push!(state.split_targets, join_bb)
+    push!(item.bbs, join_bb)
+    for bb in from_bbs
+        push!(state.new_cfg_blocks[bb].succs, join_bb)
+    end
+end
+
+function finish_cfg_inline!(state::CFGInliningState)
+    new_range = (state.first_bb + 1):length(state.cfg.blocks)
+    l = length(state.new_cfg_blocks)
+    state.bb_rename[new_range] = (l+1:l+length(new_range))
+    append!(state.new_cfg_blocks, state.cfg.blocks[new_range])
 
     # Rename edges original bbs
-    for (orig_bb, bb) in pairs(bb_rename)
-        p, s = new_cfg_blocks[bb].preds, new_cfg_blocks[bb].succs
+    for (orig_bb, bb) in pairs(state.bb_rename)
+        p, s = state.new_cfg_blocks[bb].preds, state.new_cfg_blocks[bb].succs
         map!(p, p) do pred_bb
-            pred_bb == length(bb_rename) && return length(new_cfg_blocks)
-            return bb_rename[pred_bb + 1] - 1
+            pred_bb == length(state.bb_rename) && return length(state.new_cfg_blocks)
+            return state.bb_rename[pred_bb + 1] - 1
         end
-        if !(orig_bb in merged_orig_blocks)
+        if !(orig_bb in state.merged_orig_blocks)
             map!(s, s) do succ_bb
-                return bb_rename[succ_bb]
+                return state.bb_rename[succ_bb]
             end
         end
     end
 
-    for bb in collect(split_targets)
-        s = new_cfg_blocks[bb].succs
+    for bb in collect(state.split_targets)
+        s = state.new_cfg_blocks[bb].succs
         map!(s, s) do succ_bb
-            return bb_rename[succ_bb]
+            return state.bb_rename[succ_bb]
         end
     end
 
     # Rename any annotated original bb references
-    for bb in 1:length(new_cfg_blocks)
-        s = new_cfg_blocks[bb].succs
+    for bb in 1:length(state.new_cfg_blocks)
+        s = state.new_cfg_blocks[bb].succs
         map!(s, s) do succ_bb
-            return succ_bb < 0 ? bb_rename[-succ_bb] : succ_bb
+            return succ_bb < 0 ? state.bb_rename[-succ_bb] : succ_bb
         end
+    end
+end
+
+function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
+                         linetable::Vector{LineInfoNode}, item::InliningTodo,
+                         boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
+    # Ok, do the inlining here
+    inline_cfg = item.ir.cfg
+    stmt = compact.result[idx]
+    linetable_offset = length(linetable)
+    # Append the linetable of the inlined function to our line table
+    inlined_at = compact.result_lines[idx]
+    for entry in item.linetable
+        push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
+            (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
+    end
+    if item.isva
+        vararg = mk_tuplecall!(compact, argexprs[item.na:end], compact.result_lines[idx])
+        argexprs = Any[argexprs[1:(item.na - 1)]..., vararg]
+    end
+    flag = compact.result_flags[idx]
+    boundscheck_idx = boundscheck
+    if boundscheck_idx === :default || boundscheck_idx === :propagate
+        if (flag & IR_FLAG_INBOUNDS) != 0
+            boundscheck_idx = :off
+        end
+    end
+    # If the iterator already moved on to the next basic block,
+    # temorarily re-open in again.
+    local return_value
+    # Special case inlining that maintains the current basic block if there's only one BB in the target
+    if item.linear_inline_eligible
+        terminator = item.ir[SSAValue(last(inline_cfg.blocks[1].stmts))]
+        #compact[idx] = nothing
+        inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
+        for (idx′, stmt′) in inline_compact
+            # This dance is done to maintain accurate usage counts in the
+            # face of rename_arguments! mutating in place - should figure out
+            # something better eventually.
+            inline_compact[idx′] = nothing
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, item.method.sig, item.sparams, linetable_offset, boundscheck_idx, compact)
+            if isa(stmt′, ReturnNode)
+                isa(stmt′.val, SSAValue) && (compact.used_ssas[stmt′.val.id] += 1)
+                return_value = stmt′.val
+                stmt′ = nothing
+            end
+            inline_compact[idx′] = stmt′
+        end
+        just_fixup!(inline_compact)
+        compact.result_idx = inline_compact.result_idx
+    else
+        bb_offset, post_bb_id = popfirst!(todo_bbs)
+        # This implements the need_split_before flag above
+        need_split_before = !isempty(item.ir.cfg.blocks[1].preds)
+        if need_split_before
+            finish_current_bb!(compact)
+        end
+        pn = PhiNode()
+        #compact[idx] = nothing
+        inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
+        for (idx′, stmt′) in inline_compact
+            inline_compact[idx′] = nothing
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, item.method.sig, item.sparams, linetable_offset, boundscheck_idx, compact)
+            if isa(stmt′, ReturnNode)
+                if isdefined(stmt′, :val)
+                    push!(pn.edges, inline_compact.active_result_bb-1)
+                    push!(pn.values, stmt′.val)
+                    stmt′ = GotoNode(post_bb_id)
+                end
+            elseif isa(stmt′, GotoNode)
+                stmt′ = GotoNode(stmt′.label + bb_offset)
+            elseif isa(stmt′, Expr) && stmt′.head == :enter
+                stmt′ = Expr(:enter, stmt′.args[1] + bb_offset)
+            elseif isa(stmt′, GotoIfNot)
+                stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
+            elseif isa(stmt′, PhiNode)
+                stmt′ = PhiNode(Any[edge+bb_offset for edge in stmt′.edges], stmt′.values)
+            end
+            inline_compact[idx′] = stmt′
+        end
+        just_fixup!(inline_compact)
+        compact.result_idx = inline_compact.result_idx
+        compact.active_result_bb = inline_compact.active_result_bb
+        for i = 1:length(pn.values)
+            isassigned(pn.values, i) || continue
+            if isa(pn.values[i], SSAValue)
+                compact.used_ssas[pn.values[i].id] += 1
+            end
+        end
+        if length(pn.edges) == 1
+            return_value = pn.values[1]
+        else
+            return_value = insert_node_here!(compact, pn, stmt.typ, compact.result_lines[idx])
+        end
+    end
+    return_value
+end
+
+function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
+                               argexprs::Vector{Any}, linetable::Vector{LineInfoNode},
+                               item::UnionSplit, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
+    stmt, typ, line = compact.result[idx], compact.result_types[idx], compact.result_lines[idx]
+    atype = item.atype
+    generic_bb = item.bbs[end-1]
+    join_bb = item.bbs[end]
+    bb = compact.active_result_bb
+    pn = PhiNode()
+    has_generic = false
+    @assert length(item.bbs) > length(item.cases)
+    for ((metharg, case), next_cond_bb) in zip(item.cases, item.bbs)
+        @assert !isa(metharg, UnionAll)
+        cond = true
+        @assert length(atype.parameters) == length(metharg.parameters)
+        for i in 2:length(atype.parameters)
+            a, m = atype.parameters[i], metharg.parameters[i]
+            # If this is always true, we don't need to check for it
+            a <: m && continue
+            # Generate isa check
+            isa_expr = Expr(:call, isa, argexprs[i], m)
+            isa_expr.typ = Bool
+            ssa = insert_node_here!(compact, isa_expr, Bool, line)
+            if cond === true
+                cond = ssa
+            else
+                and_expr = Expr(:call, and_int, cond, ssa)
+                cond = insert_node_here!(compact, and_expr, Bool, line)
+            end
+        end
+        insert_node_here!(compact, GotoIfNot(cond, next_cond_bb), Union{}, line)
+        bb = next_cond_bb - 1
+        finish_current_bb!(compact)
+        # Insert Pi nodes here
+        if isa(case, InliningTodo)
+            val = ir_inline_item!(compact, idx, argexprs, linetable, case, boundscheck, todo_bbs)
+        elseif isa(case, MethodInstance)
+            val = insert_node_here!(compact, Expr(:invoke, case, argexprs...), typ, line)
+        else
+            case = case::ConstantCase
+            val = case.val
+        end
+        push!(pn.edges, bb)
+        push!(pn.values, val)
+        insert_node_here!(compact, GotoNode(join_bb), Union{}, line)
+        finish_current_bb!(compact)
+    end
+    bb += 1
+    # We're now in the fall through block, decide what to do
+    if item.fully_covered
+        e = Expr(:call, :error, "fatal error in type inference (type bound)")
+        e.typ = Union{}
+        insert_node_here!(compact, e, Union{}, line)
+        insert_node_here!(compact, ReturnNode(), Union{}, line)
+        finish_current_bb!(compact)
+    else
+        ssa = insert_node_here!(compact, stmt, typ, line)
+        push!(pn.edges, bb)
+        push!(pn.values, ssa)
+        insert_node_here!(compact, GotoNode(join_bb), Union{}, line)
+        finish_current_bb!(compact)
+    end
+
+    # We're now in the join block.
+    compact.ssa_rename[compact.idx-1] = insert_node_here!(compact, pn, typ, line)
+end
+
+function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
+    # Compute the new CFG first (modulo statement ranges, which will be computed below)
+    state = CFGInliningState(ir)
+    for item in todo
+        if isa(item, UnionSplit)
+            cfg_inline_unionsplit!(item::UnionSplit, state)
+        else
+            item = item::InliningTodo
+            # A linear inline does not modify the CFG
+            item.linear_inline_eligible && continue
+            cfg_inline_item!(item, state)
+        end
+    end
+    finish_cfg_inline!(state)
+
+    boundscheck = inbounds_option()
+    if boundscheck === :default && sv.src.propagate_inbounds
+        boundscheck = :propagate
     end
 
     let compact = IncrementalCompact(ir)
-        compact.result_bbs = new_cfg_blocks
+        compact.result_bbs = state.new_cfg_blocks
+        # This needs to be a minimum and is more of a size hint
         nnewnodes = length(compact.result) + (sum(todo) do item
-            return length(item.ir.stmts) + length(item.ir.new_nodes)
+            return isa(item, InliningTodo) ? (length(item.ir.stmts) + length(item.ir.new_nodes)) : 0
         end)
         resize!(compact, nnewnodes)
         item = popfirst!(todo)
         inline_idx = item.idx
         for (idx, stmt) in compact
             if compact.idx - 1 == inline_idx
-                # Ok, do the inlining here
-                inline_cfg = item.ir.cfg
-                linetable_offset = length(linetable)
-                # Append the linetable of the inlined function to our line table
-                inlined_at = compact.result_lines[idx]
-                for entry in item.linetable
-                    push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
-                        (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
-                end
-                # If the iterator already moved on to the next basic block,
-                # temorarily re-open in again.
+                argexprs = copy(stmt.args)
                 refinish = false
                 if compact.result_idx == first(compact.result_bbs[compact.active_result_bb].stmts)
                     compact.active_result_bb -= 1
                     refinish = true
                 end
-                argexprs = copy(stmt.args)
                 # At the moment we will allow globalrefs in argument position, turn those into ssa values
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
@@ -196,87 +457,17 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
                         argexprs[aidx] = insert_node_here!(compact, aexpr, compact_exprtype(compact, aexpr), compact.result_lines[idx])
                     end
                 end
-                argexprs = rewrite_exprargs((node, typ)->insert_node_here!(compact, node, typ, compact.result_lines[idx]),
-                                            arg->compact_exprtype(compact, arg), item.isinvoke, item.isapply, argexprs)
-                if item.isva
-                    vararg = mk_tuplecall!(compact, argexprs[item.na:end], compact.result_lines[idx])
-                    argexprs = Any[argexprs[1:(item.na - 1)]..., vararg]
+                if item.isinvoke
+                    argexprs = rewrite_invoke_exprargs!((node, typ)->insert_node_here!(compact, node, typ, compact.result_lines[idx]),
+                                                arg->compact_exprtype(compact, arg), argexprs)
                 end
-                flag = compact.result_flags[idx]
-                boundscheck_idx = boundscheck
-                if boundscheck_idx === :default || boundscheck_idx === :propagate
-                    if (flag & IR_FLAG_INBOUNDS) != 0
-                        boundscheck_idx = :off
-                    end
+                if isa(item, InliningTodo)
+                    compact.ssa_rename[compact.idx-1] = ir_inline_item!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
+                elseif isa(item, UnionSplit)
+                    ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 end
-                # Special case inlining that maintains the current basic block if there's only one BB in the target
-                if item.linear_inline_eligible
-                    terminator = item.ir[SSAValue(last(inline_cfg.blocks[1].stmts))]
-                    compact[idx] = nothing
-                    inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
-                    for (idx′, stmt′) in inline_compact
-                        # This dance is done to maintain accurate usage counts in the
-                        # face of rename_arguments! mutating in place - should figure out
-                        # something better eventually.
-                        inline_compact[idx′] = nothing
-                        stmt′ = ssa_substitute!(idx′, stmt′, argexprs, item.method.sig, item.sparams, linetable_offset, boundscheck_idx, compact)
-                        if isa(stmt′, ReturnNode)
-                            isa(stmt′.val, SSAValue) && (compact.used_ssas[stmt′.val.id] += 1)
-                            compact.ssa_rename[compact.idx-1] = stmt′.val
-                            stmt′ = nothing
-                        end
-                        inline_compact[idx′] = stmt′
-                    end
-                    just_fixup!(inline_compact)
-                    compact.result_idx = inline_compact.result_idx
-                    refinish && finish_current_bb!(compact)
-                else
-                    bb_offset, post_bb_id = popfirst!(todo_bbs)
-                    # This implements the need_split_before flag above
-                    need_split_before = !isempty(item.ir.cfg.blocks[1].preds)
-                    if need_split_before
-                        finish_current_bb!(compact)
-                    end
-                    pn = PhiNode()
-                    compact[idx] = nothing
-                    inline_compact = IncrementalCompact(compact, item.ir, compact.result_idx)
-                    for (idx′, stmt′) in inline_compact
-                        inline_compact[idx′] = nothing
-                        stmt′ = ssa_substitute!(idx′, stmt′, argexprs, item.method.sig, item.sparams, linetable_offset, boundscheck_idx, compact)
-                        if isa(stmt′, ReturnNode)
-                            if isdefined(stmt′, :val)
-                                push!(pn.edges, inline_compact.active_result_bb-1)
-                                push!(pn.values, stmt′.val)
-                                stmt′ = GotoNode(post_bb_id)
-                            end
-                        elseif isa(stmt′, GotoNode)
-                            stmt′ = GotoNode(stmt′.label + bb_offset)
-                        elseif isa(stmt′, Expr) && stmt′.head == :enter
-                            stmt′ = Expr(:enter, stmt′.args[1] + bb_offset)
-                        elseif isa(stmt′, GotoIfNot)
-                            stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
-                        elseif isa(stmt′, PhiNode)
-                            stmt′ = PhiNode(Any[edge+bb_offset for edge in stmt′.edges], stmt′.values)
-                        end
-                        inline_compact[idx′] = stmt′
-                    end
-                    just_fixup!(inline_compact)
-                    compact.result_idx = inline_compact.result_idx
-                    compact.active_result_bb = inline_compact.active_result_bb
-                    for i = 1:length(pn.values)
-                        isassigned(pn.values, i) || continue
-                        if isa(pn.values[i], SSAValue)
-                            compact.used_ssas[pn.values[i].id] += 1
-                        end
-                    end
-                    if length(pn.edges) == 1
-                        compact.ssa_rename[compact.idx-1] = pn.values[1]
-                    else
-                        pn_ssa = insert_node_here!(compact, pn, stmt.typ, compact.result_lines[idx])
-                        compact.ssa_rename[compact.idx-1] = pn_ssa
-                    end
-                    refinish && finish_current_bb!(compact)
-                end
+                compact[idx] = nothing
+                refinish && finish_current_bb!(compact)
                 if !isempty(todo)
                     item = popfirst!(todo)
                     inline_idx = item.idx
@@ -284,13 +475,13 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
                     inline_idx = -1
                 end
             elseif isa(stmt, GotoNode)
-                compact[idx] = GotoNode(bb_rename[stmt.label])
+                compact[idx] = GotoNode(state.bb_rename[stmt.label])
             elseif isa(stmt, Expr) && stmt.head == :enter
-                compact[idx] = Expr(:enter, bb_rename[stmt.args[1]])
+                compact[idx] = Expr(:enter, state.bb_rename[stmt.args[1]])
             elseif isa(stmt, GotoIfNot)
-                compact[idx] = GotoIfNot(stmt.cond, bb_rename[stmt.dest])
+                compact[idx] = GotoIfNot(stmt.cond, state.bb_rename[stmt.dest])
             elseif isa(stmt, PhiNode)
-                compact[idx] = PhiNode(Any[edge == length(bb_rename) ? length(new_cfg_blocks) : bb_rename[edge+1]-1 for edge in stmt.edges], stmt.values)
+                compact[idx] = PhiNode(Any[edge == length(state.bb_rename) ? length(state.new_cfg_blocks) : state.bb_rename[edge+1]-1 for edge in stmt.edges], stmt.values)
             end
         end
 
@@ -299,7 +490,7 @@ function batch_inline!(todo::Vector{InliningTodo}, ir::IRCode, linetable::Vector
     return ir
 end
 
-function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(invoke_data))
+function _spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(invoke_data))
     if invoke_data === nothing
         return ccall(:jl_get_spec_lambda, Any, (Any, UInt), atype, sv.params.world)
     else
@@ -310,54 +501,34 @@ function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(
     end
 end
 
-function rewrite_exprargs(inserter, exprtype, isinvoke::Bool, isapply::Bool, argexprs::Vector{Any})
-    if isapply
-        new_argexprs = Any[argexprs[2]]
-        # Flatten all tuples
-        for arg in argexprs[3:end]
-            tupT = exprtype(arg)
-            t = widenconst(tupT)
-            for i = 1:length(t.parameters)
-                # Insert a getfield call here
-                new_call = Expr(:call, Core.getfield, arg, i)
-                new_call.typ = getfield_tfunc(tupT, Const(i))
-                push!(new_argexprs, inserter(new_call, new_call.typ))
-            end
+function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(invoke_data))
+    linfo = _spec_lambda(atype, sv, invoke_data)
+    linfo !== nothing && add_backedge!(linfo, sv)
+    linfo
+end
+
+function rewrite_apply_exprargs!(inserter, exprtype, argexprs::Vector{Any})
+    new_argexprs = Any[argexprs[2]]
+    # Flatten all tuples
+    for arg in argexprs[3:end]
+        tupT = exprtype(arg)
+        t = widenconst(tupT)
+        for i = 1:length(t.parameters)
+            # Insert a getfield call here
+            new_call = Expr(:call, Core.getfield, arg, i)
+            new_call.typ = getfield_tfunc(tupT, Const(i))
+            push!(new_argexprs, inserter(new_call, new_call.typ))
         end
-        argexprs = new_argexprs
     end
-    if isinvoke
-        argexpr0 = argexprs[2]
-        argexprs = argexprs[4:end]
-        pushfirst!(argexprs, argexpr0)
-    end
+    argexprs = new_argexprs
     return argexprs
 end
 
-function maybe_make_invoke!(ir::IRCode, idx::Int, @nospecialize(etype), atypes::Vector{Any}, sv::OptimizationState,
-                    @nospecialize(atype_unlimited), isinvoke::Bool, isapply::Bool, @nospecialize(invoke_data))
-    nu = countunionsplit(atypes)
-    nu > 1 && return # TODO: The old optimizer did union splitting here. Is this the right place?
-    linfo = spec_lambda(atype_unlimited, sv, invoke_data)
-    if linfo === nothing
-        if !isapply || isinvoke
-            return
-        end
-        # We might not have an linfo, but we can still rewrite the _apply into a regular call
-        # based on our analysis
-        ex = Expr(:call)
-    else
-        ex = Expr(:invoke)
-        add_backedge!(linfo, sv)
-    end
-    argexprs = ir[SSAValue(idx)].args
-    argexprs = rewrite_exprargs((node, typ)->insert_node!(ir, idx, typ, node), arg->exprtype(arg, ir, ir.mod),
-        isinvoke, isapply, argexprs)
-    linfo !== nothing && pushfirst!(argexprs, linfo)
-    ex.typ = etype
-    ex.args = argexprs
-    ir[SSAValue(idx)] = ex
-    nothing
+function rewrite_invoke_exprargs!(inserter, exprtype, argexprs::Vector{Any})
+    argexpr0 = argexprs[2]
+    argexprs = argexprs[4:end]
+    pushfirst!(argexprs, argexpr0)
+    return argexprs
 end
 
 function singleton_type(@nospecialize(ft))
@@ -367,9 +538,166 @@ function singleton_type(@nospecialize(ft))
     return nothing
 end
 
+function analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
+    methsig = method.sig
+
+    # Check whether this call just evaluates to a constant
+    if isa(f, widenconst(ft)) && !isdefined(method, :generator) && method.pure &&
+            isa(stmt.typ, Const) && stmt.typ.actual && is_inlineable_constant(stmt.typ.val)
+        return ConstantCase(quoted(stmt.typ.val), method, Any[methsp...], metharg)
+    end
+
+    # Check that we habe the correct number of arguments
+    na = Int(method.nargs)
+    npassedargs = length(atypes)
+    if na != npassedargs && !(na > 0 && method.isva)
+        # we have a method match only because an earlier
+        # inference step shortened our call args list, even
+        # though we have too many arguments to actually
+        # call this function
+        return nothing
+    end
+
+    # Bail out if any static parameters are left as TypeVar
+    ok = true
+    for i = 1:length(methsp)
+        isa(methsp[i], TypeVar) && return nothing
+    end
+
+    # Find the linfo for this methods
+    linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Nothing, MethodInstance}
+    if !isa(linfo, MethodInstance)
+        return spec_lambda(atype_unlimited, sv, invoke_data)
+    end
+
+    if invoke_api(linfo) == 2
+        # in this case function can be inlined to a constant
+        add_backedge!(linfo, sv)
+        return ConstantCase(quoted(linfo.inferred_const), method, Any[methsp...], metharg)
+    end
+
+    # Handle vararg functions
+    isva = na > 0 && method.isva
+    if isva
+        @assert length(atypes) >= na - 1
+        va_type = tuple_tfunc(Tuple{Any[widenconst(atypes[i]) for i in 1:length(atypes)]...})
+        atypes = Any[atypes[1:(na - 1)]..., va_type]
+    end
+
+    # Go see if we already have a pre-inferred result
+    res = find_inferred(linfo, atypes, sv)
+    res === nothing && return nothing
+
+    if length(res::Tuple) == 1
+        return ConstantCase(res[1], method, Any[methsp...], metharg)
+    end
+    (rettype, inferred) = res::Tuple
+
+    if inferred === nothing
+        return spec_lambda(atype_unlimited, sv, invoke_data)
+    end
+
+    src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), inferred)
+    src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), inferred)
+
+    if !(src_inferred && src_inlineable)
+        return spec_lambda(atype_unlimited, sv, invoke_data)
+    end
+
+    # At this point we're committedd to performing the inlining, add the backedge
+    add_backedge!(linfo, sv)
+
+    if isa(inferred, CodeInfo)
+        src = inferred
+        ast = copy_exprargs(inferred.code)
+    else
+        src = ccall(:jl_uncompress_ast, Any, (Any, Any), method, inferred::Vector{UInt8})::CodeInfo
+        # TODO: It seems like PhiNodes are shared between compressed codeinfos, making this copy necessary
+        ast = copy_exprargs(src.code)
+    end
+
+    @timeit "inline IR inflation" if src.codelocs === nothing
+        topline = LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)
+        inline_linetable = [topline]
+        push!(ast, LabelNode(length(ast) + 1))
+        ir2 = just_construct_ssa(src, ast, na-1, inline_linetable)
+    else
+        ir2, inline_linetable = inflate_ir(src), src.linetable
+    end
+    #verify_ir(ir2)
+
+    return InliningTodo(idx,
+        isva, isinvoke, isapply, na,
+        method, Any[methsp...], metharg,
+        inline_linetable, ir2, linear_inline_eligible(ir2))
+end
+
+# Neither the product iterator not CartesianIndices are available
+# here, so use this poor man's version
+struct SimpleCartesian
+    ranges::Vector{UnitRange{Int}}
+end
+start(s::SimpleCartesian) = Int[1 for _ in 1:length(s.ranges)]
+done(s::SimpleCartesian, state) = state[end] > last(s.ranges[end])
+function next(s::SimpleCartesian, state)
+    vals = copy(state)
+    any = false
+    for i = 1:length(s.ranges)
+        if state[i] < last(s.ranges[i])
+            state[i] += 1
+            any = true
+            break
+        end
+    end
+    if !any
+        state[end] += 1
+    end
+    (vals, state)
+end
+
+# Given a signure, iterate over the signatures to union split over
+struct UnionSplitSignature
+    it::SimpleCartesian
+    typs::Vector{Any}
+end
+
+function UnionSplitSignature(atypes::Vector{Any})
+    typs = Any[uniontypes(widenconst(atypes[i])) for i = 1:length(atypes)]
+    ranges = UnitRange{Int}[1:length(typs[i]) for i = 1:length(typs)]
+    UnionSplitSignature(SimpleCartesian(ranges), typs)
+end
+
+start(split::UnionSplitSignature) = start(split.it)
+done(split::UnionSplitSignature, state) = done(split.it, state)
+function next(split::UnionSplitSignature, state)
+    idxs, state = next(split.it, state)
+    sig = Any[split.typs[i][j] for (i,j) in enumerate(idxs)]
+    sig, state
+end
+
+function handle_single_case!(ir, stmt, idx, case, isinvoke, todo)
+    if isa(case, ConstantCase)
+        ir[SSAValue(idx)] = case.val
+    elseif isa(case, MethodInstance)
+        if isinvoke
+            stmt.args = rewrite_invoke_exprargs!(
+                (node, typ)->insert_node!(ir, idx, typ, node),
+                arg->exprtype(arg, ir, ir.mod),
+                stmt.args)
+        end
+        stmt.head = :invoke
+        pushfirst!(stmt.args, case)
+    elseif case === nothing
+        # Do, well, nothing
+    else
+        push!(todo, case::InliningTodo)
+    end
+end
+
+
 function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie)
-    todo = InliningTodo[]
+    todo = Any[]
     for idx in 1:length(ir.stmts)
         stmt = ir.stmts[idx]
         isexpr(stmt, :call) || continue
@@ -393,7 +721,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         ok || continue
 
         # Check if we match any of the early inliners
-        res = early_inline_special_case(ir, f, ft, stmt, atypes)
+        res = early_inline_special_case(ir, f, ft, stmt, atypes, sv.params)
         if res !== nothing
             ir.stmts[idx] = res[1]
             continue
@@ -447,10 +775,13 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             isapply = true
         end
 
-        if isapply && f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
-            # Even though we don't do inlining or :invoke, for intrinsic functions, we do want to eliminate apply if possible.
-            stmt.args = rewrite_exprargs((node, typ)->insert_node!(ir, idx, typ, node), arg->exprtype(arg, ir, ir.mod),
-                false, isapply, stmt.args)
+        # Independent of whether we can inline, the above analysis allows us to rewrite
+        # this apply call to a regular call
+        if isapply
+            stmt.args = rewrite_apply_exprargs!((node, typ)->insert_node!(ir, idx, typ, node), arg->exprtype(arg, ir, ir.mod), stmt.args)
+        end
+
+        if f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
             continue
         end
 
@@ -469,7 +800,8 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # signature we're invoking.
         (invoke_data === nothing || atype_unlimited <: invoke_data.types0) || continue
 
-        # TODO: Bail out here if inlining is disabled
+        # Bail out here if inlining is disabled
+        sv.params.inlining || continue
 
         # Special case inliners for regular functions
         if late_inline_special_case!(ir, idx, stmt, atypes, f, ft, _topmod(ir.mod))
@@ -484,123 +816,99 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         end
 
         # Ok, now figure out what method to call
-        @timeit "method matching" if invoke_data === nothing
-            min_valid = UInt[typemin(UInt)]
-            max_valid = UInt[typemax(UInt)]
-            meth = _methods_by_ftype(atype, 1, sv.params.world, min_valid, max_valid)
-            if meth === false || length(meth) != 1
-                maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, false, isapply, nothing)
-                continue
-            end
-            meth = meth[1]::SimpleVector
-            metharg = meth[1]::Type
-            methsp = meth[2]::SimpleVector
-            method = meth[3]::Method
-        else
+        if invoke_data !== nothing
             method = invoke_data.entry.func
             (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
                                     atype_unlimited, method.sig)::SimpleVector
             methsp = methsp::SimpleVector
-        end
-
-        methsig = method.sig
-        if !(atype <: metharg)
-            maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
+            result = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
+            handle_single_case!(ir, stmt, idx, result, isinvoke, todo)
             continue
         end
 
-        # Check whether this call just evaluates to a constant
-        if isa(f, widenconst(ft)) && !isdefined(method, :generator) && method.pure &&
-                isa(stmt.typ, Const) && stmt.typ.actual && is_inlineable_constant(stmt.typ.val)
-            ir[SSAValue(idx)] = quoted(stmt.typ.val)
+        # Regular case: Perform method matching
+        min_valid = UInt[typemin(UInt)]
+        max_valid = UInt[typemax(UInt)]
+        meth = _methods_by_ftype(atype, sv.params.MAX_METHODS, sv.params.world, min_valid, max_valid)
+        if meth === false || length(meth) == 0
+            # No applicable method, or too many applicable methods
             continue
         end
 
-        # Check that we habe the correct number of arguments
-        na = Int(method.nargs)
-        npassedargs = length(atypes)
-        if na != npassedargs && !(na > 0 && method.isva)
-            # we have a method match only because an earlier
-            # inference step shortened our call args list, even
-            # though we have too many arguments to actually
-            # call this function
+        cases = Pair{Type, Any}[]
+        # TODO: This could be better
+        signature_union = Union{Any[match[1]::Type for match in meth]...}
+        signature_fully_covered = atype <: signature_union
+        fully_covered = signature_fully_covered
+        split_out_sigs = Any[]
+
+        # For any method match that's a dispatch tuple, extract those cases first
+        for (i, match) in enumerate(meth)
+            (metharg, methsp, method) = (match[1]::Type, match[2]::SimpleVector, match[3]::Method)
+            if !isdispatchtuple(metharg)
+                fully_covered = false
+                continue
+            end
+            case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, metharg, isinvoke, isapply, invoke_data)
+            if case === nothing
+                fully_covered = false
+                continue
+            end
+            push!(cases, Pair{Type,Any}(metharg, case))
+            push!(split_out_sigs, metharg)
+        end
+
+        # Now, if profitable union split the atypes into dispatch tuples and match the appropriate method
+        nu = countunionsplit(atypes)
+        if nu != 1 && nu <= sv.params.MAX_UNION_SPLITTING
+            for sig in UnionSplitSignature(atypes)
+                metharg′ = argtypes_to_type(sig)
+                if !isdispatchtuple(metharg′)
+                    fully_covered = false
+                    continue
+                elseif any(x->x === metharg′, split_out_sigs)
+                    continue
+                end
+                # `meth` is in specificity order, so find the first applicable method
+                found_any = false
+                for (i, match) in enumerate(meth)
+                    (metharg, methsp, method) = (match[1]::Type, match[2]::SimpleVector, match[3]::Method)
+                    metharg′ <: method.sig || continue
+                    case = analyze_method!(idx, f, ft, metharg′, methsp, method, stmt, atypes, sv, metharg′, isinvoke, isapply, invoke_data)
+                    if case !== nothing
+                        found_any = true
+                        push!(cases, Pair{Type,Any}(metharg′, case))
+                    end
+                    break
+                end
+                if !found_any
+                    fully_covered = false
+                    continue
+                end
+            end
+        end
+
+        # If we're fully covered and there's only one applicable method,
+        # we inline, even if the signature is not a dispatch tuple
+        if signature_fully_covered && length(cases) == 0 && length(meth) == 1
+            metharg = meth[1][1]::Type
+            methsp = meth[1][2]::SimpleVector
+            method = meth[1][3]::Method
+            fully_covered = true
+            case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
+            case == nothing && continue
+            push!(cases, Pair{Type,Any}(metharg, case))
+        end
+
+        # If we only have one case and that case is fully covered, we may either
+        # be able to do the inlining now (for constant cases), or push it directly
+        # onto the todo list
+        if fully_covered && length(cases) == 1
+            handle_single_case!(ir, stmt, idx, cases[1][2], isinvoke, todo)
             continue
         end
-
-        # Bail out if any static parameters are left as TypeVar
-        ok = true
-        for i = 1:length(methsp)
-            isa(methsp[i], TypeVar) && (ok = false; break)
-        end
-        ok || continue
-
-        # Find the linfo for this methods (Generated functions are expanded here if necessary)
-        linfo = code_for_method(method, metharg, methsp, sv.params.world, true) # Union{Nothing, MethodInstance}
-        if !isa(linfo, MethodInstance)
-            maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
-            continue
-        end
-
-        if invoke_api(linfo) == 2
-            # in this case function can be inlined to a constant
-            add_backedge!(linfo, sv)
-            ir[SSAValue(idx)] = linfo.inferred_const
-            continue
-        end
-
-        # Handle vararg functions
-        isva = na > 0 && method.isva
-        if isva
-            @assert length(atypes) >= na - 1
-            va_type = tuple_tfunc(Tuple{Any[widenconst(atypes[i]) for i in 1:length(atypes)]...})
-            atypes = Any[atypes[1:(na - 1)]..., va_type]
-        end
-
-        # Go see if we already have a pre-inferred result
-        res = find_inferred!(ir, idx, linfo, atypes, sv)
-        res === nothing && continue
-
-        (rettype, inferred) = res
-
-        if inferred === nothing
-            maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
-            continue
-        end
-
-        src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), inferred)
-        src_inlineable = ccall(:jl_ast_flag_inlineable, Bool, (Any,), inferred)
-
-        if !(src_inferred && src_inlineable)
-            maybe_make_invoke!(ir, idx, stmt.typ, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
-            continue
-        end
-
-        # At this point we're committedd to performing the inlining, add the backedge
-        add_backedge!(linfo, sv)
-
-        if isa(inferred, CodeInfo)
-            src = inferred
-            ast = copy_exprargs(inferred.code)
-        else
-            src = ccall(:jl_uncompress_ast, Any, (Any, Any), method, inferred::Vector{UInt8})::CodeInfo
-            # TODO: It seems like PhiNodes are shared between compressed codeinfos, making this copy necessary
-            ast = copy_exprargs(src.code)
-        end
-
-        @timeit "inline IR inflation" if src.codelocs === nothing
-            topline = LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)
-            inline_linetable = [topline]
-            push!(ast, LabelNode(length(ast) + 1))
-            ir2 = just_construct_ssa(src, ast, na-1, inline_linetable)
-        else
-            ir2, inline_linetable = inflate_ir(src), src.linetable
-        end
-        #verify_ir(ir2)
-
-        push!(todo, InliningTodo(idx,
-            isva, isinvoke, isapply, na,
-            method, Any[methsp...],
-            inline_linetable, ir2, linear_inline_eligible(ir2)))
+        length(cases) == 0 && continue
+        push!(todo, UnionSplit(idx, fully_covered, atype_unlimited, isinvoke, cases))
     end
     todo
 end
@@ -650,7 +958,7 @@ function compute_invoke_data(@nospecialize(atypes), argexprs::Vector{Any}, sv::O
     return svec(f, ft, atypes, argexprs, invoke_data)
 end
 
-function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector{Any})
+function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector{Any}, params)
     if (f === typeassert || ft ⊑ typeof(typeassert)) && length(atypes) == 3
         # typeassert(x::S, T) => x, when S<:T
         a3 = atypes[3]
@@ -661,7 +969,7 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
     end
     topmod = _topmod(ir.mod)
     # special-case inliners for known pure functions that compute types
-    if true #sv.params.inlining
+    if params.inlining
         if isa(e.typ, Const) # || isconstType(e.typ)
             val = e.typ.val
             if (f === apply_type || f === fieldtype || f === typeof || f === (===) ||
@@ -769,7 +1077,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     return urs[]
 end
 
-function find_inferred!(ir::IRCode, idx::Int, linfo::MethodInstance, @nospecialize(atypes), sv::OptimizationState)
+function find_inferred(linfo::MethodInstance, @nospecialize(atypes), sv::OptimizationState)
     # see if the method has a InferenceResult in the current cache
     # or an existing inferred code info store in `.inferred`
     haveconst = false
@@ -797,8 +1105,7 @@ function find_inferred!(ir::IRCode, idx::Int, linfo::MethodInstance, @nospeciali
             end
             if @isdefined(inferred_const) && is_inlineable_constant(inferred_const)
                 add_backedge!(linfo, sv)
-                ir[SSAValue(idx)] = quoted(inferred_const)
-                return nothing
+                return (quoted(inferred_const),)
             end
         end
         inferred = inf_result.src

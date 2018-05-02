@@ -23,6 +23,8 @@ function dominates(domtree::DomTree, bb1::Int, bb2::Int)
     return bb1 == bb2
 end
 
+bb_unreachable(domtree::DomTree, bb::Int) = bb != 1 && domtree.nodes[bb].level == 1
+
 function update_level!(domtree::Vector{DomTreeNode}, node::Int, level::Int)
     domtree[node] = DomTreeNode(level, domtree[node].children)
     foreach(domtree[node].children) do child
