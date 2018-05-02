@@ -190,9 +190,9 @@ end
 function Base.show(io::IO, t::Broken)
     printstyled(io, "Test Broken\n"; bold=true, color=Base.warn_color())
     if t.test_type == :skipped && !(t.orig_expr === nothing)
-        println(io, "  Skipped: ", t.orig_expr)
+        print(io, "  Skipped: ", t.orig_expr)
     elseif !(t.orig_expr === nothing)
-        println(io, "Expression: ", t.orig_expr)
+        print(io, "  Expression: ", t.orig_expr)
     end
 end
 
