@@ -361,6 +361,15 @@ function getindex(iter::LinearIndices{N,R}, i::Int) where {N,R}
     @boundscheck checkbounds(iter, i)
     i
 end
+# More efficient iteration — predominantly for non-vector LinearIndices
+# but one-dimensional LinearIndices must be special-cased to support OffsetArrays
+start(iter::LinearIndices{1}) = start(iter.indices[1])
+next(iter::LinearIndices{1}, s) = next(iter.indices[1], s)
+done(iter::LinearIndices{1}, s) = done(iter.indices[1], s)
+start(::LinearIndices) = 1
+next(::LinearIndices, i) = i, i+1
+done(iter::LinearIndices, i) = i > length(iter)
+
 
 # Needed since firstindex and lastindex are defined in terms of LinearIndices
 first(iter::LinearIndices) = 1
