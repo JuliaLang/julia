@@ -190,9 +190,9 @@ end
 function Base.show(io::IO, t::Broken)
     printstyled(io, "Test Broken\n"; bold=true, color=Base.warn_color())
     if t.test_type == :skipped && !(t.orig_expr === nothing)
-        println(io, "  Skipped: ", t.orig_expr)
+        print(io, "  Skipped: ", t.orig_expr)
     elseif !(t.orig_expr === nothing)
-        println(io, "Expression: ", t.orig_expr)
+        print(io, "  Expression: ", t.orig_expr)
     end
 end
 
@@ -297,13 +297,25 @@ Tests that the expression `ex` evaluates to `true`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 `false`, and an `Error` `Result` if it could not be evaluated.
 
+# Examples
+```jldoctest
+julia> @test true
+Test Passed
+
+julia> @test [1, 2] + [2, 1] == [3, 3]
+Test Passed
+```
+
 The `@test f(args...) key=val...` form is equivalent to writing
 `@test f(args..., key=val...)` which can be useful when the expression
 is a call using infix syntax such as approximate comparisons:
 
-    @test a ≈ b atol=ε
+```jldoctest
+julia> @test π ≈ 3.14 atol=0.01
+Test Passed
+```
 
-This is equivalent to the uglier test `@test ≈(a, b, atol=ε)`.
+This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
 It is an error to supply more than one expression unless the first
 is a call expression and the rest are assignments (`k=v`).
 """
@@ -324,6 +336,17 @@ exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
 if the expression evaluates to `true`.
 
 The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
+
+# Examples
+```jldoctest
+julia> @test_broken 1 == 2
+Test Broken
+Expression: 1 == 2
+
+julia> @test_broken 1 == 2 atol=0.1
+Test Broken
+Expression: ==(1, 2, atol=0.1)
+```
 """
 macro test_broken(ex, kws...)
     test_expr!("@test_broken", ex, kws...)
@@ -342,6 +365,17 @@ summary reporting as `Broken`. This can be useful for tests that intermittently
 fail, or tests of not-yet-implemented functionality.
 
 The `@test_skip f(args...) key=val...` form works as for the `@test` macro.
+
+# Examples
+```jldoctest
+julia> @test_skip 1 == 2
+Test Broken
+  Skipped: 1 == 2
+
+julia> @test_skip 1 == 2 atol=0.1
+Test Broken
+  Skipped: ==(1, 2, atol=0.1)
+```
 """
 macro test_skip(ex, kws...)
     test_expr!("@test_skip", ex, kws...)
@@ -480,6 +514,16 @@ Tests that the expression `expr` throws `exception`.
 The exception may specify either a type,
 or a value (which will be tested for equality by comparing fields).
 Note that `@test_throws` does not support a trailing keyword form.
+
+# Examples
+```jldoctest
+julia> @test_throws BoundsError [1, 2, 3][4]
+Test Passed
+      Thrown: BoundsError
+
+julia> @test_throws DimensionMismatch [1, 2, 3] + [1, 2]
+Test Passed
+      Thrown: DimensionMismatch
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
@@ -969,6 +1013,19 @@ restored to what it was before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
 re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
+
+# Examples
+```jldoctest
+julia> @testset "trigonometric identities" begin
+           θ = 2/3*π
+           @test sin(-θ) ≈ -sin(θ)
+           @test cos(-θ) ≈ cos(θ)
+           @test sin(2θ) ≈ 2*sin(θ)*cos(θ)
+           @test cos(2θ) ≈ cos(θ)^2 - sin(θ)^2
+       end;
+Test Summary:            | Pass  Total
+trigonometric identities |    4      4
+```
 """
 macro testset(args...)
     isempty(args) && error("No arguments to @testset")
