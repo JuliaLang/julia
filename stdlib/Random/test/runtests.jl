@@ -120,7 +120,9 @@ end
 for T in [UInt32, UInt64, UInt128, Int128]
     local r, s
     s = big(typemax(T)-1000) : big(typemax(T)) + 10000
-    @test rand(s) != rand(s)
+    # s is a 11001-length array
+    @test rand(s) isa BigInt
+    @test sum(rand(s, 1000) .== rand(s, 1000)) <= 20
     @test big(typemax(T)-1000) <= rand(s) <= big(typemax(T)) + 10000
     r = rand(s, 1, 2)
     @test size(r) == (1, 2)
