@@ -582,10 +582,10 @@ import .Iterators.enumerate
 @deprecate isabstract isabstracttype
 
 # PR #22932
-@deprecate +(a::Number, b::AbstractArray) broadcast(+, a, b)
-@deprecate +(a::AbstractArray, b::Number) broadcast(+, a, b)
-@deprecate -(a::Number, b::AbstractArray) broadcast(-, a, b)
-@deprecate -(a::AbstractArray, b::Number) broadcast(-, a, b)
+@deprecate +(a::Number, b::AbstractArray) a .+ b
+@deprecate +(a::AbstractArray, b::Number) a .+ b
+@deprecate -(a::Number, b::AbstractArray) a .- b
+@deprecate -(a::AbstractArray, b::Number) a .- b
 
 @deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
 
