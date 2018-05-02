@@ -56,7 +56,7 @@ end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
 function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind::String)
-    #=if JLOptions().debug_level == 2
+    if JLOptions().debug_level == 2
         # this is a debug build of julia, so let's validate linfo
         errors = validate_code(linfo, src)
         if !isempty(errors)
@@ -70,7 +70,7 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
                 end
             end
         end
-    end=#
+    end
 end
 
 """
@@ -156,6 +156,9 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
         elseif isa(x, SlotNumber)
         elseif isa(x, GlobalRef)
         elseif isa(x, LineNumberNode)
+        elseif isa(x, PiNode)
+        elseif isa(x, PhiCNode)
+        elseif isa(x, PhiNode)
         else
             push!(errors, InvalidCodeError("invalid statement", x))
         end
