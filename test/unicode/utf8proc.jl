@@ -20,6 +20,7 @@
     @test isempty(normalize_string("\u00ad", stripignore=true))
     @test normalize_string("\t\r", stripcc=true) == "  "
     @test normalize_string("\t\r", stripcc=true, newline2ls=true) == " \u2028"
+    @test normalize_string("\u0072\u0307\u0323", :NFC) == "\u1E5B\u0307" #26917
 end
 
 @testset "unicode sa#15" begin
