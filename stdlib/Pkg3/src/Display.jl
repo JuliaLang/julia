@@ -118,11 +118,12 @@ vstring(ctx::Context, a::VerInfo) =
            )
 
 Base.:(==)(a::VerInfo, b::VerInfo) =
-    a.hash == b.hash && a.ver == b.ver && a.pinned == b.pinned
+    a.hash == b.hash && a.ver == b.ver && a.pinned == b.pinned && a.repo == b.repo
 
 ≈(a::VerInfo, b::VerInfo) = a.hash == b.hash &&
     (a.ver == nothing || b.ver == nothing || a.ver == b.ver) &&
-    (a.pinned == b.pinned)
+    (a.pinned == b.pinned) &&
+    (a.repo == nothing || b.repo == nothing || a.repo == b.repo)
 
 struct DiffEntry
     uuid::UUID
@@ -154,7 +155,7 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry})
                         "versions match but hashes don't: $(x.old.hash) ≠ $(x.new.hash)"
                     push!(warnings, msg)
                 end
-                vstr = (x.old.ver == x.new.ver && x.old.pinned == x.new.pinned) ?
+                vstr = (x.old.ver == x.new.ver && x.old.pinned == x.new.pinned && x.old.repo == x.new.repo) ?
                       vstring(ctx, x.new) :
                       vstring(ctx, x.old) * " ⇒ " * vstring(ctx, x.new)
             end

@@ -384,6 +384,7 @@ end
 
 GitRepo(url::String, revspec) = GitRepo(url, revspec, nothing)
 GitRepo(url::String) = GitRepo(url, "", nothing)
+Base.:(==)(repo1::GitRepo, repo2::GitRepo) = (repo1.url == repo2.url && repo1.rev == repo2.rev && repo1.git_tree_sha1 == repo2.git_tree_sha1)
 
 mutable struct PackageSpec
     name::String
