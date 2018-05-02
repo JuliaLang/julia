@@ -6547,6 +6547,7 @@ static std::unique_ptr<Module> emit_function(
 
     // Codegen Phi nodes
     std::map<BasicBlock *, BasicBlock*> BB_rewrite_map;
+    std::vector<llvm::PHINode*> ToDelete;
     for (auto &tup : ctx.PhiNodes) {
         jl_cgval_t phi_result;
         PHINode *VN;
@@ -6724,6 +6725,16 @@ static std::unique_ptr<Module> emit_function(
                 }
             }
         }
+        // In LLVM IR it is illegal to have phi nodes without incoming values, even if
+        // there are no operands, so delete any such phi nodes
+        if (pred_begin(PhiBB) == pred_end(PhiBB))
+        {
+            if (VN)
+                ToDelete.push_back(VN);
+            if (TindexN)
+                ToDelete.push_back(TindexN);
+            continue;
+        }
         // Julia PHINodes may be incomplete with respect to predecessors, LLVM's may not
         Value *VNUndef = nullptr;
         for (auto *pred : predecessors(PhiBB)) {
@@ -6746,6 +6757,11 @@ static std::unique_ptr<Module> emit_function(
                 }
             }
         }
+    }
+
+    for (PHINode *PN : ToDelete) {
+        PN->replaceAllUsesWith(UndefValue::get(PN->getType()));
+        PN->eraseFromParent();
     }
 
     UndefAlloca->setOperand(0, ConstantInt::get(T_size, undef_alloca_bytes));
