@@ -1,13 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    ConsoleLogger(stream=stderr, min_level=Info; meta_formatter=default_metafmt,
+    ConsoleLogger(stream=nothing, min_level=Info; meta_formatter=default_metafmt,
                   show_limited=true, right_justify=0)
 
 Logger with formatting optimized for readability in a text console, for example
 interactive work with the Julia REPL.
 
-Log levels less than `min_level` are filtered out.
+Log levels less than `min_level` are filtered out. If stream is `nothing` then
+messages with log level greater or equal to `Warn` will be logged to `stderr`
+and below to `stdout`
 
 Message formatting can be controlled by setting keyword arguments:
 
@@ -23,14 +25,14 @@ Message formatting can be controlled by setting keyword arguments:
   at. The default is zero (metadata goes on its own line).
 """
 struct ConsoleLogger <: AbstractLogger
-    stream::IO
+    stream::Union{IO,Nothing}
     min_level::LogLevel
     meta_formatter
     show_limited::Bool
     right_justify::Int
     message_limits::Dict{Any,Int}
 end
-function ConsoleLogger(stream::IO=stderr, min_level=Info;
+function ConsoleLogger(stream::Union{IO,Nothing}=nothing, min_level=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
     ConsoleLogger(stream, min_level, meta_formatter,
@@ -96,11 +98,16 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
     # Generate a text representation of the message and all key value pairs,
     # split into lines.
     msglines = [(indent=0,msg=l) for l in split(chomp(string(message)), '\n')]
-    dsize = displaysize(logger.stream)
+    stream = if logger.stream == nothing
+                 level < Warn ? stdout : stderr
+             else
+                 logger.stream
+             end
+    dsize = displaysize(stream)
     if !isempty(kwargs)
         valbuf = IOBuffer()
         rows_per_value = max(1, dsize[1]÷(length(kwargs)+1))
-        valio = IOContext(IOContext(valbuf, logger.stream),
+        valio = IOContext(IOContext(valbuf, stream),
                           :displaysize=>(rows_per_value,dsize[2]-5))
         if logger.show_limited
             valio = IOContext(valio, :limit=>true)
@@ -122,7 +129,7 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
     color,prefix,suffix = logger.meta_formatter(level, _module, group, id, filepath, line)
     minsuffixpad = 2
     buf = IOBuffer()
-    iob = IOContext(buf, logger.stream)
+    iob = IOContext(buf, stream)
     nonpadwidth = 2 + (isempty(prefix) || length(msglines) > 1 ? 0 : length(prefix)+1) +
                   msglines[end].indent + termlength(msglines[end].msg) +
                   (isempty(suffix) ? 0 : length(suffix)+minsuffixpad)
@@ -150,7 +157,6 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
         println(iob)
     end
 
-    write(logger.stream, take!(buf))
+    write(stream, take!(buf))
     nothing
 end
-

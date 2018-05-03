@@ -269,58 +269,10 @@ end
         String(take!(io))
     end
 
-    # Simple
-    @test genmsg(Info, "msg", Main, "some/path.jl", 101) ==
-    """
-    ┌ Info: msg
-    └ @ Main some/path.jl:101
-    """
-
-    # Multiline message
-    @test genmsg(Warn, "line1\nline2", Main, "some/path.jl", 101) ==
-    """
-    ┌ Warning: line1
-    │ line2
-    └ @ Main some/path.jl:101
-    """
-
-    # Keywords
-    @test genmsg(Error, "msg", Base, "other.jl", 101, a=1, b="asdf") ==
-    """
-    ┌ Error: msg
-    │   a = 1
-    │   b = asdf
-    └ @ Base other.jl:101
-    """
-end
-
-@testset "DefaultLogger" begin
-    # Log level limiting
-    @test min_enabled_level(CoreLogging.DefaultLogger()) == Info
-
-    # Log limiting
-    logger = CoreLogging.DefaultLogger()
-    @test shouldlog(logger, Info, Base, :group, :asdf) === true
-    old = stdout
-    fname = tempname()
-    f = open(fname, "w")
-    redirect_stdout(f)
-    handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
-    redirect_stdout(old)
-    @test shouldlog(logger, Info, Base, :group, :asdf) === true
-    redirect_stdout(f)
-    handle_message(logger, Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
-    redirect_stdout(old)
-    close(f)
-    rm(fname)
-    @test shouldlog(logger, Info, Base, :group, :asdf) === false
-    @test catch_exceptions(logger) === false
-
-    # Log formatting
     function genmsg_out(level, message, _module, filepath, line; kws...)
         fname = tempname()
         f = open(fname, "w")
-        logger = CoreLogging.DefaultLogger()
+        logger = SimpleLogger()
         redirect_stdout(f) do
             handle_message(logger, level, message, _module, :group, :id,
                            filepath, line; kws...)
@@ -334,7 +286,7 @@ end
     function genmsg_err(level, message, _module, filepath, line; kws...)
         fname = tempname()
         f = open(fname, "w")
-        logger = CoreLogging.DefaultLogger()
+        logger = SimpleLogger()
         redirect_stderr(f) do
             handle_message(logger, level, message, _module, :group, :id,
                            filepath, line; kws...)
@@ -361,7 +313,7 @@ end
     """
 
     # Keywords
-    @test genmsg_err(Error, "msg", Base, "other.jl", 101, a=1, b="asdf") ==
+    @test genmsg(Error, "msg", Base, "other.jl", 101, a=1, b="asdf") ==
         """
     ┌ Error: msg
     │   a = 1

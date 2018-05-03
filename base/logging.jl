@@ -492,17 +492,18 @@ current_logger() = current_logstate().logger
 #-------------------------------------------------------------------------------
 # SimpleLogger
 """
-    SimpleLogger(stream=stderr, min_level=Info)
+    SimpleLogger(stream=nothing, min_level=Info)
 
 Simplistic logger for logging all messages with level greater than or equal to
-`min_level` to `stream`.
+`min_level` to `stream`. If stream is `nothing` then messages with log level
+greater or equal to `Warn` will be logged to `stderr` and below to `stdout`
 """
 struct SimpleLogger <: AbstractLogger
-    stream::IO
+    stream::Union{IO,Nothing}
     min_level::LogLevel
     message_limits::Dict{Any,Int}
 end
-SimpleLogger(stream::IO=stderr, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
+SimpleLogger(stream::Union{IO,Nothing}=nothing, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
 
 shouldlog(logger::SimpleLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
@@ -519,50 +520,11 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
         remaining > 0 || return
     end
     buf = IOBuffer()
-    iob = IOContext(buf, logger.stream)
-    levelstr = level == Warn ? "Warning" : string(level)
-    msglines = split(chomp(string(message)), '\n')
-    println(iob, "┌ ", levelstr, ": ", msglines[1])
-    for i in 2:length(msglines)
-        println(iob, "│ ", msglines[i])
-    end
-    for (key, val) in kwargs
-        println(iob, "│   ", key, " = ", val)
-    end
-    println(iob, "└ @ ", _module, " ", filepath, ":", line)
-    write(logger.stream, take!(buf))
-    nothing
-end
-
-#-------------------------------------------------------------------------------
-# DefaultLogger
-"""
-    DefaultLogger()
-
-Default logger for logging all messages with level greater than `Info` to `stdout`
-and greater than `Warning` to `stderr`.
-"""
-struct DefaultLogger <: AbstractLogger
-    message_limits::Dict{Any,Int}
-end
-DefaultLogger() = DefaultLogger(Dict{Any,Int}())
-
-shouldlog(logger::DefaultLogger, level, _module, group, id) =
-    get(logger.message_limits, id, 1) > 0
-
-min_enabled_level(logger::DefaultLogger) = Info
-
-catch_exceptions(logger::DefaultLogger) = false
-
-function handle_message(logger::DefaultLogger, level, message, _module, group, id,
-                        filepath, line; maxlog=nothing, kwargs...)
-    if maxlog != nothing && maxlog isa Integer
-        remaining = get!(logger.message_limits, id, maxlog)
-        logger.message_limits[id] = remaining - 1
-        remaining > 0 || return
-    end
-    buf = IOBuffer()
-    stream = level == Info ? stdout : stderr
+    stream = if logger.stream == nothing
+                 level < Warn ? stdout : stderr
+             else
+                 logger.stream
+             end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
     msglines = split(chomp(string(message)), '\n')
@@ -578,6 +540,6 @@ function handle_message(logger::DefaultLogger, level, message, _module, group, i
     nothing
 end
 
-_global_logstate = LogState(DefaultLogger())
+_global_logstate = LogState(SimpleLogger())
 
 end # CoreLogging
