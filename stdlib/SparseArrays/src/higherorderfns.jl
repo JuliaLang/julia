@@ -1091,7 +1091,6 @@ end
 
 _sparsifystructured(M::AbstractMatrix) = SparseMatrixCSC(M)
 _sparsifystructured(V::AbstractVector) = SparseVector(V)
-_sparsifystructured(P::AbstractArray{<:Any,0}) = SparseVector(reshape(P, 1))
 _sparsifystructured(M::AbstractSparseMatrix) = SparseMatrixCSC(M)
 _sparsifystructured(V::AbstractSparseVector) = SparseVector(V)
 _sparsifystructured(S::SparseVecOrMat) = S
