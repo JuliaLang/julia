@@ -53,11 +53,11 @@ include("ConsoleLogger.jl")
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
 
 function __init__()
-    global_logger(ConsoleLogger(stderr))
+    global_logger(ConsoleLogger())
     atexit() do
         logger = global_logger()
         if isa(logger, ConsoleLogger)
-            global_logger(ConsoleLogger(Core.stderr, min_enabled_level(logger)))
+            global_logger(ConsoleLogger(nothing, min_enabled_level(logger)))
         end
     end
 end
