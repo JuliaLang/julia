@@ -706,6 +706,21 @@ function setindex! end
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
     (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
 
+# This is redundant with the abstract fallbacks but needed and helpful for bootstrap
+function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
+    @_propagate_inbounds_meta
+    @boundscheck setindex_shape_check(X, length(I))
+    X′ = unalias(A, X)
+    I′ = unalias(A, I)
+    count = 1
+    for i in I′
+        @inbounds x = X′[count]
+        A[i] = x
+        count += 1
+    end
+    return A
+end
+
 # Faster contiguous setindex! with copyto!
 function setindex!(A::Array{T}, X::Array{T}, I::UnitRange{Int}) where T
     @_inline_meta
