@@ -155,7 +155,6 @@ function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
         throw_setindex_mismatch(X, (i,j))
     end
 end
-setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 
 # convert to a supported index type (array or Int)
 """
