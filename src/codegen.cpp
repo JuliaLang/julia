@@ -535,7 +535,7 @@ public:
     std::vector<jl_varinfo_t> slots;
     std::map<int, jl_varinfo_t> phic_slots;
     std::vector<jl_cgval_t> SAvalues;
-    std::vector<std::tuple<jl_cgval_t, PHINode *, jl_value_t *>> PhiNodes;
+    std::vector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, jl_value_t *>> PhiNodes;
     std::vector<bool> ssavalue_assigned;
     std::map<int, jl_arrayvar_t> *arrayvars = NULL;
     jl_module_t *module = NULL;
@@ -3528,10 +3528,17 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     if (phiType == jl_bottom_type) {
         return;
     }
+    AllocaInst *dest = nullptr;
+    // N.B.: For any memory space, used as a phi,
+    // we need to emit space twice here. The reason for this is that
+    // phi nodes may be arguments of other phi nodes, so if we don't
+    // have two buffers, one may be overwritten before its value is
+    // used. Hopefully LLVM will be able to fold this back where legal.
     if (jl_is_uniontype(phiType)) {
         bool allunbox;
-        size_t min_align;
-        Value *dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)phiType), allunbox, min_align);
+        size_t min_align, nbytes;
+        dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)phiType), allunbox, min_align, nbytes);
+        Value *phi = try_emit_union_alloca(ctx, ((jl_uniontype_t*)phiType), allunbox, min_align, nbytes);
         Value *ptr = NULL;
         if (dest) {
             PHINode *Tindex_phi = PHINode::Create(T_int8, jl_array_len(edges), "tindex_phi");
@@ -3541,12 +3548,14 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
                     ConstantInt::get(T_int8, 0));
+            ctx.builder.CreateMemCpy(phi, dest, nbytes, min_align, false);
+            ctx.builder.CreateLifetimeEnd(dest);
             ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ptr_phi), T_pint8),
-                maybe_bitcast(ctx, decay_derived(dest), T_pint8));
+                maybe_bitcast(ctx, decay_derived(phi), T_pint8));
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, tbaa_stack);
             val.Vboxed = ptr_phi;
-            ctx.PhiNodes.push_back(std::make_tuple(val, ptr_phi, r));
+            ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, r));
             ctx.SAvalues.at(idx) = val;
             ctx.ssavalue_assigned.at(idx) = true;
             return;
@@ -3555,7 +3564,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             PHINode *Tindex_phi = PHINode::Create(T_int8, jl_array_len(edges), "tindex_phi");
             BB->getInstList().insert(InsertPt, Tindex_phi);
             jl_cgval_t val = mark_julia_slot(NULL, phiType, Tindex_phi, tbaa_stack);
-            ctx.PhiNodes.push_back(std::make_tuple(val, (PHINode*)NULL, r));
+            ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, (PHINode*)NULL, r));
             ctx.SAvalues.at(idx) = val;
             ctx.ssavalue_assigned.at(idx) = true;
             return;
@@ -3577,20 +3586,19 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     jl_cgval_t slot;
     PHINode *value_phi = NULL;
     if (vtype->isAggregateType()) {
-        value_phi = PHINode::Create(vtype->getPointerTo(AddressSpace::Derived),
-                jl_array_len(edges), "value_phi");
-        BB->getInstList().insert(InsertPt, value_phi);
-        Value *alloc = emit_static_alloca(ctx, vtype);
-        ctx.builder.CreateMemCpy(alloc, value_phi, jl_datatype_size(phiType),
+        dest = emit_static_alloca(ctx, vtype);
+        Value *phi = emit_static_alloca(ctx, vtype);
+        ctx.builder.CreateMemCpy(phi, dest, jl_datatype_size(phiType),
             jl_datatype_align(phiType), false);
-        slot = mark_julia_slot(alloc, phiType, NULL, tbaa_stack);
+        ctx.builder.CreateLifetimeEnd(dest);
+        slot = mark_julia_slot(phi, phiType, NULL, tbaa_stack);
     }
     else {
         value_phi = PHINode::Create(vtype, jl_array_len(edges), "value_phi");
         BB->getInstList().insert(InsertPt, value_phi);
         slot = mark_julia_type(ctx, value_phi, isboxed, phiType);
     }
-    ctx.PhiNodes.push_back(std::make_tuple(slot, value_phi, r));
+    ctx.PhiNodes.push_back(std::make_tuple(slot, BB, dest, value_phi, r));
     ctx.SAvalues.at(idx) = slot;
     ctx.ssavalue_assigned.at(idx) = true;
     return;
@@ -3628,8 +3636,8 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         if (jl_is_uniontype(jt)) {
             assert(slot.TIndex && "Unboxed union must have a type-index.");
             bool allunbox;
-            size_t min_align;
-            dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)jt), allunbox, min_align);
+            size_t min_align, nbytes;
+            dest = try_emit_union_alloca(ctx, ((jl_uniontype_t*)jt), allunbox, min_align, nbytes);
             Value *isboxed = NULL;
             if (slot.isboxed || slot.Vboxed != nullptr) {
                 isboxed = ctx.builder.CreateICmpNE(
@@ -5669,8 +5677,8 @@ static std::unique_ptr<Module> emit_function(
         }
         else if (jl_is_uniontype(jt)) {
             bool allunbox;
-            size_t align;
-            Value *lv = try_emit_union_alloca(ctx, (jl_uniontype_t*)jt, allunbox, align);
+            size_t align, nbytes;
+            Value *lv = try_emit_union_alloca(ctx, (jl_uniontype_t*)jt, allunbox, align, nbytes);
             if (lv) {
                 lv->setName(jl_symbol_name(s));
                 varinfo.value = mark_julia_slot(lv, jt, NULL, tbaa_stack);
@@ -6489,56 +6497,10 @@ static std::unique_ptr<Module> emit_function(
             come_from_bb[pair.first] = pair.second;
     }
 
-    // This alloca is used to represent SSA `undef` semantics on the stack.
-    // We emit an alloca here and resize it appropriately below. We also
-    // emit a call to lifetime_end of this alloca. This tells the optimizer
-    // that all loads from this alloca are undef and all stores to it are
-    // dead, which are the semantics we want.
-    size_t undef_alloca_bytes = 1;
-    size_t undef_alloca_align = 0;
-    AllocaInst *UndefAlloca = new AllocaInst(T_int8,
-#if JL_LLVM_VERSION >= 50000
-        0,
-#endif
-        ConstantInt::get(T_size, 1), "undef_alloca", /* InsertBefore= */ctx.ptlsStates);
-    ctx.builder.SetInsertPoint(ctx.ptlsStates);
-    ctx.builder.CreateLifetimeEnd(UndefAlloca);
-
     auto undef_value_for_type = [&](jl_value_t *phiType, Type *UndefType) {
-        // While we're guaranteed that this value will not be looked at dynamically,
-        // we're not guaranteed that it won't be moved around. For things allocated on the
-        // stack, that generally involves memcpying them from one stack slot to another,
-        // so we need to make sure that such values are legal to be copied from.
         Value *VNUndef;
         if (UndefType == T_prjlvalue) {
             VNUndef =  (llvm::Value*)ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
-        } else if (UndefType->isPointerTy()) {
-            size_t nbytes, align, min_align;
-            if (jl_is_uniontype(phiType)) {
-                bool allunbox;
-                union_alloca_type((jl_uniontype_t *)phiType, allunbox, nbytes, align, min_align);
-            } else {
-                bool isboxed;
-                Type *vtype = julia_type_to_llvm(phiType, &isboxed);
-                assert(vtype->isAggregateType());
-                nbytes = jl_data_layout.getTypeStoreSize(vtype);
-                align = jl_data_layout.getABITypeAlignment(vtype);
-            }
-            if (nbytes > undef_alloca_bytes)
-                undef_alloca_bytes = nbytes;
-            if (align > undef_alloca_align)
-                undef_alloca_align = align;
-            VNUndef = UndefAlloca;
-            // It's legal to decay our addrspace(0) alloca to any of our addrspaces
-            ctx.builder.SetInsertPoint(ctx.ptlsStates);
-            if (UndefType->getPointerAddressSpace() !=
-                VNUndef->getType()->getPointerAddressSpace()) {
-                VNUndef = new AddrSpaceCastInst(VNUndef,
-                    cast<PointerType>(VNUndef->getType())->getElementType()->getPointerTo(
-                        UndefType->getPointerAddressSpace()), "",
-                    /*InsertBefore=*/ ctx.ptlsStates);
-            }
-            VNUndef = maybe_bitcast(ctx, VNUndef, UndefType);
         } else {
             VNUndef = (llvm::Value*)UndefValue::get(UndefType);
         }
@@ -6552,16 +6514,13 @@ static std::unique_ptr<Module> emit_function(
         jl_cgval_t phi_result;
         PHINode *VN;
         jl_value_t *r;
-        std::tie(phi_result, VN, r) = tup;
+        AllocaInst *dest;
+        BasicBlock *PhiBB;
+        std::tie(phi_result, PhiBB, dest, VN, r) = tup;
         jl_value_t *phiType = phi_result.typ;
         jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(r, 0);
         jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(r, 1);
-        Value *PhiAlloca = NULL;
-        if (phi_result.V && isa<SelectInst>(phi_result.V)) {
-            PhiAlloca = cast<SelectInst>(phi_result.V)->getOperand(2)->stripPointerCasts();
-        }
         PHINode *TindexN = cast_or_null<PHINode>(phi_result.TIndex);
-        BasicBlock *PhiBB = VN ? VN->getParent() : TindexN->getParent();
         for (size_t i = 0; i < jl_array_len(edges); ++i) {
             size_t edge = jl_unbox_long(jl_array_ptr_ref(edges, i));
             jl_value_t *value = jl_array_ptr_ref(values, i);
@@ -6581,6 +6540,8 @@ static std::unique_ptr<Module> emit_function(
             assert(found_pred);
 #endif
             ctx.builder.SetInsertPoint(FromBB->getTerminator());
+            if (dest)
+                ctx.builder.CreateLifetimeStart(dest);
             jl_cgval_t val;
             if (!value || jl_is_ssavalue(value)) {
                 ssize_t idx = value ? ((jl_ssavalue_t*)value)->id : 0;
@@ -6588,7 +6549,7 @@ static std::unique_ptr<Module> emit_function(
                     idx -= 1;
                 if (!value || !ctx.ssavalue_assigned.at(idx)) {
                     Value *RTindex = TindexN ? UndefValue::get(T_int8) : NULL;
-                     if (VN) { // otherwise, it's all-unboxed
+                    if (VN) { // otherwise, it's all-unboxed
                         Value *undef;
                         if (isa<PointerType>(VN->getType())) {
                             bool isboxed;
@@ -6645,23 +6606,26 @@ static std::unique_ptr<Module> emit_function(
                 ctx.builder.SetInsertPoint(FromBB);
             }
             if (!jl_is_uniontype(phiType) || !TindexN) {
-                if (val.typ == (jl_value_t*)jl_bottom_type) {
-                    V = undef_value_for_type(phiType, VN->getType());
+                if (VN) {
+                    if (val.typ == (jl_value_t*)jl_bottom_type) {
+                        V = undef_value_for_type(phiType, VN->getType());
+                    }
+                    else if (VN && VN->getType() == T_prjlvalue) {
+                        // Includes the jl_is_uniontype(phiType) && !TindexN case
+                        V = boxed(ctx, val);
+                    }
+                    else {
+                        V = emit_unbox(ctx, VN->getType(), val, phiType);
+                    }
+                    VN->addIncoming(V, ctx.builder.GetInsertBlock());
+                    assert(!TindexN);
+                } else if (dest && val.typ != (jl_value_t*)jl_bottom_type) {
+                    ctx.builder.CreateMemCpy(decay_derived(dest),
+                        decay_derived(data_pointer(ctx, val)),
+                        jl_datatype_size(phiType),
+                        jl_datatype_align(phiType),
+                        false);
                 }
-                else if (VN->getType() == T_prjlvalue) {
-                    // Includes the jl_is_uniontype(phiType) && !TindexN case
-                    V = boxed(ctx, val);
-                }
-                else if (VN->getType()->isPointerTy()) {
-                    V = maybe_bitcast(ctx,
-                            decay_derived(data_pointer(ctx, val)),
-                            VN->getType());
-                }
-                else {
-                    V = emit_unbox(ctx, VN->getType(), val, phiType);
-                }
-                VN->addIncoming(V, ctx.builder.GetInsertBlock());
-                assert(!TindexN);
             }
             else {
                 Value *RTindex = NULL;
@@ -6678,8 +6642,8 @@ static std::unique_ptr<Module> emit_function(
                     else {
                         V = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
                         Type *lty = julia_type_to_llvm(val.typ);
-                        if (PhiAlloca && !type_is_ghost(lty)) // basically, if !ghost union
-                            emit_unbox(ctx, lty, val, val.typ, PhiAlloca);
+                        if (dest && !type_is_ghost(lty)) // basically, if !ghost union
+                            emit_unbox(ctx, lty, val, val.typ, dest);
                         RTindex = ConstantInt::get(T_int8, tindex);
                     }
                 }
@@ -6689,21 +6653,21 @@ static std::unique_ptr<Module> emit_function(
                     if (!RTindex) {
                         assert(new_union.isboxed && new_union.Vboxed && "convert_julia_type failed");
                         RTindex = compute_tindex_unboxed(ctx, new_union, phiType);
-                        if (PhiAlloca) {
-                            // If PhiAlloca is not set, this is a ghost union, the recipient of which
+                        if (dest) {
+                            // If dest is not set, this is a ghost union, the recipient of which
                             // is often not prepared to handle a boxed representation of the ghost.
                             RTindex = ctx.builder.CreateOr(RTindex, ConstantInt::get(T_int8, 0x80));
                         }
                         new_union.TIndex = RTindex;
                     }
                     V = new_union.Vboxed ? new_union.Vboxed : ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
-                    if (PhiAlloca) { // basically, if !ghost union
+                    if (dest) { // basically, if !ghost union
                         Value *skip = NULL;
                         if (new_union.Vboxed != nullptr)
                             skip = ctx.builder.CreateICmpNE( // if 0x80 is set, we won't select this slot anyways
                                     ctx.builder.CreateAnd(RTindex, ConstantInt::get(T_int8, 0x80)),
                                     ConstantInt::get(T_int8, 0));
-                        emit_unionmove(ctx, PhiAlloca, new_union, skip, false, NULL);
+                        emit_unionmove(ctx, dest, new_union, skip, false, NULL);
                     }
                 }
                 if (VN)
@@ -6737,23 +6701,25 @@ static std::unique_ptr<Module> emit_function(
         }
         // Julia PHINodes may be incomplete with respect to predecessors, LLVM's may not
         Value *VNUndef = nullptr;
-        for (auto *pred : predecessors(PhiBB)) {
-            PHINode *PhiN = VN ? VN : TindexN;
-            bool found = false;
-            for (size_t i = 0; i < PhiN->getNumIncomingValues(); ++i) {
-                found = pred == PhiN->getIncomingBlock(i);
-                if (found)
-                    break;
-            }
-            if (!found) {
-                if (VN) {
-                    if (!VNUndef) {
-                        VNUndef = undef_value_for_type(phiType, VN->getType());
-                    }
-                    VN->addIncoming(VNUndef, pred);
+        if (VN || TindexN) {
+            for (auto *pred : predecessors(PhiBB)) {
+                PHINode *PhiN = VN ? VN : TindexN;
+                bool found = false;
+                for (size_t i = 0; i < PhiN->getNumIncomingValues(); ++i) {
+                    found = pred == PhiN->getIncomingBlock(i);
+                    if (found)
+                        break;
                 }
-                if (TindexN) {
-                    TindexN->addIncoming(UndefValue::get(TindexN->getType()), pred);
+                if (!found) {
+                    if (VN) {
+                        if (!VNUndef) {
+                            VNUndef = undef_value_for_type(phiType, VN->getType());
+                        }
+                        VN->addIncoming(VNUndef, pred);
+                    }
+                    if (TindexN) {
+                        TindexN->addIncoming(UndefValue::get(TindexN->getType()), pred);
+                    }
                 }
             }
         }
@@ -6763,9 +6729,6 @@ static std::unique_ptr<Module> emit_function(
         PN->replaceAllUsesWith(UndefValue::get(PN->getType()));
         PN->eraseFromParent();
     }
-
-    UndefAlloca->setOperand(0, ConstantInt::get(T_size, undef_alloca_bytes));
-    UndefAlloca->setAlignment(undef_alloca_align);
 
     // step 13. Perform any delayed instantiations
     if (ctx.debug_enabled) {
