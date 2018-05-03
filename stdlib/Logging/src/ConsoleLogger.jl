@@ -153,3 +153,4 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
     write(logger.stream, take!(buf))
     nothing
 end
+
