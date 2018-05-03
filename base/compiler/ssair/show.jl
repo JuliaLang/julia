@@ -88,7 +88,7 @@ function Base.show(io::IO, code::IRCode)
     end
     new_nodes = code.new_nodes[filter(i->isassigned(code.new_nodes, i), 1:length(code.new_nodes))]
     foreach(nn -> scan_ssa_use!(used, nn.node), new_nodes)
-    perm = sortperm(new_nodes, by = x->x[1])
+    perm = sortperm(new_nodes, by = x->x.pos)
     new_nodes_perm = Iterators.Stateful(perm)
 
     if isempty(used)
@@ -122,7 +122,7 @@ function Base.show(io::IO, code::IRCode)
             print_sep = true
         end
         floop = true
-        while !isempty(new_nodes_perm) && new_nodes[peek(new_nodes_perm)][1] == idx
+        while !isempty(new_nodes_perm) && new_nodes[peek(new_nodes_perm)].pos == idx
             node_idx = popfirst!(new_nodes_perm)
             new_node = new_nodes[node_idx]
             node_idx += length(code.stmts)
