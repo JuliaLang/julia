@@ -720,6 +720,9 @@ function next(s::SimpleCartesian, state)
     any = false
     for i = 1:length(s.ranges)
         if state[i] < last(s.ranges[i])
+            for j = 1:(i-1)
+                state[j] = first(s.ranges[j])
+            end
             state[i] += 1
             any = true
             break
