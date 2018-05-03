@@ -80,7 +80,9 @@ function inline_into_block!(state::CFGInliningState, block::Int)
     if state.first_bb != block
         new_range = state.first_bb+1:block
         l = length(state.new_cfg_blocks)
-        state.bb_rename[new_range] = (l+1:l+length(new_range))
+        for (i,j) in zip(new_range, l+1:l+length(new_range))
+            state.bb_rename[i] = j
+        end
         append!(state.new_cfg_blocks, map(copy, state.cfg.blocks[new_range]))
         push!(state.merged_orig_blocks, last(new_range))
     end
@@ -218,7 +220,9 @@ end
 function finish_cfg_inline!(state::CFGInliningState)
     new_range = (state.first_bb + 1):length(state.cfg.blocks)
     l = length(state.new_cfg_blocks)
-    state.bb_rename[new_range] = (l+1:l+length(new_range))
+    for (i,j) in zip(new_range, l+1:l+length(new_range))
+        state.bb_rename[i] = j
+    end
     append!(state.new_cfg_blocks, state.cfg.blocks[new_range])
 
     # Rename edges original bbs
