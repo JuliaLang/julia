@@ -299,14 +299,14 @@ end
 
     # Simple
     @test genmsg_out(Info, "msg", Main, "some/path.jl", 101) ==
-        """
+    """
     ┌ Info: msg
     └ @ Main some/path.jl:101
     """
 
     # Multiline message
     @test genmsg_err(Warn, "line1\nline2", Main, "some/path.jl", 101) ==
-        """
+    """
     ┌ Warning: line1
     │ line2
     └ @ Main some/path.jl:101
@@ -314,7 +314,7 @@ end
 
     # Keywords
     @test genmsg(Error, "msg", Base, "other.jl", 101, a=1, b="asdf") ==
-        """
+    """
     ┌ Error: msg
     │   a = 1
     │   b = asdf
