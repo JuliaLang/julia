@@ -577,6 +577,7 @@ function analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, 
     end
 
     # Handle vararg functions
+    prevararg_rewritten_atypes = atypes
     isva = na > 0 && method.isva
     if isva
         @assert length(atypes) >= na - 1
@@ -584,8 +585,9 @@ function analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, 
         atypes = Any[atypes[1:(na - 1)]..., va_type]
     end
 
-    # Go see if we already have a pre-inferred result
-    res = find_inferred(linfo, atypes, sv)
+    # Go see if we already have a pre-inferred result. Use prevararg_rewritten_atypes
+    # for the lookup, since that's what inference used when it populated the cache.
+    res = find_inferred(linfo, prevararg_rewritten_atypes, sv)
     res === nothing && return nothing
 
     if length(res::Tuple) == 1
