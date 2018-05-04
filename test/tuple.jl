@@ -164,8 +164,8 @@ end
     @test_throws BoundsError next((5,6,7), 0)
     @test_throws BoundsError next((), 1)
 
-    @test eachindex((2,5,"foo")) === 1:3
-    @test eachindex((2,5,"foo"), (1,2,5,7)) === 1:4
+    @test eachindex((2,5,"foo")) === Base.OneTo(3)
+    @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
 end
 
 

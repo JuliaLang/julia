@@ -66,7 +66,9 @@ end
 # ----
 let s = "hello"
     _, st = next(s, start(s))
-    @test collect(rest(s, st)) == ['e','l','l','o']
+    c = collect(rest(s, st))
+    @test c == ['e','l','l','o']
+    @test c isa Vector{Char}
 end
 
 @test_throws MethodError collect(rest(countfrom(1), 5))
@@ -414,6 +416,9 @@ let s = "Monkey 🙈🙊🙊"
     @test tf(1) == "M|o|n|k|e|y| |🙈|🙊|🙊"
 end
 
+@test Base.IteratorEltype(partition([1,2,3,4], 2)) == Base.HasEltype()
+@test Base.IteratorEltype(partition((2x for x in 1:3), 2)) == Base.EltypeUnknown()
+
 # take and friends with arbitrary integers (#19214)
 for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
     @test length(take(1:6, T(3))) == 3
@@ -450,10 +455,11 @@ end
         @test length(d) == length(A)
         @test keys(d) == keys(A)
         @test values(d) == A
-        @test Base.IteratorSize(d) == Base.HasLength()
+        @test Base.IteratorSize(d) == Base.IteratorSize(A)
         @test Base.IteratorEltype(d) == Base.HasEltype()
+        @test Base.IteratorSize(pairs([1 2;3 4])) isa Base.HasShape{2}
         @test isempty(d) || haskey(d, first(keys(d)))
-        @test collect(v for (k, v) in d) == vec(collect(A))
+        @test collect(v for (k, v) in d) == collect(A)
         if A isa NamedTuple
             K = isempty(d) ? Union{} : Symbol
             V = isempty(d) ? Union{} : Float64
@@ -484,6 +490,10 @@ end
         @test String(take!(io)) == "pairs(::Array{$Int,1})"
         Base.showarg(io, pairs((a=1, b=2)), true)
         @test String(take!(io)) == "pairs(::NamedTuple)"
+        Base.showarg(io, pairs(IndexLinear(), zeros(3,3)), true)
+        @test String(take!(io)) == "pairs(IndexLinear(), ::Array{Float64,2})"
+        Base.showarg(io, pairs(IndexCartesian(), zeros(3)), true)
+        @test String(take!(io)) == "pairs(IndexCartesian(), ::Array{Float64,1})"
     end
 end
 

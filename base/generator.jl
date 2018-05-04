@@ -47,6 +47,11 @@ function next(g::Generator, s)
     g.f(v), s2
 end
 
+length(g::Generator) = length(g.iter)
+size(g::Generator) = size(g.iter)
+axes(g::Generator) = axes(g.iter)
+ndims(g::Generator) = ndims(g.iter)
+
 
 ## iterator traits
 
@@ -85,6 +90,13 @@ Base.HasLength()
 IteratorSize(x) = IteratorSize(typeof(x))
 IteratorSize(::Type) = HasLength()  # HasLength is the default
 
+IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
+IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
+
+IteratorSize(::Type{Any}) = SizeUnknown()
+
+haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
+
 abstract type IteratorEltype end
 struct EltypeUnknown <: IteratorEltype end
 struct HasEltype <: IteratorEltype end
@@ -111,13 +123,6 @@ Base.HasEltype()
 IteratorEltype(x) = IteratorEltype(typeof(x))
 IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
 
-IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
-IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
-length(g::Generator) = length(g.iter)
-size(g::Generator) = size(g.iter)
-axes(g::Generator) = axes(g.iter)
-ndims(g::Generator) = ndims(g.iter)
-
 IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
 
-haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
+IteratorEltype(::Type{Any}) = EltypeUnknown()
