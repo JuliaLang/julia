@@ -2,10 +2,67 @@
 
 module REPLCompletions
 
-export completions, shell_completions, bslash_completions
+export completions, shell_completions, bslash_completions, completion_text
 
 using Base.Meta
 using Base: propertynames, coalesce
+
+abstract type Completion end
+
+struct KeywordCompletion <: Completion
+    keyword::String
+end
+
+struct PathCompletion <: Completion
+    path::String
+end
+
+struct ModuleCompletion <: Completion
+    parent::Module
+    mod::String
+end
+
+struct PropertyCompletion <: Completion
+    value
+    property::Symbol
+end
+
+struct FieldCompletion <: Completion
+    typ::DataType
+    field::Symbol
+end
+
+struct MethodCompletion <: Completion
+    func
+    input_types::Type
+    method::Method
+    kwtype # needed for printing
+end
+
+struct BslashCompletion <: Completion
+    bslash::String
+end
+
+struct ShellCompletion <: Completion
+    text::String
+end
+
+struct DictCompletion <: Completion
+    dict::AbstractDict
+    key::String
+end
+
+completion_text(c::KeywordCompletion) = c.keyword
+completion_text(c::PathCompletion) = c.path
+completion_text(c::ModuleCompletion) = c.mod
+completion_text(c::PropertyCompletion) = string(c.property)
+completion_text(c::FieldCompletion) = string(c.field)
+completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method, kwtype=c.kwtype))
+completion_text(c::BslashCompletion) = c.bslash
+completion_text(c::ShellCompletion) = c.text
+completion_text(c::DictCompletion) = c.key
+
+const Completions = Tuple{Vector{Completion}, UnitRange{Int64}, Bool}
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -29,11 +86,11 @@ function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, 
     appendmacro!(syms, macros, "_str", "\"")
     appendmacro!(syms, macros, "_cmd", "`")
     filter!(x->completes_global(x, name), syms)
-    return syms
+    return [ModuleCompletion(mod, sym) for sym in syms]
 end
 
 # REPL Symbol Completions
-function complete_symbol(sym, ffunc, context_module=Main)
+function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
     mod = context_module
     name = sym
 
@@ -60,12 +117,12 @@ function complete_symbol(sym, ffunc, context_module=Main)
             lookup_module = false
             t, found = get_type(ex, context_module)
         end
-        found || return String[]
+        found || return Completion[]
         # Ensure REPLCompletion do not crash when asked to complete a tuple, #15329
-        !lookup_module && t <: Tuple && return String[]
+        !lookup_module && t <: Tuple && return Completion[]
     end
 
-    suggestions = String[]
+    suggestions = Completion[]
     if lookup_module
         # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
@@ -86,7 +143,7 @@ function complete_symbol(sym, ffunc, context_module=Main)
         for property in propertynames(val, false)
             s = string(property)
             if startswith(s, name)
-                push!(suggestions, s)
+                push!(suggestions, PropertyCompletion(val, property))
             end
         end
     else
@@ -96,7 +153,7 @@ function complete_symbol(sym, ffunc, context_module=Main)
             for field in fields
                 s = string(field)
                 if startswith(s, name)
-                    push!(suggestions, s)
+                    push!(suggestions, FieldCompletion(t, field))
                 end
             end
         end
@@ -112,7 +169,7 @@ const sorted_keywords = [
     "primitive type", "quote", "return", "struct",
     "true", "try", "using", "while"]
 
-function complete_keyword(s::Union{String,SubString{String}})
+function complete_keyword(s::Union{String,SubString{String}})::Vector{Completion}
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
@@ -120,10 +177,10 @@ function complete_keyword(s::Union{String,SubString{String}})
         r = first(r):i
         i += 1
     end
-    sorted_keywords[r]
+    map(KeywordCompletion, sorted_keywords[r])
 end
 
-function complete_path(path::AbstractString, pos; use_envpath=false)
+function complete_path(path::AbstractString, pos; use_envpath=false)::Completions
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
@@ -141,10 +198,10 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         elseif isdir(dir)
             files = readdir(dir)
         else
-            return String[], 0:-1, false
+            return PathCompletion[], 0:-1, false
         end
     catch
-        return String[], 0:-1, false
+        return PathCompletion[], 0:-1, false
     end
 
     matches = Set{String}()
@@ -198,7 +255,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         end
     end
 
-    matchList = String[replace(s, r"\s" => "\\ ") for s in matches]
+    matchList = Completion[PathCompletion(replace(s, r"\s" => "\\ ")) for s in matches]
     startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
@@ -206,9 +263,9 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     return matchList, startpos:pos, !isempty(matchList)
 end
 
-function complete_expanduser(path::AbstractString, r)
+function complete_expanduser(path::AbstractString, r)::Completions
     expanded = expanduser(path)
-    return String[expanded], r, path != expanded
+    return [PathCompletion(expanded)], r, path != expanded
 end
 
 # Determines whether method_complete should be tried. It should only be done if
@@ -366,20 +423,19 @@ function get_type(sym, fn::Module)
 end
 
 # Method completion on function call expression that look like :(max(1))
-function complete_methods(ex_org::Expr, context_module=Main)
+function complete_methods(ex_org::Expr, context_module=Main)::Vector{Completion}
     args_ex = Any[]
     func, found = get_value(ex_org.args[1], context_module)
-    !found && return String[]
+    !found && return Completion[]
     for ex in ex_org.args[2:end]
         val, found = get_type(ex, context_module)
         push!(args_ex, val)
     end
-    out = String[]
+    out = Completion[]
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
     ml = methods(func)
     kwtype = isdefined(ml.mt, :kwsorter) ? typeof(ml.mt.kwsorter) : nothing
-    io = IOBuffer()
     for method in ml
         ms = method.sig
 
@@ -390,8 +446,7 @@ function complete_methods(ex_org::Expr, context_module=Main)
 
         # Check if the method's type signature intersects the input types
         if typeintersect(Base.rewrap_unionall(Tuple{Base.unwrap_unionall(ms).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
-            show(io, method, kwtype=kwtype)
-            push!(out, String(take!(io)))
+            push!(out, MethodCompletion(func, t_in, method, kwtype))
         end
     end
     return out
@@ -420,7 +475,7 @@ function afterusing(string::String, startpos::Int)
     return occursin(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
-function bslash_completions(string, pos)
+function bslash_completions(string, pos)::Tuple{Bool, Completions}
     slashpos = coalesce(findprev(isequal('\\'), string, pos), 0)
     if (coalesce(findprev(in(bslash_separators), string, pos), 0) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
@@ -428,23 +483,23 @@ function bslash_completions(string, pos)
         s = string[slashpos:pos]
         latex = get(latex_symbols, s, "")
         if !isempty(latex) # complete an exact match
-            return (true, ([latex], slashpos:pos, true))
+            return (true, ([BslashCompletion(latex)], slashpos:pos, true))
         end
         emoji = get(emoji_symbols, s, "")
         if !isempty(emoji)
-            return (true, ([emoji], slashpos:pos, true))
+            return (true, ([BslashCompletion(emoji)], slashpos:pos, true))
         end
         # return possible matches; these cannot be mixed with regular
         # Julian completions as only latex / emoji symbols contain the leading \
         if startswith(s, "\\:") # emoji
             emoji_names = Iterators.filter(k -> startswith(k, s), keys(emoji_symbols))
-            return (true, (sort!(collect(emoji_names)), slashpos:pos, true))
+            return (true, (map(BslashCompletion, sort!(collect(emoji_names))), slashpos:pos, true))
         else # latex
             latex_names = Iterators.filter(k -> startswith(k, s), keys(latex_symbols))
-            return (true, (sort!(collect(latex_names)), slashpos:pos, true))
+            return (true, (map(BslashCompletion, sort!(collect(latex_names))), slashpos:pos, true))
         end
     end
-    return (false, (String[], 0:-1, false))
+    return (false, (Completion[], 0:-1, false))
 end
 
 function dict_identifier_key(str,tag)
@@ -484,7 +539,7 @@ end
     return matches
 end
 
-function completions(string, pos, context_module=Main)
+function completions(string, pos, context_module=Main)::Completions
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
@@ -495,9 +550,9 @@ function completions(string, pos, context_module=Main)
         if partial_key !== nothing
             matches = find_dict_matches(identifier, partial_key)
             length(matches)==1 && (length(string) <= pos || string[pos+1] != ']') && (matches[1]*="]")
-            length(matches)>0 && return sort!(matches), loc:pos, true
+            length(matches)>0 && return [DictCompletion(identifier, match) for match in sort!(matches)], loc:pos, true
         else
-            return String[], 0:-1, false
+            return Completion[], 0:-1, false
         end
     end
 
@@ -514,15 +569,15 @@ function completions(string, pos, context_module=Main)
 
         if inc_tag == :string &&
            length(paths) == 1 &&  # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1],
+           !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1].path,
                                      r"\\ " => " "))) &&  # except if it's a directory
            (length(string) <= pos ||
             string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
-            paths[1] *= "\""
+            paths[1] = PathCompletion(paths[1].path * "\"")
         end
 
         #Latex symbols can be completed for strings
-        (success || inc_tag==:cmd) && return sort!(paths), r, success
+        (success || inc_tag==:cmd) && return sort!(paths, by=p->p.path), r, success
     end
 
     ok, ret = bslash_completions(string, pos)
@@ -538,14 +593,14 @@ function completions(string, pos, context_module=Main)
             return complete_methods(ex, context_module), start(frange):method_name_end, false
         end
     elseif inc_tag == :comment
-        return String[], 0:-1, false
+        return Completion[], 0:-1, false
     end
 
     dotpos = coalesce(findprev(isequal('.'), string, pos), 0)
     startpos = nextind(string, coalesce(findprev(in(non_identifier_chars), string, pos), 0))
 
     ffunc = (mod,x)->true
-    suggestions = String[]
+    suggestions = Completion[]
     comp_keywords = true
     if afterusing(string, startpos)
         # We're right after using or import. Let's look only for packages
@@ -567,7 +622,7 @@ function completions(string, pos, context_module=Main)
                         #   <Mod>.jl/src/<Mod>.jl
                         if isfile(joinpath(dir, pname))
                             endswith(pname, ".jl") && push!(suggestions,
-                                                            pname[1:prevind(pname, end-2)])
+                                                            ModuleCompletion(Base.__toplevel__, pname[1:prevind(pname, end-2)]))
                         else
                             mod_name = if endswith(pname, ".jl")
                                 pname[1:prevind(pname, end-2)]
@@ -576,7 +631,7 @@ function completions(string, pos, context_module=Main)
                             end
                             if isfile(joinpath(dir, pname, "src",
                                                "$mod_name.jl"))
-                                push!(suggestions, mod_name)
+                                push!(suggestions, ModuleCompletion(Base.__toplevel__, mod_name))
                             end
                         end
                     end
@@ -615,20 +670,20 @@ function completions(string, pos, context_module=Main)
         end
     end
     append!(suggestions, complete_symbol(s, ffunc, context_module))
-    return sort!(unique(suggestions)), (dotpos+1):pos, true
+    return sort!(unique(suggestions), by=completion_text), (dotpos+1):pos, true
 end
 
-function shell_completions(string, pos)
+function shell_completions(string, pos)::Completions
     # First parse everything up to the current position
     scs = string[1:pos]
     local args, last_parse
     try
         args, last_parse = Base.shell_parse(scs, true)
     catch
-        return String[], 0:-1, false
+        return Completion[], 0:-1, false
     end
     # Now look at the last thing we parsed
-    isempty(args.args[end].args) && return String[], 0:-1, false
+    isempty(args.args[end].args) && return Completion[], 0:-1, false
     arg = args.args[end].args[end]
     if all(s -> isa(s, AbstractString), args.args[end].args)
         # Treat this as a path
@@ -649,7 +704,7 @@ function shell_completions(string, pos)
         range = range .+ (first(last_parse) - 1)
         return ret, range, true
     end
-    return String[], 0:-1, false
+    return Completion[], 0:-1, false
 end
 
 end # module

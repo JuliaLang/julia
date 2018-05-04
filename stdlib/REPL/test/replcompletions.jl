@@ -103,10 +103,15 @@ function temp_pkg_dir_noinit(fn::Function)
     end
 end
 
-test_complete(s) = completions(s,lastindex(s))
-test_scomplete(s) = shell_completions(s,lastindex(s))
-test_bslashcomplete(s) = bslash_completions(s,lastindex(s))[2]
-test_complete_context(s) = completions(s,lastindex(s),Main.CompletionFoo)
+function map_completion_text(completions)
+    c, r, res = completions
+    return map(completion_text, c), r, res
+end
+
+test_complete(s) = map_completion_text(completions(s,lastindex(s)))
+test_scomplete(s) =  map_completion_text(shell_completions(s,lastindex(s)))
+test_bslashcomplete(s) =  map_completion_text(bslash_completions(s,lastindex(s))[2])
+test_complete_context(s) =  map_completion_text(completions(s,lastindex(s),Main.CompletionFoo))
 
 let s = ""
     c, r = test_complete(s)
@@ -591,6 +596,7 @@ let s, c, r
     # Issue #8047
     s = "@show \"/dev/nul\""
     c,r = completions(s, 15)
+    c = map(completion_text, c)
     @test "null" in c
     @test r == 13:15
     @test s[r] == "nul"
@@ -838,6 +844,7 @@ function test_dict_completion(dict_name)
     @test c == Any["\"abcd\"]"]
     s = "$dict_name[\"abcd]"  # trailing close bracket
     c, r = completions(s, lastindex(s) - 1)
+    c = map(completion_text, c)
     @test c == Any["\"abcd\""]
     s = "$dict_name[:b"
     c, r = test_complete(s)
