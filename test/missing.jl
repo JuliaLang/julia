@@ -358,7 +358,8 @@ end
     @test collect(x) isa Vector{Int}
 
     x = skipmissing(v for v in [missing, 1, missing, 2, 4])
-    @test eltype(x) === Any
+    # TODO: enable in v0.7
+    #@test_throws MethodError eltype(x)
     @test collect(x) == [1, 2, 4]
     @test collect(x) isa Vector{Int}
 end

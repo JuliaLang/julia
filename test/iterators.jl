@@ -66,7 +66,9 @@ end
 # ----
 let s = "hello"
     _, st = next(s, start(s))
-    @test collect(rest(s, st)) == ['e','l','l','o']
+    c = collect(rest(s, st))
+    @test c == ['e','l','l','o']
+    @test c isa Vector{Char}
 end
 
 @test_throws MethodError collect(rest(countfrom(1), 5))
@@ -452,6 +454,7 @@ end
         @test values(d) == A
         @test Base.IteratorSize(d) == Base.HasLength()
         @test Base.IteratorEltype(d) == Base.HasEltype()
+        @test Base.IteratorSize(pairs([1 2;3 4])) isa Base.HasShape{2}
         @test isempty(d) || haskey(d, first(keys(d)))
         @test collect(v for (k, v) in d) == vec(collect(A))
         if A isa NamedTuple
