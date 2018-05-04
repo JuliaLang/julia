@@ -959,6 +959,9 @@ Deprecated or removed
   * `map` on dictionaries previously operated on `key=>value` pairs. This behavior is deprecated,
     and in the future `map` will operate only on values ([#5794]).
 
+  * `map` on sets previously returned a `Set`, possibly changing the order or number of elements. This
+    behavior is deprecated and in the future `map` will preserve order and number of elements ([#26980]).
+
   * Previously, broadcast defaulted to treating its arguments as scalars if they were not
     arrays. This behavior is deprecated, and in the future `broadcast` will default to
     iterating over all its arguments. Wrap arguments you wish to be treated as scalars with

@@ -576,6 +576,8 @@ import .Iterators.enumerate
 
 # issue #5794
 @deprecate map(f, d::T) where {T<:AbstractDict}  T( f(p) for p in pairs(d) )
+# issue #26359 - map over sets
+@deprecate map(f, s::AbstractSet)  Set( f(v) for v in s )
 
 # issue #17086
 @deprecate isleaftype isconcretetype
