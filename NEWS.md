@@ -725,9 +725,9 @@ Deprecated or removed
   * `slicedim(A, d, i)` has been deprecated in favor of `copy(selectdim(A, d, i))`. The new
     `selectdim` function now always returns a view into `A`; in many cases the `copy` is
     not necessary. Previously, `slicedim` on a vector `V` over dimension `d=1` and scalar
-	index `i` would return the just selected element (unless `V` was a `BitVector`). This
-	has now been made consistent: `selectdim` now always returns a view into the original
-	array, with a zero-dimensional view in this specific case ([#26009]).
+    index `i` would return the just selected element (unless `V` was a `BitVector`). This
+    has now been made consistent: `selectdim` now always returns a view into the original
+    array, with a zero-dimensional view in this specific case ([#26009]).
 
   * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
     output ([#12131]).
