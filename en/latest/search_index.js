@@ -109,7 +109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Julia v0.7.0 Release Notes",
     "title": "Deprecated or removed",
     "category": "section",
-    "text": "The JULIA_HOME environment variable has been renamed to JULIA_BINDIR and Base.JULIA_HOME has been moved to Sys.BINDIR (#20899).\nThe keyword immutable is fully deprecated to struct, and type is fully deprecated to mutable struct (#19157, #20418).\nIndexing into multidimensional arrays with more than one index but fewer indices than there are dimensions is no longer permitted when those trailing dimensions have lengths greater than 1. Instead, reshape the array or add trailing indices so the dimensionality and number of indices match (#14770, #23628).\nThe use of a positional dimension argument has largely been deprecated in favor of a dims keyword argument. This includes the functions sum, prod, maximum, minimum, all, any, findmax, findmin, mean, varm, std, var, cov, cor, median, mapreducedim, reducedim, sort, accumulate, accumulate!, cumsum, cumsum!, cumprod, cumprod!, flipdim, and squeeze (#25501).\nindices(a) and indices(a,d) have been deprecated in favor of axes(a) and axes(a, d) (#25057).\nEnvHash has been renamed to EnvDict (#24167).\nUninitialized Array constructors of the form Array[{T,N}](shape...) have been deprecated in favor of equivalents accepting undef (an alias for UndefInitializer()) as their first argument, as in Array[{T,N}](undef, shape...). For example, Vector(3) is now Vector(undef, 3), Matrix{Int}((2, 4)) is now, Matrix{Int}(undef, (2, 4)), and Array{Float32,3}(11, 13, 17) is now Array{Float32,3}(undef, 11, 13, 17) (#24781).\nPreviously setindex!(A, x, I...) (and the syntax A[I...] = x) supported two different modes of operation when supplied with a set of non-scalar indices I (e.g., at least one index is an AbstractArray) depending upon the value of x on the right hand side. If x is an AbstractArray, its contents are copied elementwise into the locations in A selected by I and it must have the same number of elements as I selects locations. Otherwise, if x is not an AbstractArray, then its value is implicitly broadcast to all locations to all locations in A selected by I. This latter behavior—implicitly broadcasting \"scalar\"-like values across many locations—is now deprecated in favor of explicitly using the broadcasted assignment syntax A[I...] .= x or fill!(view(A, I...), x) (#26347).\nLinAlg.fillslots! has been renamed LinAlg.fillstored! (#25030).\nfill!(A::Diagonal, x) and fill!(A::AbstractTriangular, x) have been deprecated in favor of Base.LinAlg.fillstored!(A, x) (#24413).\neye has been deprecated in favor of I and Matrix constructors. Please see the deprecation warnings for replacement details (#24438).\nzeros(D::Diagonal[, opts...]) has been deprecated (#24654).\nUsing Bool values directly as indices is now deprecated and will be an error in the future. Convert them to Int before indexing if you intend to access index 1 for true and 0 for false.\nslicedim(A, d, i) has been deprecated in favor of copy(selectdim(A, d, i)). The new selectdim function now always returns a view into A; in many cases the copy is not necessary. Previously, slicedim on a vector V over dimension d=1 and scalarindex `i` would return the just selected element (unless `V` was a `BitVector`). This\nhas now been made consistent: `selectdim` now always returns a view into the original\narray, with a zero-dimensional view in this specific case ([#26009](https://github.com/JuliaLang/julia/issues/26009)).whos has been renamed varinfo, and now returns a markdown table instead of printing output (#12131).\nUninitialized RowVector constructors of the form RowVector{T}(shape...) have been deprecated in favor of equivalents accepting undef (an alias for UndefInitializer()) as their first argument, as in RowVector{T}(undef, shape...). For example, RowVector{Int}(3) is now RowVector{Int}(undef, 3), and RowVector{Float32}((1, 4)) is now RowVector{Float32}(undef, (1, 4)) (#24786).\nwritecsv(io, a; opts...) has been deprecated in favor of writedlm(io, a, \',\'; opts...) (#23529).\nThe method srand(rng, filename, n=4) has been deprecated (#21359).\nreadcsv(io[, T::Type]; opts...) has been deprecated in favor of readdlm(io, \',\'[, T]; opts...) (#23530).\nsparse(s::UniformScaling, m::Integer) has been deprecated in favor of the three-argument equivalent sparse(s::UniformScaling, m, n) (#24472).\nThe cholfact/cholfact! methods that accepted an uplo symbol have been deprecated in favor of using Hermitian (or Symmetric) views (#22187, #22188).\nThe thin keyword argument for orthogonal decomposition methods has been deprecated in favor of full, which has the opposite meaning: thin == true if and only if full == false (#24279).\nisposdef(A::AbstractMatrix, UL::Symbol) and isposdef!(A::AbstractMatrix, UL::Symbol) have been deprecated in favor of isposdef(Hermitian(A, UL)) and isposdef!(Hermitian(A, UL)) respectively (#22245).\nThe bkfact/bkfact! methods that accepted uplo and issymmetric symbols have been deprecated in favor of using Hermitian (or Symmetric) views (#22605).\nThe function current_module is deprecated and replaced with @__MODULE__. This caused the deprecation of some reflection methods (such as macroexpand and isconst), which now require a module argument. And it caused the bugfix of other default arguments to use the Main module (including whos, which)  (#22064).\nexpand(ex) and expand(module, ex) have been deprecated in favor of Meta.lower(module, ex) (#22064, #24278).\nones(A::AbstractArray[, opts...]) and zeros(A::AbstractArray[, opts...]) methods have been deprecated. For zeros(A), consider zero(A). For ones(A) or zeros(A), consider ones(size(A)), zeros(size(A)), fill(v, size(A)) for v an appropriate one or zero, fill!(copy(A), {1|0}), fill!(similar(A), {1|0}), or any of the preceding with different element type and/or shape depending on opts.... Where strictly necessary, consider fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))}). For an algebraic multiplicative identity, consider one(A) (#24656).\nThe similar(dims->f(..., dims...), [T], axes...) method to add offset array support to a function f that would otherwise create a non-offset array has been deprecated. Instead, call f(..., axes...) directly and, if needed, the offset array implementation should add offset axis support to the function f directly (#26733).\nThe functions ones and zeros used to accept any objects as dimensional arguments, implicitly converting them to Ints.  This is now deprecated; only Integers or AbstractUnitRanges are accepted as arguments.  Instead, convert the arguments before calling ones or zeros (#26733).\nThe variadic size(A, dim1, dim2, dims...) method to return a tuple of multiple dimension lengths of A has been deprecated (#26862).\nThe Operators module is deprecated. Instead, import required operators explicitly from Base, e.g. import Base: +, -, *, / (#22251).\nBindings to the FFTW library have been removed from Base. The DFT framework for building FFT implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl, and the Base signal processing functions which used FFTs are now in DSP.jl (#21956).\nThe corrected positional argument to cov has been deprecated in favor of a keyword argument with the same name (#21709).\nOmitting spaces around the ? and the : tokens in a ternary expression has been deprecated. Ternaries must now include some amount of whitespace, e.g. x ? a : b rather than x?a:b (#22523 and #22712).\n? can no longer be used as an identifier name (#22712)\nThe method replace(s::AbstractString, pat, r, [count]) is deprecated in favor of replace(s::AbstractString, pat => r; [count]) (#25165). Moreover, count cannot be negative anymore (use typemax(Int) instead (#22325).\nread(io, type, dims) is deprecated to read!(io, Array{type}(undef, dims)) (#21450).\nread(::IO, ::Ref) is now a method of read!, since it mutates its Ref argument (#21592).\nnb_available is now bytesavailable (#25634).\nskipchars(io::IO, predicate; linecomment=nothing) is deprecated in favor of skipchars(predicate, io::IO; linecomment=nothing) (#25667).\nBidiagonal constructors now use a Symbol (:U or :L) for the upper/lower argument, instead of a Bool or a Char (#22703).\nBidiagonal, Tridiagonal and SymTridiagonal constructors that automatically converted the input vectors to the same type are deprecated in favor of explicit conversion (#22925, #23035, #23154.\nCalling nfields on a type to find out how many fields its instances have is deprecated. Use fieldcount instead. Use nfields only to get the number of fields in a specific object (#22350).\nfieldnames now operates only on types. To get the names of fields in an object, use fieldnames(typeof(x)) (#22350).\nInexactError, DomainError, and OverflowError now take arguments. InexactError(func::Symbol, type, -3) now prints as \"ERROR: InexactError: func(type, -3)\", DomainError(val, [msg]) prints as \"ERROR: DomainError with val:\\nmsg\", and OverflowError(msg) prints as \"ERROR: OverflowError: msg\". (#20005, #22751, #22761)\nThe operating system identification functions: is_linux, is_bsd, is_apple, is_unix, and is_windows, have been deprecated in favor of Sys.islinux, Sys.isbsd, Sys.isapple, Sys.isunix, and Sys.iswindows, respectively (#22182).\nThe forms of read, readstring, and eachline that accepted both a Cmd object and an input stream are deprecated. Use e.g. read(pipeline(stdin, cmd)) instead (#22762).\nThe unexported type AbstractIOBuffer has been renamed to GenericIOBuffer (#17360 #22796).\nIOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer), IOBuffer(read::Bool, write::Bool), and IOBuffer(maxsize::Integer) are deprecated in favor of constructors taking keyword arguments (#25872).\nDisplay has been renamed to AbstractDisplay (#24831).\nRemaining vectorized methods over SparseVectors, particularly floor, ceil, trunc, round, and most common transcendental functions such as exp, log, and sin variants, have been deprecated in favor of dot-syntax (#22961).\nThe method String(io::IOBuffer) is deprecated to String(take!(copy(io))) (#21438).\nThe function readstring is deprecated in favor of read(io, String) (#22793)\nThe function showall is deprecated. Showing entire values is the default, unless an IOContext specifying :limit=>true is in use (#22847).\nissubtype has been deprecated in favor of <: (which used to be an alias for issubtype).\nCalling write on non-isbits arrays is deprecated in favor of explicit loops or serialize (#6466).\nThe default startup.jl file on Windows has been removed. Now must explicitly include the full path if you need access to executables or libraries in the Sys.BINDIR directory, e.g. joinpath(Sys.BINDIR, \"7z.exe\") for 7z.exe (#21540).\nsqrtm has been deprecated in favor of sqrt (#23504).\nexpm has been deprecated in favor of exp (#23233).\nlogm has been deprecated in favor of log (#23505).\nfull has been deprecated in favor of more specific, better defined alternatives. On structured matrices A, consider instead Matrix(A), Array(A), SparseMatrixCSC(A), or sparse(A). On sparse arrays S, consider instead Vector(S), Matrix(S), or Array(S) as appropriate. On factorizations F, consider instead Matrix(F), Array(F), AbstractMatrix(F), or AbstractArray(F). On implicit orthogonal factors Q, consider instead Matrix(Q) or Array(Q); for implicit orthogonal factors that can be recovered in square or truncated form, see the deprecation message for square recovery instructions. On Symmetric, Hermitian, or AbstractTriangular matrices A, consider instead Matrix(S), Array(S), SparseMatrixCSC(S), or sparse(S). On Symmetric matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo). On Hermitian matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo, true). On UpperTriangular matrices A particularly, consider instead triu!(copy(parent(A))). On LowerTriangular matrices A particularly, consider instead tril!(copy(parent(A))) (#24250).\nspeye has been deprecated in favor of I, sparse, and SparseMatrixCSC constructor methods (#24356).\nCalling union with no arguments is deprecated; construct an empty set with an appropriate element type using Set{T}() instead (#23144).\nVectorized DateTime, Date, and format methods have been deprecated in favor of dot-syntax (#23207).\nBase.cpad has been removed; use an appropriate combination of rpad and lpad instead (#23187).\nctranspose and ctranspose! have been deprecated in favor of adjoint and adjoint!, respectively (#23235).\nfilter and filter! on dictionaries now pass a single key=>value pair to the argument function, instead of two arguments (#17886).\nrol, rol!, ror, and ror! have been deprecated in favor of specialized methods for circshift/circshift! (#23404).\nBase.SparseArrays.SpDiagIterator has been removed (#23261).\nThe tuple-of-types form of cfunction, cfunction(f, returntype, (types...)), has been deprecated in favor of the tuple-type form cfunction(f, returntype, Tuple{types...}) (#23066).\ndiagm(v::AbstractVector, k::Integer=0) has been deprecated in favor of diagm(k => v) (#24047).\ndiagm(x::Number) has been deprecated in favor of fill(x, 1, 1) (#24047).\ndiagm(A::SparseMatrixCSC) has been deprecated in favor of spdiagm(sparsevec(A)) (#23341).\ndiagm(A::BitMatrix) has been deprecated, use diagm(0 => vec(A)) or BitMatrix(Diagonal(vec(A))) instead (#23373, #24047).\nℯ (written as \\mscre<TAB> or \\euler<TAB>) is now the only (by default) exported name for Euler\'s number, and the type has changed from Irrational{:e} to Irrational{:ℯ} (#23427).\nThe mathematical constants π, pi, ℯ, e, γ, eulergamma, catalan, φ and golden have been moved from Base to a new module; Base.MathConstants. Only π, pi and ℯ are now exported by default from Base (#23427).\neu (previously an alias for ℯ) has been deprecated in favor of ℯ (or MathConstants.e) (#23427).\nGMP.gmp_version(), GMP.GMP_VERSION, GMP.gmp_bits_per_limb(), and GMP.GMP_BITS_PER_LIBM have been renamed to GMP.version(), GMP.VERSION, GMP.bits_per_libm(), and GMP.BITS_PER_LIBM, respectively. Similarly, MPFR.get_version(), has been renamed to MPFR.version() (#23323). Also, LinAlg.LAPACK.laver() has been renamed to LinAlg.LAPACK.version() and now returns a VersionNumber.\nselect, select!, selectperm and selectperm! have been renamed respectively to partialsort, partialsort!, partialsortperm and partialsortperm! (#23051).\nThe Range abstract type has been renamed to AbstractRange (#23570).\nmap on dictionaries previously operated on key=>value pairs. This behavior is deprecated, and in the future map will operate only on values (#5794).\nPreviously, broadcast defaulted to treating its arguments as scalars if they were not arrays. This behavior is deprecated, and in the future broadcast will default to iterating over all its arguments. Wrap arguments you wish to be treated as scalars with Ref() or a 1-tuple. Package developers can choose to allow a non-iterable type T to always behave as a scalar by implementing broadcastable(x::T) = Ref(x) (#26212).\nAutomatically broadcasted + and - for array + scalar, scalar - array, and so-on have been deprecated due to inconsistency with linear algebra. Use .+ and .- for these operations instead (#22880, #22932).\nisleaftype is deprecated in favor of the simpler predicates isconcretetype and isdispatchtuple. Concrete types are those that might equal typeof(x) for some x; isleaftype included some types for which this is not true. Those are now categorized more precisely as \"dispatch tuple types\" and \"!hasfreetypevars\" (not exported). (#17086, #25496)\ncontains(eq, itr, item) is deprecated in favor of any with a predicate (#23716).\nspdiagm(x::AbstractVector) has been deprecated in favor of sparse(Diagonal(x)) alternatively spdiagm(0 => x) (#23757).\nspdiagm(x::AbstractVector, d::Integer) and spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer}) have been deprecated in favor of spdiagm(d => x) and spdiagm(d[1] => x[1], d[2] => x[2], ...) respectively. The new spdiagm implementation now always returns a square matrix (#23757).\nspones(A::AbstractSparseArray) has been deprecated in favor of LinAlg.fillstored!(copy(A), 1) (#25037).\nConstructors for LibGit2.UserPasswordCredentials and LibGit2.SSHCredentials which take a prompt_if_incorrect argument are deprecated. Instead, prompting behavior is controlled using the allow_prompt keyword in the LibGit2.CredentialPayload constructor (#23690).\ngradient is deprecated and will be removed in the next release (#23816).\nThe timing functions tic, toc, and toq are deprecated in favor of @time and @elapsed (#17046).\nMethods of findfirst, findnext, findlast, and findprev that accept a value to search for are deprecated in favor of passing a predicate (#19186, #10593).\nfind functions now operate only on booleans by default. To look for non-zeros, use x->x!=0 or !iszero (#23120).\nThe ability of reinterpret to yield Arrays of different type than the underlying storage has been removed. The reinterpret function is still available, but now returns a ReinterpretArray. The three argument form of reinterpret that implicitly reshapes has been deprecated (#23750).\nbits has been deprecated in favor of bitstring (#24281, #24263).\nnum2hex and hex2num have been deprecated in favor of reinterpret combined with parse/hex (#22088).\ncopy! is deprecated for AbstractSet and AbstractDict, with the intention to re-enable it with a cleaner meaning in a future version (#24844).\ncopy! (resp. unsafe_copy!) is deprecated for AbstractArray and is renamed copyto! (resp. unsafe_copyto!); it will be re-introduced with a different meaning in a future version (#24808).\na:b is deprecated for constructing a StepRange when a and b have physical units (Dates and Times). Use a:s:b, where s = Dates.Day(1) or s = Dates.Second(1).\ntrues(A::AbstractArray) and falses(A::AbstractArray) are deprecated in favor of trues(size(A)) and falses(size(A)) respectively (#24595).\nworkspace is discontinued, check out Revise.jl for an alternative workflow (#25046).\ncumsum, cumprod, accumulate, their mutating versions, and diff all now require a dim argument instead of defaulting to using the first dimension unless there is only one dimension (#24684, #25457).\nThe sum_kbn and cumsum_kbn functions have been moved to the KahanSummation package (#24869).\nisnumber has been renamed to isnumeric (#25021).\nis_assigned_char and normalize_string have been renamed to isassigned and normalize, and moved to the new Unicode standard library module. graphemes has also been moved to that module (#25021).\nThe functions eigs and svds have been moved to the IterativeEigensolvers standard library module (#24714).\nSparse array functionality has moved to the SparseArrays standard library module (#25249).\nLinear algebra functionality, and specifically the LinAlg module has moved to the LinearAlgebra standard library module (#25571).\n@printf and @sprintf have been moved to the Printf standard library (#23929,#25056).\nThe Libdl module has moved to the Libdl standard library module (#25459).\nThe aliases Complex32, Complex64 and Complex128 have been deprecated in favor of ComplexF16, ComplexF32 and ComplexF64 respectively (#24647).\nBase.parentindexes and SharedArrays.localindexes have been renamed to parentindices and localindices, respectively. Similarly, the indexes field in the SubArray type has been renamed to indices without deprecation (#25088).\nAssociative has been deprecated in favor of AbstractDict (#25012).\nVoid has been renamed back to Nothing with an alias Cvoid for use when calling C with a return type of Cvoid or a return or argument type of Ptr{Cvoid} (#25162).\nNullable{T} has been deprecated and moved to the Nullables package (#23642). Use Union{T, Nothing} instead, or Union{Some{T}, Nothing} if nothing is a possible value (i.e. Nothing <: T). isnull(x) can be replaced with x === nothing and unsafe_get/get can be dropped or replaced with coalesce. NullException has been removed.\nunshift! and shift! have been renamed to pushfirst! and popfirst! (#23902)\nipermute! has been deprecated in favor of invpermute! (#25168).\nCartesianRange has been renamed CartesianIndices (#24715).\nsub2ind and ind2sub are deprecated in favor of using CartesianIndices and LinearIndices (#24715).\ngetindex(F::Factorization, s::Symbol) (usually seen as e.g. F[:Q]) is deprecated in favor of dot overloading (getproperty) so factors should now be accessed as e.g. F.Q instead of F[:Q] (#25184).\nsearch and rsearch have been deprecated in favor of findfirst/findnext and findlast/findprev respectively, in combination with curried isequal and in predicates for some methods (#24673).\nsearch(buf::IOBuffer, delim::UInt8) has been deprecated in favor of either occursin(delim, buf) (to test containment) or readuntil(buf, delim) (to read data up to delim) (#26600).\nismatch(regex, str) has been deprecated in favor of contains(str, regex) (#24673).\nmatchall has been deprecated in favor of collect(m.match for m in eachmatch(r, s)) (#26071).\nsimilar(::Associative) has been deprecated in favor of empty(::Associative), and similar(::Associative, ::Pair{K, V}) has been deprecated in favour of empty(::Associative, K, V) (#24390).\nfindin(a, b) has been deprecated in favor of findall(in(b), a) (#24673).\nmodule_name has been deprecated in favor of a new, general nameof function. Similarly, the unexported Base.function_name and Base.datatype_name have been deprecated in favor of nameof methods (#25622).\nThe module Random.dSFMT is renamed Random.DSFMT (#25567).\nRandom.RandomDevice(unlimited::Bool) (on non-Windows systems) is deprecated in favor of Random.RandomDevice(; unlimited=unlimited) (#25668).\nThe generic implementations of strides(::AbstractArray) and stride(::AbstractArray, ::Int)  have been deprecated. Subtypes of AbstractArray that implement the newly introduced strided  array interface should define their own strides method (#25321).\nmodule_parent, Base.datatype_module, and Base.function_module have been deprecated in favor of parentmodule ([#TODO]).\nrand(t::Tuple{Vararg{Int}}) is deprecated in favor of rand(Float64, t) or rand(t...); rand(::Tuple) will have another meaning in the future (#25429, #25278).\nThe assert function (and @assert macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.\nObjectIdDict has been deprecated in favor of IdDict{Any,Any} (#25210).\ngc and gc_enable have been deprecated in favor of GC.gc and GC.enable (#25616).\nBase.@gc_preserve has been deprecated in favor of GC.@preserve (#25616).\nprint_shortest has been discontinued, but is still available in the Base.Grisu submodule (#25745).\nscale! has been deprecated in favor of mul!, lmul!, and rmul! (#25701, #25812).\nThe remove_destination keyword argument to cp, mv, and the unexported cptree has been renamed to force (#25979).\ncontains has been deprecated in favor of a more general occursin function, which takes its arguments in reverse order from contains (#26283).\nRegex objects are no longer callable. Use occursin instead (#26283).\nThe methods of range based on positional arguments have been deprecated in favor of keyword arguments (#25896).\nlinspace has been deprecated in favor of range with stop and length keyword arguments (#25896).\nLinSpace has been renamed to LinRange (#25896).\nlogspace has been deprecated to its definition (#25896).\nendof(a) has been renamed to lastindex(a), and the end keyword in indexing expressions now lowers to either lastindex(a) (in the case with only one index) or lastindex(a, d) (in cases where there is more than one index and end appears at dimension d) (#23554, #25763).\nDateTime(), Date(), and Time() have been deprecated, instead use DateTime(1), Date(1) and Time(0) respectively (#23724).\nThe fallback method ^(x, p::Integer) is deprecated. If your type relied on this definition, add a method such as ^(x::MyType, p::Integer) = Base.power_by_squaring(x, p) (#23332).\nDevNull, STDIN, STDOUT, and STDERR have been renamed to devnull, stdin, stdout, and stderr, respectively (#25786).\nwait and fetch on Task now resemble the interface of Future.\nshowcompact(io, x...) has been deprecated in favor of show(IOContext(io, :compact => true), x...) (#26080). Use sprint(show, x..., context=:compact => true) instead of sprint(showcompact, x...).\nisupper, islower, ucfirst and lcfirst have been deprecated in favor of isuppercase, islowercase, uppercasefirst and lowercasefirst, respectively (#26442).\nsignif has been deprecated in favor of the sigdigits keyword argument to round."
+    "text": "The JULIA_HOME environment variable has been renamed to JULIA_BINDIR and Base.JULIA_HOME has been moved to Sys.BINDIR (#20899).\nThe keyword immutable is fully deprecated to struct, and type is fully deprecated to mutable struct (#19157, #20418).\nIndexing into multidimensional arrays with more than one index but fewer indices than there are dimensions is no longer permitted when those trailing dimensions have lengths greater than 1. Instead, reshape the array or add trailing indices so the dimensionality and number of indices match (#14770, #23628).\nThe use of a positional dimension argument has largely been deprecated in favor of a dims keyword argument. This includes the functions sum, prod, maximum, minimum, all, any, findmax, findmin, mean, varm, std, var, cov, cor, median, mapreducedim, reducedim, sort, accumulate, accumulate!, cumsum, cumsum!, cumprod, cumprod!, flipdim, and squeeze (#25501).\nindices(a) and indices(a,d) have been deprecated in favor of axes(a) and axes(a, d) (#25057).\nEnvHash has been renamed to EnvDict (#24167).\nUninitialized Array constructors of the form Array[{T,N}](shape...) have been deprecated in favor of equivalents accepting undef (an alias for UndefInitializer()) as their first argument, as in Array[{T,N}](undef, shape...). For example, Vector(3) is now Vector(undef, 3), Matrix{Int}((2, 4)) is now, Matrix{Int}(undef, (2, 4)), and Array{Float32,3}(11, 13, 17) is now Array{Float32,3}(undef, 11, 13, 17) (#24781).\nPreviously setindex!(A, x, I...) (and the syntax A[I...] = x) supported two different modes of operation when supplied with a set of non-scalar indices I (e.g., at least one index is an AbstractArray) depending upon the value of x on the right hand side. If x is an AbstractArray, its contents are copied elementwise into the locations in A selected by I and it must have the same number of elements as I selects locations. Otherwise, if x is not an AbstractArray, then its value is implicitly broadcast to all locations to all locations in A selected by I. This latter behavior—implicitly broadcasting \"scalar\"-like values across many locations—is now deprecated in favor of explicitly using the broadcasted assignment syntax A[I...] .= x or fill!(view(A, I...), x) (#26347).\nLinAlg.fillslots! has been renamed LinAlg.fillstored! (#25030).\nfill!(A::Diagonal, x) and fill!(A::AbstractTriangular, x) have been deprecated in favor of Base.LinAlg.fillstored!(A, x) (#24413).\neye has been deprecated in favor of I and Matrix constructors. Please see the deprecation warnings for replacement details (#24438).\nzeros(D::Diagonal[, opts...]) has been deprecated (#24654).\nUsing Bool values directly as indices is now deprecated and will be an error in the future. Convert them to Int before indexing if you intend to access index 1 for true and 0 for false.\nslicedim(A, d, i) has been deprecated in favor of copy(selectdim(A, d, i)). The new selectdim function now always returns a view into A; in many cases the copy is not necessary. Previously, slicedim on a vector V over dimension d=1 and scalar index i would return the just selected element (unless V was a BitVector). This has now been made consistent: selectdim now always returns a view into the original array, with a zero-dimensional view in this specific case (#26009).\nwhos has been renamed varinfo, and now returns a markdown table instead of printing output (#12131).\nUninitialized RowVector constructors of the form RowVector{T}(shape...) have been deprecated in favor of equivalents accepting undef (an alias for UndefInitializer()) as their first argument, as in RowVector{T}(undef, shape...). For example, RowVector{Int}(3) is now RowVector{Int}(undef, 3), and RowVector{Float32}((1, 4)) is now RowVector{Float32}(undef, (1, 4)) (#24786).\nwritecsv(io, a; opts...) has been deprecated in favor of writedlm(io, a, \',\'; opts...) (#23529).\nThe method srand(rng, filename, n=4) has been deprecated (#21359).\nreadcsv(io[, T::Type]; opts...) has been deprecated in favor of readdlm(io, \',\'[, T]; opts...) (#23530).\nsparse(s::UniformScaling, m::Integer) has been deprecated in favor of the three-argument equivalent sparse(s::UniformScaling, m, n) (#24472).\nThe cholfact/cholfact! methods that accepted an uplo symbol have been deprecated in favor of using Hermitian (or Symmetric) views (#22187, #22188).\nThe thin keyword argument for orthogonal decomposition methods has been deprecated in favor of full, which has the opposite meaning: thin == true if and only if full == false (#24279).\nisposdef(A::AbstractMatrix, UL::Symbol) and isposdef!(A::AbstractMatrix, UL::Symbol) have been deprecated in favor of isposdef(Hermitian(A, UL)) and isposdef!(Hermitian(A, UL)) respectively (#22245).\nThe bkfact/bkfact! methods that accepted uplo and issymmetric symbols have been deprecated in favor of using Hermitian (or Symmetric) views (#22605).\nThe function current_module is deprecated and replaced with @__MODULE__. This caused the deprecation of some reflection methods (such as macroexpand and isconst), which now require a module argument. And it caused the bugfix of other default arguments to use the Main module (including whos, which)  (#22064).\nexpand(ex) and expand(module, ex) have been deprecated in favor of Meta.lower(module, ex) (#22064, #24278).\nones(A::AbstractArray[, opts...]) and zeros(A::AbstractArray[, opts...]) methods have been deprecated. For zeros(A), consider zero(A). For ones(A) or zeros(A), consider ones(size(A)), zeros(size(A)), fill(v, size(A)) for v an appropriate one or zero, fill!(copy(A), {1|0}), fill!(similar(A), {1|0}), or any of the preceding with different element type and/or shape depending on opts.... Where strictly necessary, consider fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))}). For an algebraic multiplicative identity, consider one(A) (#24656).\nThe similar(dims->f(..., dims...), [T], axes...) method to add offset array support to a function f that would otherwise create a non-offset array has been deprecated. Instead, call f(..., axes...) directly and, if needed, the offset array implementation should add offset axis support to the function f directly (#26733).\nThe functions ones and zeros used to accept any objects as dimensional arguments, implicitly converting them to Ints.  This is now deprecated; only Integers or AbstractUnitRanges are accepted as arguments.  Instead, convert the arguments before calling ones or zeros (#26733).\nThe variadic size(A, dim1, dim2, dims...) method to return a tuple of multiple dimension lengths of A has been deprecated (#26862).\nThe Operators module is deprecated. Instead, import required operators explicitly from Base, e.g. import Base: +, -, *, / (#22251).\nBindings to the FFTW library have been removed from Base. The DFT framework for building FFT implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl, and the Base signal processing functions which used FFTs are now in DSP.jl (#21956).\nThe corrected positional argument to cov has been deprecated in favor of a keyword argument with the same name (#21709).\nOmitting spaces around the ? and the : tokens in a ternary expression has been deprecated. Ternaries must now include some amount of whitespace, e.g. x ? a : b rather than x?a:b (#22523 and #22712).\n? can no longer be used as an identifier name (#22712)\nThe method replace(s::AbstractString, pat, r, [count]) is deprecated in favor of replace(s::AbstractString, pat => r; [count]) (#25165). Moreover, count cannot be negative anymore (use typemax(Int) instead (#22325).\nread(io, type, dims) is deprecated to read!(io, Array{type}(undef, dims)) (#21450).\nread(::IO, ::Ref) is now a method of read!, since it mutates its Ref argument (#21592).\nnb_available is now bytesavailable (#25634).\nskipchars(io::IO, predicate; linecomment=nothing) is deprecated in favor of skipchars(predicate, io::IO; linecomment=nothing) (#25667).\nBidiagonal constructors now use a Symbol (:U or :L) for the upper/lower argument, instead of a Bool or a Char (#22703).\nBidiagonal, Tridiagonal and SymTridiagonal constructors that automatically converted the input vectors to the same type are deprecated in favor of explicit conversion (#22925, #23035, #23154.\nCalling nfields on a type to find out how many fields its instances have is deprecated. Use fieldcount instead. Use nfields only to get the number of fields in a specific object (#22350).\nfieldnames now operates only on types. To get the names of fields in an object, use fieldnames(typeof(x)) (#22350).\nInexactError, DomainError, and OverflowError now take arguments. InexactError(func::Symbol, type, -3) now prints as \"ERROR: InexactError: func(type, -3)\", DomainError(val, [msg]) prints as \"ERROR: DomainError with val:\\nmsg\", and OverflowError(msg) prints as \"ERROR: OverflowError: msg\". (#20005, #22751, #22761)\nThe operating system identification functions: is_linux, is_bsd, is_apple, is_unix, and is_windows, have been deprecated in favor of Sys.islinux, Sys.isbsd, Sys.isapple, Sys.isunix, and Sys.iswindows, respectively (#22182).\nThe forms of read, readstring, and eachline that accepted both a Cmd object and an input stream are deprecated. Use e.g. read(pipeline(stdin, cmd)) instead (#22762).\nThe unexported type AbstractIOBuffer has been renamed to GenericIOBuffer (#17360 #22796).\nIOBuffer(data::AbstractVector{UInt8}, read::Bool, write::Bool, maxsize::Integer), IOBuffer(read::Bool, write::Bool), and IOBuffer(maxsize::Integer) are deprecated in favor of constructors taking keyword arguments (#25872).\nDisplay has been renamed to AbstractDisplay (#24831).\nRemaining vectorized methods over SparseVectors, particularly floor, ceil, trunc, round, and most common transcendental functions such as exp, log, and sin variants, have been deprecated in favor of dot-syntax (#22961).\nThe method String(io::IOBuffer) is deprecated to String(take!(copy(io))) (#21438).\nThe function readstring is deprecated in favor of read(io, String) (#22793)\nThe function showall is deprecated. Showing entire values is the default, unless an IOContext specifying :limit=>true is in use (#22847).\nissubtype has been deprecated in favor of <: (which used to be an alias for issubtype).\nCalling write on non-isbits arrays is deprecated in favor of explicit loops or serialize (#6466).\nThe default startup.jl file on Windows has been removed. Now must explicitly include the full path if you need access to executables or libraries in the Sys.BINDIR directory, e.g. joinpath(Sys.BINDIR, \"7z.exe\") for 7z.exe (#21540).\nsqrtm has been deprecated in favor of sqrt (#23504).\nexpm has been deprecated in favor of exp (#23233).\nlogm has been deprecated in favor of log (#23505).\nfull has been deprecated in favor of more specific, better defined alternatives. On structured matrices A, consider instead Matrix(A), Array(A), SparseMatrixCSC(A), or sparse(A). On sparse arrays S, consider instead Vector(S), Matrix(S), or Array(S) as appropriate. On factorizations F, consider instead Matrix(F), Array(F), AbstractMatrix(F), or AbstractArray(F). On implicit orthogonal factors Q, consider instead Matrix(Q) or Array(Q); for implicit orthogonal factors that can be recovered in square or truncated form, see the deprecation message for square recovery instructions. On Symmetric, Hermitian, or AbstractTriangular matrices A, consider instead Matrix(S), Array(S), SparseMatrixCSC(S), or sparse(S). On Symmetric matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo). On Hermitian matrices A particularly, consider instead LinAlg.copytri!(copy(parent(A)), A.uplo, true). On UpperTriangular matrices A particularly, consider instead triu!(copy(parent(A))). On LowerTriangular matrices A particularly, consider instead tril!(copy(parent(A))) (#24250).\nspeye has been deprecated in favor of I, sparse, and SparseMatrixCSC constructor methods (#24356).\nCalling union with no arguments is deprecated; construct an empty set with an appropriate element type using Set{T}() instead (#23144).\nVectorized DateTime, Date, and format methods have been deprecated in favor of dot-syntax (#23207).\nBase.cpad has been removed; use an appropriate combination of rpad and lpad instead (#23187).\nctranspose and ctranspose! have been deprecated in favor of adjoint and adjoint!, respectively (#23235).\nfilter and filter! on dictionaries now pass a single key=>value pair to the argument function, instead of two arguments (#17886).\nrol, rol!, ror, and ror! have been deprecated in favor of specialized methods for circshift/circshift! (#23404).\nBase.SparseArrays.SpDiagIterator has been removed (#23261).\nThe tuple-of-types form of cfunction, cfunction(f, returntype, (types...)), has been deprecated in favor of the tuple-type form cfunction(f, returntype, Tuple{types...}) (#23066).\ndiagm(v::AbstractVector, k::Integer=0) has been deprecated in favor of diagm(k => v) (#24047).\ndiagm(x::Number) has been deprecated in favor of fill(x, 1, 1) (#24047).\ndiagm(A::SparseMatrixCSC) has been deprecated in favor of spdiagm(sparsevec(A)) (#23341).\ndiagm(A::BitMatrix) has been deprecated, use diagm(0 => vec(A)) or BitMatrix(Diagonal(vec(A))) instead (#23373, #24047).\nℯ (written as \\mscre<TAB> or \\euler<TAB>) is now the only (by default) exported name for Euler\'s number, and the type has changed from Irrational{:e} to Irrational{:ℯ} (#23427).\nThe mathematical constants π, pi, ℯ, e, γ, eulergamma, catalan, φ and golden have been moved from Base to a new module; Base.MathConstants. Only π, pi and ℯ are now exported by default from Base (#23427).\neu (previously an alias for ℯ) has been deprecated in favor of ℯ (or MathConstants.e) (#23427).\nGMP.gmp_version(), GMP.GMP_VERSION, GMP.gmp_bits_per_limb(), and GMP.GMP_BITS_PER_LIBM have been renamed to GMP.version(), GMP.VERSION, GMP.bits_per_libm(), and GMP.BITS_PER_LIBM, respectively. Similarly, MPFR.get_version(), has been renamed to MPFR.version() (#23323). Also, LinAlg.LAPACK.laver() has been renamed to LinAlg.LAPACK.version() and now returns a VersionNumber.\nselect, select!, selectperm and selectperm! have been renamed respectively to partialsort, partialsort!, partialsortperm and partialsortperm! (#23051).\nThe Range abstract type has been renamed to AbstractRange (#23570).\nmap on dictionaries previously operated on key=>value pairs. This behavior is deprecated, and in the future map will operate only on values (#5794).\nPreviously, broadcast defaulted to treating its arguments as scalars if they were not arrays. This behavior is deprecated, and in the future broadcast will default to iterating over all its arguments. Wrap arguments you wish to be treated as scalars with Ref() or a 1-tuple. Package developers can choose to allow a non-iterable type T to always behave as a scalar by implementing broadcastable(x::T) = Ref(x) (#26212).\nAutomatically broadcasted + and - for array + scalar, scalar - array, and so-on have been deprecated due to inconsistency with linear algebra. Use .+ and .- for these operations instead (#22880, #22932).\nisleaftype is deprecated in favor of the simpler predicates isconcretetype and isdispatchtuple. Concrete types are those that might equal typeof(x) for some x; isleaftype included some types for which this is not true. Those are now categorized more precisely as \"dispatch tuple types\" and \"!hasfreetypevars\" (not exported). (#17086, #25496)\ncontains(eq, itr, item) is deprecated in favor of any with a predicate (#23716).\nspdiagm(x::AbstractVector) has been deprecated in favor of sparse(Diagonal(x)) alternatively spdiagm(0 => x) (#23757).\nspdiagm(x::AbstractVector, d::Integer) and spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer}) have been deprecated in favor of spdiagm(d => x) and spdiagm(d[1] => x[1], d[2] => x[2], ...) respectively. The new spdiagm implementation now always returns a square matrix (#23757).\nspones(A::AbstractSparseArray) has been deprecated in favor of LinAlg.fillstored!(copy(A), 1) (#25037).\nConstructors for LibGit2.UserPasswordCredentials and LibGit2.SSHCredentials which take a prompt_if_incorrect argument are deprecated. Instead, prompting behavior is controlled using the allow_prompt keyword in the LibGit2.CredentialPayload constructor (#23690).\ngradient is deprecated and will be removed in the next release (#23816).\nThe timing functions tic, toc, and toq are deprecated in favor of @time and @elapsed (#17046).\nMethods of findfirst, findnext, findlast, and findprev that accept a value to search for are deprecated in favor of passing a predicate (#19186, #10593).\nfind functions now operate only on booleans by default. To look for non-zeros, use x->x!=0 or !iszero (#23120).\nThe ability of reinterpret to yield Arrays of different type than the underlying storage has been removed. The reinterpret function is still available, but now returns a ReinterpretArray. The three argument form of reinterpret that implicitly reshapes has been deprecated (#23750).\nbits has been deprecated in favor of bitstring (#24281, #24263).\nnum2hex and hex2num have been deprecated in favor of reinterpret combined with parse/hex (#22088).\ncopy! is deprecated for AbstractSet and AbstractDict, with the intention to re-enable it with a cleaner meaning in a future version (#24844).\ncopy! (resp. unsafe_copy!) is deprecated for AbstractArray and is renamed copyto! (resp. unsafe_copyto!); it will be re-introduced with a different meaning in a future version (#24808).\na:b is deprecated for constructing a StepRange when a and b have physical units (Dates and Times). Use a:s:b, where s = Dates.Day(1) or s = Dates.Second(1).\ntrues(A::AbstractArray) and falses(A::AbstractArray) are deprecated in favor of trues(size(A)) and falses(size(A)) respectively (#24595).\nworkspace is discontinued, check out Revise.jl for an alternative workflow (#25046).\ncumsum, cumprod, accumulate, their mutating versions, and diff all now require a dim argument instead of defaulting to using the first dimension unless there is only one dimension (#24684, #25457).\nThe sum_kbn and cumsum_kbn functions have been moved to the KahanSummation package (#24869).\nisnumber has been renamed to isnumeric (#25021).\nis_assigned_char and normalize_string have been renamed to isassigned and normalize, and moved to the new Unicode standard library module. graphemes has also been moved to that module (#25021).\nThe functions eigs and svds have been moved to the IterativeEigensolvers standard library module (#24714).\nSparse array functionality has moved to the SparseArrays standard library module (#25249).\nLinear algebra functionality, and specifically the LinAlg module has moved to the LinearAlgebra standard library module (#25571).\n@printf and @sprintf have been moved to the Printf standard library (#23929,#25056).\nThe Libdl module has moved to the Libdl standard library module (#25459).\nThe aliases Complex32, Complex64 and Complex128 have been deprecated in favor of ComplexF16, ComplexF32 and ComplexF64 respectively (#24647).\nBase.parentindexes and SharedArrays.localindexes have been renamed to parentindices and localindices, respectively. Similarly, the indexes field in the SubArray type has been renamed to indices without deprecation (#25088).\nAssociative has been deprecated in favor of AbstractDict (#25012).\nVoid has been renamed back to Nothing with an alias Cvoid for use when calling C with a return type of Cvoid or a return or argument type of Ptr{Cvoid} (#25162).\nNullable{T} has been deprecated and moved to the Nullables package (#23642). Use Union{T, Nothing} instead, or Union{Some{T}, Nothing} if nothing is a possible value (i.e. Nothing <: T). isnull(x) can be replaced with x === nothing and unsafe_get/get can be dropped or replaced with coalesce. NullException has been removed.\nunshift! and shift! have been renamed to pushfirst! and popfirst! (#23902)\nipermute! has been deprecated in favor of invpermute! (#25168).\nCartesianRange has been renamed CartesianIndices (#24715).\nsub2ind and ind2sub are deprecated in favor of using CartesianIndices and LinearIndices (#24715).\ngetindex(F::Factorization, s::Symbol) (usually seen as e.g. F[:Q]) is deprecated in favor of dot overloading (getproperty) so factors should now be accessed as e.g. F.Q instead of F[:Q] (#25184).\nsearch and rsearch have been deprecated in favor of findfirst/findnext and findlast/findprev respectively, in combination with curried isequal and in predicates for some methods (#24673).\nsearch(buf::IOBuffer, delim::UInt8) has been deprecated in favor of either occursin(delim, buf) (to test containment) or readuntil(buf, delim) (to read data up to delim) (#26600).\nismatch(regex, str) has been deprecated in favor of contains(str, regex) (#24673).\nmatchall has been deprecated in favor of collect(m.match for m in eachmatch(r, s)) (#26071).\nsimilar(::Associative) has been deprecated in favor of empty(::Associative), and similar(::Associative, ::Pair{K, V}) has been deprecated in favour of empty(::Associative, K, V) (#24390).\nfindin(a, b) has been deprecated in favor of findall(in(b), a) (#24673).\nmodule_name has been deprecated in favor of a new, general nameof function. Similarly, the unexported Base.function_name and Base.datatype_name have been deprecated in favor of nameof methods (#25622).\nThe module Random.dSFMT is renamed Random.DSFMT (#25567).\nRandom.RandomDevice(unlimited::Bool) (on non-Windows systems) is deprecated in favor of Random.RandomDevice(; unlimited=unlimited) (#25668).\nThe generic implementations of strides(::AbstractArray) and stride(::AbstractArray, ::Int)  have been deprecated. Subtypes of AbstractArray that implement the newly introduced strided  array interface should define their own strides method (#25321).\nmodule_parent, Base.datatype_module, and Base.function_module have been deprecated in favor of parentmodule ([#TODO]).\nrand(t::Tuple{Vararg{Int}}) is deprecated in favor of rand(Float64, t) or rand(t...); rand(::Tuple) will have another meaning in the future (#25429, #25278).\nThe assert function (and @assert macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.\nObjectIdDict has been deprecated in favor of IdDict{Any,Any} (#25210).\ngc and gc_enable have been deprecated in favor of GC.gc and GC.enable (#25616).\nBase.@gc_preserve has been deprecated in favor of GC.@preserve (#25616).\nprint_shortest has been discontinued, but is still available in the Base.Grisu submodule (#25745).\nscale! has been deprecated in favor of mul!, lmul!, and rmul! (#25701, #25812).\nThe remove_destination keyword argument to cp, mv, and the unexported cptree has been renamed to force (#25979).\ncontains has been deprecated in favor of a more general occursin function, which takes its arguments in reverse order from contains (#26283).\nRegex objects are no longer callable. Use occursin instead (#26283).\nThe methods of range based on positional arguments have been deprecated in favor of keyword arguments (#25896).\nlinspace has been deprecated in favor of range with stop and length keyword arguments (#25896).\nLinSpace has been renamed to LinRange (#25896).\nlogspace has been deprecated to its definition (#25896).\nendof(a) has been renamed to lastindex(a), and the end keyword in indexing expressions now lowers to either lastindex(a) (in the case with only one index) or lastindex(a, d) (in cases where there is more than one index and end appears at dimension d) (#23554, #25763).\nDateTime(), Date(), and Time() have been deprecated, instead use DateTime(1), Date(1) and Time(0) respectively (#23724).\nThe fallback method ^(x, p::Integer) is deprecated. If your type relied on this definition, add a method such as ^(x::MyType, p::Integer) = Base.power_by_squaring(x, p) (#23332).\nDevNull, STDIN, STDOUT, and STDERR have been renamed to devnull, stdin, stdout, and stderr, respectively (#25786).\nwait and fetch on Task now resemble the interface of Future.\nshowcompact(io, x...) has been deprecated in favor of show(IOContext(io, :compact => true), x...) (#26080). Use sprint(show, x..., context=:compact => true) instead of sprint(showcompact, x...).\nisupper, islower, ucfirst and lcfirst have been deprecated in favor of isuppercase, islowercase, uppercasefirst and lowercasefirst, respectively (#26442).\nsignif has been deprecated in favor of the sigdigits keyword argument to round."
 },
 
 {
@@ -5021,7 +5021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.copy",
     "category": "function",
-    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ncopy(A::Transpose)\ncopy(A::Adjoint)\n\nEagerly evaluate the lazy matrix transpose/adjoint. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2im; -3im 4]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+2im\n 0-3im  4+0im\n\njulia> T = transpose(A)\n2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0-3im\n 0+2im  4+0im\n\njulia> copy(T)\n2×2 Array{Complex{Int64},2}:\n 1+0im  0-3im\n 0+2im  4+0im\n\n\n\n\n\n"
+    "text": "copy(x)\n\nCreate a shallow copy of x: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.\n\n\n\n\n\ncopy(A::Transpose)\ncopy(A::Adjoint)\n\nEagerly evaluate the lazy matrix transpose/adjoint. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see Base.permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2im; -3im 4]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+2im\n 0-3im  4+0im\n\njulia> T = transpose(A)\n2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0-3im\n 0+2im  4+0im\n\njulia> copy(T)\n2×2 Array{Complex{Int64},2}:\n 1+0im  0-3im\n 0+2im  4+0im\n\n\n\n\n\n"
 },
 
 {
@@ -6385,6 +6385,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/base/#Base.moduleroot",
+    "page": "Essentials",
+    "title": "Base.moduleroot",
+    "category": "function",
+    "text": "moduleroot(m::Module) -> Module\n\nFind the root module of a given module. This is the first module in the chain of parent modules of m which is either a registered root module or which is its own parent module.\n\n\n\n\n\n"
+},
+
+{
     "location": "base/base/#Base.@__MODULE__",
     "page": "Essentials",
     "title": "Base.@__MODULE__",
@@ -6453,7 +6461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Reflection",
     "category": "section",
-    "text": "Base.nameof(::Module)\nBase.parentmodule\nBase.@__MODULE__\nBase.fullname\nBase.names\nCore.nfields\nBase.isconst\nBase.nameof(::Function)\nBase.functionloc(::Any, ::Any)\nBase.functionloc(::Method)"
+    "text": "Base.nameof(::Module)\nBase.parentmodule\nBase.moduleroot\nBase.@__MODULE__\nBase.fullname\nBase.names\nCore.nfields\nBase.isconst\nBase.nameof(::Function)\nBase.functionloc(::Any, ::Any)\nBase.functionloc(::Method)"
 },
 
 {
@@ -6941,7 +6949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository\'s history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository\'s history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n\n\n"
 },
 
 {
@@ -6973,7 +6981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository\'s history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository\'s history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\n\n\n"
 },
 
 {
@@ -7293,7 +7301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
 },
 
 {
@@ -7589,7 +7597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -7969,11 +7977,1019 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/math/#Base.isapprox",
+    "page": "Mathematics",
+    "title": "Base.isapprox",
+    "category": "function",
+    "text": "isapprox(x, y; rtol::Real=atol>0 ? 0 : √eps, atol::Real=0, nans::Bool=false, norm::Function)\n\nInexact equality comparison: true if norm(x-y) <= max(atol, rtol*max(norm(x), norm(y))). The default atol is zero and the default rtol depends on the types of x and y. The keyword argument nans determines whether or not NaN values are considered equal (defaults to false).\n\nFor real or complex floating-point values, if an atol > 0 is not specified, rtol defaults to the square root of eps of the type of x or y, whichever is bigger (least precise). This corresponds to requiring equality of about half of the significand digits. Otherwise, e.g. for integer arguments or if an atol > 0 is supplied, rtol defaults to zero.\n\nx and y may also be arrays of numbers, in which case norm defaults to vecnorm but may be changed by passing a norm::Function keyword argument. (For numbers, norm is the same thing as abs.) When x and y are arrays, if norm(x-y) is not finite (i.e. ±Inf or NaN), the comparison falls back to checking whether all elements of x and y are approximately equal component-wise.\n\nThe binary operator ≈ is equivalent to isapprox with the default arguments, and x ≉ y is equivalent to !isapprox(x,y).\n\nNote that x ≈ 0 (i.e., comparing to zero with the default tolerances) is equivalent to x == 0 since the default atol is 0.  In such cases, you should either supply an appropriate atol (or use norm(x) ≤ atol) or rearrange your code (e.g. use x ≈ y rather than x - y ≈ 0).   It is not possible to pick a nonzero atol automatically because it depends on the overall scaling (the \"units\") of your problem: for example, in x - y ≈ 0, atol=1e-9 is an absurdly small tolerance if x is the radius of the Earth in meters, but an absurdly large tolerance if x is the radius of a Hydrogen atom in meters.\n\nExamples\n\njulia> 0.1 ≈ (0.1 - 1e-10)\ntrue\n\njulia> isapprox(10, 11; atol = 2)\ntrue\n\njulia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])\ntrue\n\njulia> 1e-10 ≈ 0\nfalse\n\njulia> isapprox(1e-10, 0, atol=1e-8)\ntrue\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.sin-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.sin",
+    "category": "method",
+    "text": "sin(x)\n\nCompute sine of x, where x is in radians.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.cos-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.cos",
+    "category": "method",
+    "text": "cos(x)\n\nCompute cosine of x, where x is in radians.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.sincos-Tuple{Float64}",
+    "page": "Mathematics",
+    "title": "Base.Math.sincos",
+    "category": "method",
+    "text": "sincos(x)\n\nSimultaneously compute the sine and cosine of x, where the x is in radians.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.tan-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.tan",
+    "category": "method",
+    "text": "tan(x)\n\nCompute tangent of x, where x is in radians.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.sind",
+    "page": "Mathematics",
+    "title": "Base.Math.sind",
+    "category": "function",
+    "text": "sind(x)\n\nCompute sine of x, where x is in degrees. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.cosd",
+    "page": "Mathematics",
+    "title": "Base.Math.cosd",
+    "category": "function",
+    "text": "cosd(x)\n\nCompute cosine of x, where x is in degrees. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.tand",
+    "page": "Mathematics",
+    "title": "Base.Math.tand",
+    "category": "function",
+    "text": "tand(x)\n\nCompute tangent of x, where x is in degrees. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.sinpi",
+    "page": "Mathematics",
+    "title": "Base.Math.sinpi",
+    "category": "function",
+    "text": "sinpi(x)\n\nCompute sin(pi x) more accurately than sin(pi*x), especially for large x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.cospi",
+    "page": "Mathematics",
+    "title": "Base.Math.cospi",
+    "category": "function",
+    "text": "cospi(x)\n\nCompute cos(pi x) more accurately than cos(pi*x), especially for large x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.sinh-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.sinh",
+    "category": "method",
+    "text": "sinh(x)\n\nCompute hyperbolic sine of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.cosh-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.cosh",
+    "category": "method",
+    "text": "cosh(x)\n\nCompute hyperbolic cosine of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.tanh-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.tanh",
+    "category": "method",
+    "text": "tanh(x)\n\nCompute hyperbolic tangent of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.asin-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.asin",
+    "category": "method",
+    "text": "asin(x)\n\nCompute the inverse sine of x, where the output is in radians.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.acos-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.acos",
+    "category": "method",
+    "text": "acos(x)\n\nCompute the inverse cosine of x, where the output is in radians\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.atan-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.atan",
+    "category": "method",
+    "text": "atan(x)\n\nCompute the inverse tangent of x, where the output is in radians.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.atan2",
+    "page": "Mathematics",
+    "title": "Base.Math.atan2",
+    "category": "function",
+    "text": "atan2(y, x)\n\nCompute the inverse tangent of y/x, using the signs of both x and y to determine the quadrant of the return value.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.asind",
+    "page": "Mathematics",
+    "title": "Base.Math.asind",
+    "category": "function",
+    "text": "asind(x)\n\nCompute the inverse sine of x, where the output is in degrees. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.acosd",
+    "page": "Mathematics",
+    "title": "Base.Math.acosd",
+    "category": "function",
+    "text": "acosd(x)\n\nCompute the inverse cosine of x, where the output is in degrees. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.atand",
+    "page": "Mathematics",
+    "title": "Base.Math.atand",
+    "category": "function",
+    "text": "atand(x)\n\nCompute the inverse tangent of x, where the output is in degrees. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.sec-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.sec",
+    "category": "method",
+    "text": "sec(x)\n\nCompute the secant of x, where x is in radians.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.csc-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.csc",
+    "category": "method",
+    "text": "csc(x)\n\nCompute the cosecant of x, where x is in radians.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.cot-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.cot",
+    "category": "method",
+    "text": "cot(x)\n\nCompute the cotangent of x, where x is in radians.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.secd",
+    "page": "Mathematics",
+    "title": "Base.Math.secd",
+    "category": "function",
+    "text": "secd(x)\n\nCompute the secant of x, where x is in degrees.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.cscd",
+    "page": "Mathematics",
+    "title": "Base.Math.cscd",
+    "category": "function",
+    "text": "cscd(x)\n\nCompute the cosecant of x, where x is in degrees.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.cotd",
+    "page": "Mathematics",
+    "title": "Base.Math.cotd",
+    "category": "function",
+    "text": "cotd(x)\n\nCompute the cotangent of x, where x is in degrees.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.asec-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.asec",
+    "category": "method",
+    "text": "asec(x)\n\nCompute the inverse secant of x, where the output is in radians. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.acsc-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.acsc",
+    "category": "method",
+    "text": "acsc(x)\n\nCompute the inverse cosecant of x, where the output is in radians. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.acot-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.acot",
+    "category": "method",
+    "text": "acot(x)\n\nCompute the inverse cotangent of x, where the output is in radians. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.asecd",
+    "page": "Mathematics",
+    "title": "Base.Math.asecd",
+    "category": "function",
+    "text": "asecd(x)\n\nCompute the inverse secant of x, where the output is in degrees. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.acscd",
+    "page": "Mathematics",
+    "title": "Base.Math.acscd",
+    "category": "function",
+    "text": "acscd(x)\n\nCompute the inverse cosecant of x, where the output is in degrees. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.acotd",
+    "page": "Mathematics",
+    "title": "Base.Math.acotd",
+    "category": "function",
+    "text": "acotd(x)\n\nCompute the inverse cotangent of x, where the output is in degrees. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.sech-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.sech",
+    "category": "method",
+    "text": "sech(x)\n\nCompute the hyperbolic secant of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.csch-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.csch",
+    "category": "method",
+    "text": "csch(x)\n\nCompute the hyperbolic cosecant of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.coth-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.coth",
+    "category": "method",
+    "text": "coth(x)\n\nCompute the hyperbolic cotangent of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.asinh-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.asinh",
+    "category": "method",
+    "text": "asinh(x)\n\nCompute the inverse hyperbolic sine of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.acosh-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.acosh",
+    "category": "method",
+    "text": "acosh(x)\n\nCompute the inverse hyperbolic cosine of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.atanh-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.atanh",
+    "category": "method",
+    "text": "atanh(x)\n\nCompute the inverse hyperbolic tangent of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.asech-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.asech",
+    "category": "method",
+    "text": "asech(x)\n\nCompute the inverse hyperbolic secant of x. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.acsch-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.acsch",
+    "category": "method",
+    "text": "acsch(x)\n\nCompute the inverse hyperbolic cosecant of x. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.acoth-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.Math.acoth",
+    "category": "method",
+    "text": "acoth(x)\n\nCompute the inverse hyperbolic cotangent of x. \n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.sinc",
+    "page": "Mathematics",
+    "title": "Base.Math.sinc",
+    "category": "function",
+    "text": "sinc(x)\n\nCompute sin(pi x)  (pi x) if x neq 0, and 1 if x = 0.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.cosc",
+    "page": "Mathematics",
+    "title": "Base.Math.cosc",
+    "category": "function",
+    "text": "cosc(x)\n\nCompute cos(pi x)  x - sin(pi x)  (pi x^2) if x neq 0, and 0 if x = 0. This is the derivative of sinc(x).\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.deg2rad",
+    "page": "Mathematics",
+    "title": "Base.Math.deg2rad",
+    "category": "function",
+    "text": "deg2rad(x)\n\nConvert x from degrees to radians.\n\njulia> deg2rad(90)\n1.5707963267948966\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.rad2deg",
+    "page": "Mathematics",
+    "title": "Base.Math.rad2deg",
+    "category": "function",
+    "text": "rad2deg(x)\n\nConvert x from radians to degrees.\n\njulia> rad2deg(pi)\n180.0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.hypot",
+    "page": "Mathematics",
+    "title": "Base.Math.hypot",
+    "category": "function",
+    "text": "hypot(x, y)\n\nCompute the hypotenuse sqrtx^2+y^2 avoiding overflow and underflow.\n\nExamples\n\njulia> a = 10^10;\n\njulia> hypot(a, a)\n1.4142135623730951e10\n\njulia> √(a^2 + a^2) # a^2 overflows\nERROR: DomainError with -2.914184810805068e18:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).\nStacktrace:\n[...]\n\n\n\n\n\nhypot(x...)\n\nCompute the hypotenuse sqrtsum x_i^2 avoiding overflow and underflow.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.log-Tuple{Number}",
+    "page": "Mathematics",
+    "title": "Base.log",
+    "category": "method",
+    "text": "log(x)\n\nCompute the natural logarithm of x. Throws DomainError for negative Real arguments. Use complex negative arguments to obtain complex results.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.log-Tuple{Number,Number}",
+    "page": "Mathematics",
+    "title": "Base.log",
+    "category": "method",
+    "text": "log(b,x)\n\nCompute the base b logarithm of x. Throws DomainError for negative Real arguments.\n\njulia> log(4,8)\n1.5\n\njulia> log(4,2)\n0.5\n\nnote: Note\nIf b is a power of 2 or 10, log2 or log10 should be used, as these will typically be faster and more accurate. For example,julia> log(100,1000000)\n2.9999999999999996\n\njulia> log10(1000000)/2\n3.0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.log2",
+    "page": "Mathematics",
+    "title": "Base.log2",
+    "category": "function",
+    "text": "log2(x)\n\nCompute the logarithm of x to base 2. Throws DomainError for negative Real arguments.\n\nExamples\n\njulia> log2(4)\n2.0\n\njulia> log2(10)\n3.321928094887362\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.log10",
+    "page": "Mathematics",
+    "title": "Base.log10",
+    "category": "function",
+    "text": "log10(x)\n\nCompute the logarithm of x to base 10. Throws DomainError for negative Real arguments.\n\nExamples\n\njulia> log10(100)\n2.0\n\njulia> log10(2)\n0.3010299956639812\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.log1p",
+    "page": "Mathematics",
+    "title": "Base.log1p",
+    "category": "function",
+    "text": "log1p(x)\n\nAccurate natural logarithm of 1+x. Throws DomainError for Real arguments less than -1.\n\nExamples\n\njulia> log1p(-0.5)\n-0.6931471805599453\n\njulia> log1p(0)\n0.0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.frexp",
+    "page": "Mathematics",
+    "title": "Base.Math.frexp",
+    "category": "function",
+    "text": "frexp(val)\n\nReturn (x,exp) such that x has a magnitude in the interval 12 1) or 0, and val is equal to x times 2^exp.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.exp-Tuple{Float64}",
+    "page": "Mathematics",
+    "title": "Base.exp",
+    "category": "method",
+    "text": "exp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.exp2",
+    "page": "Mathematics",
+    "title": "Base.exp2",
+    "category": "function",
+    "text": "exp2(x)\n\nCompute the base 2 exponential of x, in other words 2^x.\n\nExamples\n\njulia> exp2(5)\n32.0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.exp10",
+    "page": "Mathematics",
+    "title": "Base.exp10",
+    "category": "function",
+    "text": "exp10(x)\n\nCompute the base 10 exponential of x, in other words 10^x.\n\nExamples\n\njulia> exp10(2)\n100.0\n\n\n\n\n\nexp10(x)\n\nCompute 10^x.\n\nExamples\n\njulia> exp10(2)\n100.0\n\njulia> exp10(0.2)\n1.5848931924611136\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.ldexp",
+    "page": "Mathematics",
+    "title": "Base.Math.ldexp",
+    "category": "function",
+    "text": "ldexp(x, n)\n\nCompute x times 2^n.\n\nExamples\n\njulia> ldexp(5., 2)\n20.0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.modf",
+    "page": "Mathematics",
+    "title": "Base.Math.modf",
+    "category": "function",
+    "text": "modf(x)\n\nReturn a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts have the same sign as the argument.\n\nExamples\n\njulia> modf(3.5)\n(0.5, 3.0)\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.expm1",
+    "page": "Mathematics",
+    "title": "Base.expm1",
+    "category": "function",
+    "text": "expm1(x)\n\nAccurately compute e^x-1.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.round-Tuple{Type,Any}",
+    "page": "Mathematics",
+    "title": "Base.round",
+    "category": "method",
+    "text": "round([T,] x, [r::RoundingMode])\nround(x, [r::RoundingMode]; digits::Integer=0, base = 10)\nround(x, [r::RoundingMode]; sigdigits::Integer, base = 10)\n\nRounds the number x.\n\nWithout keyword arguments, x is rounded to an integer value, returning a value of type T, or of the same type of x if no T is provided. An InexactError will be thrown if the value is not representable by T, similar to convert.\n\nIf the digits keyword argument is provided, it rounds to the specified number of digits after the decimal place (or before if negative), in base base.\n\nIf the sigdigits keyword argument is provided, it rounds to the specified number of significant digits, in base base.\n\nThe RoundingMode r controls the direction of the rounding; the default is RoundNearest, which rounds to the nearest integer, with ties (fractional values of 0.5) being rounded to the nearest even integer. Note that round may give incorrect results if the global rounding mode is changed (see rounding).\n\nExamples\n\njulia> round(1.7)\n2.0\n\njulia> round(Int, 1.7)\n2\n\njulia> round(1.5)\n2.0\n\njulia> round(2.5)\n2.0\n\njulia> round(pi; digits=2)\n3.14\n\njulia> round(pi; digits=3, base=2)\n3.125\n\njulia> round(123.456; sigdigits=2)\n120.0\n\njulia> round(357.913; sigdigits=4, base=2)\n352.0\n\nnote: Note\nRounding to specified digits in bases other than 2 can be inexact when operating on binary floating point numbers. For example, the Float64 value represented by 1.15 is actually less than 1.15, yet will be rounded to 1.2.Examplesjulia> x = 1.15\n1.15\n\njulia> @sprintf \"%.20f\" x\n\"1.14999999999999991118\"\n\njulia> x < 115//100\ntrue\n\njulia> round(x, 1)\n1.2\n\nExtensions\n\nTo extend round to new numeric types, it is typically sufficient to define Base.round(x::NewType, r::RoundingMode).\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Rounding.RoundingMode",
+    "page": "Mathematics",
+    "title": "Base.Rounding.RoundingMode",
+    "category": "type",
+    "text": "RoundingMode\n\nA type used for controlling the rounding mode of floating point operations (via rounding/setrounding functions), or as optional arguments for rounding to the nearest integer (via the round function).\n\nCurrently supported rounding modes are:\n\nRoundNearest (default)\nRoundNearestTiesAway\nRoundNearestTiesUp\nRoundToZero\nRoundFromZero (BigFloat only)\nRoundUp\nRoundDown\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Rounding.RoundNearest",
+    "page": "Mathematics",
+    "title": "Base.Rounding.RoundNearest",
+    "category": "constant",
+    "text": "RoundNearest\n\nThe default rounding mode. Rounds to the nearest integer, with ties (fractional values of 0.5) being rounded to the nearest even integer.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Rounding.RoundNearestTiesAway",
+    "page": "Mathematics",
+    "title": "Base.Rounding.RoundNearestTiesAway",
+    "category": "constant",
+    "text": "RoundNearestTiesAway\n\nRounds to nearest integer, with ties rounded away from zero (C/C++ round behaviour).\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Rounding.RoundNearestTiesUp",
+    "page": "Mathematics",
+    "title": "Base.Rounding.RoundNearestTiesUp",
+    "category": "constant",
+    "text": "RoundNearestTiesUp\n\nRounds to nearest integer, with ties rounded toward positive infinity (Java/JavaScript round behaviour).\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Rounding.RoundToZero",
+    "page": "Mathematics",
+    "title": "Base.Rounding.RoundToZero",
+    "category": "constant",
+    "text": "RoundToZero\n\nround using this rounding mode is an alias for trunc.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Rounding.RoundUp",
+    "page": "Mathematics",
+    "title": "Base.Rounding.RoundUp",
+    "category": "constant",
+    "text": "RoundUp\n\nround using this rounding mode is an alias for ceil.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Rounding.RoundDown",
+    "page": "Mathematics",
+    "title": "Base.Rounding.RoundDown",
+    "category": "constant",
+    "text": "RoundDown\n\nround using this rounding mode is an alias for floor.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.round-Tuple{Complex{#s43} where #s43<:AbstractFloat,RoundingMode,RoundingMode}",
+    "page": "Mathematics",
+    "title": "Base.round",
+    "category": "method",
+    "text": "round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]])\nround(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; digits=, base=10)\nround(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; sigdigits=, base=10)\n\nReturn the nearest integral value of the same type as the complex-valued z to z, breaking ties using the specified RoundingModes. The first RoundingMode is used for rounding the real components while the second is used for rounding the imaginary components.\n\nExample\n\njulia> round(3.14 + 4.5im)\n3.0 + 4.0im\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.ceil",
+    "page": "Mathematics",
+    "title": "Base.ceil",
+    "category": "function",
+    "text": "ceil([T,] x)\nceil(x; digits::Integer= [, base = 10])\nceil(x; sigdigits::Integer= [, base = 10])\n\nceil(x) returns the nearest integral value of the same type as x that is greater than or equal to x.\n\nceil(T, x) converts the result to type T, throwing an InexactError if the value is not representable.\n\ndigits, sigdigits and base work as for round.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.floor",
+    "page": "Mathematics",
+    "title": "Base.floor",
+    "category": "function",
+    "text": "floor([T,] x)\nfloor(x; digits::Integer= [, base = 10])\nfloor(x; sigdigits::Integer= [, base = 10])\n\nfloor(x) returns the nearest integral value of the same type as x that is less than or equal to x.\n\nfloor(T, x) converts the result to type T, throwing an InexactError if the value is not representable.\n\ndigits, sigdigits and base work as for round.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.trunc",
+    "page": "Mathematics",
+    "title": "Base.trunc",
+    "category": "function",
+    "text": "trunc([T,] x)\ntrunc(x; digits::Integer= [, base = 10])\ntrunc(x; sigdigits::Integer= [, base = 10])\n\ntrunc(x) returns the nearest integral value of the same type as x whose absolute value is less than or equal to x.\n\ntrunc(T, x) converts the result to type T, throwing an InexactError if the value is not representable.\n\ndigits, sigdigits and base work as for round.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.unsafe_trunc",
+    "page": "Mathematics",
+    "title": "Base.unsafe_trunc",
+    "category": "function",
+    "text": "unsafe_trunc(T, x)\n\nReturn the nearest integral value of type T whose absolute value is less than or equal to x. If the value is not representable by T, an arbitrary value will be returned.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.min",
+    "page": "Mathematics",
+    "title": "Base.min",
+    "category": "function",
+    "text": "min(x, y, ...)\n\nReturn the minimum of the arguments. See also the minimum function to take the minimum element from a collection.\n\nExamples\n\njulia> min(2, 5, 1)\n1\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.max",
+    "page": "Mathematics",
+    "title": "Base.max",
+    "category": "function",
+    "text": "max(x, y, ...)\n\nReturn the maximum of the arguments. See also the maximum function to take the maximum element from a collection.\n\nExamples\n\njulia> max(2, 5, 1)\n5\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.minmax",
+    "page": "Mathematics",
+    "title": "Base.minmax",
+    "category": "function",
+    "text": "minmax(x, y)\n\nReturn (min(x,y), max(x,y)). See also: extrema that returns (minimum(x), maximum(x)).\n\nExamples\n\njulia> minmax(\'c\',\'b\')\n(\'b\', \'c\')\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.clamp",
+    "page": "Mathematics",
+    "title": "Base.Math.clamp",
+    "category": "function",
+    "text": "clamp(x, lo, hi)\n\nReturn x if lo <= x <= hi. If x > hi, return hi. If x < lo, return lo. Arguments are promoted to a common type.\n\njulia> clamp.([pi, 1.0, big(10.)], 2., 9.)\n3-element Array{BigFloat,1}:\n 3.141592653589793238462643383279502884197169399375105820974944592307816406286198\n 2.0\n 9.0\n\njulia> clamp.([11,8,5],10,6) # an example where lo > hi\n3-element Array{Int64,1}:\n  6\n  6\n 10\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.clamp!",
+    "page": "Mathematics",
+    "title": "Base.Math.clamp!",
+    "category": "function",
+    "text": "clamp!(array::AbstractArray, lo, hi)\n\nRestrict values in array to the specified range, in-place. See also clamp.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.abs",
+    "page": "Mathematics",
+    "title": "Base.abs",
+    "category": "function",
+    "text": "abs(x)\n\nThe absolute value of x.\n\nWhen abs is applied to signed integers, overflow may occur, resulting in the return of a negative value. This overflow occurs only when abs is applied to the minimum representable value of a signed integer. That is, when x == typemin(typeof(x)), abs(x) == x < 0, not -x as might be expected.\n\njulia> abs(-3)\n3\n\njulia> abs(1 + im)\n1.4142135623730951\n\njulia> abs(typemin(Int64))\n-9223372036854775808\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_abs",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_abs",
+    "category": "function",
+    "text": "Base.checked_abs(x)\n\nCalculates abs(x), checking for overflow errors where applicable. For example, standard two\'s complement signed integers (e.g. Int) cannot represent abs(typemin(Int)), thus leading to an overflow.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_neg",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_neg",
+    "category": "function",
+    "text": "Base.checked_neg(x)\n\nCalculates -x, checking for overflow errors where applicable. For example, standard two\'s complement signed integers (e.g. Int) cannot represent -typemin(Int), thus leading to an overflow.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_add",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_add",
+    "category": "function",
+    "text": "Base.checked_add(x, y)\n\nCalculates x+y, checking for overflow errors where applicable.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_sub",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_sub",
+    "category": "function",
+    "text": "Base.checked_sub(x, y)\n\nCalculates x-y, checking for overflow errors where applicable.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_mul",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_mul",
+    "category": "function",
+    "text": "Base.checked_mul(x, y)\n\nCalculates x*y, checking for overflow errors where applicable.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_div",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_div",
+    "category": "function",
+    "text": "Base.checked_div(x, y)\n\nCalculates div(x,y), checking for overflow errors where applicable.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_rem",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_rem",
+    "category": "function",
+    "text": "Base.checked_rem(x, y)\n\nCalculates x%y, checking for overflow errors where applicable.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_fld",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_fld",
+    "category": "function",
+    "text": "Base.checked_fld(x, y)\n\nCalculates fld(x,y), checking for overflow errors where applicable.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_mod",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_mod",
+    "category": "function",
+    "text": "Base.checked_mod(x, y)\n\nCalculates mod(x,y), checking for overflow errors where applicable.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.checked_cld",
+    "page": "Mathematics",
+    "title": "Base.Checked.checked_cld",
+    "category": "function",
+    "text": "Base.checked_cld(x, y)\n\nCalculates cld(x,y), checking for overflow errors where applicable.\n\nThe overflow protection may impose a perceptible performance penalty.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.add_with_overflow",
+    "page": "Mathematics",
+    "title": "Base.Checked.add_with_overflow",
+    "category": "function",
+    "text": "Base.add_with_overflow(x, y) -> (r, f)\n\nCalculates r = x+y, with the flag f indicating whether overflow has occurred.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.sub_with_overflow",
+    "page": "Mathematics",
+    "title": "Base.Checked.sub_with_overflow",
+    "category": "function",
+    "text": "Base.sub_with_overflow(x, y) -> (r, f)\n\nCalculates r = x-y, with the flag f indicating whether overflow has occurred.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Checked.mul_with_overflow",
+    "page": "Mathematics",
+    "title": "Base.Checked.mul_with_overflow",
+    "category": "function",
+    "text": "Base.mul_with_overflow(x, y) -> (r, f)\n\nCalculates r = x*y, with the flag f indicating whether overflow has occurred.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.abs2",
+    "page": "Mathematics",
+    "title": "Base.abs2",
+    "category": "function",
+    "text": "abs2(x)\n\nSquared absolute value of x.\n\njulia> abs2(-3)\n9\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.copysign",
+    "page": "Mathematics",
+    "title": "Base.copysign",
+    "category": "function",
+    "text": "copysign(x, y) -> z\n\nReturn z which has the magnitude of x and the same sign as y.\n\nExamples\n\njulia> copysign(1, -2)\n-1\n\njulia> copysign(-1, 2)\n1\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.sign",
+    "page": "Mathematics",
+    "title": "Base.sign",
+    "category": "function",
+    "text": "sign(x)\n\nReturn zero if x==0 and xx otherwise (i.e., ±1 for real x).\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.signbit",
+    "page": "Mathematics",
+    "title": "Base.signbit",
+    "category": "function",
+    "text": "signbit(x)\n\nReturns true if the value of the sign of x is negative, otherwise false.\n\nExamples\n\njulia> signbit(-4)\ntrue\n\njulia> signbit(5)\nfalse\n\njulia> signbit(5.5)\nfalse\n\njulia> signbit(-4.1)\ntrue\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.flipsign",
+    "page": "Mathematics",
+    "title": "Base.flipsign",
+    "category": "function",
+    "text": "flipsign(x, y)\n\nReturn x with its sign flipped if y is negative. For example abs(x) = flipsign(x,x).\n\njulia> flipsign(5, 3)\n5\n\njulia> flipsign(5, -3)\n-5\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.sqrt-Tuple{Real}",
+    "page": "Mathematics",
+    "title": "Base.sqrt",
+    "category": "method",
+    "text": "sqrt(x)\n\nReturn sqrtx. Throws DomainError for negative Real arguments. Use complex negative arguments instead. The prefix operator √ is equivalent to sqrt.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.isqrt",
+    "page": "Mathematics",
+    "title": "Base.isqrt",
+    "category": "function",
+    "text": "isqrt(n::Integer)\n\nInteger square root: the largest integer m such that m*m <= n.\n\njulia> isqrt(5)\n2\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.cbrt",
+    "page": "Mathematics",
+    "title": "Base.Math.cbrt",
+    "category": "function",
+    "text": "cbrt(x::Real)\n\nReturn the cube root of x, i.e. x^13. Negative values are accepted (returning the negative real root when x  0).\n\nThe prefix operator ∛ is equivalent to cbrt.\n\njulia> cbrt(big(27))\n3.0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.real-Tuple{Complex}",
+    "page": "Mathematics",
+    "title": "Base.real",
+    "category": "method",
+    "text": "real(z)\n\nReturn the real part of the complex number z.\n\nExamples\n\njulia> real(1 + 3im)\n1\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.imag",
+    "page": "Mathematics",
+    "title": "Base.imag",
+    "category": "function",
+    "text": "imag(z)\n\nReturn the imaginary part of the complex number z.\n\nExamples\n\njulia> imag(1 + 3im)\n3\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.reim",
+    "page": "Mathematics",
+    "title": "Base.reim",
+    "category": "function",
+    "text": "reim(z)\n\nReturn both the real and imaginary parts of the complex number z.\n\nExamples\n\njulia> reim(1 + 3im)\n(1, 3)\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.conj",
+    "page": "Mathematics",
+    "title": "Base.conj",
+    "category": "function",
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.angle",
+    "page": "Mathematics",
+    "title": "Base.angle",
+    "category": "function",
+    "text": "angle(z)\n\nCompute the phase angle in radians of a complex number z.\n\nExamples\n\njulia> rad2deg(angle(1 + im))\n45.0\n\njulia> rad2deg(angle(1 - im))\n-45.0\n\njulia> rad2deg(angle(-1 - im))\n-135.0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.cis",
+    "page": "Mathematics",
+    "title": "Base.cis",
+    "category": "function",
+    "text": "cis(z)\n\nReturn exp(iz).\n\nExamples\n\njulia> cis(π) ≈ -1\ntrue\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.binomial",
+    "page": "Mathematics",
+    "title": "Base.binomial",
+    "category": "function",
+    "text": "binomial(n, k)\n\nNumber of ways to choose k out of n items.\n\nExamples\n\njulia> binomial(5, 3)\n10\n\njulia> factorial(5) ÷ (factorial(5-3) * factorial(3))\n10\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.factorial",
+    "page": "Mathematics",
+    "title": "Base.factorial",
+    "category": "function",
+    "text": "factorial(n)\n\nFactorial of n. If n is an Integer, the factorial is computed as an integer (promoted to at least 64 bits). Note that this may overflow if n is not small, but you can use factorial(big(n)) to compute the result exactly in arbitrary precision. If n is not an Integer, factorial(n) is equivalent to gamma(n+1).\n\njulia> factorial(6)\n720\n\njulia> factorial(21)\nERROR: OverflowError: 21 is too large to look up in the table\nStacktrace:\n[...]\n\njulia> factorial(21.0)\n5.109094217170944e19\n\njulia> factorial(big(21))\n51090942171709440000\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.gcd",
+    "page": "Mathematics",
+    "title": "Base.gcd",
+    "category": "function",
+    "text": "gcd(x,y)\n\nGreatest common (positive) divisor (or zero if x and y are both zero).\n\nExamples\n\njulia> gcd(6,9)\n3\n\njulia> gcd(6,-9)\n3\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.lcm",
+    "page": "Mathematics",
+    "title": "Base.lcm",
+    "category": "function",
+    "text": "lcm(x,y)\n\nLeast common (non-negative) multiple.\n\nExamples\n\njulia> lcm(2,3)\n6\n\njulia> lcm(-2,3)\n6\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.gcdx",
+    "page": "Mathematics",
+    "title": "Base.gcdx",
+    "category": "function",
+    "text": "gcdx(x,y)\n\nComputes the greatest common (positive) divisor of x and y and their Bézout coefficients, i.e. the integer coefficients u and v that satisfy ux+vy = d = gcd(xy). gcdx(xy) returns (duv).\n\nExamples\n\njulia> gcdx(12, 42)\n(6, -3, 1)\n\njulia> gcdx(240, 46)\n(2, -9, 47)\n\nnote: Note\nBézout coefficients are not uniquely defined. gcdx returns the minimal Bézout coefficients that are computed by the extended Euclidean algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) For signed integers, these coefficients u and v are minimal in the sense that u  yd and v  xd. Furthermore, the signs of u and v are chosen so that d is positive. For unsigned integers, the coefficients u and v might be near their typemax, and the identity then holds only via the unsigned integers\' modulo arithmetic.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.ispow2",
+    "page": "Mathematics",
+    "title": "Base.ispow2",
+    "category": "function",
+    "text": "ispow2(n::Integer) -> Bool\n\nTest whether n is a power of two.\n\nExamples\n\njulia> ispow2(4)\ntrue\n\njulia> ispow2(5)\nfalse\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.nextpow2",
+    "page": "Mathematics",
+    "title": "Base.nextpow2",
+    "category": "function",
+    "text": "nextpow2(n::Integer)\n\nThe smallest power of two not less than n. Returns 0 for n==0, and returns -nextpow2(-n) for negative arguments.\n\nExamples\n\njulia> nextpow2(16)\n16\n\njulia> nextpow2(17)\n32\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.prevpow2",
+    "page": "Mathematics",
+    "title": "Base.prevpow2",
+    "category": "function",
+    "text": "prevpow2(n::Integer)\n\nThe largest power of two not greater than n. Returns 0 for n==0, and returns -prevpow2(-n) for negative arguments.\n\nExamples\n\njulia> prevpow2(5)\n4\n\njulia> prevpow2(0)\n0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.nextpow",
+    "page": "Mathematics",
+    "title": "Base.nextpow",
+    "category": "function",
+    "text": "nextpow(a, x)\n\nThe smallest a^n not less than x, where n is a non-negative integer. a must be greater than 1, and x must be greater than 0.\n\nExamples\n\njulia> nextpow(2, 7)\n8\n\njulia> nextpow(2, 9)\n16\n\njulia> nextpow(5, 20)\n25\n\njulia> nextpow(4, 16)\n16\n\nSee also prevpow.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.prevpow",
+    "page": "Mathematics",
+    "title": "Base.prevpow",
+    "category": "function",
+    "text": "prevpow(a, x)\n\nThe largest a^n not greater than x, where n is a non-negative integer. a must be greater than 1, and x must not be less than 1.\n\nExamples\n\njulia> prevpow(2, 7)\n4\n\njulia> prevpow(2, 9)\n8\n\njulia> prevpow(5, 20)\n5\n\njulia> prevpow(4, 16)\n16\n\nSee also nextpow.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.nextprod",
+    "page": "Mathematics",
+    "title": "Base.nextprod",
+    "category": "function",
+    "text": "nextprod([k_1, k_2,...], n)\n\nNext integer greater than or equal to n that can be written as prod k_i^p_i for integers p_1, p_2, etc.\n\nExamples\n\njulia> nextprod([2, 3], 105)\n108\n\njulia> 2^2 * 3^3\n108\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.invmod",
+    "page": "Mathematics",
+    "title": "Base.invmod",
+    "category": "function",
+    "text": "invmod(x,m)\n\nTake the inverse of x modulo m: y such that x y = 1 pmod m, with div(xy) = 0. This is undefined for m = 0, or if gcd(xm) neq 1.\n\nExamples\n\njulia> invmod(2,5)\n3\n\njulia> invmod(2,3)\n2\n\njulia> invmod(5,6)\n5\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.powermod",
+    "page": "Mathematics",
+    "title": "Base.powermod",
+    "category": "function",
+    "text": "powermod(x::Integer, p::Integer, m)\n\nCompute x^p pmod m.\n\nExamples\n\njulia> powermod(2, 6, 5)\n4\n\njulia> mod(2^6, 5)\n4\n\njulia> powermod(5, 2, 20)\n5\n\njulia> powermod(5, 2, 19)\n6\n\njulia> powermod(5, 3, 19)\n11\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.gamma",
+    "page": "Mathematics",
+    "title": "Base.Math.gamma",
+    "category": "function",
+    "text": "gamma(x)\n\nCompute the gamma function of x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.lgamma",
+    "page": "Mathematics",
+    "title": "Base.Math.lgamma",
+    "category": "function",
+    "text": "lgamma(x)\n\nCompute the logarithm of the absolute value of gamma for Real x, while for Complex x compute the principal branch cut of the logarithm of gamma(x) (defined for negative real(x) by analytic continuation from positive real(x)).\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.lfact",
+    "page": "Mathematics",
+    "title": "Base.Math.lfact",
+    "category": "function",
+    "text": "lfact(x)\n\nCompute the logarithmic factorial of a nonnegative integer x. Equivalent to lgamma of x + 1, but lgamma extends this function to non-integer x.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.beta",
+    "page": "Mathematics",
+    "title": "Base.Math.beta",
+    "category": "function",
+    "text": "beta(x, y)\n\nEuler integral of the first kind operatornameB(xy) = Gamma(x)Gamma(y)Gamma(x+y).\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.lbeta",
+    "page": "Mathematics",
+    "title": "Base.Math.lbeta",
+    "category": "function",
+    "text": "lbeta(x, y)\n\nNatural logarithm of the absolute value of the beta function log(operatornameB(xy)).\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.ndigits",
+    "page": "Mathematics",
+    "title": "Base.ndigits",
+    "category": "function",
+    "text": "ndigits(n::Integer, b::Integer=10)\n\nCompute the number of digits in integer n written in base b. The base b must not be in [-1, 0, 1].\n\nExamples\n\njulia> ndigits(12345)\n5\n\njulia> ndigits(1022, 16)\n3\n\njulia> string(1022, base = 16)\n\"3fe\"\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.widemul",
+    "page": "Mathematics",
+    "title": "Base.widemul",
+    "category": "function",
+    "text": "widemul(x, y)\n\nMultiply x and y, giving the result as a larger type.\n\njulia> widemul(Float32(3.), 4.)\n1.2e+01\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.Math.@evalpoly",
+    "page": "Mathematics",
+    "title": "Base.Math.@evalpoly",
+    "category": "macro",
+    "text": "@evalpoly(z, c...)\n\nEvaluate the polynomial sum_k ck z^k-1 for the coefficients c[1], c[2], ...; that is, the coefficients are given in ascending order by power of z.  This macro expands to efficient inline code that uses either Horner\'s method or, for complex z, a more efficient Goertzel-like algorithm.\n\njulia> @evalpoly(3, 1, 0, 1)\n10\n\njulia> @evalpoly(2, 1, 0, 1)\n5\n\njulia> @evalpoly(2, 1, 1, 1)\n7\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/math/#Base.FastMath.@fastmath",
+    "page": "Mathematics",
+    "title": "Base.FastMath.@fastmath",
+    "category": "macro",
+    "text": "@fastmath expr\n\nExecute a transformed version of the expression, which calls functions that may violate strict IEEE semantics. This allows the fastest possible operation, but results are undefined – be careful when doing this, as it may change numerical results.\n\nThis sets the LLVM Fast-Math flags, and corresponds to the -ffast-math option in clang. See the notes on performance annotations for more details.\n\nExamples\n\njulia> @fastmath 1+2\n3\n\njulia> @fastmath(sin(3))\n0.1411200080598672\n\n\n\n\n\n"
+},
+
+{
     "location": "base/math/#Mathematical-Functions-1",
     "page": "Mathematics",
     "title": "Mathematical Functions",
     "category": "section",
-    "text": "Base.isapprox\nBase.sin(::Number)\nBase.cos(::Number)\nBase.sincos(::Float64)\nBase.tan(::Number)\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh(::Number)\nBase.cosh(::Number)\nBase.tanh(::Number)\nBase.asin(::Number)\nBase.acos(::Number)\nBase.atan(::Number)\nBase.Math.atan2\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec(::Number)\nBase.Math.csc(::Number)\nBase.Math.cot(::Number)\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec(::Number)\nBase.Math.acsc(::Number)\nBase.Math.acot(::Number)\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech(::Number)\nBase.Math.csch(::Number)\nBase.Math.coth(::Number)\nBase.asinh(::Number)\nBase.acosh(::Number)\nBase.atanh(::Number)\nBase.Math.asech(::Number)\nBase.Math.acsch(::Number)\nBase.Math.acoth(::Number)\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Number)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp(::Float64)\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round{T <: AbstractFloat, MR, MI}(::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.signif\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt(::Real)\nBase.isqrt\nBase.Math.cbrt\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow2\nBase.prevpow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.Math.gamma\nBase.Math.lgamma\nBase.Math.lfact\nBase.Math.beta\nBase.Math.lbeta\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly\nBase.FastMath.@fastmath"
+    "text": "Base.isapprox\nBase.sin(::Number)\nBase.cos(::Number)\nBase.sincos(::Float64)\nBase.tan(::Number)\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh(::Number)\nBase.cosh(::Number)\nBase.tanh(::Number)\nBase.asin(::Number)\nBase.acos(::Number)\nBase.atan(::Number)\nBase.Math.atan2\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec(::Number)\nBase.Math.csc(::Number)\nBase.Math.cot(::Number)\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec(::Number)\nBase.Math.acsc(::Number)\nBase.Math.acot(::Number)\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech(::Number)\nBase.Math.csch(::Number)\nBase.Math.coth(::Number)\nBase.asinh(::Number)\nBase.acosh(::Number)\nBase.atanh(::Number)\nBase.Math.asech(::Number)\nBase.Math.acsch(::Number)\nBase.Math.acoth(::Number)\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Number)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp(::Float64)\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round(::Complex{<: AbstractFloat}, ::RoundingMode, ::RoundingMode)\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt(::Real)\nBase.isqrt\nBase.Math.cbrt\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow2\nBase.prevpow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.Math.gamma\nBase.Math.lgamma\nBase.Math.lfact\nBase.Math.beta\nBase.Math.lbeta\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly\nBase.FastMath.@fastmath"
 },
 
 {
@@ -9521,11 +10537,235 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/arrays/#Core.AbstractArray",
+    "page": "Arrays",
+    "title": "Core.AbstractArray",
+    "category": "type",
+    "text": "AbstractArray{T,N}\n\nSupertype for N-dimensional arrays (or array-like types) with elements of type T. Array and other types are subtypes of this. See the manual section on the AbstractArray interface.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.AbstractVector",
+    "page": "Arrays",
+    "title": "Base.AbstractVector",
+    "category": "type",
+    "text": "AbstractVector{T}\n\nSupertype for one-dimensional arrays (or array-like types) with elements of type T. Alias for AbstractArray{T,1}.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.AbstractMatrix",
+    "page": "Arrays",
+    "title": "Base.AbstractMatrix",
+    "category": "type",
+    "text": "AbstractMatrix{T}\n\nSupertype for two-dimensional arrays (or array-like types) with elements of type T. Alias for AbstractArray{T,2}.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Core.Array",
+    "page": "Arrays",
+    "title": "Core.Array",
+    "category": "type",
+    "text": "Array{T,N} <: AbstractArray{T,N}\n\nN-dimensional dense array with elements of type T.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Core.Array-Tuple{UndefInitializer,Any}",
+    "page": "Arrays",
+    "title": "Core.Array",
+    "category": "method",
+    "text": "Array{T}(undef, dims)\nArray{T,N}(undef, dims)\n\nConstruct an uninitialized N-dimensional Array containing elements of type T. N can either be supplied explicitly, as in Array{T,N}(undef, dims), or be determined by the length or number of dims. dims may be a tuple or a series of integer arguments corresponding to the lengths in each dimension. If the rank N is supplied explicitly, then it must match the length or number of dims. See undef.\n\nExamples\n\njulia> A = Array{Float64,2}(undef, 2, 3) # N given explicitly\n2×3 Array{Float64,2}:\n 6.90198e-310  6.90198e-310  6.90198e-310\n 6.90198e-310  6.90198e-310  0.0\n\njulia> B = Array{Float64}(undef, 2) # N determined by the input\n2-element Array{Float64,1}:\n 1.87103e-320\n 0.0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Core.Array-Tuple{Nothing,Any}",
+    "page": "Arrays",
+    "title": "Core.Array",
+    "category": "method",
+    "text": "Array{T}(nothing, dims)\nArray{T,N}(nothing, dims)\n\nConstruct an N-dimensional Array containing elements of type T, initialized with nothing entries. Element type T must be able to hold these values, i.e. Nothing <: T.\n\nExamples\n\njulia> Array{Union{Nothing, String}}(nothing, 2)\n2-element Array{Union{Nothing, String},1}:\n nothing\n nothing\n\njulia> Array{Union{Nothing, Int}}(nothing, 2, 3)\n2×3 Array{Union{Nothing, Int64},2}:\n nothing  nothing  nothing\n nothing  nothing  nothing\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Core.Array-Tuple{Missing,Any}",
+    "page": "Arrays",
+    "title": "Core.Array",
+    "category": "method",
+    "text": "Array{T}(missing, dims)\nArray{T,N}(missing, dims)\n\nConstruct an N-dimensional Array containing elements of type T, initialized with missing entries. Element type T must be able to hold these values, i.e. Missing <: T.\n\nExamples\n\njulia> Array{Union{Missing, String}}(missing, 2)\n2-element Array{Union{Missing, String},1}:\n missing\n missing\n\njulia> Array{Union{Missing, Int}}(missing, 2, 3)\n2×3 Array{Union{Missing, Int64},2}:\n missing  missing  missing\n missing  missing  missing\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Core.UndefInitializer",
+    "page": "Arrays",
+    "title": "Core.UndefInitializer",
+    "category": "type",
+    "text": "UndefInitializer\n\nSingleton type used in array initialization, indicating the array-constructor-caller would like an uninitialized array. See also undef, an alias for UndefInitializer().\n\nExamples\n\njulia> Array{Float64,1}(UndefInitializer(), 3)\n3-element Array{Float64,1}:\n 2.2752528595e-314\n 2.202942107e-314\n 2.275252907e-314\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Core.undef",
+    "page": "Arrays",
+    "title": "Core.undef",
+    "category": "constant",
+    "text": "undef\n\nAlias for UndefInitializer(), which constructs an instance of the singleton type UndefInitializer, used in array initialization to indicate the array-constructor-caller would like an uninitialized array.\n\nExamples\n\njulia> Array{Float64,1}(undef, 3)\n3-element Array{Float64,1}:\n 2.2752528595e-314\n 2.202942107e-314\n 2.275252907e-314\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.Vector",
+    "page": "Arrays",
+    "title": "Base.Vector",
+    "category": "type",
+    "text": "Vector{T} <: AbstractVector{T}\n\nOne-dimensional dense array with elements of type T, often used to represent a mathematical vector. Alias for Array{T,1}.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.Vector-Tuple{UndefInitializer,Any}",
+    "page": "Arrays",
+    "title": "Base.Vector",
+    "category": "method",
+    "text": "Vector{T}(undef, n)\n\nConstruct an uninitialized Vector{T} of length n. See undef.\n\nExamples\n\njulia> Vector{Float64}(undef, 3)\n3-element Array{Float64,1}:\n 6.90966e-310\n 6.90966e-310\n 6.90966e-310\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.Vector-Tuple{Nothing,Any}",
+    "page": "Arrays",
+    "title": "Base.Vector",
+    "category": "method",
+    "text": "Vector{T}(nothing, m)\n\nConstruct a Vector{T} of length m, initialized with nothing entries. Element type T must be able to hold these values, i.e. Nothing <: T.\n\nExamples\n\njulia> Vector{Union{Nothing, String}}(nothing, 2)\n2-element Array{Union{Nothing, String},1}:\n nothing\n nothing\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.Vector-Tuple{Missing,Any}",
+    "page": "Arrays",
+    "title": "Base.Vector",
+    "category": "method",
+    "text": "Vector{T}(missing, m)\n\nConstruct a Vector{T} of length m, initialized with missing entries. Element type T must be able to hold these values, i.e. Missing <: T.\n\nExamples\n\njulia> Vector{Union{Missing, String}}(missing, 2)\n2-element Array{Union{Missing, String},1}:\n missing\n missing\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.Matrix",
+    "page": "Arrays",
+    "title": "Base.Matrix",
+    "category": "type",
+    "text": "Matrix{T} <: AbstractMatrix{T}\n\nTwo-dimensional dense array with elements of type T, often used to represent a mathematical matrix. Alias for Array{T,2}.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.Matrix-Tuple{UndefInitializer,Any,Any}",
+    "page": "Arrays",
+    "title": "Base.Matrix",
+    "category": "method",
+    "text": "Matrix{T}(undef, m, n)\n\nConstruct an uninitialized Matrix{T} of size m×n. See undef.\n\nExamples\n\njulia> Matrix{Float64}(undef, 2, 3)\n2×3 Array{Float64,2}:\n 6.93517e-310  6.93517e-310  6.93517e-310\n 6.93517e-310  6.93517e-310  1.29396e-320\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.Matrix-Tuple{Nothing,Any,Any}",
+    "page": "Arrays",
+    "title": "Base.Matrix",
+    "category": "method",
+    "text": "Matrix{T}(nothing, m, n)\n\nConstruct a Matrix{T} of size m×n, initialized with nothing entries. Element type T must be able to hold these values, i.e. Nothing <: T.\n\nExamples\n\njulia> Matrix{Union{Nothing, String}}(nothing, 2, 3)\n2×3 Array{Union{Nothing, String},2}:\n nothing  nothing  nothing\n nothing  nothing  nothing\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.Matrix-Tuple{Missing,Any,Any}",
+    "page": "Arrays",
+    "title": "Base.Matrix",
+    "category": "method",
+    "text": "Matrix{T}(missing, m, n)\n\nConstruct a Matrix{T} of size m×n, initialized with missing entries. Element type T must be able to hold these values, i.e. Missing <: T.\n\nExamples\n\njulia> Matrix{Union{Missing, String}}(missing, 2, 3)\n2×3 Array{Union{Missing, String},2}:\n missing  missing  missing\n missing  missing  missing\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.getindex-Tuple{Type,Vararg{Any,N} where N}",
+    "page": "Arrays",
+    "title": "Base.getindex",
+    "category": "method",
+    "text": "getindex(type[, elements...])\n\nConstruct a 1-d array of the specified type. This is usually called with the syntax Type[]. Element values can be specified using Type[a,b,c,...].\n\nExamples\n\njulia> Int8[1, 2, 3]\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\njulia> getindex(Int8, 1, 2, 3)\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.zeros",
+    "page": "Arrays",
+    "title": "Base.zeros",
+    "category": "function",
+    "text": "zeros([T=Float64,] dims...)\n\nCreate an Array, with element type T, of all zeros with size specified by dims. See also fill, ones.\n\nExamples\n\njulia> zeros(1)\n1-element Array{Float64,1}:\n 0.0\n\njulia> zeros(Int8, 2, 3)\n2×3 Array{Int8,2}:\n 0  0  0\n 0  0  0\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.ones",
+    "page": "Arrays",
+    "title": "Base.ones",
+    "category": "function",
+    "text": "ones([T=Float64,] dims...)\n\nCreate an Array, with element type T, of all ones with size specified by dims. See also: fill, zeros.\n\nExamples\n\njulia> ones(1,2)\n1×2 Array{Float64,2}:\n 1.0  1.0\n\njulia> ones(ComplexF64, 2, 3)\n2×3 Array{Complex{Float64},2}:\n 1.0+0.0im  1.0+0.0im  1.0+0.0im\n 1.0+0.0im  1.0+0.0im  1.0+0.0im\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.BitArray",
+    "page": "Arrays",
+    "title": "Base.BitArray",
+    "category": "type",
+    "text": "BitArray{N} <: DenseArray{Bool, N}\n\nSpace-efficient N-dimensional boolean array, which stores one bit per boolean value.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.BitArray-Tuple{UndefInitializer,Vararg{Integer,N} where N}",
+    "page": "Arrays",
+    "title": "Base.BitArray",
+    "category": "method",
+    "text": "BitArray(undef, dims::Integer...)\nBitArray{N}(undef, dims::NTuple{N,Int})\n\nConstruct an undef BitArray with the given dimensions. Behaves identically to the Array constructor. See undef.\n\nExamples\n\njulia> BitArray(undef, 2, 2)\n2×2 BitArray{2}:\n false  false\n false  true\n\njulia> BitArray(undef, (3, 1))\n3×1 BitArray{2}:\n false\n true\n false\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.BitArray-Tuple{Any}",
+    "page": "Arrays",
+    "title": "Base.BitArray",
+    "category": "method",
+    "text": "BitArray(itr)\n\nConstruct a BitArray generated by the given iterable object. The shape is inferred from the itr object.\n\nExamples\n\njulia> BitArray([1 0; 0 1])\n2×2 BitArray{2}:\n  true  false\n false   true\n\njulia> BitArray(x+y == 3 for x = 1:2, y = 1:3)\n2×3 BitArray{2}:\n false   true  false\n  true  false  false\n\njulia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)\n6-element BitArray{1}:\n false\n  true\n false\n  true\n false\n false\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.trues",
+    "page": "Arrays",
+    "title": "Base.trues",
+    "category": "function",
+    "text": "trues(dims)\n\nCreate a BitArray with all values set to true.\n\nExamples\n\njulia> trues(2,3)\n2×3 BitArray{2}:\n true  true  true\n true  true  true\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.falses",
+    "page": "Arrays",
+    "title": "Base.falses",
+    "category": "function",
+    "text": "falses(dims)\n\nCreate a BitArray with all values set to false.\n\nExamples\n\njulia> falses(2,3)\n2×3 BitArray{2}:\n false  false  false\n false  false  false\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.fill",
+    "page": "Arrays",
+    "title": "Base.fill",
+    "category": "function",
+    "text": "fill(x, dims)\n\nCreate an array filled with the value x. For example, fill(1.0, (5,5)) returns a 5×5 array of floats, with each element initialized to 1.0.\n\nExamples\n\njulia> fill(1.0, (5,5))\n5×5 Array{Float64,2}:\n 1.0  1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0  1.0\n\nIf x is an object reference, all elements will refer to the same object. fill(Foo(), dims) will return an array filled with the result of evaluating Foo() once.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.fill!",
+    "page": "Arrays",
+    "title": "Base.fill!",
+    "category": "function",
+    "text": "fill!(A, x)\n\nFill array A with the value x. If x is an object reference, all elements will refer to the same object. fill!(A, Foo()) will return A filled with the result of evaluating Foo() once.\n\nExamples\n\njulia> A = zeros(2,3)\n2×3 Array{Float64,2}:\n 0.0  0.0  0.0\n 0.0  0.0  0.0\n\njulia> fill!(A, 2.)\n2×3 Array{Float64,2}:\n 2.0  2.0  2.0\n 2.0  2.0  2.0\n\njulia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(undef, 3), a); a[1] = 2; A\n3-element Array{Array{Int64,1},1}:\n [2, 1, 1]\n [2, 1, 1]\n [2, 1, 1]\n\njulia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(undef, 3), f())\n3-element Array{Int64,1}:\n 1\n 1\n 1\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/arrays/#Base.similar",
+    "page": "Arrays",
+    "title": "Base.similar",
+    "category": "function",
+    "text": "similar(array, [element_type=eltype(array)], [dims=size(array)])\n\nCreate an uninitialized mutable array with the given element type and size, based upon the given source array. The second and third arguments are both optional, defaulting to the given array\'s eltype and size. The dimensions may be specified either as a single tuple argument or as a series of integer arguments.\n\nCustom AbstractArray subtypes may choose which specific array type is best-suited to return for the given element type and dimensionality. If they do not specialize this method, the default is an Array{element_type}(undef, dims...).\n\nFor example, similar(1:10, 1, 4) returns an uninitialized Array{Int,2} since ranges are neither mutable nor support 2 dimensions:\n\njulia> similar(1:10, 1, 4)\n1×4 Array{Int64,2}:\n 4419743872  4374413872  4419743888  0\n\nConversely, similar(trues(10,10), 2) returns an uninitialized BitVector with two elements since BitArrays are both mutable and can support 1-dimensional arrays:\n\njulia> similar(trues(10,10), 2)\n2-element BitArray{1}:\n false\n false\n\nSince BitArrays can only store elements of type Bool, however, if you request a different element type it will create a regular Array instead:\n\njulia> similar(falses(10), Float64, 2, 4)\n2×4 Array{Float64,2}:\n 2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314\n 2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314\n\n\n\n\n\nsimilar(storagetype, axes)\n\nCreate an uninitialized mutable array analogous to that specified by storagetype, but with axes specified by the last argument. storagetype might be a type or a function.\n\nExamples:\n\nsimilar(Array{Int}, axes(A))\n\ncreates an array that \"acts like\" an Array{Int} (and might indeed be backed by one), but which is indexed identically to A. If A has conventional indexing, this will be identical to Array{Int}(undef, size(A)), but if A has unconventional indexing then the indices of the result will match A.\n\nsimilar(BitArray, (axes(A, 2),))\n\nwould create a 1-dimensional logical array whose indices match those of the columns of A.\n\n\n\n\n\n"
+},
+
+{
     "location": "base/arrays/#Constructors-and-Types-1",
     "page": "Arrays",
     "title": "Constructors and Types",
     "category": "section",
-    "text": "Core.AbstractArray\nBase.AbstractVector\nBase.AbstractMatrix\nCore.Array\nCore.Array(::UndefInitializer, ::Any)\nCore.Array(::Nothing, ::Any)\nCore.Array(::Missing, ::Any)\nCore.UndefInitializer\nCore.undef\nBase.Vector\nBase.Vector(::UndefInitializer, ::Any)\nBase.Vector(::Nothing, ::Any)\nBase.Vector(::Missing, ::Any)\nBase.Matrix\nBase.Matrix(::UndefInitializer, ::Any, ::Any)\nBase.Matrix(::Nothing, ::Any, ::Any)\nBase.Matrix(::Missing, ::Any, ::Any)\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.BitArray(::UndefInitializer, ::Integer...)\nBase.BitArray(::Any)\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)"
+    "text": "Core.AbstractArray\nBase.AbstractVector\nBase.AbstractMatrix\nCore.Array\nCore.Array(::UndefInitializer, ::Any)\nCore.Array(::Nothing, ::Any)\nCore.Array(::Missing, ::Any)\nCore.UndefInitializer\nCore.undef\nBase.Vector\nBase.Vector(::UndefInitializer, ::Any)\nBase.Vector(::Nothing, ::Any)\nBase.Vector(::Missing, ::Any)\nBase.Matrix\nBase.Matrix(::UndefInitializer, ::Any, ::Any)\nBase.Matrix(::Nothing, ::Any, ::Any)\nBase.Matrix(::Missing, ::Any, ::Any)\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.BitArray(::UndefInitializer, ::Integer...)\nBase.BitArray(::Any)\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar"
 },
 
 {
@@ -14085,7 +15325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
 },
 
 {
@@ -17053,7 +18293,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.copy",
     "category": "method",
-    "text": "copy(A::Transpose)\ncopy(A::Adjoint)\n\nEagerly evaluate the lazy matrix transpose/adjoint. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2im; -3im 4]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+2im\n 0-3im  4+0im\n\njulia> T = transpose(A)\n2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0-3im\n 0+2im  4+0im\n\njulia> copy(T)\n2×2 Array{Complex{Int64},2}:\n 1+0im  0-3im\n 0+2im  4+0im\n\n\n\n\n\n"
+    "text": "copy(A::Transpose)\ncopy(A::Adjoint)\n\nEagerly evaluate the lazy matrix transpose/adjoint. Note that the transposition is applied recursively to elements.\n\nThis operation is intended for linear algebra usage - for general data manipulation see Base.permutedims, which is non-recursive.\n\nExamples\n\njulia> A = [1 2im; -3im 4]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+2im\n 0-3im  4+0im\n\njulia> T = transpose(A)\n2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0-3im\n 0+2im  4+0im\n\njulia> copy(T)\n2×2 Array{Complex{Int64},2}:\n 1+0im  0-3im\n 0+2im  4+0im\n\n\n\n\n\n"
 },
 
 {
@@ -18229,7 +19469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Logging",
     "title": "Loggers",
     "category": "section",
-    "text": "Processing of events is performed by a logger, which is the first piece of user configurable code to see the event. All loggers must be subtypes of AbstractLogger.When an event is triggered, the appropriate logger is found by looking for a task-local logger with the global logger as fallback.  The idea here is that the application code knows how log events should be processed and exists somewhere at the top of the call stack. So we should look up through the call stack to discover the logger — that is, the logger should be dynamically scoped. (This is a point of contrast with logging frameworks where the logger is lexically scoped; provided explicitly by the module author or as a simple global variable. In such a system it\'s awkward to control logging while composing functionality from multiple modules.)The global logger may be set with global_logger, and task-local loggers controlled using with_logger.  Newly spawned tasks inherit the logger of the parent task.There are three logger types provided by the library.  ConsoleLogger is the default logger you see when starting the REPL.  It displays events in a readable text format and tries to give simple but user friendly control over formatting and filtering.  NullLogger is a convenient way to drop all messages where necessary; it is the logging equivalent of the DevNull stream.  SimpleLogger is a very simplistic text formatting logger, mainly useful for debugging the logging system itself.Custom loggers should come with overloads for the functions described in the reference section."
+    "text": "Processing of events is performed by a logger, which is the first piece of user configurable code to see the event. All loggers must be subtypes of AbstractLogger.When an event is triggered, the appropriate logger is found by looking for a task-local logger with the global logger as fallback.  The idea here is that the application code knows how log events should be processed and exists somewhere at the top of the call stack. So we should look up through the call stack to discover the logger — that is, the logger should be dynamically scoped. (This is a point of contrast with logging frameworks where the logger is lexically scoped; provided explicitly by the module author or as a simple global variable. In such a system it\'s awkward to control logging while composing functionality from multiple modules.)The global logger may be set with global_logger, and task-local loggers controlled using with_logger.  Newly spawned tasks inherit the logger of the parent task.There are three logger types provided by the library.  ConsoleLogger is the default logger you see when starting the REPL.  It displays events in a readable text format and tries to give simple but user friendly control over formatting and filtering.  NullLogger is a convenient way to drop all messages where necessary; it is the logging equivalent of the devnull stream.  SimpleLogger is a very simplistic text formatting logger, mainly useful for debugging the logging system itself.Custom loggers should come with overloads for the functions described in the reference section."
 },
 
 {
@@ -18237,7 +19477,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Logging",
     "title": "Early filtering and message handling",
     "category": "section",
-    "text": "When an event occurs, a few steps of early filtering occur to avoid generating messages that will be discarded:The message log level is checked against a global minimum level (set via disable_logging).  This is a crude but extremely cheap global setting.\nThe current logger state is looked up and the message level checked against the logger\'s cached minimum level, as found by calling min_enabled_level. This behavior can be overridden via environment variables (more on this later).\nThe shouldlog function is called with the current logger, taking some minimal information (level, module, group, id) which can be computed statically.  Most usefully, shouldlog is passed an event id which can be used to discard events early based on a cached predicate.If all these checks pass, the message and key–value pairs are evaluated in full and passed to the current logger via the handle_message function. handle_message() may perform additional filtering as required and display the event to the screen, save it to a file, etc.Exceptions that occur while generating the log event are captured and logged by default.  This prevents individual broken events from crashing the application, which is helpful when enabling little-used debug events in a production system.  This behavior can be customized per logger type by extending catch_exceptions."
+    "text": "When an event occurs, a few steps of early filtering occur to avoid generating messages that will be discarded:The message log level is checked against a global minimum level (set via disable_logging).  This is a crude but extremely cheap global setting.\nThe current logger state is looked up and the message level checked against the logger\'s cached minimum level, as found by calling Logging.min_enabled_level. This behavior can be overridden via environment variables (more on this later).\nThe Logging.shouldlog function is called with the current logger, taking some minimal information (level, module, group, id) which can be computed statically.  Most usefully, shouldlog is passed an event id which can be used to discard events early based on a cached predicate.If all these checks pass, the message and key–value pairs are evaluated in full and passed to the current logger via the Logging.handle_message function. handle_message() may perform additional filtering as required and display the event to the screen, save it to a file, etc.Exceptions that occur while generating the log event are captured and logged by default.  This prevents individual broken events from crashing the application, which is helpful when enabling little-used debug events in a production system.  This behavior can be customized per logger type by extending Logging.catch_exceptions."
 },
 
 {
@@ -18341,7 +19581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Logging",
     "title": "Processing events with AbstractLogger",
     "category": "section",
-    "text": "Event processing is controlled by overriding functions associated with AbstractLogger:Methods to implement   Brief description\nhandle_message  Handle a log event\nshouldlog  Early filtering of events\nmin_enabled_level  Lower bound for log level of accepted events\nOptional methods Default definition Brief description\ncatch_exceptions true Catch exceptions during event evaluationLogging.AbstractLogger\nLogging.handle_message\nLogging.shouldlog\nLogging.min_enabled_level\nLogging.catch_exceptions\nLogging.disable_logging"
+    "text": "Event processing is controlled by overriding functions associated with AbstractLogger:Methods to implement  Brief description\nLogging.handle_message  Handle a log event\nLogging.shouldlog  Early filtering of events\nLogging.min_enabled_level  Lower bound for log level of accepted events\nOptional methods Default definition Brief description\nLogging.catch_exceptions true Catch exceptions during event evaluationLogging.AbstractLogger\nLogging.handle_message\nLogging.shouldlog\nLogging.min_enabled_level\nLogging.catch_exceptions\nLogging.disable_logging"
 },
 
 {
@@ -19405,7 +20645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
