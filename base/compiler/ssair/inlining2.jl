@@ -767,7 +767,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                     for tuparg in ir[def].args[2:end]
                         push!(new_atypes, exprtype(tuparg, ir, ir.mod))
                     end
-                elseif (isa(def, Argument) && def === stmt.args[end] && !isempty(sv.result_vargs))
+                elseif isa(def, Argument) && def === stmt.args[end] && !isempty(sv.result_vargs)
                     append!(new_atypes, sv.result_vargs)
                 else
                     append!(new_atypes, typ.parameters)
