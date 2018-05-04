@@ -169,6 +169,7 @@ makedocs(
     pages     = PAGES,
     html_prettyurls = ("deploy" in ARGS),
     html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/stable/" : nothing,
+    assets = ["assets/julia-manual.css", ]
 )
 
 
