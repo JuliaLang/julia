@@ -726,3 +726,26 @@ let f(args...) = *(args...)
     @test f.(x..., y, z...) == broadcast(f, x..., y, z...) == 120
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
 end
+
+# Broadcasted iterable/indexable APIs
+let
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5))
+    @test eachindex(bc) === Base.OneTo(5)
+    @test length(bc) === 5
+    @test ndims(bc) === 1
+    @test ndims(typeof(bc)) === 1
+    @test bc[1] === bc[CartesianIndex((1,))] === 5.0
+    @test copy(bc) == [v for v in bc] == collect(bc)
+    @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
+    @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5*ones(1, 4)))
+    @test eachindex(bc) === CartesianIndices((Base.OneTo(5), Base.OneTo(4)))
+    @test length(bc) === 20
+    @test ndims(bc) === 2
+    @test ndims(typeof(bc)) === 2
+    @test bc[1,1] == bc[CartesianIndex((1,1))] === 5.0
+    @test copy(bc) == [v for v in bc] == collect(bc)
+    @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
+    @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+end
