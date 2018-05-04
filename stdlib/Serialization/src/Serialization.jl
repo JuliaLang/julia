@@ -855,7 +855,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     name = deserialize(s)::Symbol
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
-    sig = deserialize(s)::DataType
+    sig = deserialize(s)::Type
     sparam_syms = deserialize(s)::SimpleVector
     ambig = deserialize(s)::Union{Array{Any,1}, Nothing}
     nargs = deserialize(s)::Int32
