@@ -131,7 +131,7 @@ There are three logger types provided by the library.  [`ConsoleLogger`](@ref)
 is the default logger you see when starting the REPL.  It displays events in a
 readable text format and tries to give simple but user friendly control over
 formatting and filtering.  [`NullLogger`](@ref) is a convenient way to drop all
-messages where necessary; it is the logging equivalent of the [`DevNull`](@ref)
+messages where necessary; it is the logging equivalent of the [`devnull`](@ref)
 stream.  [`SimpleLogger`](@ref) is a very simplistic text formatting logger,
 mainly useful for debugging the logging system itself.
 
@@ -147,15 +147,15 @@ messages that will be discarded:
    [`disable_logging`](@ref)).  This is a crude but extremely cheap global
    setting.
 2. The current logger state is looked up and the message level checked against the
-   logger's cached minimum level, as found by calling [`min_enabled_level`](@ref).
+   logger's cached minimum level, as found by calling [`Logging.min_enabled_level`](@ref).
    This behavior can be overridden via environment variables (more on this later).
-3. The [`shouldlog`](@ref) function is called with the current logger, taking
+3. The [`Logging.shouldlog`](@ref) function is called with the current logger, taking
    some minimal information (level, module, group, id) which can be computed
    statically.  Most usefully, `shouldlog` is passed an event `id` which can be
    used to discard events early based on a cached predicate.
 
 If all these checks pass, the message and key--value pairs are evaluated in full
-and passed to the current logger via the [`handle_message`](@ref) function.
+and passed to the current logger via the [`Logging.handle_message`](@ref) function.
 `handle_message()` may perform additional filtering as required and display the
 event to the screen, save it to a file, etc.
 
@@ -163,7 +163,7 @@ Exceptions that occur while generating the log event are captured and logged
 by default.  This prevents individual broken events from crashing the
 application, which is helpful when enabling little-used debug events in a
 production system.  This behavior can be customized per logger type by
-extending [`catch_exceptions`](@ref).
+extending [`Logging.catch_exceptions`](@ref).
 
 ## Testing log events
 
@@ -208,13 +208,13 @@ Logging.LogLevel
 Event processing is controlled by overriding functions associated with
 `AbstractLogger`:
 
-| Methods to implement          |                        | Brief description                        |
-|:----------------------------- |:---------------------- |:---------------------------------------- |
-| [`handle_message`](@ref)      |                        | Handle a log event                       |
-| [`shouldlog`](@ref)           |                        | Early filtering of events                |
-| [`min_enabled_level`](@ref)   |                        | Lower bound for log level of accepted events |
-| **Optional methods**          | **Default definition** | **Brief description**                    |
-| [`catch_exceptions`](@ref)    | `true`                 | Catch exceptions during event evaluation |
+| Methods to implement                |                        | Brief description                        |
+|:----------------------------------- |:---------------------- |:---------------------------------------- |
+| [`Logging.handle_message`](@ref)    |                        | Handle a log event                       |
+| [`Logging.shouldlog`](@ref)         |                        | Early filtering of events                |
+| [`Logging.min_enabled_level`](@ref) |                        | Lower bound for log level of accepted events |
+| **Optional methods**                | **Default definition** | **Brief description**                    |
+| [`Logging.catch_exceptions`](@ref)  | `true`                 | Catch exceptions during event evaluation |
 
 
 ```@docs

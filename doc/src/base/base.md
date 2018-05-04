@@ -316,6 +316,7 @@ Base.AsyncCondition(::Function)
 ```@docs
 Base.nameof(::Module)
 Base.parentmodule
+Base.moduleroot
 Base.@__MODULE__
 Base.fullname
 Base.names
