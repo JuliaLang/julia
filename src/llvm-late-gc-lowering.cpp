@@ -492,6 +492,21 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 break;
             CurrentV = Operand;
         }
+        else if (isa<InsertValueInst>(CurrentV)) {
+            if (!isUnionRep(CurrentV->getType()))
+                break;
+            InsertValueInst *IVI = cast<InsertValueInst>(CurrentV);
+            assert(IVI->getNumIndices() == 1);
+            unsigned idx = IVI->getIndices()[0];
+            if (idx == 0) {
+                // Updating the pointer in the union. Follow the pointer.
+                CurrentV = IVI->getOperand(1);
+            } else {
+                // Updating which tindex is active. Follow the union.
+                assert(idx == 1);
+                CurrentV = IVI->getOperand(0);
+            }
+        }
         else if (auto EEI = dyn_cast<ExtractElementInst>(CurrentV)) {
             assert(CurrentV->getType()->isPointerTy() && fld_idx == -1);
             // For now, only support constant index.
@@ -567,6 +582,7 @@ int LateLowerGCFrame::NumberBase(State &S, Value *V, Value *CurrentV)
     if (it != S.AllPtrNumbering.end())
         return it->second;
     int Number;
+    bool isUnion = isUnionRep(CurrentV->getType());
     if (isa<Constant>(CurrentV)) {
         // Perm rooted
         Number = -2;
@@ -575,22 +591,22 @@ int LateLowerGCFrame::NumberBase(State &S, Value *V, Value *CurrentV)
                 getValueAddrSpace(CurrentV) != AddressSpace::Tracked)) {
         // We know this is rooted in the parent
         Number = -1;
-    } else if (isa<SelectInst>(CurrentV) && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
+    } else if (isa<SelectInst>(CurrentV) && !isUnion && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
         int Number = LiftSelect(S, cast<SelectInst>(CurrentV));
         S.AllPtrNumbering[V] = Number;
         return Number;
-    } else if (isa<PHINode>(CurrentV) && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
+    } else if (isa<PHINode>(CurrentV) && !isUnion && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
         int Number = LiftPhi(S, cast<PHINode>(CurrentV));
         S.AllPtrNumbering[V] = Number;
         return Number;
-    } else if (isa<ExtractValueInst>(CurrentV) && !isUnionRep(CurrentV->getType())) {
+    } else if (isa<ExtractValueInst>(CurrentV) && !isUnion) {
         assert(false && "TODO: Extract");
         abort();
     } else {
         assert(
             (CurrentV->getType()->isPointerTy() &&
                 getValueAddrSpace(CurrentV) == AddressSpace::Tracked) ||
-            isUnionRep(CurrentV->getType()));
+            isUnion);
         Number = ++S.MaxPtrNumber;
         S.ReversePtrNumbering[Number] = CurrentV;
     }
@@ -1128,9 +1144,9 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
                 // We need to insert an extra select for the GC root
-                if (!isSpecialPtr(SI->getType()))
+                if (!isSpecialPtr(SI->getType()) && !isUnionRep(SI->getType()))
                     continue;
-                if (getValueAddrSpace(SI) != AddressSpace::Tracked) {
+                if (!isUnionRep(SI->getType()) && getValueAddrSpace(SI) != AddressSpace::Tracked) {
                     if (S.AllPtrNumbering.find(SI) != S.AllPtrNumbering.end())
                         continue;
                     auto Num = LiftSelect(S, SI);
@@ -1147,12 +1163,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
                 }
             } else if (PHINode *Phi = dyn_cast<PHINode>(&I)) {
-                if (!isSpecialPtr(Phi->getType())) {
+                if (!isSpecialPtr(Phi->getType()) && !isUnionRep(Phi->getType())) {
                     continue;
                 }
                 auto nIncoming = Phi->getNumIncomingValues();
                 // We need to insert an extra phi for the GC root
-                if (getValueAddrSpace(Phi) != AddressSpace::Tracked) {
+                if (!isUnionRep(Phi->getType()) && getValueAddrSpace(Phi) != AddressSpace::Tracked) {
                     if (S.AllPtrNumbering.find(Phi) != S.AllPtrNumbering.end())
                         continue;
                     auto Num = LiftPhi(S, Phi);

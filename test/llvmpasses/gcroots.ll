@@ -346,6 +346,45 @@ exit:
     ret void
 }
 
+define %jl_value_t addrspace(10)* @phi_union(i1 %cond) {
+; CHECK-LABEL: @phi_union
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+top:
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  br i1 %cond, label %a, label %b
+
+a:
+  %obj = call %jl_value_t addrspace(10) *@alloc()
+  %aobj = insertvalue {%jl_value_t addrspace(10)*, i8} undef, %jl_value_t addrspace(10)* %obj, 0
+  %aunion = insertvalue {%jl_value_t addrspace(10)*, i8} undef, i8 -126, 1
+  br label %join
+
+b:
+  %bunion = call {%jl_value_t addrspace(10)*, i8} @union_ret()
+  br label %join
+
+join:
+  %phi = phi {%jl_value_t addrspace(10)*, i8} [%aunion, %a], [%bunion, %b]
+  call void @jl_safepoint()
+  %rval = extractvalue { %jl_value_t addrspace(10)*, i8 } %phi, 0
+  ret %jl_value_t addrspace(10)* %rval
+}
+
+define %jl_value_t addrspace(10)* @select_union(i1 %cond) {
+; CHECK-LABEL: @select_union
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+top:
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  %obj = call %jl_value_t addrspace(10) *@alloc()
+  %aobj = insertvalue {%jl_value_t addrspace(10)*, i8} undef, %jl_value_t addrspace(10)* %obj, 0
+  %aunion = insertvalue {%jl_value_t addrspace(10)*, i8} undef, i8 -126, 1
+  %bunion = call {%jl_value_t addrspace(10)*, i8} @union_ret()
+  %select = select i1 %cond, {%jl_value_t addrspace(10)*, i8} %aunion, {%jl_value_t addrspace(10)*, i8} %bunion
+  call void @jl_safepoint()
+  %rval = extractvalue { %jl_value_t addrspace(10)*, i8 } %select, 0
+  ret %jl_value_t addrspace(10)* %rval
+}
+
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}
