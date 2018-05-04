@@ -105,7 +105,7 @@ end
 ```
 Here, `map` visits each commit using the `GitRevWalker` and finds its `GitHash`.
 """
-function Base.map(f::Function, walker::GitRevWalker;
+function map(f::Function, walker::GitRevWalker;
                   oid::GitHash=GitHash(),
                   range::AbstractString="",
                   by::Cint = Consts.SORT_NONE,

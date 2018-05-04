@@ -342,7 +342,7 @@ end
 
 Base.IteratorSize(::Type{GitBranchIter}) = Base.SizeUnknown()
 
-function Base.map(f::Function, bi::GitBranchIter)
+function map(f::Function, bi::GitBranchIter)
     res = nothing
     s = start(bi)
     while !done(bi, s)
