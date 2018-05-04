@@ -57,7 +57,6 @@ const PAGES = [
     "Home" => "index.md",
     hide("NEWS.md"),
     "Manual" => [
-        "manual/introduction.md",
         "manual/getting-started.md",
         "manual/variables.md",
         "manual/integers-and-floating-point-numbers.md",
