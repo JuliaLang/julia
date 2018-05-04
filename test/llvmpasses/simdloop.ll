@@ -1,5 +1,7 @@
 ; RUN: opt -load libjulia%shlibext -LowerSIMDLoop -S %s | FileCheck %s
 
+declare void @julia.simdloop_marker()
+
 define void @simd_test(double *%a, double *%b) {
 top:
   br label %loop
@@ -12,7 +14,8 @@ loop:
   %bval = load double, double *%aptr
   %cval = fadd double %aval, %bval
   store double %cval, double *%bptr
-  %nexti = add i64 %i, 1, !simd_loop !1
+  %nexti = add i64 %i, 1
+  call void @julia.simdloop_marker()
   %done = icmp sgt i64 %nexti, 500
   br i1 %done, label %loopdone, label %loop
 loopdone:
@@ -30,7 +33,8 @@ loop:
   %aval = load double, double *%aptr
   %nextv = fsub double %v, %aval
 ; CHECK: fsub fast double %v, %aval
-  %nexti = add i64 %i, 1, !simd_loop !1
+  %nexti = add i64 %i, 1
+  call void @julia.simdloop_marker()
   %done = icmp sgt i64 %nexti, 500
   br i1 %done, label %loopdone, label %loop
 loopdone:

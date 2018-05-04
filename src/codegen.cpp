@@ -301,6 +301,7 @@ static Function *jlegal_func;
 static Function *jl_alloc_obj_func;
 static Function *jl_newbits_func;
 static Function *jl_typeof_func;
+static Function *jl_simdloop_marker_func;
 static Function *jl_write_barrier_func;
 static Function *jlisa_func;
 static Function *jlsubtype_func;
@@ -4084,7 +4085,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
                     maybe_decay_untracked(boxed(ctx, ast))), true, jl_expr_type);
     }
     else if (head == simdloop_sym) {
-        llvm::annotateSimdLoop(ctx.builder.GetInsertBlock());
+        ctx.builder.CreateCall(prepare_call(jl_simdloop_marker_func));
         return jl_cgval_t();
     }
     else if (head == goto_ifnot_sym) {
@@ -7436,6 +7437,13 @@ static void init_julia_llvm_env(Module *m)
     add_return_attr(jl_newbits_func, Attribute::NoAlias);
     add_return_attr(jl_newbits_func, Attribute::NonNull);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
+
+    jl_simdloop_marker_func = Function::Create(FunctionType::get(T_void, {}, false),
+                                               Function::ExternalLinkage,
+                                               "julia.simdloop_marker");
+    jl_simdloop_marker_func->addFnAttr(Attribute::NoUnwind);
+    jl_simdloop_marker_func->addFnAttr(Attribute::NoRecurse);
+    jl_simdloop_marker_func->addFnAttr(Attribute::InaccessibleMemOnly);
 
     jl_typeof_func = Function::Create(FunctionType::get(T_prjlvalue, {T_prjlvalue}, false),
                                       Function::ExternalLinkage,

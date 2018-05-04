@@ -134,6 +134,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         PM->add(createLateLowerGCFramePass());
         PM->add(createLowerPTLSPass(dump_native));
 #endif
+        PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
         return;
@@ -145,8 +146,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     }
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
-    PM->add(createDeadInstEliminationPass());
-    PM->add(createPromoteMemoryToRegisterPass()); // Kill useless allocas
+    PM->add(createDeadCodeEliminationPass());
+    PM->add(createSROAPass()); // Kill useless allocas
 
     // Due to bugs and missing features LLVM < 5.0, does not properly propagate
     // our invariants. We need to do GC rooting here. This reduces the
