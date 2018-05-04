@@ -12,7 +12,7 @@ function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
     return GitRebase(repo, rebase_ptr_ptr[])
 end
 
-function Base.count(rb::GitRebase)
+function count(rb::GitRebase)
     return ccall((:git_rebase_operation_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), rb.ptr)
 end
 

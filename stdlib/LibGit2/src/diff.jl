@@ -106,7 +106,7 @@ function deletions(diff_stat::GitDiffStats)
     return ccall((:git_diff_stats_deletions, :libgit2), Csize_t, (Ptr{Cvoid},), diff_stat.ptr)
 end
 
-function Base.count(diff::GitDiff)
+function count(diff::GitDiff)
     return ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Cvoid},), diff.ptr)
 end
 
