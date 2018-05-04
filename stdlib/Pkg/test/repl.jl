@@ -121,7 +121,10 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     p2 = git_init_package(tmp_pkg_path, joinpath(@__DIR__, "test_packages/$pkg2"))
     Pkg.REPLMode.pkgstr("add $p2")
     Pkg.REPLMode.pkgstr("pin $pkg2")
-    @eval import $(Symbol(pkg2))
+    # FIXME: this confuses the precompile logic to know what is going on with the user
+    # FIXME: why isn't this testing the Pkg after importing, rather than after freeing it
+    #@eval import Example
+    #@eval import $(Symbol(pkg2))
     @test Pkg.installed()[pkg2] == v"0.1.0"
     Pkg.REPLMode.pkgstr("free $pkg2")
     @test_throws CommandError Pkg.REPLMode.pkgstr("free $pkg2")

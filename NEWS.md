@@ -233,6 +233,10 @@ Language changes
     `size`, `length`, and `@inbounds`. To optionally enforce conventional indices,
     you can `@assert !has_offset_axes(A)`.
 
+  * Module pre-compilation is now the default for code loading. Adding a
+    `__precompile__()` declaration is no longer necessary, although
+    `__precompile__(false)` can still be used to opt-out ([#26991]).
+
 Breaking changes
 ----------------
 

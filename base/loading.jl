@@ -744,46 +744,30 @@ function include_dependency(path::AbstractString)
     return nothing
 end
 
-# We throw PrecompilableError(true) when a module wants to be precompiled but isn't,
-# and PrecompilableError(false) when a module doesn't want to be precompiled but is
-struct PrecompilableError <: Exception
-    isprecompilable::Bool
-end
+# we throw PrecompilableError when a module doesn't want to be precompiled
+struct PrecompilableError <: Exception end
 function show(io::IO, ex::PrecompilableError)
-    if ex.isprecompilable
-        print(io, "Declaring __precompile__(true) is only allowed in module files being imported.")
-    else
-        print(io, "Declaring __precompile__(false) is not allowed in files that are being precompiled.")
-    end
+    print(io, "Declaring __precompile__(false) is not allowed in files that are being precompiled.")
 end
-precompilableerror(ex::PrecompilableError, c) = ex.isprecompilable == c
-precompilableerror(ex::WrappedException, c) = precompilableerror(ex.error, c)
-precompilableerror(ex, c) = false
+precompilableerror(ex::PrecompilableError) = true
+precompilableerror(ex::WrappedException) = precompilableerror(ex.error)
+precompilableerror(@nospecialize ex) = false
 
-# Call __precompile__ at the top of a file to force it to be precompiled (true), or
-# to be prevent it from being precompiled (false).  __precompile__(true) is
-# ignored except within "require" call.
+# Call __precompile__(false) at the top of a tile prevent it from being precompiled (false)
 """
-    __precompile__(isprecompilable::Bool=true)
+    __precompile__(false)
 
-Specify whether the file calling this function is precompilable. If `isprecompilable` is
-`true`, then `__precompile__` throws an exception when the file is loaded by
-`using`/`import`/`require` *unless* the file is being precompiled, and in a module file it
-causes the module to be automatically precompiled when it is imported. Typically,
-`__precompile__()` should occur before the `module` declaration in the file.
-
+Specify that the file calling this function is not precompilable.
 If a module or file is *not* safely precompilable, it should call `__precompile__(false)` in
 order to throw an error if Julia attempts to precompile it.
-
-`__precompile__()` should *not* be used in a module unless all of its dependencies are also
-using `__precompile__()`. Failure to do so can result in a runtime error when loading the module.
 """
-function __precompile__(isprecompilable::Bool=true)
-    if (JLOptions().use_compiled_modules != 0 &&
-        isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
-        !(isprecompilable && toplevel_load[]))
-        throw(PrecompilableError(isprecompilable))
+@noinline function __precompile__(isprecompilable::Bool=true)
+    if isprecompilable
+        depwarn("__precompile__() is now the default", :__precompile__)
+    elseif 0 != ccall(:jl_generating_output, Cint, ())
+        throw(PrecompilableError())
     end
+    nothing
 end
 
 # require always works in Main scope and loads files from node 1
@@ -932,10 +916,9 @@ function _require(pkg::PkgId)
         end
 
         # attempt to load the module file via the precompile cache locations
-        doneprecompile = false
         if JLOptions().use_compiled_modules != 0
-            doneprecompile = _require_search_from_serialized(pkg, path)
-            if !isa(doneprecompile, Bool)
+            m = _require_search_from_serialized(pkg, path)
+            if !isa(m, Bool)
                 return
             end
         end
@@ -948,21 +931,24 @@ function _require(pkg::PkgId)
                      This may mean module $name does not support precompilation but is imported by a module that does."""
                 if JLOptions().incremental != 0
                     # during incremental precompilation, this should be fail-fast
-                    throw(PrecompilableError(false))
+                    throw(PrecompilableError())
                 end
             end
         end
 
-        if doneprecompile === true || JLOptions().incremental != 0
-            # spawn off a new incremental pre-compile task for recursive `require` calls
-            # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
-            cachefile = compilecache(pkg)
-            m = _require_from_serialized(cachefile)
-            if isa(m, Exception)
-                @warn "The call to compilecache failed to create a usable precompiled cache file for module $name" exception=m
-                # fall-through, TODO: disable __precompile__(true) error so that the normal include will succeed
-            else
-                return
+        if JLOptions().use_compiled_modules != 0
+            if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+                # spawn off a new incremental pre-compile task for recursive `require` calls
+                # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
+                cachefile = compilecache(pkg)
+                m = _require_from_serialized(cachefile)
+                if isa(m, Exception)
+                    if !precompilableerror(m)
+                        @warn "The call to compilecache failed to create a usable precompiled cache file for module $name" exception=m
+                    end
+                else
+                    return
+                end
             end
         end
 
@@ -977,22 +963,6 @@ function _require(pkg::PkgId)
         try
             include_relative(__toplevel__, path)
             return
-        catch ex
-            if uuid !== old_uuid
-                ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
-            end
-            if doneprecompile === true || JLOptions().use_compiled_modules == 0 || !precompilableerror(ex, true)
-                rethrow() # rethrow non-precompilable=true errors
-            end
-            # the file requested `__precompile__`, so try to build a cache file and use that
-            cachefile = compilecache(pkg)
-            m = _require_from_serialized(cachefile)
-            if isa(m, Exception)
-                @warn """Module `$name` declares `__precompile__(true)` but `require` failed
-                         to create a usable precompiled cache file""" exception=m
-                # TODO: disable __precompile__(true) error and do normal include instead of error
-                error("Module $name declares __precompile__(true) but require failed to create a usable precompiled cache file.")
-            end
         finally
             if uuid !== old_uuid
                 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
