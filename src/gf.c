@@ -880,6 +880,10 @@ static jl_method_instance_t *cache_method(
         int allow_exec)
 {
     // caller must hold the mt->writelock
+    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(*cache, (jl_value_t*)tt, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
+    if (entry && entry->func.value)
+        return (jl_method_instance_t*)entry->func.value;
+
     jl_value_t *decl = (jl_value_t*)definition->sig;
     jl_value_t *temp = NULL;
     jl_value_t *temp2 = NULL;
@@ -1082,12 +1086,17 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
 {
     // caller must hold the mt->writelock
     jl_typemap_entry_t *entry = NULL;
-    jl_svec_t *env = jl_emptysvec;
-    jl_method_t *func = NULL;
-    jl_tupletype_t *sig = NULL;
-    jl_method_instance_t *nf = NULL;
-    JL_GC_PUSH4(&env, &entry, &func, &sig);
+    entry = jl_typemap_assoc_by_type(mt->cache, (jl_value_t*)tt, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
+    if (entry && entry->func.value) {
+        assert(entry->func.linfo->min_world <= entry->min_world && entry->func.linfo->max_world >= entry->max_world &&
+                "typemap consistency error: MethodInstance doesn't apply to full range of its entry");
+        return entry->func.linfo;
+    }
 
+    jl_method_instance_t *nf = NULL;
+    jl_svec_t *env = jl_emptysvec;
+    jl_tupletype_t *sig = NULL;
+    JL_GC_PUSH2(&env, &sig);
     entry = jl_typemap_assoc_by_type(mt->defs, (jl_value_t*)tt, &env, /*subtype*/1, /*offs*/0, world, /*max_world_mask*/0);
     if (entry != NULL) {
         jl_method_t *m = entry->func.method;
@@ -1101,12 +1110,10 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
 #endif
             int sharp_match;
             sig = join_tsig(tt, m->sig, &sharp_match);
-            if (!mt_cache) {
+            if (!mt_cache)
                 nf = jl_specializations_get_linfo(m, (jl_value_t*)sig, env, world);
-            }
-            else {
+            else
                 nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, tt, m, world, env, allow_exec);
-            }
         }
     }
     JL_GC_POP();
@@ -1652,8 +1659,9 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     return tt;
 }
 
-jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
-                                               int cache, int allow_exec, size_t world)
+static jl_method_instance_t *jl_method_lookup_by_type(
+        jl_methtable_t *mt, jl_tupletype_t *types,
+        int cache, int allow_exec, size_t world)
 {
     jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->cache, (jl_value_t*)types, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
     if (entry) {
@@ -1663,25 +1671,10 @@ jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_
         return linfo;
     }
     JL_LOCK(&mt->writelock);
-    entry = jl_typemap_assoc_by_type(mt->cache, (jl_value_t*)types, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
-    if (entry) {
-        jl_method_instance_t *linfo = (jl_method_instance_t*)entry->func.value;
-        assert(linfo->min_world <= entry->min_world && linfo->max_world >= entry->max_world &&
-                "typemap consistency error: MethodInstance doesn't apply to full range of its entry");
-        JL_UNLOCK(&mt->writelock);
-        return linfo;
-    }
     if (jl_is_datatype((jl_value_t*)types) && types->isdispatchtuple)
-        cache = 1;
+        cache = 1; // TODO: this might be detrimental to performance, should be tested
     jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, cache, allow_exec, world);
-    if (cache) {
-        JL_UNLOCK(&mt->writelock);
-    }
-    else {
-        JL_GC_PUSH1(&sf);
-        JL_UNLOCK(&mt->writelock);
-        JL_GC_POP();
-    }
+    JL_UNLOCK(&mt->writelock);
     return sf;
 }
 
@@ -1696,24 +1689,11 @@ jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, si
     if (entry)
         return entry->func.linfo;
     JL_LOCK(&mt->writelock);
-    entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt), world);
-    if (entry) {
-        JL_UNLOCK(&mt->writelock);
-        return entry->func.linfo;
-    }
     jl_tupletype_t *tt = arg_type_tuple(args, nargs);
-    jl_method_instance_t *sf = NULL;
-    JL_GC_PUSH2(&tt, &sf);
-    sf = jl_mt_assoc_by_type(mt, tt, cache, 1, world);
-    if (cache) {
-        JL_UNLOCK(&mt->writelock);
-    }
-    else {
-        JL_GC_PUSH1(&sf);
-        JL_UNLOCK(&mt->writelock);
-        JL_GC_POP();
-    }
+    JL_GC_PUSH1(&tt);
+    jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, tt, cache, 1, world);
     JL_GC_POP();
+    JL_UNLOCK(&mt->writelock);
     return sf;
 }
 
@@ -1906,6 +1886,7 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world
             JL_LOCK(&mt->writelock);
             nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, ti, m, world, env, /*allow_exec*/1);
             JL_UNLOCK(&mt->writelock);
+            assert(nf->min_world <= world && nf->max_world >= world);
         }
         // // get the specialization without caching it
         // int need_guard_entries = 0;
@@ -1917,7 +1898,6 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world
         //     sig = jl_apply_tuple_type(newparams);
         // nf = jl_specializations_get_linfo(m, (jl_value_t*)sig, env, world);
     }
-    assert(nf == NULL || (nf->min_world <= world && nf->max_world >= world));
     JL_GC_POP();
     return nf;
 }
@@ -2123,18 +2103,12 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t **args, uint32
     }
     else {
         JL_LOCK(&mt->writelock);
-        entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt), world);
-        if (entry) {
-            mfunc = entry->func.linfo;
-        }
-        else {
-            // cache miss case
-            JL_TIMING(METHOD_LOOKUP_SLOW);
-            jl_tupletype_t *tt = arg_type_tuple(args, nargs);
-            JL_GC_PUSH1(&tt);
-            mfunc = jl_mt_assoc_by_type(mt, tt, /*cache*/1, /*allow_exec*/1, world);
-            JL_GC_POP();
-        }
+        // cache miss case
+        JL_TIMING(METHOD_LOOKUP_SLOW);
+        jl_tupletype_t *tt = arg_type_tuple(args, nargs);
+        JL_GC_PUSH1(&tt);
+        mfunc = jl_mt_assoc_by_type(mt, tt, /*cache*/1, /*allow_exec*/1, world);
+        JL_GC_POP();
         JL_UNLOCK(&mt->writelock);
         if (mfunc == NULL) {
 #ifdef JL_TRACE
@@ -2223,25 +2197,18 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t **args, size_t nargs)
     }
     else {
         JL_LOCK(&method->writelock);
-        if (method->invokes.unknown != NULL)
-            tm = jl_typemap_assoc_exact(method->invokes, args, nargs, jl_cachearg_offset(mt), world);
-        if (tm) {
-            mfunc = tm->func.linfo;
+        tt = arg_type_tuple(args, nargs);
+        if (jl_is_unionall(method->sig)) {
+            int sub = jl_subtype_matching((jl_value_t*)tt, (jl_value_t*)method->sig, &tpenv);
+            assert(sub); (void)sub;
         }
-        else {
-            tt = arg_type_tuple(args, nargs);
-            if (jl_is_unionall(method->sig)) {
-                int sub = jl_subtype_matching((jl_value_t*)tt, (jl_value_t*)method->sig, &tpenv);
-                assert(sub); (void)sub;
-            }
 
-            if (method->invokes.unknown == NULL)
-                method->invokes.unknown = jl_nothing;
+        if (method->invokes.unknown == NULL)
+            method->invokes.unknown = jl_nothing;
 
-            int sharp_match;
-            sig = join_tsig(tt, method->sig, &sharp_match);
-            mfunc = cache_method(mt, &method->invokes, entry->func.value, sig, tt, method, world, tpenv, 1);
-        }
+        int sharp_match;
+        sig = join_tsig(tt, method->sig, &sharp_match);
+        mfunc = cache_method(mt, &method->invokes, entry->func.value, sig, tt, method, world, tpenv, 1);
         JL_UNLOCK(&method->writelock);
     }
     JL_GC_POP();
