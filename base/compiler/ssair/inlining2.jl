@@ -696,7 +696,6 @@ function handle_single_case!(ir, stmt, idx, case, isinvoke, todo)
     end
 end
 
-
 function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Any[]
@@ -763,11 +762,13 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                 # As a special case, if we can see the tuple() call, look at it's arguments to find
                 # our types. They can be more precise (e.g. f(Bool, A...) would be lowered as
                 # _apply(f, tuple(Bool)::Tuple{DataType}, A), which might not be precise enough to
-                # get a good method match. This pattern is used in the array code a bunch.
+                # get a good method match). This pattern is used in the array code a bunch.
                 if isa(def, SSAValue) && is_tuple_call(ir, ir[def])
                     for tuparg in ir[def].args[2:end]
                         push!(new_atypes, exprtype(tuparg, ir, ir.mod))
                     end
+                elseif (isa(def, Argument) && def === stmt.args[end] && !isempty(sv.result_vargs))
+                    append!(new_atypes, sv.result_vargs)
                 else
                     append!(new_atypes, typ.parameters)
                 end
