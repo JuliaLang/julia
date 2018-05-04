@@ -223,7 +223,7 @@ add_tfunc(===, 2, 2,
         end
         return Bool
     end, 1)
-function isdefined_tfunc(args...)
+function isdefined_tfunc(@nospecialize(args...))
     arg1 = args[1]
     if isa(arg1, Const)
         a1 = typeof(arg1.val)

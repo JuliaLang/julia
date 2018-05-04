@@ -116,8 +116,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     method.isva && (nargs -= 1)
     length(argtypes) >= nargs || return Any # probably limit_tuple_type made this non-matching method apparently match
     haveconst = false
-    for i in 1:nargs
-        a = argtypes[i]
+    for a in argtypes
         if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
             # have new information from argtypes that wasn't available from the signature
             haveconst = true
@@ -144,8 +143,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
         tm = _topmod(sv)
         if !istopfunction(tm, f, :getproperty) && !istopfunction(tm, f, :setproperty!)
             # in this case, see if all of the arguments are constants
-            for i in 1:nargs
-                a = argtypes[i]
+            for a in argtypes
                 if !isa(a, Const) && !isconstType(a)
                     return Any
                 end
@@ -156,6 +154,17 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     if inf_result === nothing
         inf_result = InferenceResult(code)
         atypes = get_argtypes(inf_result)
+        if method.isva
+            vargs = argtypes[(nargs + 1):end]
+            for i in 1:length(vargs)
+                a = vargs[i]
+                if i > length(inf_result.vargs)
+                    push!(inf_result.vargs, a)
+                elseif a isa Const
+                    inf_result.vargs[i] = a
+                end
+            end
+        end
         for i in 1:nargs
             a = argtypes[i]
             if a isa Const
@@ -187,7 +196,13 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     cyclei = 0
     infstate = sv
     edgecycle = false
+    # The `method_for_inference_heuristics` will expand the given method's generator if
+    # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
+    # The other `CodeInfo`s we inspect will already have this field inflated, so we just
+    # access it directly instead (to avoid regeneration).
     method2 = method_for_inference_heuristics(method, sig, sparams, sv.params.world) # Union{Method, Nothing}
+    sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
+    sv_method2 isa Method || (sv_method2 = nothing) # Union{Method, Nothing}
     while !(infstate === nothing)
         infstate = infstate::InferenceState
         if method === infstate.linfo.def
@@ -208,7 +223,9 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                 for parent in infstate.callers_in_cycle
                     # check in the cycle list first
                     # all items in here are mutual parents of all others
-                    if parent.linfo.def === sv.linfo.def
+                    parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
+                    parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
+                    if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                         topmost = infstate
                         edgecycle = true
                         break
@@ -218,7 +235,9 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                     # then check the parent link
                     if topmost === nothing && parent !== nothing
                         parent = parent::InferenceState
-                        if parent.cached && parent.linfo.def === sv.linfo.def
+                        parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
+                        parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
+                        if parent.cached && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                             topmost = infstate
                             edgecycle = true
                         end
@@ -315,8 +334,8 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
     end
 
     arg = ssa_def_expr(arg, sv)
-    if is_specializable_vararg_slot(arg, sv)
-        return Any[rewrap_unionall(p, sv.linfo.specTypes) for p in sv.vararg_type_container.parameters]
+    if is_specializable_vararg_slot(arg, sv.nargs, sv.result.vargs)
+        return sv.result.vargs
     end
 
     tti0 = widenconst(typ)
@@ -482,7 +501,13 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
     tm = _topmod(sv)
     if isa(f, Builtin) || isa(f, IntrinsicFunction)
         rt = builtin_tfunction(f, argtypes[2:end], sv)
-        if (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
+        if f === getfield && isa(fargs, Vector{Any}) && length(argtypes) == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
+            cti = precise_container_type(fargs[2], argtypes[2], vtypes, sv)
+            idx = argtypes[3].val
+            if 1 <= idx <= length(cti)
+                rt = unwrapva(cti[idx])
+            end
+        elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
             # perform very limited back-propagation of type information for `is` and `isa`
             if f === isa
                 a = ssa_def_expr(fargs[2], sv)

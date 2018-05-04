@@ -50,15 +50,12 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
     if t === c
         return mindepth == 0
     end
-    if isa(c, TypeVar)
-        # see if it is replacing a TypeVar upper bound with something simpler
-        return is_derived_type(t, c.ub, mindepth)
-    elseif isa(c, Union)
+    if isa(c, Union)
         # see if it is one of the elements of the union
         return is_derived_type(t, c.a, mindepth + 1) || is_derived_type(t, c.b, mindepth + 1)
     elseif isa(c, UnionAll)
         # see if it is derived from the body
-        return is_derived_type(t, c.body, mindepth)
+        return is_derived_type(t, c.var.ub, mindepth) || is_derived_type(t, c.body, mindepth + 1)
     elseif isa(c, DataType)
         if isa(t, DataType)
             # see if it is one of the supertypes of a parameter
@@ -96,7 +93,8 @@ function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, minde
     return false
 end
 
-# type vs. comparison or which was derived from source
+# The goal of this function is to return a type of greater "size" and less "complexity" than
+# both `t` or `c` over the lattice defined by `sources`, `depth`, and `allowed_tuplelen`.
 function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
     if t === c
         return t # quick egal test
@@ -140,9 +138,9 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                 lb = Bottom
             end
             v2 = TypeVar(tv.name, lb, ub)
-            return UnionAll(v2, _limit_type_size(t{v2}, c{v2}, sources, depth + 1, allowed_tuplelen))
+            return UnionAll(v2, _limit_type_size(t{v2}, c{v2}, sources, depth, allowed_tuplelen))
         end
-        tbody = _limit_type_size(t.body, c, sources, depth + 1, allowed_tuplelen)
+        tbody = _limit_type_size(t.body, c, sources, depth, allowed_tuplelen)
         tbody === t.body && return t
         return UnionAll(t.var, tbody)
     elseif isa(c, UnionAll)

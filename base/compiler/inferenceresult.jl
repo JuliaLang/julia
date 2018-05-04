@@ -5,6 +5,9 @@ const EMPTY_VECTOR = Vector{Any}()
 mutable struct InferenceResult
     linfo::MethodInstance
     args::Vector{Any}
+    vargs::Vector{Any} # Memoize vararg type info w/Consts here when calling get_argtypes
+                       # on the InferenceResult, so that the optimizer can use this info
+                       # later during inlining.
     result # ::Type, or InferenceState if WIP
     src::Union{CodeInfo, Nothing} # if inferred copy is available
     function InferenceResult(linfo::MethodInstance)
@@ -13,7 +16,7 @@ mutable struct InferenceResult
         else
             result = linfo.rettype
         end
-        return new(linfo, EMPTY_VECTOR, result, nothing)
+        return new(linfo, EMPTY_VECTOR, Any[], result, nothing)
     end
 end
 
@@ -31,7 +34,35 @@ function get_argtypes(result::InferenceResult)
             end
             vararg_type = Tuple
         else
-            vararg_type = rewrap(tupleparam_tail(atypes, nargs), linfo.specTypes)
+            laty = length(atypes)
+            if nargs > laty
+                va = atypes[laty]
+                if isvarargtype(va)
+                    new_va = rewrap_unionall(unconstrain_vararg_length(va), linfo.specTypes)
+                    vararg_type_vec = Any[new_va]
+                    vararg_type = Tuple{new_va}
+                else
+                    vararg_type_vec = Any[]
+                    vararg_type = Tuple{}
+                end
+            else
+                vararg_type_vec = Any[]
+                for p in atypes[nargs:laty]
+                    p = isvarargtype(p) ? unconstrain_vararg_length(p) : p
+                    push!(vararg_type_vec, rewrap_unionall(p, linfo.specTypes))
+                end
+                vararg_type = tuple_tfunc(Tuple{vararg_type_vec...})
+                for i in 1:length(vararg_type_vec)
+                    atyp = vararg_type_vec[i]
+                    if isa(atyp, DataType) && isdefined(atyp, :instance)
+                        # replace singleton types with their equivalent Const object
+                        vararg_type_vec[i] = Const(atyp.instance)
+                    elseif isconstType(atyp)
+                        vararg_type_vec[i] = Const(atyp.parameters[1])
+                    end
+                end
+            end
+            result.vargs = vararg_type_vec
         end
         args[nargs] = vararg_type
         nargs -= 1
@@ -80,19 +111,12 @@ function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector
     for cache_code in cache
         # try to search cache first
         cache_args = cache_code.args
-        if cache_code.linfo === code && length(cache_args) >= nargs
+        cache_vargs = cache_code.vargs
+        if cache_code.linfo === code && length(argtypes) === (length(cache_vargs) + nargs)
             cache_match = true
-            # verify that the trailing args (va) aren't Const
-            for i in (nargs + 1):length(cache_args)
-                if isa(cache_args[i], Const)
-                    cache_match = false
-                    break
-                end
-            end
-            cache_match || continue
-            for i in 1:nargs
+            for i in 1:length(argtypes)
                 a = argtypes[i]
-                ca = cache_args[i]
+                ca = i <= nargs ? cache_args[i] : cache_vargs[i - nargs]
                 # verify that all Const argument types match between the call and cache
                 if (isa(a, Const) || isa(ca, Const)) && !(a === ca)
                     cache_match = false

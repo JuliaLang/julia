@@ -214,6 +214,14 @@ function unwrapva(@nospecialize(t))
     return isvarargtype(t2) ? rewrap_unionall(t2.parameters[1], t) : t
 end
 
+function unconstrain_vararg_length(@nospecialize(va))
+    # construct a new Vararg type where its length is unconstrained,
+    # but its element type still captures any dependencies the input
+    # element type may have had on the input length
+    T = unwrap_unionall(va).parameters[1]
+    return rewrap_unionall(Vararg{T}, va)
+end
+
 typename(a) = error("typename does not apply to this type")
 typename(a::DataType) = a.name
 function typename(a::Union)

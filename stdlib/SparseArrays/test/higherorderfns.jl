@@ -266,16 +266,7 @@ end
             # --> test broadcast! entry point / not zero-preserving op
             fQ = broadcast(f, fX, fY, fZ); Q = sparse(fQ)
             broadcast!(f, Q, X, Y, Z); Q = sparse(fQ) # warmup for @allocated
-            @test_broken (@allocated broadcast!(f, Q, X, Y, Z)) == 0
-            broadcast!(f, Q, X, Y, Z); Q = sparse(fQ) # warmup for @allocated
-            @test (@allocated broadcast!(f, Q, X, Y, Z)) <= 16
-            # the preceding test allocates 16 bytes in the entry point for broadcast!, but
-            # none of the earlier tests of the same code path allocate. no allocation shows
-            # up with --track-allocation=user. allocation shows up on the first line of the
-            # entry point for broadcast! with --track-allocation=all, but that first line
-            # almost certainly should not allocate. so not certain what's going on.
-            # additional info: occurs for broadcast!(f, Z, X) for Z and X of different
-            # shape, but not for Z and X of the same shape.
+            @test (@allocated broadcast!(f, Q, X, Y, Z)) == 0
             @test broadcast!(f, Q, X, Y, Z) == sparse(broadcast!(f, fQ, fX, fY, fZ))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
