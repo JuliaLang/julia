@@ -30,8 +30,7 @@ Base.trues
 Base.falses
 Base.fill
 Base.fill!
-Base.similar(::AbstractArray)
-Base.similar(::Any, ::Tuple)
+Base.similar
 ```
 
 ## Basic functions
