@@ -45,23 +45,35 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-function startswith(a::String, b::String)
+function startswith(a::Union{String, SubString{String}},
+                    b::Union{String, SubString{String}})
     cub = ncodeunits(b)
     if ncodeunits(a) < cub
         false
-    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0
+    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+                 pointer(a), pointer(b), sizeof(b)) == 0
         nextind(a, cub) == cub + 1
     else
         false
     end
 end
 
-# TODO: fast startswith for SubString{String}
-
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
     ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0
 
-# TODO: fast endswith
+function endswith(a::Union{String, SubString{String}},
+                  b::Union{String, SubString{String}})
+    cub = ncodeunits(b)
+    astart = ncodeunits(a) - ncodeunits(b) + 1
+    if astart < 1
+        false
+    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+                 pointer(a, astart), pointer(b), sizeof(b)) == 0
+        thisind(a, astart) == astart
+    else
+        false
+    end
+end
 
 """
     chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
