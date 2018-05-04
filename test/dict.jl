@@ -926,7 +926,7 @@ end
         @test i isa AbstractSet
         @test i == Set([1])
     end
-    @test map(string, keys(d)) == Set(["1","3"])
+    @test Set(string(k) for k in keys(d)) == Set(["1","3"])
 end
 
 @testset "find" begin
