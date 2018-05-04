@@ -478,3 +478,16 @@ let x = T20324[T20324(1) for i = 1:2]
     @test isa(y,Vector{T20324})
     @test y == x
 end
+
+# issue #26979
+let io = IOBuffer()
+    function gen_f(a::T) where T
+        f = x -> T(x)
+        return f
+    end
+    f = gen_f(1f0)
+    serialize(io, f)
+    seekstart(io)
+    f2 = deserialize(io)
+    @test f2(1) === 1f0
+end
