@@ -612,4 +612,21 @@ end
     @test A == [2,1,4,3] .+ 2^30
 end
 
+@testset "1-dimensional 'opt-out' (non) sparse broadcasting" begin
+    # SparseArrays intentionally only promotes to sparse for limited array types
+    # More support may be added in the future, but for now let's make sure that
+    # broadcast still performs as expected (issue #26977)
+    A = spzeros(5)
+    @test A .+ (1:5) == 1:5
+    @test A .* 2 .+ view(collect(1:10), 1:5) == 1:5
+    @test 2 .* A .+ view(1:10, 1:5) == 1:5
+    @test (A .+ (1:5)) .* 2 == 2:2:10
+    @test ((1:5) .+ A) .* 2 == 2:2:10
+    @test 2 .* ((1:5) .+ A) == 2:2:10
+    @test 2 .* (A .+ (1:5)) == 2:2:10
+
+    @test Diagonal(spzeros(5)) \ view(rand(10), 1:5) == [Inf,Inf,Inf,Inf,Inf]
+end
+
+
 end # module
