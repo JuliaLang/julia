@@ -60,3 +60,6 @@ struct RowVector{T,V<:AbstractVector} <: AbstractMatrix{T}
     end
 end
 const ConjRowVector{T,CV<:ConjVector} = RowVector{T,CV}
+
+# Issue #24590: an inner product on a vector space induces an inner product on the dual space.
+dot(x::RowVector, y::RowVector) = dot(transpose(x), transpose(y))
