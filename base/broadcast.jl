@@ -600,7 +600,7 @@ Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 @inline _broadcast_getindex_evalf(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)  # not propagate_inbounds
 
 """
-    broadcastable(x)
+    Broadcast.broadcastable(x)
 
 Return either `x` or an object like `x` such that it supports `axes`, indexing, and its type supports `ndims`.
 
@@ -614,16 +614,16 @@ Further, if `x` defines its own [`BroadcastStyle`](@ref), then it must define it
 
 # Examples
 ```jldoctest
-julia> broadcastable([1,2,3]) # like `identity` since arrays already support axes and indexing
+julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already support axes and indexing
 3-element Array{Int64,1}:
  1
  2
  3
 
-julia> broadcastable(Int) # Types don't support axes, indexing, or iteration but are commonly used as scalars
+julia> Broadcast.broadcastable(Int) # Types don't support axes, indexing, or iteration but are commonly used as scalars
 Base.RefValue{Type{Int64}}(Int64)
 
-julia> broadcastable("hello") # Strings break convention of matching iteration and act like a scalar instead
+julia> Broadcast.broadcastable("hello") # Strings break convention of matching iteration and act like a scalar instead
 Base.RefValue{String}("hello")
 ```
 """

@@ -331,9 +331,9 @@ from cartesian to linear indexing:
 ```jldoctest
 julia> linear = LinearIndices((1:3, 1:2))
 LinearIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
-    1  4
-    2  5
-    3  6
+ 1  4
+ 2  5
+ 3  6
 
 julia> linear[1,2]
 4

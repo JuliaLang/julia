@@ -341,11 +341,11 @@ The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
 ```jldoctest
 julia> @test_broken 1 == 2
 Test Broken
-Expression: 1 == 2
+  Expression: 1 == 2
 
 julia> @test_broken 1 == 2 atol=0.1
 Test Broken
-Expression: ==(1, 2, atol=0.1)
+  Expression: ==(1, 2, atol=0.1)
 ```
 """
 macro test_broken(ex, kws...)
