@@ -266,7 +266,7 @@ struct BBState {
     BitVector UpExposedUsesUnrooted;
     //// All other uses
     BitVector UpExposedUses;
-    //// Downward exposed uses that were not followed by a safepoint
+    //// Downward exposed defs that were not followed by a safepoint
     BitVector DownExposedUnrooted;
     // These get updated during dataflow
     BitVector LiveIn;
@@ -678,8 +678,7 @@ static void NoteDef(State &S, BBState &BBS, int Num, const std::vector<int> &Saf
     BBS.Defs[Num] = 1;
     BBS.UpExposedUses[Num] = 0;
     BBS.UpExposedUsesUnrooted[Num] = 0;
-    if (!BBS.HasSafepoint)
-        BBS.DownExposedUnrooted[Num] = 1;
+    BBS.DownExposedUnrooted[Num] = 1;
     // This value could potentially be live at any following safe point
     // if it ends up live out, so add it to the LiveIfLiveOut lists for all
     // following safepoints.
@@ -902,16 +901,19 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
     // Now we have all the possible refinement information, we can remove ones for the invalid
 
     // * First find all values that must be externally rooted.
-    //   Values that might not be externally rooted must either have no refinement (the majority)
-    //   or have one of the value it's derived from (one of its refinements) be possibly
-    //   not externally rooted.
+    //   Values may either be obviously externally rooted (e.g. arguments) - (this is indicated by a
+    //   value of -1 or -2 in the refinement map), or may be externally rooted by refinement to other
+    //   values. Thus a value is not externally rooted if it either:
+    //   either:
+    //     - Has no refinements (all obiviously externally rooted values are annotated by -1/-2 in the
+    //       refinement map).
+    //     - Recursively reaches a not-externally rooted value through its refinements
     //
-    //   All other values can only possibly be externally rooted values,
-    //   which can include loops (of phi nodes).
-    //   We do this by first assuming all values to be externally rooted and then removing
-    //   values that are or can be derived from non-externally rooted values recursively.
+    //   We compute this set by first assuming all values are externally rooted and then iteratively
+    //   removing the ones that are not.
     BitVector extern_rooted(S.MaxPtrNumber + 1, true);
     BitVector perm_rooted(S.MaxPtrNumber + 1, true);
+
     //   * First clear all values that are not derived from anything.
     //     This only needs to be done once.
     for (int i = 0; i <= S.MaxPtrNumber; i++) {
@@ -993,6 +995,7 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
         // Not sure if `Num` can be `-1`
         if (Num < 0 || HasBitSet(extern_rooted, Num))
             continue;
+        // N.B.: We reset the bit vector below on every iteration
         visited[Num] = true;
         auto Phi = cast<PHINode>(S.ReversePtrNumbering[Num]);
         auto &RefinedPtr = S.Refinements[Num];
@@ -1027,8 +1030,8 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
                         RefinedPtr.append(it->second.begin() + k, it->second.end());
                     continue;
                 }
-                // Invalid
-                RefinedPtr = SmallVector<int, 1>{};
+                // Invalid - Remove All refinements
+                RefinedPtr.resize(0);
                 break;
             }
         }
@@ -1113,6 +1116,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI);
                 BBS.HasSafepoint = true;
+                BBS.DownExposedUnrooted.reset();
                 BBS.TopmostSafepoint = SafepointNumber;
                 BBS.Safepoints.push_back(SafepointNumber);
             } else if (LoadInst *LI = dyn_cast<LoadInst>(&I)) {
