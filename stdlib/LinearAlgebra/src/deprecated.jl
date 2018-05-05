@@ -1260,3 +1260,25 @@ end
 @deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(C, Diagonal(a), B)
 
 Base.@deprecate_binding trace tr
+
+# deprecate lu(...) in favor of lufact and factorization destructuring
+export lu
+function lu(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true))
+    depwarn(string("`lu(A[, pivot])` has been deprecated in favor of ",
+        "`lufact(A[, pivot])`. Whereas `lu(A[, pivot])` returns a tuple of arrays, ",
+        "`lufact(A[, pivot])` returns an `LU` object. So for a direct replacement, ",
+        "use `(lufact(A[, pivot])...,)`. But going forward, consider using the direct ",
+        "result of `lufact(A[, pivot])` instead, either destructured into its components ",
+        "(`l, u, p = lufact(A[, pivot])`) or as an `LU` object (`lup = lufact(A)`)."), :lu)
+    return (lufact(A, pivot)...,)
+end
+function lu(x::Number)
+    depwarn(string("`lu(x::Number)` has been deprecated in favor of `lufact(x::Number)`. ",
+        "Whereas `lu(x::Number)` returns a tuple of numbers, `lufact(x::Number)` ",
+        "returns a tuple of arrays for consistency with other `lufact` methods. ",
+        "So for a direct replacement, use `first.((lufact(x)...,))`. But going ",
+        "forward, consider using the direct result of `lufact(x)` instead, either ",
+        "destructured into its components (`l, u, p = lufact(x)`) or as an ",
+        "`LU` object (`lup = lufact(x)`)."), :lu)
+    return first.((lufact(x)...,))
+end

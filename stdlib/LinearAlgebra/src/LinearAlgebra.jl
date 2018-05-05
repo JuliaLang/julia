@@ -111,7 +111,6 @@ export
     lowrankdowndate!,
     lowrankupdate,
     lowrankupdate!,
-    lu,
     lufact,
     lufact!,
     lyap,

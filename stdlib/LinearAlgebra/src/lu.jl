@@ -11,6 +11,14 @@ struct LU{T,S<:AbstractMatrix} <: Factorization{T}
 end
 LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T} = LU{T,typeof(factors)}(factors, ipiv, info)
 
+# iteration for destructuring into factors
+Base.start(::LU) = Val(:L)
+Base.next(F::LU, ::Val{:L}) = (F.L, Val(:U))
+Base.next(F::LU, ::Val{:U}) = (F.U, Val(:p))
+Base.next(F::LU, ::Val{:p}) = (F.p, Val(:done))
+Base.done(F::LU, ::Val{:done}) = true
+Base.done(F::LU, ::Any) = false
+
 adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
@@ -174,6 +182,26 @@ U factor:
 
 julia> F.L * F.U == A[F.p, :]
 true
+
+julia> L, U, p = lufact(A); # destructuring via iteration
+
+julia> L
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 1.5  1.0
+
+julia> U
+2×2 Array{Float64,2}:
+ 4.0   3.0
+ 0.0  -1.5
+
+julia> p
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> A[p, :] == L * U
+true
 ```
 """
 function lufact(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T
@@ -199,36 +227,6 @@ end
 
 lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
 lufact(F::LU) = F
-
-lu(x::Number) = (one(x), x, 1)
-
-"""
-    lu(A, pivot=Val(true)) -> L, U, p
-
-Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
-By default, pivoting is used. This can be overridden by passing
-`Val(false)` for the second argument.
-
-See also [`lufact`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [4. 3.; 6. 3.]
-2×2 Array{Float64,2}:
- 4.0  3.0
- 6.0  3.0
-
-julia> L, U, p = lu(A)
-([1.0 0.0; 0.666667 1.0], [6.0 3.0; 0.0 1.0], [2, 1])
-
-julia> A[p, :] == L * U
-true
-```
-"""
-function lu(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true))
-    F = lufact(A, pivot)
-    F.L, F.U, F.p
-end
 
 function LU{T}(F::LU) where T
     M = convert(AbstractMatrix{T}, F.factors)
