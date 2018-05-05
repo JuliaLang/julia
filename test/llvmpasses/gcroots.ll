@@ -314,6 +314,38 @@ define %jl_value_t addrspace(10)* @vec_loadobj() {
   ret %jl_value_t addrspace(10)* %v7
 }
 
+declare i1 @check_property(%jl_value_t addrspace(10)* %val)
+define void @loopyness(i1 %cond1, %jl_value_t addrspace(10) *%arg) {
+; CHECK-LABEL: @loopyness
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    br label %header
+
+header:
+    %phi = phi %jl_value_t addrspace(10)* [null, %top], [%obj, %latch]
+    br i1 %cond1, label %a, label %latch
+
+a:
+; This needs a store
+; CHECK-LABEL: a:
+; CHECK:  [[GEP1:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; CHECK:  store %jl_value_t addrspace(10)* %phi, %jl_value_t addrspace(10)** [[GEP1]]
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %phi)
+    br label %latch
+
+latch:
+; This as well in case we went the other path
+; CHECK:  [[GEP2:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 [[GEPSLOT0]]
+; CHECK:  store %jl_value_t addrspace(10)* %phi, %jl_value_t addrspace(10)** [[GEP2]]
+    %obj = call %jl_value_t addrspace(10)* @alloc()
+    %cond = call i1 @check_property(%jl_value_t addrspace(10)* %phi)
+    br i1 %cond, label %exit, label %header
+
+exit:
+    ret void
+}
+
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}

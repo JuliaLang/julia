@@ -1846,6 +1846,11 @@ static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
     while (!WorkList.empty()) {
         BB = &*WorkList.back();
         WorkList.pop_back();
+        // Nothing is live at function entry
+        if (BB == &S.F->getEntryBlock()) {
+            LiveIn.reset();
+            return;
+        }
         for (BasicBlock *Pred : predecessors(BB)) {
             if (!Visited.insert(Pred).second)
                 continue;
@@ -1860,6 +1865,8 @@ static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
                 } else {
                     LiveIn &= S.LiveSets[LastSP];
                 }
+                if (LiveIn.empty()) // Just a compiler performance optimization
+                    return;
             }
         }
     }
