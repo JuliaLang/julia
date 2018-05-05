@@ -1085,6 +1085,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Known functions emitted in codegen that are not safepoints
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
+                        callee == ptls_getter ||
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
