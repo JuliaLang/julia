@@ -73,7 +73,7 @@ julia> asyncmap(batch_func, 1:5; ntasks=2, batch_size=2)
 
 !!! note
     Currently, all tasks in Julia are executed in a single OS thread co-operatively. Consequently,
-    `ayncmap` is beneficial only when the mapping function involves any I/O - disk, network, remote
+    `asyncmap` is beneficial only when the mapping function involves any I/O - disk, network, remote
     worker invocation, etc.
 
 """
