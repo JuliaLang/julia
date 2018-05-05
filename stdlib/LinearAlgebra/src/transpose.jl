@@ -153,7 +153,7 @@ Eagerly evaluate the lazy matrix transpose/adjoint.
 Note that the transposition is applied recursively to elements.
 
 This operation is intended for linear algebra usage - for general data manipulation see
-[`Base.permutedims`](@ref), which is non-recursive.
+[`permutedims`](@ref Base.permutedims), which is non-recursive.
 
 # Examples
 ```jldoctest
