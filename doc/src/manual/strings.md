@@ -348,9 +348,9 @@ x
 y
 ```
 
-Strings in Julia can contain invalid UTF-8 code unit sequences. This is rule allows to accept
-any byte sequence as a string. In such situations a rule is that characters are formed by longest
-possibly valid sequences of code points. This rule is best explained by an example:
+Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
+treat any byte sequence as a `String`. In such situations a rule is that characters are formed
+by longest possibly valid sequences of code points. This rule is best explained by an example:
 
 ```jldoctest unicodestring
 julia> s = "\xc0\xa0\xe2\x88\xe2|"
@@ -400,10 +400,10 @@ julia> string(greet, ", ", whom, ".\n")
 "Hello, world.\n"
 ```
 
-An important to be aware of situation is when invalid UTF-8 strings are concatenated.
+A situation which is important to be aware of is when invalid UTF-8 strings are concatenated.
 In that case string may contain different characters than those that constitute concatenated
-stings and number of characters in such string may be lower than sum of numbers of characters
-of the concatenated strings, e.g.:
+stings and number of characters in such a string may be lower than sum of numbers of
+characters of the concatenated strings, e.g.:
 
 ```jldoctest stringconcat
 julia> a, b = "\xe2\x88", "\x80"

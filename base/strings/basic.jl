@@ -357,11 +357,6 @@ return `i`. In all other cases throw `BoundsError`.
 
 # Examples
 ```jldoctest
-julia> thisind("α", -1)
-ERROR: BoundsError: attempt to access "α"
-  at index [-1]
-[...]
-
 julia> thisind("α", 0)
 0
 
@@ -375,6 +370,10 @@ julia> thisind("α", 3)
 3
 
 julia> thisind("α", 4)
+ERROR: BoundsError: attempt to access "α"
+  at index [4]
+[...]
+
 julia> thisind("α", -1)
 ERROR: BoundsError: attempt to access "α"
   at index [-1]
@@ -396,7 +395,8 @@ end
 """
     prevind(str::AbstractString, i::Integer, n::Integer=1) -> Int
 
-Case `n == 1`.
+* Case `n == 1`
+
 If `i` is in bounds in `s` return the index of the start of the character whose
 encoding starts before index `i`. In other words, if `i` is the start of a
 character, return the start of the previous character; if `i` is not the start
@@ -405,12 +405,15 @@ If `i` is equal to `1` return `0`.
 If `i` is equal to `ncodeunits(str)+1` return `lastindex(str)`.
 Otherwise throw `BoundsError`.
 
-Case `n > 1`. Behaves like applying `n` times `prevind` for `n==1`. The only difference
+* Case `n > 1`
+
+Behaves like applying `n` times `prevind` for `n==1`. The only difference
 is that if `n` is so large that applying `prevind` would reach `0` then each remaining
 iteration decreases the returned value by `1`.
 This means that in this case `prevind` can return a negative value.
 
-Case `n == 0`.
+* Case `n == 0`
+
 Return `i` only if `i` is a valid index in `str` or is equal to `ncodeunits(str)+1`.
 Otherwise `StringIndexError` or `BoundsError` is thrown.
 
@@ -452,7 +455,8 @@ end
 """
     nextind(str::AbstractString, i::Integer, n::Integer=1) -> Int
 
-Case `n == 1`.
+* Case `n == 1`
+
 If `i` is in bounds in `s` return the index of the start of the character whose
 encoding starts after index `i`. In other words, if `i` is the start of a
 character, return the start of the next character; if `i` is not the start
@@ -461,12 +465,15 @@ If `i` is equal to `0` return `1`.
 If `i` is in bounds but greater or equal to `lastindex(str)` return `ncodeunits(str)+1`.
 Otherwise throw `BoundsError`.
 
-Case `n > 1`. Behaves like applying `n` times `nextind` for `n==1`. The only difference
+* Case `n > 1`
+
+Behaves like applying `n` times `nextind` for `n==1`. The only difference
 is that if `n` is so large that applying `nextind` would reach `ncodeunits(str)+1` then each
 remaining iteration increases the returned value by `1`.
 This means that in this case `nextind` can return a value greater than `ncodeunits(str)+1`.
 
-Case `n == 0`.
+* Case `n == 0`
+
 Return `i` only if `i` is a valid index in `s` or is equal to `0`.
 Otherwise `StringIndexError` or `BoundsError` is thrown.
 
