@@ -266,16 +266,9 @@ struct BBState {
     BitVector UpExposedUsesUnrooted;
     //// All other uses
     BitVector UpExposedUses;
-    //// Downward exposed defs that were not followed by a safepoint
-    BitVector DownExposedUnrooted;
     // These get updated during dataflow
     BitVector LiveIn;
     BitVector LiveOut;
-    //// Incoming values that are unrooted - these are propagated forward. I.e.
-    //// they need not necessarily be LiveIn if there are no following uses,
-    //// but if they are they haven't been rooted yet.
-    BitVector UnrootedIn;
-    BitVector UnrootedOut;
     std::vector<int> Safepoints;
     int TopmostSafepoint = -1;
     bool HasSafepoint = false;
@@ -662,7 +655,6 @@ static void MaybeResize(BBState &BBS, unsigned Idx) {
         BBS.Defs.resize(Idx + 1);
         BBS.UpExposedUses.resize(Idx + 1);
         BBS.UpExposedUsesUnrooted.resize(Idx + 1);
-        BBS.DownExposedUnrooted.resize(Idx + 1);
         BBS.PhiOuts.resize(Idx + 1);
     }
 }
@@ -678,7 +670,6 @@ static void NoteDef(State &S, BBState &BBS, int Num, const std::vector<int> &Saf
     BBS.Defs[Num] = 1;
     BBS.UpExposedUses[Num] = 0;
     BBS.UpExposedUsesUnrooted[Num] = 0;
-    BBS.DownExposedUnrooted[Num] = 1;
     // This value could potentially be live at any following safe point
     // if it ends up live out, so add it to the LiveIfLiveOut lists for all
     // following safepoints.
@@ -802,16 +793,10 @@ JL_USED_FUNC static void dumpLivenessState(Function &F, State &S) {
         dumpBitVectorValues(S, S.BBStates[&BB].UpExposedUsesUnrooted);
         dbgs() << "\n\tUpExposedUses: ";
         dumpBitVectorValues(S, S.BBStates[&BB].UpExposedUses);
-        dbgs() << "\n\tDownExposedUnrooted: ";
-        dumpBitVectorValues(S, S.BBStates[&BB].DownExposedUnrooted);
         dbgs() << "\n\tLiveIn: ";
         dumpBitVectorValues(S, S.BBStates[&BB].LiveIn);
         dbgs() << "\n\tLiveOut: ";
         dumpBitVectorValues(S, S.BBStates[&BB].LiveOut);
-        dbgs() << "\n\tUnrootedIn: ";
-        dumpBitVectorValues(S, S.BBStates[&BB].UnrootedIn);
-        dbgs() << "\n\tUnrootedOut: ";
-        dumpBitVectorValues(S, S.BBStates[&BB].UnrootedOut);
         dbgs() << "\n";
     }
 }
@@ -1116,7 +1101,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI);
                 BBS.HasSafepoint = true;
-                BBS.DownExposedUnrooted.reset();
                 BBS.TopmostSafepoint = SafepointNumber;
                 BBS.Safepoints.push_back(SafepointNumber);
             } else if (LoadInst *LI = dyn_cast<LoadInst>(&I)) {
@@ -1206,7 +1190,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
         // Pre-seed the dataflow variables;
         BBS.LiveIn = BBS.UpExposedUses;
         BBS.LiveIn |= BBS.UpExposedUsesUnrooted;
-        BBS.UnrootedOut = BBS.DownExposedUnrooted;
         BBS.Done = true;
     }
     FixUpRefinements(PHINumbers, S);
@@ -1217,19 +1200,14 @@ State LateLowerGCFrame::LocalScan(Function &F) {
  * DataFlow equations:
  * LiveIn[BB] = UpExposedUses[BB] ∪ (LiveOut[BB] - Defs[BB])
  * LiveOut[BB] =  PhiUses[BB] ∪ ∪_{Succ} LiveIn[Succ]
- * UnrootedOut[BB] = DownExposedUnrooted[BB] ∪ (HasSafepoint ? {} : UnrootedIn[BB])
- * UnrootedIn[BB] = ∪_{Pred} UnrootedOut[Pred]
  *
  * We'll perform textbook iterative dataflow to compute this. There are better
  * algorithms. If this starts becoming a problem, we should use one of them.
  */
 void LateLowerGCFrame::ComputeLiveness(State &S) {
     bool Converged = false;
-    /* Liveness is a reverse problem. Our problem is slightly more general,
-     * because the Unrooted* variables are forward problems. Nevertheless,
-     * we use reverse postorder in an attempt to speed convergence of the Live*
-     * variables, in anticipation of the live ranges being larger than the
-     * unrooted ranges (since those terminate at any safe point).
+    /* Liveness is a reverse problem, so RPOT is a good way to
+     * perform this iteration.
      */
     ReversePostOrderTraversal<Function *> RPOT(S.F);
     while (!Converged) {
@@ -1256,16 +1234,6 @@ void LateLowerGCFrame::ComputeLiveness(State &S) {
             if (NewLiveIn != BBS.LiveIn) {
                 AnyChanged = true;
                 BBS.LiveIn = NewLiveIn;
-            }
-            BitVector NewUnrootedIn;
-            for (BasicBlock *Pred : predecessors(BB))
-                NewUnrootedIn |= S.BBStates[Pred].UnrootedOut;
-            if (NewUnrootedIn != BBS.UnrootedIn) {
-                AnyChanged = true;
-                BBS.UnrootedIn = NewUnrootedIn;
-                if (!BBS.HasSafepoint) {
-                    BBS.UnrootedOut |= BBS.UnrootedIn;
-                }
             }
         }
         Converged = !AnyChanged;
