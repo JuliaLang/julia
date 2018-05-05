@@ -618,7 +618,8 @@ function analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, 
     #verify_ir(ir2)
 
     return InliningTodo(idx,
-        isva, isinvoke, isapply, na,
+        na > 0 && method.isva,
+        isinvoke, isapply, na,
         method, Any[methsp...], metharg,
         inline_linetable, ir2, linear_inline_eligible(ir2))
 end
