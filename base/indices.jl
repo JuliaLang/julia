@@ -354,10 +354,11 @@ LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) whe
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
 # AbstractArray implementation
-IndexStyle(::Type{LinearIndices{N,R}}) where {N,R} = IndexLinear()
-axes(iter::LinearIndices{N,R}) where {N,R} = iter.indices
-size(iter::LinearIndices{N,R}) where {N,R} = length.(iter.indices)
-function getindex(iter::LinearIndices{N,R}, i::Int) where {N,R}
+IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
+axes(iter::LinearIndices) = iter.indices
+size(iter::LinearIndices) = map(unsafe_length, iter.indices)
+length(iter::LinearIndices) = prod(size(iter))
+function getindex(iter::LinearIndices, i::Int)
     @boundscheck checkbounds(iter, i)
     i
 end
