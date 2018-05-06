@@ -77,10 +77,10 @@ $(LIBGIT2_SRC_PATH)/libgit2-bundled_zlib.patch-applied: $(LIBGIT2_SRC_PATH)/sour
 	echo 1 > $@
 
 $(build_datarootdir)/julia/cert.pem:
-	$(JLDOWNLOAD) $(shell pwd)/cacert-2018-03-07.pem https://curl.haxx.se/ca/cacert-2018-03-07.pem
-	$(JLCHECKSUM) $(shell pwd)/cacert-2018-03-07.pem
+	$(JLDOWNLOAD) $(shell pwd)/$(MOZILLA_CACERT_VERSION) https://curl.haxx.se/ca/$(MOZILLA_CACERT_VERSION)
+	$(JLCHECKSUM) $(shell pwd)/$(MOZILLA_CACERT_VERSION)
 	mkdir -p $(build_datarootdir)/julia
-	mv $(shell pwd)/cacert-2018-03-07.pem $@
+	mv $(shell pwd)/$(MOZILLA_CACERT_VERSION) $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
