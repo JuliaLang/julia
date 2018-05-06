@@ -1138,6 +1138,7 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 if (id == Intrinsic::memset || id == Intrinsic::lifetime_start ||
                     id == Intrinsic::lifetime_end || isa<DbgInfoIntrinsic>(II)) {
                     call->eraseFromParent();
+                    return;
                 }
             }
             // remove from operand bundle
