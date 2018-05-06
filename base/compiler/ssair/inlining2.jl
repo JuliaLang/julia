@@ -576,15 +576,6 @@ function analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, 
         return ConstantCase(quoted(linfo.inferred_const), method, Any[methsp...], metharg)
     end
 
-    # Handle vararg functions
-    isva = na > 0 && method.isva
-    if isva
-        @assert length(atypes) >= na - 1
-        va_type = tuple_tfunc(Tuple{Any[widenconst(atypes[i]) for i in 1:length(atypes)]...})
-        atypes = Any[atypes[1:(na - 1)]..., va_type]
-    end
-
-    # Go see if we already have a pre-inferred result
     res = find_inferred(linfo, atypes, sv)
     res === nothing && return nothing
 
@@ -627,7 +618,8 @@ function analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, 
     #verify_ir(ir2)
 
     return InliningTodo(idx,
-        isva, isinvoke, isapply, na,
+        na > 0 && method.isva,
+        isinvoke, isapply, na,
         method, Any[methsp...], metharg,
         inline_linetable, ir2, linear_inline_eligible(ir2))
 end
@@ -693,7 +685,6 @@ function handle_single_case!(ir, stmt, idx, case, isinvoke, todo)
         push!(todo, case::InliningTodo)
     end
 end
-
 
 function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie)
@@ -761,11 +752,13 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                 # As a special case, if we can see the tuple() call, look at it's arguments to find
                 # our types. They can be more precise (e.g. f(Bool, A...) would be lowered as
                 # _apply(f, tuple(Bool)::Tuple{DataType}, A), which might not be precise enough to
-                # get a good method match. This pattern is used in the array code a bunch.
+                # get a good method match). This pattern is used in the array code a bunch.
                 if isa(def, SSAValue) && is_tuple_call(ir, ir[def])
                     for tuparg in ir[def].args[2:end]
                         push!(new_atypes, exprtype(tuparg, ir, ir.mod))
                     end
+                elseif isa(def, Argument) && def.n === length(ir.argtypes) && !isempty(sv.result_vargs)
+                    append!(new_atypes, sv.result_vargs)
                 else
                     append!(new_atypes, typ.parameters)
                 end

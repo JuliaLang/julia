@@ -1536,9 +1536,9 @@ x26826 = rand()
 
 apply26826(f, args...) = f(args...)
 
-f26826(x) = apply26826(Base.getproperty, Foo26826(1, x), :b)
 # We use getproperty to drive these tests because it requires constant
 # propagation in order to lower to a well-inferred getfield call.
+f26826(x) = apply26826(Base.getproperty, Foo26826(1, x), :b)
 
 @test @inferred(f26826(x26826)) === x26826
 
@@ -1554,12 +1554,10 @@ g26826(x) = getfield26826(x, :a, :b)
 # InferenceResult cache properly for varargs methods.
 typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first.code
 found_well_typed_getfield_call = false
-for stmnt in typed_code
-    if Meta.isexpr(stmnt, :(=)) && Meta.isexpr(stmnt.args[2], :call)
-        lhs = stmnt.args[2]
-        if lhs.args[1] == GlobalRef(Base, :getfield) && lhs.typ === Float64
-            global found_well_typed_getfield_call = true
-        end
+for stmt in typed_code
+    lhs = Meta.isexpr(stmt, :(=)) ? stmt.args[2] : stmt
+    if Meta.isexpr(lhs, :call) && lhs.args[1] == GlobalRef(Base, :getfield) && lhs.typ === Float64
+        global found_well_typed_getfield_call = true
     end
 end
 
