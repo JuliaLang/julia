@@ -17,6 +17,7 @@ are supported on all primitive numeric types:
 | `x - y`    | binary minus   | performs subtraction                   |
 | `x * y`    | times          | performs multiplication                |
 | `x / y`    | divide         | performs division                      |
+| `x ÷ y`    | integer divide | x / y, truncated to an integer         |
 | `x \ y`    | inverse divide | equivalent to `y / x`                  |
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
