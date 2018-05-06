@@ -220,6 +220,11 @@ includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(incl
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 
+# BinaryBuilder options
+# TODO: Autodiscover triplet
+USE_BINARYBUILDER_LLVM := 0
+BINARYBUILDER_TRIPLET :=
+
 # LLVM Options
 LLVMROOT := $(build_prefix)
 LLVM_ASSERTIONS := 0
