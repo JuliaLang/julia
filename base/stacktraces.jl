@@ -83,7 +83,7 @@ If the StackFrame has function and line information, we consider two of them the
 they share the same function/line information.
 =#
 function ==(a::StackFrame, b::StackFrame)
-    a.line == b.line && a.from_c == b.from_c && a.func == b.func && a.file == b.file && a.inlined == b.inlined
+    return a.line == b.line && a.from_c == b.from_c && a.func == b.func && a.file == b.file && a.inlined == b.inlined # excluding linfo and pointer
 end
 
 function hash(frame::StackFrame, h::UInt)
@@ -93,6 +93,7 @@ function hash(frame::StackFrame, h::UInt)
     h = hash(frame.func, h)
     h = hash(frame.from_c, h)
     h = hash(frame.inlined, h)
+    return h
 end
 
 
