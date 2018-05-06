@@ -353,4 +353,10 @@ end
     @test Tridiagonal(4:5, 1:3, 1:2) == [1 1 0; 4 2 2; 0 5 3]
 end
 
+@testset "Issue #26994" begin
+    T = SymTridiagonal([1.0],[3.0])
+    x = ones(1)
+    @test T*x == ones(1)
+end
+
 end # module TestTridiagonal
