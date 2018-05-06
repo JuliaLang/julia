@@ -1328,11 +1328,11 @@ end
 @test I24002.y == [1:10;]
 @test I24002.s1() == 1
 
-@testset "eachindexvalue" begin
+@testset "pairs" begin
     A14 = [11 13; 12 14]
-    @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
+    @test [a for (a,b) in pairs(IndexLinear(),    A14)] == reshape(1:4, 2, 2)
     @test [a for (a,b) in pairs(IndexCartesian(), A14)] == Array(CartesianIndices(axes(A14)))
-    @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
+    @test [b for (a,b) in pairs(IndexLinear(),    A14)] == A14
     @test [b for (a,b) in pairs(IndexCartesian(), A14)] == A14
 end
 
