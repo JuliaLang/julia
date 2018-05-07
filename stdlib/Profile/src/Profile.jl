@@ -242,14 +242,17 @@ function callers end
 
 function callers(funcname::String, bt::Vector, lidict::LineInfoFlatDict; filename = nothing, linerange = nothing)
     if filename === nothing && linerange === nothing
-        return callersf(li -> li.func == funcname, bt, lidict)
+        return callersf(li -> String(li.func) == funcname,
+            bt, lidict)
     end
     filename === nothing && throw(ArgumentError("if supplying linerange, you must also supply the filename"))
+    filename = String(filename)
     if linerange === nothing
-        return callersf(li -> li.func == funcname && li.file == filename, bt, lidict)
+        return callersf(li -> String(li.func) == funcname && String(li.file) == filename,
+            bt, lidict)
     else
-        return callersf(li -> li.func == funcname && li.file == filename &&
-            in(li.line, linerange), bt, lidict)
+        return callersf(li -> String(li.func) == funcname && String(li.file) == filename && in(li.line, linerange),
+            bt, lidict)
     end
 end
 
