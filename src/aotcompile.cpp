@@ -48,9 +48,10 @@
 #include <llvm/CodeGen/TargetPassConfig.h>
 #if JL_LLVM_VERSION < 50000
 #include <llvm/CodeGen/Passes.h>
-#include <llvm/CodeGen/AsmPrinter.h>
 #endif
+#include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/MC/MCAsmInfo.h>
+#include <llvm/MC/MCStreamer.h>
 
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
