@@ -3034,11 +3034,14 @@ JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    maybe_collect(ptls);
-    ptls->gc_num.allocd += sz;
-    ptls->gc_num.malloc++;
+    if (ptls && ptls->safepoint) {
+        maybe_collect(ptls);
+        ptls->gc_num.allocd += sz;
+        ptls->gc_num.malloc++;
+    }
     void *b = malloc(sz);
-    if (b == NULL)
+    // If ptls->safepoint is NULL, then let the caller deal with the failed malloc
+    if (b == NULL && ptls && ptls->safepoint)
         jl_throw(jl_memory_exception);
     return b;
 }
@@ -3046,11 +3049,14 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    maybe_collect(ptls);
-    ptls->gc_num.allocd += nm*sz;
-    ptls->gc_num.malloc++;
+    if (ptls && ptls->safepoint) {
+        maybe_collect(ptls);
+        ptls->gc_num.allocd += nm*sz;
+        ptls->gc_num.malloc++;
+    }
     void *b = calloc(nm, sz);
-    if (b == NULL)
+    // If ptls->safepoint is NULL, then let the caller deal with the failed calloc
+    if (b == NULL && ptls && ptls->safepoint)
         jl_throw(jl_memory_exception);
     return b;
 }
@@ -3059,8 +3065,10 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     free(p);
-    ptls->gc_num.freed += sz;
-    ptls->gc_num.freecall++;
+    if (ptls && ptls->safepoint) {
+        ptls->gc_num.freed += sz;
+        ptls->gc_num.freecall++;
+    }
 }
 
 // older name for jl_gc_counted_free_with_size
@@ -3072,14 +3080,17 @@ JL_DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    maybe_collect(ptls);
-    if (sz < old)
-        ptls->gc_num.freed += (old - sz);
-    else
-        ptls->gc_num.allocd += (sz - old);
-    ptls->gc_num.realloc++;
+    if (ptls && ptls->safepoint) {
+        maybe_collect(ptls);
+        if (sz < old)
+            ptls->gc_num.freed += (old - sz);
+        else
+            ptls->gc_num.allocd += (sz - old);
+        ptls->gc_num.realloc++;
+    }
     void *b = realloc(p, sz);
-    if (b == NULL)
+    // If ptls->safepoint is NULL, then let the caller deal with the failed realloc
+    if (b == NULL && ptls && ptls->safepoint)
         jl_throw(jl_memory_exception);
     return b;
 }

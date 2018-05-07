@@ -652,6 +652,12 @@ function pfib(n::Int)
 end
 @test pfib(20) == 6765
 
+function test_27020_SIGSEGV()
+    x = BigInt()
+    # We only care that this call does not throw a SIGSEGV, so no need to check return value
+    @threadcall((:__gmpz_init, :libgmp), Cvoid, (Ptr{BigInt}, ), Ref(x))
+end
+test_27020_SIGSEGV()
 
 # scheduling wake/sleep test (#32511)
 let timeout = 300 # this test should take about 1-10 seconds
