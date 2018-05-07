@@ -60,10 +60,13 @@ automatically such that there are `length` linearly spaced elements in the range
 ```jldoctest
 julia> range(1, length=100)
 1:100
+
 julia> range(1, stop=100)
 1:100
+
 julia> range(1, step=5, length=100)
 1:5:496
+
 julia> range(1, step=5, stop=100)
 1:5:96
 ```
