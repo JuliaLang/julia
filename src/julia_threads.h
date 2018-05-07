@@ -161,7 +161,7 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 // gc safepoint and gc states
 // This triggers a SegFault when we are in GC
-// Assign it to a variable to make sure the compiler emit the load
+// Assign it to a variable to make sure the compiler emits the load
 // and to avoid Clang warning for -Wunused-volatile-lvalue
 #define jl_gc_safepoint_(ptls) do {                     \
         jl_signal_fence();                              \

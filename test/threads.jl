@@ -503,3 +503,11 @@ function test_thread_too_few_iters()
     @test !(true in found[nthreads():end])
 end
 test_thread_too_few_iters()
+
+
+function test_27020_SIGSEGV()
+    x = BigInt()
+    # We only care that this call does not throw a SIGSEGV, so no need to check return value
+    @threadcall((:__gmpz_init, :libgmp), Cvoid, (Ptr{BigInt}, ), Ref(x))
+end
+test_27020_SIGSEGV()
