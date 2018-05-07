@@ -55,6 +55,21 @@ If `length`, `stop`, and `step` are all specified, they must agree.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
 automatically such that there are `length` linearly spaced elements in the range.
+
+# Examples
+```jldoctest
+julia> range(1, length=100)
+1:100
+
+julia> range(1, stop=100)
+1:100
+
+julia> range(1, step=5, length=100)
+1:5:496
+
+julia> range(1, step=5, stop=100)
+1:5:96
+```
 """
 range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing) =
     _range(start, step, stop, length)
