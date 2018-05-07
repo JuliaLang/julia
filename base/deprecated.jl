@@ -1496,6 +1496,7 @@ end
 # PR #26347: Deprecate implicit scalar broadcasting in setindex!
 _axes(::Ref) = ()
 _axes(x) = axes(x)
+setindex_shape_check(X::Base.Iterators.Repeated, I...) = nothing
 function deprecate_scalar_setindex_broadcast_message(v, I...)
     value = (_axes(Base.Broadcast.broadcastable(v)) == () ? "x" : "(x,)")
     "using `A[I...] = x` to implicitly broadcast `x` across many locations is deprecated. Use `A[I...] .= $value` instead."
