@@ -125,7 +125,7 @@ The keyword arguments can be any combination of:
 
  - `mincount` -- Limits the printout to only those lines with at least `mincount` occurrences.
 """
-function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data);
+function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data);
         format = :tree,
         C = false,
         combine = true,
@@ -142,7 +142,7 @@ function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict 
         format)
 end
 
-function print(io::IO, data::Vector{<:Unsigned}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
+function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat, format::Symbol)
     cols::Int = Base.displaysize(io)[2]
     data = convert(Vector{UInt64}, data)
     if format == :tree
@@ -163,7 +163,7 @@ a dictionary `lidict` of line information.
 
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
-print(data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
+print(data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
     print(stdout, data, lidict; kwargs...)
 
 """
@@ -185,7 +185,7 @@ function getdict(data::Vector{UInt})
 end
 
 """
-    flatten(btdata, lidict) -> (newdata::Vector{UInt64}, newdict::LineInfoFlatDict)
+    flatten(btdata::Vector, lidict::LineInfoDict) -> (newdata::Vector{UInt64}, newdict::LineInfoFlatDict)
 
 Produces "flattened" backtrace data. Individual instruction pointers
 sometimes correspond to a multi-frame backtrace due to inlining; in
@@ -240,7 +240,7 @@ profile buffer is used.
 """
 function callers end
 
-function callers(funcname::String, bt::Vector, lidict::LineInfoDict; filename = nothing, linerange = nothing)
+function callers(funcname::String, bt::Vector, lidict::LineInfoFlatDict; filename = nothing, linerange = nothing)
     if filename === nothing && linerange === nothing
         return callersf(li -> li.func == funcname, bt, lidict)
     end
@@ -254,7 +254,7 @@ function callers(funcname::String, bt::Vector, lidict::LineInfoDict; filename = 
 end
 
 callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
-callers(func::Function, bt::Vector, lidict::LineInfoDict; kwargs...) =
+callers(func::Function, bt::Vector, lidict::LineInfoFlatDict; kwargs...) =
     callers(string(func), bt, lidict; kwargs...)
 callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
 
@@ -333,20 +333,30 @@ function count_flat(data::Vector{UInt64})
     return (iplist, n)
 end
 
-function parse_flat(iplist::Vector{UInt64}, n::Vector{Int}, lidict::LineInfoFlatDict, C::Bool)
+function parse_flat(iplist::Vector{UInt64}, n::Vector{Int}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool)
     # Convert instruction pointers to names & line numbers
-    lilist = StackFrame[lidict[ip] for ip in iplist]
-    # Keep only the interpretable ones
-    # The ones with no line number might appear multiple times in a single
-    # backtrace, giving the wrong impression about the total number of backtraces.
-    # Delete them too.
-    keep = Bool[x != UNKNOWN && x.line != 0 && (C || !x.from_c) for x in lilist]
-    n = n[keep]
-    lilist = lilist[keep]
-    return (lilist, n)
+    lilist = StackFrame[]
+    nlist = Int[]
+    for (ip, count) in zip(iplist, n)
+        frames = lidict[ip]
+        nframes = (frames isa Vector ? length(frames) : 1)
+        # add all the inlining frames
+        for i = nframes:-1:1
+            frame = (frames isa Vector ? frames[i] : frames)
+            # Keep only the interpretable ones
+            # The ones with no line number might appear multiple times in a single
+            # backtrace, giving the wrong impression about the total number of backtraces.
+            # Delete them too.
+            if frame != UNKNOWN && frame.line != 0 && (C || !frame.from_c)
+                push!(lilist, frame)
+                push!(nlist, count)
+            end
+        end
+    end
+    return (lilist, nlist)
 end
 
-function flat(io::IO, data::Vector{UInt64}, lidict::LineInfoFlatDict, cols::Int, fmt::ProfileFormat)
+function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat)
     iplist, n = count_flat(data)
     if isempty(n)
         warning_empty()
@@ -354,12 +364,6 @@ function flat(io::IO, data::Vector{UInt64}, lidict::LineInfoFlatDict, cols::Int,
     end
     lilist, n = parse_flat(iplist, n, lidict, fmt.C)
     print_flat(io, lilist, n, cols, fmt)
-    nothing
-end
-
-function flat(io::IO, data::Vector{UInt64}, lidict::LineInfoDict, cols::Int, fmt::ProfileFormat)
-    newdata, newdict = flatten(data, lidict)
-    flat(io, newdata, newdict, cols, fmt)
     nothing
 end
 
@@ -582,7 +586,7 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
     nothing
 end
 
-function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoDict)
+function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoFlatDict)
     counts = Dict{StackFrame, Int}()
     lastmatched = false
     for id in bt
