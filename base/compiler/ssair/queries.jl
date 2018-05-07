@@ -10,7 +10,6 @@ function stmt_effect_free(@nospecialize(stmt), src, mod::Module)
     if isa(stmt, Expr)
         e = stmt::Expr
         head = e.head
-        is_meta_expr_head(head) && return true
         if head === :static_parameter
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
             return isa(e.typ, Const) || issingletontype(widenconst(e.typ))
@@ -45,9 +44,10 @@ function stmt_effect_free(@nospecialize(stmt), src, mod::Module)
                 eT ⊑ fT || return false
             end
             return true
-        elseif head === :isdefined || head === :the_exception || head === :copyast
+        elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck
             return true
         else
+            # e.g. :simdloop
             return false
         end
     end
