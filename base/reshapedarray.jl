@@ -38,13 +38,13 @@ length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
 """
-    reshape(A, dims...) -> R
-    reshape(A, dims) -> R
+    reshape(A, dims...) -> AbstractArray
+    reshape(A, dims) -> AbstractArray
 
-Return an array `R` with the same data as `A`, but with different
+Return an array with the same data as `A`, but with different
 dimension sizes or number of dimensions. The two arrays share the same
-underlying data, so that setting elements of `R` alters the values of
-`A` and vice versa.
+underlying data, so that the result is mutable if and only if `A` is
+mutable, and setting elements of one alters the values of the other.
 
 The new dimensions may be specified either as a list of arguments or
 as a shape tuple. At most one dimension may be specified with a `:`,
@@ -83,6 +83,11 @@ julia> reshape(A, 2, :)
 2×8 Array{Int64,2}:
  1  3  5  7   9  11  13  15
  2  4  6  8  10  12  14  16
+
+ julia> reshape(1:6, 2, 3)
+ 2×3 reshape(::UnitRange{Int64}, 2, 3) with eltype Int64:
+  1  3  5
+  2  4  6
 ```
 
 """
