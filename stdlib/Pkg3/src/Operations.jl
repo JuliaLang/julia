@@ -450,8 +450,12 @@ end
 
 # install & update manifest
 function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
-    BinaryProvider.probe_platform_engines!()
     hashes, urls = version_data!(ctx, pkgs)
+    apply_versions(ctx, pkgs, hashes, urls)
+end
+
+function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UUID,SHA1}, urls::Dict{UUID,Vector{String}})
+    BinaryProvider.probe_platform_engines!()
     new_versions = UUID[]
 
     pkgs_to_install = Tuple{PackageSpec, String}[]

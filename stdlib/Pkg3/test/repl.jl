@@ -105,7 +105,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
                 write("Manifest.toml", manifest)
                 mktempdir() do depot_dir
                     pushfirst!(DEPOT_PATH, depot_dir)
-                    pkg"up --fixed"
+                    pkg"instantiate"
                     @test Pkg3.installed()[pkg2] == v"0.2.0"
                 end
             finally
