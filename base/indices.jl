@@ -357,10 +357,15 @@ LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = iter.indices
 size(iter::LinearIndices) = map(unsafe_length, iter.indices)
-length(iter::LinearIndices) = prod(size(iter))
 function getindex(iter::LinearIndices, i::Int)
+    @_inline_meta
     @boundscheck checkbounds(iter, i)
     i
+end
+function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
+    @_inline_meta
+    @boundscheck checkbounds(iter, i)
+    @inbounds (first(iter):last(iter))[i]
 end
 # More efficient iteration — predominantly for non-vector LinearIndices
 # but one-dimensional LinearIndices must be special-cased to support OffsetArrays

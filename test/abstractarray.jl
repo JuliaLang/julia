@@ -119,11 +119,13 @@ end
         for i in ((), fill(0))
             @test LinearIndices(i)[1] == 1
             @test_throws BoundsError LinearIndices(i)[2]
+            @test_throws BoundsError LinearIndices(i)[1:2]
             @test LinearIndices(i)[1,1] == 1
             @test LinearIndices(i)[] == 1
             @test size(LinearIndices(i)) == ()
             @test CartesianIndices(i)[1] == CartesianIndex()
             @test_throws BoundsError CartesianIndices(i)[2]
+            @test_throws BoundsError CartesianIndices(i)[1:2]
         end
     end
 
@@ -135,6 +137,9 @@ end
         @test LinearIndices((3,))[2,1] == 2
         @test LinearIndices((3,))[[1]] == [1]
         @test size(LinearIndices((3,))) == (3,)
+        @test LinearIndices((3,))[1:2] === 1:2
+        @test LinearIndices((3,))[1:2:3] === 1:2:3
+        @test_throws BoundsError LinearIndices((3,))[2:4]
         @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
@@ -162,6 +167,9 @@ end
         @test cartesian[vec(linear)] == vec(cartesian)
         @test cartesian[cartesian] == cartesian
         @test cartesian[vec(cartesian)] == vec(cartesian)
+        @test linear[2:3] === 2:3
+        @test linear[3:-1:1] === 3:-1:1
+        @test_throws BoundsError linear[4:13]
     end
 
     @testset "3-dimensional" begin
