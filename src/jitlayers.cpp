@@ -111,8 +111,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
 #if defined(JL_MSAN_ENABLED)
     PM->add(llvm::createMemorySanitizerPass(true));
 #endif
-    if (opt_level == 0) {
+    if (opt_level < 2) {
         PM->add(createCFGSimplificationPass()); // Clean up disgusting code
+        if (opt_level == 1) {
+            PM->add(createSROAPass());                 // Break up aggregate allocas
+            PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+            PM->add(createEarlyCSEPass());
+        }
 #if JL_LLVM_VERSION < 50000
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
