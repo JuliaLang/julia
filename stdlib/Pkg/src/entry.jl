@@ -715,6 +715,7 @@ function test!(pkg::AbstractString,
     else
         @info "Testing $pkg"
         cd(dirname(test_path)) do
+            script = "using Test; Test.run_test_file(\"$test_path\")"
             try
                 cmd = ```
                     $(Base.julia_cmd())
@@ -724,7 +725,7 @@ function test!(pkg::AbstractString,
                     --check-bounds=yes
                     --warn-overwrite=yes
                     --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
-                    $test_path
+                    -e $script
                     ```
                 run(cmd)
                 @info "$pkg tests passed"

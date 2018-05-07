@@ -550,11 +550,38 @@ temp_pkg_dir() do
         @test occursin(Regex("- $package.*Restart Julia to use the updated versions","s"), msg)
     end
 
+    let package = "TestError"
+            test_filename = Pkg.dir(package, "test", "runtests.jl")
+            mkpath(dirname(test_filename))
+
+            open(test_filename, "w") do io
+                write(io, "using Test; @test true")
+            end
+            @test_nowarn Pkg.test(package)
+
+            open(test_filename, "w") do io
+                write(io, "using Test; @testset \"hi\" begin end")
+            end
+            @test_nowarn Pkg.test(package)
+
+            open(test_filename, "w") do io
+                write(io, "this = \"not a test\"")
+            end
+            #@test_throws Pkg.Entry.PkgTestError Pkg.test(package)
+
+            open(test_filename, "w") do io
+                write(io, "@test false")
+            end
+            #@test_throws Pkg.Entry.PkgTestError Pkg.test(package)
+    end
+
     # Verify that the --startup-file flag is respected by Pkg.build / Pkg.test
     let package = "StartupFile"
         content = """
             @info "JULIA_RC_LOADED defined \$(isdefined(@__MODULE__, :JULIA_RC_LOADED))"
             @info "Main.JULIA_RC_LOADED defined \$(isdefined(Main, :JULIA_RC_LOADED))"
+            using Test
+            @test true
             """
 
         write_build(package, content)

@@ -684,7 +684,9 @@ end
 
 A simple fallback test set that throws immediately on a failure.
 """
-struct FallbackTestSet <: AbstractTestSet end
+struct FallbackTestSet <: AbstractTestSet
+ end
+
 fallback_testset = FallbackTestSet()
 
 struct FallbackTestSetException <: Exception
@@ -698,12 +700,89 @@ end
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
 record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
+
+record(ts::FallbackTestSet, t::AbstractTestSet) = t
+
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
     throw(FallbackTestSetException("There was an error during testing"))
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
+
+"""
+    IntermediaryTestSet
+
+A hidden testset to check if any tests have been run. Throws immediately on a failure.
+"""
+mutable struct IntermediaryTestSet <: AbstractTestSet
+    filename::AbstractString
+    is_empty::Bool
+ end
+
+IntermediaryTestSet(filename) = IntermediaryTestSet(filename, true)
+struct NoTestsException <: Exception
+    msg::AbstractString
+end
+
+function Base.showerror(io::IO, ex::NoTestsException, bt; backtrace=true)
+    printstyled(io, ex.msg, color=Base.error_color())
+end
+
+# Throws an error immediately whenever a Fail or Error occurs.
+# Takes no action in the event of a Pass result.
+# TODO: check that testsets hold any tests
+function record(ts::IntermediaryTestSet, t::Union{Pass,AbstractTestSet})
+    ts.is_empty = false
+    t
+end
+
+function record(ts::IntermediaryTestSet, t::Broken)
+    t
+end
+
+function record(ts::IntermediaryTestSet, t::Union{Fail,Error})
+    ts.is_empty = false
+    throw(FallbackTestSetException("There was an error during testing"))
+end
+
+function finish(ts::IntermediaryTestSet)
+    if ts.is_empty
+        throw(NoTestsException("No tests found in $(ts.filename)."))
+    end
+    ts
+end
+
+function run_test_file(filename::AbstractString)
+        if get_testset_depth() == 0
+            # avoid throwing off the testset depth
+            global fallback_testset = IntermediaryTestSet(filename)
+            try
+                include(filename)
+                finish(fallback_testset)
+            catch err
+                if err isa LoadError
+                    err = err.error
+                end
+                rethrow(err)
+            finally
+                global fallback_testset = FallbackTestSet()
+            end
+        else
+            # allow running within a testset
+            push_testset(IntermediaryTestSet(filename))
+            try
+                include(filename)
+            catch err
+                if err isa LoadError
+                    err = err.error
+                end
+                rethrow(err)
+            finally
+                finish(pop_testset())
+            end
+        end
+end
 
 #-----------------------------------------------------------------------
 
@@ -819,10 +898,11 @@ const TESTSET_PRINT_ENABLE = Ref(true)
 function finish(ts::DefaultTestSet)
     # If we are a nested test set, do not print a full summary
     # now - let the parent test set do the printing
+
+    # Attach this test set to the parent test set
+    parent_ts = get_testset()
+    record(parent_ts, ts)
     if get_testset_depth() != 0
-        # Attach this test set to the parent test set
-        parent_ts = get_testset()
-        record(parent_ts, ts)
         return ts
     end
     passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
