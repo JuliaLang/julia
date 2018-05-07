@@ -556,6 +556,7 @@ public:
     bool has_sret = false;
     int nReqArgs = 0;
     int nargs = 0;
+    int nvargs = -1;
 
     CallInst *ptlsStates = NULL;
     Value *signalPage = NULL;
@@ -2419,7 +2420,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == jl_builtin__apply && nargs == 2 && ctx.vaSlot > 0) {
         // turn Core._apply(f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
         if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[2].V)) {
-            if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot) {
+            if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
                 Value *theF = maybe_decay_untracked(boxed(ctx, argv[1]));
                 Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
@@ -2668,7 +2669,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             if (ctx.vaSlot > 0) {
                 // optimize VA tuple
                 if (LoadInst *load = dyn_cast_or_null<LoadInst>(obj.V)) {
-                    if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot) {
+                    if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
                         Value *valen = emit_n_varargs(ctx);
                         jl_cgval_t va_ary( // fake instantiation of a cgval, in order to call emit_bounds_check
                                 ctx.builder.CreateGEP(ctx.argArray, ConstantInt::get(T_size, ctx.nReqArgs)),
@@ -5154,12 +5155,6 @@ static bool uses_specsig(jl_value_t *sig, size_t nreq, jl_value_t *rettype, bool
     if (va) {
         if (jl_is_vararg_type(jl_tparam(sig, jl_nparams(sig)-1)))
             return false;
-        // For now we can only handle va tuples that will end up being
-        // leaf types
-        for (size_t i = nreq; i < jl_nparams(sig); i++) {
-            if (!jl_justbits(jl_tparam(sig, i)))
-                return false;
-        }
     }
     // not invalid, consider if specialized signature is worthwhile
     if (prefer_specsig)
@@ -5901,17 +5896,23 @@ static std::unique_ptr<Module> emit_function(
             assert(vi.boxroot == NULL);
         }
         else if (specsig) {
-            size_t nvargs = jl_nparams(lam->specTypes) - nreq;
-            jl_cgval_t *vargs = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nvargs);
+            ctx.nvargs = jl_nparams(lam->specTypes) - nreq;
+            jl_cgval_t *vargs = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * ctx.nvargs);
             for (size_t i = nreq; i < jl_nparams(lam->specTypes); ++i) {
                 jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
                 bool isboxed;
                 Type *llvmArgType = julia_type_to_llvm(argType, &isboxed);
                 vargs[i - nreq] = get_specsig_arg(argType, llvmArgType, isboxed);
             }
-            jl_cgval_t tuple = emit_new_struct(ctx, vi.value.typ, nvargs, vargs);
-            // FIXME: this may assert since the type of vi might not be isbits here
-            emit_vi_assignment_unboxed(ctx, vi, NULL, tuple);
+            if (jl_is_concrete_type(vi.value.typ)) {
+                jl_cgval_t tuple = emit_new_struct(ctx, vi.value.typ, ctx.nvargs, vargs);
+                // FIXME: this may assert since the type of vi might not be isbits here
+                emit_varinfo_assign(ctx, vi, tuple);
+            } else {
+                jl_cgval_t tuple = mark_julia_type(ctx, emit_jlcall(ctx, prepare_call(jltuple_func), maybe_decay_untracked(V_null),
+                    vargs, ctx.nvargs), true, vi.value.typ);
+                emit_varinfo_assign(ctx, vi, tuple);
+            }
         }
         else {
             // restarg = jl_f_tuple(NULL, &args[nreq], nargs - nreq)
