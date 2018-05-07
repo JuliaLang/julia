@@ -483,8 +483,12 @@ mutable struct StackFrameTree{T} # where T <: Union{UInt64, StackFrame}
     frame::StackFrame
     count::Int
     down::Dict{T, StackFrameTree{T}}
-    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, LEAF(T))
+    builder::Dict{UInt64, StackFrameTree{T}}
+    up::StackFrameTree{T}
+    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, LEAF(T), LEAF(UInt64))
 end
+
+# lazy allocate the child nodes, if they exist
 @eval LEAF(::Type{UInt64}) = $(Dict{UInt64, StackFrameTree{UInt64}}())
 @eval LEAF(::Type{StackFrame}) = $(Dict{StackFrame, StackFrameTree{StackFrame}}())
 
@@ -494,11 +498,33 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     for i in length(all):-1:1
         ip = all[i]
         if ip == 0
+            # sentinel value indicates the start of a new backtrace
             parent = root
             parent.count += 1
         else
+            builder = parent.builder
+            if !isempty(builder) && haskey(builder, ip)
+                # jump forward to the end of the inlining chain
+                # avoiding an extra (slow) lookup of `ip` in `lidict`
+                # and an extra chain of them in `down`
+                this = builder[ip]
+                let this = this
+                    while this !== parent
+                        this.count += 1
+                        this = this.up
+                    end
+                end
+                parent = this
+                continue
+            end
+            if builder === LEAF(UInt64)
+                builder = Dict{UInt64, StackFrameTree{T}}()
+                parent.builder = builder
+            end
             frames = lidict[ip]
             nframes = (frames isa Vector ? length(frames) : 1)
+            this = parent
+            # add all the inlining frames
             for i = nframes:-1:1
                 frame = (frames isa Vector ? frames[i] : frames)
                 !C && frame.from_c && continue
@@ -507,17 +533,20 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 if down === LEAF(T)
                     down = Dict{T, StackFrameTree{T}}()
                     parent.down = down
-                    parent = StackFrameTree{T}()
-                    parent.frame = frame
-                    down[key] = parent
+                    this = StackFrameTree{T}()
+                    down[key] = this
                 else
-                    parent = get!(down, key) do
+                    this = get!(down, key) do
                         return StackFrameTree{T}()
                     end
-                    parent.frame = frame
                 end
-                parent.count += 1
+                this.frame = frame
+                this.up = parent
+                this.count += 1
+                parent = this
             end
+            # record where the end of this chain is for this ip
+            builder[ip] = this
         end
     end
     return root
