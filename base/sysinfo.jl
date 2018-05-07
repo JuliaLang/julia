@@ -27,7 +27,7 @@ export BINDIR,
 
 import ..Base: show
 
-global BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
 """
     Sys.BINDIR
 
@@ -91,7 +91,8 @@ function __init__()
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
-    global BINDIR = ccall(:jl_get_julia_bindir, Any, ())
+    global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
+    nothing
 end
 
 mutable struct UV_cpu_info_t
