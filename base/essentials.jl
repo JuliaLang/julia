@@ -207,7 +207,15 @@ function isvarargtype(@nospecialize(t))
     return isa(t, DataType) && (t::DataType).name === _va_typename
 end
 
-isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
+function isvatuple(@nospecialize(t))
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        n = length(t.parameters)
+        return n > 0 && isvarargtype(t.parameters[n])
+    end
+    return false
+end
+
 function unwrapva(@nospecialize(t))
     # NOTE: this returns a related type, but it's NOT a subtype of the original tuple
     t2 = unwrap_unionall(t)
