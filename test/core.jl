@@ -6051,3 +6051,13 @@ g2_23206(::Tuple{Type{Int}}) = 1
 let x26739 = Int[1]
     @test eval(:(identity.($x26739))) == x26739
 end
+
+# issue #27018
+@test Base.isvatuple(Tuple{Float64,Vararg{Int}})
+@test Base.isvatuple(Tuple{T,Vararg{Int}} where T)
+@test Base.isvatuple(Tuple{Int,Int,Vararg{Int,N}} where N)
+@test Base.isvatuple(Tuple{T,S,Vararg{T}} where T<:S where S)
+@test Base.isvatuple(Tuple{T,S,Vararg{T,3}} where T<:S where S)
+@test !Base.isvatuple(Tuple{Float64,Vararg{Int,1}})
+@test !Base.isvatuple(Tuple{T,Vararg{Int,2}} where T)
+@test !Base.isvatuple(Tuple{Int,Int,Vararg{Int,2}})
