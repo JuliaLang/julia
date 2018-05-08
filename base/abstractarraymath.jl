@@ -10,11 +10,12 @@ all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 ## Constructors ##
 
 """
-    vec(a::AbstractArray) -> Vector
+    vec(a::AbstractArray) -> AbstractVector
 
-Reshape the array `a` as a one-dimensional column vector. The resulting array
-shares the same underlying data as `a`, so modifying one will also modify the
-other.
+Reshape the array `a` as a one-dimensional column vector. Return `a` if it is
+already an `AbstractVector`. The resulting array
+shares the same underlying data as `a`, so it will only be mutable if `a` is
+mutable, in which case modifying one will also modify the other.
 
 # Examples
 ```jldoctest
@@ -31,6 +32,9 @@ julia> vec(a)
  5
  3
  6
+
+julia> vec(1:3)
+1:3
 ```
 
 See also [`reshape`](@ref).
