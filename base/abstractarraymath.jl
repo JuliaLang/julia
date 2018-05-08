@@ -15,7 +15,7 @@ all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 Reshape the array `a` as a one-dimensional column vector. Return `a` if it is
 already an `AbstractVector`. The resulting array
 shares the same underlying data as `a`, so it will only be mutable if `a` is
-mutable, and in that case modifying one will also modify the other.
+mutable, in which case modifying one will also modify the other.
 
 # Examples
 ```jldoctest
