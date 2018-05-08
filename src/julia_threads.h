@@ -438,7 +438,7 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
 // Accessing the tls variables, gc safepoint and gc states
 JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void);
 // This triggers a SegFault when we are in GC
-// Assign it to a variable to make sure the compiler emit the load
+// Assign it to a variable to make sure the compiler emits the load
 // and to avoid Clang warning for -Wunused-volatile-lvalue
 #define jl_gc_safepoint_(ptls) do {                     \
         jl_signal_fence();                              \

@@ -449,3 +449,10 @@ function test_nested_loops()
     end
 end
 test_nested_loops()
+
+function test_27020_SIGSEGV()
+    x = BigInt()
+    # We only care that this call does not throw a SIGSEGV, so no need to check return value
+    @threadcall((:__gmpz_init, :libgmp), Void, (Ptr{BigInt}, ), Ref(x))
+end
+test_27020_SIGSEGV()

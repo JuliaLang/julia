@@ -2179,11 +2179,14 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     sz += JL_SMALL_BYTE_ALIGNMENT;
-    maybe_collect(ptls);
+    if (ptls && ptls->safepoint) {
+        maybe_collect(ptls);
+    }
     gc_num.allocd += sz;
     gc_num.malloc++;
     void *b = malloc(sz);
-    if (b == NULL)
+    // If ptls->safepoint is NULL, then let the caller deal with the failed malloc
+    if (b == NULL && ptls && ptls->safepoint)
         jl_throw(jl_memory_exception);
     return b;
 }
@@ -2192,11 +2195,14 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     nm += JL_SMALL_BYTE_ALIGNMENT;
-    maybe_collect(ptls);
+    if (ptls && ptls->safepoint) {
+        maybe_collect(ptls);
+    }
     gc_num.allocd += nm*sz;
     gc_num.malloc++;
     void *b = calloc(nm, sz);
-    if (b == NULL)
+    // If ptls->safepoint is NULL, then let the caller deal with the failed calloc
+    if (b == NULL && ptls && ptls->safepoint)
         jl_throw(jl_memory_exception);
     return b;
 }
@@ -2213,14 +2219,17 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     jl_ptls_t ptls = jl_get_ptls_states();
     old += JL_SMALL_BYTE_ALIGNMENT;
     sz += JL_SMALL_BYTE_ALIGNMENT;
-    maybe_collect(ptls);
+    if (ptls && ptls->safepoint) {
+        maybe_collect(ptls);
+    }
     if (sz < old)
        gc_num.freed += (old - sz);
     else
        gc_num.allocd += (sz - old);
     gc_num.realloc++;
     void *b = realloc(p, sz);
-    if (b == NULL)
+    // If ptls->safepoint is NULL, then let the caller deal with the failed realloc
+    if (b == NULL && ptls && ptls->safepoint)
         jl_throw(jl_memory_exception);
     return b;
 }
