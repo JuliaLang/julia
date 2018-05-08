@@ -157,6 +157,10 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
         throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
     end
 
+    if m == 0
+        return C
+    end
+
     α = S.dv
     β = S.ev
     @inbounds begin
