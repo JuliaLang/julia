@@ -93,33 +93,8 @@ indices1(iter) = OneTo(length(iter))
 unsafe_indices(A) = axes(A)
 unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
 
-"""
-    linearindices(A)
-
-Return a `UnitRange` specifying the valid range of indices for `A[i]`
-where `i` is an `Int`. For arrays with conventional indexing (indices
-start at 1), or any multidimensional array, this is `1:length(A)`;
-however, for one-dimensional arrays with unconventional indices, this
-is `axes(A, 1)`.
-
-Calling this function is the "safe" way to write algorithms that
-exploit linear indexing.
-
-# Examples
-```jldoctest
-julia> A = fill(1, (5,6,7));
-
-julia> b = linearindices(A);
-
-julia> extrema(b)
-(1, 210)
-```
-"""
-linearindices(A::AbstractArray) = (@_inline_meta; OneTo(_length(A)))
-linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
-
 keys(a::AbstractArray) = CartesianIndices(axes(a))
-keys(a::AbstractVector) = linearindices(a)
+keys(a::AbstractVector) = LinearIndices(a)
 
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
@@ -182,6 +157,76 @@ length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
 _length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, axes(A)))) # circumvent missing size
 _length(A) = (@_inline_meta; length(A))
 
+# `eachindex` is mostly an optimization of `keys`
+eachindex(itrs...) = keys(itrs...)
+
+# eachindex iterates over all indices. IndexCartesian definitions are later.
+eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
+
+"""
+    eachindex(A...)
+
+Create an iterable object for visiting each index of an AbstractArray `A` in an efficient
+manner. For array types that have opted into fast linear indexing (like `Array`), this is
+simply the range `1:length(A)`. For other array types, return a specialized Cartesian
+range to efficiently index into the array with indices specified for every dimension. For
+other iterables, including strings and dictionaries, return an iterator object
+supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+
+If you supply more than one `AbstractArray` argument, `eachindex` will create an
+iterable object that is fast for all arguments (a `UnitRange`
+if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
+otherwise).
+If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
+iterable that spans the largest range along each dimension.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4];
+
+julia> for i in eachindex(A) # linear indexing
+           println(i)
+       end
+1
+2
+3
+4
+
+julia> for i in eachindex(view(A, 1:2, 1:1)) # Cartesian indexing
+           println(i)
+       end
+CartesianIndex(1, 1)
+CartesianIndex(2, 1)
+```
+"""
+eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(IndexStyle(A), A))
+
+function eachindex(A::AbstractArray, B::AbstractArray)
+    @_inline_meta
+    eachindex(IndexStyle(A,B), A, B)
+end
+function eachindex(A::AbstractArray, B::AbstractArray...)
+    @_inline_meta
+    eachindex(IndexStyle(A,B...), A, B...)
+end
+eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(_length(A)))
+eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; indices1(A))
+function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
+    @_inline_meta
+    indsA = eachindex(IndexLinear(), A)
+    _all_match_first(X->eachindex(IndexLinear(), X), indsA, B...) ||
+        throw_eachindex_mismatch(IndexLinear(), A, B...)
+    indsA
+end
+function _all_match_first(f::F, inds, A, B...) where F<:Function
+    @_inline_meta
+    (inds == f(A)) & _all_match_first(f, inds, B...)
+end
+_all_match_first(f::F, inds) where F<:Function = true
+
+# keys with an IndexStyle
+keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
+
 """
     lastindex(collection) -> Integer
     lastindex(collection, d) -> Integer
@@ -200,7 +245,7 @@ julia> lastindex(rand(3,4,5), 2)
 4
 ```
 """
-lastindex(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
+lastindex(a::AbstractArray) = (@_inline_meta; last(eachindex(IndexLinear(), a)))
 lastindex(a::AbstractArray, d) = (@_inline_meta; last(axes(a, d)))
 
 """
@@ -218,7 +263,7 @@ julia> firstindex(rand(3,4,5), 2)
 1
 ```
 """
-firstindex(a::AbstractArray) = (@_inline_meta; first(linearindices(a)))
+firstindex(a::AbstractArray) = (@_inline_meta; first(eachindex(IndexLinear(), a)))
 firstindex(a::AbstractArray, d) = (@_inline_meta; first(axes(a, d)))
 
 first(a::AbstractArray) = a[first(eachindex(a))]
@@ -334,49 +379,6 @@ function trailingsize(inds::Indices)
     prod(map(unsafe_length, inds))
 end
 
-## Traits for array types ##
-
-abstract type IndexStyle end
-struct IndexLinear <: IndexStyle end
-struct IndexCartesian <: IndexStyle end
-
-"""
-    IndexStyle(A)
-    IndexStyle(typeof(A))
-
-`IndexStyle` specifies the "native indexing style" for array `A`. When
-you define a new `AbstractArray` type, you can choose to implement
-either linear indexing or cartesian indexing.  If you decide to
-implement linear indexing, then you must set this trait for your array
-type:
-
-    Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
-
-The default is `IndexCartesian()`.
-
-Julia's internal indexing machinery will automatically (and invisibly)
-convert all indexing operations into the preferred style. This allows users
-to access elements of your array using any indexing style, even when explicit
-methods have not been provided.
-
-If you define both styles of indexing for your `AbstractArray`, this
-trait can be used to select the most performant indexing style. Some
-methods check this trait on their inputs, and dispatch to different
-algorithms depending on the most efficient access pattern. In
-particular, [`eachindex`](@ref) creates an iterator whose type depends
-on the setting of this trait.
-"""
-IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
-IndexStyle(::Type{Union{}}) = IndexLinear()
-IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
-IndexStyle(::Type{<:Array}) = IndexLinear()
-IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
-
-IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
-IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), IndexStyle(B...))
-IndexStyle(::IndexLinear, ::IndexLinear) = IndexLinear()
-IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
-
 ## Bounds checking ##
 
 # The overall hierarchy is
@@ -424,10 +426,11 @@ function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
     checkbounds_indices(Bool, axes(A), I)
 end
+
 # Linear indexing is explicitly allowed when there is only one (non-cartesian) index
 function checkbounds(::Type{Bool}, A::AbstractArray, i)
     @_inline_meta
-    checkindex(Bool, linearindices(A), i)
+    checkindex(Bool, eachindex(IndexLinear(), A), i)
 end
 # As a special extension, allow using logical arrays that match the source array exactly
 function checkbounds(::Type{Bool}, A::AbstractArray{<:Any,N}, I::AbstractArray{Bool,N}) where N
@@ -682,7 +685,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
     n < 0 && throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
     n == 0 && return dest
     dmax = dstart + n - 1
-    inds = linearindices(dest)
+    inds = LinearIndices(dest)
     if (dstart ∉ inds || dmax ∉ inds) | (sstart < 1)
         sstart < 1 && throw(ArgumentError(string("source start offset (",sstart,") is < 1")))
         throw(BoundsError(dest, dstart:dmax))
@@ -712,7 +715,7 @@ copyto!(dest::AbstractArray, src::AbstractArray) =
     copyto!(IndexStyle(dest), dest, IndexStyle(src), src)
 
 function copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
-    destinds, srcinds = linearindices(dest), linearindices(src)
+    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) ||
         throw(BoundsError(dest, srcinds))
     @inbounds for i in srcinds
@@ -722,7 +725,7 @@ function copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractA
 end
 
 function copyto!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
-    destinds, srcinds = linearindices(dest), linearindices(src)
+    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) ||
         throw(BoundsError(dest, srcinds))
     i = 0
@@ -733,11 +736,11 @@ function copyto!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::Abstr
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
-    copyto!(dest, dstart, src, first(linearindices(src)), _length(src))
+    copyto!(dest, dstart, src, first(LinearIndices(src)), _length(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
-    srcinds = linearindices(src)
+    srcinds = LinearIndices(src)
     sstart ∈ srcinds || throw(BoundsError(src, sstart))
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
@@ -747,7 +750,7 @@ function copyto!(dest::AbstractArray, dstart::Integer,
                n::Integer)
     n == 0 && return dest
     n < 0 && throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
-    destinds, srcinds = linearindices(dest), linearindices(src)
+    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     (dstart ∈ destinds && dstart+n-1 ∈ destinds) || throw(BoundsError(dest, dstart:dstart+n-1))
     (sstart ∈ srcinds  && sstart+n-1 ∈ srcinds)  || throw(BoundsError(src,  sstart:sstart+n-1))
     @inbounds for i = 0:(n-1)
@@ -824,75 +827,8 @@ start(A::AbstractArray) = (@_inline_meta; itr = eachindex(A); (itr, start(itr)))
 next(A::AbstractArray, i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
 done(A::AbstractArray, i) = (@_propagate_inbounds_meta; done(i[1], i[2]))
 
-# `eachindex` is mostly an optimization of `keys`
-eachindex(itrs...) = keys(itrs...)
-
-# eachindex iterates over all indices. IndexCartesian definitions are later.
-eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
-
-"""
-    eachindex(A...)
-
-Create an iterable object for visiting each index of an AbstractArray `A` in an efficient
-manner. For array types that have opted into fast linear indexing (like `Array`), this is
-simply the range `1:length(A)`. For other array types, return a specialized Cartesian
-range to efficiently index into the array with indices specified for every dimension. For
-other iterables, including strings and dictionaries, return an iterator object
-supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
-
-If you supply more than one `AbstractArray` argument, `eachindex` will create an
-iterable object that is fast for all arguments (a `UnitRange`
-if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
-otherwise).
-If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
-iterable that spans the largest range along each dimension.
-
-# Examples
-```jldoctest
-julia> A = [1 2; 3 4];
-
-julia> for i in eachindex(A) # linear indexing
-           println(i)
-       end
-1
-2
-3
-4
-
-julia> for i in eachindex(view(A, 1:2, 1:1)) # Cartesian indexing
-           println(i)
-       end
-CartesianIndex(1, 1)
-CartesianIndex(2, 1)
-```
-"""
-eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(IndexStyle(A), A))
-
-function eachindex(A::AbstractArray, B::AbstractArray)
-    @_inline_meta
-    eachindex(IndexStyle(A,B), A, B)
-end
-function eachindex(A::AbstractArray, B::AbstractArray...)
-    @_inline_meta
-    eachindex(IndexStyle(A,B...), A, B...)
-end
-eachindex(::IndexLinear, A::AbstractArray) = linearindices(A)
-function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
-    @_inline_meta
-    indsA = linearindices(A)
-    _all_match_first(linearindices, indsA, B...) || throw_eachindex_mismatch(IndexLinear(), A, B...)
-    indsA
-end
-function _all_match_first(f::F, inds, A, B...) where F<:Function
-    @_inline_meta
-    (inds == f(A)) & _all_match_first(f, inds, B...)
-end
-_all_match_first(f::F, inds) where F<:Function = true
-
 isempty(a::AbstractArray) = (_length(a) == 0)
 
-# keys with an IndexStyle
-keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
 
 ## range conversions ##
 
@@ -911,7 +847,7 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
-    unsafe_convert(Ptr{T}, x) + (i - first(linearindices(x)))*elsize(x)
+    unsafe_convert(Ptr{T}, x) + (i - first(LinearIndices(x)))*elsize(x)
 end
 
 ## Approach:
@@ -2038,7 +1974,7 @@ end
 @inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    for i = linearindices(As[1])
+    for i = LinearIndices(As[1])
         dest[i] = f(ith_all(i, As)...)
     end
     return dest

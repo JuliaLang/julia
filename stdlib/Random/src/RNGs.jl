@@ -335,7 +335,7 @@ rand(r::MersenneTwister, T::SamplerUnion(Union{Bool,Int8,UInt8,Int16,UInt16,Int3
 
 function rand!(r::MersenneTwister, A::AbstractArray{Float64},
                I::SamplerTrivial{<:FloatInterval_64})
-    region = linearindices(A)
+    region = LinearIndices(A)
     # what follows is equivalent to this simple loop but more efficient:
     # for i=region
     #     @inbounds A[i] = rand(r, I[])

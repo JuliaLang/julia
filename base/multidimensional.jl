@@ -11,7 +11,7 @@ module IteratorsMD
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
     using .Base.Iterators: Reverse
 
-    export CartesianIndex, CartesianIndices, LinearIndices
+    export CartesianIndex, CartesianIndices
 
     """
         CartesianIndex(i, j, k...)   -> I
@@ -377,49 +377,7 @@ module IteratorsMD
     next(iter::Reverse{<:CartesianIndices{0}}, state) = CartesianIndex(), true
     done(iter::Reverse{<:CartesianIndices{0}}, state) = state
 
-    """
-        LinearIndices(inds::CartesianIndices) -> R
-        LinearIndices(sz::Dims) -> R
-        LinearIndices(istart:istop, jstart:jstop, ...) -> R
-
-    Define a mapping between cartesian indices and the corresponding linear index into a `CartesianIndices`.
-
-    # Example
-
-    The main purpose of this type is intuitive conversion from cartesian to linear indexing:
-
-    ```jldoctest
-    julia> linear = LinearIndices((1:3, 1:2))
-    LinearIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
-     1  4
-     2  5
-     3  6
-
-    julia> linear[1,2]
-    4
-    ```
-    """
-    struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
-        indices::R
-    end
-
     LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
-    LinearIndices(::Tuple{}) = LinearIndices(CartesianIndices(()))
-    LinearIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(index::CartesianIndex) = LinearIndices(CartesianIndices(index))
-    LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(CartesianIndices(sz))
-    LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(A::AbstractArray) = LinearIndices(CartesianIndices(A))
-
-    # AbstractArray implementation
-    Base.IndexStyle(::Type{LinearIndices{N,R}}) where {N,R} = IndexLinear()
-    Base.axes(iter::LinearIndices{N,R}) where {N,R} = iter.indices
-    Base.size(iter::LinearIndices{N,R}) where {N,R} = length.(iter.indices)
-    function Base.getindex(iter::LinearIndices{N,R}, i::Int) where {N,R}
-        @boundscheck checkbounds(iter, i)
-        i
-    end
 end  # IteratorsMD
 
 
@@ -536,7 +494,7 @@ show(io::IO, r::LogicalIndex) = print(io, "Base.LogicalIndex(", r.mask, ")")
 # keep track of the count of elements since we already know how many there
 # should be -- this way we don't need to look at future indices to check done.
 @inline function start(L::LogicalIndex{Int})
-    r = linearindices(L.mask)
+    r = LinearIndices(L.mask)
     return (r, start(r), 1)
 end
 @inline function start(L::LogicalIndex{<:CartesianIndex})
@@ -570,7 +528,7 @@ end
 @inline done(L::LogicalIndex{Int,<:BitArray}, s) = s[2] > length(L)
 
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
-    linearindices(A) == linearindices(I.mask)
+    eachindex(IndexLinear(), A) == eachindex(IndexLinear(), I.mask)
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = axes(A) == axes(I.mask)
 @inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == axes(I.mask)
 checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = false

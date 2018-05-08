@@ -572,7 +572,7 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{<:Integer}) where {T}
     @_inline_meta
     @boundscheck checkbounds(r, s)
     # Find closest approach to offset by s
-    ind = linearindices(s)
+    ind = LinearIndices(s)
     offset = max(min(1 + round(Int, (r.offset - first(s))/step(s)), last(ind)), first(ind))
     ref = _getindex_hiprec(r, first(s) + (offset-1)*step(s))
     return StepRangeLen{T}(ref, r.step*step(s), length(s), offset)

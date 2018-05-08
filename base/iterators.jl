@@ -12,7 +12,7 @@ using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    linearindices, (:), |, +, -, !==, !, <=, <
+    LinearIndices, (:), |, +, -, !==, !, <=, <
 
 import .Base:
     start, done, next, first, last,
@@ -211,7 +211,7 @@ CartesianIndex(2, 2) e
 
 See also: [`IndexStyle`](@ref), [`axes`](@ref).
 """
-pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, linearindices(A))
+pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
 
 # preserve indexing capabilities for known indexable types

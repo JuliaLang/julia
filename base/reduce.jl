@@ -331,7 +331,7 @@ mapreduce_first(f, op, x) = reduce_first(op, f(x))
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
-    inds = linearindices(A)
+    inds = LinearIndices(A)
     n = length(inds)
     if n == 0
         return mapreduce_empty(f, op, T)

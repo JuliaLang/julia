@@ -119,11 +119,13 @@ end
         for i in ((), fill(0))
             @test LinearIndices(i)[1] == 1
             @test_throws BoundsError LinearIndices(i)[2]
+            @test_throws BoundsError LinearIndices(i)[1:2]
             @test LinearIndices(i)[1,1] == 1
             @test LinearIndices(i)[] == 1
             @test size(LinearIndices(i)) == ()
             @test CartesianIndices(i)[1] == CartesianIndex()
             @test_throws BoundsError CartesianIndices(i)[2]
+            @test_throws BoundsError CartesianIndices(i)[1:2]
         end
     end
 
@@ -135,6 +137,9 @@ end
         @test LinearIndices((3,))[2,1] == 2
         @test LinearIndices((3,))[[1]] == [1]
         @test size(LinearIndices((3,))) == (3,)
+        @test LinearIndices((3,))[1:2] === 1:2
+        @test LinearIndices((3,))[1:2:3] === 1:2:3
+        @test_throws BoundsError LinearIndices((3,))[2:4]
         @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
@@ -162,6 +167,9 @@ end
         @test cartesian[vec(linear)] == vec(cartesian)
         @test cartesian[cartesian] == cartesian
         @test cartesian[vec(cartesian)] == vec(cartesian)
+        @test linear[2:3] === 2:3
+        @test linear[3:-1:1] === 3:-1:1
+        @test_throws BoundsError linear[4:13]
     end
 
     @testset "3-dimensional" begin
@@ -461,13 +469,13 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
 
     # last(a)
     @test last(B) == B[lastindex(B)] == B[end] == A[end]
-    @test lastindex(B) == lastindex(A) == last(linearindices(B))
+    @test lastindex(B) == lastindex(A) == last(LinearIndices(B))
     @test lastindex(B, 1) == lastindex(A, 1) == last(axes(B, 1))
     @test lastindex(B, 2) == lastindex(A, 2) == last(axes(B, 2))
 
     # first(a)
     @test first(B) == B[firstindex(B)] == B[1] == A[1] # TODO: use B[begin] once parser transforms it
-    @test firstindex(B) == firstindex(A) == first(linearindices(B))
+    @test firstindex(B) == firstindex(A) == first(LinearIndices(B))
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
@@ -871,7 +879,7 @@ end
         @test CR[i,j] == CartesianIndex(i,j)
     end
 
-    for i_lin in linearindices(CR)
+    for i_lin in LinearIndices(CR)
         i = (i_lin-1) % length(xrng) + 1
         j = (i_lin-i) ÷ length(xrng) + 1
         @test CR[i_lin] == CartesianIndex(xrng[i],yrng[j])
