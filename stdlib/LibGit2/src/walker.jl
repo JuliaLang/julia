@@ -105,7 +105,7 @@ end
 ```
 Here, `map` visits each commit using the `GitRevWalker` and finds its `GitHash`.
 """
-function Base.map(f::Function, walker::GitRevWalker;
+function map(f::Function, walker::GitRevWalker;
                   oid::GitHash=GitHash(),
                   range::AbstractString="",
                   by::Cint = Consts.SORT_NONE,
@@ -158,7 +158,7 @@ end
 the walk from that commit and moving forwards in time from it. Since the `GitHash` is unique to
 a commit, `cnt` will be `1`.
 """
-function Base.count(f::Function, walker::GitRevWalker;
+function count(f::Function, walker::GitRevWalker;
                   oid::GitHash=GitHash(),
                   by::Cint = Consts.SORT_NONE,
                   rev::Bool=false)

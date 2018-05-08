@@ -163,7 +163,7 @@ function read!(repo::GitRepo, force::Bool = false)
     return
 end
 
-function Base.count(idx::GitIndex)
+function count(idx::GitIndex)
     return ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), idx.ptr)
 end
 
