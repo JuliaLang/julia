@@ -23,6 +23,15 @@ line. A common pattern includes the following elements:
 
     end
     ```
+  * **Ensure that Julia can find your module file** In order for `import Tmp` to work, the file `Tmp.jl` must be in one of Julia's [Module file paths](@ref). For example, if `Tmp.jl` is in your current working directory, then you can add [`@__DIR__`](@ref) to the [`LOAD_PATH`](@ref) with:
+    ```julia
+    push!(LOAD_PATH, @__DIR__)
+    ```
+    Alternatively, if `Tmp.jl` is in `/home/user/projects`, then you can do
+    ```julia
+    push!(LOAD_PATH, "/home/user/projects")
+    ```
+    (Note that `~` does not automatically expand to your home directory in this context, so you cannot abbreviate the path above to `"~/projects"`.).
   * **Put your test code in another file.** Create another file, say `tst.jl`, which begins with
 
     ```julia

@@ -943,7 +943,7 @@ function _require(pkg::PkgId)
         name = pkg.name
         path = locate_package(pkg)
         if path === nothing
-            throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
+            throw(ArgumentError("Module $name not found in `LOAD_PATH` or `Pkg.dir()`.\nRun `Pkg.add(\"$name\")` to install the $name package."))
         end
 
         # attempt to load the module file via the precompile cache locations
