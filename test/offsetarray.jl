@@ -80,7 +80,7 @@ for i = 1:9 @test A_3_3[i] == i end
 @test_throws BoundsError A[CartesianIndex(1,1)]
 @test_throws BoundsError S[CartesianIndex(1,1)]
 @test eachindex(A) == 1:4
-@test eachindex(S) == CartesianIndices((0:1,3:4))
+@test eachindex(S) == CartesianIndices(axes(S)) == CartesianIndices(map(Base.Slice, (0:1,3:4)))
 
 # logical indexing
 @test A[A .> 2] == [3,4]
@@ -98,13 +98,13 @@ S = view(A, :, 3)
 @test S[0] == 1
 @test S[1] == 2
 @test_throws BoundsError S[2]
-@test axes(S) === (0:1,)
+@test axes(S) === (Base.Slice(0:1),)
 S = view(A, 0, :)
 @test S == OffsetArray([1,3], (A.offsets[2],))
 @test S[3] == 1
 @test S[4] == 3
 @test_throws BoundsError S[1]
-@test axes(S) === (3:4,)
+@test axes(S) === (Base.Slice(3:4),)
 S = view(A, 0:0, 4)
 @test S == [3]
 @test S[1] == 3
@@ -123,17 +123,17 @@ S = view(A, :, :)
 @test S[0,4] == S[3] == 3
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
-@test axes(S) === (0:1, 3:4)
+@test axes(S) === Base.Slice.((0:1, 3:4))
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
 g = OffsetArray(Vector(-2:3), (-3,))
 gv = view(g, -1:2)
 @test axes(gv, 1) === Base.OneTo(4)
 @test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-2,)))
-@test axes(gv, 1) === -1:2
+@test axes(gv, 1) === Base.Slice(-1:2)
 @test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-1,)))
-@test axes(gv, 1) === 0:3
+@test axes(gv, 1) === Base.Slice(0:3)
 @test collect(gv) == -1:2
 
 # iteration

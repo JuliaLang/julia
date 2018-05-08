@@ -285,7 +285,8 @@ last(S::Slice) = last(S.indices)
 errmsg(A) = error("size not supported for arrays with indices $(axes(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
 size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
 length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
-unsafe_length(S::Slice) = first(S.indices) == 1 ? unsafe_length(S.indices) : errmsg(S)
+_length(S::Slice) = length(S.indices)
+unsafe_length(S::Slice) = unsafe_length(S.indices)
 getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 start(S::Slice) = start(S.indices)
@@ -354,7 +355,7 @@ LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
 # AbstractArray implementation
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
-axes(iter::LinearIndices) = iter.indices
+axes(iter::LinearIndices) = map(indices1, iter.indices)
 size(iter::LinearIndices) = map(unsafe_length, iter.indices)
 function getindex(iter::LinearIndices, i::Int)
     @_inline_meta

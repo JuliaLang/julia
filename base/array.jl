@@ -510,9 +510,9 @@ end
 
 _collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
+    copyto!(Array{eltype(A)}(undef, _length.(indsA)), A)
 function _collect_indices(indsA, A)
-    B = Array{eltype(A)}(undef, length.(indsA))
+    B = Array{eltype(A)}(undef, _length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
 end
 
@@ -830,7 +830,7 @@ themselves in another collection. The result is of the preceding example is equi
 """
 function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
-    n = length(itemindices)
+    n = _length(itemindices)
     _growend!(a, n)
     copyto!(a, length(a)-n+1, items, first(itemindices), n)
     return a
@@ -873,7 +873,7 @@ function prepend! end
 
 function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
-    n = length(itemindices)
+    n = _length(itemindices)
     _growbeg!(a, n)
     if a === items
         copyto!(a, 1, items, n+1, n)

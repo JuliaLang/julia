@@ -78,7 +78,7 @@ function alignment(io::IO, X::AbstractVecOrMat,
             break
         end
     end
-    if 1 < length(a) < length(axes(X,2))
+    if 1 < length(a) < _length(axes(X,2))
         while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
             pop!(a)
         end
@@ -96,9 +96,8 @@ is specified as string sep.
 function print_matrix_row(io::IO,
         X::AbstractVecOrMat, A::Vector,
         i::Integer, cols::AbstractVector, sep::AbstractString)
-    isempty(A) || first(axes(cols,1)) == 1 || throw(DimensionMismatch("indices of cols ($(axes(cols,1))) must start at 1"))
-    for k = 1:length(A)
-        j = cols[k]
+    for (k, j) = enumerate(cols)
+        k > length(A) && break
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
@@ -169,20 +168,20 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)
     rowsA, colsA = axes(X,1), axes(X,2)
-    m, n = length(rowsA), length(colsA)
+    m, n = _length(rowsA), _length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
     # If not, then we only need to look at the first and last chunks of A,
     # each half a screen height in size.
     halfheight = div(screenheight,2)
     if m > screenheight
-        rowsA = [rowsA[1:halfheight]; rowsA[m-div(screenheight-1,2)+1:m]]
+        rowsA = [rowsA[(0:halfheight-1) .+ firstindex(rowsA)]; rowsA[(end-div(screenheight-1,2)+1):end]]
     end
     # Similarly for columns, only necessary to get alignments for as many
     # columns as could conceivably fit across the screen
     maxpossiblecols = div(screenwidth, 1+sepsize)
     if n > maxpossiblecols
-        colsA = [colsA[1:maxpossiblecols]; colsA[(n-maxpossiblecols+1):n]]
+        colsA = [colsA[(0:maxpossiblecols-1) .+ firstindex(colsA)]; colsA[(end-maxpossiblecols+1):end]]
     end
     A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize)
     # Nine-slicing is accomplished using print_matrix_row repeatedly
@@ -314,7 +313,7 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     # 0) compute new IOContext
-    if !haskey(io, :compact) && length(axes(X, 2)) > 1
+    if !haskey(io, :compact) && _length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
     if get(io, :limit, false) && eltype(X) === Method
@@ -360,7 +359,7 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
     indr, indc = axes(X,1), axes(X,2)
-    nr, nc = length(indr), length(indc)
+    nr, nc = _length(indr), _length(indc)
     rdots, cdots = false, false
     rr1, rr2 = UnitRange{Int}(indr), 1:0
     cr1, cr2 = UnitRange{Int}(indc), 1:0
