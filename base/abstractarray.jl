@@ -162,6 +162,22 @@ julia> length([1 2; 3 4])
 4
 ```
 """
+length
+
+"""
+    length(A::AbstractArray)
+
+Return the number of elements in the array, defaults to `prod(size(A))`.
+
+# Examples
+```jldoctest
+julia> length([1, 2, 3, 4])
+4
+
+julia> length([1 2; 3 4])
+4
+```
+"""
 length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
 _length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, axes(A)))) # circumvent missing size
 _length(A) = (@_inline_meta; length(A))

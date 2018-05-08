@@ -127,7 +127,6 @@ Base.last
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)
-Base.issubset(::Any, ::Any)
 Base.filter
 Base.filter!
 Base.replace(::Any, ::Pair...)
