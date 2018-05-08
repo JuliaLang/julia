@@ -1432,3 +1432,9 @@ catch e
     @test e isa LoadError
     @test e.error isa MethodError
 end
+
+@test Meta.lower(@__MODULE__, :(return 0 for i = 1:2)) == Expr(:error, "\"return\" not allowed inside a generator expression")
+@test Meta.lower(@__MODULE__, :([ return 0 for i = 1:2 ])) == Expr(:error, "\"return\" not allowed inside a generator expression")
+@test Meta.lower(@__MODULE__, :(Int[ return 0 for i = 1:2 ])) == Expr(:error, "\"return\" not allowed inside a generator expression")
+@test [ (()->return 42) for i = 1:1 ][1]() == 42
+@test Function[ (()->return 42) for i = 1:1 ][1]() == 42
