@@ -299,3 +299,7 @@ end
 let s = convert(SharedArray, [1,2,3,4])
     @test pmap(i->length(s), 1:2) == [4,4]
 end
+
+let S = SharedArray([1,2,3])
+    @test sprint(show, S) == "[1, 2, 3]"
+end
