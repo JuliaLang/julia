@@ -351,21 +351,24 @@ end
 ########################
 # Package installation #
 ########################
-function get_archive_url_for_version(url::String, version)
+function get_archive_url_for_version(url::String, ref)
     if (m = match(r"https://github.com/(.*?)/(.*?).git", url)) != nothing
-        return "https://github.com/$(m.captures[1])/$(m.captures[2])/archive/v$(version).tar.gz"
+        return "https://api.github.com/repos/$(m.captures[1])/$(m.captures[2])/tarball/$(ref)"
     end
     return nothing
 end
 
+# can be removed after https://github.com/JuliaLang/julia/pull/27036
+get_archive_url_for_version(url::String, hash::SHA1) = get_archive_url_for_version(url::String, string(hash))
+
 # Returns if archive successfully installed
 function install_archive(
     urls::Vector{String},
-    version::Union{VersionNumber,Nothing},
+    hash::SHA1,
     version_path::String
 )::Bool
     for url in urls
-        archive_url = get_archive_url_for_version(url, version)
+        archive_url = get_archive_url_for_version(url, hash)
         if archive_url != nothing
             path = tempname() * randstring(6) * ".tar.gz"
             url_success = true
@@ -496,7 +499,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UU
                     continue
                 end
                 try
-                    success = install_archive(urls[pkg.uuid], pkg.version::VersionNumber, path)
+                    success = install_archive(urls[pkg.uuid], hashes[pkg.uuid], path)
                     put!(results, (pkg, success, path))
                 catch err
                     put!(results, (pkg, err, catch_backtrace()))
