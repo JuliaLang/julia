@@ -53,7 +53,7 @@ static uint64_t cong_unbias;
 
 /*  multiq_init()
  */
-static inline void multiq_init()
+static inline void multiq_init(void)
 {
     heap_p = heap_c * jl_n_threads;
     heaps = (taskheap_t *)calloc(heap_p, sizeof(taskheap_t));
@@ -133,7 +133,7 @@ static inline int multiq_insert(jl_task_t *task, int16_t priority)
 
 /*  multiq_deletemin()
  */
-static inline jl_task_t *multiq_deletemin()
+static inline jl_task_t *multiq_deletemin(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     uint64_t rn1, rn2;
@@ -202,7 +202,7 @@ static int16_t num_reducers, num_reducer_tree_nodes, next_reducer;
 
 /*  synctreepool_init()
  */
-static inline void synctreepool_init()
+static inline void synctreepool_init(void)
 {
     num_arriver_tree_nodes = (GRAIN_K * jl_n_threads) - 1;
     num_reducer_tree_nodes = (2 * GRAIN_K * jl_n_threads) - 1;
@@ -247,7 +247,7 @@ static inline void synctreepool_init()
 
 /*  arriver_alloc()
  */
-static inline arriver_t *arriver_alloc()
+static inline arriver_t *arriver_alloc(void)
 {
     int16_t candidate;
     arriver_t *arr;
@@ -276,7 +276,7 @@ static inline void arriver_free(arriver_t *arr)
 
 /*  reducer_alloc()
  */
-static inline reducer_t *reducer_alloc()
+static inline reducer_t *reducer_alloc(void)
 {
     int16_t candidate;
     reducer_t *red;
@@ -348,7 +348,7 @@ static inline jl_value_t *reduce(arriver_t *arr, reducer_t *red, jl_callptr_t fp
 
         /* neighbor has already arrived, get its value and reduce it */
         nidx = ridx & 0x1 ? ridx + 1 : ridx - 1;
-        /* TODO: review needed */
+        /* TODO: need to pass in val and red->tree[nidx] */
         JL_TRY {
             val = fptr(mfunc, rargs, nrargs);
         }
@@ -390,7 +390,7 @@ void jl_init_threadarg(jl_threadarg_t *targ) { }
 
 
 // helper for final thread initialization
-static void init_started_thread()
+static void init_started_thread(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 
@@ -515,7 +515,7 @@ static void sync_grains(jl_task_t *task)
 
 
 // all tasks except the root task start and exit here
-void NOINLINE JL_NORETURN task_wrapper()
+void NOINLINE JL_NORETURN task_wrapper(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *task = ptls->current_task;
@@ -587,7 +587,7 @@ void NOINLINE JL_NORETURN task_wrapper()
 
 
 // get the next available task and run it
-static void JL_NORETURN run_next()
+static void JL_NORETURN run_next(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *task = NULL;

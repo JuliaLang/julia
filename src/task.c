@@ -149,7 +149,7 @@ jl_datatype_t *jl_task_type;
 #ifdef JULIA_ENABLE_PARTR
 jl_datatype_t *jl_condition_type;
 
-void NOINLINE JL_NORETURN task_wrapper();
+void NOINLINE JL_NORETURN task_wrapper(void);
 #endif
 
 #ifdef COPY_STACKS
