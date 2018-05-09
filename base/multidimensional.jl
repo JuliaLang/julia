@@ -377,7 +377,7 @@ module IteratorsMD
     next(iter::Reverse{<:CartesianIndices{0}}, state) = CartesianIndex(), true
     done(iter::Reverse{<:CartesianIndices{0}}, state) = state
 
-    LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
+    Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
 end  # IteratorsMD
 
 
