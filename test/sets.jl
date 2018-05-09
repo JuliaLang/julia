@@ -5,16 +5,18 @@ isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using .Main.TestHelpers.OAs
 
 @testset "Construction, collect" begin
-    @test ===(typeof(Set([1,2,3])), Set{Int})
-    @test ===(typeof(Set{Int}([3])), Set{Int})
+    @test Set([1,2,3]) isa Set{Int}
+    @test Set{Int}([3]) isa Set{Int}
     data_in = (1,"banana", ())
     s = Set(data_in)
     data_out = collect(s)
-    @test ===(typeof(data_out), Array{Any,1})
+    @test s isa Set{Any}
+    @test data_out isa Array{Any,1}
     @test all(map(in(data_out), data_in))
     @test length(data_out) == length(data_in)
     let f17741 = x -> x < 0 ? false : 1
         @test isa(Set(x for x = 1:3), Set{Int})
+        @test isa(Set(x for x = 1:3 for j = 1:1), Set{Int})
         @test isa(Set(sin(x) for x = 1:3), Set{Float64})
         @test isa(Set(f17741(x) for x = 1:3), Set{Int})
         @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
