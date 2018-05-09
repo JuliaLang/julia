@@ -1046,20 +1046,26 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
         JL_GC_POP();
         return NULL;
     }
-#ifdef TRACE_COMPILE
-    if (!jl_has_free_typevars((jl_value_t*)tt)) {
-        jl_printf(JL_STDERR, "precompile(");
-        jl_static_show(JL_STDERR, (jl_value_t*)tt);
-        jl_printf(JL_STDERR, ")\n");
-    }
-#endif
     sig = join_tsig(tt, entry->sig);
     jl_method_instance_t *nf;
     if (!cache) {
         nf = jl_specializations_get_linfo(m, (jl_value_t*)sig, env, world);
     }
     else {
+        //int64_t t0 = jl_hrtime();
         nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, tt, entry, world, env, allow_exec);
+#ifdef TRACE_COMPILE
+        if (nf && allow_exec && !inexact) {
+            jl_generic_fptr_t fptr;
+            (void)jl_compile_method_internal(&fptr, nf);
+        }
+        if (!jl_has_free_typevars((jl_value_t*)tt)) {
+            jl_printf(JL_STDERR, "%.6f\t", (jl_hrtime()-t0)/1e9);
+            jl_printf(JL_STDERR, "precompile(");
+            jl_static_show(JL_STDERR, (jl_value_t*)tt);
+            jl_printf(JL_STDERR, ")\n");
+        }
+#endif
     }
     JL_GC_POP();
     return nf;

@@ -159,8 +159,16 @@ unitrange_last(start::T, stop::T) where {T} =
                           convert(T,start-oneunit(stop-start)))
 
 if isdefined(Main, :Base)
-    getindex(t::Tuple, r::AbstractUnitRange{<:Real}) =
-        (o = first(r) - 1; ntuple(n -> t[o + n], length(r)))
+    function getindex(t::Tuple, r::AbstractUnitRange{<:Real})
+        n = length(r)
+        n == 0 && return ()
+        a = Vector{eltype(t)}(n)
+        o = first(r) - 1
+        @inbounds for i = 1:n
+            a[i] = t[o + i]
+        end
+        (a...,)
+    end
 end
 
 """

@@ -128,6 +128,11 @@ void addOptimizationPasses(PassManager *PM)
 #endif
     if (jl_options.opt_level == 0) {
         PM->add(createCFGSimplificationPass()); // Clean up disgusting code
+
+        PM->add(createSROAPass());                 // Break up aggregate allocas
+        PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+        PM->add(createEarlyCSEPass());
+
         PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
         PM->add(createLowerPTLSPass(imaging_mode));
 #if JL_LLVM_VERSION >= 40000
@@ -156,6 +161,7 @@ void addOptimizationPasses(PassManager *PM)
     }
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
+    //PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createPromoteMemoryToRegisterPass()); // Kill useless allocas
 
     // hopefully these functions (from llvmcall) don't try to interact with the Julia runtime
@@ -206,27 +212,27 @@ void addOptimizationPasses(PassManager *PM)
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
     PM->add(createLICMPass());                 // Hoist loop invariants
-    PM->add(createLoopUnswitchPass());         // Unswitch loops.
+    //PM->add(createLoopUnswitchPass());         // Unswitch loops.
     // Subsequent passes not stripping metadata from terminator
 #ifndef INSTCOMBINE_BUG
-    PM->add(createInstructionCombiningPass());
+    //PM->add(createInstructionCombiningPass());
 #endif
     PM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     PM->add(createLoopDeletionPass());         // Delete dead loops
 #if JL_LLVM_VERSION >= 30500
-    PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
+    //PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
 #else
-    PM->add(createLoopUnrollPass());           // Unroll small loops
+    //PM->add(createLoopUnrollPass());           // Unroll small loops
 #endif
 #if JL_LLVM_VERSION < 30500 && !defined(INSTCOMBINE_BUG)
-    PM->add(createLoopVectorizePass());        // Vectorize loops
+    //PM->add(createLoopVectorizePass());        // Vectorize loops
 #endif
     //PM->add(createLoopStrengthReducePass());   // (jwb added)
 
 #ifndef INSTCOMBINE_BUG
-    PM->add(createInstructionCombiningPass()); // Clean up after the unroller
+    //PM->add(createInstructionCombiningPass()); // Clean up after the unroller
 #endif
-    PM->add(createGVNPass());                  // Remove redundancies
+    //PM->add(createGVNPass());                  // Remove redundancies
     PM->add(createMemCpyOptPass());            // Remove memcpy / form memset
     PM->add(createSCCPPass());                 // Constant prop with SCCP
 
@@ -235,7 +241,7 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(createSinkingPass()); ////////////// ****
     PM->add(createInstructionSimplifierPass());///////// ****
 #ifndef INSTCOMBINE_BUG
-    PM->add(createInstructionCombiningPass());
+    //PM->add(createInstructionCombiningPass());
 #endif
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
@@ -243,10 +249,10 @@ void addOptimizationPasses(PassManager *PM)
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass());     // Merge & remove BBs
-    PM->add(createLoopIdiomPass());
-    PM->add(createLoopDeletionPass());          // Delete dead loops
-    PM->add(createJumpThreadingPass());         // Thread jumps
+    //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
+    //PM->add(createLoopIdiomPass());
+    //PM->add(createLoopDeletionPass());          // Delete dead loops
+    //PM->add(createJumpThreadingPass());         // Thread jumps
 
 #if JL_LLVM_VERSION >= 30500
     if (jl_options.opt_level >= 3) {

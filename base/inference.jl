@@ -28,7 +28,7 @@ struct InferenceParams
                     tuple_depth::Int = 4,
                     tuple_splat::Int = 16,
                     union_splitting::Int = 4,
-                    apply_union_enum::Int = 8)
+                    apply_union_enum::Int = 3)
         return new(world, inlining, tupletype_len,
             tuple_depth, tuple_splat, union_splitting, apply_union_enum)
     end
@@ -1523,7 +1523,6 @@ end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(af::ANY, fargs::Vector{Any}, aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
-    res = Union{}
     nargs = length(fargs)
     assert(nargs == length(aargtypes))
     splitunions = countunionsplit(aargtypes) <= sv.params.MAX_APPLY_UNION_ENUM
@@ -1551,6 +1550,10 @@ function abstract_apply(af::ANY, fargs::Vector{Any}, aargtypes::Vector{Any}, vty
         end
         ctypes = ctypes´
     end
+    if length(ctypes) > 3
+        return Any
+    end
+    res = Bottom
     for ct in ctypes
         if length(ct) > sv.params.MAX_TUPLETYPE_LEN
             tail = foldl((a,b)->tmerge(a,unwrapva(b)), Bottom, ct[sv.params.MAX_TUPLETYPE_LEN:end])
@@ -1898,7 +1901,21 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
 end
 
 function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
-    argtypes = Any[abstract_eval(e.args[i], vtypes, sv) for i in 1:length(e.args)]
+    na = length(e.args)
+    argtypes = Vector{Any}(na)
+    for i = 1:na
+        a = e.args[i]
+        if a isa SSAValue
+            at = abstract_eval_ssavalue(a::SSAValue, sv.src)
+        elseif a isa Slot
+            at = vtypes[slot_id(a)].typ
+        elseif a isa Number
+            at = Const(a)
+        else
+            at = abstract_eval(a, vtypes, sv)
+        end
+        argtypes[i] = at
+    end
     #print("call ", e.args[1], argtypes, "\n\n")
     for x in argtypes
         x === Bottom && return Bottom
