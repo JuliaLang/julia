@@ -498,7 +498,7 @@ const helps = Dict(
 
     Precompile all the dependencies of the project by running `import` on all of them in a new process.
     """, CMD_INSTANTIATE => md"""
-        instantaite
+        instantiate
         instantiate [-m|--manifest]
         instantiate [-p|--project]
 
