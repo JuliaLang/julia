@@ -436,6 +436,12 @@ circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
 @test dest[1:3,2:4] == src[1:3,2:4]
 
+# reshape
+A = OffsetArray(rand(4,4), (-3,5))
+@test vec(A) == reshape(A, :) == reshape(A, Val(1)) == A[:] == vec(A.parent)
+A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
+@test vec(A) == reshape(A, :) == reshape(A, Val(1)) == A[:] == vec(A.parent)
+
 end # let
 
 # Check that similar throws a MethodError rather than a

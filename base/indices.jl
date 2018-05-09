@@ -277,9 +277,14 @@ iterate over all the wrapped indices, even supporting offset indices.
 struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
-axes(S::Slice) = (S.indices,)
-unsafe_indices(S::Slice) = (S.indices,)
-indices1(S::Slice) = S.indices
+Slice(S::Slice) = S
+axes(S::Slice) = (S,)
+unsafe_indices(S::Slice) = (S,)
+indices1(S::Slice) = S
+axes(S::Slice{<:OneTo}) = (S.indices,)
+unsafe_indices(S::Slice{<:OneTo}) = (S.indices,)
+indices1(S::Slice{<:OneTo}) = S.indices
+
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
 errmsg(A) = error("size not supported for arrays with indices $(axes(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
