@@ -1610,6 +1610,11 @@
                         (call (top not_int) (call (core typeassert) (call (top done) ,coll ,state) (core Bool)))
                         ,body))))))))
 
+(define (check-generator-expr e)
+  (if (expr-contains-p return? e (lambda (x) (not (function-def? x))))
+      (error "\"return\" not allowed inside a generator expression")
+      #t))
+
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs flat outervars)
   (let* ((vars    (map cadr range-exprs))
@@ -1639,6 +1644,7 @@
                                                                                outervars)))
                               ,expr))
                           (else expr))))
+          (check-generator-expr expr)
           `(-> ,argname (block ,@splat ,expr))))))
 
 (define (expand-generator e flat outervars)
@@ -2321,6 +2327,7 @@
                              ranges)
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
+                      (check-generator-expr (caddr e))
                       (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
           `(call (top collect) ,(cadr e) ,(caddr e)))))))
 

@@ -347,9 +347,9 @@ function _jl_spawn(file, argv, cmd::Cmd, stdio)
     loop = eventloop()
     handles = Tuple{Cint, UInt}[ # assuming little-endian layout
         let h = rawhandle(io)
-            h === C_NULL    && return (0x00, UInt(0))
-            h isa OS_HANDLE && return (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h)))
-            h isa Ptr{Cvoid} && return (0x04, UInt(h))
+            h === C_NULL     ? (0x00, UInt(0)) :
+            h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
+            h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
             error("invalid spawn handle $h from $io")
         end
         for io in stdio]
