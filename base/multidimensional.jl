@@ -949,7 +949,7 @@ end
 @inline function _circcopy!(dest, rdest, indsdest::Tuple{AbstractUnitRange,Vararg{Any}},
                             src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})
     indd1, inds1 = indsdest[1], indssrc[1]
-    l = length(indd1)
+    l = _length(indd1)
     s = mod(first(inds1)-first(indd1), l)
     sdf = first(indd1)+s
     rd1, rd2 = first(indd1):sdf-1, sdf:last(indd1)

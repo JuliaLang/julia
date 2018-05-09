@@ -438,9 +438,9 @@ circcopy!(dest, src)
 
 # reshape
 A = OffsetArray(rand(4,4), (-3,5))
-@test vec(A) == reshape(A, :) == reshape(A, Val(1)) == A[:] == vec(A.parent)
+@test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
-@test vec(A) == reshape(A, :) == reshape(A, Val(1)) == A[:] == vec(A.parent)
+@test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 
 end # let
 
