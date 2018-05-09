@@ -43,7 +43,7 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
                             0,    // code_coverage
                             0,    // malloc_log
-                            2,    // opt_level
+                            1,    // opt_level
 #ifdef JL_DEBUG_BUILD
                             2,    // debug_level [debug build]
 #else
