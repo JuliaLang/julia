@@ -655,6 +655,8 @@ Library improvements
   * `trunc`, `floor`, `ceil`, and `round` specify `digits`, `sigdigits` and `base` using
     keyword arguments. ([#26156], [#26670])
 
+  * `Sys.which()` provides a cross-platform method to find executable files, similar to
+    the Unix `which` command. ([#26559])
 
 Compiler/Runtime improvements
 -----------------------------
