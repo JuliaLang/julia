@@ -2316,12 +2316,24 @@
                      (error "comprehension syntax with `:` ranges has been removed"))
                  (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)))
                              ranges)
+                      (not (has-return? (cadr (caddr e))))
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
                       (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
           `(call (top collect) ,(cadr e) ,(caddr e)))))))
 
+(define (has-return? e)
+  (expr-contains-p return? e (lambda (x) (not (function-def? x)))))
+
+(define (has-break-or-continue? e)
+  (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
+                   e
+                   (lambda (x) (not (and (pair? x)
+                                         (memq (car x) '(for while)))))))
+
 (define (lower-comprehension ty expr itrs)
+  (if (has-break-or-continue? expr)
+      (error "break or continue outside loop"))
   (let ((result    (gensy))
         (idx       (gensy))
         (oneresult (make-ssavalue))

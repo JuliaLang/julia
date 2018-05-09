@@ -220,3 +220,10 @@ end
 let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end
+
+# comprehensions with `return`
+let f() = [ return 2 for i=1:2 ],
+    g() = Int[return 2 for i=1:2 ]
+    @test f() == [2, 2]
+    @test g() == [2, 2]
+end
