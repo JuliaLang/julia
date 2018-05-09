@@ -163,9 +163,9 @@ SOMINOR := $(JULIA_MINOR_VERSION)
 endif
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.
-# The versions of cacert.pem are identified by the date of their changes.
+# The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
-MOZILLA_CACERT_VERSION:=cacert-2018-03-07.pem
+MOZILLA_CACERT_VERSION := 2018-03-07
 
 ifneq ($(NO_GIT), 1)
 JULIA_COMMIT := $(shell git rev-parse --short=10 HEAD)
