@@ -111,7 +111,7 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape
     any(d -> d isa Colon, post) && throw1(dims)
     sz, remainder = divrem(_length(A), prod(pre)*prod(post))
     remainder == 0 || throw2(A, dims)
-    (pre..., sz, post...)
+    (pre..., Int(sz), post...)
 end
 @inline _before_colon(dim::Any, tail...) =  (dim, _before_colon(tail...)...)
 @inline _before_colon(dim::Colon, tail...) = ()
@@ -169,7 +169,7 @@ _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
     parent = p[1]
     strds = front(size_to_strides(map(_length, axes(parent))..., 1))
-    strds1 = map(s->max(1,s), strds)  # for resizing empty arrays
+    strds1 = map(s->max(1,Int(s)), strds)  # for resizing empty arrays
     mi = map(SignedMultiplicativeInverse, strds1)
     ReshapedArray(parent, dims, reverse(mi))
 end
