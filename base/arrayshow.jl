@@ -266,10 +266,10 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
             for i = 1:nd
                 ii = idxs[i]
                 ind = tailinds[i]
-                if length(ind) > 10
-                    if ii == ind[4] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
+                if _length(ind) > 10
+                    if ii == ind[firstindex(ind)+3] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
                         for j=i+1:nd
-                            szj = length(axes(a, j+2))
+                            szj = _length(axes(a, j+2))
                             indj = tailinds[j]
                             if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
                                 @goto skip
@@ -279,7 +279,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
                         print(io, "...\n\n")
                         @goto skip
                     end
-                    if ind[3] < ii <= ind[end-3]
+                    if ind[firstindex(ind)+2] < ii <= ind[end-3]
                         @goto skip
                     end
                 end

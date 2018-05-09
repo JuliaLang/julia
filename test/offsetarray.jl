@@ -210,26 +210,26 @@ B = similar(A, (3,4))
 @test axes(B) === (Base.OneTo(3), Base.OneTo(4))
 B = similar(A, (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test axes(B) === (-3:3, 1:4)
+@test axes(B) === Base.Slice.((-3:3, 1:4))
 B = similar(parent(A), (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test axes(B) === (-3:3, 1:4)
+@test axes(B) === Base.Slice.((-3:3, 1:4))
 
 # Indexing with OffsetArray indices
 i1 = OffsetArray([2,1], (-5,))
 i1 = OffsetArray([2,1], -5)
 b = A0[i1, 1]
-@test axes(b) === (-4:-3,)
+@test axes(b) === (Base.Slice(-4:-3),)
 @test b[-4] == 2
 @test b[-3] == 1
 b = A0[1,i1]
-@test axes(b) === (-4:-3,)
+@test axes(b) === (Base.Slice(-4:-3),)
 @test b[-4] == 3
 @test b[-3] == 1
 v = view(A0, i1, 1)
-@test axes(v) === (-4:-3,)
+@test axes(v) === (Base.Slice(-4:-3),)
 v = view(A0, 1:1, i1)
-@test axes(v) === (Base.OneTo(1), -4:-3)
+@test axes(v) === (Base.OneTo(1), Base.Slice(-4:-3))
 
 # copyto! and fill!
 a = OffsetArray{Int}(undef, (-3:-1,))
@@ -316,7 +316,7 @@ a = OffsetArray(a0, (-1,2,3,4,5))
 v = OffsetArray(v0, (-3,))
 @test lastindex(v) == 1
 @test v ≈ v
-@test axes(v') === (Base.OneTo(1),-2:1)
+@test axes(v') === (Base.OneTo(1),Base.Slice(-2:1))
 @test parent(v) == collect(v)
 rv = reverse(v)
 @test axes(rv) == axes(v)
@@ -332,7 +332,7 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test lastindex(A, 1) == 1
 @test lastindex(A, 2) == 9
 @test A ≈ A
-@test axes(A') === (6:9, -2:1)
+@test axes(A') === Base.Slice.((6:9, -2:1))
 @test parent(copy(A')) == copy(parent(A)')
 @test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))

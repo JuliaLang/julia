@@ -545,7 +545,7 @@ else
 end
 
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(undef, Int(length(itr)::Integer))
-_array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, axes(itr))::Array{T}
+_array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, axes(itr))
 
 function collect(itr::Generator)
     isz = IteratorSize(itr.iter)

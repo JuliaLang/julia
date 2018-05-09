@@ -72,7 +72,7 @@ squeeze(A; dims) = _squeeze(A, dims)
 function _squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
-        length(axes(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
+        _length(axes(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
         for j = 1:i-1
             dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
         end
@@ -158,7 +158,7 @@ function reverse(A::AbstractArray; dims::Integer)
     B = similar(A)
     nnd = 0
     for i = 1:nd
-        nnd += Int(length(inds[i])==1 || i==d)
+        nnd += Int(_length(inds[i])==1 || i==d)
     end
     indsd = inds[d]
     sd = first(indsd)+last(indsd)

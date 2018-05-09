@@ -889,7 +889,7 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
                              inds::Tuple{AbstractUnitRange,Vararg{Any}},
                              shiftamt::Tuple{Integer,Vararg{Any}})
     ind1, d = inds[1], shiftamt[1]
-    s = mod(d, length(ind1))
+    s = mod(d, _length(ind1))
     sf, sl = first(ind1)+s, last(ind1)-s
     r1, r2 = first(ind1):sf-1, sf:last(ind1)
     r3, r4 = first(ind1):sl, sl+1:last(ind1)
@@ -937,7 +937,7 @@ true
 function circcopy!(dest, src)
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
     indssrc, indsdest = axes(src), axes(dest)
-    if (szsrc = map(length, indssrc)) != (szdest = map(length, indsdest))
+    if (szsrc = map(_length, indssrc)) != (szdest = map(_length, indsdest))
         throw(DimensionMismatch("src and dest must have the same sizes (got $szsrc and $szdest)"))
     end
     shift = map((isrc, idest)->first(isrc)-first(idest), indssrc, indsdest)

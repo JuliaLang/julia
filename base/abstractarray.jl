@@ -572,9 +572,23 @@ similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, 
 similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, to_shape(dims))
 similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, to_shape(dims))
 similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::NeedsShaping) where {T} = similar(a, T, to_shape(dims))
+# Similar supports specifying dims as either Integers or AbstractUnitRanges or any mixed combination
+# thereof. Ideally, we'd just convert Integers to OneTo ranges and then call a canonical range method,
+# but we don't want to require all AbstractArray subtypes to dispatch on Base.OneTo.
+similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, ::Type{T}, dims::Tuple{Integer, Vararg{Integer}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
+
+# to_shape(dims) = _is_oneto_shape(dims) ? _to_dims(dims) : _to_inds(dims)
+# _is_oneto_shape(::Tuple{}) = true
+# _is_oneto_shape(t::Tuple{Any, Vararg{Any}}) = false
+# _is_oneto_shape(t::Tuple{Union{Integer, OneTo}, Vararg{Any}}) = _is_oneto_shape(tail(t))
+#
+# _to_dims(dims) = map(to_dim, dims)
+# _to_inds(dims) = map(_to_ind, dims)
+# _to_ind(i::Integer) = OneTo(Int(i))
+# _to_ind(r::AbstractUnitRange) = r
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
