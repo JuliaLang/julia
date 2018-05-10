@@ -1585,9 +1585,15 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
 // emit length of vararg tuple
 static Value *emit_n_varargs(jl_codectx_t &ctx)
 {
-    int nreq = ctx.nReqArgs;
-    Value *valen = ctx.builder.CreateSub((Value*)ctx.argCount,
-                                     ConstantInt::get(T_int32, nreq));
+    Value *valen = NULL;
+    if (ctx.nvargs != -1) {
+        valen = ConstantInt::get(T_int32, ctx.nvargs);
+    } else {
+        assert(ctx.argCount);
+        int nreq = ctx.nReqArgs;
+        valen = ctx.builder.CreateSub((Value*)ctx.argCount,
+                                        ConstantInt::get(T_int32, nreq));
+    }
 #ifdef _P64
     return ctx.builder.CreateSExt(valen, T_int64);
 #else
