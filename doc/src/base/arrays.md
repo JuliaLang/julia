@@ -160,13 +160,3 @@ Base.reverse(::AbstractVector; kwargs...)
 Base.reverseind
 Base.reverse!
 ```
-
-## BitArrays
-
-[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
-They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
-and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
-
-```@docs
-Base.flipbits!
-```

@@ -1644,6 +1644,9 @@ function search(buf::IOBuffer, delim::UInt8)
     return Int(q-p+1)
 end
 
+# Issue #27067
+@deprecate flipbits!(B::BitArray) B .= .!B
+
 @deprecate linearindices(x::AbstractArray) LinearIndices(x)
 
 # PR #26647
