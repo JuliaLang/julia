@@ -1599,7 +1599,7 @@ function show(io::IO, tv::TypeVar)
     nothing
 end
 
-function dump(io::IO, x::SimpleVector, n::Int, indent)
+function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)
         print(io, "empty SimpleVector")
         return
@@ -1619,37 +1619,40 @@ function dump(io::IO, x::SimpleVector, n::Int, indent)
     nothing
 end
 
-function dump(io::IO, @nospecialize(x), n::Int, indent)
+function dump(io::IOContext, @nospecialize(x), n::Int, indent)
     T = typeof(x)
     if isa(x, Function)
         print(io, x, " (function of type ", T, ")")
     else
         print(io, T)
     end
-    if nfields(x) > 0
-        if n > 0
-            for field in (isa(x,Tuple) ? (1:length(x)) : fieldnames(T))
+    nf = nfields(x)
+    if nf > 0
+        if n > 0 && !show_circular(io, x)
+            recur_io = IOContext(io, Pair{Symbol,Any}(:SHOWN_SET, x))
+            for field in 1:nf
                 println(io)
-                print(io, indent, "  ", field, ": ")
+                fname = string(fieldname(T, field))
+                print(io, indent, "  ", fname, ": ")
                 if isdefined(x,field)
-                    dump(io, getfield(x, field), n - 1, string(indent, "  "))
+                    dump(recur_io, getfield(x, field), n - 1, string(indent, "  "))
                 else
                     print(io, undef_ref_str)
                 end
             end
         end
     else
-        !isa(x,Function) && print(io, " ", x)
+        !isa(x, Function) && print(io, " ", x)
     end
     nothing
 end
 
-dump(io::IO, x::Module, n::Int, indent) = print(io, "Module ", x)
-dump(io::IO, x::String, n::Int, indent) = (print(io, "String "); show(io, x))
-dump(io::IO, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
-dump(io::IO, x::Union,  n::Int, indent) = print(io, x)
+dump(io::IOContext, x::Module, n::Int, indent) = print(io, "Module ", x)
+dump(io::IOContext, x::String, n::Int, indent) = (print(io, "String "); show(io, x))
+dump(io::IOContext, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
+dump(io::IOContext, x::Union,  n::Int, indent) = print(io, x)
 
-function dump_elts(io::IO, x::Array, n::Int, indent, i0, i1)
+function dump_elts(io::IOContext, x::Array, n::Int, indent, i0, i1)
     for i in i0:i1
         print(io, indent, "  ", i, ": ")
         if !isassigned(x,i)
@@ -1661,23 +1664,25 @@ function dump_elts(io::IO, x::Array, n::Int, indent, i0, i1)
     end
 end
 
-function dump(io::IO, x::Array, n::Int, indent)
+function dump(io::IOContext, x::Array, n::Int, indent)
     print(io, "Array{$(eltype(x))}($(size(x)))")
     if eltype(x) <: Number
         print(io, " ")
         show(io, x)
     else
-        if n > 0 && !isempty(x)
+        if n > 0 && !isempty(x) && !show_circular(io, x)
             println(io)
+            recur_io = IOContext(io, :SHOWN_SET => x)
+            lx = length(x)
             if get(io, :limit, false)
-                dump_elts(io, x, n, indent, 1, (length(x) <= 10 ? length(x) : 5))
-                if length(x) > 10
+                dump_elts(recur_io, x, n, indent, 1, (lx <= 10 ? lx : 5))
+                if lx > 10
                     println(io)
                     println(io, indent, "  ...")
-                    dump_elts(io, x, n, indent, length(x)-4, length(x))
+                    dump_elts(recur_io, x, n, indent, lx - 4, lx)
                 end
             else
-                dump_elts(io, x, n, indent, 1, length(x))
+                dump_elts(recur_io, x, n, indent, 1, lx)
             end
         end
     end
@@ -1685,7 +1690,7 @@ function dump(io::IO, x::Array, n::Int, indent)
 end
 
 # Types
-function dump(io::IO, x::DataType, n::Int, indent)
+function dump(io::IOContext, x::DataType, n::Int, indent)
     print(io, x)
     if x !== Any
         print(io, " <: ", supertype(x))
@@ -1712,7 +1717,10 @@ end
 
 const DUMP_DEFAULT_MAXDEPTH = 8
 
-dump(io::IO, arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = (dump(io, arg, maxdepth, ""); println(io))
+function dump(io::IO, @nospecialize(x); maxdepth=DUMP_DEFAULT_MAXDEPTH)
+    dump(IOContext(io), x, maxdepth, "")
+    println(io)
+end
 
 """
     dump(x; maxdepth=$DUMP_DEFAULT_MAXDEPTH)
