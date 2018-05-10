@@ -200,8 +200,9 @@ add_tfunc(ifelse, 3, 3,
             else
                 return Bottom
             end
-        end
-        if !isa(cnd, Conditional) && !(Bool ⊑ cnd)
+        elseif isa(cnd, Conditional)
+            # handled in abstract_call
+        elseif !(Bool ⊑ cnd)
             return Bottom
         end
         return tmerge(x, y)

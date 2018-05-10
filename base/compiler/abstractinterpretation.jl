@@ -500,6 +500,18 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
 
     tm = _topmod(sv)
     if isa(f, Builtin) || isa(f, IntrinsicFunction)
+        if f === ifelse && fargs isa Vector{Any} && length(argtypes) == 4 && argtypes[2] isa Conditional
+            cnd = argtypes[2]
+            tx = argtypes[3]
+            ty = argtypes[4]
+            if isa(fargs[3], Slot) && slot_id(cnd.var) == slot_id(fargs[3])
+                tx = typeintersect(tx, cnd.vtype)
+            end
+            if isa(fargs[4], Slot) && slot_id(cnd.var) == slot_id(fargs[4])
+                ty = typeintersect(ty, cnd.elsetype)
+            end
+            return tmerge(tx, ty)
+        end
         rt = builtin_tfunction(f, argtypes[2:end], sv)
         if f === getfield && isa(fargs, Vector{Any}) && length(argtypes) == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
             cti = precise_container_type(fargs[2], argtypes[2], vtypes, sv)
