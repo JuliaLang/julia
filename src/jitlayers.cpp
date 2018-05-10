@@ -257,9 +257,14 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createLoopIdiomPass());
     PM->add(createLoopDeletionPass());          // Delete dead loops
     PM->add(createJumpThreadingPass());         // Thread jumps
-    PM->add(createSLPVectorizerPass());         // Vectorize straight-line code
+
+    if (opt_level >= 3) {
+        PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
+    }
+
     PM->add(createAggressiveDCEPass());         // Delete dead instructions
-    PM->add(createInstructionCombiningPass());  // Clean up after SLP loop vectorizer
+    if (opt_level >= 3)
+        PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
     // LowerPTLS removes an indirect call. As a result, it is likely to trigger
