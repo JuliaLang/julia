@@ -2807,8 +2807,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         const jl_cgval_t &typ = argv[1];
         const jl_cgval_t &fld = argv[2];
         if ((jl_is_type_type(typ.typ) && jl_is_concrete_type(jl_tparam0(typ.typ))) ||
-                (typ.constant && jl_is_datatype(typ.constant)) ||
-                typ.typ == (jl_value_t*)jl_datatype_type) {
+                (typ.constant && jl_is_concrete_type(typ.constant))) {
             if (fld.typ == (jl_value_t*)jl_long_type) {
                 assert(typ.isboxed);
                 Value *tyv = boxed(ctx, typ);
