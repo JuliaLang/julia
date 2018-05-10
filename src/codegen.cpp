@@ -3142,8 +3142,6 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex)
 
     if (f.constant && jl_typeis(f.constant, jl_intrinsic_type)) {
         JL_I::intrinsic fi = (intrinsic)*(uint32_t*)jl_data_ptr(f.constant);
-        if (fi == JL_I::select_value)
-            return emit_select_value(ctx, args, nargs - 1, rt);
         return emit_intrinsic(ctx, fi, args, nargs - 1);
     }
 
@@ -3156,15 +3154,15 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex)
     }
 
     if (f.constant && jl_isa(f.constant, (jl_value_t*)jl_builtin_type)) {
+        if (f.constant == jl_builtin_ifelse && nargs == 4)
+            return emit_ifelse(ctx, argv[1], argv[2], argv[3], rt);
         jl_cgval_t result;
         bool handled = emit_builtin_call(ctx, &result, f.constant, argv, nargs - 1, rt, ex);
         if (handled) {
             return result;
         }
-    }
 
-    // special case for known builtin not handled by emit_builtin_call
-    if (f.constant && jl_isa(f.constant, (jl_value_t*)jl_builtin_type)) {
+        // special case for known builtin not handled by emit_builtin_call
         std::map<jl_fptr_args_t, Function*>::iterator it = builtin_func_map.find(jl_get_builtin_fptr(f.constant));
         if (it != builtin_func_map.end()) {
             Value *theFptr = it->second;
@@ -7226,6 +7224,7 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f_issubtype] = jlcall_func_to_llvm("jl_f_issubtype", &jl_f_issubtype, m);
     builtin_func_map[jl_f_isa] = jlcall_func_to_llvm("jl_f_isa", &jl_f_isa, m);
     builtin_func_map[jl_f_typeassert] = jlcall_func_to_llvm("jl_f_typeassert", &jl_f_typeassert, m);
+    builtin_func_map[jl_f_ifelse] = jlcall_func_to_llvm("jl_f_ifelse", &jl_f_ifelse, m);
     builtin_func_map[jl_f__apply] = jlcall_func_to_llvm("jl_f__apply", &jl_f__apply, m);
     builtin_func_map[jl_f__apply_pure] = jlcall_func_to_llvm("jl_f__apply_pure", &jl_f__apply_pure, m);
     builtin_func_map[jl_f__apply_latest] = jlcall_func_to_llvm("jl_f__apply_latest", &jl_f__apply_latest, m);

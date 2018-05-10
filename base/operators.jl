@@ -348,7 +348,7 @@ julia> ifelse(1 > 2, 1, 2)
 2
 ```
 """
-ifelse(c::Bool, x, y) = select_value(c, x, y)
+ifelse
 
 """
     cmp(x,y)

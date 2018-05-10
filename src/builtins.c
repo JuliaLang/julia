@@ -437,6 +437,13 @@ JL_CALLABLE(jl_f_throw)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f_ifelse)
+{
+    JL_NARGS(ifelse, 3, 3);
+    JL_TYPECHK(ifelse, bool, args[0]);
+    return (args[0] == jl_false ? args[2] : args[1]);
+}
+
 // apply ----------------------------------------------------------------------
 
 jl_function_t *jl_append_any_func;
@@ -1210,6 +1217,7 @@ void jl_init_primitives(void)
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
+    add_builtin_func("ifelse", jl_f_ifelse);
 
     // field access
     add_builtin_func("getfield",  jl_f_getfield);
