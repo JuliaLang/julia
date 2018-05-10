@@ -2023,7 +2023,7 @@ void jl_init_types(void)
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(13,
+                        jl_perm_symsvec(15,
                             "code",
                             "codelocs",
                             "method_for_inference_limit_heuristics",
@@ -2033,11 +2033,13 @@ void jl_init_types(void)
                             "ssaflags",
                             "slotflags",
                             "slotnames",
+                            "min_world",
+                            "max_world",
                             "inferred",
                             "inlineable",
                             "propagate_inbounds",
                             "pure"),
-                        jl_svec(13,
+                        jl_svec(15,
                             jl_array_any_type,
                             jl_any_type,
                             jl_any_type,
@@ -2050,11 +2052,13 @@ void jl_init_types(void)
                             // If you change them, you'll have to adjust the
                             // serializer
                             jl_array_any_type,
+                            jl_ulong_type,
+                            jl_ulong_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
-                        0, 1, 13);
+                        0, 1, 15);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,

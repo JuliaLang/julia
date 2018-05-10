@@ -2287,6 +2287,9 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
                   | (code->pure << 0);
     write_uint8(s.s, flags);
 
+    write_int32(s.s, code->min_world);
+    write_int32(s.s, code->max_world);
+
     size_t nsyms = jl_array_len(code->slotnames);
     assert(nsyms >= m->nargs && nsyms < INT32_MAX); // required by generated functions
     write_int32(s.s, nsyms);
@@ -2299,7 +2302,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     }
 
     size_t nf = jl_datatype_nfields(jl_code_info_type);
-    for (i = 0; i < nf - 5; i++) {
+    for (i = 0; i < nf - 7; i++) {
         int copy = (i != 2); // don't copy contents of method_for_inference_limit_heuristics field
         jl_serialize_value_(&s, jl_get_nth_field((jl_value_t*)code, i), copy);
     }
@@ -2350,6 +2353,9 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
     code->propagate_inbounds = !!(flags & (1 << 1));
     code->pure = !!(flags & (1 << 0));
 
+    code->min_world = read_int32(s.s);
+    code->max_world = read_int32(s.s);
+
     size_t nslots = read_int32(&src);
     jl_array_t *syms = jl_alloc_vec_any(nslots);
     code->slotnames = syms;
@@ -2362,7 +2368,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
     }
 
     size_t nf = jl_datatype_nfields(jl_code_info_type);
-    for (i = 0; i < nf - 5; i++) {
+    for (i = 0; i < nf - 7; i++) {
         assert(jl_field_isptr(jl_code_info_type, i));
         jl_value_t **fld = (jl_value_t**)((char*)jl_data_ptr(code) + jl_field_offset(jl_code_info_type, i));
         *fld = jl_deserialize_value(&s, fld);

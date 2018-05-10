@@ -247,6 +247,8 @@ typedef struct _jl_code_info_t {
         // 7 = has out-of-band info
     jl_array_t *slotflags;  // local var bit flags
     jl_array_t *slotnames; // names of local variables
+    size_t min_world;
+    size_t max_world;
     uint8_t inferred;
     uint8_t inlineable;
     uint8_t propagate_inbounds;

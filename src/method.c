@@ -312,6 +312,8 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->codelocs = jl_nothing;
     src->linetable = jl_nothing;
     src->ssaflags = NULL;
+    src->min_world = 0;
+    src->max_world = 0;
     src->inferred = 0;
     src->pure = 0;
     src->inlineable = 0;
@@ -520,6 +522,8 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         jl_array_ptr_set(copy, i, st);
     }
     src = jl_copy_code_info(src);
+    src->min_world = m->min_world;
+    src->max_world = ~(size_t)0;
     src->code = copy;
     jl_gc_wb(src, copy);
     if (gen_only)
