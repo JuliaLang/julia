@@ -96,9 +96,7 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{OffsetAxis,Vararg{O
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(::Type{T}, shape::Tuple{OffsetAxis,Vararg{OffsetAxis}}) where {T<:Array} =
-    OffsetArray(T(undef, map(indslength, shape)), map(indsoffset, shape))
-Base.similar(::Type{T}, shape::Tuple{OffsetAxis,Vararg{OffsetAxis}}) where {T<:BitArray} =
+Base.similar(::Type{T}, shape::Tuple{OffsetAxis,Vararg{OffsetAxis}}) where {T<:AbstractArray} =
     OffsetArray(T(undef, map(indslength, shape)), map(indsoffset, shape))
 
 Base.reshape(A::AbstractArray, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}}) = OffsetArray(reshape(A, map(indslength, inds)), map(indsoffset, inds))
