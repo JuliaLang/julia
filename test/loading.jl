@@ -86,6 +86,18 @@ import UUIDs: UUID, uuid4, uuid_version
 import Random: shuffle, randstring
 using Test
 
+shastr = "ab"^20
+hash = SHA1(shastr)
+@test hash == eval(sprint(io -> show(io, hash))) # check show method
+@test string(hash) == shastr
+@test "check $hash" == "check $shastr"
+
+uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
+uuid = UUID(uuidstr)
+@test uuid == eval(sprint(io -> show(io, uuid))) # check show method
+@test string(uuid) == uuidstr
+@test "check $uuid" == "check $uuidstr"
+
 function subset(v::Vector{T}, m::Int) where T
     T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
 end
