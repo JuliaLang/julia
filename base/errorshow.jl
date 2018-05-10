@@ -443,7 +443,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         end
                     end
                 end
-                if ex.world < min_world(method)
+                if ex.world < Core.Compiler.min_world(method)
                     print(iob, " (method too new to be called from this world context.)")
                 end
                 # TODO: indicate if it's in the wrong world

@@ -5,7 +5,7 @@ const COMPILER_TEMP_SYM = Symbol("#temp#")
 # add the real backedges
 function finalize_backedges(frame::InferenceState)
     toplevel = !isa(frame.linfo.def, Method)
-    if !toplevel && (frame.cached || frame.parent !== nothing) && frame.src.max_world == typemax(UInt)
+    if !toplevel && (frame.cached || frame.parent !== nothing) && max_world(frame.src) == typemax(UInt)
         caller = frame.linfo
         for edges in frame.stmt_edges
             i = 1
@@ -173,8 +173,8 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     tree.slotflags = fill(0x00, Int(method.nargs))
                     tree.slottypes = nothing
                     tree.ssavaluetypes = 0
-                    tree.min_world = min_world(linfo)
-                    tree.max_world = max_world(linfo)
+                    set_min_world!(tree, min_world(linfo))
+                    set_max_world!(tree, max_world(linfo))
                     tree.inferred = true
                     tree.ssaflags = UInt8[]
                     tree.pure = true
@@ -425,11 +425,11 @@ function typeinf(frame::InferenceState)
                 typeinf_work(caller)
                 no_active_ips_in_callers = false
             end
-            if caller.src.min_world < frame.src.min_world
-                caller.src.min_world = frame.src.min_world
+            if min_world(caller.src) < min_world(frame.src)
+                set_min_world!(caller.src, min_world(frame.src))
             end
-            if caller.src.max_world > frame.src.max_world
-                caller.src.max_world = frame.src.max_world
+            if max_world(caller.src) > max_world(frame.src)
+                set_max_world!(caller.src, max_world(frame.src))
             end
         end
     end
@@ -450,16 +450,16 @@ function typeinf(frame::InferenceState)
         # complete the computation of the src optimizations
         for caller in frame.callers_in_cycle
             optimize(caller)
-            if frame.src.min_world < caller.src.min_world
-                frame.src.min_world = caller.src.min_world
+            if min_world(frame.src) < min_world(caller.src)
+                set_min_world!(frame.src, min_world(caller.src))
             end
-            if frame.src.max_world > caller.src.max_world
-                frame.src.max_world = caller.src.max_world
+            if max_world(frame.src) > max_world(caller.src)
+                set_max_world!(frame.src, max_world(caller.src))
             end
         end
         # update and store in the global cache
         for caller in frame.callers_in_cycle
-            caller.src.min_world = frame.src.min_world
+            set_min_world!(caller.src, min_world(frame.src))
         end
         for caller in frame.callers_in_cycle
             finish(caller)

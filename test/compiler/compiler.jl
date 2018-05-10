@@ -1303,8 +1303,8 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
-    @test opt.src.max_world === typemax(UInt)
-    @test opt.src.min_world === Core.Compiler.min_world(opt.linfo) > 2
+    @test Core.Compiler.max_world(opt.src) === typemax(UInt)
+    @test Core.Compiler.min_world(opt.src) === Core.Compiler.min_world(opt.linfo) > 2
     @test opt.nargs == 3
 end
 

@@ -129,11 +129,11 @@ mutable struct InferenceState
 
         # TODO: we should be setting this correctly somewhere else
         if cached && !toplevel
-            src.min_world = min_world(linfo.def)
-            src.max_world = max_world(linfo.def)
+            set_min_world!(src, min_world(linfo.def))
+            set_max_world!(src, max_world(linfo.def))
         else
-            src.min_world = typemax(UInt)
-            src.max_world = typemin(UInt)
+            set_min_world!(src, typemax(UInt))
+            set_max_world!(src, typemin(UInt))
         end
         frame = new(
             params, result, linfo,
@@ -168,16 +168,16 @@ _topmod(sv::InferenceState) = _topmod(sv.mod)
 
 # work towards converging the valid age range for sv
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::InferenceState)
-    sv.src.min_world = max(sv.src.min_world, min_valid)
-    sv.src.max_world = min(sv.src.max_world, max_valid)
+    set_min_world!(sv.src, max(min_world(sv.src), min_valid))
+    set_max_world!(sv.src, min(max_world(sv.src), max_valid))
     @assert(!isa(sv.linfo.def, Method) ||
             !sv.cached ||
-            sv.src.min_world <= sv.params.world <= sv.src.max_world,
+            min_world(sv.src) <= sv.params.world <= max_world(sv.src),
             "invalid age range update")
     nothing
 end
 
-update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(edge.src.min_world, edge.src.max_world, sv)
+update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(min_world(edge.src), max_world(edge.src), sv)
 update_valid_age!(li::MethodInstance, sv::InferenceState) = update_valid_age!(min_world(li), max_world(li), sv)
 
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)

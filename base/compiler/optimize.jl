@@ -77,11 +77,11 @@ function newvar!(sv::OptimizationState, @nospecialize(typ))
 end
 
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::OptimizationState)
-    sv.src.min_world = max(sv.src.min_world, min_valid)
-    sv.src.max_world = min(sv.src.max_world, max_valid)
+    set_min_world!(sv.src, max(min_world(sv.src), min_valid))
+    set_max_world!(sv.src, min(max_world(sv.src), max_valid))
     @assert(!isa(sv.linfo.def, Method) ||
-            (sv.src.min_world == typemax(UInt) && sv.src.max_world == typemin(UInt)) ||
-            sv.src.min_world <= sv.params.world <= sv.src.max_world,
+            (min_world(sv.src) == typemax(UInt) && max_world(sv.src) == typemin(UInt)) ||
+            min_world(sv.src) <= sv.params.world <= max_world(sv.src),
             "invalid age range update")
     nothing
 end
@@ -318,8 +318,8 @@ function optimize(me::InferenceState)
                 reindex_labels!(opt)
             end
         end
-        me.src.min_world = opt.src.min_world
-        me.src.max_world = opt.src.max_world
+        set_min_world!(me.src, min_world(opt.src))
+        set_max_world!(me.src, max_world(opt.src))
     end
 
     # convert all type information into the form consumed by the code-generator
@@ -407,8 +407,8 @@ function finish(me::InferenceState)
     if me.cached
         toplevel = !isa(me.linfo.def, Method)
         if !toplevel
-            min_valid = me.src.min_world
-            max_valid = me.src.max_world
+            min_valid = min_world(me.src)
+            max_valid = max_world(me.src)
         else
             min_valid = UInt(0)
             max_valid = UInt(0)

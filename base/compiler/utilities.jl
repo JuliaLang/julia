@@ -92,9 +92,19 @@ function occurs_more(@nospecialize(e), pred, n)
     return 0
 end
 
-###########################
-# MethodInstance/CodeInfo #
-###########################
+##################################
+# Method/MethodInstance/CodeInfo #
+##################################
+
+min_world(m::Method) = reinterpret(UInt, m.min_world)
+max_world(m::Method) = typemax(UInt)
+min_world(m::MethodInstance) = reinterpret(UInt, m.min_world)
+max_world(m::MethodInstance) = reinterpret(UInt, m.max_world)
+min_world(c::CodeInfo) = reinterpret(UInt, c.min_world)
+max_world(c::CodeInfo) = reinterpret(UInt, c.max_world)
+
+set_min_world!(c::CodeInfo, w::UInt) = (sw = reinterpret(Int, w); c.min_world = sw; sw)
+set_max_world!(c::CodeInfo, w::UInt) = (sw = reinterpret(Int, w); c.max_world = sw; sw)
 
 function invoke_api(li::MethodInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)

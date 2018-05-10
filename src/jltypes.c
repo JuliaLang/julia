@@ -2052,8 +2052,8 @@ void jl_init_types(void)
                             // If you change them, you'll have to adjust the
                             // serializer
                             jl_array_any_type,
-                            jl_ulong_type,
-                            jl_ulong_type,
+                            jl_long_type,
+                            jl_long_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
