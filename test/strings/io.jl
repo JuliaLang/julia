@@ -151,6 +151,9 @@ end
     @test join(1:5, ", ", " and ") == "1, 2, 3, 4 and 5"
     @test join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
     @test_throws MethodError join(1, 2, 3, 4)
+    @test join(()) == ""
+    @test join((), ", ") == ""
+    @test join((), ", ", ", and ") == ""
 end
 
 # issue #9178 `join` calls `done()` twice on the iterables
