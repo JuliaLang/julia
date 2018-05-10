@@ -1063,6 +1063,7 @@ max_world(m::Method) = typemax(UInt)
 min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
 max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
 
+
 """
     propertynames(x, private=false)
 

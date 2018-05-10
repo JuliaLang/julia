@@ -12,8 +12,6 @@ mutable struct OptimizationState
     mod::Module
     nargs::Int
     next_label::Int # index of the current highest label for this function
-    min_valid::UInt
-    max_valid::UInt
     params::Params
     function OptimizationState(frame::InferenceState)
         s_edges = frame.stmt_edges[1]
@@ -26,8 +24,7 @@ mutable struct OptimizationState
         return new(frame.linfo, frame.result.vargs,
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
-                   next_label, frame.min_valid, frame.max_valid,
-                   frame.params)
+                   next_label, frame.params)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo,
                                params::Params)
@@ -57,9 +54,7 @@ mutable struct OptimizationState
         return new(linfo, result_vargs,
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
-                   next_label,
-                   min_world(linfo), max_world(linfo),
-                   params)
+                   next_label, params)
     end
 end
 
@@ -82,11 +77,11 @@ function newvar!(sv::OptimizationState, @nospecialize(typ))
 end
 
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::OptimizationState)
-    sv.min_valid = max(sv.min_valid, min_valid)
-    sv.max_valid = min(sv.max_valid, max_valid)
+    sv.src.min_world = max(sv.src.min_world, min_valid)
+    sv.src.max_world = min(sv.src.max_world, max_valid)
     @assert(!isa(sv.linfo.def, Method) ||
-            (sv.min_valid == typemax(UInt) && sv.max_valid == typemin(UInt)) ||
-            sv.min_valid <= sv.params.world <= sv.max_valid,
+            (sv.src.min_world == typemax(UInt) && sv.src.max_world == typemin(UInt)) ||
+            sv.src.min_world <= sv.params.world <= sv.src.max_world,
             "invalid age range update")
     nothing
 end
@@ -323,8 +318,8 @@ function optimize(me::InferenceState)
                 reindex_labels!(opt)
             end
         end
-        me.min_valid = opt.min_valid
-        me.max_valid = opt.max_valid
+        me.src.min_world = opt.src.min_world
+        me.src.max_world = opt.src.max_world
     end
 
     # convert all type information into the form consumed by the code-generator
@@ -412,8 +407,8 @@ function finish(me::InferenceState)
     if me.cached
         toplevel = !isa(me.linfo.def, Method)
         if !toplevel
-            min_valid = me.min_valid
-            max_valid = me.max_valid
+            min_valid = me.src.min_world
+            max_valid = me.src.max_world
         else
             min_valid = UInt(0)
             max_valid = UInt(0)

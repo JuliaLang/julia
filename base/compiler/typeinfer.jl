@@ -5,7 +5,7 @@ const COMPILER_TEMP_SYM = Symbol("#temp#")
 # add the real backedges
 function finalize_backedges(frame::InferenceState)
     toplevel = !isa(frame.linfo.def, Method)
-    if !toplevel && (frame.cached || frame.parent !== nothing) && frame.max_valid == typemax(UInt)
+    if !toplevel && (frame.cached || frame.parent !== nothing) && frame.src.max_world == typemax(UInt)
         caller = frame.linfo
         for edges in frame.stmt_edges
             i = 1
@@ -173,6 +173,8 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     tree.slotflags = fill(0x00, Int(method.nargs))
                     tree.slottypes = nothing
                     tree.ssavaluetypes = 0
+                    tree.min_world = min_world(linfo)
+                    tree.max_world = max_world(linfo)
                     tree.inferred = true
                     tree.ssaflags = UInt8[]
                     tree.pure = true
@@ -423,11 +425,11 @@ function typeinf(frame::InferenceState)
                 typeinf_work(caller)
                 no_active_ips_in_callers = false
             end
-            if caller.min_valid < frame.min_valid
-                caller.min_valid = frame.min_valid
+            if caller.src.min_world < frame.src.min_world
+                caller.src.min_world = frame.src.min_world
             end
-            if caller.max_valid > frame.max_valid
-                caller.max_valid = frame.max_valid
+            if caller.src.max_world > frame.src.max_world
+                caller.src.max_world = frame.src.max_world
             end
         end
     end
@@ -448,16 +450,16 @@ function typeinf(frame::InferenceState)
         # complete the computation of the src optimizations
         for caller in frame.callers_in_cycle
             optimize(caller)
-            if frame.min_valid < caller.min_valid
-                frame.min_valid = caller.min_valid
+            if frame.src.min_world < caller.src.min_world
+                frame.src.min_world = caller.src.min_world
             end
-            if frame.max_valid > caller.max_valid
-                frame.max_valid = caller.max_valid
+            if frame.src.max_world > caller.src.max_world
+                frame.src.max_world = caller.src.max_world
             end
         end
         # update and store in the global cache
         for caller in frame.callers_in_cycle
-            caller.min_valid = frame.min_valid
+            caller.src.min_world = frame.src.min_world
         end
         for caller in frame.callers_in_cycle
             finish(caller)
