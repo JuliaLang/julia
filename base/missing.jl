@@ -35,6 +35,8 @@ end
 promote_rule(::Type{Union{Nothing, Missing}}, ::Type{Any}) = Any
 promote_rule(::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
     Union{Nothing, Missing, T}
+promote_rule(::Type{Union{Nothing, Missing, S}}, ::Type{T}) where {T,S} =
+    Union{Nothing, Missing, promote_type(T, S)}
 
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities
