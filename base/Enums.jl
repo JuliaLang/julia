@@ -162,7 +162,12 @@ macro enum(T, syms...)
             Base.show_datatype(io, t)
             print(io, ":")
             for (sym, i) in $vals
-                print(io, "\n", sym, " = ", i)
+                print(io, "\n", sym, " = ")
+                if (isa(i, UInt8))
+                  show(io, i)
+                else
+                  print(io, i)
+                end
             end
         end
     end
