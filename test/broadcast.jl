@@ -120,22 +120,22 @@ for arr in (identity, as_sub)
     @test arr(BitArray([true false])) .^ arr([0, 3]) == [true true; true false]
 
     M = arr([11 12; 21 22])
-    @test broadcast_getindex(M, [2 1; 1 2], arr([1, 2])) == [21 11; 12 22]
-    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, -1]))
-    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, 2]), [2])
-    @test broadcast_getindex(M, [2 1; 1 2],arr([2, 1]), [1]) == [22 12; 11 21]
+    @test getindex.((M,), [2 1; 1 2], arr([1, 2])) == [21 11; 12 22]
+    @test_throws BoundsError getindex.((M,), [2 1; 1 2], arr([1, -1]))
+    @test_throws BoundsError getindex.((M,), [2 1; 1 2], arr([1, 2]), [2])
+    @test getindex.((M,), [2 1; 1 2],arr([2, 1]), [1]) == [22 12; 11 21]
 
     A = arr(zeros(2,2))
-    broadcast_setindex!(A, arr([21 11; 12 22]), [2 1; 1 2], arr([1, 2]))
+    setindex!.((A,), arr([21 11; 12 22]), [2 1; 1 2], arr([1, 2]))
     @test A == M
-    broadcast_setindex!(A, 5, [1,2], [2 2])
+    setindex!.((A,), 5, [1,2], [2 2])
     @test A == [11 5; 21 5]
-    broadcast_setindex!(A, 7, [1,2], [1 2])
+    setindex!.((A,), 7, [1,2], [1 2])
     @test A == fill(7, 2, 2)
     A = arr(zeros(3,3))
-    broadcast_setindex!(A, 10:12, 1:3, 1:3)
+    setindex!.((A,), 10:12, 1:3, 1:3)
     @test A == [10 0 0; 0 11 0; 0 0 12]
-    @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
+    @test_throws BoundsError setindex!.((A,), 7, [1,-1], [1 2])
 
     for f in ((==), (<) , (!=), (<=))
         bittest(f, arr([1 0; 0 1]), arr([1, 4]))

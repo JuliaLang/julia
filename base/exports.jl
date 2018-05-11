@@ -357,8 +357,6 @@ export
     axes,
     broadcast!,
     broadcast,
-    broadcast_getindex,
-    broadcast_setindex!,
     cat,
     checkbounds,
     checkindex,

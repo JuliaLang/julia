@@ -711,6 +711,9 @@ Deprecated or removed
     using the broadcasted assignment syntax `A[I...] .= x` or `fill!(view(A, I...), x)`
     ([#26347]).
 
+  * `broadcast_getindex(A, I...)` and `broadcast_setindex!(A, v, I...)` are deprecated in
+    favor of `getindex.((A,), I...)` and `setindex!.((A,), v, I...)`, respectively ([#27075]).
+
   * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
 
   * `fill!(A::Diagonal, x)` and `fill!(A::AbstractTriangular, x)` have been deprecated
