@@ -660,6 +660,13 @@ end
     @test rand(RNG, SamplerRangeFast(r)) ∈ r
 end
 
+@testset "rand! is allocation-free" begin
+    for A in (Array{Int}(undef, 20), Array{Float64}(undef, 5, 4), BitArray(undef, 20), BitArray(undef, 50, 40))
+        rand!(A)
+        @test @allocated(rand!(A)) == 0
+    end
+end
+
 @testset "eltype for UniformBits" begin
     @test eltype(Random.UInt52()) == UInt64
     @test eltype(Random.UInt52(UInt128)) == UInt128
