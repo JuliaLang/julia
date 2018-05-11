@@ -88,13 +88,13 @@ using Test
 
 shastr = "ab"^20
 hash = SHA1(shastr)
-@test hash == eval(sprint(io -> show(io, hash))) # check show method
+@test hash == eval(parse(sprint(io -> show(io, hash)))) # check show method
 @test string(hash) == shastr
 @test "check $hash" == "check $shastr"
 
 uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
 uuid = UUID(uuidstr)
-@test uuid == eval(sprint(io -> show(io, uuid))) # check show method
+@test uuid == eval(parse(sprint(io -> show(io, uuid)))) # check show method
 @test string(uuid) == uuidstr
 @test "check $uuid" == "check $uuidstr"
 
