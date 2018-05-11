@@ -2424,6 +2424,25 @@ end
     @inferred hash([1,2,3])
 end
 
+function f27079()
+    X = rand(5)
+    for x in X
+        resize!(X, 0)
+    end
+    length(X)
+end
+function g27079(X)
+    r = 0
+    @inbounds for x in X
+        r += x
+    end
+    r
+end
+@testset "iteration over resized vector" begin
+    @test f27079() == 0
+    @test occursin("vector.body", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+end
+
 @testset "indices-related shape promotion errors" begin
     @test_throws DimensionMismatch Base.promote_shape((2,), (3,))
     @test_throws DimensionMismatch Base.promote_shape((2, 3), (2, 4))
