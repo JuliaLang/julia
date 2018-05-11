@@ -956,9 +956,9 @@ julia> round(3.14 + 4.5im)
 3.0 + 4.0im
 ```
 """
-function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; digits=nothing, sigdigits=nothing, base=10)
-    Complex(round(real(z), rr; digits=digits, sigdigits=sigdigits, base=base),
-            round(imag(z), ri; digits=digits, sigdigits=sigdigits, base=base))
+function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; kwargs...)
+    Complex(round(real(z), rr; kwargs...),
+            round(imag(z), ri; kwargs...))
 end
 
 
