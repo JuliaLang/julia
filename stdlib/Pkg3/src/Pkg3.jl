@@ -38,7 +38,8 @@ include("Operations.jl")
 include("API.jl")
 include("REPLMode.jl")
 
-import .API: add, rm, up, test, gc, init, build, installed, pin, free, checkout, develop, generate
+import .API: add, rm, up, test, gc, init, build, installed, pin, free, checkout, develop, generate, instantiate
+import .Display: status
 const update = up
 # legacy CI script support
 import .API: clone, dir

@@ -64,8 +64,11 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     pkg2 = "UnregisteredWithProject"
     p2 = git_init_package(tmp_pkg_path, joinpath(@__DIR__, "test_packages/$pkg2"))
     Pkg3.REPLMode.pkgstr("add $p2")
+    Pkg3.REPLMode.pkgstr("pin $pkg2")
     @eval import $(Symbol(pkg2))
     @test Pkg3.installed()[pkg2] == v"0.1.0"
+    Pkg3.REPLMode.pkgstr("free $pkg2")
+    @test_throws CommandError Pkg3.REPLMode.pkgstr("free $pkg2")
     Pkg3.test("UnregisteredWithProject")
 
     write(joinpath(p2, "Project.toml"), """
@@ -102,7 +105,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
                 write("Manifest.toml", manifest)
                 mktempdir() do depot_dir
                     pushfirst!(DEPOT_PATH, depot_dir)
-                    pkg"up --fixed"
+                    pkg"instantiate"
                     @test Pkg3.installed()[pkg2] == v"0.2.0"
                 end
             finally

@@ -42,10 +42,10 @@ end
 uuid5(namespace::UUID, key::AbstractString) = uuid5(namespace, String(key))
 
 const uuid_dns = UUID(0x6ba7b810_9dad_11d1_80b4_00c04fd430c8)
-const uuid_julia = uuid5(uuid_dns, "julialang.org")
-const uuid_package = uuid5(uuid_julia, "package")
-const uuid_registry = uuid5(uuid_julia, "registry")
-
+const uuid_julia_project = uuid5(uuid_dns, "julialang.org")
+const uuid_package = uuid5(uuid_julia_project, "package")
+const uuid_registry = uuid5(uuid_julia_project, "registry")
+const uuid_julia = uuid5(uuid_package, "julia")
 
 ## user-friendly representation of package IDs ##
 function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
@@ -384,6 +384,7 @@ end
 
 GitRepo(url::String, revspec) = GitRepo(url, revspec, nothing)
 GitRepo(url::String) = GitRepo(url, "", nothing)
+Base.:(==)(repo1::GitRepo, repo2::GitRepo) = (repo1.url == repo2.url && repo1.rev == repo2.rev && repo1.git_tree_sha1 == repo2.git_tree_sha1)
 
 mutable struct PackageSpec
     name::String

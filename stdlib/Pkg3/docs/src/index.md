@@ -373,7 +373,7 @@ Developed packages are never touched by the package manager.
 If you just want install the packages that are given by the current `Manifest.toml` use
 
 ```
-(HelloWorld) pkg> up --manifest --fixed
+(HelloWorld) pkg> instantiate
 ```
 
 ## Precompiling the project
@@ -409,9 +409,10 @@ However, nothing would be installed and your `Project.toml` and `Manfiest.toml` 
 Simple clone their project using e.g. `git clone`, `cd` to the project directory and call
 
 ```
-(SomeProject) pkg> up --manifest --fixed
+(SomeProject) pkg> instantiate
 ```
 
-This will install the packages at the same state that the project you cloned was using.
+If the project contains a manifest, this will install the packages at the same state that is given by that manifest.
+Otherwise it will resolve the latest versions of the dependencies compatible with the project.
 
 

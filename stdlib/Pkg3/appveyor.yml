@@ -30,9 +30,15 @@ install:
 
 build_script:
 # Need to convert from shallow to complete for Pkg.clone to work
+# We swap the uuid for Pkg3 here to make it not load the stdlib version of Pkg3
   - IF EXIST .git\shallow (git fetch --unshallow)
   - C:\projects\julia\bin\julia -e "versioninfo();
-      using UUIDs; write(\"Project.toml\", replace(read(\"Project.toml\", String), r\"uuid = .*?\\n\" => \"uuid = \\\"\$(uuid4())\\\"\")); import Pkg3; Pkg3.build()"
+      using UUIDs;
+      before = read(\"Project.toml\", String);
+      after = replace(before, \"uuid = \\\"44cfe95a-1eb2-52ea-b672-e2afdf69b78f\\\"\" =>
+                              \"uuid = \\\"4d836010-47a6-11e8-12b2-0918962bae33\\\"\");
+      write(\"Project.toml\", after);
+      import Pkg3; Pkg3.instantiate()"
 
 test_script:
   - C:\projects\julia\bin\julia -e "import Pkg3; Pkg3.test(; coverage=true)"

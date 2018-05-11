@@ -80,7 +80,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
     for pkg in pkgs
         local path
         info = manifest_info(ctx.env, pkg.uuid)
-        if pkg.special_action == PKGSPEC_FREED
+        if pkg.special_action == PKGSPEC_FREED && !haskey(info, "pinned")
             continue
         elseif pkg.special_action == PKGSPEC_DEVELOPED
             @assert pkg.path !== nothing
@@ -159,7 +159,7 @@ function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
             if pkg_name == "julia"
                 if !(VERSION in vspec)
-                    error("julia version requirement for package $pkg not satisfied")
+                    @warn("julia version requirement for package $pkg not satisfied")
                 end
             else
                 deppkg = PackageSpec(pkg_name, vspec)
@@ -198,6 +198,7 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
         isempty(unseen) && break
         for uuid in unseen
             push!(seen, uuid)
+            uuid in keys(fixed) && continue
             all_versions_u = get_or_make!(all_versions, uuid)
             all_deps_u     = get_or_make!(all_deps,     uuid)
             all_compat_u   = get_or_make!(all_compat,   uuid)
@@ -350,21 +351,24 @@ end
 ########################
 # Package installation #
 ########################
-function get_archive_url_for_version(url::String, version)
+function get_archive_url_for_version(url::String, ref)
     if (m = match(r"https://github.com/(.*?)/(.*?).git", url)) != nothing
-        return "https://github.com/$(m.captures[1])/$(m.captures[2])/archive/v$(version).tar.gz"
+        return "https://api.github.com/repos/$(m.captures[1])/$(m.captures[2])/tarball/$(ref)"
     end
     return nothing
 end
 
+# can be removed after https://github.com/JuliaLang/julia/pull/27036
+get_archive_url_for_version(url::String, hash::SHA1) = get_archive_url_for_version(url::String, string(hash))
+
 # Returns if archive successfully installed
 function install_archive(
     urls::Vector{String},
-    version::Union{VersionNumber,Nothing},
+    hash::SHA1,
     version_path::String
 )::Bool
     for url in urls
-        archive_url = get_archive_url_for_version(url, version)
+        archive_url = get_archive_url_for_version(url, hash)
         if archive_url != nothing
             path = tempname() * randstring(6) * ".tar.gz"
             url_success = true
@@ -449,8 +453,12 @@ end
 
 # install & update manifest
 function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
-    BinaryProvider.probe_platform_engines!()
     hashes, urls = version_data!(ctx, pkgs)
+    apply_versions(ctx, pkgs, hashes, urls)
+end
+
+function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UUID,SHA1}, urls::Dict{UUID,Vector{String}})
+    BinaryProvider.probe_platform_engines!()
     new_versions = UUID[]
 
     pkgs_to_install = Tuple{PackageSpec, String}[]
@@ -491,7 +499,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec})::Vector{UUID}
                     continue
                 end
                 try
-                    success = install_archive(urls[pkg.uuid], pkg.version::VersionNumber, path)
+                    success = install_archive(urls[pkg.uuid], hashes[pkg.uuid], path)
                     put!(results, (pkg, success, path))
                 catch err
                     put!(results, (pkg, err, catch_backtrace()))
@@ -596,17 +604,25 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
     info["version"] = string(version)
     hash == nothing ? delete!(info, "git-tree-sha1") : (info["git-tree-sha1"] = string(hash))
     path == nothing ? delete!(info, "path")          : (info["path"]          = relative_project_path_if_in_project(ctx, path))
-    if special_action in (PKGSPEC_FREED, PKGSPEC_DEVELOPED)
+    if special_action == PKGSPEC_DEVELOPED
         delete!(info, "pinned")
         delete!(info, "repo-url")
         delete!(info, "repo-rev")
+    elseif special_action == PKGSPEC_FREED
+        if get(info, "pinned", false)
+           delete!(info, "pinned")
+        else
+            delete!(info, "repo-url")
+            delete!(info, "repo-rev")
+        end
     elseif special_action == PKGSPEC_PINNED
         info["pinned"] = true
     elseif special_action == PKGSPEC_REPO_ADDED
         info["repo-url"] = repo.url
         info["repo-rev"] = repo.rev
         path = find_installed(name, uuid, hash)
-    elseif haskey(info, "repo-url")
+    end
+    if haskey(info, "repo-url")
         path = find_installed(name, uuid, hash)
     end
 
