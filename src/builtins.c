@@ -791,9 +791,19 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
         JL_GC_POP();
         return u;
     }
+    if (jl_is_uniontype(t)) {
+        jl_value_t **u;
+        jl_value_t *r;
+        JL_GC_PUSHARGS(u, 2);
+        u[0] = get_fieldtype(((jl_uniontype_t*)t)->a, f);
+        u[1] = get_fieldtype(((jl_uniontype_t*)t)->b, f);
+        r = jl_type_union(u, 2);
+        JL_GC_POP();
+        return r;
+    }
+    if (!jl_is_datatype(t))
+        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, t);
     jl_datatype_t *st = (jl_datatype_t*)t;
-    if (!jl_is_datatype(st))
-        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, (jl_value_t*)st);
     int field_index;
     if (jl_is_long(f)) {
         field_index = jl_unbox_long(f) - 1;
