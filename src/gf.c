@@ -640,9 +640,11 @@ static void jl_compilation_sig(
     jl_value_t *decl = definition->sig;
     assert(jl_is_tuple_type(tt));
     size_t i, np = jl_nparams(tt);
+    size_t nargs = definition->nargs; // == jl_field_count(jl_unwrap_unionall(decl));
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(tt, i);
         jl_value_t *decl_i = jl_nth_slot_type(decl, i);
+        size_t i_arg = (i <= nargs ? i : nargs);
 
         if (jl_is_kind(decl_i)) {
             // if we can prove the match was against the kind (not a Type)
@@ -671,8 +673,8 @@ static void jl_compilation_sig(
             continue;
         }
 
-        if (i > 0 && i <= sizeof(definition->nospecialize) * 8 &&
-                (definition->nospecialize & (1 << (i - 1))) &&
+        if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
+                (definition->nospecialize & (1 << (i_arg - 1))) &&
                 decl_i == (jl_value_t*)jl_any_type) { // TODO: handle @nospecialize with other declared types
             if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
             jl_svecset(*newparams, i, (jl_value_t*)jl_any_type);
@@ -713,7 +715,7 @@ static void jl_compilation_sig(
                   this can be determined using a type intersection.
                 */
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-                if (i < jl_nparams(jl_unwrap_unionall(decl))) {
+                if (i < nargs || !definition->isva) {
                     jl_value_t *di = jl_type_intersection(decl_i, (jl_value_t*)jl_typetype_type);
                     assert(di != (jl_value_t*)jl_bottom_type);
                     // issue #11355: DataType has a UID and so would take precedence in the cache
@@ -730,7 +732,7 @@ static void jl_compilation_sig(
             }
         }
 
-        int notcalled_func = (i > 0 && i <= 8 && !(definition->called & (1 << (i - 1))) &&
+        int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
         if (notcalled_func && (decl_i == (jl_value_t*)jl_any_type ||
                                decl_i == (jl_value_t*)jl_function_type ||
@@ -765,9 +767,11 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
     }
 
     size_t i, np = jl_nparams(type);
+    size_t nargs = definition->nargs; // == jl_field_count(jl_unwrap_unionall(decl));
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(type, i);
         jl_value_t *decl_i = jl_nth_slot_type((jl_value_t*)decl, i);
+        size_t i_arg = (i <= nargs ? i : nargs);
 
         if (jl_is_vararg_type(elt)) { // varargs are always considered compilable
             if (!jl_has_free_typevars(elt))
@@ -783,8 +787,8 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             return 0;
         }
 
-        if (i > 0 && i <= sizeof(definition->nospecialize) * 8 &&
-                (definition->nospecialize & (1 << (i - 1))) &&
+        if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
+                (definition->nospecialize & (1 << (i_arg - 1))) &&
                 decl_i == (jl_value_t*)jl_any_type) { // TODO: handle @nospecialize with other declared types
             if (elt == (jl_value_t*)jl_any_type)
                 continue;
@@ -833,7 +837,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                   specific like Type{Type{Int32}} was actually declared.
                   this can be determined using a type intersection.
                 */
-                if (i < jl_nparams(jl_unwrap_unionall((jl_value_t*)decl))) {
+                if (i < nargs || !definition->isva) {
                     jl_value_t *di = jl_type_intersection(decl_i, (jl_value_t*)jl_typetype_type);
                     JL_GC_PUSH1(&di);
                     assert(di != (jl_value_t*)jl_bottom_type);
@@ -854,7 +858,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             continue;
         }
 
-        int notcalled_func = (i > 0 && i <= 8 && !(definition->called & (1 << (i - 1))) &&
+        int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
         if (notcalled_func && (decl_i == (jl_value_t*)jl_any_type ||
                                decl_i == (jl_value_t*)jl_function_type ||
@@ -902,12 +906,13 @@ static jl_method_instance_t *cache_method(
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (definition->generator == NULL && jl_nparams(tt) > mt->max_args
+    intptr_t nspec = (mt == jl_type_type_mt ? definition->nargs + 1 : mt->max_args + 2);
+    if (definition->generator == NULL && jl_nparams(tt) >= nspec
             && jl_va_tuple_kind((jl_datatype_t*)definition->sig) == JL_VARARG_UNBOUND) {
-        size_t i, nspec = mt->max_args + 2;
         jl_svec_t *limited = jl_alloc_svec(nspec);
         temp = (jl_value_t*)limited;
         if (!newparams) newparams = tt->parameters;
+        size_t i;
         for (i = 0; i < nspec - 1; i++) {
             jl_svecset(limited, i, jl_svecref(newparams, i));
         }
@@ -1330,6 +1335,8 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
 
 static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
 {
+    if (mt == jl_type_type_mt)
+        return;
     type = jl_unwrap_unionall(type);
     assert(jl_is_datatype(type));
     size_t na = jl_nparams(type);
