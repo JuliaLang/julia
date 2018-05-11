@@ -19901,7 +19901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg3.jl",
     "title": "Updating dependencies",
     "category": "section",
-    "text": "When new versions of packages the project is using  are released, it is a good idea to update. Simply calling up will try to update all the dependencies of the project. Sometimes this is not what you want. You can specify a subset of the dependencies to upgrade by giving them as arguments to up, e.g:(HelloWorld) pkg> up JSONThe version of all other direct dependencies will stay the same. If you only want to update the minor version of packages, to reduce the risk that your project breaks, you can give the --minor flag, e.g:(HelloWorld) pkg> up --minor JSONPackages that track a branch are not updated when a minor upgrade is done. Developed packages are never touched by the package manager.If you just want install the packages that are given by the current Manifest.toml use(HelloWorld) pkg> up --manifest --fixed"
+    "text": "When new versions of packages the project is using  are released, it is a good idea to update. Simply calling up will try to update all the dependencies of the project. Sometimes this is not what you want. You can specify a subset of the dependencies to upgrade by giving them as arguments to up, e.g:(HelloWorld) pkg> up JSONThe version of all other direct dependencies will stay the same. If you only want to update the minor version of packages, to reduce the risk that your project breaks, you can give the --minor flag, e.g:(HelloWorld) pkg> up --minor JSONPackages that track a branch are not updated when a minor upgrade is done. Developed packages are never touched by the package manager.If you just want install the packages that are given by the current Manifest.toml use(HelloWorld) pkg> instantiate"
 },
 
 {
@@ -19925,7 +19925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg3.jl",
     "title": "Using someone elses project",
     "category": "section",
-    "text": "Simple clone their project using e.g. git clone, cd to the project directory and call(SomeProject) pkg> up --manifest --fixedThis will install the packages at the same state that the project you cloned was using."
+    "text": "Simple clone their project using e.g. git clone, cd to the project directory and call(SomeProject) pkg> instantiateIf the project contains a manifest, this will install the packages at the same state that is given by that manifest. Otherwise it will resolve the latest versions of the dependencies compatible with the project."
 },
 
 {
