@@ -483,6 +483,11 @@ function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nos
     ret
 end
 
+function getindex(compact::IncrementalCompact, ssa::SSAValue)
+    @assert ssa.id < compact.result_idx
+    return compact.result[ssa.id]
+end
+
 function getindex(view::TypesView, v::OldSSAValue)
     return view.ir.ir.types[v.id]
 end
@@ -521,6 +526,13 @@ function getindex(view::TypesView, idx)
     else
         return ir.new_nodes[idx - length(ir.types)].typ
     end
+end
+
+function setindex!(view::TypesView, @nospecialize(t), idx)
+    isa(idx, SSAValue) && (idx = idx.id)
+    ir = view.ir
+    @assert isa(ir, IRCode)
+    ir.types[idx] = t
 end
 
 start(compact::IncrementalCompact) = (compact.idx, 1)

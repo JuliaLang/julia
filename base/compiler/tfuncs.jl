@@ -204,25 +204,25 @@ add_tfunc(Core.Intrinsics.select_value, 3, 3,
         (Bool ⊑ cnd) || return Bottom
         return tmerge(x, y)
     end, 1)
-add_tfunc(===, 2, 2,
-    function (@nospecialize(x), @nospecialize(y))
-        if isa(x, Const) && isa(y, Const)
-            return Const(x.val === y.val)
-        elseif typeintersect(widenconst(x), widenconst(y)) === Bottom
-            return Const(false)
-        elseif (isa(x, Const) && y === typeof(x.val) && isdefined(y, :instance)) ||
-               (isa(y, Const) && x === typeof(y.val) && isdefined(x, :instance))
-            return Const(true)
-        elseif isa(x, Conditional) && isa(y, Const)
-            y.val === false && return Conditional(x.var, x.elsetype, x.vtype)
-            y.val === true && return x
-            return x
-        elseif isa(y, Conditional) && isa(x, Const)
-            x.val === false && return Conditional(y.var, y.elsetype, y.vtype)
-            x.val === true && return y
-        end
-        return Bool
-    end, 1)
+function egal_tfunc(@nospecialize(x), @nospecialize(y))
+    if isa(x, Const) && isa(y, Const)
+        return Const(x.val === y.val)
+    elseif typeintersect(widenconst(x), widenconst(y)) === Bottom
+        return Const(false)
+    elseif (isa(x, Const) && y === typeof(x.val) && isdefined(y, :instance)) ||
+           (isa(y, Const) && x === typeof(y.val) && isdefined(x, :instance))
+        return Const(true)
+    elseif isa(x, Conditional) && isa(y, Const)
+        y.val === false && return Conditional(x.var, x.elsetype, x.vtype)
+        y.val === true && return x
+        return x
+    elseif isa(y, Conditional) && isa(x, Const)
+        x.val === false && return Conditional(y.var, y.elsetype, y.vtype)
+        x.val === true && return y
+    end
+    return Bool
+end
+add_tfunc(===, 2, 2, egal_tfunc, 1)
 function isdefined_tfunc(@nospecialize(args...))
     arg1 = args[1]
     if isa(arg1, Const)
@@ -381,29 +381,29 @@ add_tfunc(typeassert, 2, 2,
               end
               return typeintersect(v, t)
           end, 4)
-add_tfunc(isa, 2, 2,
-          function (@nospecialize(v), @nospecialize(t))
-              t, isexact = instanceof_tfunc(t)
-              if !has_free_typevars(t)
-                  if t === Bottom
-                      return Const(false)
-                  elseif v ⊑ t
-                      if isexact
-                          return Const(true)
-                      end
-                  elseif isa(v, Const) || isa(v, Conditional) || isdispatchelem(v)
-                      # this tests for knowledge of a leaftype appearing on the LHS
-                      # (ensuring the isa is precise)
-                      return Const(false)
-                  elseif isexact && typeintersect(v, t) === Bottom
-                      if !iskindtype(v) #= subtyping currently intentionally answers this query incorrectly for kinds =#
-                          return Const(false)
-                      end
-                  end
-              end
-              # TODO: handle non-leaftype(t) by testing against lower and upper bounds
-              return Bool
-          end, 0)
+function isa_tfunc(@nospecialize(v), @nospecialize(t))
+    t, isexact = instanceof_tfunc(t)
+    if !has_free_typevars(t)
+        if t === Bottom
+            return Const(false)
+        elseif v ⊑ t
+            if isexact
+                return Const(true)
+            end
+        elseif isa(v, Const) || isa(v, Conditional) || isdispatchelem(v)
+            # this tests for knowledge of a leaftype appearing on the LHS
+            # (ensuring the isa is precise)
+            return Const(false)
+        elseif isexact && typeintersect(v, t) === Bottom
+            if !iskindtype(v) #= subtyping currently intentionally answers this query incorrectly for kinds =#
+                return Const(false)
+            end
+        end
+    end
+    # TODO: handle non-leaftype(t) by testing against lower and upper bounds
+    return Bool
+end
+add_tfunc(isa, 2, 2, isa_tfunc, 0)
 add_tfunc(<:, 2, 2,
           function (@nospecialize(a), @nospecialize(b))
               a, isexact_a = instanceof_tfunc(a)

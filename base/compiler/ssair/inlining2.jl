@@ -346,7 +346,62 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     return_value
 end
 
-function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
+# Constraints are generally small, so a linear search is the bets option
+function find_constraint(val, constraints)
+    for i = 1:length(constraints)
+        if val === constraints[i][1]
+            return constraints[i][2]
+        end
+    end
+    return nothing
+end
+
+# Performs minimal backwards inference to catch a couple of interesting, common cases
+function minimal_backinf(compact, constraints, unconstrained_types, argexprs)
+    for i = 2:length(argexprs)
+        isa(argexprs[i], SSAValue) || continue
+        # Check if the argexpr is in the constraint list directly
+        c = find_constraint(argexprs[i], constraints)
+        if c !== nothing
+            unconstrained_types[i] = c
+        end
+        # For boolean values check for type predicates on any of the constraints
+        ut = unconstrained_types[i]
+        if ut === Bool
+            def = compact[argexprs[i]]
+            isa(def, Expr) || continue
+            if is_known_call(def, ===, compact)
+                v1, v2, = def.args[2:3]
+                c = find_constraint(v1, constraints)
+                if c !== nothing
+                    refined = egal_tfunc(c, compact_exprtype(compact, v2))
+                    if !(ut ⊑ refined)
+                        unconstrained_types[i] = refined
+                    end
+                end
+                c = find_constraint(v2, constraints)
+                if c !== nothing
+                    refined = egal_tfunc(compact_exprtype(compact, v1), c)
+                    if !(ut ⊑ refined)
+                        unconstrained_types[i] = refined
+                    end
+                end
+            elseif is_known_call(def, isa, compact)
+                v = def.args[2]
+                c = find_constraint(v, constraints)
+                if c !== nothing
+                    refined = isa_tfunc(c, compact_exprtype(compact, def.args[3]))
+                    if !(ut ⊑ refined)
+                        unconstrained_types[i] = refined
+                    end
+                end
+            end
+        end
+    end
+    unconstrained_types
+end
+
+function ir_inline_unionsplit!(compact::IncrementalCompact, topmod::Module, idx::Int,
                                argexprs::Vector{Any}, linetable::Vector{LineInfoNode},
                                item::UnionSplit, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     stmt, typ, line = compact.result[idx], compact.result_types[idx], compact.result_lines[idx]
@@ -379,11 +434,40 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         insert_node_here!(compact, GotoIfNot(cond, next_cond_bb), Union{}, line)
         bb = next_cond_bb - 1
         finish_current_bb!(compact)
-        # Insert Pi nodes here
+        if !isa(case, ConstantCase)
+            argexprs′ = copy(argexprs)
+            constraints = Pair{SSAValue, Any}[]
+            unconstrained_types = Any[atype.parameters...]
+            for i = 2:length(metharg.parameters)
+                a, m = unconstrained_types[i], metharg.parameters[i]
+                isa(argexprs[i], SSAValue) || continue
+                if !(a <: m)
+                    push!(constraints, Pair{SSAValue, Any}(argexprs[i], m))
+                end
+            end
+            constrained_types = minimal_backinf(compact, constraints, unconstrained_types, argexprs)
+            for i = 2:length(metharg.parameters)
+                if !(atype.parameters[i] ⊑ constrained_types[i])
+                    if isa(constrained_types[i], Const)
+                        argexprs′[i] = constrained_types[i].val
+                    else
+                        ct = widenconst(constrained_types[i])
+                        if isa(ct, DataType) && isdefined(ct, :instance)
+                            argexprs′[i] = ct.instance
+                        else
+                            argexprs′[i] = insert_node_here!(compact, PiNode(argexprs′[i], constrained_types[i]),
+                                constrained_types[i], line)
+                        end
+                    end
+                end
+            end
+        else
+            argexprs′ = argexprs
+        end
         if isa(case, InliningTodo)
-            val = ir_inline_item!(compact, idx, argexprs, linetable, case, boundscheck, todo_bbs)
+            val = ir_inline_item!(compact, idx, argexprs′, linetable, case, boundscheck, todo_bbs)
         elseif isa(case, MethodInstance)
-            val = insert_node_here!(compact, Expr(:invoke, case, argexprs...), typ, line)
+            val = insert_node_here!(compact, Expr(:invoke, case, argexprs′...), typ, line)
         else
             case = case::ConstantCase
             val = case.val
@@ -396,7 +480,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     bb += 1
     # We're now in the fall through block, decide what to do
     if item.fully_covered
-        e = Expr(:call, :error, "fatal error in type inference (type bound)")
+        e = Expr(:call, GlobalRef(topmod, :error), "fatal error in type inference (type bound)")
         e.typ = Union{}
         insert_node_here!(compact, e, Union{}, line)
         insert_node_here!(compact, ReturnNode(), Union{}, line)
@@ -464,7 +548,7 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
                 if isa(item, InliningTodo)
                     compact.ssa_rename[compact.idx-1] = ir_inline_item!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
-                    ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
+                    ir_inline_unionsplit!(compact, _topmod(sv.mod), idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact)
@@ -636,6 +720,9 @@ function next(s::SimpleCartesian, state)
     any = false
     for i = 1:length(s.ranges)
         if state[i] < last(s.ranges[i])
+            for j = 1:(i-1)
+                state[j] = first(s.ranges[j])
+            end
             state[i] += 1
             any = true
             break
@@ -854,6 +941,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # Now, if profitable union split the atypes into dispatch tuples and match the appropriate method
         nu = countunionsplit(atypes)
         if nu != 1 && nu <= sv.params.MAX_UNION_SPLITTING
+            fully_covered = true
             for sig in UnionSplitSignature(atypes)
                 metharg′ = argtypes_to_type(sig)
                 if !isdispatchtuple(metharg′)

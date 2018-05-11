@@ -524,3 +524,43 @@ function type_lift_pass!(ir::IRCode)
     end
     ir
 end
+
+function type_tightening_pass!(ir, sv)
+    compact = IncrementalCompact(ir)
+    phi_nodes = Int[]
+    for (idx, stmt) in compact
+        if isa(stmt, PhiNode)
+            isconcretetype(types(compact)[idx]) && continue
+            push!(phi_nodes, idx)
+        end
+        isa(stmt, Expr) || continue
+        isexpr(stmt, :call) || continue
+        isconcretetype(types(compact)[idx]) && continue
+        ft = compact_exprtype(compact, stmt.args[1])
+        isa(ft, Const) || continue
+        # Let's be conservative in what we look at here for now
+        ft.val === select_value || continue
+        argtypes = Any[compact_exprtype(compact, stmt.args[i]) for i = 2:length(stmt.args)]
+        rt = builtin_tfunction(ft.val, argtypes, nothing, sv.params)
+        if !(compact.result_types[idx] ⊑ rt)
+            stmt.typ = rt
+            compact.result_types[idx] = rt
+        end
+    end
+    ir = finish(compact)
+    # Try to tigthen any phi nodes
+    for pn_idx in phi_nodes
+        new_typ = Union{}
+        pn = ir.stmts[pn_idx]
+        isa(pn, Nothing) && continue
+        pn = pn::PhiNode
+        for i = 1:length(pn.values)
+            isassigned(pn.values, i) || continue
+            new_typ = tmerge(new_typ, exprtype(pn.values[i], ir, ir.mod))
+        end
+        if !(types(ir)[pn_idx] ⊑ new_typ)
+            types(ir)[pn_idx] = new_typ
+        end
+    end
+    ir
+end
