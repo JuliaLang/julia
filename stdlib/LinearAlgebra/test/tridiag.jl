@@ -353,4 +353,11 @@ end
     @test Tridiagonal(4:5, 1:3, 1:2) == [1 1 0; 4 2 2; 0 5 3]
 end
 
+@testset "Issue #26994 (and the empty case)" begin
+    T = SymTridiagonal([1.0],[3.0])
+    x = ones(1)
+    @test T*x == ones(1)
+    @test SymTridiagonal(ones(0), ones(0)) * ones(0, 2) == ones(0, 2)
+end
+
 end # module TestTridiagonal
