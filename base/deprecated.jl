@@ -1085,7 +1085,7 @@ end
 @deprecate_moved sum_kbn "KahanSummation"
 @deprecate_moved cumsum_kbn "KahanSummation"
 
-@deprecate isalnum(c::Char) isalpha(c) || isnumeric(c)
+@deprecate isalnum(c::Char) isletter(c) || isnumeric(c)
 @deprecate isgraph(c::Char) isprint(c) && !isspace(c)
 @deprecate isnumber(c::Char) isnumeric(c)
 
@@ -1635,6 +1635,9 @@ end
 @deprecate islower islowercase
 @deprecate ucfirst uppercasefirst
 @deprecate lcfirst lowercasefirst
+
+# Issue #26932
+@deprecate isalpha isletter
 
 function search(buf::IOBuffer, delim::UInt8)
     Base.depwarn("search(buf::IOBuffer, delim::UInt8) is deprecated: use occursin(delim, buf) or readuntil(buf, delim) instead", :search)

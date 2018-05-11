@@ -353,7 +353,7 @@ function matchinds(needle, haystack; acronym = false)
         isempty(chars) && break
         while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if lowercase(char) == lowercase(chars[1]) &&
-           (!acronym || !isalpha(lastc))
+           (!acronym || !isletter(lastc))
             push!(is, i)
             popfirst!(chars)
         end

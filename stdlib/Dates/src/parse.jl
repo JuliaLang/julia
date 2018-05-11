@@ -182,7 +182,7 @@ end
     max_pos = maxchars <= 0 ? len : min(len, nextind(str, i, maxchars-1))
     @inbounds while i <= max_pos
         c, ii = next(str, i)
-        if isalpha(c)
+        if isletter(c)
             word_end = i
         else
             break

@@ -1040,6 +1040,8 @@ Deprecated or removed
 
   * `isnumber` has been renamed to `isnumeric` ([#25021]).
 
+  * `isalpha` has been renamed to `isletter` ([#26932]).
+
   * `is_assigned_char` and `normalize_string` have been renamed to `isassigned` and
     `normalize`, and moved to the new `Unicode` standard library module.
     `graphemes` has also been moved to that module ([#25021]).
@@ -1488,3 +1490,4 @@ Command-line option changes
 [#26600]: https://github.com/JuliaLang/julia/issues/26600
 [#26670]: https://github.com/JuliaLang/julia/issues/26670
 [#26775]: https://github.com/JuliaLang/julia/issues/26775
+[#26932]: https://github.com/JuliaLang/julia/issues/26932
