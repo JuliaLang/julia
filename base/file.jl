@@ -230,7 +230,7 @@ Copy the file, link, or directory from `src` to `dest`.
 If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created as a
 symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` will be a copy
 of the file or directory `src` refers to.
-Returns `dst`
+Returns `dst`.
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
                                                       follow_symlinks::Bool=false,
@@ -276,7 +276,7 @@ end
     touch(path::AbstractString)
 
 Update the last-modified timestamp on a file to the current time.
-Returns `path`
+Returns `path`.
 """
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
