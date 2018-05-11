@@ -706,7 +706,7 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
 
 // preparing method IR for interpreter
 
-jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam)
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam, world)
 {
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
     JL_GC_PUSH1(&src);
@@ -717,7 +717,10 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam)
             }
             else {
                 assert(lam->def.method->generator);
-                src = jl_code_for_staged(lam);
+                src = jl_code_for_staged(lam, world);
+                if (src->min_world != lam->min_world || src->max_world != lam->max_world) {
+                    // What
+                }
             }
         }
         if (src && (jl_value_t*)src != jl_nothing) {

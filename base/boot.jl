@@ -506,8 +506,8 @@ struct GeneratedFunctionStub
 end
 
 # invoke and wrap the results of @generated
-function (g::GeneratedFunctionStub)(@nospecialize args...)
-    body = g.gen(args...)
+function (g::GeneratedFunctionStub)(__world__, @nospecialize args...)
+    body = g.gen(__world__, args...)
     if body isa CodeInfo
         return body
     end

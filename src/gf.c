@@ -340,14 +340,9 @@ static void update_world_bound(jl_method_instance_t *replaced, jl_typemap_visito
     jl_typemap_visitor(gf->name->mt->cache, fptr, (void*)&update);
 }
 
-JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
-        jl_method_instance_t *li, jl_value_t *rettype,
-        jl_value_t *inferred_const, jl_value_t *inferred,
-        int32_t const_flags, size_t min_world, size_t max_world)
+JL_DLLEXPORT jl_method_instance_t* jl_recompute_lambda_for_world_bound(
+        jl_method_instance_t *li, size_t min_world, size_t max_world)
 {
-    JL_GC_PUSH1(&li);
-    assert(min_world <= max_world && "attempting to set invalid world constraints");
-    assert(li->inInference && "shouldn't be caching an inference result for a MethodInstance that wasn't being inferred");
     if (min_world != li->min_world || max_world != li->max_world) {
         if (!jl_is_method(li->def.method)) {
             // thunks don't have multiple references, so just update in-place
@@ -412,6 +407,19 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
             JL_UNLOCK(&li->def.method->writelock);
         }
     }
+    return li;
+}
+
+JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
+        jl_method_instance_t *li, jl_value_t *rettype,
+        jl_value_t *inferred_const, jl_value_t *inferred,
+        int32_t const_flags, size_t min_world, size_t max_world)
+{
+    JL_GC_PUSH1(&li);
+    assert(min_world <= max_world && "attempting to set invalid world constraints");
+    assert(li->inInference && "shouldn't be caching an inference result for a MethodInstance that wasn't being inferred");
+
+    li = jl_recompute_lambda_for_world_bound(li, min_world, max_world);
 
     // changing rettype changes the llvm signature,
     // so clear all of the llvm state at the same time

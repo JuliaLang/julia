@@ -333,27 +333,28 @@ jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast)
 
 // invoke (compiling if necessary) the jlcall function pointer for a method template
 STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator, jl_svec_t *sparam_vals,
-                                         jl_value_t **args, uint32_t nargs)
+                                         jl_value_t **args, uint32_t nargs, size_t world)
 {
     size_t n_sparams = jl_svec_len(sparam_vals);
     jl_value_t **gargs;
-    size_t totargs = 1 + n_sparams + nargs + def->isva;
+    size_t totargs = 2 + n_sparams + nargs + def->isva;
     JL_GC_PUSHARGS(gargs, totargs);
     gargs[0] = generator;
-    memcpy(&gargs[1], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
-    memcpy(&gargs[1 + n_sparams], args, nargs * sizeof(void*));
+    gargs[1] = jl_box_ulong(world);
+    memcpy(&gargs[2], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
+    memcpy(&gargs[2 + n_sparams], args, nargs * sizeof(void*));
     if (def->isva) {
-        gargs[totargs-1] = jl_f_tuple(NULL, &gargs[1 + n_sparams + def->nargs - 1], nargs - (def->nargs - 1));
-        gargs[1 + n_sparams + def->nargs - 1] = gargs[totargs - 1];
+        gargs[totargs-1] = jl_f_tuple(NULL, &gargs[2 + n_sparams + def->nargs - 1], nargs - (def->nargs - 1));
+        gargs[2 + n_sparams + def->nargs - 1] = gargs[totargs - 1];
     }
-    jl_value_t *code = jl_apply(gargs, 1 + n_sparams + def->nargs);
+    jl_value_t *code = jl_apply(gargs, 2 + n_sparams + def->nargs);
     JL_GC_POP();
     return code;
 }
 
 // return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world)
 {
     JL_TIMING(STAGED_FUNCTION);
     jl_tupletype_t *tt = (jl_tupletype_t*)linfo->specTypes;
@@ -379,7 +380,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ptls->world_age = def->min_world;
 
         // invoke code generator
-        ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals, jl_svec_data(tt->parameters), jl_nparams(tt));
+        ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals,
+                            jl_svec_data(tt->parameters), jl_nparams(tt), world);
 
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;

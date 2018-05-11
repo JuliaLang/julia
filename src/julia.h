@@ -1142,7 +1142,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_value_t **bp, jl_value_t *bp_owner,
                                                  jl_binding_t *bnd);
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_code_info_t *f, jl_module_t *module);
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void);
 JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty);

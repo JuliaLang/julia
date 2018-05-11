@@ -1392,7 +1392,7 @@ jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t de
             jl_code_info_t *src = (jl_code_info_t*)unspec->def.method->source;
             if (src == NULL) {
                 assert(unspec->def.method->generator);
-                src = jl_code_for_staged(unspec);
+                src = jl_code_for_staged(unspec, world);
             }
             fptr = unspec->invoke;
             if (fptr != jl_fptr_trampoline) {
@@ -1601,7 +1601,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
         if (decls.functionObject == NULL) {
             src = jl_type_infer(&linfo, world, 0);
             if (!src) {
-                src = linfo->def.method->generator ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
+                src = linfo->def.method->generator ? jl_code_for_staged(&linfo, world) : (jl_code_info_t*)linfo->def.method->source;
             }
             decls = jl_compile_linfo(&linfo, src, world, &params);
             linfo->functionObjectsDecls = decls;
