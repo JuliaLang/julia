@@ -202,7 +202,7 @@ Base.getindex(::V26163, ::Int) = 0
     @test reshape(z, 1) == v == [0]
     @test reshape(z, 1, 1) == reshape(v, 1, 1) == fill(0, 1, 1)
     @test occursin("1-element reshape", summary(reshape(z, 1)))
-    @test_broken occursin("0-dimensional reshape", summary(reshape(v, ())))
+    @test occursin("0-dimensional reshape", summary(reshape(v, ())))
 end
 
 @test reshape(1:5, (5,)) === 1:5
