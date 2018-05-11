@@ -977,6 +977,9 @@ Deprecated or removed
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead ([#22880], [#22932]).
 
+  * `flipbits!(B)` is deprecated in favor of using in-place broadcast to negate each element:
+    `B .= .!B` ([#27067]).
+
   * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`.
     Concrete types are those that might equal `typeof(x)` for some `x`;
     `isleaftype` included some types for which this is not true. Those are now categorized more precisely
