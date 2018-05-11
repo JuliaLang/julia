@@ -857,6 +857,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # Now, if profitable union split the atypes into dispatch tuples and match the appropriate method
         nu = countunionsplit(atypes)
         if nu != 1 && nu <= sv.params.MAX_UNION_SPLITTING
+            fully_covered = true
             for sig in UnionSplitSignature(atypes)
                 metharg′ = argtypes_to_type(sig)
                 if !isdispatchtuple(metharg′)
