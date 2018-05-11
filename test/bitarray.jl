@@ -779,7 +779,8 @@ timesofar("dequeue")
     @testset "flipbits!" begin
         b1 = bitrand(n1, n2)
         i1 = Array(b1)
-        @test flipbits!(b1) == .~i1
+        b1 .= .!b1
+        @test b1 == .~i1
         @test bitcheck(b1)
     end
 end
