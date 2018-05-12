@@ -283,7 +283,7 @@ end
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(isalpha, io))
+        @test !eof(skipchars(isletter, io))
         @test read(io, Char) == char
     end
 end
