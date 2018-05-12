@@ -563,24 +563,25 @@ end
 
 macro big_str(s)
     if '_' in s
-        # remove _ in s[2:end-1]
-        bf = IOBuffer(maxsize=lastindex(s))
-        print(bf, s[1])
-        for c in SubString(s, 2, lastindex(s)-1)
-            c != '_' && print(bf, c)
+        # remove _ in s[2:(end - 1)]
+        if startswith(s, '_') || endswith(s, '_')
+            big = nothing
+        else
+            s = replace(s, '_' => "")
+            big = tryparse(BigInt, s)
         end
-        print(bf, s[end])
-        seekstart(bf)
-        n = tryparse(BigInt, String(take!(bf)))
-        n === nothing || return n
     else
-        n = tryparse(BigInt, s)
-        n === nothing || return n
-        n = tryparse(BigFloat, s)
-        n === nothing || return n
+        big = tryparse(BigInt, s)
+        if big === nothing
+            big = tryparse(BigFloat, s)
+        end
     end
-    message = "invalid number format $s for BigInt or BigFloat"
-    return :(throw(ArgumentError($message)))
+    big === nothing && throw(ArgumentError("invalid number format $(repr(s)) for BigInt or BigFloat"))
+    if big isa BigInt
+        big_str = string(big, base = 62)
+        return :(GMP._reinit!($big, $big_str))
+    end
+    return big
 end
 
 ## integer promotions ##

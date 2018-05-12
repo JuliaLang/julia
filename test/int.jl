@@ -107,8 +107,8 @@ end
     @test big"2"^100 == BigInt(2)^100
     @test isa(big"2", BigInt)
     @test big"1.0" == BigFloat(1.0)
-    @test_throws ArgumentError big"1.0.3"
-    @test_throws ArgumentError big"pi"
+    @test_throws LoadError Meta.@macroexpand big"1.0.3"
+    @test_throws LoadError Meta.@macroexpand big"pi"
 end
 
 @test round(UInt8, 123) == 123
@@ -287,8 +287,8 @@ end
 
 @testset "issue #21092" begin
     @test big"1_0_0_0" == BigInt(1000)
-    @test_throws ArgumentError big"1_0_0_0_"
-    @test_throws ArgumentError big"_1_0_0_0"
+    @test_throws LoadError Meta.@lower big"1_0_0_0_"
+    @test_throws LoadError Meta.@lower big"_1_0_0_0"
 end
 
 # issue #26779
