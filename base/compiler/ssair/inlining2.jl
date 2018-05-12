@@ -379,11 +379,22 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, topmod::Module, idx:
         insert_node_here!(compact, GotoIfNot(cond, next_cond_bb), Union{}, line)
         bb = next_cond_bb - 1
         finish_current_bb!(compact)
-        # Insert Pi nodes here
+        argexprs′ = argexprs
+        if !isa(case, ConstantCase)
+            argexprs′ = copy(argexprs)
+            for i = 2:length(metharg.parameters)
+                a, m = atype.parameters[i], metharg.parameters[i]
+                isa(argexprs[i], SSAValue) || continue
+                if !(a <: m)
+                    argexprs′[i] = insert_node_here!(compact, PiNode(argexprs′[i], m),
+                                                     m, line)
+                end
+            end
+        end
         if isa(case, InliningTodo)
-            val = ir_inline_item!(compact, idx, argexprs, linetable, case, boundscheck, todo_bbs)
+            val = ir_inline_item!(compact, idx, argexprs′, linetable, case, boundscheck, todo_bbs)
         elseif isa(case, MethodInstance)
-            val = insert_node_here!(compact, Expr(:invoke, case, argexprs...), typ, line)
+            val = insert_node_here!(compact, Expr(:invoke, case, argexprs′...), typ, line)
         else
             case = case::ConstantCase
             val = case.val
@@ -857,6 +868,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # Now, if profitable union split the atypes into dispatch tuples and match the appropriate method
         nu = countunionsplit(atypes)
         if nu != 1 && nu <= sv.params.MAX_UNION_SPLITTING
+            fully_covered = true
             for sig in UnionSplitSignature(atypes)
                 metharg′ = argtypes_to_type(sig)
                 if !isdispatchtuple(metharg′)
