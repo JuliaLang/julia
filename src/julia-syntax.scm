@@ -533,7 +533,7 @@
                                                ,(if (or (eq? T 'ANY)
                                                         (and (globalref? T)
                                                              (eq? (caddr T) 'ANY)))
-                                                    `(call (|.| (core Intrinsics) 'select_value)
+                                                    `(call (core ifelse)
                                                            (call (core ===) ,T (core ANY))
                                                            (core Any)
                                                            ,T)
