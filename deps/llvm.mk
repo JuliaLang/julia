@@ -488,6 +488,7 @@ $(eval $(call LLVM_PATCH,llvm-D45008)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D45070)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0.0-ifconv-D45819)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D46460))
+$(eval $(call LLVM_PATCH,llvm-D46797-domain-reassign-implicit-def))
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build
