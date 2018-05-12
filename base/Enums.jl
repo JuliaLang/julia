@@ -162,7 +162,8 @@ macro enum(T, syms...)
             Base.show_datatype(io, t)
             print(io, ":")
             for (sym, i) in $vals
-                print(io, "\n", sym, " = ", i)
+                print(io, "\n", sym, " = ")
+                show(io, i)
             end
         end
     end
