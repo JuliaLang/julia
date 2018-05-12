@@ -7,6 +7,12 @@ using Random
 @test foldl(+, Int16[]) === Int16(0) # In reference to issues #21536
 @test foldl(-, 1:5) == -13
 @test foldl(-, 10, 1:5) == -5
+@test foldl(&, UInt8[]) === typemax(UInt8)
+@test foldl(&, Int8[])  === Int8(-1)
+@test foldl(|, UInt8[]) === zero(UInt8)
+@test foldl(|, Int8[])  === zero(Int8)
+@test foldl(⊻, UInt8[]) === zero(UInt8)
+@test foldl(⊻, Int8[])  === zero(Int8)
 
 @test Base.mapfoldl(abs2, -, 2:5) == -46
 @test Base.mapfoldl(abs2, -, 10, 2:5) == -44
@@ -392,7 +398,7 @@ test18695(r) = sum( t^2 for t in r )
 
 # test neutral element not picked incorrectly for &, |
 @test @inferred(foldl(&, Int[1])) === 1
-@test_throws ArgumentError foldl(&, Int[])
+@test foldl(&, Int[]) === -1
 
 # prod on Chars
 @test prod(Char[]) == ""
