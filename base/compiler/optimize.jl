@@ -261,7 +261,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
     return inlineable
 end
 
-const enable_new_optimizer = RefValue(false)
+const enable_new_optimizer = RefValue(true)
 
 # converge the optimization work
 function optimize(me::InferenceState)
