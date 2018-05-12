@@ -138,10 +138,6 @@ end
 @test repr(apple) == "apple::$(string(Fruit)) = 0"
 @test string(apple) == "apple"
 
-@enum UI8::UInt8 ten=0x0A el=0x03 t=0x07
-
-@test repr("text/plain", UI8) == "Enum $(string(UI8)):\nten = 0x0a\nel = 0x03\nt = 0x07"
-
 @test repr("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
 @test repr("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
 let io = IOBuffer()
@@ -167,3 +163,6 @@ end
     haggis       = 4
 end
 @test Int(haggis) == 4
+
+@enum UI8::UInt8 ten=0x0A thr=0x03 sevn=0x07
+@test repr("text/plain", UI8) == "Enum $(string(UI8)):\nten = 0x0a\nthr = 0x03\nsevn = 0x07"
