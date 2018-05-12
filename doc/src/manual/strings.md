@@ -349,8 +349,9 @@ y
 ```
 
 Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
-treat any byte sequence as a `String`. In such situations a rule is that characters are formed
-by longest possibly valid sequences of code points. This rule is best explained by an example:
+treat any byte sequence as a `String`. In such situations a rule is that characters are
+formed by the longest sequence of code units that could be a start of some valid code point.
+This rule is best explained by an example:
 
 ```jldoctest unicodestring
 julia> s = "\xc0\xa0\xe2\x88\xe2|"
@@ -372,10 +373,10 @@ julia> isvalid.(collect(s))
 
 We can see that first two code units in `s` form an overlong encoding of space character.
 It is invalid, but is accepted in a string as a single character.
-Next two code units form a valid start of a three byte UTF-8 sequence. However, fifth code unit
-`\xe2` is not its valid continuation. Therefore code units 3 and 4 form a second malformed
-character in this string. Similarly code unit 5 forms a malformed character because
-because `|` is not a valid continuation.
+The next two code units form a valid start of a three-byte UTF-8 sequence. However, the fifth
+code unit `\xe2` is not its valid continuation. Therefore code units 3 and 4 form a second
+malformed character in this string. Similarly code unit 5 forms a malformed character because
+`|` is not a valid continuation.
 
 Julia uses the UTF-8 encoding by default, and support for new encodings can be added by packages.
 For example, the [LegacyStrings.jl](https://github.com/JuliaArchive/LegacyStrings.jl) package
@@ -401,9 +402,9 @@ julia> string(greet, ", ", whom, ".\n")
 ```
 
 A situation which is important to be aware of is when invalid UTF-8 strings are concatenated.
-In that case string may contain different characters than those that constitute concatenated
-stings and number of characters in such a string may be lower than sum of numbers of
-characters of the concatenated strings, e.g.:
+In that case the resulting string may contain different characters than those that constitute
+input strings and its number of characters may be lower than sum of numbers of characters
+of the concatenated strings, e.g.:
 
 ```jldoctest stringconcat
 julia> a, b = "\xe2\x88", "\x80"
