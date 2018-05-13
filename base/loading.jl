@@ -1076,20 +1076,38 @@ function include_relative(mod::Module, _path::String)
 end
 
 """
-    include(m::Module, path::AbstractString)
+    Base.include([m::Module,] path::AbstractString)
 
-Evaluate the contents of the input source file into module `m`. Returns the result
-of the last evaluated expression of the input file. During including, a task-local include
+Evaluate the contents of the input source file in the global scope of module `m`, or,
+for the one argument call, in the global scope of the `Base` module.
+Note that every `Module` (except those defined with `baremodule`) has its own 1-argument
+definition of `include`, which evaluates the file in that module.
+Returns the result of the last evaluated expression of the input file. During including,
+a task-local include path is set to the directory containing the file. Nested calls to
+`include` will search relative to that path. This function is typically used to load source
+interactively, or to combine files in packages that are broken into multiple source files.
+"""
+Base.include # defined in sysimg.jl
+
+"""
+    include(path::AbstractString)
+
+Evaluate the contents of the input source file into the global scope of the containing module.
+Every `Module` (except those defined with `baremodule`) has its own 1-argument
+definition of `include`, which evaluates the file in that module.
+Returns the result of the last evaluated expression of the input file. During including, a task-local include
 path is set to the directory containing the file. Nested calls to `include` will search
 relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+
+Use [`Base.include`](@ref) to evaluate a file into another module.
 """
-include # defined in sysimg.jl
+MainInclude.include # defined in sysimg.jl
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](@ref), evaluate all expressions,
+Load the file using [`Base.include`](@ref), evaluate all expressions,
 and return the value of the last one.
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
