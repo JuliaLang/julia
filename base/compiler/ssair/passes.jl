@@ -180,7 +180,7 @@ end
 
 struct FastForward
     to::SSAValue
-    phi_locs::Vector{Tuple{Int64, Int64}}
+    phi_locs::Vector{Tuple{Int, Int}}
 end
 
 function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
