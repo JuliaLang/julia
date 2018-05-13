@@ -12,7 +12,7 @@ struct Some{T}
     value::T
 end
 
-promote_rule(::Type{Some{S}}, ::Type{Some{T}}) where {S,T} = Some{promote_type(S, T)}
+promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
 promote_rule(::Type{Some{T}}, ::Type{Nothing}) where {T} = Union{Some{T}, Nothing}
 
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
