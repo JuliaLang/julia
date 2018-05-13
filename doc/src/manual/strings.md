@@ -349,8 +349,19 @@ y
 ```
 
 Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
-treat any byte sequence as a `String`. In such situations a rule is that characters are
-formed by the longest sequence of code units that could be a start of some valid code point.
+treat any byte sequence as a `String`. In such situations a rule is that when parsing
+a sequence of code units from left to right characters are formed by the longest sequence of
+8-bit code units that matches the start of one of the following bit patterns
+(each `x` can be `0` or `1`):
+
+* `0xxxxxxx`;
+* `110xxxxx` `10xxxxxx`;
+* `1110xxxx` `10xxxxxx` `10xxxxxx`;
+* `11110xxx` `10xxxxxx` `10xxxxxx` `10xxxxxx`;
+* `10xxxxxx`;
+* `11111xxx`.
+
+In particular this implies that overlong and too high code unit sequences are accepted.
 This rule is best explained by an example:
 
 ```jldoctest unicodestring
@@ -369,14 +380,21 @@ julia> isvalid.(collect(s))
  false
  false
   true
+
+julia> s2 = "\xf7\xbf\xbf\xbf"
+"\U1fffff"
+
+julia> foreach(display, s2)
+'\U1fffff': Unicode U+1fffff (category In: Invalid, too high)
 ```
 
-We can see that first two code units in `s` form an overlong encoding of space character.
-It is invalid, but is accepted in a string as a single character.
+We can see that the first two code units in the string `s` form an overlong encoding of
+space character. It is invalid, but is accepted in a string as a single character.
 The next two code units form a valid start of a three-byte UTF-8 sequence. However, the fifth
-code unit `\xe2` is not its valid continuation. Therefore code units 3 and 4 form a second
-malformed character in this string. Similarly code unit 5 forms a malformed character because
-`|` is not a valid continuation.
+code unit `\xe2` is not its valid continuation. Therefore code units 3 and 4 are also
+interpreted as malformed characters in this string. Similarly code unit 5 forms a malformed
+character because `|` is not a valid continuation to it. Finally the string `s2` contains
+one too high code point.
 
 Julia uses the UTF-8 encoding by default, and support for new encodings can be added by packages.
 For example, the [LegacyStrings.jl](https://github.com/JuliaArchive/LegacyStrings.jl) package
@@ -402,8 +420,8 @@ julia> string(greet, ", ", whom, ".\n")
 ```
 
 A situation which is important to be aware of is when invalid UTF-8 strings are concatenated.
-In that case the resulting string may contain different characters than those that constitute
-input strings and its number of characters may be lower than sum of numbers of characters
+In that case the resulting string may contain different characters than the input strings,
+and its number of characters may be lower than sum of numbers of characters
 of the concatenated strings, e.g.:
 
 ```jldoctest stringconcat
