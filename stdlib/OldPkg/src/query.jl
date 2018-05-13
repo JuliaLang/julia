@@ -2,7 +2,7 @@
 
 module Query
 
-import Pkg
+import OldPkg
 import ..PkgError
 using ..Types
 
@@ -204,13 +204,13 @@ function check_partial_updates(reqs::Requires,
         @info begin
             "Package $p was set to version $v, but a higher version $(vers[end]) exists.\n" *
             if isfixed
-                "The package is fixed. You can try using `Pkg.free(\"$p\")` to update it."
+                "The package is fixed. You can try using `OldPkg.free(\"$p\")` to update it."
             elseif blocking_reqs
                 "The update is prevented by explicit requirements constraints. Edit your REQUIRE file to change this."
             elseif !isempty(blocking_parents)
                 string("To install the latest version, you could try updating these packages as well: ", join(blocking_parents, ", ", " and "), ".")
             else
-                "To install the latest version, you could try doing a full update with `Pkg.update()`."
+                "To install the latest version, you could try doing a full update with `OldPkg.update()`."
             end
         end
     end

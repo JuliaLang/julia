@@ -3,12 +3,12 @@
 module PkgResolveTests
 
 using Test
-import Pkg
-using Pkg.Types
-using Pkg.Query
-using Pkg.Resolve
-using Pkg.Resolve.VersionWeights
-import Pkg.PkgError
+import OldPkg
+using OldPkg.Types
+using OldPkg.Query
+using OldPkg.Resolve
+using OldPkg.Resolve.VersionWeights
+import OldPkg.PkgError
 
 # Check that VersionWeight keeps the same ordering as VersionNumber
 

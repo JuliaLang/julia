@@ -4,7 +4,7 @@ Julia has a built-in package manager for installing add-on functionality written
 can also install external libraries using your operating system's standard system for doing so,
 or by compiling from source. The list of registered Julia packages can be found at [http://pkg.julialang.org](http://pkg.julialang.org).
 All package manager commands are found in the `Pkg` standard library which becomes available after using
-`import Pkg`.
+`import OldPkg`.
 
 First we'll go over the mechanics of the `Pkg` family of commands and then we'll provide some
 guidance on how to get your package registered. Be sure to read the section below on package naming
@@ -13,22 +13,22 @@ add your code to the curated METADATA repository.
 
 ## Package Status
 
-The [`Pkg.status()`](@ref) function prints out a summary of the state of packages you have installed.
+The [`OldPkg.status()`](@ref) function prints out a summary of the state of packages you have installed.
 Initially, you'll have no packages installed:
 
 ```julia-repl
-julia> Pkg.status()
+julia> OldPkg.status()
 INFO: Initializing package repository /Users/someone/.julia/v0.6
 INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
 No packages installed.
 ```
 
 Your package directory is automatically initialized the first time you run a `Pkg` command
-that expects it to exist – which includes [`Pkg.status()`](@ref). Here's an example non-trivial
+that expects it to exist – which includes [`OldPkg.status()`](@ref). Here's an example non-trivial
 set of required and additional packages:
 
 ```julia-repl
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - Distributions                 0.2.8
  - SHA                           0.3.2
@@ -39,12 +39,12 @@ Additional packages:
 
 These packages are all on registered versions, managed by `Pkg`. Packages can be in more
 complicated states, indicated by annotations to the right of the installed package version; we
-will explain these states and annotations as we encounter them. For programmatic usage, [`Pkg.installed()`](@ref)
+will explain these states and annotations as we encounter them. For programmatic usage, [`OldPkg.installed()`](@ref)
 returns a dictionary, mapping installed package names to the version of that package which is
 installed:
 
 ```julia-repl
-julia> Pkg.installed()
+julia> OldPkg.installed()
 Dict{String,VersionNumber} with 4 entries:
 "Distributions"     => v"0.2.8"
 "Stats"             => v"0.2.6"
@@ -63,21 +63,21 @@ version of something you wanted, and a newer version doesn't have that requireme
 will actually remove that package.
 
 Your package requirements are in the file `~/.julia/v0.6/REQUIRE`. You can edit this file by hand
-and then call [`Pkg.resolve()`](@ref) to install, upgrade or remove packages to optimally satisfy
-the requirements, or you can do [`Pkg.edit()`](@ref), which will open `REQUIRE` in your editor
+and then call [`OldPkg.resolve()`](@ref) to install, upgrade or remove packages to optimally satisfy
+the requirements, or you can do [`OldPkg.edit()`](@ref), which will open `REQUIRE` in your editor
 (configured via the `EDITOR` or `VISUAL` environment variables), and then automatically call
-[`Pkg.resolve()`](@ref) afterwards if necessary. If you only want to add or remove the requirement
-for a single package, you can also use the non-interactive [`Pkg.add()`](@ref) and [`Pkg.rm()`](@ref)
-commands, which add or remove a single requirement to `REQUIRE` and then call [`Pkg.resolve()`](@ref).
+[`OldPkg.resolve()`](@ref) afterwards if necessary. If you only want to add or remove the requirement
+for a single package, you can also use the non-interactive [`OldPkg.add()`](@ref) and [`OldPkg.rm()`](@ref)
+commands, which add or remove a single requirement to `REQUIRE` and then call [`OldPkg.resolve()`](@ref).
 
-You can add a package to the list of requirements with the [`Pkg.add()`](@ref) function, and the
+You can add a package to the list of requirements with the [`OldPkg.add()`](@ref) function, and the
 package and all the packages that it depends on will be installed:
 
 ```julia-repl
-julia> Pkg.status()
+julia> OldPkg.status()
 No packages installed.
 
-julia> Pkg.add("Distributions")
+julia> OldPkg.add("Distributions")
 INFO: Cloning cache of Distributions from git://github.com/JuliaStats/Distributions.jl.git
 INFO: Cloning cache of NumericExtensions from git://github.com/lindahua/NumericExtensions.jl.git
 INFO: Cloning cache of Stats from git://github.com/JuliaStats/Stats.jl.git
@@ -86,7 +86,7 @@ INFO: Installing NumericExtensions v0.2.17
 INFO: Installing Stats v0.2.6
 INFO: REQUIRE updated.
 
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - Distributions                 0.2.7
 Additional packages:
@@ -101,19 +101,19 @@ $ cat ~/.julia/v0.6/REQUIRE
 Distributions
 ```
 
-It then runs [`Pkg.resolve()`](@ref) using these new requirements, which leads to the conclusion
+It then runs [`OldPkg.resolve()`](@ref) using these new requirements, which leads to the conclusion
 that the `Distributions` package should be installed since it is required but not installed. As
 stated before, you can accomplish the same thing by editing your `~/.julia/v0.6/REQUIRE` file
-by hand and then running [`Pkg.resolve()`](@ref) yourself:
+by hand and then running [`OldPkg.resolve()`](@ref) yourself:
 
 ```julia-repl
 $ echo SHA >> ~/.julia/v0.6/REQUIRE
 
-julia> Pkg.resolve()
+julia> OldPkg.resolve()
 INFO: Cloning cache of SHA from git://github.com/staticfloat/SHA.jl.git
 INFO: Installing SHA v0.3.2
 
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - Distributions                 0.2.7
  - SHA                           0.3.2
@@ -122,46 +122,46 @@ Additional packages:
  - Stats                         0.2.6
 ```
 
-This is functionally equivalent to calling [`Pkg.add("SHA")`](@ref), except that [`Pkg.add()`](@ref)
+This is functionally equivalent to calling [`OldPkg.add("SHA")`](@ref), except that [`OldPkg.add()`](@ref)
 doesn't change `REQUIRE` until *after* installation has completed, so if there are problems,
-`REQUIRE` will be left as it was before calling [`Pkg.add()`](@ref). The format of the `REQUIRE`
+`REQUIRE` will be left as it was before calling [`OldPkg.add()`](@ref). The format of the `REQUIRE`
 file is described in [Requirements Specification](@ref); it allows, among other things, requiring
 specific ranges of versions of packages.
 
-When you decide that you don't want to have a package around any more, you can use [`Pkg.rm()`](@ref)
+When you decide that you don't want to have a package around any more, you can use [`OldPkg.rm()`](@ref)
 to remove the requirement for it from the `REQUIRE` file:
 
 ```julia-repl
-julia> Pkg.rm("Distributions")
+julia> OldPkg.rm("Distributions")
 INFO: Removing Distributions v0.2.7
 INFO: Removing Stats v0.2.6
 INFO: Removing NumericExtensions v0.2.17
 INFO: REQUIRE updated.
 
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - SHA                           0.3.2
 
-julia> Pkg.rm("SHA")
+julia> OldPkg.rm("SHA")
 INFO: Removing SHA v0.3.2
 INFO: REQUIRE updated.
 
-julia> Pkg.status()
+julia> OldPkg.status()
 No packages installed.
 ```
 
 Once again, this is equivalent to editing the `REQUIRE` file to remove the line with each package
-name on it then running [`Pkg.resolve()`](@ref) to update the set of installed packages to match.
-While [`Pkg.add()`](@ref) and [`Pkg.rm()`](@ref) are convenient for adding and removing requirements
-for a single package, when you want to add or remove multiple packages, you can call [`Pkg.edit()`](@ref)
-to manually change the contents of `REQUIRE` and then update your packages accordingly. [`Pkg.edit()`](@ref)
-does not roll back the contents of `REQUIRE` if [`Pkg.resolve()`](@ref) fails – rather, you
-have to run [`Pkg.edit()`](@ref) again to fix the files contents yourself.
+name on it then running [`OldPkg.resolve()`](@ref) to update the set of installed packages to match.
+While [`OldPkg.add()`](@ref) and [`OldPkg.rm()`](@ref) are convenient for adding and removing requirements
+for a single package, when you want to add or remove multiple packages, you can call [`OldPkg.edit()`](@ref)
+to manually change the contents of `REQUIRE` and then update your packages accordingly. [`OldPkg.edit()`](@ref)
+does not roll back the contents of `REQUIRE` if [`OldPkg.resolve()`](@ref) fails – rather, you
+have to run [`OldPkg.edit()`](@ref) again to fix the files contents yourself.
 
 Because the package manager uses libgit2 internally to manage the package git repositories, users
-may run into protocol issues (if behind a firewall, for example), when running [`Pkg.add()`](@ref).
+may run into protocol issues (if behind a firewall, for example), when running [`OldPkg.add()`](@ref).
 By default, all GitHub-hosted packages wil be accessed via 'https'; this default can be modified
-by calling [`Pkg.setprotocol!()`](@ref). The following command can be run from the command line
+by calling [`OldPkg.setprotocol!()`](@ref). The following command can be run from the command line
 in order to tell git to use 'https' instead of the 'git' protocol when cloning all repositories,
 wherever they are hosted:
 
@@ -169,28 +169,28 @@ wherever they are hosted:
 git config --global url."https://".insteadOf git://
 ```
 
-However, this change will be system-wide and thus the use of [`Pkg.setprotocol!()`](@ref) is preferable.
+However, this change will be system-wide and thus the use of [`OldPkg.setprotocol!()`](@ref) is preferable.
 
 !!! note
     The package manager functions also accept the `.jl` suffix on package names, though the suffix is
     stripped internally. For example:
 
     ```julia
-    Pkg.add("Distributions.jl")
-    Pkg.rm("Distributions.jl")
+    OldPkg.add("Distributions.jl")
+    OldPkg.rm("Distributions.jl")
     ```
 
 ## Offline Installation of Packages
 
 For machines with no Internet connection, packages may be installed by copying the package root
-directory (given by [`Pkg.dir()`](@ref)) from a machine with the same operating system and environment.
+directory (given by [`OldPkg.dir()`](@ref)) from a machine with the same operating system and environment.
 
-[`Pkg.add()`](@ref) does the following within the package root directory:
+[`OldPkg.add()`](@ref) does the following within the package root directory:
 
 1. Adds the name of the package to `REQUIRE`.
 2. Downloads the package to `.cache`, then copies the package to the package root directory.
 3. Recursively performs step 2 against all the packages listed in the package's `REQUIRE` file.
-4. Runs [`Pkg.build()`](@ref)
+4. Runs [`OldPkg.build()`](@ref)
 
 !!! warning
     Copying installed packages from a different machine is brittle for packages requiring binary external
@@ -202,13 +202,13 @@ directory (given by [`Pkg.dir()`](@ref)) from a machine with the same operating 
 Julia packages are simply git repositories, clonable via any of the [protocols](https://www.kernel.org/pub/software/scm/git/docs/git-clone.html#URLS)
 that git supports, and containing Julia code that follows certain layout conventions. Official
 Julia packages are registered in the [METADATA.jl](https://github.com/JuliaLang/METADATA.jl) repository,
-available at a well-known location [^1]. The [`Pkg.add()`](@ref) and [`Pkg.rm()`](@ref) commands
+available at a well-known location [^1]. The [`OldPkg.add()`](@ref) and [`OldPkg.rm()`](@ref) commands
 in the previous section interact with registered packages, but the package manager can install
-and work with unregistered packages too. To install an unregistered package, use [`Pkg.clone(url)`](@ref),
+and work with unregistered packages too. To install an unregistered package, use [`OldPkg.clone(url)`](@ref),
 where `url` is a git URL from which the package can be cloned:
 
 ```julia-repl
-julia> Pkg.clone("git://example.com/path/to/Package.jl.git")
+julia> OldPkg.clone("git://example.com/path/to/Package.jl.git")
 INFO: Cloning Package from git://example.com/path/to/Package.jl.git
 Cloning into 'Package'...
 remote: Counting objects: 22, done.
@@ -240,10 +240,10 @@ the requirements of both registered and unregistered packages.
 
 When package developers publish new registered versions of packages that you're using, you will,
 of course, want the new shiny versions. To get the latest and greatest versions of all your packages,
-just do [`Pkg.update()`](@ref):
+just do [`OldPkg.update()`](@ref):
 
 ```julia-repl
-julia> Pkg.update()
+julia> OldPkg.update()
 INFO: Updating METADATA...
 INFO: Computing changes...
 INFO: Upgrading Distributions: v0.2.8 => v0.2.10
@@ -251,7 +251,7 @@ INFO: Upgrading Stats: v0.2.7 => v0.2.8
 ```
 
 The first step of updating packages is to pull new changes to `~/.julia/v0.6/METADATA` and see
-if any new registered package versions have been published. After this, [`Pkg.update()`](@ref)
+if any new registered package versions have been published. After this, [`OldPkg.update()`](@ref)
 attempts to update packages that are checked out on a branch and not dirty (i.e. no changes have
 been made to files tracked by git) by pulling changes from the package's upstream repository.
 Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch
@@ -263,7 +263,7 @@ Finally, the update process recomputes an optimal set of package versions to hav
 satisfy your top-level requirements and the requirements of "fixed" packages. A package is considered
 fixed if it is one of the following:
 
-1. **Unregistered:** the package is not in `METADATA` – you installed it with [`Pkg.clone()`](@ref).
+1. **Unregistered:** the package is not in `METADATA` – you installed it with [`OldPkg.clone()`](@ref).
 2. **Checked out:** the package repo is on a development branch.
 3. **Dirty:** changes have been made to files in the repo.
 
@@ -272,12 +272,12 @@ the package, so its requirements must be satisfied by whatever other package ver
 The combination of top-level requirements in `~/.julia/v0.6/REQUIRE` and the requirement of fixed
 packages are used to determine what should be installed.
 
-You can also update only a subset of the installed packages, by providing arguments to the [`Pkg.update`](@ref)
+You can also update only a subset of the installed packages, by providing arguments to the [`OldPkg.update`](@ref)
 function. In that case, only the packages provided as arguments and their dependencies will be
 updated:
 
 ```julia-repl
-julia> Pkg.update("Example")
+julia> OldPkg.update("Example")
 INFO: Updating METADATA...
 INFO: Computing changes...
 INFO: Upgrading Example: v0.4.0 => 0.4.1
@@ -292,28 +292,28 @@ explicitly provided, and their dependencies, as fixed.
 You may want to use the `master` version of a package rather than one of its registered versions.
 There might be fixes or functionality on master that you need that aren't yet published in any
 registered versions, or you may be a developer of the package and need to make changes on `master`
-or some other development branch. In such cases, you can do [`Pkg.checkout(pkg)`](@ref) to checkout
-the `master` branch of `pkg` or [`Pkg.checkout(pkg,branch)`](@ref) to checkout some other branch:
+or some other development branch. In such cases, you can do [`OldPkg.checkout(pkg)`](@ref) to checkout
+the `master` branch of `pkg` or [`OldPkg.checkout(pkg,branch)`](@ref) to checkout some other branch:
 
 ```julia-repl
-julia> Pkg.add("Distributions")
+julia> OldPkg.add("Distributions")
 INFO: Installing Distributions v0.2.9
 INFO: Installing NumericExtensions v0.2.17
 INFO: Installing Stats v0.2.7
 INFO: REQUIRE updated.
 
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - Distributions                 0.2.9
 Additional packages:
  - NumericExtensions             0.2.17
  - Stats                         0.2.7
 
-julia> Pkg.checkout("Distributions")
+julia> OldPkg.checkout("Distributions")
 INFO: Checking out Distributions master...
 INFO: No packages to install, update or remove.
 
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - Distributions                 0.2.9+             master
 Additional packages:
@@ -321,9 +321,9 @@ Additional packages:
  - Stats                         0.2.7
 ```
 
-Immediately after installing `Distributions` with [`Pkg.add()`](@ref) it is on the current most
-recent registered version – `0.2.9` at the time of writing this. Then after running [`Pkg.checkout("Distributions")`](@ref),
-you can see from the output of [`Pkg.status()`](@ref) that `Distributions` is on an unregistered
+Immediately after installing `Distributions` with [`OldPkg.add()`](@ref) it is on the current most
+recent registered version – `0.2.9` at the time of writing this. Then after running [`OldPkg.checkout("Distributions")`](@ref),
+you can see from the output of [`OldPkg.status()`](@ref) that `Distributions` is on an unregistered
 version greater than `0.2.9`, indicated by the "pseudo-version" number `0.2.9+`.
 
 When you checkout an unregistered version of a package, the copy of the `REQUIRE` file in the
@@ -335,14 +335,14 @@ populate newly published versions of the package if you use the API that `Pkg` p
 for this (described below).
 
 When you decide that you no longer want to have a package checked out on a branch, you can "free"
-it back to the control of the package manager with [`Pkg.free(pkg)`](@ref):
+it back to the control of the package manager with [`OldPkg.free(pkg)`](@ref):
 
 ```julia-repl
-julia> Pkg.free("Distributions")
+julia> OldPkg.free("Distributions")
 INFO: Freeing Distributions...
 INFO: No packages to install, update or remove.
 
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - Distributions                 0.2.9
 Additional packages:
@@ -353,14 +353,14 @@ Additional packages:
 After this, since the package is on a registered version and not on a branch, its version will
 be updated as new registered versions of the package are published.
 
-If you want to pin a package at a specific version so that calling [`Pkg.update()`](@ref) won't
-change the version the package is on, you can use the [`Pkg.pin()`](@ref) function:
+If you want to pin a package at a specific version so that calling [`OldPkg.update()`](@ref) won't
+change the version the package is on, you can use the [`OldPkg.pin()`](@ref) function:
 
 ```julia-repl
-julia> Pkg.pin("Stats")
+julia> OldPkg.pin("Stats")
 INFO: Creating Stats branch pinned.47c198b1.tmp
 
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - Distributions                 0.2.9
 Additional packages:
@@ -370,16 +370,16 @@ Additional packages:
 
 After this, the `Stats` package will remain pinned at version `0.2.7` – or more specifically,
 at commit `47c198b1`, but since versions are permanently associated a given git hash, this is
-the same thing. [`Pkg.pin()`](@ref) works by creating a throw-away branch for the commit you want
+the same thing. [`OldPkg.pin()`](@ref) works by creating a throw-away branch for the commit you want
 to pin the package at and then checking that branch out. By default, it pins a package at the
 current commit, but you can choose a different version by passing a second argument:
 
 ```julia-repl
-julia> Pkg.pin("Stats",v"0.2.5")
+julia> OldPkg.pin("Stats",v"0.2.5")
 INFO: Creating Stats branch pinned.1fd0983b.tmp
 INFO: No packages to install, update or remove.
 
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - Distributions                 0.2.9
 Additional packages:
@@ -389,14 +389,14 @@ Additional packages:
 
 Now the `Stats` package is pinned at commit `1fd0983b`, which corresponds to version `0.2.5`.
 When you decide to "unpin" a package and let the package manager update it again, you can use
-[`Pkg.free()`](@ref) like you would to move off of any branch:
+[`OldPkg.free()`](@ref) like you would to move off of any branch:
 
 ```julia-repl
-julia> Pkg.free("Stats")
+julia> OldPkg.free("Stats")
 INFO: Freeing Stats...
 INFO: No packages to install, update or remove.
 
-julia> Pkg.status()
+julia> OldPkg.status()
 Required packages:
  - Distributions                 0.2.9
 Additional packages:
@@ -405,7 +405,7 @@ Additional packages:
 ```
 
 After this, the `Stats` package is managed by the package manager again, and future calls to
-[`Pkg.update()`](@ref) will upgrade it to newer versions when they are published. The throw-away
+[`OldPkg.update()`](@ref) will upgrade it to newer versions when they are published. The throw-away
 `pinned.1fd0983b.tmp` branch remains in your local `Stats` repo, but since git branches are extremely
 lightweight, this doesn't really matter; if you feel like cleaning them up, you can go into the
 repo and delete those branches [^2].
@@ -425,14 +425,14 @@ custom branch with the official `metadata-v2` branch. In order to use a custom r
 branch, issue the following command:
 
 ```julia-repl
-julia> Pkg.init("https://me.example.com/METADATA.jl.git", "branch")
+julia> OldPkg.init("https://me.example.com/METADATA.jl.git", "branch")
 ```
 
 The branch argument is optional and defaults to `metadata-v2`. Once initialized, a file named
 `META_BRANCH` in your `~/.julia/vX.Y/` path will track the branch that your METADATA repository
 was initialized with. If you want to change branches, you will need to either modify the `META_BRANCH`
 file directly (be careful!) or remove the `vX.Y` directory and re-initialize your METADATA repository
-using the `Pkg.init` command.
+using the `OldPkg.init` command.
 
 # Package Development
 
@@ -469,7 +469,7 @@ your public SSH key to GitHub and set up an [SSH agent](https://linux.die.net/ma
 on your development machine so that you can push changes with minimal hassle. In the future, we
 will make this system extensible and support other common git hosting options like [BitBucket](https://bitbucket.org)
 and allow developers to choose their favorite. Since the package development functions has been
-moved to the [PkgDev](https://github.com/JuliaLang/PkgDev.jl) package, you need to run `Pkg.add("PkgDev"); import PkgDev`
+moved to the [PkgDev](https://github.com/JuliaLang/PkgDev.jl) package, you need to run `OldPkg.add("PkgDev"); import PkgDev`
 to access the functions starting with `PkgDev.` in the document below.
 
 ## Making changes to an existing package
@@ -498,7 +498,7 @@ above). Let's imagine you're fixing a bug in the Images package:
 ```
 Pkg.checkout("Images")           # check out the master branch
 <here, make sure your bug is still a bug and hasn't been fixed already>
-cd(Pkg.dir("Images"))
+cd(OldPkg.dir("Images"))
 ;git checkout -b myfixes         # create a branch for your changes
 <edit code>                      # be sure to add a test for your bug
 Pkg.test("Images")               # make sure everything works now
@@ -521,12 +521,12 @@ you first *push* your changes to a publicly-visible location, your own online *f
 (hosted on your own personal GitHub account).
 
 Let's assume you already have the `Foo` package installed. In the description below, anything
-starting with `Pkg.` or `PkgDev.` is meant to be typed at the Julia prompt; anything starting
+starting with `OldPkg.` or `PkgDev.` is meant to be typed at the Julia prompt; anything starting
 with `git` is meant to be typed in [julia's shell mode](@ref man-shell-mode) (or using the shell that comes with
 your operating system). Within Julia, you can combine these two modes:
 
 ```julia-repl
-julia> cd(Pkg.dir("Foo"))          # go to Foo's folder
+julia> cd(OldPkg.dir("Foo"))          # go to Foo's folder
 
 shell> git command arguments...    # command will apply to Foo
 ```
@@ -534,14 +534,14 @@ shell> git command arguments...    # command will apply to Foo
 Now suppose you're ready to make some changes to `Foo`. While there are several possible approaches,
 here is one that is widely used:
 
-  * From the Julia prompt, type [`Pkg.checkout("Foo")`](@ref). This ensures you're running the latest
+  * From the Julia prompt, type [`OldPkg.checkout("Foo")`](@ref). This ensures you're running the latest
     code (the `master` branch), rather than just whatever "official release" version you have installed.
     (If you're planning to fix a bug, at this point it's a good idea to check again whether the bug
     has already been fixed by someone else. If it has, you can request that a new official release
     be tagged so that the fix gets distributed to the rest of the community.) If you receive an error
     `Foo is dirty, bailing`, see [Dirty packages](@ref) below.
   * Create a branch for your changes: navigate to the package folder (the one that Julia reports from
-    [`Pkg.dir("Foo")`](@ref)) and (in shell mode) create a new branch using `git checkout -b <newbranch>`,
+    [`OldPkg.dir("Foo")`](@ref)) and (in shell mode) create a new branch using `git checkout -b <newbranch>`,
     where `<newbranch>` might be some descriptive name (e.g., `fixbar`). By creating a branch, you
     ensure that you can easily go back and forth between your new work and the current `master` branch
     (see [https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell](https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell)).
@@ -556,7 +556,7 @@ here is one that is widely used:
     owner that you've made sure your code works as intended.
   * Run the package's tests and make sure they pass. There are several ways to run the tests:
 
-      * From Julia, run [`Pkg.test("Foo")`](@ref): this will run your tests in a separate (new) `julia`
+      * From Julia, run [`OldPkg.test("Foo")`](@ref): this will run your tests in a separate (new) `julia`
         process.
       * From Julia, `include("runtests.jl")` from the package's `test/` folder (it's possible the file
         has a different name, look for one that runs all the tests): this allows you to run the tests
@@ -575,7 +575,7 @@ here is one that is widely used:
     for merged pull requests, make new changes by starting a new branch):
 
       * If you've changed branches in the meantime, make sure you go back to the same branch with `git checkout fixbar`
-        (from shell mode) or [`Pkg.checkout("Foo", "fixbar")`](@ref) (from the Julia prompt).
+        (from shell mode) or [`OldPkg.checkout("Foo", "fixbar")`](@ref) (from the Julia prompt).
       * As above, make your changes, run the tests, and commit your changes.
       * From the shell, type `git push`.  This will add your new commit(s) to the same pull request; you
         should see them appear automatically on the page holding the discussion of your pull request.
@@ -589,7 +589,7 @@ If you can't change branches because the package manager complains that your pac
 it means you have some changes that have not been committed. From the shell, use `git diff` to
 see what these changes are; you can either discard them (`git checkout changedfile.jl`) or commit
 them before switching branches.  If you can't easily resolve the problems manually, as a last
-resort you can delete the entire `"Foo"` folder and reinstall a fresh copy with [`Pkg.add("Foo")`](@ref).
+resort you can delete the entire `"Foo"` folder and reinstall a fresh copy with [`OldPkg.add("Foo")`](@ref).
 Naturally, this deletes any changes you've made.
 
 ### [Making a branch *post hoc*](@id man-branch-post-hoc)
@@ -662,7 +662,7 @@ from the one in your GitHub fork, you're going to have to do a *force push*:
 You should have a `REQUIRE` file in your package repository, with a bare minimum directive of
 what Julia version you expect your users to be running for the package to work. Putting a floor
 on what Julia version your package supports is done by simply adding `julia 0.x` in this file.
-While this line is partly informational, it also has the consequence of whether `Pkg.update()`
+While this line is partly informational, it also has the consequence of whether `OldPkg.update()`
 will update code found in `.julia` version directories. It will not update code found in version
 directories beneath the floor of what's specified in your `REQUIRE`.
 
@@ -827,11 +827,11 @@ git://github.com/someone/FooBar.jl.git
 ```
 
 For your package, it will be your GitHub user name and the name of your package, but you get the
-idea. People you send this URL to can use [`Pkg.clone()`](@ref) to install the package and try
+idea. People you send this URL to can use [`OldPkg.clone()`](@ref) to install the package and try
 it out:
 
 ```julia-repl
-julia> Pkg.clone("git://github.com/someone/FooBar.jl.git")
+julia> OldPkg.clone("git://github.com/someone/FooBar.jl.git")
 INFO: Cloning FooBar from git@github.com:someone/FooBar.jl.git
 ```
 

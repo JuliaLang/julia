@@ -2,7 +2,7 @@
 
 module Types
 
-import Pkg
+import OldPkg
 
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies,
        ResolveBacktraceItem, ResolveBacktrace

@@ -1,4 +1,4 @@
-name = "Pkg"
+name = "OldPkg"
 uuid = "fe1c5a76-5840-53d2-82f9-288dd83ce2ce"
 
 [deps]

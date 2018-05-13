@@ -3,7 +3,7 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
-import Pkg
+import OldPkg
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 using LibGit2
 import ..PkgError
@@ -74,7 +74,7 @@ function add(pkg::AbstractString, vers::VersionSet)
         is = outdated == :yes ? "is" : "might be"
         @info """
             METADATA $is out-of-date — you may not have the latest version of $pkg
-            Use `Pkg.update()` to get the latest versions of your packages
+            Use `OldPkg.update()` to get the latest versions of your packages
             """
     end
 end
@@ -385,7 +385,7 @@ function update(branch::AbstractString, upkgs::Set{String})
         catch err
             cex = CapturedException(err, catch_backtrace())
             throw(PkgError("METADATA cannot be updated. Resolve problems manually in " *
-                Pkg.dir("METADATA") * ".", cex))
+                OldPkg.dir("METADATA") * ".", cex))
         end
     end
     deferred_errors = CompositeException()
@@ -405,7 +405,7 @@ function update(branch::AbstractString, upkgs::Set{String})
         for (pkg, (v,f)) in instd
             satisfies(pkg, v, reqs) || throw(PkgError("Package $pkg: current " *
                 "package status does not satisfy the requirements, cannot do " *
-                "a partial update; use `Pkg.update()`"))
+                "a partial update; use `OldPkg.update()`"))
         end
     end
     dont_update = Query.partial_update_mask(instd, avail, upkgs)
@@ -494,7 +494,7 @@ function resolve(
         if !haskey(deps,pkg)
             if "julia" in conflicts[pkg]
                 throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION " *
-                   "of julia. You may need to update METADATA by running `Pkg.update()`"))
+                   "of julia. You may need to update METADATA by running `OldPkg.update()`"))
             else
                 sconflicts = join(conflicts[pkg], ", ", " and ")
                 throw(PkgError("$pkg's requirements can't be satisfied because " *
@@ -583,7 +583,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
     # To isolate the build from the running Julia process, we execute each build.jl file in
     # a separate process. Errors are written to errfile for later reporting.
     code = """
-        import Pkg
+        import OldPkg
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)
@@ -653,7 +653,7 @@ function build(pkgs::Vector)
         $(join(keys(errs),", "," and ")) had build errors.
 
          - packages with build errors remain installed in $(pwd())
-         - build the package(s) and all dependencies with `Pkg.build("$(join(keys(errs),"\", \""))")`
+         - build the package(s) and all dependencies with `OldPkg.build("$(join(keys(errs),"\", \""))")`
          - build a single package by running its `deps/build.jl` script
         """
 end
@@ -691,7 +691,7 @@ function updatehook(pkgs::Vector)
         $(join(keys(errs),", "," and ")) had update errors.
 
         - Unrelated packages are unaffected
-        - To retry, run Pkg.update() again
+        - To retry, run OldPkg.update() again
         """
 end
 

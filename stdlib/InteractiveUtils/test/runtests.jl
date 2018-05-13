@@ -175,7 +175,7 @@ end
 # PR #23075
 @testset "versioninfo" begin
     # check that versioninfo(io; verbose=true) doesn't error, produces some output
-    # and doesn't invoke Pkg.status which will error if JULIA_PKGDIR is set
+    # and doesn't invoke OldPkg.status which will error if JULIA_PKGDIR is set
     mktempdir() do dir
         withenv("JULIA_PKGDIR" => dir) do
             buf = PipeBuffer()

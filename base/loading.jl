@@ -854,7 +854,7 @@ current `include` path but does not use it to search for files (see help for `in
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
-When searching for files, `require` first looks for package code under `Pkg.dir()`,
+When searching for files, `require` first looks for package code under `OldPkg.dir()`,
 then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
 all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
@@ -863,7 +863,7 @@ function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
     # Core.println("require($(PkgId(into)), $mod) -> $uuidkey")
     uuidkey === nothing &&
-        throw(ArgumentError("Module $mod not found in current path.\nRun `Pkg.add(\"$mod\")` to install the $mod package."))
+        throw(ArgumentError("Module $mod not found in current path.\nRun `OldPkg.add(\"$mod\")` to install the $mod package."))
     if _track_dependencies[]
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
@@ -944,7 +944,7 @@ function _require(pkg::PkgId)
         name = pkg.name
         path = locate_package(pkg)
         if path === nothing
-            throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
+            throw(ArgumentError("Module $name not found in current path.\nRun `OldPkg.add(\"$name\")` to install the $name package."))
         end
 
         # attempt to load the module file via the precompile cache locations
@@ -1122,7 +1122,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     try
         write(in, """
         begin
-        import Pkg
+        import OldPkg
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)

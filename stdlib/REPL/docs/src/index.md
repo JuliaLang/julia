@@ -306,7 +306,7 @@ completion to be able to remove non-matching methods.
 Tab completion can also help completing fields:
 
 ```julia-repl
-julia> Pkg.a[TAB]
+julia> OldPkg.a[TAB]
 add       available
 ```
 

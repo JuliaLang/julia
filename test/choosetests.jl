@@ -162,7 +162,7 @@ function choosetests(choices = [])
 
     filter!(!in(skip_tests), tests)
 
-    explicit_pkg     =  "Pkg/pkg"        in tests
+    explicit_pkg     =  "OldPkg/pkg"        in tests
     explicit_pkg3    =  "Pkg3/pkg"       in tests
     explicit_libgit2 =  "LibGit2/online" in tests
     new_tests = String[]
@@ -180,7 +180,7 @@ function choosetests(choices = [])
     end
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     append!(tests, new_tests)
-    explicit_pkg     || filter!(x -> x != "Pkg/pkg",        tests)
+    explicit_pkg     || filter!(x -> x != "OldPkg/pkg",        tests)
     explicit_pkg3    || filter!(x -> x != "Pkg3/pkg",       tests)
     explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 

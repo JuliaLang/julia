@@ -2,7 +2,7 @@
 
 module Resolve
 
-import Pkg
+import OldPkg
 
 include("resolve/versionweight.jl")
 include("resolve/interface.jl")
@@ -104,7 +104,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
                 if !haskey(sub_deps, pkg)
                     if "julia" in conflicts[pkg]
                         throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION " *
-                           "of julia. You may need to update METADATA by running `Pkg.update()`"))
+                           "of julia. You may need to update METADATA by running `OldPkg.update()`"))
                     else
                         sconflicts = join(conflicts[pkg], ", ", " and ")
                         throw(PkgError("$pkg's requirements can't be satisfied because " *

@@ -147,7 +147,7 @@ end
 macro deprecate_moved(old, new, export_old=true)
     eold = esc(old)
     emsg = string(old, " has been moved to the package ", new, ".jl.\n",
-        "Run `Pkg.add(\"", new, "\")` to install it, restart Julia,\n",
+        "Run `OldPkg.add(\"", new, "\")` to install it, restart Julia,\n",
         "and then run `using ", new, "` to load it.")
     return Expr(:toplevel,
         :($eold(args...; kwargs...) = error($emsg)),

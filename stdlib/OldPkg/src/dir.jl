@@ -2,7 +2,7 @@
 
 module Dir
 
-import Pkg
+import OldPkg
 import ..DEFAULT_META, ..META_BRANCH, ..PkgError
 import LibGit2, LibGit2.with
 const DIR_NAME = ".julia"
@@ -26,7 +26,7 @@ function cd(f::Function, args...; kws...)
     metadata_dir = joinpath(dir, "METADATA")
     if !isdir(metadata_dir)
         !haskey(ENV,"JULIA_PKGDIR") ? init() :
-            throw(PkgError("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it."))
+            throw(PkgError("Package metadata directory $metadata_dir doesn't exist; run OldPkg.init() to initialize it."))
     end
     if haskey(ENV,"JULIA_PKGDIR")
         withenv("JULIA_PKGDIR" => abspath(ENV["JULIA_PKGDIR"])) do

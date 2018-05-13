@@ -15,7 +15,7 @@ using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_ty
 
 using Markdown
 using LinearAlgebra  # for peakflops
-import Pkg
+import OldPkg
 
 include("editless.jl")
 include("codeview.jl")
@@ -116,11 +116,11 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     end
     if packages || verbose
         println(io, "Packages:")
-        println(io, "  Package Directory: ", Pkg.dir())
+        println(io, "  Package Directory: ", OldPkg.dir())
         print(io, "  Package Status:")
-        if isdir(Pkg.dir())
+        if isdir(OldPkg.dir())
             println(io, "")
-            Pkg.status(io)
+            OldPkg.status(io)
         else
             println(io, " no packages installed")
         end
