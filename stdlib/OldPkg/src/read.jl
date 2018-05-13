@@ -2,7 +2,7 @@
 
 module Read
 
-import Pkg
+import OldPkg
 import LibGit2
 import ..Cache, ..Reqs, ..PkgError, ..Dir
 using ..Types

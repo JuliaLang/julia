@@ -2,7 +2,7 @@
 
 module Write
 
-import Pkg
+import OldPkg
 import ..Cache, ..Read, ..PkgError
 using LibGit2
 

@@ -3,7 +3,7 @@
 module Reqs
 
 import Base: ==
-import Pkg
+import OldPkg
 import ..PkgError
 using ..Types
 
@@ -113,8 +113,8 @@ parse(x) = parse(read(x))
 
 function dependents(packagename::AbstractString)
     pkgs = AbstractString[]
-    cd(Pkg.dir()) do
-        for (pkg,latest) in Pkg.Read.latest()
+    cd(OldPkg.dir()) do
+        for (pkg,latest) in OldPkg.Read.latest()
             if haskey(latest.requires, packagename)
                 push!(pkgs, pkg)
             end
