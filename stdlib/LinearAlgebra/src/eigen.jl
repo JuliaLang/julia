@@ -20,6 +20,13 @@ end
 GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
     GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
+# iteration for destructuring into factors
+Base.start(::Union{Eigen,GeneralizedEigen}) = Val(:values)
+Base.next(F::Union{Eigen,GeneralizedEigen}, ::Val{:values}) = (F.values, Val(:vectors))
+Base.next(F::Union{Eigen,GeneralizedEigen}, ::Val{:vectors}) = (F.vectors, Val(:done))
+Base.done(F::Union{Eigen,GeneralizedEigen}, ::Val{:done}) = true
+Base.done(F::Union{Eigen,GeneralizedEigen}, ::Any) = false
+
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
 """
@@ -98,6 +105,20 @@ julia> F.vectors
  1.0  0.0  0.0
  0.0  1.0  0.0
  0.0  0.0  1.0
+
+julia> vals, vecs = F; # destructuring via iteration
+
+julia> vals
+3-element Array{Float64,1}:
+  1.0
+  3.0
+ 18.0
+
+julia> vecs
+3×3 Array{Float64,2}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
 ```
 """
 function eigfact(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T
@@ -106,38 +127,6 @@ function eigfact(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) wher
     return eigfact!(AA, permute = permute, scale = scale)
 end
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
-
-function eig(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
-    F = eigfact(A, permute=permute, scale=scale)
-    F.values, F.vectors
-end
-
-"""
-    eig(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> D, V
-    eig(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> D, V
-    eig(A, permute::Bool=true, scale::Bool=true) -> D, V
-
-Computes eigenvalues (`D`) and eigenvectors (`V`) of `A`.
-See [`eigfact`](@ref) for details on the
-`irange`, `vl`, and `vu` arguments
-(for [`SymTridiagonal`](@ref), [`Hermitian`](@ref), and
-[`Symmetric`](@ref) matrices)
-and the `permute` and `scale` keyword arguments.
-The eigenvectors are returned columnwise.
-
-# Examples
-```jldoctest
-julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
-```
-
-`eig` is a wrapper around [`eigfact`](@ref), extracting all parts of the
-factorization to a tuple; where possible, using [`eigfact`](@ref) is recommended.
-"""
-function eig(A::AbstractMatrix, args...)
-    F = eigfact(A, args...)
-    F.values, F.vectors
-end
 
 """
     eigvecs(A; permute::Bool=true, scale::Bool=true) -> Matrix
@@ -381,6 +370,18 @@ julia> F.vectors
 2×2 Array{Complex{Float64},2}:
   0.0-1.0im   0.0+1.0im
  -1.0-0.0im  -1.0+0.0im
+
+julia> vals, vecs = F; # destructuring via iteration
+
+julia> vals
+2-element Array{Complex{Float64},1}:
+ 0.0 + 1.0im
+ 0.0 - 1.0im
+
+julia> vecs
+2×2 Array{Complex{Float64},2}:
+  0.0-1.0im   0.0+1.0im
+ -1.0-0.0im  -1.0+0.0im
 ```
 """
 function eigfact(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
@@ -390,38 +391,6 @@ end
 
 eigfact(A::Number, B::Number) = eigfact(fill(A,1,1), fill(B,1,1))
 
-"""
-    eig(A, B) -> D, V
-
-Computes generalized eigenvalues (`D`) and vectors (`V`) of `A` with respect to `B`.
-
-`eig` is a wrapper around [`eigfact`](@ref), extracting all parts of the
-factorization to a tuple; where possible, using [`eigfact`](@ref) is recommended.
-
-# Examples
-```jldoctest
-julia> A = [1 0; 0 -1]
-2×2 Array{Int64,2}:
- 1   0
- 0  -1
-
-julia> B = [0 1; 1 0]
-2×2 Array{Int64,2}:
- 0  1
- 1  0
-
-julia> eig(A, B)
-(Complex{Float64}[0.0+1.0im, 0.0-1.0im], Complex{Float64}[0.0-1.0im 0.0+1.0im; -1.0-0.0im -1.0+0.0im])
-```
-"""
-function eig(A::AbstractMatrix, B::AbstractMatrix)
-    F = eigfact(A,B)
-    F.values, F.vectors
-end
-function eig(A::Number, B::Number)
-    F = eigfact(A,B)
-    F.values, F.vectors
-end
 
 """
     eigvals!(A, B) -> values

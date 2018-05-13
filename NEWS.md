@@ -1009,6 +1009,22 @@ Deprecated or removed
     But going forward, consider using the direct result of `lufact(x)` instead, either destructured
     into its components (`l, u, p = lufact(x)`) or as an `LU` object (`lup = lufact(x)`) ([#26997]).
 
+  * `eig(A[, args...])` has been deprecated in favor of `eigfact(A[, args...])`.
+    Whereas the former returns a tuple of arrays, the latter returns an `Eigen` object.
+    So for a direct replacement, use `(eigfact(A[, args...])...,)`.
+    But going forward, consider using the direct result of
+    `eigfact(A[, args...])` instead, either destructured into its components
+    (`vals, vecs = eigfact(A[, args...])`) or as an `Eigen` object
+    (`eigf = eigfact(A[, args...])`) ([#26997]).
+
+  * `eig(A::AbstractMatrix, B::AbstractMatrix)` and `eig(A::Number, B::Number)`
+    have been deprecated in favor of `eigfact(A, B)`. Whereas the former each return
+    a tuple of arrays, the latter returns a `GeneralizedEigen` object. So for a direct
+    replacement, use `(eigfact(A, B)...,)`. But going forward, consider using the
+    direct result of `eigfact(A, B)` instead, either destructured into its components
+    (`vals, vecs = eigfact(A, B)`), or as a
+    `GeneralizedEigen` object (`eigf = eigfact(A, B)`) ([#26997]).
+
   * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
     ([#17046]).
 

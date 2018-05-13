@@ -1282,3 +1282,43 @@ function lu(x::Number)
         "`LU` object (`lup = lufact(x)`)."), :lu)
     return first.((lufact(x)...,))
 end
+
+# deprecate eig(...) in favor of eigfact and factorization destructuring
+export eig
+function eig(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+    depwarn(string("`eig(A[, permute, scale])` has been deprecated in favor of ",
+        "`eigfact(A[, permute, scale])`. Whereas `eig(A[, permute, scale])` ",
+        "returns a tuple of arrays, `eigfact(A[, permute, scale])` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigfact(A[, permute, scale])...,)`. But going forward, consider ",
+        "using the direct result of `eigfact(A[, permute, scale])` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigfact(A[, permute, scale])`) ",
+        "or as an `Eigen` object (`eigf = eigfact(A[, permute, scale])`)."), :eig)
+    return (eigfact(A, permute=permute, scale=scale)...,)
+end
+function eig(A::AbstractMatrix, args...)
+    depwarn(string("`eig(A, args...)` has been deprecated in favor of ",
+        "`eigfact(A, args...)`. Whereas `eig(A, args....)` ",
+        "returns a tuple of arrays, `eigfact(A, args...)` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigfact(A, args...)...,)`. But going forward, consider ",
+        "using the direct result of `eigfact(A, args...)` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigfact(A, args...)`) ",
+        "or as an `Eigen` object (`eigf = eigfact(A, args...)`)."), :eig)
+    return (eigfact(A, args...)...,)
+end
+eig(A::AbstractMatrix, B::AbstractMatrix) = _geneig(A, B)
+eig(A::Number, B::Number) = _geneig(A, B)
+function _geneig(A, B)
+    depwarn(string("`eig(A::AbstractMatrix, B::AbstractMatrix)` and ",
+    "`eig(A::Number, B::Number)` have been deprecated in favor of ",
+    "`eigfact(A, B)`. Whereas the former each return a tuple of arrays, ",
+    "the latter returns a `GeneralizedEigen` object. So for a direct ",
+    "replacement, use `(eigfact(A, B)...,)`. But going forward, consider ",
+    "using the direct result of `eigfact(A, B)` instead, either ",
+    "destructured into its components (`vals, vecs = eigfact(A, B)`), ",
+    "or as a `GeneralizedEigen` object (`eigf = eigfact(A, B)`)."), :eig)
+    return (eigfact(A, B)...,)
+end

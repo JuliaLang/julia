@@ -51,7 +51,7 @@ dimg  = randn(n)/2
                                        -eps(real(one(eltya)))/4  eps(real(one(eltya)))/2  -1.0     0;
                                        -0.5     -0.5       0.1     1.0])
             F = eigfact(A, permute=false, scale=false)
-            eig(A, permute=false, scale=false)
+            (eigfact(A, permute=false, scale=false)...,)
             @test F.vectors*Diagonal(F.values)/F.vectors ≈ A
             F = eigfact(A)
             # @test norm(F.vectors*Diagonal(F.values)/F.vectors - A) > 0.01
