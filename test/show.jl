@@ -802,6 +802,9 @@ end
 let repr = sprint(dump, Union{Integer, Float32})
     @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
 end
+let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
+    @test repr == "Ptr{UInt8} @$(repr(UInt(1)))"
+end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
 end
