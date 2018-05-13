@@ -35,15 +35,15 @@ aimg  = randn(n,n)/2
         @test convert(Array, f) ≈ a
         @test_throws ErrorException f.A
 
-        sch, vecs, vals = schur(UpperTriangular(triu(a)))
+        sch, vecs, vals = schurfact(UpperTriangular(triu(a)))
         @test vecs*sch*vecs' ≈ triu(a)
-        sch, vecs, vals = schur(LowerTriangular(tril(a)))
+        sch, vecs, vals = schurfact(LowerTriangular(tril(a)))
         @test vecs*sch*vecs' ≈ tril(a)
-        sch, vecs, vals = schur(Hermitian(asym))
+        sch, vecs, vals = schurfact(Hermitian(asym))
         @test vecs*sch*vecs' ≈ asym
-        sch, vecs, vals = schur(Symmetric(a + transpose(a)))
+        sch, vecs, vals = schurfact(Symmetric(a + transpose(a)))
         @test vecs*sch*vecs' ≈ a + transpose(a)
-        sch, vecs, vals = schur(Tridiagonal(a + transpose(a)))
+        sch, vecs, vals = schurfact(Tridiagonal(a + transpose(a)))
         @test vecs*sch*vecs' ≈ Tridiagonal(a + transpose(a))
 
         tstring = sprint((t, s) -> show(t, "text/plain", s), f.T)
@@ -111,7 +111,7 @@ aimg  = randn(n,n)/2
             @test S.Z ≈ SchurNew.Z
             @test S.alpha ≈ SchurNew.alpha
             @test S.beta  ≈ SchurNew.beta
-            sS,sT,sQ,sZ = schur(a1_sf,a2_sf)
+            sS,sT,sQ,sZ = schurfact(a1_sf,a2_sf)
             @test NS.Q ≈ sQ
             @test NS.T ≈ sT
             @test NS.S ≈ sS
@@ -119,7 +119,7 @@ aimg  = randn(n,n)/2
         end
     end
     @testset "0x0 matrix" for A in (zeros(eltya, 0, 0), view(rand(eltya, 2, 2), 1:0, 1:0))
-        T, Z, λ = LinearAlgebra.schur(A)
+        T, Z, λ = LinearAlgebra.schurfact(A)
         @test T == A
         @test Z == A
         @test λ == zeros(0)

@@ -1322,3 +1322,26 @@ function _geneig(A, B)
     "or as a `GeneralizedEigen` object (`eigf = eigfact(A, B)`)."), :eig)
     return (eigfact(A, B)...,)
 end
+
+# deprecate schur(...) in favor of schurfact(...) and factorization destructuring
+export schur
+function schur(A::Union{StridedMatrix,Symmetric,Hermitian,UpperTriangular,LowerTriangular,Tridiagonal})
+    depwarn(string("`schur(A::AbstractMatrix)` has been deprecated in favor of ",
+        "`schurfact(A)`. Whereas the former returns a tuple of arrays, the ",
+        "latter returns a `Schur` object. So for a direct replacement, ",
+        "use `(schurfact(A)...,)`. But going forward, consider using ",
+        "the direct result of `schurfact(A)` instead, either destructured ",
+        "into its components (`T, Z, λ = schurfact(A)`) or as a `Schur` ",
+        "object (`schurf = schurfact(A)`)."), :schur)
+    return (schurfact(A)...,)
+end
+function schur(A::StridedMatrix, B::StridedMatrix)
+    depwarn(string("`schur(A::StridedMatrix, B::StridedMatrix)` has been ",
+        "deprecated in favor of `schurfact(A, B)`. Whereas the former returns ",
+        "a tuple of arrays, the latter returns a `GeneralizedSchur` object. ",
+        "So for a direct replacement, use `(schurfact(A, B)...,)`. But going ",
+        "forward, consider using the direct result of `schurfact(A, B)` instead, ",
+        "either destructured into its components (`S, T, Q, Z, α, β = schurfact(A, B)`) ",
+        " or as a `GeneralizedSchur` object (`schurf = schurfact(A, B)`)."), :schur)
+    return (schurfact(A, B)...,)
+end

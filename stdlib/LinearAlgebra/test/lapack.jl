@@ -590,7 +590,7 @@ end
         for job in ('N', 'E', 'V', 'B')
             for c in ('V', 'N')
                 A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
-                T,Q,d = schur(A)
+                T,Q,d = schurfact(A)
                 s, sep = LinearAlgebra.LAPACK.trsen!(job,c,Array{LinearAlgebra.BlasInt}([0,1,0,0]),T,Q)[4:5]
                 @test d[1] ≈ T[2,2]
                 @test d[2] ≈ T[1,1]
@@ -616,7 +616,7 @@ end
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         for c in ('V', 'N')
             A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
-            T,Q,d = schur(A)
+            T,Q,d = schurfact(A)
             LinearAlgebra.LAPACK.trexc!(c,LinearAlgebra.BlasInt(1),LinearAlgebra.BlasInt(2),T,Q)
             @test d[1] ≈ T[2,2]
             @test d[2] ≈ T[1,1]

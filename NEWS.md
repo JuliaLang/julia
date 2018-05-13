@@ -1025,6 +1025,21 @@ Deprecated or removed
     (`vals, vecs = eigfact(A, B)`), or as a
     `GeneralizedEigen` object (`eigf = eigfact(A, B)`) ([#26997]).
 
+  * `schur(A::AbstractMatrix)` has been deprecated in favor of `schurfact(A)`.
+    Whereas the former returns a tuple of arrays, the latter returns a `Schur` object.
+    So for a direct replacement, use `(schurfact(A)...,)`. But going forward, consider
+    using the direct result of `schurfact(A)` instead, either destructured into
+    its components (`T, Z, λ = schurfact(A)`) or as a `Schur` object
+    (`schurf = schurfact(A)`) ([#26997]).
+
+  * `schur(A::StridedMatrix, B::StridedMatrix)` has been deprecated in favor of
+    `schurfact(A, B)`. Whereas the former returns a tuple of arrays, the latter
+    returns a `GeneralizedSchur` object. So for a direct replacement, use
+    `(schurfact(A, B)...,)`. But going forward, consider using the direct result
+    of `schurfact(A, B)` instead, either destructured into its components
+    (`S, T, Q, Z, α, β = schurfact(A, B)`) or as a `GeneralizedSchur` object
+    (`schurf = schurfact(A, B)`) ([#26997]).
+
   * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
     ([#17046]).
 

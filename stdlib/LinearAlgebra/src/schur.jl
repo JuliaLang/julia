@@ -9,6 +9,14 @@ struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
 end
 Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty} = Schur{Ty, typeof(T)}(T, Z, values)
 
+# iteration for destructuring into factors
+Base.start(::Schur) = Val(:T)
+Base.next(F::Schur, ::Val{:T}) = (F.T, Val(:Z))
+Base.next(F::Schur, ::Val{:Z}) = (F.Z, Val(:values))
+Base.next(F::Schur, ::Val{:values}) = (F.values, Val(:done))
+Base.done(F::Schur, ::Val{:done}) = true
+Base.done(F::Schur, ::Any) = false
+
 """
     schurfact!(A::StridedMatrix) -> F::Schur
 
@@ -78,10 +86,34 @@ julia> F.vectors * F.Schur * F.vectors'
 2×2 Array{Float64,2}:
   5.0   7.0
  -2.0  -4.0
+
+julia> T, Z, λ = schurfact(A); # destructuring via iteration
+
+julia> T
+2×2 Array{Float64,2}:
+ 3.0   9.0
+ 0.0  -2.0
+
+julia> Z
+2×2 Array{Float64,2}:
+  0.961524  0.274721
+ -0.274721  0.961524
+
+julia> λ
+2-element Array{Float64,1}:
+  3.0
+ -2.0
 ```
 """
 schurfact(A::StridedMatrix{<:BlasFloat}) = schurfact!(copy(A))
 schurfact(A::StridedMatrix{T}) where T = schurfact!(copy_oftype(A, eigtype(T)))
+schurfact(A::Tridiagonal) = _schurfact_structured(A)
+schurfact(A::Symmetric) = _schurfact_annotated(A)
+schurfact(A::Hermitian) = _schurfact_annotated(A)
+schurfact(A::UpperTriangular) = _schurfact_annotated(A)
+schurfact(A::LowerTriangular) = _schurfact_annotated(A)
+_schurfact_annotated(A) = schurfact(copyto!(similar(parent(A)), A))
+_schurfact_structured(A) = schurfact(Matrix(A))
 
 function getproperty(F::Schur, d::Symbol)
     if d == :Schur
@@ -105,47 +137,6 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Schur)
     println(io, "\neigenvalues:")
     show(io, mime, F.values)
 end
-
-"""
-    schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector
-
-Computes the Schur factorization of the matrix `A`. The methods return the (quasi)
-triangular Schur factor `T` and the orthogonal/unitary Schur vectors `Z` such that
-`A = Z * T * Z'`. The eigenvalues of `A` are returned in the vector `λ`.
-
-See [`schurfact`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
-  5.0   7.0
- -2.0  -4.0
-
-julia> T, Z, lambda = schur(A)
-([3.0 9.0; 0.0 -2.0], [0.961524 0.274721; -0.274721 0.961524], [3.0, -2.0])
-
-julia> Z * Z'
-2×2 Array{Float64,2}:
- 1.0  0.0
- 0.0  1.0
-
-julia> Z * T * Z'
-2×2 Array{Float64,2}:
-  5.0   7.0
- -2.0  -4.0
-```
-"""
-function schur(A::StridedMatrix)
-    SchurF = schurfact(A)
-    SchurF.T, SchurF.Z, SchurF.values
-end
-schur(A::Symmetric) = schur(copyto!(similar(parent(A)), A))
-schur(A::Hermitian) = schur(copyto!(similar(parent(A)), A))
-schur(A::UpperTriangular) = schur(copyto!(similar(parent(A)), A))
-schur(A::LowerTriangular) = schur(copyto!(similar(parent(A)), A))
-schur(A::Tridiagonal) = schur(Matrix(A))
-
 
 """
     ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
@@ -209,6 +200,17 @@ function GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::V
     GeneralizedSchur{Ty, typeof(S)}(S, T, alpha, beta, Q, Z)
 end
 
+# iteration for destructuring into factors
+Base.start(::GeneralizedSchur) = Val(:S)
+Base.next(F::GeneralizedSchur, ::Val{:S}) = (F.S, Val(:T))
+Base.next(F::GeneralizedSchur, ::Val{:T}) = (F.T, Val(:Q))
+Base.next(F::GeneralizedSchur, ::Val{:Q}) = (F.Q, Val(:Z))
+Base.next(F::GeneralizedSchur, ::Val{:Z}) = (F.Z, Val(:α))
+Base.next(F::GeneralizedSchur, ::Val{:α}) = (F.α, Val(:β))
+Base.next(F::GeneralizedSchur, ::Val{:β}) = (F.β, Val(:done))
+Base.done(F::GeneralizedSchur, ::Val{:done}) = true
+Base.done(F::GeneralizedSchur, ::Any) = false
+
 """
     schurfact!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
 
@@ -226,6 +228,67 @@ and `F.T`, the left unitary/orthogonal Schur vectors can be obtained with `F.lef
 `F.Q` and the right unitary/orthogonal Schur vectors can be obtained with `F.right` or
 `F.Z` such that `A=F.left*F.S*F.right'` and `B=F.left*F.T*F.right'`. The
 generalized eigenvalues of `A` and `B` can be obtained with `F.α./F.β`.
+
+# Examples
+```jldoctest
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> B = [6. 8.; -3. -5.]
+2×2 Array{Float64,2}:
+  6.0   8.0
+ -3.0  -5.0
+
+julia> F = schurfact(A, B)
+GeneralizedSchur{Float64,Array{Float64,2}}
+S factor:
+2×2 Array{Float64,2}:
+  9.65794   0.323267
+ -0.504339  0.604369
+T factor:
+2×2 Array{Float64,2}:
+ 11.5642  0.0
+  0.0     0.518842
+Q factor:
+2×2 Array{Float64,2}:
+ -0.864443  0.50273
+  0.50273   0.864443
+Z factor:
+2×2 Array{Float64,2}:
+ -0.578929   0.815378
+ -0.815378  -0.578929
+α:
+2-element Array{Complex{Float64},1}:
+ 2.0000000000000044 + 2.738953629966988e-8im
+ 2.9999999999999907 - 4.10843044495046e-8im
+β:
+2-element Array{Float64,1}:
+ 2.0000000000000058
+ 2.9999999999999925
+
+julia> F.Q * F.S * F.Z'
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> F.Q * F.T * F.Z'
+2×2 Array{Float64,2}:
+  6.0   8.0
+ -3.0  -5.0
+
+julia> S, T, Q, Z, α, β = schurfact(A, B); # destructuring via iteration
+
+julia> Q * S * Z' ≈ A
+true
+
+julia> Q * T * Z' ≈ B
+true
+
+julia> α. / β ≈ eigvals(A, B)
+true
+```
 """
 schurfact(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schurfact!(copy(A),copy(B))
 function schurfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
@@ -299,16 +362,6 @@ end
 
 Base.propertynames(F::GeneralizedSchur) =
     (:values, :left, :right, fieldnames(typeof(F))...)
-
-"""
-    schur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
-
-See [`schurfact`](@ref).
-"""
-function schur(A::StridedMatrix, B::StridedMatrix)
-    SchurF = schurfact(A, B)
-    SchurF.S, SchurF.T, SchurF.Q, SchurF.Z, SchurF.α, SchurF.β
-end
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::GeneralizedSchur)
     println(io, summary(F))

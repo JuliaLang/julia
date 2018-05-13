@@ -131,7 +131,6 @@ export
     lqfact,
     rank,
     rdiv!,
-    schur,
     schurfact!,
     schurfact,
     svd,
