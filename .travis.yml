@@ -154,5 +154,5 @@ script:
         rm -f julia/deps/scratch/libgit2-*/CMakeFiles/CMakeOutput.log
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
-after_success:
+    # build the docs and run the doctests
     - cd julia && make -C doc deploy
