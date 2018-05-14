@@ -5,7 +5,7 @@ isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using .Main.TestHelpers.OAs
 using SparseArrays
 
-using Random, LinearAlgebra, InteractiveUtils
+using Random, LinearAlgebra
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -2431,16 +2431,8 @@ function f27079()
     end
     length(X)
 end
-function g27079(X)
-    r = 0
-    @inbounds for x in X
-        r += x
-    end
-    r
-end
 @testset "iteration over resized vector" begin
     @test f27079() == 0
-    @test occursin("vector.body", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
 end
 
 @testset "indices-related shape promotion errors" begin
