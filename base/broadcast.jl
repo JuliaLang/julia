@@ -7,7 +7,7 @@ using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcast_similar, broadcastable,
-       broadcast_getindex, broadcast_setindex!, dotview, @__dot__
+       dotview, @__dot__
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
 
@@ -1017,125 +1017,6 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::UnitRange) = big(r.start):
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(big), r::LinRange) = LinRange(big(r.start), big(r.stop), length(r))
-
-
-"""
-    broadcast_getindex(A, inds...)
-
-Equivalent to [`broadcast`](@ref)ing the `inds` arrays to a common size
-and returning an array `[A[ks...] for ks in zip(indsb...)]` (where `indsb`
-would be the broadcast `inds`). The shape of the output is equal to the shape of each
-element of `indsb`.
-
-# Examples
-```jldoctest bc_getindex
-julia> A = [11 12; 21 22]
-2×2 Array{Int64,2}:
- 11  12
- 21  22
-
-julia> A[1:2, 1:2]
-2×2 Array{Int64,2}:
- 11  12
- 21  22
-
-julia> broadcast_getindex(A, 1:2, 1:2)
-2-element Array{Int64,1}:
- 11
- 22
-
-julia> A[1:2, 2:-1:1]
-2×2 Array{Int64,2}:
- 12  11
- 22  21
-
-julia> broadcast_getindex(A, 1:2, 2:-1:1)
-2-element Array{Int64,1}:
- 12
- 21
-```
-Because the indices are all vectors, these calls are like `[A[i[k], j[k]] for k = 1:2]`
-where `i` and `j` are the two index vectors.
-
-```jldoctest bc_getindex
-julia> broadcast_getindex(A, 1:2, (1:2)')
-2×2 Array{Int64,2}:
- 11  12
- 21  22
-
-julia> broadcast_getindex(A, (1:2)', 1:2)
-2×2 Array{Int64,2}:
- 11  21
- 12  22
-
-julia> broadcast_getindex(A, [1 2 1; 1 2 2], [1, 2])
-2×3 Array{Int64,2}:
- 11  21  11
- 12  22  22
-```
-"""
-broadcast_getindex(src::AbstractArray, I::AbstractArray...) =
-    broadcast_getindex!(Base.similar(Array{eltype(src)}, combine_axes(I...)), src, I...)
-
-@generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    quote
-        @nexprs $N d->(I_d = I[d])
-        check_broadcast_axes(Base.axes(dest), $(Isplat...))  # unnecessary if this function is never called directly
-        checkbounds(src, $(Isplat...))
-        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.axes(I_k, d) == OneTo(1)))
-        @nloops $N i dest d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin
-            @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
-            @inbounds (@nref $N dest i) = (@nref $N src J)
-        end
-        dest
-    end
-end
-
-"""
-    broadcast_setindex!(A, X, inds...)
-
-Efficient element-by-element setting of the values of `A` in a pattern established by `inds`.
-Equivalent to broadcasting the `X` and `inds` arrays to a common size, and then executing
-
-    for (is, js) in zip(zip(indsb), eachindex(Xb))
-        A[is...] = Xb[js...]
-    end
-
-where `Xb` and `indsb` are the broadcast `X` and `inds`.
-
-See [`broadcast_getindex`](@ref) for examples of the treatment of `inds`.
-"""
-@generated function broadcast_setindex!(A::AbstractArray, x, I::AbstractArray...)
-    N = length(I)
-    Isplat = Expr[:(I[$d]) for d = 1:N]
-    quote
-        @nexprs $N d->(I_d = I[d])
-        checkbounds(A, $(Isplat...))
-        shape = combine_axes($(Isplat...))
-        @nextract $N shape d->(length(shape) < d ? OneTo(1) : shape[d])
-        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = Base.axes(I_k, d) == 1:1))
-        if !isa(x, AbstractArray)
-            xA = convert(eltype(A), x)
-            @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin
-                @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
-                @inbounds (@nref $N A J) = xA
-            end
-        else
-            X = x
-            @nexprs $N d->(shapelen_d = length(shape_d))
-            @ncall $N Base.setindex_shape_check X shapelen
-            Xstate = start(X)
-            @inbounds @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin
-                @nexprs $N k->(J_k = @nref $N I_k d->j_d_k)
-                x_el, Xstate = next(X, Xstate)
-                (@nref $N A J) = x_el
-            end
-        end
-        A
-    end
-end
 
 ## In specific instances, we can broadcast masked BitArrays whole chunks at a time
 # Very intentionally do not support much functionality here: scalar indexing would be O(n)
