@@ -59,7 +59,7 @@ main_ex = quote
     end
     RemoteChannel(()->DictChannel(), 1)
 end
-dc = eval(Main, main_ex)
+dc = Core.eval(Main, main_ex)
 @test typeof(dc) == RemoteChannel{Main.DictChannel}
 
 @test isready(dc) == false

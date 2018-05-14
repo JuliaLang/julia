@@ -296,6 +296,69 @@ end
 
 ## printing with color ##
 
+const text_colors = AnyDict(
+    :black         => "\033[30m",
+    :red           => "\033[31m",
+    :green         => "\033[32m",
+    :yellow        => "\033[33m",
+    :blue          => "\033[34m",
+    :magenta       => "\033[35m",
+    :cyan          => "\033[36m",
+    :white         => "\033[37m",
+    :light_black   => "\033[90m", # gray
+    :light_red     => "\033[91m",
+    :light_green   => "\033[92m",
+    :light_yellow  => "\033[93m",
+    :light_blue    => "\033[94m",
+    :light_magenta => "\033[95m",
+    :light_cyan    => "\033[96m",
+    :normal        => "\033[0m",
+    :default       => "\033[39m",
+    :bold          => "\033[1m",
+    :underline     => "\033[4m",
+    :blink         => "\033[5m",
+    :reverse       => "\033[7m",
+    :hidden        => "\033[8m",
+    :nothing       => "",
+)
+
+for i in 0:255
+    text_colors[i] = "\033[38;5;$(i)m"
+end
+
+const disable_text_style = AnyDict(
+    :bold      => "\033[22m",
+    :underline => "\033[24m",
+    :blink     => "\033[25m",
+    :reverse   => "\033[27m",
+    :hidden    => "\033[28m",
+    :normal    => "",
+    :default   => "",
+    :nothing   => "",
+)
+
+# Create a docstring with an automatically generated list
+# of colors.
+available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
+const possible_formatting_symbols = [:normal, :bold, :default]
+available_text_colors = cat(1,
+    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
+    sort!(setdiff(  available_text_colors, possible_formatting_symbols)))
+
+const available_text_colors_docstring =
+    string(join([string("`:", key,"`")
+                 for key in available_text_colors], ",\n", ", or \n"))
+
+"""Dictionary of color codes for the terminal.
+
+Available colors are: $available_text_colors_docstring as well as the integers 0 to 255 inclusive.
+
+The color `:default` will print text in the default color while the color `:normal`
+will print text with all text properties (like boldness) reset.
+Printing with the color `:nothing` will print the string without modifications.
+"""
+text_colors
+
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
     iscolor = get(io, :color, false)

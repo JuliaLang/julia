@@ -22,7 +22,7 @@ function runtests(name, path, isolate=true; seed=nothing)
                 include($"$path.jl")
             end
         end
-        res_and_time_data = eval(m, ex)
+        res_and_time_data = Core.eval(m, ex)
         rss = Sys.maxrss()
         #res_and_time_data[1] is the testset
         passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Test.get_test_counts(res_and_time_data[1])

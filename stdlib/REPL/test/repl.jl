@@ -910,5 +910,5 @@ for (line, expr) in Pair[
     ]
     #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
     buf = IOBuffer()
-    @test eval(Base, REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+    @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
 end

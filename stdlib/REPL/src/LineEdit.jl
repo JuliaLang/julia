@@ -2211,7 +2211,7 @@ function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=ini
             @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
-        eval(Main,
+        Core.eval(Main,
             Expr(:body,
                 Expr(:return,
                      Expr(:call,

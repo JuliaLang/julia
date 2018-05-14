@@ -145,7 +145,6 @@ baremodule Mod
 using Base
 
 eval(x) = Core.eval(Mod, x)
-eval(m,x) = Core.eval(m, x)
 include(p) = Base.include(Mod, p)
 
 ...

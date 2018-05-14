@@ -541,7 +541,7 @@ let filename = tempname()
 
     # stdin is unavailable on the workers. Run test on master.
     @test occursin("WARNING: hello", read(filename, String))
-    ret = eval(Main, quote
+    ret = Core.eval(Main, quote
         remotecall_fetch(1, $filename) do fname
             open(fname) do f
                 redirect_stdin(f) do
