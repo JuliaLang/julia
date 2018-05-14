@@ -138,7 +138,7 @@ static inline int multiq_insert(jl_task_t *task, int16_t priority)
 static inline jl_task_t *multiq_deletemin(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    uint64_t rn1, rn2;
+    uint64_t rn1 = 0, rn2;
     int16_t i, prio1, prio2;
     jl_task_t *task;
 
@@ -956,7 +956,7 @@ JL_DLLEXPORT void jl_task_yield(int requeue)
     if (ytask  &&  !jl_setjmp(ytask->ctx, 0)) {
         if (ytask != ptls->root_task)
             ytask->current_tid = -1;
-        ptls->current_task = NULL;
+        //ptls->current_task = NULL;
 
         // backtraces don't survive task switches, see issue #12485
         ptls->bt_size = 0;
@@ -1057,6 +1057,12 @@ JL_DLLEXPORT void jl_task_notify(jl_condition_t *c)
         enqueue_task(qtask);
         qtask = qnext;
     }
+}
+
+
+JL_DLLEXPORT int jl_condition_isempty(jl_condition_t *c)
+{
+    return c->head ? 0 : 1;
 }
 
 
