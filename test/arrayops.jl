@@ -5,7 +5,7 @@ isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using .Main.TestHelpers.OAs
 using SparseArrays
 
-using Random, LinearAlgebra
+using Random, LinearAlgebra, InteractiveUtils
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
