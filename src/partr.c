@@ -954,7 +954,8 @@ JL_DLLEXPORT void jl_task_yield(int requeue)
 #endif
 
     if (ytask  &&  !jl_setjmp(ytask->ctx, 0)) {
-        ytask->current_tid = -1;
+        if (ytask != ptls->root_task)
+            ytask->current_tid = -1;
         ptls->current_task = NULL;
 
         // backtraces don't survive task switches, see issue #12485

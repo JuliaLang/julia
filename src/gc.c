@@ -2132,13 +2132,15 @@ mark: {
 #else
             int16_t tid = ta->tid;
 #endif
-            jl_ptls_t ptls2 = jl_all_tls_states[tid];
+            jl_ptls_t ptls2 = NULL;
+            if (tid != -1)
+                ptls2 = jl_all_tls_states[tid];
             if (stkbuf) {
 #ifdef COPY_STACKS
                 gc_setmark_buf_(ptls, ta->stkbuf, bits, ta->bufsz);
 #else
                 // stkbuf isn't owned by julia for the root task
-                if (ta != ptls2->root_task) {
+                if (!ptls2  ||  ta != ptls2->root_task) {
                     gc_setmark_buf_(ptls, ta->stkbuf, bits, ta->ssize);
                 }
 #endif
@@ -2148,7 +2150,7 @@ mark: {
             uintptr_t offset = 0;
             uintptr_t lb = 0;
             uintptr_t ub = (uintptr_t)-1;
-            if (ta == ptls2->current_task) {
+            if (ptls2  &&  ta == ptls2->current_task) {
                 s = ptls2->pgcstack;
             }
             else if (stkbuf) {
