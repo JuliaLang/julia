@@ -28,8 +28,6 @@
   * [Handling Operating System Variation](@ref)
   * [Environment Variables](@ref)
   * [Embedding Julia](@ref)
-  * [Packages](@ref)
-  * [Package Development](@ref)
   * [Profiling](@ref)
   * [Memory allocation analysis](@ref)
   * [Stack Traces](@ref)
