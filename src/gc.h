@@ -493,8 +493,10 @@ void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp,
 void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp);
 void gc_debug_init(void);
 
+#ifdef JULIA_ENABLE_PARTR
 /* scheduler interface to mark all tasks sitting in its queues */
 void jl_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp);
+#endif
 
 /* interface to mark an object inside the Julia runtime */
 void jl_gc_mark_obj(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp, void *_obj);

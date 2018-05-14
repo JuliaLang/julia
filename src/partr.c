@@ -689,7 +689,7 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 
-    jl_task_t *task = (jl_task_t *)jl_new_struct_uninit(jl_task_type);
+    jl_task_t *task = (jl_task_t *)jl_gc_alloc(ptls, sizeof (jl_task_t), jl_task_type);
     JL_GC_PUSH1(&task);
     if (setup_task_fun(_args, &task->mfunc, &task->fptr) != 0)
         task = NULL;

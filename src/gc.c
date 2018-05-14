@@ -2273,7 +2273,9 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
     gc_mark_queue_obj(gc_cache, sp, jl_internal_main_module);
 
     // tasks
+#ifdef JULIA_ENABLE_PARTR
     jl_mark_enqueued_tasks(gc_cache, sp);
+#endif
 
     // invisible builtin values
     if (jl_an_empty_vec_any != NULL)
