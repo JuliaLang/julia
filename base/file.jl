@@ -98,7 +98,7 @@ modified by the current file creation mask. This function never creates more tha
 directory. If the directory already exists, or some intermediate directories do not exist,
 this function throws an error. See [`mkpath`](@ref) for a function which creates all
 required intermediate directories.
-Returns `path`
+Return `path`.
 """
 function mkdir(path::AbstractString; mode::Integer = 0o777)
     @static if Sys.iswindows()
@@ -115,7 +115,7 @@ end
 
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
 `0o777`, modified by the current file creation mask.
-Returns `path`.
+Return `path`.
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
@@ -230,7 +230,7 @@ Copy the file, link, or directory from `src` to `dest`.
 If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created as a
 symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` will be a copy
 of the file or directory `src` refers to.
-Returns `dst`.
+Return `dst`.
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
                                                       follow_symlinks::Bool=false,
@@ -257,7 +257,7 @@ end
 
 Move the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
-Returns `dst`.
+Return `dst`.
 """
 function mv(src::AbstractString, dst::AbstractString; force::Bool=false,
                                                       remove_destination::Union{Bool,Nothing}=nothing)
@@ -276,7 +276,7 @@ end
     touch(path::AbstractString)
 
 Update the last-modified timestamp on a file to the current time.
-Returns `path`.
+Return `path`.
 """
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
@@ -658,7 +658,7 @@ end
 Change the permissions mode of `path` to `mode`. Only integer `mode`s (e.g. `0o777`) are
 currently supported. If `recursive=true` and the path is a directory all permissions in
 that directory will be recursively changed.
-Returns `path`.
+Return `path`.
 """
 function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
@@ -678,7 +678,7 @@ end
 
 Change the owner and/or group of `path` to `owner` and/or `group`. If the value entered for `owner` or `group`
 is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
-Returns `path`
+Return `path`
 """
 function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
