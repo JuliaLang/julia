@@ -776,7 +776,7 @@ timesofar("dequeue")
     @check_bit_operation (-)(b0)  Vector{Int}
     @check_bit_operation broadcast(sign, b0) BitVector
 
-    @testset "flipbits!" begin
+    @testset "in-place .!" begin
         b1 = bitrand(n1, n2)
         i1 = Array(b1)
         b1 .= .!b1
