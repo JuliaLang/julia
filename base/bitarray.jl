@@ -1062,36 +1062,6 @@ function (-)(B::BitArray)
     return A
 end
 
-"""
-    flipbits!(B::BitArray{N}) -> BitArray{N}
-
-Performs a bitwise not operation on `B`. See [`~`](@ref).
-
-# Examples
-```jldoctest
-julia> A = trues(2,2)
-2×2 BitArray{2}:
- true  true
- true  true
-
-julia> flipbits!(A)
-2×2 BitArray{2}:
- false  false
- false  false
-```
-"""
-function flipbits!(B::BitArray)
-    Bc = B.chunks
-    @inbounds if !isempty(Bc)
-        for i = 1:length(Bc)
-            Bc[i] = ~Bc[i]
-        end
-        Bc[end] &= _msk_end(B)
-    end
-    return B
-end
-
-
 ## Binary arithmetic operators ##
 
 for f in (:+, :-)

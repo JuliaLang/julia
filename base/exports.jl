@@ -469,7 +469,6 @@ export
 
 # bitarrays
     falses,
-    flipbits!,
     trues,
 
 # dequeues
