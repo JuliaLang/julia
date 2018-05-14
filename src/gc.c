@@ -1490,6 +1490,11 @@ STATIC_INLINE int gc_mark_queue_obj(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *
     return (int)nptr;
 }
 
+void jl_gc_mark_obj(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp, void *_obj)
+{
+    gc_mark_queue_obj(gc_cache, sp, _obj);
+}
+
 // Check if `nptr` is tagged for `old + refyoung`,
 // Push the object to the remset and update the `nptr` counter if necessary.
 STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj, uintptr_t nptr)
@@ -2264,6 +2269,9 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
     // modules
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
     gc_mark_queue_obj(gc_cache, sp, jl_internal_main_module);
+
+    // tasks
+    jl_mark_enqueued_tasks(gc_cache, sp);
 
     // invisible builtin values
     if (jl_an_empty_vec_any != NULL)

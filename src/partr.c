@@ -7,6 +7,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "gc.h"
 #include "threading.h"
 
 #ifdef __cplusplus
@@ -117,6 +118,7 @@ static inline int multiq_insert(jl_task_t *task, int16_t priority)
 
     if (heaps[rn].ntasks >= tasks_per_heap) {
         jl_mutex_unlock_nogc(&heaps[rn].lock);
+        jl_error("multiq insertion failed, increase #tasks per heap");
         return -1;
     }
 
@@ -446,6 +448,8 @@ void jl_threadfun(void *arg)
 // enqueue the specified task for execution
 static void enqueue_task(jl_task_t *task)
 {
+    uv_stop(jl_global_event_loop());
+
     /* sticky tasks go to the thread's sticky queue */
     if (task->settings & TASK_IS_STICKY) {
         assert(task->sticky_tid != -1);
@@ -906,6 +910,7 @@ JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
                 while (pt->next)
                     pt = pt->next;
                 pt->next = ptls->current_task;
+                jl_gc_wb(task, ptls->current_task);
             }
 
             JL_UNLOCK(&task->cq.lock);
@@ -933,6 +938,14 @@ JL_DLLEXPORT void jl_task_yield(int requeue)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *ytask = ptls->current_task;
+
+    if (ptls->in_finalizer)
+        jl_error("task switch not allowed from inside gc finalizer");
+    if (ptls->in_pure_callback)
+        jl_error("task switch not allowed from inside staged nor pure functions");
+
+    sig_atomic_t defer_signal = ptls->defer_signal;
+    int8_t gc_state = jl_gc_unsafe_enter(ptls);
 
 #ifdef ENABLE_TIMINGS
     jl_timing_block_t *blk = ytask->timing_stack;
@@ -981,6 +994,11 @@ JL_DLLEXPORT void jl_task_yield(int requeue)
     if (blk)
         jl_timing_block_start(blk);
 #endif
+
+    jl_gc_unsafe_leave(ptls, gc_state);
+    sig_atomic_t other_defer_signal = ptls->defer_signal;
+    if (other_defer_signal  &&  !defer_signal)
+        jl_sigint_safepoint(ptls);
 }
 
 
@@ -1039,6 +1057,26 @@ JL_DLLEXPORT void jl_task_notify(jl_condition_t *c)
         qtask = qnext;
     }
 }
+
+
+// interface to other parts of the Julia runtime
+
+/*  jl_mark_enqueued_tasks()
+ */
+void jl_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
+{
+    for (int16_t i = 0;  i < heap_p;  ++i)
+        for (int16_t j = 0;  j < heaps[i].ntasks;  ++j)
+            jl_gc_mark_obj(gc_cache, sp, heaps[i].tasks[j]);
+    for (int16_t i = 0;  i < jl_n_threads;  ++i) {
+        jl_task_t *t = sticky_taskqs[i].head;
+        while (t) {
+            jl_gc_mark_obj(gc_cache, sp, t);
+            t = t->next;
+        }
+    }
+}
+
 
 #endif // JULIA_ENABLE_PARTR
 #endif // JULIA_ENABLE_THREADING
