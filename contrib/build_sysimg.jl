@@ -123,7 +123,7 @@ function find_system_compiler()
                 throw()
             end
         catch
-            push!(warn_msg, "Install GCC via `OldPkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times.")
+            push!(warn_msg, "Install GCC via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times.")
         end
     end
 

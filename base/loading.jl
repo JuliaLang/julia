@@ -864,7 +864,7 @@ function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
     # Core.println("require($(PkgId(into)), $mod) -> $uuidkey")
     uuidkey === nothing &&
-        throw(ArgumentError("Module $mod not found in current path.\nRun `OldPkg.add(\"$mod\")` to install the $mod package."))
+        throw(ArgumentError("Module $mod not found in current path.\nRun `Pkg.add(\"$mod\")` to install the $mod package."))
     if _track_dependencies[]
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
@@ -945,7 +945,7 @@ function _require(pkg::PkgId)
         name = pkg.name
         path = locate_package(pkg)
         if path === nothing
-            throw(ArgumentError("Module $name not found in current path.\nRun `OldPkg.add(\"$name\")` to install the $name package."))
+            throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
         end
 
         # attempt to load the module file via the precompile cache locations

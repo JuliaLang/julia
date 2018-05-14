@@ -52,7 +52,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
                          ┌ Warning: Failed to insert InteractiveUtils into module Main
                          │   exception =
                          │    ArgumentError: Module InteractiveUtils not found in current path.
-                         │    Run `OldPkg.add("InteractiveUtils")` to install the InteractiveUtils package.
+                         │    Run `Pkg.add("InteractiveUtils")` to install the InteractiveUtils package.
                          │    Stacktrace:
                          """)
     end
