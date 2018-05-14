@@ -1,14 +1,7 @@
-# Pkg.jl
+# Pkg
 
 !!! warning
     This documentation is a work in progress and the information in it might be or become outdated.
-
-Sections:
-
-```@contents
-Pages = [
-    "index.md"]
-```
 
 ## Introduction
 
