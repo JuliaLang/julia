@@ -706,9 +706,11 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
     # unless we already have resolved for the current environment, which the calleer indicates
     # with `might_need_to_resolve`
     need_to_resolve = false
+    is_project = Types.is_project(localctx.env, pkg)
 
-    if Types.is_project(localctx.env, pkg)
+    if is_project
         foreach(k->delete!(localctx.env.project, k), ("name", "uuid", "version"))
+        localctx.env.pkg = nothing
         localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
         localctx.env.manifest[pkg.name] = [Dict(
             "deps" => mainctx.env.project["deps"],
@@ -745,7 +747,7 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
             if pkg.uuid in keys(localctx.stdlibs)
                 path = Types.stdlib_path(pkg.name)
             elseif Types.is_project_uuid(localctx.env, pkg.uuid)
-                path = dirname(localctx.env.project_file)
+                path = dirname(mainctx.env.project_file)
             else
                 info = manifest_info(localctx.env, pkg.uuid)
                 path = haskey(info, "path") ? project_rel_path(localctx, info["path"]) : find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
@@ -757,6 +759,7 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
                     pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
                     push!(pkgs, PackageSpec(pkg_name, vspec))
                 end
+                is_project && push!(pkgs, mainctx.env.pkg)
                 registry_resolve!(localctx.env, pkgs)
                 ensure_resolved(localctx.env, pkgs; registry=true)
                 add_or_develop(localctx, pkgs)
