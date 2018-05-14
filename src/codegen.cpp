@@ -3950,6 +3950,11 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         undef_var_error_ifnot(ctx, ctx.builder.CreateTrunc(cond, T_int1), (jl_sym_t*)args[0]);
         return ghostValue(jl_void_type);
     }
+    else if (head == assert_egal_sym) {
+        Value *cond = emit_f_is(ctx, emit_expr(ctx, args[1]), emit_expr(ctx, args[2]));
+        undef_var_error_ifnot(ctx, ctx.builder.CreateTrunc(cond, T_int1), (jl_sym_t*)args[0]);
+        return ghostValue(jl_void_type);
+    }
     else if (head == invoke_sym) {
         return emit_invoke(ctx, ex);
     }

@@ -272,7 +272,8 @@ function is_relevant_expr(e::Expr)
     return e.head in (:call, :invoke, :new, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
-                      :undefcheck, :throw_undef_if_not)
+                      :undefcheck, :throw_undef_if_not,
+                      :assert_egal)
 end
 
 function setindex!(x::UseRef, @nospecialize(v))
