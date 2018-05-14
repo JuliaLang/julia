@@ -658,6 +658,7 @@ end
 Change the permissions mode of `path` to `mode`. Only integer `mode`s (e.g. `0o777`) are
 currently supported. If `recursive=true` and the path is a directory all permissions in
 that directory will be recursively changed.
+Returns `path`.
 """
 function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
@@ -669,6 +670,7 @@ function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
             end
         end
     end
+    path
 end
 
 """
@@ -676,8 +678,10 @@ end
 
 Change the owner and/or group of `path` to `owner` and/or `group`. If the value entered for `owner` or `group`
 is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
+Returns `path`
 """
 function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
     uv_error("chown",err)
+    path
 end

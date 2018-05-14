@@ -62,7 +62,7 @@ end
 
 @test filemode(file) & 0o444 > 0 # readable
 @test filemode(file) & 0o222 > 0 # writable
-chmod(file, filemode(file) & 0o7555)
+@test chmod(file, filemode(file) & 0o7555) == file
 @test filemode(file) & 0o222 == 0
 chmod(file, filemode(file) | 0o222)
 @test filemode(file) & 0o111 == 0
@@ -171,7 +171,7 @@ if !Sys.iswindows()
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
         @test stat(file).gid !=0
         @test stat(file).uid ==0
-        chown(file, -1, 0)
+        @test chown(file, -1, 0) == file
         @test stat(file).gid ==0
         @test stat(file).uid ==0
     else
@@ -180,7 +180,7 @@ if !Sys.iswindows()
     end
 else
     # test that chown doesn't cause any errors for Windows
-    @test chown(file, -2, -2) === nothing
+    @test chown(file, -2, -2) == file
 end
 
 ##############
