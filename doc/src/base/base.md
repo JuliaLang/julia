@@ -267,6 +267,7 @@ Base.@static
 ## Versioning
 
 ```@docs
+Base.VersionNumber
 Base.@v_str
 ```
 

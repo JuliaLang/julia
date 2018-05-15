@@ -3,7 +3,23 @@
 ## semantic version numbers (http://semver.org)
 
 const VInt = UInt32
+"""
+    VersionNumber
 
+Version number type which follow the specifications of
+[semantic versioning](http://semver.org), composed of major, minor
+and patch numeric values, followed by pre-release and build
+alpha-numeric annotations. See also [`@v_str`](@ref).
+
+# Examples
+```jldoctest
+julia> VersionNumber("1.2.3")
+v"1.2.3"
+
+julia> VersionNumber("2.0.1-rc1")
+v"2.0.1-rc1"
+```
+"""
 struct VersionNumber
     major::VInt
     minor::VInt
@@ -108,7 +124,7 @@ end
 """
     @v_str
 
-String macro used to parse a string to a `VersionNumber`.
+String macro used to parse a string to a [`VersionNumber`](@ref).
 
 # Examples
 ```jldoctest

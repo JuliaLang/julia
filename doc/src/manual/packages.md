@@ -1102,7 +1102,7 @@ The first condition applies to any system but Windows and the second condition a
 UNIX system besides OS X.
 
 Runtime checks for the current version of Julia can be made using the built-in `VERSION` variable,
-which is of type `VersionNumber`. Such code is occasionally necessary to keep track of new or
+which is of type [`VersionNumber`](@ref). Such code is occasionally necessary to keep track of new or
 deprecated functionality between various releases of Julia. Examples of runtime checks:
 
 ```julia

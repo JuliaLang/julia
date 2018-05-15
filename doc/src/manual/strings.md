@@ -935,7 +935,8 @@ some confusion regarding the matter.
 ## [Version Number Literals](@id man-version-number-literals)
 
 Version numbers can easily be expressed with non-standard string literals of the form [`v"..."`](@ref @v_str).
-Version number literals create `VersionNumber` objects which follow the specifications of [semantic versioning](http://semver.org),
+Version number literals create [`VersionNumber`](@ref) objects which follow the
+specifications of [semantic versioning](http://semver.org),
 and therefore are composed of major, minor and patch numeric values, followed by pre-release and
 build alpha-numeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
 `0`, minor version `2`, patch version `1`, pre-release `rc1` and build `win64`. When entering
