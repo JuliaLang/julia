@@ -72,6 +72,7 @@ primitive type
 
 ## Base Modules
 ```@docs
+Base.Base
 Base.Docs
 Base.Iterators
 Base.Libc
