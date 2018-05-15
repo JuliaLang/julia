@@ -81,6 +81,7 @@ Base.Meta
 Base.StackTraces
 Base.Sys
 Base.Threads
+Base.GC
 ```
 
 ## All Objects
