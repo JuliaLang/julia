@@ -332,6 +332,7 @@ Base.functionloc(::Method)
 ```@docs
 Base.GC.gc
 Base.GC.enable
+Base.GC.@preserve
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)
