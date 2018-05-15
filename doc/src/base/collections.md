@@ -77,6 +77,7 @@ Fully implemented by:
 
 ```@docs
 Base.in
+Base.:∉
 Base.eltype
 Base.indexin
 Base.unique
