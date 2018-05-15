@@ -457,7 +457,7 @@ we could compute the singular values of several large random matrices in paralle
 ```julia-repl
 julia> M = Matrix{Float64}[rand(1000,1000) for i = 1:10];
 
-julia> pmap(svd, M);
+julia> pmap(svdvals, M);
 ```
 
 Julia's [`pmap`](@ref) is designed for the case where each function call does a large amount
@@ -486,7 +486,7 @@ As an example, consider computing the singular values of matrices of different s
 ```julia-repl
 julia> M = Matrix{Float64}[rand(800,800), rand(600,600), rand(800,800), rand(600,600)];
 
-julia> pmap(svd, M);
+julia> pmap(svdvals, M);
 ```
 
 If one process handles both 800×800 matrices and another handles both 600×600 matrices, we will

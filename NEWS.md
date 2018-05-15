@@ -1040,6 +1040,46 @@ Deprecated or removed
     (`S, T, Q, Z, α, β = schurfact(A, B)`) or as a `GeneralizedSchur` object
     (`schurf = schurfact(A, B)`) ([#26997]).
 
+  * `svd(A::Abstractarray; thin=true)` has been deprecated in favor of
+    `svdfact(A; full=false)`. Note that the `thin` keyword and its replacement
+    `full` have opposite meanings. Additionally, whereas `svd` returns a
+    tuple of arrays `(U, S, V)` such that `A ≈ U*Diagonal(S)*V'`, `svdfact` returns
+    an `SVD` object that nominally provides `U, S, Vt` such that `A ≈ U*Diagonal(S)*Vt`.
+    So for a direct replacement,
+    use `((U, S, Vt) = svdfact(A[; full=...]); (U, S, copy(Vt')))`. But going forward,
+    consider using the direct result of `svdfact(A[; full=...])` instead,
+    either destructured into its components (`U, S, Vt = svdfact(A[; full=...])`)
+    or as an `SVD` object (`svdf = svdfact(A[; full=...])`) ([#26997]).
+
+  * `svd(x::Number; thin=true)` has been deprecated in favor of
+    `svdfact(x; full=false)`. Note that the `thin` keyword and its replacement
+    `full` have opposite meanings. Additionally, whereas `svd(x::Number[; thin=...])`
+    returns a tuple of numbers `(u, s, v)` such that `x ≈ u*s*conj(v)`,
+    `svdfact(x::Number[; full=...])` returns
+    an `SVD` object that nominally provides `u, s, vt` such that `x ≈ u*Diagonal(s)*conj(vt)`.
+    So for a direct replacement,
+    use `((u, s, vt) = first.((svdfact(x[; full=...]...,)); (u, s, conj(vt)))`.
+    But going forward,
+    consider using the direct result of `svdfact(x[; full=...])` instead,
+    either destructured into its components (`U, S, Vt = svdfact(A[; full=...])`)
+    or as an `SVD` object (`svdf = svdfact(x[; full=...])`) ([#26997]).
+
+  * `svd(A::Abstractarray, B::AbstractArray)` has been deprecated in favor of
+    `svdfact(A, B)`. Whereas the former returns a tuple of arrays,
+    the latter returns a `GeneralizedSVD` object. So for a direct replacement,
+    use `(svdfact(A, B)...,)`. But going forward,
+    consider using the direct result of `svdfact(A, B)` instead,
+    either destructured into its components (`U, V, Q, D1, D2, R0 = svdfact(A, B)`)
+    or as a `GeneralizedSVD` object (`gsvdf = svdfact(A, B)`) ([#26997]).
+
+  * `svd(x::Number, y::Number)` has been deprecated in favor of
+    `svdfact(x, y)`. Whereas the former returns a tuple of numbers,
+    the latter returns a `GeneralizedSVD` object. So for a direct replacement,
+    use `first.((svdfact(x, y)...,))`. But going forward,
+    consider using the direct result of `svdfact(x, ys)` instead,
+    either destructured into its components (`U, V, Q, D1, D2, R0 = svdfact(x, y)`)
+    or as a `GeneralizedSVD` object (`gsvdf = svdfact(x, y)`) ([#26997]).
+
   * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
     ([#17046]).
 

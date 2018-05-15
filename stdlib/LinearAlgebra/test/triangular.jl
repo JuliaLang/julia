@@ -264,7 +264,6 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not implemented yet
-            svd(A1)
             svdfact(A1)
             elty1 <: BlasFloat && svdfact!(copy(A1))
             svdvals(A1)

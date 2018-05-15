@@ -1345,3 +1345,76 @@ function schur(A::StridedMatrix, B::StridedMatrix)
         " or as a `GeneralizedSchur` object (`schurf = schurfact(A, B)`)."), :schur)
     return (schurfact(A, B)...,)
 end
+
+# deprecate svd(...) in favor of svdfact(...) and factorization destructuring
+export svd
+function svd(A::AbstractArray; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+    depwarn(string("`svd(A::Abstractarray; thin=true)` has been deprecated ",
+        "in favor of `svdfact(A; full=false)`. Note that the `thin` keyword ",
+        "and its replacement `full` have opposite meanings. Additionally, whereas ",
+        "`svd` returns a tuple of arrays `(U, S, V)` such that `A ≈ U*Diagonal(S)*V'`, ",
+        "`svdfact` returns an `SVD` object that nominally provides `U, S, Vt` ",
+        "such that `A ≈ U*Diagonal(S)*Vt`. So for a direct replacement, use ",
+        "`((U, S, Vt) = svdfact(A[; full=...]); (U, S, copy(Vt')))`. But going forward, ",
+        "consider using the direct result of `svdfact(A[; full=...])` instead, ",
+        "either destructured into its components (`U, S, Vt = svdfact(A[; full=...])`) ",
+        "or as an `SVD` object (`svdf = svdfact(A[; full=...])`)."), :svd)
+    F = svdfact(A, full = (thin != nothing ? !thin : full))
+    return F.U, F.S, copy(F.Vt')
+end
+function svd(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+    depwarn(string("`svd(x::Number; thin=true)` has been deprecated ",
+        "in favor of `svdfact(x; full=false)`. Note that the `thin` keyword ",
+        "and its replacement `full` have opposite meanings. Additionally, whereas ",
+        "`svd(x::Number[; thin=...])` returns a tuple of numbers `(u, s, v)` ",
+        " such that `x ≈ u*s*conj(v)`, `svdfact(x::Number[; full=...])` returns ",
+        "an `SVD` object that nominally provides `u, s, vt` such that ",
+        "`x ≈ u*s*vt`. So for a direct replacement, use ",
+        "`((u, s, vt) = first.((svdfact(A[; full=...])...,)); (u, s, conj(vt)))`. ",
+        "But going forward, ",
+        "consider using the direct result of `svdfact(A[; full=...])` instead, ",
+        "either destructured into its components (`u, s, vt = svdfact(A[; full=...])`) ",
+        "or as an `SVD` object (`svdf = svdfact(A[; full=...])`)."), :svd)
+    u, s, v = first.((svdfact(x)...,))
+    return u, s, conj(vt)
+end
+
+function svd(A::AbstractMatrix, B::AbstractMatrix)
+    depwarn(string("`svd(A::Abstractarray, B::AbstractArray)` has been deprecated ",
+        "in favor of `svdfact(A, B)`. Whereas the former returns a tuple of arrays, ",
+        "the latter returns a `GeneralizedSVD` object. So for a direct replacement, ",
+        "use `(svdfact(A, B)...,)`. But going forward, ",
+        "consider using the direct result of `svdfact(A, B)` instead, ",
+        "either destructured into its components ",
+        "(`U, V, Q, D1, D2, R0 = svdfact(A, B)`) ",
+        "or as a `GeneralizedSVD` object (`gsvdf = svdfact(A, B)`)."), :svd)
+    return (svdfact(A, B)...,)
+end
+function svd(x::Number, y::Number)
+    depwarn(string("`svd(x::Number, y::Number)` has been deprecated ",
+        "in favor of `svdfact(x, y)`. Whereas the former returns a tuple of numbers, ",
+        "the latter returns a `GeneralizedSVD` object. So for a direct replacement, ",
+        "use `first.((svdfact(x, y)...,))`. But going forward, ",
+        "consider using the direct result of `svdfact(x, y)` instead, ",
+        "either destructured into its components ",
+        "(`U, V, Q, D1, D2, R0 = svdfact(x, y)`) ",
+        "or as a `GeneralizedSVD` object (`gsvdf = svdfact(x, y)`)."), :svd)
+    return first.((svdfact(x, y)...,))
+end
+
+@inline function _simpledepsvd(A)
+    depwarn(string("`svd(A)` has been deprecated ",
+        "in favor of `svdfact(A)`. Whereas `svd` ",
+        "returns a tuple of arrays `(U, S, V)` such that `A ≈ U*Diagonal(S)*V'`, ",
+        "`svdfact` returns an `SVD` object that nominally provides `U, S, Vt` ",
+        "such that `A ≈ U*Diagonal(S)*Vt`. So for a direct replacement, use ",
+        "`((U, S, Vt) = svdfact(A); (U, S, copy(Vt')))`. But going forward, ",
+        "consider using the direct result of `svdfact(A)` instead, ",
+        "either destructured into its components (`U, S, Vt = svdfact(A)`) ",
+        "or as an `SVD` object (`svdf = svdfact(A)`)."), :svd)
+    U, S, Vt = svdfact(A)
+    return U, S, copy(Vt')
+end
+svd(A::BitMatrix) = _simpledepsvd(float(A))
+svd(D::Diagonal{<:Number}) = _simpledepsvd(D)
+svd(A::AbstractTriangular) = _simpledepsvd(copyto!(similar(parent(A)), A))

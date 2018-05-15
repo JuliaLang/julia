@@ -66,7 +66,7 @@ may trip up Julia users accustomed to MATLAB:
     parentheses may be required (e.g., to select elements of `A` equal to 1 or 2 use `(A .== 1) .| (A .== 2)`).
   * In Julia, the elements of a collection can be passed as arguments to a function using the splat
     operator `...`, as in `xs=[1,2]; f(xs...)`.
-  * Julia's [`svd`](@ref) returns singular values as a vector instead of as a dense diagonal matrix.
+  * Julia's [`svdfact`](@ref) returns singular values as a vector instead of as a dense diagonal matrix.
   * In Julia, `...` is not used to continue lines of code. Instead, incomplete expressions automatically
     continue onto the next line.
   * In both Julia and MATLAB, the variable `ans` is set to the value of the last expression issued

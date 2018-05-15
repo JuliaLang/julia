@@ -186,7 +186,7 @@ end
 @testset "real svds" begin
     A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], [2.0, -1.0, 6.1, 7.0, 1.5])
     S1 = svds(A, nsv = 2)
-    S2 = svd(Array(A))
+    S2 = (F = svdfact(Array(A)); (F.U, F.S, F.V))
 
     ## singular values match:
     @test S1[1].S ≈ S2[2][1:2]
@@ -248,7 +248,7 @@ end
 @testset "complex svds" begin
     A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], exp.(im*[2.0:2:10;]), 5, 4)
     S1 = svds(A, nsv = 2)
-    S2 = svd(Array(A))
+    S2 = (F = svdfact(Array(A)); (F.U, F.S, F.V))
 
     ## singular values match:
     @test S1[1].S ≈ S2[2][1:2]

@@ -198,16 +198,16 @@ Legend:
 
 ### Matrix factorizations
 
-| Matrix type               | LAPACK | [`eigfact`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
-|:------------------------- |:------ |:----------------- |:----------------- |:----------------- |:------------- |:----------------- |
-| [`Symmetric`](@ref)       | SY     |                   | ARI               |                   |               |                   |
-| [`Hermitian`](@ref)       | HE     |                   | ARI               |                   |               |                   |
-| [`UpperTriangular`](@ref) | TR     | A                 | A                 | A                 |               |                   |
-| [`LowerTriangular`](@ref) | TR     | A                 | A                 | A                 |               |                   |
-| [`SymTridiagonal`](@ref)  | ST     | A                 | ARI               | AV                |               |                   |
-| [`Tridiagonal`](@ref)     | GT     |                   |                   |                   |               |                   |
-| [`Bidiagonal`](@ref)      | BD     |                   |                   |                   | A             | A                 |
-| [`Diagonal`](@ref)        | DI     |                   | A                 |                   |               |                   |
+| Matrix type               | LAPACK | [`eigfact`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svdfact`](@ref) | [`svdvals`](@ref) |
+|:------------------------- |:------ |:----------------- |:----------------- |:----------------- |:----------------- |:----------------- |
+| [`Symmetric`](@ref)       | SY     |                   | ARI               |                   |                   |                   |
+| [`Hermitian`](@ref)       | HE     |                   | ARI               |                   |                   |                   |
+| [`UpperTriangular`](@ref) | TR     | A                 | A                 | A                 |                   |                   |
+| [`LowerTriangular`](@ref) | TR     | A                 | A                 | A                 |                   |                   |
+| [`SymTridiagonal`](@ref)  | ST     | A                 | ARI               | AV                |                   |                   |
+| [`Tridiagonal`](@ref)     | GT     |                   |                   |                   |                   |                   |
+| [`Bidiagonal`](@ref)      | BD     |                   |                   |                   | A                 | A                 |
+| [`Diagonal`](@ref)        | DI     |                   | A                 |                   |                   |                   |
 
 Legend:
 
@@ -349,7 +349,6 @@ LinearAlgebra.ordschur
 LinearAlgebra.ordschur!
 LinearAlgebra.svdfact
 LinearAlgebra.svdfact!
-LinearAlgebra.svd
 LinearAlgebra.svdvals
 LinearAlgebra.svdvals!
 LinearAlgebra.Givens

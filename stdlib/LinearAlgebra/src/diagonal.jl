@@ -455,18 +455,18 @@ end
 #Singular system
 svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)
 svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
-function svd(D::Diagonal{<:Number})
+function svdfact(D::Diagonal{<:Number})
     S   = abs.(D.diag)
     piv = sortperm(S, rev = true)
     U   = Diagonal(D.diag ./ S)
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
     V   = Diagonal(fill!(similar(D.diag), one(eltype(D.diag))))
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
-    return (Up, S[piv], Vp)
+    return SVD(Up, S[piv], copy(Vp'))
 end
 function svdfact(D::Diagonal)
-    U, s, V = svd(D)
-    SVD(U, s, copy(V'))
+    U, s, Vt = svdfact(D)
+    return SVD(U, s, Vt)
 end
 
 # dismabiguation methods: * of Diagonal and Adj/Trans AbsVec

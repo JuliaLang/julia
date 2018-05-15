@@ -165,7 +165,7 @@ end
 @testset "gesvd, ggsvd" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,5)
-        U,S,V = svd(A)
+        U,S,V = (F = svdfact(A); (F.U, F.S, F.V))
         lU,lS,lVt = LAPACK.gesvd!('S','S',A)
         @test U ≈ lU
         @test S ≈ lS
