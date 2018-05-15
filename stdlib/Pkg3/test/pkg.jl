@@ -15,6 +15,9 @@ include("utils.jl")
 
 const TEST_PKG = (name = "Example", uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a"))
 
+# Make the progress bar less verbose since some CI does not support \r
+Pkg3.GitTools.PROGRESS_BAR_PERCENTAGE_GRANULARITY[] = 33
+
 temp_pkg_dir() do project_path
     @testset "simple add and remove with preview" begin
         Pkg3.init(project_path)
@@ -157,6 +160,10 @@ temp_pkg_dir() do project_path
                 end
             end
         end
+    end
+
+    @testset "add julia" begin
+        @test_throws CommandError Pkg3.add("julia")
     end
 
     @testset "up in Project without manifest" begin

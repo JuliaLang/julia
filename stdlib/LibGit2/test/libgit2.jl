@@ -1274,6 +1274,13 @@ mktempdir() do dir
         end
     end
 
+    @testset "Show closed repo" begin
+        # Make sure this doesn't crash
+        buf = IOBuffer()
+        Base.show(buf, LibGit2.with(identity, LibGit2.GitRepo(test_repo)))
+        @test String(take!(buf)) == "LibGit2.GitRepo(<closed>)"
+    end
+
     @testset "Fetch from cache repository" begin
         LibGit2.with(LibGit2.GitRepo(test_repo)) do repo
             # fetch changes

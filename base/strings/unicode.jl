@@ -347,25 +347,25 @@ false
 isdigit(c::AbstractChar) = '0' <= c <= '9'
 
 """
-    isalpha(c::AbstractChar) -> Bool
+    isletter(c::AbstractChar) -> Bool
 
-Tests whether a character is alphabetic.
-A character is classified as alphabetic if it belongs to the Unicode general
+Test whether a character is a letter.
+A character is classified as a letter if it belongs to the Unicode general
 category Letter, i.e. a character whose category code begins with 'L'.
 
 # Examples
 ```jldoctest
-julia> isalpha('❤')
+julia> isletter('❤')
 false
 
-julia> isalpha('α')
+julia> isletter('α')
 true
 
-julia> isalpha('9')
+julia> isletter('9')
 false
 ```
 """
-isalpha(c::AbstractChar) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO
+isletter(c::AbstractChar) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO
 
 """
     isnumeric(c::AbstractChar) -> Bool

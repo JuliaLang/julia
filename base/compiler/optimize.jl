@@ -261,7 +261,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
     return inlineable
 end
 
-const enable_new_optimizer = RefValue(false)
+const enable_new_optimizer = RefValue(true)
 
 # converge the optimization work
 function optimize(me::InferenceState)
@@ -456,7 +456,7 @@ function finish(me::InferenceState)
                     def = me.linfo.def::Method
                     keeptree = me.optimize &&
                         (me.src.inlineable ||
-                         ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any), me.linfo.specTypes, def.sig, def) != 0)
+                         ccall(:jl_isa_compileable_sig, Int32, (Any, Any), me.linfo.specTypes, def) != 0)
                     if keeptree
                         # compress code for non-toplevel thunks
                         inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)

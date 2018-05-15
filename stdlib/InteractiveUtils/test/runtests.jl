@@ -188,6 +188,12 @@ end
             @test isempty(readdir(dir))
         end
     end
+    let exename = `$(Base.julia_cmd()) --startup-file=no`
+        @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
+                                                    String[]), String))
+        @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
+                                                    String["JULIA_CPU_CORES=1"]), String))
+    end
 end
 
 const curmod = @__MODULE__

@@ -62,10 +62,10 @@ Base.thisind
 Base.nextind
 Base.prevind
 Base.textwidth
-Base.isalpha
 Base.isascii
 Base.iscntrl
 Base.isdigit
+Base.isletter
 Base.islowercase
 Base.isnumeric
 Base.isprint

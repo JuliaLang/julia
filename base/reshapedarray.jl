@@ -130,8 +130,8 @@ rdims_trailing(l, inds...) = _length(l) * rdims_trailing(inds...)
 rdims_trailing(l) = _length(l)
 rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val(N)), inds)
 rdims(out::Tuple{}, inds::Tuple{}) = () # N == 0, M == 0
-@noinline rdims(out::Tuple{}, inds::Tuple{Any}) = throw(ArgumentError("new dimensions cannot be empty")) # N == 0
-@noinline rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = throw(ArgumentError("new dimensions cannot be empty")) # N == 0
+rdims(out::Tuple{}, inds::Tuple{Any}) = ()
+rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = ()
 rdims(out::Tuple{Any}, inds::Tuple{}) = out # N == 1, M == 0
 rdims(out::NTuple{N,Any}, inds::Tuple{}) where {N} = out # N > 1, M == 0
 rdims(out::Tuple{Any}, inds::Tuple{Any}) = inds # N == 1, M == 1

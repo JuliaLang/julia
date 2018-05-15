@@ -357,8 +357,6 @@ export
     axes,
     broadcast!,
     broadcast,
-    broadcast_getindex,
-    broadcast_setindex!,
     cat,
     checkbounds,
     checkindex,
@@ -469,7 +467,6 @@ export
 
 # bitarrays
     falses,
-    flipbits!,
     trues,
 
 # dequeues
@@ -566,10 +563,10 @@ export
     escape_string,
     hex2bytes,
     hex2bytes!,
-    isalpha,
     isascii,
     iscntrl,
     isdigit,
+    isletter,
     islowercase,
     isnumeric,
     isprint,

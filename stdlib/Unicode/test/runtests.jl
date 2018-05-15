@@ -114,7 +114,7 @@ end
     alphas=vcat(alower,ulower,aupper,uupper,nocase)
 
     for c in alphas
-        @test isalpha(c) == true
+        @test isletter(c) == true
         @test isnumeric(c) == false
     end
 
@@ -132,7 +132,7 @@ end
 
     alnums=vcat(alphas,anumber,unumber)
     for c in alnums
-        @test isalpha(c) || isnumeric(c)
+        @test isletter(c) || isnumeric(c)
         @test ispunct(c) == false
     end
 
@@ -144,7 +144,7 @@ end
 
     for c in vcat(apunct,upunct)
         @test ispunct(c) == true
-        @test !isalpha(c) && !isnumeric(c)
+        @test !isletter(c) && !isnumeric(c)
     end
 
     for c in vcat(alnums,asymbol,usymbol,apunct,upunct)
@@ -180,7 +180,7 @@ end
 
     for c in vcat(acontrol, acntrl_space, latincontrol)
         @test iscntrl(c) == true
-        @test !isalpha(c) && !isnumeric(c)
+        @test !isletter(c) && !isnumeric(c)
         @test isprint(c) == false
     end
 
@@ -188,19 +188,19 @@ end
         if c!=Char(0x0085)
             @test iscntrl(c) == false
             @test isspace(c) == false
-            @test !isalpha(c) && !isnumeric(c)
+            @test !isletter(c) && !isnumeric(c)
             @test isprint(c) == false
         end
     end
 
     @test  all(isspace,"  \t   \n   \r  ")
     @test !all(isprint,"  \t   \n   \r  ")
-    @test !all(isalpha,"  \t   \n   \r  ")
+    @test !all(isletter,"  \t   \n   \r  ")
     @test !all(isnumeric,"  \t   \n   \r  ")
     @test !all(ispunct,"  \t   \n   \r  ")
 
     @test !all(isspace,"ΣβΣβ")
-    @test  all(isalpha,"ΣβΣβ")
+    @test  all(isletter,"ΣβΣβ")
     @test  all(isprint,"ΣβΣβ")
     @test !all(isuppercase,"ΣβΣβ")
     @test !all(islowercase,"ΣβΣβ")
@@ -210,7 +210,7 @@ end
 
     @test  all(isnumeric,"23435")
     @test  all(isdigit,"23435")
-    @test !all(isalpha,"23435")
+    @test !all(isletter,"23435")
     @test  all(iscntrl,string(Char(0x0080)))
     @test  all(ispunct, "‡؟჻")
 

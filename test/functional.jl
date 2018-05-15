@@ -201,3 +201,10 @@ end
     res = map(f, y)
     @test res isa Vector{Union{Bool, T}}
 end
+
+@testset "inference of collect with unstable eltype" begin
+    @test Core.Compiler.return_type(collect, Tuple{typeof(2x for x in Real[])}) <: Vector
+    @test Core.Compiler.return_type(collect, Tuple{typeof(x+y for x in Real[] for y in Real[])}) <: Vector
+    @test Core.Compiler.return_type(collect, Tuple{typeof(x+y for x in Real[], y in Real[])}) <: Matrix
+    @test Core.Compiler.return_type(collect, Tuple{typeof(x for x in Union{Bool,String}[])}) <: Array
+end

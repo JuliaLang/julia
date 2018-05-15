@@ -234,7 +234,6 @@ function join(io::IO, strings, delim, last)
         print(io, str)
     end
 end
-
 function join(io::IO, strings, delim)
     a = Iterators.Stateful(strings)
     for str in a
@@ -243,6 +242,9 @@ function join(io::IO, strings, delim)
     end
 end
 join(io::IO, strings) = join(io, strings, "")
+# Hack around https://github.com/JuliaLang/julia/issues/26871
+join(io::IO, strings::Tuple{}, delim) = nothing
+join(io::IO, strings::Tuple{}, delim, last) = nothing
 
 join(strings) = sprint(join, strings)
 join(strings, delim) = sprint(join, strings, delim)

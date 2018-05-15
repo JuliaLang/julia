@@ -14,7 +14,8 @@ using ..Types, ..Display, ..Operations
 ############
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
                    CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
-                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE, CMD_PRECOMPILE)
+                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE, CMD_PRECOMPILE,
+                   CMD_INSTANTIATE)
 
 struct Command
     kind::CommandKind
@@ -53,6 +54,7 @@ const cmds = Dict(
     "dev"       => CMD_DEVELOP,
     "generate"  => CMD_GENERATE,
     "precompile" => CMD_PRECOMPILE,
+    "instantiate" => CMD_INSTANTIATE,
 )
 
 #################
@@ -284,6 +286,7 @@ function do_cmd!(tokens::Vector{Token}, repl)
     cmd.kind == CMD_FREE     ? Base.invokelatest(          do_free!, ctx, tokens) :
     cmd.kind == CMD_GENERATE ? Base.invokelatest(      do_generate!, ctx, tokens) :
     cmd.kind == CMD_PRECOMPILE ? Base.invokelatest(  do_precompile!, ctx, tokens) :
+    cmd.kind == CMD_INSTANTIATE ? Base.invokelatest(do_instantiate!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -339,9 +342,11 @@ What action you want the package manager to take:
 
 `develop`: clone the full package repo locally for development
 
-`free`: undoes a `pin` or `develop`
+`free`: undoes a `pin`, `develop`, or stops tracking a repo.
 
 `precompile`: precompile all the project dependencies
+
+`instantiate`: downloads all the dependencies for the project
 """
 
 const helps = Dict(
@@ -384,6 +389,9 @@ const helps = Dict(
     may be specified by `@1`, `@1.2`, `@1.2.3`, allowing any version with a prefix
     that matches, or ranges thereof, such as `@1.2-3.4.5`. A git-revision can be
     specified by `#branch` or `#commit`.
+
+    If a local path is used as an argument to `add`, the path needs to be a git repository.
+    The project will then track that git repository just like if it is was tracking a remote repository online.
 
     **Examples**
     ```
@@ -489,6 +497,13 @@ const helps = Dict(
         precompile
 
     Precompile all the dependencies of the project by running `import` on all of them in a new process.
+    """, CMD_INSTANTIATE => md"""
+        instantiate
+        instantiate [-m|--manifest]
+        instantiate [-p|--project]
+
+    Download all the dependencies for the current project at the version given by the project's manifest.
+    If no manifest exists or the `--project` option is given, resolve and download the dependencies compatible with the project.
     """
 )
 
@@ -740,6 +755,24 @@ function do_precompile!(ctx::Context, tokens::Vector{Token})
         cmderror("`precompile` does not take any arguments")
     end
     API.precompile(ctx)
+end
+
+function do_instantiate!(ctx::Context, tokens::Vector{Token})
+    manifest = nothing
+    for token in tokens
+        if token isa Option
+            if token.kind == OPT_MANIFEST
+                manifest = true
+            elseif token.kind == OPT_PROJECT
+            manifest = false
+            else
+                cmderror("invalid option for `instantiate`: $(token)")
+            end
+        else
+            cmderror("invalid argument for `instantiate` :$(token)")
+        end
+    end
+    API.instantiate(ctx; manifest=manifest)
 end
 
 

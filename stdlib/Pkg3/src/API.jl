@@ -118,7 +118,8 @@ function update_registry(ctx)
     return
 end
 
-up(;kwargs...)                                 = up(PackageSpec[]; kwargs...)
+up(ctx::Context; kwargs...)                    = up(ctx, PackageSpec[]; kwargs...)
+up(; kwargs...)                                = up(PackageSpec[]; kwargs...)
 up(pkg::Union{String, PackageSpec}; kwargs...) = up([pkg]; kwargs...)
 up(pkgs::Vector{String}; kwargs...)            = up([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
 up(pkgs::Vector{PackageSpec}; kwargs...)       = up(Context(), pkgs; kwargs...)
@@ -176,7 +177,22 @@ function free(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
     registry_resolve!(ctx.env, pkgs)
-    ensure_resolved(ctx.env, pkgs; registry=true)
+    uuids_in_registry = UUID[]
+    for pkg in pkgs
+        pkg.mode = PKGMODE_MANIFEST
+    end
+    for pkg in pkgs
+        has_uuid(pkg) && push!(uuids_in_registry, pkg.uuid)
+    end
+    manifest_resolve!(ctx.env, pkgs)
+    ensure_resolved(ctx.env, pkgs)
+    # Every non pinned package that is freed need to be in a registry
+    for pkg in pkgs
+        info = manifest_info(ctx.env, pkg.uuid)
+        if !get(info, "pinned", false) && !(pkg.uuid in uuids_in_registry)
+            cmderror("cannot free an unpinned package that does not exist in a registry")
+        end
+    end
     Operations.free(ctx, pkgs)
     return
 end
@@ -401,7 +417,7 @@ function dir(pkg::String, paths::String...)
     return joinpath(abspath(path, "..", "..", paths...))
 end
 
-
+precompile() = precompile(Context())
 function precompile(ctx::Context)
     printpkgstyle(ctx, :Precompiling, "project...")
 
@@ -456,6 +472,52 @@ function precompile(ctx::Context)
         ```)))
     end
     return nothing
+end
+
+
+function read_package_from_manifest!(pkg::PackageSpec, info::Dict)
+    pkg.uuid = UUID(info["uuid"])
+    pkg.path = get(info, "path", nothing)
+    if haskey(info, "repo-url")
+        pkg.repo = Types.GitRepo(info["repo-url"], info["repo-rev"])
+    end
+    haskey(info, "version") && (pkg.version = VersionNumber(info["version"]))
+end
+
+instantiate(; kwargs...) = instantiate(Context(); kwargs...)
+function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwargs...)
+    Context!(ctx; kwargs...)
+    if (!isfile(ctx.env.manifest_file) && manifest == nothing) || manifest == false
+        up(ctx)
+        return
+    end
+    if !isfile(ctx.env.manifest_file) && manifest == true
+        cmderror("manifest at $(ctx.env.manifest) does not exist")
+    end
+    update_registry(ctx)
+    urls = Dict{}
+    hashes = Dict{UUID,SHA1}()
+    urls = Dict{UUID,Vector{String}}()
+    pkgs = PackageSpec[]
+    for (pkg_name, pkg_info) in ctx.env.manifest
+        for info in pkg_info
+            pkg = PackageSpec(pkg_name)
+            read_package_from_manifest!(pkg, info)
+            push!(pkgs, pkg)
+            pkg.uuid in keys(ctx.stdlibs) && continue
+            pkg.path !== nothing && continue
+            urls[pkg.uuid] = String[]
+            hashes[pkg.uuid] = SHA1(info["git-tree-sha1"])
+        end
+    end
+    _, urls_ref = Operations.version_data!(ctx, pkgs)
+    for (uuid, url) in urls_ref
+        append!(urls[uuid], url)
+        urls[uuid] = unique(urls[uuid])
+    end
+    new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
+    new_apply = Operations.apply_versions(ctx, pkgs, hashes, urls)
+    Operations.build_versions(ctx, union(new_apply, new_git))
 end
 
 end # module

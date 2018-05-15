@@ -42,7 +42,6 @@ Base.axes(::Any)
 Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
-Base.LinearIndices
 Base.IndexStyle
 Base.conj!
 Base.stride
@@ -60,8 +59,6 @@ to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 Base.broadcast
 Base.Broadcast.broadcast!
 Base.@__dot__
-Base.Broadcast.broadcast_getindex
-Base.Broadcast.broadcast_setindex!
 ```
 
 For specializing broadcast on custom types, see
@@ -160,14 +157,4 @@ Base.invpermute!
 Base.reverse(::AbstractVector; kwargs...)
 Base.reverseind
 Base.reverse!
-```
-
-## BitArrays
-
-[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
-They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
-and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
-
-```@docs
-Base.flipbits!
 ```

@@ -654,8 +654,7 @@ julia> broadcast(+, a, b)
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
 to `broadcast` calls (except that they fuse, as described below). There is also a
 [`broadcast!`](@ref) function to specify an explicit destination (which can also
-be accessed in a fusing fashion by `.=` assignment), and functions [`broadcast_getindex`](@ref)
-and [`broadcast_setindex!`](@ref) that broadcast the indices before indexing. Moreover, `f.(args...)`
+be accessed in a fusing fashion by `.=` assignment). Moreover, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
 ([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
@@ -721,6 +720,10 @@ data is left in place. [`view`](@ref) stores the input index vectors in a
 indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
 block of code, any `array[...]` slice in that expression will be converted to
 create a `SubArray` view instead.
+
+[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
+and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
 
 A "strided" array is stored in memory with elements laid out in regular offsets such that
 an instance with a supported `isbits` element type can be passed to

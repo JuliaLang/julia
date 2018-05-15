@@ -145,6 +145,20 @@ end
         @test isa(reshape(s, Val(N)), Base.ReshapedArray{Int,N})
     end
 end
+@testset "zero-dimensional reshapes" begin
+    @test reshape([1]) == fill(1)
+    @test reshape([1]) isa Array{Int,0}
+    @test reshape(1:1) == fill(1)
+    @test reshape(1:1) isa Base.ReshapedArray{Int, 0}
+    @test reshape([1], Val(0)) == fill(1)
+    @test reshape([1], Val(0)) isa Array{Int,0}
+    @test reshape(1:1, Val(0)) == fill(1)
+    @test reshape(1:1, Val(0)) isa Base.ReshapedArray{Int, 0}
+    @test_throws DimensionMismatch reshape([1,2])
+    @test_throws DimensionMismatch reshape([1,2], Val(0))
+    @test_throws DimensionMismatch reshape(1:2)
+    @test_throws DimensionMismatch reshape(1:2, Val(0))
+end
 @testset "sizehint!" begin
     A = zeros(40)
     resize!(A, 1)
@@ -202,7 +216,7 @@ Base.getindex(::V26163, ::Int) = 0
     @test reshape(z, 1) == v == [0]
     @test reshape(z, 1, 1) == reshape(v, 1, 1) == fill(0, 1, 1)
     @test occursin("1-element reshape", summary(reshape(z, 1)))
-    @test_broken occursin("0-dimensional reshape", summary(reshape(v, ())))
+    @test occursin("0-dimensional reshape", summary(reshape(v, ())))
 end
 
 @test reshape(1:5, (5,)) === 1:5

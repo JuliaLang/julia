@@ -2,7 +2,9 @@
 
 ## promote()
 
-@test promote_type(Some{Int}, Some{Float64}) === Some{Float64}
+@test promote_type(Some{Int}, Some{Float64}) == Some
+@test promote_type(Some{Int}, Some{Real}) == Some{Real}
+@test promote_type(Some{Int}, Nothing) == Union{Some{Int},Nothing}
 
 ## convert()
 
@@ -75,6 +77,15 @@ for v in (nothing, missing)
     @test coalesce(v, nothing) === nothing
     @test coalesce(v, missing, v) === v
     @test coalesce(v, nothing, v) === v
+
+    # issue #26927
+    a = [missing, nothing, Some(nothing), Some(missing)]
+    @test a isa Vector{Union{Missing, Nothing, Some}}
+    @test a[1] === missing && a[2] === nothing && a[3] === Some(nothing) && a[4] === Some(missing)
+    b = [ "replacement", "replacement", nothing, missing ]
+    @test b isa Vector{Union{Missing, Nothing, String}}
+    # the original operation from the issue, though it was not the source of the problem
+    @test all(coalesce.(a, "replacement") .=== b)
 end
 
 # notnothing()

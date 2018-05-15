@@ -1185,7 +1185,7 @@ function deserialize(s::AbstractSerializer, t::Type{Regex})
     pattern = deserialize(s)
     compile_options = deserialize(s)
     match_options = deserialize(s)
-    Regex(pattern, compile_options, match_options)
+    return Regex(pattern, compile_options, match_options)
 end
 
 ## StackTraces
@@ -1201,6 +1201,7 @@ function serialize(s::AbstractSerializer, frame::Base.StackTraces.StackFrame)
     write(s.io, frame.from_c)
     write(s.io, frame.inlined)
     write(s.io, frame.pointer)
+    nothing
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})

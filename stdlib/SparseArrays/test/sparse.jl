@@ -2244,4 +2244,33 @@ end
     @test maximum(B) == 6
 end
 
+_length_or_count_or_five(::Colon) = 5
+_length_or_count_or_five(x::AbstractVector{Bool}) = count(x)
+_length_or_count_or_five(x) = length(x)
+@testset "nonscalar setindex!" begin
+    for I in (1:4, :, 5:-1:2, [], trues(5), setindex!(falses(5), true, 2), 3),
+        J in (2:4, :, 4:-1:1, [], setindex!(trues(5), false, 3), falses(5), 4)
+        V = sparse(1 .+ zeros(_length_or_count_or_five(I)*_length_or_count_or_five(J)))
+        M = sparse(1 .+ zeros(_length_or_count_or_five(I), _length_or_count_or_five(J)))
+        if I isa Integer && J isa Integer
+            @test_throws MethodError spzeros(5,5)[I, J] = V
+            @test_throws MethodError spzeros(5,5)[I, J] = M
+            continue
+        end
+        @test setindex!(spzeros(5, 5), V, I, J) == setindex!(zeros(5,5), V, I, J)
+        @test setindex!(spzeros(5, 5), M, I, J) == setindex!(zeros(5,5), M, I, J)
+        @test setindex!(spzeros(5, 5), Array(M), I, J) == setindex!(zeros(5,5), M, I, J)
+        @test setindex!(spzeros(5, 5), Array(V), I, J) == setindex!(zeros(5,5), V, I, J)
+    end
+    @test setindex!(spzeros(5, 5), 1:25, :) == setindex!(zeros(5,5), 1:25, :) == reshape(1:25, 5, 5)
+    @test setindex!(spzeros(5, 5), (25:-1:1).+spzeros(25), :) == setindex!(zeros(5,5), (25:-1:1).+spzeros(25), :) == reshape(25:-1:1, 5, 5)
+    for X in (1:20, sparse(1:20), reshape(sparse(1:20), 20, 1), (1:20) .+ spzeros(20, 1), collect(1:20), collect(reshape(1:20, 20, 1)))
+        @test setindex!(spzeros(5, 5), X, 6:25) == setindex!(zeros(5,5), 1:20, 6:25)
+        @test setindex!(spzeros(5, 5), X, 21:-1:2) == setindex!(zeros(5,5), 1:20, 21:-1:2)
+        b = trues(25)
+        b[[6, 8, 13, 15, 23]] .= false
+        @test setindex!(spzeros(5, 5), X, b) == setindex!(zeros(5, 5), X, b)
+    end
+end
+
 end # module

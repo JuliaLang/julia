@@ -76,6 +76,9 @@ end
 function test_jl_dump_compiles_toplevel_thunks()
     tfile = tempname()
     io = open(tfile, "w")
+    # Make sure to cause compilation of the eval function
+    # before calling it below.
+    Core.eval(Main, Any[:(nothing)][1])
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
