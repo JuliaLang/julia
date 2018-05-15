@@ -264,6 +264,12 @@ Base.Sys.windows_version
 Base.@static
 ```
 
+## Versioning
+
+```@docs
+Base.@v_str
+```
+
 ## Errors
 
 ```@docs

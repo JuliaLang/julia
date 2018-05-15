@@ -105,6 +105,20 @@ function VersionNumber(v::AbstractString)
     return VersionNumber(major, minor, patch, prerl, build)
 end
 
+"""
+    @v_str
+
+String macro used to parse a string to a `VersionNumber`.
+
+# Examples
+```jldoctest
+julia> v"1.2.3"
+v"1.2.3"
+
+julia> v"2.0.1-rc1"
+v"2.0.1-rc1"
+```
+"""
 macro v_str(v); VersionNumber(v); end
 
 typemin(::Type{VersionNumber}) = v"0-"
