@@ -240,6 +240,8 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.:⊈
+Base.:⊊
 ```
 
 Fully implemented by:
