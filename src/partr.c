@@ -770,7 +770,7 @@ JL_DLLEXPORT int jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach)
     enqueue_task(task);
 
     /* only yield if we're running a non-sticky task */
-    if (ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY))
+    if (!task->started  &&  ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY))
         jl_task_yield(1);
 
     return 0;
