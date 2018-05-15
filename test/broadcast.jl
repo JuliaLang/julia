@@ -430,8 +430,8 @@ abstract type ArrayData{T,N} <: AbstractArray{T,N} end
 Base.getindex(A::ArrayData, i::Integer...) = A.data[i...]
 Base.setindex!(A::ArrayData, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::ArrayData) = size(A.data)
-Base.broadcast_similar(::Broadcast.ArrayStyle{A}, ::Type{T}, inds::Tuple, bc) where {A,T} =
-    A(Array{T}(undef, length.(inds)))
+Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{A}}, ::Type{T}) where {A,T} =
+    A(Array{T}(undef, length.(axes(bc))))
 
 struct Array19745{T,N} <: ArrayData{T,N}
     data::Array{T,N}
@@ -494,8 +494,8 @@ end
 struct AD2DimStyle <: Broadcast.AbstractArrayStyle{2}; end
 AD2DimStyle(::Val{2}) = AD2DimStyle()
 AD2DimStyle(::Val{N}) where {N} = Broadcast.DefaultArrayStyle{N}()
-Base.broadcast_similar(::AD2DimStyle, ::Type{T}, inds::Tuple, bc) where {T} =
-    AD2Dim(Array{T}(undef, length.(inds)))
+Base.similar(bc::Broadcast.Broadcasted{AD2DimStyle}, ::Type{T}) where {T} =
+    AD2Dim(Array{T}(undef, length.(axes(bc))))
 Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
 
 @testset "broadcasting for custom AbstractArray" begin

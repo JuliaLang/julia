@@ -1,6 +1,6 @@
 ## Broadcast styles
 import Base.Broadcast
-using Base.Broadcast: DefaultArrayStyle, broadcast_similar, tail
+using Base.Broadcast: DefaultArrayStyle, Broadcasted, tail
 
 struct StructuredMatrixStyle{T} <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()
@@ -91,11 +91,12 @@ function fzero(bc::Broadcast.Broadcasted)
     return any(ismissing, args) ? missing : bc.f(args...)
 end
 
-function Broadcast.broadcast_similar(::StructuredMatrixStyle{T}, ::Type{ElType}, inds, bc) where {T,ElType}
+function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
+    inds = axes(bc)
     if isstructurepreserving(bc) || (fzeropreserving(bc) && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
         return structured_broadcast_alloc(bc, T, ElType, length(inds[1]))
     end
-    return broadcast_similar(DefaultArrayStyle{2}(), ElType, inds, bc)
+    return similar(convert(Broadcasted{DefaultArrayStyle{ndims(bc)}}, bc), ElType)
 end
 
 function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})

@@ -11,8 +11,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!
-export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcast_similar, broadcastable,
-       dotview, @__dot__
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
 
@@ -25,8 +24,8 @@ by defining a type/method pair
     struct MyContainerStyle <: BroadcastStyle end
     Base.BroadcastStyle(::Type{<:MyContainer}) = MyContainerStyle()
 
-One then writes method(s) (at least [`broadcast_similar`](@ref)) operating on
-`MyContainerStyle`. There are also several pre-defined subtypes of `BroadcastStyle`
+One then writes method(s) (at least [`similar`](@ref)) operating on
+`Broadcasted{MyContainerStyle}`. There are also several pre-defined subtypes of `BroadcastStyle`
 that you may be able to leverage; see the
 [Interfaces chapter](@ref man-interfaces-broadcasting) for more information.
 """
@@ -38,13 +37,6 @@ parameter `C`. You can use this as an alternative to creating custom subtypes of
 for example
 
     Base.BroadcastStyle(::Type{<:MyContainer}) = Broadcast.Style{MyContainer}()
-
-There is a pre-defined [`broadcast_similar`](@ref) method
-
-    broadcast_similar(f, ::Style{C}, ::Type{ElType}, inds, args...) =
-        similar(C, ElType, inds)
-
-Naturally you can specialize this for your particular `C` (e.g., `MyContainer`).
 """
 struct Style{T} <: BroadcastStyle end
 
@@ -199,23 +191,15 @@ function Base.show(io::IO, bc::Broadcasted{Style}) where {Style}
 end
 
 ## Allocating the output container
-"""
-    broadcast_similar(::BroadcastStyle, ::Type{ElType}, inds, bc)
-
-Allocate an output object for [`broadcast`](@ref), appropriate for the indicated
-[`Broadcast.BroadcastStyle`](@ref). `ElType` and `inds` specify the desired element type and axes of the
-container. The final `bc` argument is the `Broadcasted` object representing the fused broadcast operation
-and its arguments.
-"""
-broadcast_similar(::DefaultArrayStyle{N}, ::Type{ElType}, inds::Indices{N}, bc) where {N,ElType} =
-    similar(Array{ElType}, inds)
-broadcast_similar(::DefaultArrayStyle{N}, ::Type{Bool}, inds::Indices{N}, bc) where N =
-    similar(BitArray, inds)
+Base.similar(bc::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}) where {N,ElType} =
+    similar(Array{ElType}, axes(bc))
+Base.similar(bc::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}) where N =
+    similar(BitArray, axes(bc))
 # In cases of conflict we fall back on Array
-broadcast_similar(::ArrayConflict, ::Type{ElType}, inds::Indices, bc) where ElType =
-    similar(Array{ElType}, inds)
-broadcast_similar(::ArrayConflict, ::Type{Bool}, inds::Indices, bc) =
-    similar(BitArray, inds)
+Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{ElType}) where ElType =
+    similar(Array{ElType}, axes(bc))
+Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{Bool}) =
+    similar(BitArray, axes(bc))
 
 ## Computing the result's axes. Most types probably won't need to specialize this.
 broadcast_axes() = ()
@@ -767,7 +751,7 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     ElType = combine_eltypes(bc.f, bc.args)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
-        return copyto!(broadcast_similar(Style(), ElType, axes(bc), bc), bc)
+        return copyto!(similar(bc, ElType), bc)
     end
     # When ElType is not concrete, use narrowing. Use the first output
     # value to determine the starting output eltype; copyto_nonleaf!
@@ -777,12 +761,12 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     state = start(iter)
     if done(iter, state)
         # if empty, take the ElType at face value
-        return broadcast_similar(Style(), ElType, axes(bc′), bc′)
+        return similar(bc′, ElType)
     end
     # Initialize using the first value
     I, state = next(iter, state)
     @inbounds val = bc′[I]
-    dest = broadcast_similar(Style(), typeof(val), axes(bc′), bc′)
+    dest = similar(bc′, typeof(val))
     @inbounds dest[I] = val
     # Now handle the remaining values
     return copyto_nonleaf!(dest, bc′, iter, state, 1)
