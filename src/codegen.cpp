@@ -277,6 +277,7 @@ static Function *jlthrow_func;
 static Function *jlerror_func;
 static Function *jltypeerror_func;
 static Function *jlundefvarerror_func;
+static Function *jlassertegalerror_func;
 static Function *jlboundserror_func;
 static Function *jluboundserror_func;
 static Function *jlvboundserror_func;
@@ -3176,19 +3177,29 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex)
     return mark_julia_type(ctx, callval, true, rt);
 }
 
-// --- accessing and assigning variables ---
-
-static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name)
+static void error_func_ifnot(jl_codectx_t &ctx, Value *ok, Function *error_func, jl_sym_t *label)
 {
     BasicBlock *err = BasicBlock::Create(jl_LLVMContext, "err", ctx.f);
     BasicBlock *ifok = BasicBlock::Create(jl_LLVMContext, "ok");
     ctx.builder.CreateCondBr(ok, ifok, err);
     ctx.builder.SetInsertPoint(err);
-    ctx.builder.CreateCall(prepare_call(jlundefvarerror_func),
-        mark_callee_rooted(literal_pointer_val(ctx, (jl_value_t*)name)));
+    ctx.builder.CreateCall(prepare_call(error_func),
+        mark_callee_rooted(literal_pointer_val(ctx, (jl_value_t*)label)));
     ctx.builder.CreateUnreachable();
     ctx.f->getBasicBlockList().push_back(ifok);
     ctx.builder.SetInsertPoint(ifok);
+}
+
+static void assert_egal_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *label)
+{
+    error_func_ifnot(ctx, ok, jlassertegalerror_func, label);
+}
+
+// --- accessing and assigning variables ---
+
+static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name)
+{
+    error_func_ifnot(ctx, ok, jlundefvarerror_func, name);
 }
 
 // returns a jl_ppvalue_t location for the global variable m.s
@@ -3948,6 +3959,23 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
     else if (head == throw_undef_if_not_sym) {
         Value *cond = emit_unbox(ctx, T_int8, emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type);
         undef_var_error_ifnot(ctx, ctx.builder.CreateTrunc(cond, T_int1), (jl_sym_t*)args[0]);
+        return ghostValue(jl_void_type);
+    }
+    else if (head == assert_egal_sym) {
+        Value *cond = emit_f_is(ctx, emit_expr(ctx, args[1]), emit_expr(ctx, args[2]));
+        jl_sym_t *label = NULL;
+        jl_value_t *l = args[0];
+        if (jl_is_quotenode(l))
+            l = jl_fieldref_noalloc(l, 0);
+        if (jl_is_long(l)) {
+            label = jl_symbol(
+                (std::string{"Assertion #"} + std::to_string(jl_unbox_long(l))).c_str());
+        } else if (jl_is_symbol(args[0])) {
+            label = (jl_sym_t*)l;
+        } else {
+            jl_error("Only Int or Symbol allowed as the label argument for :assert_egal");
+        }
+        assert_egal_error_ifnot(ctx, ctx.builder.CreateTrunc(cond, T_int1), label);
         return ghostValue(jl_void_type);
     }
     else if (head == invoke_sym) {
@@ -7100,6 +7128,12 @@ static void init_julia_llvm_env(Module *m)
                          "jl_undefined_var_error", m);
     jlundefvarerror_func->setDoesNotReturn();
     add_named_global(jlundefvarerror_func, &jl_undefined_var_error);
+
+    jlassertegalerror_func =
+    Function::Create(FunctionType::get(T_void, args1_, false),
+                     Function::ExternalLinkage,
+                     "jl_assert_egal_error", m);
+    jlassertegalerror_func->setDoesNotReturn();
 
     std::vector<Type*> args2_boundserrorv(0);
     args2_boundserrorv.push_back(PointerType::get(T_jlvalue, AddressSpace::CalleeRooted));

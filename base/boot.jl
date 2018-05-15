@@ -246,6 +246,9 @@ struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
 end
+struct AssertEgalError     <: Exception
+    label::Symbol
+end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
     val

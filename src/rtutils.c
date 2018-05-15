@@ -134,6 +134,11 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_assert_egal_error(jl_sym_t *label)
+{
+    jl_throw(jl_new_struct(jl_assertegalerror_type, label));
+}
+
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
 {
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to

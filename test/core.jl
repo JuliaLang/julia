@@ -6072,3 +6072,10 @@ end
 @test !Base.isvatuple(Tuple{Float64,Vararg{Int,1}})
 @test !Base.isvatuple(Tuple{T,Vararg{Int,2}} where T)
 @test !Base.isvatuple(Tuple{Int,Int,Vararg{Int,2}})
+
+# :assert_egal mechanism
+@eval f_assert_egal() = $(Expr(:assert_egal, 1, true, false))
+@eval g_assert_egal(x) = ($(Expr(:assert_egal, QuoteNode(Symbol("Important Property")), :x, true)); x)
+@test_throws(Core.AssertEgalError(Symbol("Assertion #1")), f_assert_egal())
+@test g_assert_egal(true) === true
+@test_throws(Core.AssertEgalError(Symbol("Important Property")), g_assert_egal(false))
