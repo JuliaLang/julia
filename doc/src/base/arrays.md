@@ -20,6 +20,7 @@ Base.Matrix
 Base.Matrix(::UndefInitializer, ::Any, ::Any)
 Base.Matrix(::Nothing, ::Any, ::Any)
 Base.Matrix(::Missing, ::Any, ::Any)
+Base.VecOrMat
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
