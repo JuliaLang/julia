@@ -105,7 +105,6 @@ function simple_walk(compact::IncrementalCompact, defssa::Union{SSAValue, NewSSA
     while true
         if isa(defssa, OldSSAValue) && already_inserted(compact, defssa)
             rename = compact.ssa_rename[defssa.id]
-            @assert rename != defssa
             if isa(rename, Union{SSAValue, OldSSAValue, NewSSAValue})
                 defssa = rename
                 continue
@@ -116,13 +115,17 @@ function simple_walk(compact::IncrementalCompact, defssa::Union{SSAValue, NewSSA
         if isa(def, PiNode)
             pi_callback(def, defssa)
             if isa(def.val, SSAValue)
-                defssa = def.val
+                if isa(defssa, OldSSAValue) && !already_inserted(compact, defssa)
+                    defssa = OldSSAValue(def.val.id)
+                else
+                    defssa = def.val
+                end
             else
                 return def.val
             end
         elseif isa(def, Union{SSAValue, OldSSAValue, NewSSAValue})
             defssa = def
-        elseif isa(def, Union{PhiNode, Expr})
+        elseif isa(def, Union{PhiNode, PhiCNode, Expr, GlobalRef})
             return defssa
         else
             return def
@@ -161,14 +164,20 @@ function walk_to_defs(compact, defssa, typeconstraint, visited_phinodes=Any[])
             possible_predecessors = let def=def, typeconstraint=typeconstraint
                 collect(Iterators.filter(1:length(def.edges)) do n
                     isassigned(def.values, n) || return false
-                    value = def.values[n]
-                    edge_typ = widenconst(compact_exprtype(compact, value))
+                    val = def.values[n]
+                    if isa(defssa, OldSSAValue) && isa(val, SSAValue)
+                        val = OldSSAValue(val.id)
+                    end
+                    edge_typ = widenconst(compact_exprtype(compact, val))
                     return typeintersect(edge_typ, typeconstraint) !== Union{}
                 end)
             end
             for n in possible_predecessors
                 pred = def.edges[n]
                 val = def.values[n]
+                if isa(defssa, OldSSAValue) && isa(val, SSAValue)
+                    val = OldSSAValue(val.id)
+                end
                 if isa(val, Union{SSAValue, OldSSAValue, NewSSAValue})
                     new_def, new_constraint = simple_walk_constraint(compact, val, typeconstraint)
                     if isa(new_def, Union{SSAValue, OldSSAValue, NewSSAValue})
@@ -177,6 +186,7 @@ function walk_to_defs(compact, defssa, typeconstraint, visited_phinodes=Any[])
                         end
                         continue
                     end
+                    val = new_def
                 end
                 if def == val
                     # This shouldn't really ever happen, but
@@ -203,15 +213,10 @@ function process_immutable_preserve(new_preserves::Vector{Any}, compact::Increme
     end
 end
 
-struct FastForward
-    to::SSAValue
-    phi_locs::Vector{Tuple{Int, Int}}
-end
-
-function already_inserted(compact, old::OldSSAValue)
+function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
     id = old.id
     if id < length(compact.ir.stmts)
-        return id <= compact.idx
+        return id < compact.idx
     end
     id -= length(compact.ir.stmts)
     if id < length(compact.ir.new_nodes)
@@ -222,7 +227,12 @@ function already_inserted(compact, old::OldSSAValue)
     return !(id in compact.pending_perm)
 end
 
-function lift_leaves(compact, stmt, result_t, field, leaves)
+function is_pending(compact::IncrementalCompact, old::OldSSAValue)
+    return old.id > length(compact.ir.stmts) + length(compact.ir.new_nodes)
+end
+
+function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
+        @nospecialize(result_t), field::Int, leaves::Vector{Any})
     # For every leaf, the lifted value
     lifted_leaves = IdDict{Any, Any}()
     maybe_undef = false
@@ -243,7 +253,11 @@ function lift_leaves(compact, stmt, result_t, field, leaves)
                 def = compact[leaf]
             end
             if is_tuple_call(compact.ir, def) && isa(field, Int) && 1 <= field < length(def.args)
-                lifted_leaves[leaf_key] = Ref{Any}(def.args[1+field])
+                lifted = def.args[1+field]
+                if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
+                    lifted = OldSSAValue(lifted.id)
+                end
+                lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
             elseif isexpr(def, :new)
                 typ = def.typ
@@ -252,7 +266,7 @@ function lift_leaves(compact, stmt, result_t, field, leaves)
                 end
                 (isa(typ, DataType) && (!typ.abstract)) || return nothing
                 @assert !typ.mutable
-                field = try_compute_fieldidx(typ, stmt)
+                field = try_compute_fieldidx_expr(typ, stmt)
                 field === nothing && return nothing
                 if length(def.args) < 1 + field
                     ftyp = fieldtype(typ, field)
@@ -263,6 +277,7 @@ function lift_leaves(compact, stmt, result_t, field, leaves)
                         lifted_leaves[leaf_key] = nothing
                         continue
                     end
+                    return nothing
                     # Expand the Expr(:new) to include it's element Expr(:new) nodes up until the one we want
                     compact[leaf] = nothing
                     for i = (length(def.args) + 1):(1+field)
@@ -272,7 +287,11 @@ function lift_leaves(compact, stmt, result_t, field, leaves)
                     end
                     compact[leaf] = def
                 end
-                lifted_leaves[leaf_key] = Ref{Any}(def.args[1+field])
+                lifted = def.args[1+field]
+                if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
+                    lifted = OldSSAValue(lifted.id)
+                end
+                lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
             else
                 typ = compact_exprtype(compact, leaf)
@@ -288,10 +307,12 @@ function lift_leaves(compact, stmt, result_t, field, leaves)
                         @assert !typ.mutable
                         # If there's the potential for an undefref error on access, we cannot insert a getfield
                         if field > typ.ninitialized && !isbits(fieldtype(typ, field))
-                            lifted_leaves[leaf] = Ref{Any}(insert_node!(compact, leaf, make_MaybeUndef(result_t), Expr(:call, :unchecked_getfield, SSAValue(leaf.id), field), true))
+                            return nothing
+                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, make_MaybeUndef(result_t), Expr(:call, :unchecked_getfield, SSAValue(leaf.id), field), true))
                             maybe_undef = true
                         else
-                            lifted_leaves[leaf] = Ref{Any}(insert_node!(compact, leaf, result_t, Expr(:call, getfield, SSAValue(leaf.id), field), true))
+                            return nothing
+                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, result_t, Expr(:call, getfield, SSAValue(leaf.id), field), true))
                         end
                         continue
                     end
@@ -300,6 +321,8 @@ function lift_leaves(compact, stmt, result_t, field, leaves)
                 leaf = typ.val
                 # Fall through to below
             end
+        elseif isa(leaf, QuoteNode)
+            leaf = leaf.value
         elseif isa(leaf, Union{Argument, Expr})
             return nothing
         end
@@ -307,7 +330,7 @@ function lift_leaves(compact, stmt, result_t, field, leaves)
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
         is_inlineable_constant(val) || return nothing
-        lifted_leaves[leaf_key] = Ref{Any}(quoted(val))
+        lifted_leaves[leaf_key] = RefValue{Any}(quoted(val))
     end
     lifted_leaves, maybe_undef
 end
@@ -316,11 +339,143 @@ make_MaybeUndef(typ) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
 const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 
+function lift_comparison!(compact::IncrementalCompact, idx::Int,
+        @nospecialize(c1), @nospecialize(c2), stmt::Expr,
+        lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    if isa(c1, Const)
+        cmp = c1
+        typeconstraint = widenconst(c2)
+        val = stmt.args[3]
+    else
+        cmp = c2
+        typeconstraint = widenconst(c1)
+        val = stmt.args[2]
+    end
+
+    is_type_only = isdefined(typeof(cmp), :instance)
+
+    if isa(val, Union{OldSSAValue, SSAValue})
+        val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
+    end
+
+    visited_phinodes = Any[]
+    if isa(val, Union{OldSSAValue, SSAValue, NewSSAValue}) && isa(compact[val], PhiNode)
+        leaves = walk_to_defs(compact, val, typeconstraint, visited_phinodes)
+    else
+        leaves = [val]
+    end
+
+    # Let's check if we evaluate the comparison for each one of the leaves
+    lifted_leaves = IdDict{Any, Any}()
+    for leaf in leaves
+        r = egal_tfunc(compact_exprtype(compact, leaf), cmp)
+        if isa(r, Const)
+            lifted_leaves[leaf] = RefValue{Any}(r.val)
+        else
+            # TODO: In some cases it might be profitable to hoist the ===
+            # here.
+            return
+        end
+    end
+
+    lifted_val = perform_lifting!(compact, visited_phinodes, cmp, lifting_cache, Bool, lifted_leaves, val)
+
+    #global assertion_counter
+    #assertion_counter::Int += 1
+    #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), lifted_val), nothing, 0, true)
+    #return
+    compact[idx] = lifted_val
+end
+
+struct LiftedPhi
+    ssa::AnySSAValue
+    node::Any
+    need_argupdate::Bool
+end
+
+function perform_lifting!(compact::IncrementalCompact,
+        visited_phinodes::Vector{Any}, @nospecialize(cache_key),
+        lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
+        @nospecialize(result_t), lifted_leaves::IdDict{Any, Any}, @nospecialize(stmt_val))
+    reverse_mapping = IdDict{Any, Any}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
+
+    # Insert PhiNodes
+    lifted_phis = LiftedPhi[]
+    for item in visited_phinodes
+        if (item, cache_key) in keys(lifting_cache)
+            ssa = lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)]
+            push!(lifted_phis, LiftedPhi(ssa, compact[ssa], false))
+            continue
+        end
+        n = PhiNode()
+        ssa = insert_node!(compact, item, result_t, n)
+        lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)] = ssa
+        push!(lifted_phis, LiftedPhi(ssa, n, true))
+    end
+
+    # Fix up arguments
+    for (old_node_ssa, lf) in zip(visited_phinodes, lifted_phis)
+        old_node = compact[old_node_ssa]
+        new_node = lf.node
+        lf.need_argupdate || continue
+        for i = 1:length(old_node.edges)
+            edge = old_node.edges[i]
+            isassigned(old_node.values, i) || continue
+            val = old_node.values[i]
+            orig_val = val
+            if isa(old_node_ssa, OldSSAValue) && !is_pending(compact, old_node_ssa) && !already_inserted(compact, old_node_ssa) && isa(val, SSAValue)
+                val = OldSSAValue(val.id)
+            end
+            if isa(val, Union{NewSSAValue, SSAValue, OldSSAValue})
+                val = simple_walk(compact, val)
+            end
+            if val in keys(lifted_leaves)
+                push!(new_node.edges, edge)
+                lifted_val = lifted_leaves[val]
+                if lifted_val === nothing
+                    resize!(new_node.values, length(new_node.values)+1)
+                    continue
+                end
+                lifted_val = lifted_val.x
+                if isa(lifted_val, Union{NewSSAValue, SSAValue, OldSSAValue})
+                    lifted_val = simple_walk(compact, lifted_val)
+                end
+                push!(new_node.values, lifted_val)
+            elseif isa(val, Union{NewSSAValue, SSAValue, OldSSAValue}) && val in keys(reverse_mapping)
+                push!(new_node.edges, edge)
+                push!(new_node.values, lifted_phis[reverse_mapping[val]].ssa)
+            else
+                # Probably ignored by path condition, skip this
+            end
+        end
+    end
+
+    for lf in lifted_phis
+        count_added_node!(compact, lf.node)
+    end
+
+    # Fixup the stmt itself
+    if isa(stmt_val, Union{SSAValue, OldSSAValue})
+        stmt_val = simple_walk(compact, stmt_val)
+    end
+    if stmt_val in keys(lifted_leaves)
+        stmt_val = lifted_leaves[stmt_val]
+        @assert stmt_val !== nothing
+        stmt_val = stmt_val.x
+    else
+        isa(stmt_val, Union{SSAValue, OldSSAValue}) && stmt_val in keys(reverse_mapping)
+        stmt_val = lifted_phis[reverse_mapping[stmt_val]].ssa
+    end
+
+    return stmt_val
+end
+
+assertion_counter = 0
 function getfield_elim_pass!(ir::IRCode, domtree)
     compact = IncrementalCompact(ir)
     insertions = Vector{Any}()
     defuses = IdDict{Int, Tuple{IdSet{Int}, SSADefUse}}()
-    lifting_cache = IdDict{Tuple{AnySSAValue, Int}, AnySSAValue}()
+    lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
     revisit_worklist = Int[]
     #ndone, nmax = 0, 200
     for (idx, stmt) in compact
@@ -336,6 +491,18 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             is_setfield = true
         elseif is_known_call(stmt, getfield, compact)
             is_getfield = true
+        elseif is_known_call(stmt, isa, compact)
+            # TODO
+            continue
+        elseif is_known_call(stmt, (===), compact)
+            c1 = compact_exprtype(compact, stmt.args[2])
+            c2 = compact_exprtype(compact, stmt.args[3])
+            if !(isa(c1, Const) || isa(c2, Const))
+                continue
+            end
+            (isa(c1, Const) && isa(c2, Const)) && continue
+            lift_comparison!(compact, idx, c1, c2, stmt, lifting_cache)
+            continue
         elseif isexpr(stmt, :call) && stmt.args[1] == :unchecked_getfield
             is_getfield = true
             is_unchecked = true
@@ -413,90 +580,44 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         if isa(def, Union{OldSSAValue, SSAValue, NewSSAValue}) && isa(compact[def], PhiNode)
             leaves = walk_to_defs(compact, def, typeconstraint, visited_phinodes)
         else
-            leaves = [def]
+            leaves = Any[def]
         end
 
         isempty(leaves) && continue
 
-        field = try_compute_fieldidx(struct_typ, stmt)
+        field = try_compute_fieldidx_expr(struct_typ, stmt)
         field === nothing && continue
 
         r = lift_leaves(compact, stmt, result_t, field, leaves)
         r === nothing && continue
         lifted_leaves, any_undef = r
 
-        reverse_mapping = IdDict{Any, Any}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
-
         if any_undef
             result_t = make_MaybeUndef(result_t)
         end
 
-        # Insert PhiNodes
-        lifted_phis = map(visited_phinodes) do item
-            if (item, field) in keys(lifting_cache)
-                ssa = lifting_cache[(item, field)]
-                return (ssa, compact[ssa], false)
-            end
-            n = PhiNode()
-            ssa = insert_node!(compact, item, result_t, n)
-            lifting_cache[(item, field)] = ssa
-            (ssa, n, true)
-        end
-
-        # Fix up arguments
-        for (old_node, (_, new_node, need_argupdate)) in zip(map(x->compact[x], visited_phinodes), lifted_phis)
-            need_argupdate || continue
-            for i = 1:length(old_node.edges)
-                edge = old_node.edges[i]
-                isassigned(old_node.values, i) || continue
-                val = old_node.values[i]
-                if isa(val, Union{NewSSAValue, SSAValue, OldSSAValue})
-                    val = simple_walk(compact, val)
-                end
-                if val in keys(lifted_leaves)
-                    push!(new_node.edges, edge)
-                    lifted_val = lifted_leaves[val]
-                    if lifted_val === nothing
-                        resize!(new_node.values, length(new_node.values)+1)
-                        continue
-                    end
-                    lifted_val = lifted_val.x
-                    if isa(lifted_val, Union{NewSSAValue, SSAValue, OldSSAValue})
-                        lifted_val = simple_walk(compact, lifted_val)
-                    end
-                    push!(new_node.values, lifted_val)
-                elseif isa(val, Union{NewSSAValue, SSAValue, OldSSAValue}) && val in keys(reverse_mapping)
-                    push!(new_node.edges, edge)
-                    push!(new_node.values, lifted_phis[reverse_mapping[val]][1])
-                else
-                    # Probably ignored by path condition, skip this
-                end
-            end
-        end
-
-        for (_, node) in lifted_phis
-            count_added_node!(compact, node)
-        end
-
-        # Fixup the stmt itself
-        val = stmt.args[2]
-        if isa(val, Union{SSAValue, OldSSAValue})
-            val = simple_walk(compact, val)
-        end
-        if val in keys(lifted_leaves)
-            val = lifted_leaves[val]
-            @assert val !== nothing
-            val = val.x
-        else
-            isa(val, Union{SSAValue, OldSSAValue}) && val in keys(reverse_mapping)
-            val = lifted_phis[reverse_mapping[val]][1]
-        end
+#        @Base.show result_t
+#        @Base.show stmt
+#        for (k,v) in lifted_leaves
+#            @Base.show (k, v)
+#            if isa(k, AnySSAValue)
+#                @Base.show compact[k]
+#            end
+#            if isa(v, RefValue) && isa(v.x, AnySSAValue)
+#                @Base.show compact[v.x]
+#            end
+#        end
+        val = perform_lifting!(compact, visited_phinodes, field, lifting_cache, result_t, lifted_leaves, stmt.args[2])
 
         # Insert the undef check if necessary
         if any_undef && !is_unchecked
             insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, :getfield, val))
         end
 
+        global assertion_counter
+        assertion_counter::Int += 1
+        #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), val), nothing, 0, true)
+        #continue
         compact[idx] = val
     end
 
@@ -678,7 +799,8 @@ function type_lift_pass!(ir::IRCode)
     has_non_type_ctx_uses = IdSet{Int}()
     lifted_undef = IdDict{Int, Any}()
     for (idx, stmt) in pairs(ir.stmts)
-        if stmt isa Expr && (stmt.head === :isdefined || stmt.head === :undefcheck)
+        stmt isa Expr || continue
+        if (stmt.head === :isdefined || stmt.head === :undefcheck)
             val = (stmt.head === :isdefined) ? stmt.args[1] : stmt.args[2]
             # undef can only show up by being introduced in a phi
             # node (or an UpsilonNode() argument to a PhiC node),

@@ -500,16 +500,16 @@ function resort_pending!(compact)
     sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes[x].pos))
 end
 
-function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @nospecialize(val), reverse_affinity::Bool=false)
+function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @nospecialize(val), attach_after::Bool=false)
     if isa(before, SSAValue)
         if before.id < compact.result_idx
             count_added_node!(compact, val)
             line = compact.result_lines[before.id]
-            push!(compact.new_new_nodes, NewNode(before.id, reverse_affinity, typ, val, line))
+            push!(compact.new_new_nodes, NewNode(before.id, attach_after, typ, val, line))
             return NewSSAValue(length(compact.new_new_nodes))
         else
             line = compact.ir.lines[before.id]
-            push!(compact.pending_nodes, NewNode(before.id, reverse_affinity, typ, val, line))
+            push!(compact.pending_nodes, NewNode(before.id, attach_after, typ, val, line))
             push!(compact.pending_perm, length(compact.pending_nodes))
             resort_pending!(compact)
             os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
@@ -520,12 +520,12 @@ function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @
     elseif isa(before, OldSSAValue)
         pos = before.id
         if pos > length(compact.ir.stmts)
-            @assert reverse_affinity
+            #@assert attach_after
             entry = compact.pending_nodes[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
-            pos, reverse_affinity = entry.pos, entry.reverse_affinity
+            pos, attach_after = entry.pos, entry.attach_after
         end
-        line = 0 #compact.ir.lines[before.id]
-        push!(compact.pending_nodes, NewNode(pos, reverse_affinity, typ, val, line))
+        line = compact.ir.lines[pos]
+        push!(compact.pending_nodes, NewNode(pos, attach_after, typ, val, line))
         push!(compact.pending_perm, length(compact.pending_nodes))
         resort_pending!(compact)
         os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
@@ -534,25 +534,33 @@ function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @
         return os
     elseif isa(before, NewSSAValue)
         before_entry = compact.new_new_nodes[before.id]
-        push!(compact.new_new_nodes, NewNode(before_entry.pos, reverse_affinity, typ, val, before_entry.line))
+        push!(compact.new_new_nodes, NewNode(before_entry.pos, attach_after, typ, val, before_entry.line))
         return NewSSAValue(length(compact.new_new_nodes))
     else
         error("Unsupported")
     end
 end
 
-function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typ), ltable_idx::Int)
+function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typ), ltable_idx::Int, reverse_affinity=false)
     if compact.result_idx > length(compact.result)
         @assert compact.result_idx == length(compact.result) + 1
         resize!(compact, compact.result_idx)
+    end
+    refinish = false
+    if compact.result_idx == first(compact.result_bbs[compact.active_result_bb].stmts) && reverse_affinity
+        compact.active_result_bb -= 1
+        refinish = true
     end
     compact.result[compact.result_idx] = val
     compact.result_types[compact.result_idx] = typ
     compact.result_lines[compact.result_idx] = ltable_idx
     compact.result_flags[compact.result_idx] = 0x00
-    count_added_node!(compact, val)
+    if count_added_node!(compact, val)
+        push!(compact.late_fixup, compact.result_idx)
+    end
     ret = SSAValue(compact.result_idx)
     compact.result_idx += 1
+    refinish && finish_current_bb!(compact)
     ret
 end
 
@@ -624,27 +632,73 @@ end
 
 function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int},
                                 processed_idx::Int, result_idx::Int,
-                                ssa_rename::Vector{Any}, used_ssas::Vector{Int})
+                                ssa_rename::Vector{Any}, used_ssas::Vector{Int},
+                                do_rename_ssa::Bool)
     values = Vector{Any}(undef, length(old_values))
     for i = 1:length(old_values)
         isassigned(old_values, i) || continue
         val = old_values[i]
         if isa(val, SSAValue)
+            if do_rename_ssa
+                if val.id > processed_idx
+                    push!(late_fixup, result_idx)
+                    val = OldSSAValue(val.id)
+                else
+                    val = renumber_ssa2(val, ssa_rename, used_ssas, do_rename_ssa)
+                end
+            else
+                used_ssas[val.id] += 1
+            end
+        elseif isa(val, OldSSAValue)
             if val.id > processed_idx
                 push!(late_fixup, result_idx)
-                val = OldSSAValue(val.id)
             else
-                val = renumber_ssa!(val, ssa_rename, true, used_ssas)
+                # Always renumber these. do_rename_ssa applies only to actual SSAValues
+                val = renumber_ssa2(SSAValue(val.id), ssa_rename, used_ssas, true)
             end
+        elseif isa(val, NewSSAValue)
+            push!(late_fixup, result_idx)
         end
         values[i] = val
     end
     return values
 end
 
+function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssa::Vector{Int}, do_rename_ssa::Bool)
+    id = val.id
+    if id > length(ssanums)
+        return val
+    end
+    if do_rename_ssa
+        val = ssanums[id]
+    end
+    if isa(val, SSAValue) && used_ssa !== nothing
+        used_ssa[val.id] += 1
+    end
+    return val
+end
+
+function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssa::Vector{Int}, late_fixup::Vector{Int}, result_idx::Int, do_rename_ssa::Bool)
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, OldSSAValue) || isa(val, NewSSAValue)
+            push!(late_fixup, result_idx)
+        end
+        if isa(val, SSAValue)
+            val = renumber_ssa2(val, ssanums, used_ssa, do_rename_ssa)
+        end
+        if isa(val, OldSSAValue) || isa(val, NewSSAValue)
+            push!(late_fixup, result_idx)
+        end
+        op[] = val
+    end
+    return urs[]
+end
+
 function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{Any},
         late_fixup::Vector{Int}, used_ssas::Vector{Int}, @nospecialize(stmt),
-        idx::Int, processed_idx::Int)
+        idx::Int, processed_idx::Int, do_rename_ssa::Bool)
     ssa_rename[idx] = SSAValue(result_idx)
     if stmt === nothing
         ssa_rename[idx] = stmt
@@ -654,17 +708,19 @@ function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{
         result[result_idx] = stmt
         result_idx += 1
     elseif isa(stmt, Expr) || isa(stmt, PiNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
-        result[result_idx] = renumber_ssa!(stmt, ssa_rename, true, used_ssas)
+        result[result_idx] = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)
         result_idx += 1
     elseif isa(stmt, PhiNode)
-        result[result_idx] = PhiNode(stmt.edges, process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas))
+        result[result_idx] = PhiNode(stmt.edges, process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa))
         result_idx += 1
     elseif isa(stmt, PhiCNode)
-        result[result_idx] = PhiCNode(process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas))
+        result[result_idx] = PhiCNode(process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa))
         result_idx += 1
     elseif isa(stmt, SSAValue)
         # identity assign, replace uses of this ssa value with its result
-        stmt = ssa_rename[stmt.id]
+        if do_rename_ssa
+            stmt = ssa_rename[stmt.id]
+        end
         ssa_rename[idx] = stmt
     else
         # Constant assign, replace uses of this ssa value with its result
@@ -672,9 +728,10 @@ function process_node!(result::Vector{Any}, result_idx::Int, ssa_rename::Vector{
     end
     return result_idx
 end
-function process_node!(compact::IncrementalCompact, result_idx::Int, @nospecialize(stmt), idx::Int, processed_idx::Int)
+function process_node!(compact::IncrementalCompact, result_idx::Int, @nospecialize(stmt), idx::Int, processed_idx::Int, do_rename_ssa::Bool)
     return process_node!(compact.result, result_idx, compact.ssa_rename,
-        compact.late_fixup, compact.used_ssas, stmt, idx, processed_idx)
+        compact.late_fixup, compact.used_ssas, stmt, idx, processed_idx,
+        do_rename_ssa)
 end
 
 function resize!(compact::IncrementalCompact, nnewnodes)
@@ -717,12 +774,12 @@ function attach_after_stmt_after(compact::IncrementalCompact, idx::Int)
     entry.pos == idx && entry.attach_after
 end
 
-function process_newnode!(compact, new_idx, new_node_entry, idx, active_bb)
+function process_newnode!(compact, new_idx, new_node_entry, idx, active_bb, do_rename_ssa)
     old_result_idx = compact.result_idx
     bb = compact.ir.cfg.blocks[active_bb]
     compact.result_types[old_result_idx] = new_node_entry.typ
     compact.result_lines[old_result_idx] = new_node_entry.line
-    result_idx = process_node!(compact, old_result_idx, new_node_entry.node, new_idx, idx)
+    result_idx = process_node!(compact, old_result_idx, new_node_entry.node, new_idx, idx, do_rename_ssa)
     compact.result_idx = result_idx
     # If this instruction has reverse affinity and we were at the end of a basic block,
     # finish it now.
@@ -750,21 +807,21 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         compact.new_nodes_idx += 1
         new_node_entry = compact.ir.new_nodes[new_idx]
         new_idx += length(compact.ir.stmts)
-        return process_newnode!(compact, new_idx, new_node_entry, idx, active_bb)
+        return process_newnode!(compact, new_idx, new_node_entry, idx, active_bb, true)
     elseif !isempty(compact.pending_perm) &&
         (entry = compact.pending_nodes[compact.pending_perm[1]];
          entry.attach_after ? entry.pos == idx - 1 : entry.pos == idx)
         new_idx = popfirst!(compact.pending_perm)
         new_node_entry = compact.pending_nodes[new_idx]
         new_idx += length(compact.ir.stmts) + length(compact.ir.new_nodes)
-        return process_newnode!(compact, new_idx, new_node_entry, idx, active_bb)
+        return process_newnode!(compact, new_idx, new_node_entry, idx, active_bb, false)
     end
     # This will get overwritten in future iterations if
     # result_idx is not, incremented, but that's ok and expected
     compact.result_types[old_result_idx] = compact.ir.types[idx]
     compact.result_lines[old_result_idx] = compact.ir.lines[idx]
     compact.result_flags[old_result_idx] = compact.ir.flags[idx]
-    result_idx = process_node!(compact, old_result_idx, compact.ir.stmts[idx], idx, idx)
+    result_idx = process_node!(compact, old_result_idx, compact.ir.stmts[idx], idx, idx, true)
     stmt_if_any = old_result_idx == result_idx ? nothing : compact.result[old_result_idx]
     compact.result_idx = result_idx
     if idx == last(bb.stmts) && !attach_after_stmt_after(compact, idx)
@@ -849,7 +906,11 @@ function just_fixup!(compact)
     for idx in 1:length(compact.new_new_nodes)
         node = compact.new_new_nodes[idx]
         new_stmt = fixup_node(compact, node.node)
-        (node.node !== new_stmt) && (compact.new_new_nodes[idx] = NewNode(node, node=new_stmt))
+        if node.node !== new_stmt
+            compact.new_new_nodes[idx] = NewNode(
+                node.pos, node.attach_after, node.typ,
+                new_stmt, node.line)
+        end
     end
 end
 
