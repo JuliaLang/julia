@@ -6,6 +6,7 @@
 Core.AbstractArray
 Base.AbstractVector
 Base.AbstractMatrix
+Base.AbstractVecOrMat
 Core.Array
 Core.Array(::UndefInitializer, ::Any)
 Core.Array(::Nothing, ::Any)

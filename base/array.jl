@@ -29,6 +29,12 @@ Supertype for two-dimensional arrays (or array-like types) with
 elements of type `T`. Alias for [`AbstractArray{T,2}`](@ref).
 """
 const AbstractMatrix{T} = AbstractArray{T,2}
+
+"""
+    AbstractVecOrMat{T}
+
+Union type of [`AbstractVector{T}`](@ref) and [`AbstractMatrix{T}`](@ref).
+"""
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
 const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
