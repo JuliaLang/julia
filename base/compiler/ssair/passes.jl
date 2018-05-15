@@ -483,7 +483,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         #ndone >= nmax && continue
         #ndone += 1
         result_t = compact_exprtype(compact, SSAValue(idx))
-        is_getfield = false
+        is_getfield = is_setfield = false
         is_ccall = false
         is_unchecked = false
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
@@ -493,6 +493,25 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             is_getfield = true
         elseif is_known_call(stmt, isa, compact)
             # TODO
+            continue
+        elseif is_known_call(stmt, typeassert, compact)
+            # Canonicalize
+            #   X = typeassert(Y, T)::S
+            # into
+            #   typeassert(Y, T)
+            #   X = PiNode(Y, S)
+            # N.B.: Inference may have a more precise type for `S`, than
+            #       just T, but from here on out, there's no problem with
+            #       using just using that.
+            # so subsequent analysis only has to deal with the latter
+            # form. TODO: This isn't the best place to put this.
+            # Also, we should probably have a version of typeassert
+            # that's defined not to return its value to make life easier
+            # for the backend.
+            pi = insert_node_here!(compact,
+                PiNode(stmt.args[2], compact.result_types[idx]), compact.result_types[idx],
+                compact.result_lines[idx], true)
+            compact.ssa_rename[compact.idx-1] = pi
             continue
         elseif is_known_call(stmt, (===), compact)
             c1 = compact_exprtype(compact, stmt.args[2])
@@ -567,8 +586,14 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             # Mutable stuff here
             isa(def, SSAValue) || continue
             mid, defuse = get!(defuses, def.id, (IdSet{Int}(), SSADefUse()))
-            push!(defuse.defs, idx)
+            if is_setfield
+                push!(defuse.defs, idx)
+            else
+                push!(defuse.uses, idx)
+            end
             union!(mid, intermediaries)
+            continue
+        elseif is_setfield
             continue
         end
 
@@ -624,6 +649,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
     ir = finish(compact)
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
+        continue
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
         # escapes and we cannot eliminate the allocation. This works, because we're guaranteed
@@ -812,11 +838,11 @@ function type_lift_pass!(ir::IRCode)
                 end
                 continue
             end
-            worklist = Tuple{Int, Int, SSAValue, Int}[(val.id, 0, SSAValue(0), 0)]
             stmt_id = val.id
             while isa(ir.stmts[stmt_id], PiNode)
                 stmt_id = ir.stmts[stmt_id].val.id
             end
+            worklist = Tuple{Int, Int, SSAValue, Int}[(stmt_id, 0, SSAValue(0), 0)]
             def = ir.stmts[stmt_id]
             if !isa(def, PhiNode) && !isa(def, PhiCNode)
                 if stmt.head === :isdefined
