@@ -242,6 +242,7 @@ Base.intersect!
 Base.issubset
 Base.:⊈
 Base.:⊊
+Base.issetequal
 ```
 
 Fully implemented by:
