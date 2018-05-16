@@ -174,6 +174,12 @@ Base.unsafe_convert(::Type{Ref{PtrStruct}}, at::Tuple) =
 breakpoint_ptrstruct(a::RealStruct) =
     ccall(:jl_breakpoint, Cvoid, (Ref{PtrStruct},), a)
 
+@noinline r_typeassert(c) = c ? (1,1) : nothing
+function f_typeassert(c)
+    r_typeassert(c)::Tuple
+end
+@test !occursin("jl_subtype", get_llvm(f_typeassert, Tuple{Bool}))
+
 if opt_level > 0
     @test !occursin("%gcframe", get_llvm(pointer_not_safepoint, Tuple{}))
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})

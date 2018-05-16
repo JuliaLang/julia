@@ -1047,12 +1047,16 @@ static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type,
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const std::string *msg)
 {
     Optional<bool> known_isa;
+    jl_value_t *intersected_type = type;
     if (x.constant)
         known_isa = jl_isa(x.constant, type);
     else if (jl_subtype(x.typ, type))
         known_isa = true;
-    else if (jl_type_intersection(x.typ, type) == (jl_value_t*)jl_bottom_type)
-        known_isa = false;
+    else {
+        intersected_type = jl_type_intersection(x.typ, type);
+        if (intersected_type == (jl_value_t*)jl_bottom_type)
+            known_isa = false;
+    }
     if (known_isa) {
         if (!*known_isa && msg) {
             emit_type_error(ctx, x, literal_pointer_val(ctx, type), *msg);
@@ -1076,9 +1080,9 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 ConstantInt::get(T_int32, 0)), false);
     }
     // tests for isa concretetype can be handled with pointer comparisons
-    if (jl_is_concrete_type(type)) {
+    if (jl_is_concrete_type(intersected_type)) {
         if (x.TIndex) {
-            unsigned tindex = get_box_tindex((jl_datatype_t*)type, x.typ);
+            unsigned tindex = get_box_tindex((jl_datatype_t*)intersected_type, x.typ);
             if (tindex > 0) {
                 // optimize more when we know that this is a split union-type where tindex = 0 is invalid
                 Value *xtindex = ctx.builder.CreateAnd(x.TIndex, ConstantInt::get(T_int8, 0x7f));
@@ -1093,7 +1097,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 ctx.builder.CreateCondBr(isboxed, isaBB, postBB);
                 ctx.builder.SetInsertPoint(isaBB);
                 Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.Vboxed),
-                    maybe_decay_untracked(literal_pointer_val(ctx, type)));
+                    maybe_decay_untracked(literal_pointer_val(ctx, intersected_type)));
                 ctx.builder.CreateBr(postBB);
                 ctx.builder.SetInsertPoint(postBB);
                 PHINode *istype = ctx.builder.CreatePHI(T_int1, 2);
@@ -1106,7 +1110,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
             }
         }
         return std::make_pair(ctx.builder.CreateICmpEQ(emit_typeof_boxed(ctx, x),
-            maybe_decay_untracked(literal_pointer_val(ctx, type))), false);
+            maybe_decay_untracked(literal_pointer_val(ctx, intersected_type))), false);
     }
     // everything else can be handled via subtype tests
     return std::make_pair(ctx.builder.CreateICmpNE(
