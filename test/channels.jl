@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random
+using Random, Test
 
 @testset "various constructors" begin
     c = Channel(1)
@@ -33,7 +33,7 @@ end
         size = 0
         inc() = size += 1
         dec() = size -= 1
-        @sync for i = 1:10^4
+        @sync for i = 1:10^3
             @async (sleep(rand()); put!(c, i); inc())
             @async (sleep(rand()); take!(c); dec())
         end
@@ -87,7 +87,9 @@ using Distributed
 @testset "channels bound to tasks" for N in [0, 10]
     # Normal exit of task
     c=Channel(N)
-    bind(c, @schedule (yield();nothing))
+    t=@schedule (yield();nothing)
+    bind(c, t)
+    fetch(t)
     @test_throws InvalidStateException take!(c)
     @test !isopen(c)
 

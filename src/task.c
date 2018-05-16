@@ -805,8 +805,11 @@ void jl_init_root_task(void *stack, size_t ssize)
     ptls->current_task->current_tid = ptls->tid;
     ptls->current_task->arr = NULL;
     ptls->current_task->red = NULL;
-    ptls->current_task->settings = TASK_IS_STICKY | TASK_IS_DETACHED;
-    ptls->current_task->sticky_tid = ptls->tid;
+    //TODO: commenting this for debugging
+    //ptls->current_task->settings = TASK_IS_STICKY | TASK_IS_DETACHED;
+    //ptls->current_task->sticky_tid = ptls->tid;
+    ptls->current_task->settings = 0;
+    ptls->current_task->sticky_tid = -1;
     ptls->current_task->grain_num = -1;
     ptls->current_task->fptr = NULL;
     ptls->current_task->rfptr = NULL;

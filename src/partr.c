@@ -45,7 +45,7 @@ static const int16_t heap_d = 8;
 static const int heap_c = 4;
 
 /* size of each heap */
-static const int tasks_per_heap = 129;
+static const int tasks_per_heap = 8192; // TODO: this should be smaller by default, but growable!
 
 /* the multiqueue's heaps */
 static taskheap_t *heaps;
@@ -645,7 +645,11 @@ static void JL_NORETURN run_next(void)
         if (!task) {
             // TODO: add support for allowing any thread to run the libuv event loop
             if (ptls->tid == 0)
-                jl_run_once(jl_global_event_loop());
+                //TODO: can only make blocking call to libuv if we're sure there are no
+                //tasks in the multiqueue, AND there's a way to interrupt the call when
+                //a new task is added
+                //jl_run_once(jl_global_event_loop());
+                jl_process_events(jl_global_event_loop());
             else
                 jl_cpu_pause();
         }
@@ -749,7 +753,9 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
         jl_gc_wb(task, task->mfunc);
 
         // set up stack with guard page
-        task->ssize = LLT_ALIGN(1*1024*1024, jl_page_size);
+        //TODO: hack below!
+        //task->ssize = LLT_ALIGN(1*1024*1024, jl_page_size);
+        task->ssize = LLT_ALIGN(128*1024, jl_page_size);
         size_t stkbufsize = task->ssize + jl_page_size + (jl_page_size - 1);
         task->stkbuf = (void *)jl_gc_alloc_buf(ptls, stkbufsize);
         jl_gc_wb_buf(task, task->stkbuf, stkbufsize);
@@ -907,8 +913,8 @@ JL_DLLEXPORT int jl_task_spawn_multi(jl_task_t *task)
  */
 JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
 {
-    if (!task->started || (task->settings & TASK_IS_DETACHED))
-        return NULL;
+    if (task->settings & TASK_IS_DETACHED)
+        return jl_nothing;
 
     jl_ptls_t ptls = jl_get_ptls_states();
 
