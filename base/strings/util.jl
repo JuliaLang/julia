@@ -452,7 +452,7 @@ or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
 where `s` is the matched substring (when `pat`is a `Regex` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
-If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
+If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
 
@@ -466,6 +466,9 @@ julia> replace("The quick foxes run quickly.", "quick" => "slow", count=1)
 
 julia> replace("The quick foxes run quickly.", "quick" => "", count=1)
 "The  foxes run quickly."
+
+julia> replace("The quick foxes run quickly.", r"fox(es)?" => s"bus\1")
+"The quick buses run quickly."
 ```
 """
 replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =

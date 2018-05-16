@@ -230,6 +230,18 @@ findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
 ))
 findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 
+"""
+    SubstitutionString(substr)
+
+Stores the given string `substr` as a SubstitutionString, for use in regular expression
+substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
+
+```jldoctest
+julia> Base.SubstitutionString("Hello \\g<name>, it's \\1")
+s"Hello \\g<name>, it's \\1"
+```
+
+"""
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
@@ -245,6 +257,19 @@ function show(io::IO, s::SubstitutionString)
     show(io, s.string)
 end
 
+"""
+    @s_str -> SubstitutionString
+
+Construct a substitution string, used for regular expression substitutions.  Within the
+string, sequences of the form `\N` refer to the Nth capture group in the regex, and
+`\g<groupname>` refers to a named capture group with name `groupname`.
+
+```jldoctest
+julia> msg = "#Hello# from Julia";
+julia> replace(msg, r"#(.+)# from (?<from>\w+)" => s"FROM: \g<from>; MESSAGE: \1")
+"FROM: Julia; MESSAGE: Hello"
+```
+"""
 macro s_str(string) SubstitutionString(string) end
 
 replace_err(repl) = error("Bad replacement string: $repl")
