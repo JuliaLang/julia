@@ -1021,7 +1021,7 @@ function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, atypes::Vec
             ir[SSAValue(idx)] = quoted(stmt.typ.val)
             return true
         end
-        subtype_call = Expr(:call, GlobalRef(Core, :(<:)), arg_T2, arg_T1)
+        subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])
         subtype_call.typ = Bool
         ir[SSAValue(idx)] = subtype_call
         return true
