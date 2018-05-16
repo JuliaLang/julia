@@ -1664,6 +1664,11 @@ end
 # when this is removed, `isbitstype(typeof(x))` can be replaced with `isbits(x)`
 @deprecate isbits(@nospecialize(t::Type)) isbitstype(t)
 
+# Special string deprecation
+@deprecate start(s::AbstractString) firstindex(s)
+@deprecate next(s::AbstractString, i::Integer) iterate(s, i)
+@deprecate done(s::AbstractString, i::Integer) i > ncodeunits(s)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

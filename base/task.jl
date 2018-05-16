@@ -34,9 +34,7 @@ end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
 isempty(c::CompositeException) = isempty(c.exceptions)
-start(c::CompositeException) = start(c.exceptions)
-next(c::CompositeException, state) = next(c.exceptions, state)
-done(c::CompositeException, state) = done(c.exceptions, state)
+iterate(c::CompositeException, state...) = iterate(c.exceptions, state...)
 eltype(::Type{CompositeException}) = Any
 
 function showerror(io::IO, ex::CompositeException)

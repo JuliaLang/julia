@@ -881,7 +881,6 @@ end
 end
 
 @testset "LinRange ops" begin
-    @test start(LinRange(0,3,4)) == 1
     @test 2*LinRange(0,3,4) == LinRange(0,6,4)
     @test LinRange(0,3,4)*2 == LinRange(0,6,4)
     @test LinRange(0,3,4)/3 == LinRange(0,1,4)

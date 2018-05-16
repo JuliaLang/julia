@@ -1581,7 +1581,8 @@
          (if (null? lhss)
              body
              (let* ((coll  (make-ssavalue))
-                    (state (gensy))
+                    (next  (gensy))
+                    (state (make-ssavalue))
                     (outer (outer? (car lhss)))
                     (lhs   (if outer (cadar lhss) (car lhss)))
                     (body
@@ -1591,8 +1592,7 @@
                        ,@(if (not outer)
                              (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
                              '())
-                       ,(lower-tuple-assignment (list lhs state)
-                                                `(call (top next) ,coll ,state))
+                       ,(lower-tuple-assignment (list lhs state) next)
                        ,(nest (cdr lhss) (cdr itrs))))
                     (body
                      (if (null? (cdr lhss))
@@ -1602,13 +1602,14 @@
                              ,body))
                          `(scope-block ,body))))
                `(block (= ,coll ,(car itrs))
-                       (= ,state (call (top start) ,coll))
+                       (= ,next (call (top iterate) ,coll))
                        ;; TODO avoid `local declared twice` error from this
                        ;;,@(if outer `((local ,lhs)) '())
                        ,@(if outer `((require-existing-local ,lhs)) '())
                        (_while
-                        (call (top not_int) (call (core typeassert) (call (top done) ,coll ,state) (core Bool)))
-                        ,body))))))))
+                        (call (|.| (core Intrinsics) 'not_int) (call (core ===) ,next (null)))
+                        (block ,body
+                               (= ,next (call (top iterate) ,coll ,state)))))))))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs flat outervars)
@@ -1978,13 +1979,12 @@
                        (st  (gensy)))
                   `(block
                     ,@ini
-                    (= ,st (call (top start) ,xx))
                     ,.(map (lambda (i lhs)
                              (expand-forms
                               (lower-tuple-assignment
                                (list lhs st)
-                               `(call (top indexed_next)
-                                      ,xx ,(+ i 1) ,st))))
+                               `(call (top indexed_iterate)
+                                      ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
                            (iota (length lhss))
                            lhss)
                     (unnecessary ,xx))))))
@@ -3327,13 +3327,13 @@ f(x) = yt(x)
   (or (simple-atom? e) (symbol? e)
       (and (pair? e)
            (memq (car e) '(quote inert top core globalref outerref
-                                 slot static_parameter boundscheck copyast)))))
+                                 slot static_parameter boundscheck)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin)))))
+           (memq (car e) '(new the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -3439,7 +3439,7 @@ f(x) = yt(x)
                                  (cdr lst))))
                 (simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
                                                 (and (pair? x)
-                                                     (memq (car x) '(quote inert top core globalref outerref copyast boundscheck)))))
+                                                     (memq (car x) '(quote inert top core globalref outerref boundscheck)))))
                                 lst)))
             (let loop ((lst  lst)
                        (vals '()))
@@ -3454,7 +3454,7 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))
                                          (not (simple-atom? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(& quote inert top core globalref outerref copyast boundscheck))))
+                                                   (memq (car arg) '(& quote inert top core globalref outerref boundscheck))))
                                          (not (and (symbol? aval) ;; function args are immutable and always assigned
                                                    (memq aval (lam:args lam))))
                                          (not (and (symbol? arg)

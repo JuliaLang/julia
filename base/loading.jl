@@ -1408,16 +1408,6 @@ function stale_cachefile(modpath::String, cachefile::String)
 end
 
 """
-    @__LINE__ -> Int
-
-`@__LINE__` expands to the line number of the location of the macrocall.
-Returns `0` if the line number could not be determined.
-"""
-macro __LINE__()
-    return __source__.line
-end
-
-"""
     @__FILE__ -> AbstractString
 
 `@__FILE__` expands to a string with the path to the file containing the

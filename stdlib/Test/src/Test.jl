@@ -1418,7 +1418,7 @@ function detect_unbound_args(mods...;
                             params = tuple_sig.parameters[1:(end - 1)]
                             tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
                             mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
-                            if mf != nothing && mf.func !== m && mf.func.sig <: tuple_sig
+                            if mf !== nothing && mf.func !== m && mf.func.sig <: tuple_sig
                                 continue
                             end
                         end
@@ -1499,7 +1499,7 @@ Base.ncodeunits(s::GenericString) = ncodeunits(s.string)
 Base.codeunit(s::GenericString) = codeunit(s.string)
 Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)
 Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)
-Base.next(s::GenericString, i::Integer) = next(s.string, i)
+Base.iterate(s::GenericString, i::Integer=1) = iterate(s.string, i)
 Base.reverse(s::GenericString) = GenericString(reverse(s.string))
 Base.reverse(s::SubString{GenericString}) =
     GenericString(typeof(s.string)(reverse(String(s))))
@@ -1525,10 +1525,9 @@ end
 for (G, A) in ((GenericSet, AbstractSet),
                (GenericDict, AbstractDict))
     @eval begin
-        Base.done(s::$G, state) = done(s.s, state)
-        Base.next(s::$G, state) = next(s.s, state)
+        Base.iterate(s::$G, state...) = iterate(s.s, state...)
     end
-    for f in (:isempty, :length, :start)
+    for f in (:isempty, :length)
         @eval begin
             Base.$f(s::$G) = $f(s.s)
         end

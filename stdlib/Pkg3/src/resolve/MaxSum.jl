@@ -235,9 +235,7 @@ function Random.shuffle!(perm::NodePerm)
     #@assert isperm(p)
 end
 
-Base.start(perm::NodePerm) = start(perm.p)
-Base.next(perm::NodePerm, x) = next(perm.p, x)
-Base.done(perm::NodePerm, x) = done(perm.p, x)
+Base.iterate(perm::NodePerm, state...) = iterate(perm.p, state...)
 
 # Call update for all nodes (i.e. packages) in
 # random order

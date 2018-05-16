@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct GenericIterator{N} end
-Base.start(::GenericIterator{N}) where {N} = 1
-Base.next(::GenericIterator{N}, i) where {N} = (i, i + 1)
-Base.done(::GenericIterator{N}, i) where {N} = i > N ? true : false
+Base.iterate(::GenericIterator{N}, i=1) where {N} = i > N ? nothing : (i, i + 1)
 Base.IteratorSize(::Type{GenericIterator{N}}) where {N} = Base.SizeUnknown()
 
 function generic_map_tests(mapf, inplace_mapf=nothing)

@@ -602,11 +602,6 @@ Some other useful functions include:
   * [`length(str, i, j)`](@ref) the number of valid character indices in `str` from `i` to `j`.
   * [`ncodeunits(str)`](@ref) number of [code units](https://en.wikipedia.org/wiki/Character_encoding#Terminology) in a string.
   * [`codeunit(str, i)`](@ref) gives the code unit value in the string `str` at index `i`.
-  * [`i = start(str)`](@ref start) gives the first valid index at which a character can be found in `str`
-    (typically 1).
-  * [`c, j = next(str,i)`](@ref next) returns next character at or after the index `i` and the next valid
-    character index following that. With [`start`](@ref) and [`lastindex`](@ref), can be used to iterate
-    through the characters in `str`.
   * [`thisind(str, i)`](@ref) given an arbitrary index into a string find the first index of the character into which the index points.
   * [`nextind(str, i, n=1)`](@ref) find the start of the `n`th character starting after index `i`.
   * [`prevind(str, i, n=1)`](@ref) find the start of the `n`th character starting before index `i`.

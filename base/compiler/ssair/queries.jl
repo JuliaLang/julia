@@ -63,7 +63,7 @@ function abstract_eval_ssavalue(s::SSAValue, src::IncrementalCompact)
 end
 
 function compact_exprtype(compact::IncrementalCompact, @nospecialize(value))
-    if isa(value, Union{SSAValue, OldSSAValue})
+    if isa(value, Union{SSAValue, OldSSAValue, NewSSAValue})
         return types(compact)[value]
     elseif isa(value, Argument)
         return compact.ir.argtypes[value.n]

@@ -28,6 +28,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 error()
             end
         end
+    elseif isa(op, Union{OldSSAValue, NewSSAValue})
+        #@Base.show ir
+        @verify_error "Left over SSA marker"
+        error()
     elseif isa(op, Union{SlotNumber, TypedSlot})
         @verify_error "Left over slot detected in converted IR"
         error()
@@ -109,7 +113,7 @@ function verify_ir(ir::IRCode)
             if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
                 if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
                     if ir.lines[idx] <= 0
-                        @verify_error "Missing line number information for statement $idx of $ir"
+                        #@verify_error "Missing line number information for statement $idx of $ir"
                     end
                 end
             end
