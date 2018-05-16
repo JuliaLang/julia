@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Base.Broadcast
+
+Module containing the broadcasting implementation.
+"""
 module Broadcast
 
 using .Base.Cartesian

@@ -72,6 +72,8 @@ primitive type
 
 ## Base Modules
 ```@docs
+Base.Base
+Base.Broadcast
 Base.Docs
 Base.Iterators
 Base.Libc
@@ -79,6 +81,7 @@ Base.Meta
 Base.StackTraces
 Base.Sys
 Base.Threads
+Base.GC
 ```
 
 ## All Objects
@@ -262,6 +265,13 @@ Base.Sys.isbsd
 Base.Sys.iswindows
 Base.Sys.windows_version
 Base.@static
+```
+
+## Versioning
+
+```@docs
+Base.VersionNumber
+Base.@v_str
 ```
 
 ## Errors

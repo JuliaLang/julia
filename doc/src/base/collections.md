@@ -77,6 +77,7 @@ Fully implemented by:
 
 ```@docs
 Base.in
+Base.:∉
 Base.eltype
 Base.indexin
 Base.unique
@@ -239,6 +240,9 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.:⊈
+Base.:⊊
+Base.issetequal
 ```
 
 Fully implemented by:

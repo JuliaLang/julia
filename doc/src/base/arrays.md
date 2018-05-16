@@ -6,6 +6,7 @@
 Core.AbstractArray
 Base.AbstractVector
 Base.AbstractMatrix
+Base.AbstractVecOrMat
 Core.Array
 Core.Array(::UndefInitializer, ::Any)
 Core.Array(::Nothing, ::Any)
@@ -20,6 +21,7 @@ Base.Matrix
 Base.Matrix(::UndefInitializer, ::Any, ::Any)
 Base.Matrix(::Nothing, ::Any, ::Any)
 Base.Matrix(::Missing, ::Any, ::Any)
+Base.VecOrMat
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
