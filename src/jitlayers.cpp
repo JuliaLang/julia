@@ -181,14 +181,14 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createAllocOptPass());
 #endif
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    // Now that SROA has cleaned up for front-end mess, a lot of control flow should
+    // be more evident - try to clean it up.
+    PM->add(createCFGSimplificationPass());    // Merge & remove BBs
     if (dump_native)
         PM->add(createMultiVersioningPass());
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     PM->add(createJumpThreadingPass());        // Thread jumps.
-    // NOTE: CFG simp passes after this point seem to hurt native codegen.
-    // See issue #6112. Should be re-evaluated when we switch to MCJIT.
-    //PM->add(createCFGSimplificationPass());    // Merge & remove BBs
     PM->add(createInstructionCombiningPass()); // Combine silly seq's
 
     //PM->add(createCFGSimplificationPass());    // Merge & remove BBs
