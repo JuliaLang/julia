@@ -17,7 +17,7 @@ include("compiler/ssair/passes.jl")
 include("compiler/ssair/inlining2.jl")
 include("compiler/ssair/verify.jl")
 include("compiler/ssair/legacy.jl")
-@isdefined(Base) && include("compiler/ssair/show.jl")
+#@isdefined(Base) && include("compiler/ssair/show.jl")
 
 function normalize_expr(stmt::Expr)
     if stmt.head === :gotoifnot
@@ -165,8 +165,9 @@ function run_passes(ci::CodeInfo, nargs::Int, linetable::Vector{LineInfoNode}, s
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, linetable, sv)
     #@timeit "verify 2" verify_ir(ir)
     @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
+    ir = compact!(ir)
     @timeit "SROA" ir = getfield_elim_pass!(ir, domtree)
-    @timeit "compact 2" ir = compact!(ir)
+    ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
     #@Base.show ir
