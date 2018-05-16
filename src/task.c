@@ -205,9 +205,9 @@ static void record_backtrace(void)
     ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
 }
 
-#ifndef JULIA_ENABLE_PARTR
-static jl_function_t *task_done_hook_func=NULL;
+jl_function_t *task_done_hook_func=NULL;
 
+#ifndef JULIA_ENABLE_PARTR
 static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
 {
     jl_ptls_t ptls = jl_get_ptls_states();

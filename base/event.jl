@@ -5,33 +5,114 @@
 
 if JULIA_PARTR
 
+# Global TODO: arg and error
+
 import Core.Condition
 
+"""
+    Condition()
+
+Create an edge-triggered event source that tasks can wait for. Tasks that
+call [`wait`](@ref) on a `Condition` are suspended. They are woken up when
+[`notify`](@ref) is later called on the `Condition`. Edge triggering means
+that only tasks waiting at the time [`notify`](@ref) is called are woken
+up. For level-triggered notifications, you must keep extra state to keep
+track of whether a notification has happened. The [`Channel`](@ref) type
+does this, and so can be used for level-triggered events.
+"""
 Condition() = ccall(:jl_condition_new, Ref{Condition}, ())
+
+"""
+    wait([x])
+
+Suspend the current task until some event occurs, depending on the type of
+the argument:
+
+* [`Channel`](@ref): Wait for a value to be appended to the channel.
+* [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
+* `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
+  can be used to determine success or failure.
+* [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, the
+  exception is propagated (re-thrown in the task that called `wait`).
+* `RawFD`: Wait for changes on a file descriptor (see the `FileWatching` package).
+
+If no argument is passed, the task blocks for an undefined period. A task can only be
+restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
+
+Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
+proceeding.
+"""
 wait(c::Condition) = ccall(:jl_task_wait, Cvoid, (Ref{Condition},), c)
+
+"""
+    notify(condition, val=nothing; all=true, error=false)
+
+Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
+all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
+is raised as an exception in the woken tasks.
+
+Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
+"""
 notify(c::Condition, arg, all, error) = ccall(:jl_task_notify, Cvoid, (Ref{Condition},), c)
 notify(c::Condition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 notify_error(c::Condition, err) = notify(c, err, true, true)
+
+"""
+    isempty(condition)
+
+Return `true` if no tasks are waiting on the condition, `false` otherwise.
+"""
 isempty(c::Condition) = ccall(:jl_condition_isempty, Cint, (Ref{Condition},), c) == 1
 
-schedule(t::Task) = (ccall(:jl_task_spawn, Cint, (Ref{Task},Int8,Int8), t, 0, 0); t)
+"""
+    schedule(t::Task, [val]; error=false)
+
+Add a [`Task`](@ref) to the scheduler's queue. The task will run when a thread is available
+to execute it.
+"""
+schedule(t::Task, @nospecialize(arg = nothing); error=false) = (ccall(:jl_task_spawn, Cint, (Ref{Task},Int8,Int8), t, 0, 0); t)
+
+"""
+    fetch(t::Task)
+
+Block the current task until `t` completes, then return the result of `t`.
+"""
 fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), t)
+
+"""
+    yield()
+
+Allow the scheduler to use the thread running the current task to run a higher priority task,
+if one exists in the scheduler's queue. The current task will be re-queued.
+"""
 yield() = ccall(:jl_task_yield, Cvoid, (Cint,), 1)
+yield(t::Task, @nospecialize x = nothing) = yield() # TODO: cannot yieldto anymore
+yieldto(t::Task, @nospecialize x = nothing) = yield() # TODO: cannot yieldto anymore
+try_yieldto(undo, reftask::Ref{Task}) = yield() # TODO: cannot yieldto anymore
+
+"""
+    wait()
+
+Cause the current task to stop executing, releasing the thread running it. The task will not be
+re-queued, and must be re-scheduled in order to run again.
+"""
 wait() = ccall(:jl_task_yield, Cvoid, (Cint,), 0)
 
+"""
+    @schedule
+
+Wrap an expression in a [`Task`](@ref) and [`schedule`](@ref) it.
+"""
 macro schedule(expr)
     thunk = esc(:(()->($expr)))
     :(schedule(Task($thunk)))
 end
-schedule(t::Task, arg; error=false) = schedule(t) # TODO: do we need arg? have to figure out how to do error
-function schedule_and_wait(t::Task, arg=nothing) # TODO: arg?
-    schedule(t)
-    wait(t)
+function schedule_and_wait(t::Task, arg=nothing)
+    schedule(t, arg)
+    fetch(t)
 end
-yield(t::Task, @nospecialize x = nothing) = yield() # TODO: cannot yieldto anymore
-yieldto(t::Task, @nospecialize x = nothing) = yield() # TODO: cannot yieldto anymore
-try_yieldto(undo, reftask::Ref{Task}) = yield() # TODO: cannot yieldto anymore
-throwto(t::Task, @nospecialize exc) = () # TODO: how to throw to?
+
+throwto(t::Task, @nospecialize exc) = () # TODO: should throwto() still work? what if the task is running in another thread?
 
 else # !JULIA_PARTR
 

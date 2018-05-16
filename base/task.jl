@@ -171,6 +171,55 @@ function task_local_storage(body::Function, key, val)
     end
 end
 
+_wait(not_a_task) = wait(not_a_task)
+
+if JULIA_PARTR
+
+# NOTE: you can only wait for scheduled tasks
+function _wait(t::Task)
+    fetch(t)
+end
+
+# runtime system hook called when a task finishes
+function task_done_hook(t::Task)
+    # `finish_task` sets `sigatomic` before entering this function
+    err = istaskfailed(t)
+    result = task_result(t)
+    handled = false
+    if err
+        t.backtrace = catch_backtrace()
+    end
+
+    # Execute any other hooks registered in the TLS
+    if isa(t.storage, IdDict) && haskey(t.storage, :TASKDONE_HOOKS)
+        foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
+        delete!(t.storage, :TASKDONE_HOOKS)
+        handled = true
+    end
+
+    if err && !handled
+        if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
+            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.in_eval
+            throwto(active_repl_backend.backend_task, result) # this terminates the task
+        end
+        if !suppress_excp_printing(t)
+            let bt = t.backtrace
+                # run a new task to print the error for us
+                @schedule with_output_color(Base.error_color(), stderr) do io
+                    print(io, "ERROR (unhandled task failure): ")
+                    showerror(io, result, bt)
+                    println(io)
+                end
+            end
+        end
+    end
+    # Clear sigatomic before waiting
+    sigatomic_end()
+end
+
+else # !JULIA_PARTR
+
 # NOTE: you can only wait for scheduled tasks
 # TODO: rename to wait for 1.0
 function _wait(t::Task)
@@ -185,29 +234,6 @@ function _wait(t::Task)
     if istaskfailed(t)
         throw(t.exception)
     end
-end
-
-_wait(not_a_task) = wait(not_a_task)
-
-if !JULIA_PARTR
-"""
-    fetch(t::Task)
-
-Wait for a Task to finish, then return its result value. If the task fails with an
-exception, the exception is propagated (re-thrown in the task that called fetch).
-"""
-function fetch(t::Task)
-    _wait(t)
-    task_result(t)
-end
-end # !JULIA_PARTR
-
-suppress_excp_printing(t::Task) = isa(t.storage, IdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
-
-function register_taskdone_hook(t::Task, hook)
-    tls = get_task_tls(t)
-    push!(get!(tls, :TASKDONE_HOOKS, []), hook)
-    t
 end
 
 # runtime system hook called when a task finishes
@@ -267,6 +293,27 @@ function task_done_hook(t::Task)
     end
 end
 
+"""
+    fetch(t::Task)
+
+Wait for a Task to finish, then return its result value. If the task fails with an
+exception, the exception is propagated (re-thrown in the task that called fetch).
+"""
+function fetch(t::Task)
+    _wait(t)
+    task_result(t)
+end
+
+end # JULIA_PARTR
+
+
+suppress_excp_printing(t::Task) = isa(t.storage, IdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
+
+function register_taskdone_hook(t::Task, hook)
+    tls = get_task_tls(t)
+    push!(get!(tls, :TASKDONE_HOOKS, []), hook)
+    t
+end
 
 ## dynamically-scoped waiting for multiple items
 sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWNS, ())))
@@ -328,12 +375,24 @@ function sync_add(r)
     r
 end
 
+if JULIA_PARTR
+
+function async_run_thunk(thunk)
+    t = Task(thunk)
+    sync_add(t)
+    schedule(t)
+end
+
+else # !JULIA_PARTR
+
 function async_run_thunk(thunk)
     t = Task(thunk)
     sync_add(t)
     enq_work(t)
     t
 end
+
+end # JULIA_PARTR
 
 """
     @async

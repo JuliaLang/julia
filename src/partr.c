@@ -24,6 +24,9 @@ extern jl_sym_t *done_sym;
 extern jl_sym_t *failed_sym;
 extern jl_sym_t *runnable_sym;
 
+// the lovely task-done-hook hack
+extern jl_function_t *task_done_hook_func;
+
 // task/stack switch functions used
 extern void init_task_entry(jl_task_t *t, char *stack);
 
@@ -142,7 +145,7 @@ static inline jl_task_t *multiq_deletemin(void)
     int16_t i, prio1, prio2;
     jl_task_t *task;
 
-    for (i = 0;  i < jl_n_threads;  ++i) {
+    for (i = 0;  i < heap_p;  ++i) {
         rn1 = cong(heap_p, cong_unbias, &ptls->rngseed);
         rn2 = cong(heap_p, cong_unbias, &ptls->rngseed);
         prio1 = jl_atomic_load(&heaps[rn1].prio);
@@ -159,7 +162,7 @@ static inline jl_task_t *multiq_deletemin(void)
             jl_mutex_unlock_nogc(&heaps[rn1].lock);
         }
     }
-    if (i == jl_n_threads)
+    if (i == heap_p)
         return NULL;
 
     task = heaps[rn1].tasks[0];
@@ -448,8 +451,6 @@ void jl_threadfun(void *arg)
 // enqueue the specified task for execution
 static void enqueue_task(jl_task_t *task)
 {
-    uv_stop(jl_global_event_loop());
-
     /* sticky tasks go to the thread's sticky queue */
     if (task->settings & TASK_IS_STICKY) {
         assert(task->sticky_tid != -1);
@@ -469,6 +470,8 @@ static void enqueue_task(jl_task_t *task)
     /* all others go back into the multiq */
     else
         multiq_insert(task, task->prio);
+
+    uv_stop(jl_global_event_loop());
 }
 
 
@@ -574,12 +577,30 @@ void NOINLINE JL_NORETURN task_wrapper(void)
         }
     }
 
+    JL_SIGATOMIC_BEGIN();
+
     task->state = new_state;
 
     /* clear thread state */
     ptls->in_finalizer = 0;
     ptls->in_pure_callback = 0;
     ptls->world_age = jl_world_counter;
+
+    /* run the task-is-done hook(s) */
+    if (task_done_hook_func == NULL)
+        task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
+                                                            jl_symbol("task_done_hook"));
+    if (task_done_hook_func != NULL) {
+        jl_value_t *args[2] = {task_done_hook_func, (jl_value_t*)task};
+        JL_TRY {
+            jl_apply(args, 2);
+        }
+        JL_CATCH {
+            jl_no_exc_handler(jl_exception_in_transit);
+        }
+    }
+
+    JL_SIGATOMIC_END();
 
     /* next task */
     run_next();
@@ -691,41 +712,41 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
 
     jl_task_t *task = (jl_task_t *)jl_gc_alloc(ptls, sizeof (jl_task_t), jl_task_type);
     JL_GC_PUSH1(&task);
-    if (setup_task_fun(_args, &task->mfunc, &task->fptr) != 0)
-        task = NULL;
-    else {
-        task->args = _args;
 
-        // initialize elements
-        task->storage = jl_nothing;
-        task->state = runnable_sym;
-        task->result = jl_nothing;
-        task->exception = jl_nothing;
-        task->backtrace = jl_nothing;
-        task->logstate = jl_nothing;
-        task->rargs = jl_nothing;
-        task->mredfunc = NULL;
-        task->cq.head = NULL;
-        JL_MUTEX_INIT(&task->cq.lock);
-        task->next = NULL;
-        task->parent = ptls->current_task;
-        task->red_result = jl_nothing;
-        task->started = 0;
-        arraylist_new(&task->locks, 0);
-        task->rfptr = NULL;
-        task->eh = NULL;
-        task->gcstack = NULL;
-        task->current_module = NULL;
-        task->world_age = ptls->world_age;
-        task->current_tid = -1;
-        task->arr = NULL;
-        task->red = NULL;
-        task->settings = 0;
-        task->sticky_tid = -1;
-        task->grain_num = -1;
+    task->args = _args;
+    task->storage = jl_nothing;
+    task->state = runnable_sym;
+    task->result = jl_nothing;
+    task->exception = jl_nothing;
+    task->backtrace = jl_nothing;
+    task->logstate = jl_nothing;
+    task->rargs = jl_nothing;
+    task->mredfunc = NULL;
+    task->cq.head = NULL;
+    JL_MUTEX_INIT(&task->cq.lock);
+    task->next = NULL;
+    task->parent = ptls->current_task;
+    task->red_result = jl_nothing;
+    task->started = 0;
+    arraylist_new(&task->locks, 0);
+    task->rfptr = NULL;
+    task->eh = NULL;
+    task->gcstack = NULL;
+    task->current_module = NULL;
+    task->world_age = ptls->world_age;
+    task->current_tid = -1;
+    task->arr = NULL;
+    task->red = NULL;
+    task->settings = 0;
+    task->sticky_tid = -1;
+    task->grain_num = -1;
 #ifdef ENABLE_TIMINGS
-        task->timing_stack = NULL;
+    task->timing_stack = NULL;
 #endif
+    task->stkbuf = NULL;
+
+    if (setup_task_fun(_args, &task->mfunc, &task->fptr) == 0) {
+        jl_gc_wb(task, task->mfunc);
 
         // set up stack with guard page
         task->ssize = LLT_ALIGN(1*1024*1024, jl_page_size);
@@ -743,6 +764,7 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
         // for task cleanup
         jl_gc_add_finalizer((jl_value_t *)task, jl_unprotect_stack_func);
     }
+    else task = NULL;
 
     JL_GC_POP();
     return task;
@@ -770,7 +792,8 @@ JL_DLLEXPORT int jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach)
     enqueue_task(task);
 
     /* only yield if we're running a non-sticky task */
-    if (!task->started  &&  ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY))
+    if (!task->started // need a better solution to prevent yields in callbacks
+            &&  ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY))
         jl_task_yield(1);
 
     return 0;
@@ -910,7 +933,7 @@ JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
                 while (pt->next)
                     pt = pt->next;
                 pt->next = ptls->current_task;
-                jl_gc_wb(task, ptls->current_task);
+                jl_gc_wb(pt, pt->next);
             }
 
             JL_UNLOCK(&task->cq.lock);
@@ -1034,6 +1057,7 @@ JL_DLLEXPORT void jl_task_wait(jl_condition_t *c)
         while (pt->next)
             pt = pt->next;
         pt->next = ptls->current_task;
+        jl_gc_wb(pt, pt->next);
     }
     JL_UNLOCK(&c->lock);
     jl_task_yield(0);
