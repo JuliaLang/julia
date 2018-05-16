@@ -14,7 +14,7 @@ Subtypes `MyIrrational <: AbstractIrrational` should implement at least `==(::My
 If a subtype is used to represent values that may occasionally be rational (e.g. a square-root type that represents `√n`
 for integers `n` will give a rational result when `n` is a perfect square), then it should also implement
 `isinteger`, `iszero`, `isone`, and `==` with `Real` values (since all of these default to `false` for
-`AbstractIrrational` types).
+`AbstractIrrational` types), as well as defining [`hash`](@ref) to equal that of the corresponding `Rational`.
 """
 abstract type AbstractIrrational <: Real end
 
