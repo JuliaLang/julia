@@ -324,7 +324,7 @@ end
     bin_val = hex2bytes(hex_str)
 
     @test div(length(hex_str), 2) == length(bin_val)
-    @test hex_str == bytes2hex(bin_val)
+    @test hex_str == bytes2hex(bin_val) == sprint(bytes2hex, bin_val)
 
     bin_val = hex2bytes("07bf")
     @test bin_val[1] == 7

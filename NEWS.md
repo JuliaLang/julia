@@ -478,6 +478,9 @@ Library improvements
   * `Char` is now a subtype of `AbstractChar`, and most of the functions that
     take character arguments now accept any `AbstractChar` ([#26286]).
 
+  * `bytes2hex` now accepts an optional `io` argument to output to a hexadecimal stream
+    without allocating a `String` first ([#27121]).
+
   * `String(array)` now accepts an arbitrary `AbstractVector{UInt8}`. For `Vector`
     inputs, it "steals" the memory buffer, leaving them with an empty buffer which
     is guaranteed not to be shared with the `String` object. For other types of vectors
