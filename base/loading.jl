@@ -90,10 +90,11 @@ struct SHA1
         return new(bytes)
     end
 end
-SHA1(s::Union{String,SubString{String}}) = SHA1(hex2bytes(s))
+SHA1(s::AbstractString) = SHA1(hex2bytes(s))
 string(hash::SHA1) = bytes2hex(hash.bytes)
+print(io::IO, hash::SHA1) = print(io, string(hash))
 
-show(io::IO, hash::SHA1) = print(io, "SHA1(", string(hash), ")")
+show(io::IO, hash::SHA1) = print(io, "SHA1(\"", string(hash), "\")")
 isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes

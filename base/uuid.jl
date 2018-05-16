@@ -59,4 +59,5 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
     end
 end
 
-show(io::IO, u::UUID) = write(io, string(u))
+print(io::IO, u::UUID) = print(io, string(u))
+show(io::IO, u::UUID) = print(io, "UUID(\"", u, "\")")
