@@ -2132,3 +2132,13 @@ Base.:(==)(a::T11053, b::T11053) = a.a == b.a
     @test_throws BoundsError zeros(2,3,0)[2,3]
     @test_throws BoundsError checkbounds(zeros(2,3,0), 2, 3)
 end
+
+# issue #27072
+function type_testB27072(B::StridedArray)
+    return typeof(similar(B, size(B)))
+end
+@testset "issue 27072: manually added, non-backported test" begin
+    bb_inp = reshape(eye(2^8), fill(2,16)...);
+    @test typeof(similar(bb_inp, size(bb_inp))) === Array{Float64,16}
+    @test type_testB27072(bb_inp) === Array{Float64,16}
+end
