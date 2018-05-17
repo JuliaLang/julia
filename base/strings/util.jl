@@ -467,7 +467,7 @@ julia> replace("The quick foxes run quickly.", "quick" => "slow", count=1)
 julia> replace("The quick foxes run quickly.", "quick" => "", count=1)
 "The  foxes run quickly."
 
-julia> replace("The quick foxes run quickly.", r"fox(es)?" => s"bus\1")
+julia> replace("The quick foxes run quickly.", r"fox(es)?" => s"bus\\1")
 "The quick buses run quickly."
 ```
 """

@@ -237,8 +237,8 @@ Stores the given string `substr` as a SubstitutionString, for use in regular exp
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
 ```jldoctest
-julia> Base.SubstitutionString("Hello \\g<name>, it's \\1")
-s"Hello \\g<name>, it's \\1"
+julia> Base.SubstitutionString("Hello \\\\g<name>, it's \\\\1")
+s"Hello \\\\g<name>, it's \\\\1"
 ```
 
 """
@@ -261,12 +261,12 @@ end
     @s_str -> SubstitutionString
 
 Construct a substitution string, used for regular expression substitutions.  Within the
-string, sequences of the form `\N` refer to the Nth capture group in the regex, and
-`\g<groupname>` refers to a named capture group with name `groupname`.
+string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
+`\\g<groupname>` refers to a named capture group with name `groupname`.
 
 ```jldoctest
 julia> msg = "#Hello# from Julia";
-julia> replace(msg, r"#(.+)# from (?<from>\w+)" => s"FROM: \g<from>; MESSAGE: \1")
+julia> replace(msg, r"#(.+)# from (?<from>\\w+)" => s"FROM: \\g<from>; MESSAGE: \\1")
 "FROM: Julia; MESSAGE: Hello"
 ```
 """
