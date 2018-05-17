@@ -3,7 +3,6 @@
 using REPL.REPLCompletions
 using Test
 using Random
-import OldPkg
 
 let ex = quote
     module CompletionFoo
@@ -83,23 +82,6 @@ let ex = quote
     end
     ex.head = :toplevel
     eval(Main, ex)
-end
-
-function temp_pkg_dir_noinit(fn::Function)
-    # Used in tests below to set up and tear down a sandboxed package directory
-    # Unlike the version in test/pkg.jl, this does not run OldPkg.init so does not
-    # clone METADATA (only Pkg and LibGit2 tests should need internet access)
-    tmpdir = joinpath(tempdir(),randstring())
-    withenv("JULIA_PKGDIR" => tmpdir) do
-        @test !isdir(OldPkg.dir())
-        try
-            mkpath(OldPkg.dir())
-            @test isdir(OldPkg.dir())
-            fn()
-        finally
-            rm(tmpdir, recursive=true)
-        end
-    end
 end
 
 test_complete(s) = completions(s,lastindex(s))
@@ -493,66 +475,6 @@ let s = "#=\nmax"
     @test length(c) == 0
 end
 
-# Test completion of packages
-mkp(p) = ((@assert !isdir(p)); mkpath(p))
-temp_pkg_dir_noinit() do
-    # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
-    # but not <Mod>/ if no corresponding .jl file is found
-    pkg_dir = OldPkg.dir("CompletionFooPackage", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
-
-    pkg_dir = OldPkg.dir("CompletionFooPackage2.jl", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
-
-    touch(OldPkg.dir("CompletionFooPackage3.jl"))
-
-    mkp(OldPkg.dir("CompletionFooPackageNone"))
-    mkp(OldPkg.dir("CompletionFooPackageNone2.jl"))
-
-    s = "using Completion"
-    c,r = test_complete(s)
-    @test "CompletionFoo" in c #The module
-    @test "CompletionFooPackage" in c #The package
-    @test "CompletionFooPackage2" in c #The package
-    @test "CompletionFooPackage3" in c #The package
-    @test !("CompletionFooPackageNone" in c) #The package
-    @test !("CompletionFooPackageNone2" in c) #The package
-    @test s[r] == "Completion"
-end
-
-path = joinpath(tempdir(),randstring())
-push!(LOAD_PATH, path)
-try
-    # Should not throw an error even though the path do no exist
-    test_complete("using ")
-    Pack_folder = joinpath(path, "Test_pack")
-    mkpath(Pack_folder)
-
-    Pack_folder2 = joinpath(path, "Test_pack2", "src")
-    mkpath(Pack_folder2)
-    touch(joinpath(Pack_folder2, "Test_pack2.jl"))
-
-    # Test it completes on folders
-    local c, r, res # workaround for issue #24331
-    c, r, res = test_complete("using Test_p")
-    @test !("Test_pack" in c)
-    @test "Test_pack2" in c
-
-    # Test that it also completes on .jl files in pwd()
-    cd(Pack_folder) do
-        open("Text.txt","w") do f end
-        open("Pack.jl","w") do f end
-        c, r, res = test_complete("using ")
-        @test "Pack" in c
-        @test !("Text.txt" in c)
-    end
-finally
-    @test pop!(LOAD_PATH) == path
-    rm(path, recursive=true)
-end
-
 # Test $ in shell-mode
 let s = "cd \$(max"
     c, r, res = test_scomplete(s)
@@ -564,7 +486,7 @@ end
 # The return type is of importance, before #8995 it would return nothing
 # which would raise an error in the repl code.
 @test (String[], 0:-1, false) == test_scomplete("\$a")
-
+path = joinpath(tempdir(), randstring())
 if Sys.isunix()
 let s, c, r
     #Assume that we can rely on the existence and accessibility of /tmp

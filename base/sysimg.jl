@@ -523,7 +523,6 @@ let
             :Random,
             :UUIDs,
             :Future,
-            :OldPkg,
             :LinearAlgebra,
             :IterativeEigensolvers,
             :SparseArrays,

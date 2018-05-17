@@ -15,7 +15,6 @@ using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_ty
 
 using Markdown
 using LinearAlgebra  # for peakflops
-import OldPkg
 
 include("editless.jl")
 include("codeview.jl")
@@ -45,12 +44,11 @@ end
 varinfo(pat::Regex) = varinfo(Main, pat)
 
 """
-    versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
+    versioninfo(io::IO=stdout; verbose::Bool=false)
 
 Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
 
-- `packages`: print information about installed packages
 - `verbose`: print all additional information
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
@@ -112,17 +110,6 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
         println(io, "Environment:")
         for str in env_strs
             println(io, str)
-        end
-    end
-    if packages || verbose
-        println(io, "Packages:")
-        println(io, "  Package Directory: ", OldPkg.dir())
-        print(io, "  Package Status:")
-        if isdir(OldPkg.dir())
-            println(io, "")
-            OldPkg.status(io)
-        else
-            println(io, " no packages installed")
         end
     end
 end
