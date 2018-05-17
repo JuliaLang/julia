@@ -1080,6 +1080,15 @@ Deprecated or removed
     either destructured into its components (`U, V, Q, D1, D2, R0 = svdfact(x, y)`)
     or as a `GeneralizedSVD` object (`gsvdf = svdfact(x, y)`) ([#26997]).
 
+  * `lq(A; thin=true)` has been deprecated in favor of `lqfact(A)`.
+     Whereas `lq(A; thin=true)` returns a tuple of arrays, `lqfact` returns
+     an `LQ` object. So for a direct replacement of `lqfact(A; thin=true)`,
+     use `(F = lqfact(A); (F.L, Array(F.Q)))`, and for `lqfact(A; thin=false)`
+     use `(F = lqfact(A); k = size(F.Q.factors, 2); (F.L, lmul!(F.Q, Matrix{eltype(F.Q)}(I, k, k))))`.
+     But going forward, consider using the direct result of `lqfact(A)` instead,
+     either destructured into its components (`L, Q = lqfact(A)`)
+     or as an `LQ` object (`lqf = lqfact(A)`) ([#26997]).
+
   * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
     ([#17046]).
 

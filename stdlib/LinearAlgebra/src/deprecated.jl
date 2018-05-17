@@ -1418,3 +1418,19 @@ end
 svd(A::BitMatrix) = _simpledepsvd(float(A))
 svd(D::Diagonal{<:Number}) = _simpledepsvd(D)
 svd(A::AbstractTriangular) = _simpledepsvd(copyto!(similar(parent(A)), A))
+
+# deprecate lq(...) in favor of lqfact(...) and factorization destructuring
+export lq
+function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+    depwarn(string("`lq(A; thin=true)` has been deprecated in favor of `lqfact(A)`. ",
+        "Whereas `lq(A; thin=true)` returns a tuple of arrays, `lqfact` returns ",
+        "an `LQ` object. So for a direct replacement of `lqfact(A; thin=true)`, ",
+        "use `(F = lqfact(A); (F.L, Array(F.Q)))`, and for `lqfact(A; thin=false)` ",
+        "use `(F = lqfact(A); k = size(F.Q.factors, 2); (F.L, lmul!(F.Q, Matrix{eltype(F.Q)}(I, k, k))))`. ",
+        "But going forward, consider using the direct result of `lqfact(A)` instead, ",
+        "either destructured into its components (`L, Q = lqfact(A)`) ",
+        "or as an `LQ` object (`lqf = lqfact(A)`)."), :lq)
+    F = lqfact(A)
+    retQ = !full ? Array(F.Q) : (k = size(F.Q.factors, 2); lmul!(F.Q, Matrix{eltype(F.Q)}(I, k, k)))
+    return F.L, retQ
+end

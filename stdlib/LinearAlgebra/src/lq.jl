@@ -17,48 +17,28 @@ end
 LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
 LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
+# iteration for destructuring into factors
+Base.start(::LQ) = Val(:L)
+Base.next(F::LQ, ::Val{:L}) = (F.L, Val(:Q))
+Base.next(F::LQ, ::Val{:Q}) = (F.Q, Val(:done))
+Base.done(F::LQ, ::Val{:done}) = true
+Base.done(F::LQ, ::Any) = false
+
 """
     lqfact!(A) -> LQ
 
 Compute the LQ factorization of `A`, using the input
-matrix as a workspace. See also [`lq`](@ref).
+matrix as a workspace. See also [`lqfact`](@ref).
 """
 lqfact!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
 """
     lqfact(A) -> LQ
 
-Compute the LQ factorization of `A`. See also [`lq`](@ref).
+Perform an LQ factorization of `A` such that `A = L*Q`. The LQ factorization is
+the QR factorization of `transpose(A)`.
 """
 lqfact(A::StridedMatrix{<:BlasFloat})  = lqfact!(copy(A))
 lqfact(x::Number) = lqfact(fill(x,1,1))
-
-"""
-    lq(A; full = false) -> L, Q
-
-Perform an LQ factorization of `A` such that `A = L*Q`. The default (`full = false`)
-computes a factorization with possibly-rectangular `L` and `Q`, commonly the "thin"
-factorization. The LQ factorization is the QR factorization of `transpose(A)`. If the explicit,
-full/square form of `Q` is requested via `full = true`, `L` is not extended with zeros.
-
-!!! note
-    While in QR factorization the "thin" factorization is so named due to yielding
-    either a square or "tall"/"thin" rectangular factor `Q`, in LQ factorization the
-    "thin" factorization somewhat confusingly produces either a square or "short"/"wide"
-    rectangular factor `Q`. "Thin" factorizations more broadly are also
-    referred to as "reduced" factorizatons.
-"""
-function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `lq(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `lq(A; full = $(!thin))`."), :lq)
-        full::Bool = !thin
-    end
-    F = lqfact(A)
-    L, Q = F.L, F.Q
-    return L, !full ? Array(Q) : lmul!(Q, Matrix{eltype(Q)}(I, size(Q.factors, 2), size(Q.factors, 2)))
-end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
