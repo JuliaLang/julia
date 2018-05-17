@@ -128,18 +128,21 @@
 // sanitizer defaults ---------------------------------------------------------
 
 // XXX: these macros are duplicated from julia_internal.h
-#if defined(__has_feature)
+#if defined(__has_feature) // Clang flavor
 #if __has_feature(address_sanitizer)
 #define JL_ASAN_ENABLED
 #endif
-#elif defined(__SANITIZE_ADDRESS__)
-#define JL_ASAN_ENABLED
-#endif
-#if defined(__has_feature)
 #if __has_feature(memory_sanitizer)
 #define JL_MSAN_ENABLED
 #endif
+#if __has_feature(thread_sanitizer)
+#define JL_TSAN_ENABLED
 #endif
+#else // GCC flavor
+#if defined(__SANITIZE_ADDRESS__)
+#define JL_ASAN_ENABLED
+#endif
+#endif // __has_feature
 
 // Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
 #if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)

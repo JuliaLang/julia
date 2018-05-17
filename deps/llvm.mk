@@ -476,7 +476,7 @@ $(eval $(call LLVM_PATCH,llvm-D46460))
 else ifeq ($(LLVM_VER_SHORT),6.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
 $(eval $(call LLVM_PATCH,llvm-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX
+$(eval $(call LLVM_PATCH,llvm-6.0-NVPTX-addrspaces)) # NVPTX, Julia specific
 $(eval $(call LLVM_PATCH,llvm-D42262-jumpthreading-not-i1)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-PPC-addrspaces)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D42260)) # remove for 7.0
@@ -488,6 +488,7 @@ $(eval $(call LLVM_PATCH,llvm-D45008)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D45070)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0.0-ifconv-D45819)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D46460))
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as)) # Julia specific
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build

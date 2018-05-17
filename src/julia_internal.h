@@ -18,19 +18,21 @@
 #  define jl_has_builtin(x) 0
 #endif
 
-#if defined(__has_feature)
+#if defined(__has_feature) // Clang flavor
 #if __has_feature(address_sanitizer)
-#define JL_ASAN_ENABLED     // Clang flavor
+#define JL_ASAN_ENABLED
 #endif
-#elif defined(__SANITIZE_ADDRESS__)
-#define JL_ASAN_ENABLED     // GCC flavor
-#endif
-
-#if defined(__has_feature)
 #if __has_feature(memory_sanitizer)
 #define JL_MSAN_ENABLED
 #endif
+#if __has_feature(thread_sanitizer)
+#define JL_TSAN_ENABLED
 #endif
+#else // GCC flavor
+#if defined(__SANITIZE_ADDRESS__)
+#define JL_ASAN_ENABLED
+#endif
+#endif // __has_feature
 
 // Remove when C11 is required for C code.
 #ifndef static_assert

@@ -5520,6 +5520,12 @@ static std::unique_ptr<Module> emit_function(
 #ifdef JL_DEBUG_BUILD
     f->addFnAttr(Attribute::StackProtectStrong);
 #endif
+
+#ifdef JL_TSAN_ENABLED
+    // TODO: enable this only when a argument like `-race` is passed to Julia
+    //       add a macro for no_sanitize_thread
+    f->addFnAttr(llvm::Attribute::SanitizeThread);
+#endif
     ctx.f = f;
 
     // Step 4b. determine debug info signature and other type info for locals
