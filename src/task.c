@@ -219,6 +219,8 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     _julia_init(rel);
 }
 
+void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
+
 static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
 {
     jl_task_t *t = *pt;
@@ -251,10 +253,10 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     if (killed) {
         *pt = lastt; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
-        // if (!lastt->copy_stack) { // TODO: early free of stkbuf
-        //     jl_free_stack(lastt->stkbuf, lastt->bufsz);
-        //     lastt->stkbuf = NULL;
-        // }
+        if (!lastt->copy_stack && lastt->stkbuf) {
+            // early free of stkbuf back to the pool
+            jl_release_task_stack(ptls, lastt);
+        }
     }
     else {
 #ifdef COPY_STACKS
