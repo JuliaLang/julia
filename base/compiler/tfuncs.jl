@@ -207,25 +207,25 @@ add_tfunc(ifelse, 3, 3,
         end
         return tmerge(x, y)
     end, 1)
-add_tfunc(===, 2, 2,
-    function (@nospecialize(x), @nospecialize(y))
-        if isa(x, Const) && isa(y, Const)
-            return Const(x.val === y.val)
-        elseif typeintersect(widenconst(x), widenconst(y)) === Bottom
-            return Const(false)
-        elseif (isa(x, Const) && y === typeof(x.val) && isdefined(y, :instance)) ||
-               (isa(y, Const) && x === typeof(y.val) && isdefined(x, :instance))
-            return Const(true)
-        elseif isa(x, Conditional) && isa(y, Const)
-            y.val === false && return Conditional(x.var, x.elsetype, x.vtype)
-            y.val === true && return x
-            return x
-        elseif isa(y, Conditional) && isa(x, Const)
-            x.val === false && return Conditional(y.var, y.elsetype, y.vtype)
-            x.val === true && return y
-        end
-        return Bool
-    end, 1)
+function egal_tfunc(@nospecialize(x), @nospecialize(y))
+    if isa(x, Const) && isa(y, Const)
+        return Const(x.val === y.val)
+    elseif typeintersect(widenconst(x), widenconst(y)) === Bottom
+        return Const(false)
+    elseif (isa(x, Const) && y === typeof(x.val) && isdefined(y, :instance)) ||
+           (isa(y, Const) && x === typeof(y.val) && isdefined(x, :instance))
+        return Const(true)
+    elseif isa(x, Conditional) && isa(y, Const)
+        y.val === false && return Conditional(x.var, x.elsetype, x.vtype)
+        y.val === true && return x
+        return x
+    elseif isa(y, Conditional) && isa(x, Const)
+        x.val === false && return Conditional(y.var, y.elsetype, y.vtype)
+        x.val === true && return y
+    end
+    return Bool
+end
+add_tfunc(===, 2, 2, egal_tfunc, 1)
 function isdefined_tfunc(@nospecialize(args...))
     arg1 = args[1]
     if isa(arg1, Const)
@@ -436,12 +436,46 @@ function const_datatype_getfield_tfunc(sv, fld)
     return nothing
 end
 
+function fieldcount_noerror(@nospecialize t)
+    if t isa UnionAll || t isa Union
+        t = ccall(:jl_argument_datatype, Any, (Any,), t)
+        if t === nothing
+            return nothing
+        end
+        t = t::DataType
+    elseif t == Union{}
+        return 0
+    end
+    if !(t isa DataType)
+        return nothing
+    end
+    if t.name === NamedTuple.body.body.name
+        names, types = t.parameters
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount_noerror(types)
+        end
+        abstr = true
+    else
+        abstr = t.abstract || (t.name === Tuple.name && isvatuple(t))
+    end
+    if abstr
+        return nothing
+    end
+    return length(t.types)
+end
+
+
 function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
     if isa(field, Symbol)
         field = fieldindex(typ, field, false)
         field == 0 && return nothing
     elseif isa(field, Integer)
-        (1 <= field <= fieldcount(typ)) || return nothing
+        max_fields = fieldcount_noerror(typ)
+        max_fields === nothing && return nothing
+        (1 <= field <= max_fields) || return nothing
     else
         return nothing
     end
