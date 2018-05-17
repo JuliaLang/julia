@@ -219,6 +219,9 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * The package manager `Pkg` has been replaced with a new one. See the manual entries on
+    "Code Loading" and "Pkg" for documentation.
+
   * `replace(s::AbstractString, pat=>repl)` for function `repl` arguments formerly
     passed a substring to `repl` in all cases.  It now passes substrings for
     string patterns `pat`, but a `Char` for character patterns (when `pat` is a
