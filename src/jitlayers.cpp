@@ -105,12 +105,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createVerifierPass());
 #endif
 
-#if defined(JL_ASAN_ENABLED)
-    PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(JL_MSAN_ENABLED)
-    PM->add(llvm::createMemorySanitizerPass(true));
-#endif
     if (opt_level < 2) {
         PM->add(createCFGSimplificationPass()); // Clean up disgusting code
         if (opt_level == 1) {
@@ -142,6 +136,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
+#if defined(JL_ASAN_ENABLED)
+        PM->add(createAddressSanitizerFunctionPass());
+#endif
+#if defined(JL_MSAN_ENABLED)
+        PM->add(llvm::createMemorySanitizerPass(true));
+#endif
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
@@ -282,6 +282,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createCFGSimplificationPass());
 #endif
     PM->add(createCombineMulAddPass());
+#if defined(JL_ASAN_ENABLED)
+    PM->add(createAddressSanitizerFunctionPass());
+#endif
+#if defined(JL_MSAN_ENABLED)
+    PM->add(llvm::createMemorySanitizerPass(true));
+#endif
 }
 
 extern "C" JL_DLLEXPORT
