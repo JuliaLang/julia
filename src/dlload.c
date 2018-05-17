@@ -110,7 +110,7 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
 #ifdef RTLD_NOLOAD
                   | JL_RTLD(flags, NOLOAD)
 #endif
-#if defined(RTLD_DEEPBIND) && !defined(JL_ASAN_ENABLED)
+#if defined(RTLD_DEEPBIND) && !(defined(JL_ASAN_ENABLED) || defined(JL_TSAN_ENABLED) || defined(JL_MSAN_ENABLED))
                   | JL_RTLD(flags, DEEPBIND)
 #endif
 #ifdef RTLD_FIRST

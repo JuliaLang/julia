@@ -12,29 +12,20 @@
 #define sleep(x) Sleep(1000*x)
 #endif
 
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define JL_ASAN_ENABLED     // Clang flavor
-#endif
-#elif defined(__SANITIZE_ADDRESS__)
-#define JL_ASAN_ENABLED     // GCC flavor
-#endif
-
-#ifdef JL_ASAN_ENABLED
 #ifdef __cplusplus
 extern "C" {
 #endif
+#ifdef JL_ASAN_ENABLED
 void __sanitizer_start_switch_fiber(void**, const void*, size_t);
 void __sanitizer_finish_switch_fiber(void*, const void**, size_t*);
+#endif
+#ifdef JL_TSAN_ENABLED
+void *__tsan_create_fiber(unsigned flags);
+// void __tsan_destroy_fiber(void *fiber);
+void __tsan_switch_to_fiber(void *fiber, unsigned flags);
+#endif
 #ifdef __cplusplus
 }
-#endif
-#endif
-
-#if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
-#define JL_MSAN_ENABLED
-#endif
 #endif
 
 // Remove when C11 is required for C code.
@@ -321,7 +312,8 @@ jl_value_t *jl_permbox32(jl_datatype_t *t, int32_t x);
 jl_value_t *jl_permbox64(jl_datatype_t *t, int64_t x);
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
-#if !defined(__clang_analyzer__) && !defined(JL_ASAN_ENABLED) // this sizeof(__VA_ARGS__) trick can't be computed until C11, but that only matters to Clang in some situations
+// this sizeof(__VA_ARGS__) trick can't be computed until C11, but that only matters to Clang in some situations
+#if !defined(__clang_analyzer__) && !(defined(JL_ASAN_ENABLED) || defined(JL_TSAN_ENABLED))
 #ifdef __GNUC__
 #define jl_perm_symsvec(n, ...) \
     (jl_perm_symsvec)(__extension__({                                         \

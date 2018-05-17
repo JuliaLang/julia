@@ -410,6 +410,7 @@ $(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-8.0-D65174-limit-merge-stores)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 endif # LLVM_VER 8.0
 
 ifeq ($(LLVM_VER_SHORT),9.0)
@@ -427,6 +428,7 @@ $(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-9.0-D65174-limit-merge-stores)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm9-D71443-PPC-MC-redef-symbol)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-9.0-D78196)) # remove for 11.0
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 endif # LLVM_VER 9.0
 
 ifeq ($(LLVM_VER_SHORT),10.0)
@@ -441,6 +443,7 @@ $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
 $(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-10.0-PPC_SELECT_CC)) # delete for LLVM 11
 $(eval $(call LLVM_PATCH,llvm-10.0-PPC-LI-Elimination)) # delete for LLVM 11
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 endif # LLVM_VER 10.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE

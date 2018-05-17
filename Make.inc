@@ -492,7 +492,7 @@ ifeq ($(USE_LIBCPP),1)
 $(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
 endif
 ifeq ($(SANITIZE),1)
-$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+$(error Sanitizers are only supported with clang. Try setting SANITIZE=0)
 endif
 CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
@@ -539,7 +539,7 @@ ifeq ($(USE_LIBCPP),1)
 $(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
 endif
 ifeq ($(SANITIZE),1)
-$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+$(error Sanitizers only supported with clang. Try setting SANITIZE=0)
 endif
 CC  := icc
 CXX := icpc
@@ -670,17 +670,27 @@ endif
 endif
 
 ifeq ($(SANITIZE),1)
+SANITIZE_OPTS :=
+SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
-SANITIZE_OPTS := -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
-SANITIZE_LDFLAGS := $(SANITIZE_OPTS)
-else
-SANITIZE_OPTS := -fsanitize=address -mllvm -asan-stack=0
-SANITIZE_LDFLAGS := -fsanitize=address
+SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
+endif
+ifeq ($(SANITIZE_ADDRESS),1)
+SANITIZE_OPTS += -fsanitize=address -mllvm -asan-stack=0
+SANITIZE_LDFLAGS += -fsanitize=address
+endif
+ifeq ($(SANITIZE_THREAD),1)
+SANITIZE_OPTS += -fsanitize=thread
+SANITIZE_LDFLAGS += -fsanitize=thread
+endif
+ifeq ($(SANITIZE_OPTS),)
+$(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)
 endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
 JLDFLAGS += $(SANITIZE_LDFLAGS)
-endif
+endif # SANITIZE
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
 TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')

@@ -1,6 +1,8 @@
 {
   global:
     __asan*;
+    __tsan*;
+    pthread*;
     __stack_chk_guard;
     asprintf;
     bitvector_*;
