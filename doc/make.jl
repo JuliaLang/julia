@@ -1,9 +1,3 @@
-if "deploy" in ARGS
-    # Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
-    # docs from different workers.
-    (Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux) || exit()
-end
-
 # Install dependencies needed to build the documentation.
 using Pkg
 empty!(DEPOT_PATH)
@@ -169,16 +163,19 @@ makedocs(
     assets = ["assets/julia-manual.css", ]
 )
 
+# Only deploy docs from 64bit Linux to avoid committing multiple versions of the same
+# docs from different workers.
+if "deploy" in ARGS && Sys.ARCH === :x86_64 && Sys.KERNEL === :Linux
+    # Since the `.travis.yml` config specifies `language: cpp` and not `language: julia` we
+    # need to manually set the version of Julia that we are deploying the docs from.
+    ENV["TRAVIS_JULIA_VERSION"] = "nightly"
 
-# Since the `.travis.yml` config specifies `language: cpp` and not `language: julia` we
-# need to manually set the version of Julia that we are deploying the docs from.
-ENV["TRAVIS_JULIA_VERSION"] = "nightly"
-
-deploydocs(
-    julia = "nightly",
-    repo = "github.com/JuliaLang/julia.git",
-    target = "_build/html/en",
-    dirname = "en",
-    deps = nothing,
-    make = nothing,
-)
+    deploydocs(
+        julia = "nightly",
+        repo = "github.com/JuliaLang/julia.git",
+        target = "_build/html/en",
+        dirname = "en",
+        deps = nothing,
+        make = nothing,
+    )
+end
