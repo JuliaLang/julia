@@ -266,6 +266,7 @@ string, sequences of the form `\\N` refer to the Nth capture group in the regex,
 
 ```jldoctest
 julia> msg = "#Hello# from Julia";
+
 julia> replace(msg, r"#(.+)# from (?<from>\\w+)" => s"FROM: \\g<from>; MESSAGE: \\1")
 "FROM: Julia; MESSAGE: Hello"
 ```
