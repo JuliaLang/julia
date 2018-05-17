@@ -587,7 +587,6 @@ end
     @deprecate_binding Terminals       root_module(Base, :REPL).Terminals       true ", use `REPL.Terminals` instead"
 
     @deprecate_binding Pkg root_module(Base, :Pkg) true ", run `using Pkg` instead"
-    @deprecate_binding OldPkg root_module(Base, :OldPkg) true ", run `using OldPkg` instead"
     @deprecate_binding LibGit2 root_module(Base, :LibGit2) true ", run `import LibGit2` instead"
 
     @eval @deprecate_binding $(Symbol("@doc_str")) getfield(root_module(Base, :Markdown), Symbol("@doc_str")) true ", use `Markdown` instead"
