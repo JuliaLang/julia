@@ -621,8 +621,8 @@ julia> A = Matrix(2.7182818*I, 2, 2)
 
 julia> log(A)
 2×2 Array{Float64,2}:
-  1.0  0.0
- -0.0  1.0
+ 1.0  0.0
+ 0.0  1.0
 ```
 """
 function log(A::StridedMatrix)

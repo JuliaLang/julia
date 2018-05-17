@@ -357,9 +357,6 @@ return `i`.
 
 # Examples
 ```jldoctest
-julia> thisind("αβγdef", -5)
--5
-
 julia> thisind("αβγdef", 1)
 1
 
@@ -374,9 +371,6 @@ julia> thisind("αβγdef", 9)
 
 julia> thisind("αβγdef", 10)
 10
-
-julia> thisind("αβγdef", 20)
-20
 ```
 """
 thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))

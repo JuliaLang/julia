@@ -214,7 +214,7 @@ isconst(m::Module, s::Symbol) =
 Tests whether variable `s` is defined in the current scope.
 
 # Examples
-```jldoctest
+```julia-repl
 julia> function f()
            println(@isdefined x)
            x = 3

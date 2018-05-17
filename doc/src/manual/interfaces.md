@@ -556,7 +556,7 @@ Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}
 ```
 
 This means we must also define a corresponding `broadcast_similar` method:
-```jldoctest
+```jldoctest ArrayAndChar; filter = r"(^find_aac \(generic function with 5 methods\)$|^$)"
 function Base.broadcast_similar(::Broadcast.ArrayStyle{ArrayAndChar}, ::Type{ElType}, inds, bc) where ElType
     # Scan the inputs for the ArrayAndChar:
     A = find_aac(bc)
@@ -570,6 +570,8 @@ find_aac(args::Tuple) = find_aac(find_aac(args[1]), Base.tail(args))
 find_aac(x) = x
 find_aac(a::ArrayAndChar, rest) = a
 find_aac(::Any, rest) = find_aac(rest)
+# output
+
 ```
 
 From these definitions, one obtains the following behavior:

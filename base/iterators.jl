@@ -433,7 +433,7 @@ An iterator that yields the same elements as `iter`, but starting at the given `
 # Examples
 ```jldoctest
 julia> collect(Iterators.rest([1,2,3,4], 2))
-3-element Array{Any,1}:
+3-element Array{Int64,1}:
  2
  3
  4

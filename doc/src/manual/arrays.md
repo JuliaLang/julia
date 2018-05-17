@@ -392,14 +392,15 @@ julia> x = collect(reshape(1:9, 3, 3))
  2  5  8
  3  6  9
 
-julia> x[1:2, 2:3] = -1
--1
+julia> x[3, 3] = -9;
+
+julia> x[1:2, 1:2] = [-1 -4; -2 -5];
 
 julia> x
 3×3 Array{Int64,2}:
- 1  -1  -1
- 2  -1  -1
- 3   6   9
+ -1  -4   7
+ -2  -5   8
+  3   6  -9
 ```
 
 ### [Supported index types](@id man-supported-index-types)

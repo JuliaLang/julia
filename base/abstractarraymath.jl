@@ -115,7 +115,7 @@ julia> A = [1 2 3 4; 5 6 7 8]
  5  6  7  8
 
 julia> selectdim(A, 2, 3)
-2-element view(::Array{Int64,2}, Base.OneTo(2), 3) with eltype Int64:
+2-element view(::Array{Int64,2}, :, 3) with eltype Int64:
  3
  7
 ```

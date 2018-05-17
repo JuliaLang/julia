@@ -108,7 +108,7 @@ julia> round(357.913; sigdigits=4, base=2)
     julia> x < 115//100
     true
 
-    julia> round(x, 1)
+    julia> round(x, digits=1)
     1.2
     ```
 

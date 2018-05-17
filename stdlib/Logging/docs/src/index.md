@@ -35,7 +35,7 @@ A = ones(Int, 4, 4)
 v = ones(100)
 @info "Some variables"  A  s=sum(v)
 
-# Output
+# output
 ┌ Info: Some variables
 │   A =
 │    4×4 Array{Int64,2}:

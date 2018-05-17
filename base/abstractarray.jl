@@ -36,11 +36,11 @@ may be useful. See the manual chapter on [arrays with custom indices](@ref man-c
 ```jldoctest
 julia> A = fill(1, (2,3,4));
 
+julia> size(A)
+(2, 3, 4)
+
 julia> size(A, 2)
 3
-
-julia> size(A, 3, 2)
-(4, 3)
 ```
 """
 size(t::AbstractArray{T,N}, d) where {T,N} = d <= N ? size(t)[d] : 1
