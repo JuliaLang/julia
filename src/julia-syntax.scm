@@ -1606,10 +1606,11 @@
                        ;; TODO avoid `local declared twice` error from this
                        ;;,@(if outer `((local ,lhs)) '())
                        ,@(if outer `((require-existing-local ,lhs)) '())
-                       (_while
-                        (call (|.| (core Intrinsics) 'not_int) (call (core ===) ,next (null)))
-                        (block ,body
-                               (= ,next (call (top iterate) ,coll ,state)))))))))))
+                       (if (call (top not_int) (call (core ===) ,next (null)))
+                           (_do_while
+			    (block ,body
+				   (= ,next (call (top iterate) ,coll ,state)))
+			    (call (|.| (core Intrinsics) 'not_int) (call (core ===) ,next (null))))))))))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs flat outervars)
@@ -3644,6 +3645,14 @@ f(x) = yt(x)
                (compile (caddr e) break-labels #f #f)
                (emit `(goto ,topl))
                (mark-label endl)))
+            ((_do_while)
+              (let* ((endl (make-label))
+                     (topl (make&mark-label)))
+				(compile (cadr e) break-labels #f #f)
+                (let ((test (compile-cond (caddr e) break-labels)))
+                  (emit `(gotoifnot ,test ,endl)))
+                (emit `(goto ,topl))
+                (mark-label endl)))
             ((break-block)
              (let ((endl (make-label)))
                (begin0 (compile (caddr e)

@@ -6507,7 +6507,7 @@ static std::unique_ptr<Module> emit_function(
     };
 
     // Codegen Phi nodes
-    std::map<BasicBlock *, BasicBlock*> BB_rewrite_map;
+    std::map<std::pair<BasicBlock *, BasicBlock*>, BasicBlock*> BB_rewrite_map;
     std::vector<llvm::PHINode*> ToDelete;
     for (auto &tup : ctx.PhiNodes) {
         jl_cgval_t phi_result;
@@ -6526,8 +6526,9 @@ static std::unique_ptr<Module> emit_function(
             Value *V = NULL;
             BasicBlock *IncomingBB = come_from_bb[edge];
             BasicBlock *FromBB = IncomingBB;
-            if (BB_rewrite_map.count(FromBB)) {
-                FromBB = BB_rewrite_map[IncomingBB];
+            std::pair<BasicBlock *, BasicBlock*> LookupKey(IncomingBB, PhiBB);
+            if (BB_rewrite_map.count(LookupKey)) {
+                FromBB = BB_rewrite_map[LookupKey];
             }
 #ifndef JL_NDEBUG
             bool found_pred = false;
@@ -6681,7 +6682,7 @@ static std::unique_ptr<Module> emit_function(
             // Check any phi nodes in the Phi block to see if by splitting the edges,
             // we made things inconsistent
             if (FromBB != ctx.builder.GetInsertBlock()) {
-                BB_rewrite_map[IncomingBB] = ctx.builder.GetInsertBlock();
+                BB_rewrite_map[LookupKey] = ctx.builder.GetInsertBlock();
                 for (BasicBlock::iterator I = PhiBB->begin(); isa<PHINode>(I); ++I) {
                     PHINode *PN = cast<PHINode>(I);
                     ssize_t BBIdx = PN->getBasicBlockIndex(FromBB);
