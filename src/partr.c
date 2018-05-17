@@ -77,7 +77,7 @@ static inline void sift_up(taskheap_t *heap, int16_t idx)
 {
     if (idx > 0) {
         int16_t parent = (idx-1)/heap_d;
-        if (heap->tasks[idx]->prio <= heap->tasks[parent]->prio) {
+        if (heap->tasks[idx]->prio < heap->tasks[parent]->prio) {
             jl_task_t *t = heap->tasks[parent];
             heap->tasks[parent] = heap->tasks[idx];
             heap->tasks[idx] = t;
@@ -96,7 +96,7 @@ static inline void sift_down(taskheap_t *heap, int16_t idx)
                 child < tasks_per_heap && child <= heap_d*idx + heap_d;
                 ++child) {
             if (heap->tasks[child]
-                    &&  heap->tasks[child]->prio <= heap->tasks[idx]->prio) {
+                    &&  heap->tasks[child]->prio < heap->tasks[idx]->prio) {
                 jl_task_t *t = heap->tasks[idx];
                 heap->tasks[idx] = heap->tasks[child];
                 heap->tasks[child] = t;
@@ -679,9 +679,9 @@ static void JL_NORETURN run_next(void)
 
 
 // specialize and compile the user function
-static int setup_task_fun(jl_value_t *_args,
-                          jl_method_instance_t **mfunc,
-                          jl_callptr_t *fptr)
+static void setup_task_fun(jl_value_t *_args,
+                           jl_method_instance_t **mfunc,
+                           jl_callptr_t *fptr)
 {
     uint32_t nargs;
     jl_value_t **args;
@@ -701,10 +701,6 @@ static int setup_task_fun(jl_value_t *_args,
 
     // Ignore constant return value for now.
     *fptr = jl_compile_method_internal(mfunc, world);
-    if (*fptr == jl_fptr_const_return)
-        return -1;
-
-    return 0;
 }
 
 
@@ -751,37 +747,16 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
 #endif
     task->stkbuf = NULL;
 
-    if (setup_task_fun(_args, &task->mfunc, &task->fptr) == 0) {
-        jl_gc_wb(task, task->mfunc);
+    setup_task_fun(_args, &task->mfunc, &task->fptr);
+    jl_gc_wb(task, task->mfunc);
 
-#if 1
-        task->ssize = 128*1024;
-        task->stkbuf = (void *)jl_gc_alloc_buf(ptls, task->ssize);
-        jl_gc_wb_buf(task, task->stkbuf, task->ssize);
+    // TODO: need stack management
+    task->ssize = 128*1024;
+    task->stkbuf = (void *)jl_gc_alloc_buf(ptls, task->ssize);
+    jl_gc_wb_buf(task, task->stkbuf, task->ssize);
 
-        // set up entry point for this task
-        init_task_entry(task, (char *)task->stkbuf);
-#else
-        // set up stack with guard page
-        //TODO: hack below!
-        //task->ssize = LLT_ALIGN(1*1024*1024, jl_page_size);
-        task->ssize = LLT_ALIGN(128*1024, jl_page_size);
-        size_t stkbufsize = task->ssize + jl_page_size + (jl_page_size - 1);
-        task->stkbuf = (void *)jl_gc_alloc_buf(ptls, stkbufsize);
-        jl_gc_wb_buf(task, task->stkbuf, stkbufsize);
-        char *stk = (char *)LLT_ALIGN((uintptr_t)task->stkbuf, jl_page_size);
-        if (mprotect(stk, jl_page_size - 1, PROT_NONE) == -1)
-            jl_errorf("mprotect: %s", strerror(errno));
-        stk += jl_page_size;
-
-        // set up entry point for this task
-        init_task_entry(task, stk);
-
-        // for task cleanup
-        jl_gc_add_finalizer((jl_value_t *)task, jl_unprotect_stack_func);
-#endif
-    }
-    else task = NULL;
+    // set up entry point for this task
+    init_task_entry(task, (char *)task->stkbuf);
 
     JL_GC_POP();
     return task;
@@ -793,7 +768,7 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
     If `sticky` is set, the task will only run on the current thread. If `detach`
     is set, the spawned task cannot be synced. Yields.
  */
-JL_DLLEXPORT int jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach)
+JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
 
@@ -813,7 +788,7 @@ JL_DLLEXPORT int jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach)
             &&  ptls->current_task  &&  !(ptls->current_task->settings & TASK_IS_STICKY))
         jl_task_yield(1);
 
-    return 0;
+    return task;
 }
 
 
@@ -845,11 +820,7 @@ JL_DLLEXPORT jl_task_t *jl_task_new_multi(jl_value_t *_args, int64_t count, jl_v
             arriver_free(arr);
             return NULL;
         }
-        if (setup_task_fun(_rargs, &mredfunc, &rfptr) != 0) {
-            reducer_free(red);
-            arriver_free(arr);
-            return NULL;
-        }
+        setup_task_fun(_rargs, &mredfunc, &rfptr);
     }
 
     /* allocate (GRAIN_K * nthreads) tasks */
@@ -954,7 +925,6 @@ JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
             }
 
             JL_UNLOCK(&task->cq.lock);
-
             jl_task_yield(0);
         }
 

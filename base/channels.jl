@@ -104,7 +104,7 @@ function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     chnl = Channel{ctype}(csize)
     task = Task(() -> func(chnl))
     bind(chnl, task)
-    yield(task) # immediately start it
+    schedule(task)
 
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl

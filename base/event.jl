@@ -70,7 +70,8 @@ isempty(c::Condition) = ccall(:jl_condition_isempty, Cint, (Ref{Condition},), c)
 Add a [`Task`](@ref) to the scheduler's queue. The task will run when a thread is available
 to execute it.
 """
-schedule(t::Task, @nospecialize(arg = nothing); error=false) = (ccall(:jl_task_spawn, Cint, (Ref{Task},Int8,Int8), t, 0, 0); t)
+schedule(t::Task, @nospecialize(arg = nothing); error=false) =
+    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Int8,Int8), t, 0, 0)
 
 """
     fetch(t::Task)
@@ -109,7 +110,7 @@ macro schedule(expr)
 end
 function schedule_and_wait(t::Task, arg=nothing)
     schedule(t, arg)
-    fetch(t)
+    wait()
 end
 
 throwto(t::Task, @nospecialize exc) = () # TODO: should throwto() still work? what if the task is running in another thread?
@@ -606,6 +607,6 @@ function Timer(cb::Function, timeout::Real; interval::Real = 0.0)
     end)
     # must start the task right away so that it can wait for the Timer before
     # we re-enter the event loop. this avoids a race condition. see issue #12719
-    yield(waiter)
+    schedule(waiter)
     return t
 end

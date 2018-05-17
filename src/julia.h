@@ -1737,7 +1737,7 @@ struct _jl_task_t {
 #ifdef JULIA_ENABLE_PARTR
 
 JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *args);
-JL_DLLEXPORT int jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach);
+JL_DLLEXPORT jl_task_t *jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach);
 JL_DLLEXPORT jl_task_t *jl_task_new_multi(jl_value_t *args, int64_t count, jl_value_t *rargs);
 JL_DLLEXPORT int jl_task_spawn_multi(jl_task_t *task);
 JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task);
