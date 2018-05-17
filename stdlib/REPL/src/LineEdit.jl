@@ -1680,7 +1680,9 @@ function complete_line(s::SearchState, repeats)
         prev_pos = position(s)
         push_undo(s)
         edit_splice!(s, prev_pos-sizeof(partial) => prev_pos, completions[1])
+        return true
     end
+    false
 end
 
 function accept_result(s, p)
