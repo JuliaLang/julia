@@ -552,8 +552,9 @@ void NOINLINE JL_NORETURN task_wrapper(void)
         new_state = done_sym;
     }
     JL_CATCH {
-        task->exception = ptls->exception_in_transit;
+        task->result = task->exception = ptls->exception_in_transit;
         jl_gc_wb(task, task->exception);
+        jl_gc_wb(task, task->result);
         new_state = failed_sym;
     }
 
@@ -658,6 +659,7 @@ static void JL_NORETURN run_next(void)
     /* run/resume the task */
     ptls->pgcstack = task->gcstack;
     ptls->world_age = task->world_age;
+    task->gcstack = NULL;
 
     jl_task_t *last = task;
     while (last->current_module == NULL  &&  last != ptls->root_task)
@@ -752,6 +754,14 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
     if (setup_task_fun(_args, &task->mfunc, &task->fptr) == 0) {
         jl_gc_wb(task, task->mfunc);
 
+#if 1
+        task->ssize = 128*1024;
+        task->stkbuf = (void *)jl_gc_alloc_buf(ptls, task->ssize);
+        jl_gc_wb_buf(task, task->stkbuf, task->ssize);
+
+        // set up entry point for this task
+        init_task_entry(task, (char *)task->stkbuf);
+#else
         // set up stack with guard page
         //TODO: hack below!
         //task->ssize = LLT_ALIGN(1*1024*1024, jl_page_size);
@@ -769,6 +779,7 @@ JL_DLLEXPORT jl_task_t *jl_task_new(jl_value_t *_args)
 
         // for task cleanup
         jl_gc_add_finalizer((jl_value_t *)task, jl_unprotect_stack_func);
+#endif
     }
     else task = NULL;
 
@@ -952,8 +963,10 @@ JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
             JL_UNLOCK(&task->cq.lock);
     }
 
-    return task->grain_num >= 0 && task->red ?
-           task->red_result : task->result;
+    if (task->state == failed_sym)
+        jl_throw(task->exception);
+
+    return task->grain_num >= 0 && task->red ?  task->red_result : task->result;
 }
 
 
@@ -963,7 +976,7 @@ JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task)
     (sticky or multiqueue), otherwise it is assumed it will be re-queued
     in some other way (e.g. from another task's completion queue).
  */
-JL_DLLEXPORT void jl_task_yield(int requeue)
+JL_DLLEXPORT jl_value_t *jl_task_yield(int requeue)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *ytask = ptls->current_task;
@@ -1029,6 +1042,15 @@ JL_DLLEXPORT void jl_task_yield(int requeue)
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     if (other_defer_signal  &&  !defer_signal)
         jl_sigint_safepoint(ptls);
+
+    jl_value_t *exc = ptls->current_task->exception;
+    if (exc != jl_nothing) {
+        ptls->current_task->exception = jl_nothing;
+        jl_throw(exc);
+    }
+    jl_value_t *res = ptls->current_task->result;
+    ptls->current_task->result = jl_nothing;
+    return res;
 }
 
 
@@ -1050,7 +1072,7 @@ JL_DLLEXPORT jl_condition_t *jl_condition_new(void)
 /*  jl_task_wait() -- deschedules the task until the specified condition is
         triggered
  */
-JL_DLLEXPORT void jl_task_wait(jl_condition_t *c)
+JL_DLLEXPORT jl_value_t *jl_task_wait(jl_condition_t *c)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_LOCK(&c->lock);
@@ -1066,24 +1088,39 @@ JL_DLLEXPORT void jl_task_wait(jl_condition_t *c)
         jl_gc_wb(pt, pt->next);
     }
     JL_UNLOCK(&c->lock);
-    jl_task_yield(0);
+    return jl_task_yield(0);
 }
 
 
 /*  jl_task_notify() -- triggers the specified condition, causing all tasks
         waiting on it to become schedulable
  */
-JL_DLLEXPORT void jl_task_notify(jl_condition_t *c)
+JL_DLLEXPORT void jl_task_notify(jl_condition_t *c, jl_value_t *arg, int8_t all, int8_t err)
 {
     JL_LOCK(&c->lock);
     jl_task_t *qtask = c->head;
-    c->head = NULL;
+    if (all)
+        c->head = NULL;
+    else {
+        if (c->head) {
+            c->head = c->head->next;
+            qtask->next = NULL;
+        }
+    }
     JL_UNLOCK(&c->lock);
 
     jl_task_t *qnext;
     while (qtask) {
         qnext = qtask->next;
         qtask->next = NULL;
+        if (err) {
+            qtask->exception = arg;
+            jl_gc_wb(qtask, qtask->exception);
+        }
+        else {
+            qtask->result = arg;
+            jl_gc_wb(qtask, qtask->result);
+        }
         enqueue_task(qtask);
         qtask = qnext;
     }

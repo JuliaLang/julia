@@ -582,7 +582,9 @@ static void gc_scrub_task(jl_task_t *ta)
     int16_t tid = ta->tid;
 #endif
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_ptls_t ptls2 = jl_all_tls_states[tid];
+    jl_ptls_t ptls2 = NULL;
+    if (tid != -1)
+        ptls2 = jl_all_tls_states[tid];
     if (ptls == ptls2 && ta == ptls2->current_task) {
         // scan up to current `sp` for current thread and task
         char *low = (char*)jl_get_frame_addr();
@@ -594,10 +596,12 @@ static void gc_scrub_task(jl_task_t *ta)
         return;
     }
     // The task that owns/is running on the threads's stack.
+    jl_task_t *thread_task = NULL;
 #ifdef COPY_STACKS
-    jl_task_t *thread_task = ptls2->current_task;
+    thread_task = ptls2->current_task;
 #else
-    jl_task_t *thread_task = ptls2->root_task;
+    if (ptls2)
+        thread_task = ptls2->root_task;
 #endif
     if (ta == thread_task)
         gc_scrub_range(ptls2->stack_lo, ptls2->stack_hi);

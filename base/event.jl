@@ -42,7 +42,7 @@ restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
 Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
 proceeding.
 """
-wait(c::Condition) = ccall(:jl_task_wait, Cvoid, (Ref{Condition},), c)
+wait(c::Condition) = ccall(:jl_task_wait, Any, (Ref{Condition},), c)
 
 """
     notify(condition, val=nothing; all=true, error=false)
@@ -53,7 +53,7 @@ is raised as an exception in the woken tasks.
 
 Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
 """
-notify(c::Condition, arg, all, error) = ccall(:jl_task_notify, Cvoid, (Ref{Condition},), c)
+notify(c::Condition, arg, all, error) = ccall(:jl_task_notify, Cvoid, (Ref{Condition},Any,Int8,Int8), c, arg, all, error)
 notify(c::Condition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 notify_error(c::Condition, err) = notify(c, err, true, true)
 
@@ -85,7 +85,7 @@ fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), t)
 Allow the scheduler to use the thread running the current task to run a higher priority task,
 if one exists in the scheduler's queue. The current task will be re-queued.
 """
-yield() = ccall(:jl_task_yield, Cvoid, (Cint,), 1)
+yield() = ccall(:jl_task_yield, Any, (Cint,), 1)
 yield(t::Task, @nospecialize x = nothing) = yield() # TODO: cannot yieldto anymore
 yieldto(t::Task, @nospecialize x = nothing) = yield() # TODO: cannot yieldto anymore
 try_yieldto(undo, reftask::Ref{Task}) = yield() # TODO: cannot yieldto anymore
@@ -96,7 +96,7 @@ try_yieldto(undo, reftask::Ref{Task}) = yield() # TODO: cannot yieldto anymore
 Cause the current task to stop executing, releasing the thread running it. The task will not be
 re-queued, and must be re-scheduled in order to run again.
 """
-wait() = ccall(:jl_task_yield, Cvoid, (Cint,), 0)
+wait() = ccall(:jl_task_yield, Any, (Cint,), 0)
 
 """
     @schedule

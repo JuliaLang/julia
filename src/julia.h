@@ -1741,10 +1741,10 @@ JL_DLLEXPORT int jl_task_spawn(jl_task_t *task, int8_t sticky, int8_t detach);
 JL_DLLEXPORT jl_task_t *jl_task_new_multi(jl_value_t *args, int64_t count, jl_value_t *rargs);
 JL_DLLEXPORT int jl_task_spawn_multi(jl_task_t *task);
 JL_DLLEXPORT jl_value_t *jl_task_sync(jl_task_t *task);
-JL_DLLEXPORT void jl_task_yield(int requeue);
+JL_DLLEXPORT jl_value_t *jl_task_yield(int requeue);
 JL_DLLEXPORT jl_condition_t *jl_condition_new(void);
-JL_DLLEXPORT void jl_task_wait(jl_condition_t *c);
-JL_DLLEXPORT void jl_task_notify(jl_condition_t *c);
+JL_DLLEXPORT jl_value_t *jl_task_wait(jl_condition_t *c);
+JL_DLLEXPORT void jl_task_notify(jl_condition_t *c, jl_value_t *arg, int8_t all, int8_t err);
 
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
