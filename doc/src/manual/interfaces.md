@@ -440,7 +440,7 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | Methods to implement | Brief description |
 |:-------------------- |:----------------- |
 | `Base.BroadcastStyle(::Type{SrcType}) = SrcStyle()` | Broadcasting behavior of `SrcType` |
-| `Base.broadcast_similar(::DestStyle, ::Type{ElType}, inds, bc)` | Allocation of output container |
+| `Base.similar(bc::Broadcasted{DestStyle}, ::Type{ElType})` | Allocation of output container |
 | **Optional methods** | | |
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
 | `Base.broadcast_axes(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (defaults to [`axes(A)`](@ref)) |
@@ -512,17 +512,17 @@ For more details, see [below](@ref writing-binary-broadcasting-rules).
 
 The broadcast style is computed for every broadcasting operation to allow for
 dispatch and specialization. The actual allocation of the result array is
-handled by `Base.broadcast_similar`, using this style as its first argument.
+handled by `similar`, using the Broadcasted object as its first argument.
 
 ```julia
-Base.broadcast_similar(::DestStyle, ::Type{ElType}, inds, bc)
+Base.similar(bc::Broadcasted{DestStyle}, ::Type{ElType})
 ```
 
 The fallback definition is
 
 ```julia
-broadcast_similar(::DefaultArrayStyle{N}, ::Type{ElType}, inds::Indices{N}, bc) where {N,ElType} =
-    similar(Array{ElType}, inds)
+similar(bc::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}) where {N,ElType} =
+    similar(Array{ElType}, axes(bc))
 ```
 
 However, if needed you can specialize on any or all of these arguments. The final argument
@@ -555,13 +555,13 @@ Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}
 
 ```
 
-This means we must also define a corresponding `broadcast_similar` method:
+This means we must also define a corresponding `similar` method:
 ```jldoctest ArrayAndChar; filter = r"(^find_aac \(generic function with 5 methods\)$|^$)"
-function Base.broadcast_similar(::Broadcast.ArrayStyle{ArrayAndChar}, ::Type{ElType}, inds, bc) where ElType
+function Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ArrayAndChar}}, ::Type{ElType}) where ElType
     # Scan the inputs for the ArrayAndChar:
     A = find_aac(bc)
     # Use the char field of A to create the output
-    ArrayAndChar(similar(Array{ElType}, inds), A.char)
+    ArrayAndChar(similar(Array{ElType}, axes(bc)), A.char)
 end
 
 "`A = find_aac(As)` returns the first ArrayAndChar among the arguments."
