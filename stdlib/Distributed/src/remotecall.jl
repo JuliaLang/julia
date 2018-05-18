@@ -234,7 +234,7 @@ end
 
 any_gc_flag = Condition()
 function start_gc_msgs_task()
-    @schedule while true
+    @async while true
         wait(any_gc_flag)
         flush_gc_msgs()
     end

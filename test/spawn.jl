@@ -59,7 +59,7 @@ Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
 let a, p
     a = Base.Condition()
-    @schedule begin
+    @async begin
         p = run(pipeline(yescmd,devnull), wait=false)
         Base.notify(a,p)
         @test !success(p)

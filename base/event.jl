@@ -80,19 +80,6 @@ notify_error(c::Condition, err) = notify(c, err, true, true)
 
 n_waiters(c::Condition) = length(c.waitq)
 
-# schedule an expression to run asynchronously, with minimal ceremony
-"""
-    @schedule
-
-Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
-Similar to [`@async`](@ref) except that an enclosing `@sync` does NOT wait for tasks
-started with an `@schedule`.
-"""
-macro schedule(expr)
-    thunk = esc(:(()->($expr)))
-    :(enq_work(Task($thunk)))
-end
-
 ## scheduler and work queue
 
 global const Workqueue = Task[]

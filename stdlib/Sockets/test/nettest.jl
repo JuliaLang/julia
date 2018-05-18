@@ -115,29 +115,25 @@ test_send(9)
     bsent = 0
     bread = 0
 
-    @sync begin
-        # Create an asynchronous task that can modify bread properly
-        recv_task = @task begin
-            while bread < xfer_size
-                data = read(s, UInt8, xfer_block)
-                @assert length(data) == xfer_block
-                bread += xfer_block
-            end
+    # Create an asynchronous task that can modify bread properly
+    recv_task = @async begin
+        while bread < xfer_size
+            data = read(s, UInt8, xfer_block)
+            @assert length(data) == xfer_block
+            bread += xfer_block
         end
-        Base.sync_add(recv_task)
-        Base.enq_work(recv_task)
-
-        send_task = @task begin
-            # write in chunks of xfer_block
-            data = fill!(zeros(UInt8, xfer_block), Int8(65))
-            while bsent < xfer_size
-                write(s, data)
-                bsent += xfer_block
-            end
-        end
-        Base.sync_add(send_task)
-        Base.enq_work(send_task)
     end
+
+    send_task = @async begin
+        # write in chunks of xfer_block
+        data = fill!(zeros(UInt8, xfer_block), Int8(65))
+        while bsent < xfer_size
+            write(s, data)
+            bsent += xfer_block
+        end
+    end
+    fetch(recv_task)
+    fetch(send_task)
 
     return (bsent, bread)
 end

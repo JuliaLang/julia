@@ -481,14 +481,14 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UU
     ########################################
     jobs = Channel(ctx.num_concurrent_downloads);
     results = Channel(ctx.num_concurrent_downloads);
-    @schedule begin
+    @async begin
         for pkg in pkgs_to_install
             put!(jobs, pkg)
         end
     end
 
     for i in 1:ctx.num_concurrent_downloads
-        @schedule begin
+        @async begin
             for (pkg, path) in jobs
                 if ctx.preview
                     put!(results, (pkg, true, path))

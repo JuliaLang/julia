@@ -477,6 +477,13 @@ This section lists changes that do not have deprecation warnings.
     match `café` (not just `caf`). Add the `a` modifier (e.g. `r"\w+"a`) to
     restore the previous behavior ([#27189]).
 
+  * `@sync` now waits only for *lexically* enclosed (i.e. visible directly in the source
+    text of its argument) `@async` expressions. If you need to wait for a task created by
+    a called function `f`, have `f` return the task and put `@async wait(f(...))` within
+    the `@sync` block.
+    This change makes `@schedule` redundant with `@async`, so `@schedule` has been
+    deprecated ([#27164]).
+
 Library improvements
 --------------------
 

@@ -110,7 +110,7 @@ end
 # task switching
 
 @noinline function f6597(c)
-    t = @schedule nothing
+    t = @async nothing
     finalizer(t -> c[] += 1, t)
     Base._wait(t)
     @test c[] == 0
@@ -118,7 +118,7 @@ end
     nothing
 end
 let c = Ref(0),
-    t2 = @schedule (wait(); c[] += 99)
+    t2 = @async (wait(); c[] += 99)
     @test c[] == 0
     f6597(c)
     GC.gc() # this should run the finalizer for t
@@ -129,6 +129,20 @@ let c = Ref(0),
     @test c[] == 100
 end
 
+# test that @sync is lexical (PR #27164)
+
+const x27164 = Ref(0)
+do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
+
+let t = nothing
+    @sync begin
+        t = do_something_async_27164()
+        @async (sleep(0.05); x27164[] = 1)
+    end
+    @test x27164[] == 1
+    fetch(t)
+    @test x27164[] == 2
+end
 
 # timing macros
 
