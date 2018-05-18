@@ -110,25 +110,6 @@ function from_fenv(r::Integer)
 end
 
 """
-    setrounding(T, mode)
-
-Set the rounding mode of floating point type `T`, controlling the rounding of basic
-arithmetic functions ([`+`](@ref), [`-`](@ref), [`*`](@ref),
-[`/`](@ref) and [`sqrt`](@ref)) and type conversion. Other numerical
-functions may give incorrect or invalid values when using rounding modes other than the
-default `RoundNearest`.
-
-Note that this may affect other types, for instance changing the rounding mode of
-[`Float64`](@ref) will change the rounding mode of [`Float32`](@ref).
-See [`RoundingMode`](@ref) for available modes.
-
-!!! warning
-
-    This feature is still experimental, and may give unexpected or incorrect values.
-"""
-setrounding(T::Type, mode)
-
-"""
     rounding(T)
 
 Get the current floating point rounding mode for type `T`, controlling the rounding of basic
@@ -142,7 +123,6 @@ See [`RoundingMode`](@ref) for available modes.
 setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:fegetround, Int32, ())
 
-setrounding(::Type{T}, r::RoundingMode) where {T<:Union{Float32,Float64}} = setrounding_raw(T,to_fenv(r))
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
 
 """

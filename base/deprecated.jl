@@ -1669,6 +1669,11 @@ end
 @deprecate next(s::AbstractString, i::Integer) iterate(s, i)
 @deprecate done(s::AbstractString, i::Integer) i > ncodeunits(s)
 
+function Rounding.setrounding(::Type{T}, r::RoundingMode) where {T<:Union{Float32,Float64}}
+    depwarn("""`setrounding` for `Float32` and `Float64` has been deprecated, and will not be available in future versions.""", :setrounding)
+    Rounding.setrounding_raw(T, Rounding.to_fenv(r))
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
