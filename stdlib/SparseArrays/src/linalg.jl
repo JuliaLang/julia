@@ -937,7 +937,7 @@ function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
         if ishermitian(A)
             return \(Hermitian(A), B)
         end
-        return \(lufact(A), B)
+        return \(lu(A), B)
     else
         return \(qrfact(A), B)
     end
@@ -960,7 +960,7 @@ for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
                 if ishermitian(A)
                     return \($xformop(Hermitian(A)), B)
                 end
-                return \($xformop(lufact(A)), B)
+                return \($xformop(lu(A)), B)
             else
                 return \($xformop(qrfact(A)), B)
             end
@@ -983,7 +983,7 @@ function factorize(A::SparseMatrixCSC)
         if ishermitian(A)
             return factorize(Hermitian(A))
         end
-        return lufact(A)
+        return lu(A)
     else
         return qrfact(A)
     end
@@ -1009,7 +1009,6 @@ function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatri
 end
 
 chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
-lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
 eig(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eig() for sparse matrices.")
 
 function Base.cov(X::SparseMatrixCSC; dims::Int=1, corrected::Bool=true)

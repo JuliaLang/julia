@@ -774,7 +774,7 @@ function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
         if s.is_ll == 1
             throw(LinearAlgebra.PosDefException(s.minor))
         else
-            throw(ArgumentError("factorized matrix has one or more zero pivots. Try using lufact instead."))
+            throw(ArgumentError("factorized matrix has one or more zero pivots. Try using `lu` instead."))
         end
     end
     Dense(ccall((@cholmod_name("solve", SuiteSparse_long),:libcholmod), Ptr{C_Dense{Tv}},
@@ -1720,7 +1720,7 @@ function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
         if issuccess(F)
             return \(F, B)
         else
-            return \(lufact(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A)), B)
+            return \(lu(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A)), B)
         end
     end
 end
@@ -1734,7 +1734,7 @@ function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrM
         if issuccess(F)
             return \(adjoint(F), B)
         else
-            return \(adjoint(lufact(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A))), B)
+            return \(adjoint(lu(SparseMatrixCSC{eltype(A), SuiteSparse_long}(A))), B)
         end
     end
 end

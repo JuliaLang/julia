@@ -862,7 +862,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         if istriu(A)
             return UpperTriangular(A) \ B
         end
-        return lufact(A) \ B
+        return lu(A) \ B
     end
     return qrfact(A,Val(true)) \ B
 end
@@ -1270,7 +1270,7 @@ function det(A::AbstractMatrix{T}) where T
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
     end
-    return det(lufact(A))
+    return det(lu(A))
 end
 det(x::Number) = x
 
@@ -1305,7 +1305,7 @@ julia> logabsdet(B)
 (0.6931471805599453, 1.0)
 ```
 """
-logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
+logabsdet(A::AbstractMatrix) = logabsdet(lu(A))
 
 """
     logdet(M)

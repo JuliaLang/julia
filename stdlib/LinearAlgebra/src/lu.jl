@@ -11,6 +11,20 @@ struct LU{T,S<:AbstractMatrix} <: Factorization{T}
 end
 LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T} = LU{T,typeof(factors)}(factors, ipiv, info)
 
+# iteration for destructuring into components
+Base.iterate(S::LU) = (S.L, Val(:U))
+Base.iterate(S::LU, ::Val{:U}) = (S.U, Val(:p))
+Base.iterate(S::LU, ::Val{:p}) = (S.p, Val(:done))
+Base.iterate(S::LU, ::Val{:done}) = nothing
+
+# indexing for destructuring into components
+@inline function Base.getindex(S::LU, i::Integer)
+    i == 1 ? (return S.L) :
+    i == 2 ? (return S.U) :
+    i == 3 ? (return S.p) :
+        throw(BoundsError(S, i))
+end
+
 adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
@@ -30,7 +44,7 @@ end
 """
     lufact!(A, pivot=Val(true)) -> LU
 
-`lufact!` is the same as [`lufact`](@ref), but saves space by overwriting the
+`lufact!` is the same as [`lu`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
 exception is thrown if the factorization produces a number not representable by the
 element type of `A`, e.g. for integer types.
@@ -114,13 +128,14 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true)) where {T
 end
 
 # floating point types doesn't have to be promoted for LU, but should default to pivoting
-lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
-    pivot::Union{Val{false}, Val{true}} = Val(true)) where {T<:AbstractFloat} =
-        lufact!(copy(A), pivot)
+function lu(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
+            pivot::Union{Val{false}, Val{true}} = Val(true)) where {T<:AbstractFloat}
+    lufact!(copy(A), pivot)
+end
 
 # for all other types we must promote to a type which is stable under division
 """
-    lufact(A, pivot=Val(true)) -> F::LU
+    lu(A, pivot=Val(true)) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -129,7 +144,7 @@ type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
 pivoting is chosen (default) the element type should also support `abs` and
 `<`.
 
-The individual components of the factorization `F` can be accessed by indexing:
+The individual components of the factorization `F` can be accessed via `getproperty`:
 
 | Component | Description                         |
 |:----------|:------------------------------------|
@@ -137,6 +152,8 @@ The individual components of the factorization `F` can be accessed by indexing:
 | `F.U`     | `U` (upper triangular) part of `LU` |
 | `F.p`     | (right) permutation `Vector`        |
 | `F.P`     | (right) permutation `Matrix`        |
+
+Iterating the factorization produces the components `F.L`, `F.U`, and `F.p`.
 
 The relationship between `F` and `A` is
 
@@ -161,7 +178,7 @@ julia> A = [4 3; 6 3]
  4  3
  6  3
 
-julia> F = lufact(A)
+julia> F = lu(A)
 LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
@@ -174,16 +191,21 @@ U factor:
 
 julia> F.L * F.U == A[F.p, :]
 true
+
+julia> l, u, p = lu(A); # destructuring via iteration
+
+julia> l == F.L && u == F.U && p == F.p
+true
 ```
 """
-function lufact(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T
+function lu(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S)
     copyto!(AA, A)
     lufact!(AA, pivot)
 end
 # We can't assume an ordered field so we first try without pivoting
-function lufact(A::AbstractMatrix{T}) where T
+function lu(A::AbstractMatrix{T}) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S)
     copyto!(AA, A)
@@ -197,38 +219,8 @@ function lufact(A::AbstractMatrix{T}) where T
     end
 end
 
-lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
-lufact(F::LU) = F
-
-lu(x::Number) = (one(x), x, 1)
-
-"""
-    lu(A, pivot=Val(true)) -> L, U, p
-
-Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
-By default, pivoting is used. This can be overridden by passing
-`Val(false)` for the second argument.
-
-See also [`lufact`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [4. 3.; 6. 3.]
-2×2 Array{Float64,2}:
- 4.0  3.0
- 6.0  3.0
-
-julia> L, U, p = lu(A)
-([1.0 0.0; 0.666667 1.0], [6.0 3.0; 0.0 1.0], [2, 1])
-
-julia> A[p, :] == L * U
-true
-```
-"""
-function lu(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true))
-    F = lufact(A, pivot)
-    F.L, F.U, F.p
-end
+lu(S::LU) = S
+lu(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
 
 function LU{T}(F::LU) where T
     M = convert(AbstractMatrix{T}, F.factors)
@@ -459,7 +451,7 @@ function lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(
     LU{T,Tridiagonal{T,V}}(B, ipiv, convert(BlasInt, info))
 end
 
-factorize(A::Tridiagonal) = lufact(A)
+factorize(A::Tridiagonal) = lu(A)
 
 function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     m, n = size(F)

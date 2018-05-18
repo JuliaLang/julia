@@ -42,8 +42,8 @@ dimg  = randn(n)/2
     if eltya <: BlasFloat
         @testset "LU factorization for Number" begin
             num = rand(eltya)
-            @test lu(num) == (one(eltya),num,1)
-            @test convert(Array, lufact(num)) ≈ eltya[num]
+            @test (lu(num)...,) == (hcat(one(eltya)), hcat(num), [1])
+            @test convert(Array, lu(num)) ≈ eltya[num]
         end
         @testset "Balancing in eigenvector calculations" begin
             A = convert(Matrix{eltya}, [ 3.0     -2.0      -0.9     2*eps(real(one(eltya)));
@@ -58,7 +58,7 @@ dimg  = randn(n)/2
         end
     end
     @testset "Singular LU" begin
-        lua = lufact(zeros(eltya, 3, 3))
+        lua = lu(zeros(eltya, 3, 3))
         @test !LinearAlgebra.issuccess(lua)
         @test sprint((t, s) -> show(t, "text/plain", s), lua) == "Failed factorization of type $(typeof(lua))"
     end
@@ -85,9 +85,9 @@ dimg  = randn(n)/2
     end
     κd    = cond(Array(d),1)
     @testset "Tridiagonal LU" begin
-        lud   = lufact(d)
+        lud   = lu(d)
         @test LinearAlgebra.issuccess(lud)
-        @test lufact(lud) == lud
+        @test lu(lud) == lud
         @test_throws ErrorException lud.Z
         @test lud.L*lud.U ≈ lud.P*Array(d)
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
@@ -173,22 +173,22 @@ dimg  = randn(n)/2
                 du[1] = zero(eltya)
                 dl[1] = zero(eltya)
                 zT = Tridiagonal(dl,dd,du)
-                @test !LinearAlgebra.issuccess(lufact(zT))
+                @test !LinearAlgebra.issuccess(lu(zT))
             end
         end
         @testset "Thin LU" begin
-            lua   = @inferred lufact(a[:,1:n1])
+            lua   = @inferred lu(a[:,1:n1])
             @test lua.L*lua.U ≈ lua.P*a[:,1:n1]
         end
         @testset "Fat LU" begin
-            lua   = lufact(a[1:n1,:])
+            lua   = lu(a[1:n1,:])
             @test lua.L*lua.U ≈ lua.P*a[1:n1,:]
         end
     end
 
     @testset "LU of Symmetric/Hermitian" begin
         for HS in (Hermitian(a'a), Symmetric(a'a))
-            luhs = lufact(HS)
+            luhs = lu(HS)
             @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
@@ -198,8 +198,8 @@ end
     srand(3)
     a = Tridiagonal(rand(9),rand(10),rand(9))
     fa = Array(a)
-    falu = lufact(fa)
-    alu = lufact(a)
+    falu = lu(fa)
+    alu = lu(a)
     falu = convert(typeof(falu),alu)
     @test AbstractArray(alu) == fa
 end
@@ -208,7 +208,7 @@ end
     ## Integrate in general tests when more linear algebra is implemented in julia
     a = convert(Matrix{Rational{BigInt}}, rand(1:10//1,n,n))/n
     b = rand(1:10,n,2)
-    @inferred lufact(a)
+    @inferred lu(a)
     lua   = factorize(a)
     l,u,p = lua.L, lua.U, lua.p
     @test l*u ≈ a[p,:]
@@ -242,12 +242,12 @@ end
 end
 
 @testset "Issue 21453" begin
-    @test_throws ArgumentError LinearAlgebra._cond1Inf(lufact(randn(5,5)), 2, 2.0)
+    @test_throws ArgumentError LinearAlgebra._cond1Inf(lu(randn(5,5)), 2, 2.0)
 end
 
 @testset "REPL printing" begin
         bf = IOBuffer()
-        show(bf, "text/plain", lufact(Matrix(I, 4, 4)))
+        show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
 LinearAlgebra.LU{Float64,Array{Float64,2}}
@@ -266,9 +266,9 @@ U factor:
 end
 
 @testset "propertynames" begin
-    names = sort!(collect(string.(Base.propertynames(lufact(rand(3,3))))))
+    names = sort!(collect(string.(Base.propertynames(lu(rand(3,3))))))
     @test names == ["L", "P", "U", "p"]
-    allnames = sort!(collect(string.(Base.propertynames(lufact(rand(3,3)), true))))
+    allnames = sort!(collect(string.(Base.propertynames(lu(rand(3,3)), true))))
     @test allnames == ["L", "P", "U", "factors", "info", "ipiv", "p"]
 end
 

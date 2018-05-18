@@ -1260,3 +1260,11 @@ end
 @deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(C, Diagonal(a), B)
 
 Base.@deprecate_binding trace tr
+
+# deprecate lufact to lu
+export lufact
+@deprecate(lufact(S::LU), lu(S))
+@deprecate(lufact(x::Number), lu(x))
+@deprecate(lufact(A::AbstractMatrix{T}) where T, lu(A))
+@deprecate(lufact(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T, lu(A, pivot))
+@deprecate(lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T<:AbstractFloat}, lu(A, pivot))

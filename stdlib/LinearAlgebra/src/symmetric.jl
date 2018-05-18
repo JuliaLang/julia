@@ -442,7 +442,7 @@ function factorize(A::HermOrSym{T}) where T
     if TT <: BlasFloat
         return bkfact(A)
     else # fallback
-        return lufact(A)
+        return lu(A)
     end
 end
 
@@ -453,11 +453,11 @@ det(A::Symmetric) = det(factorize(A))
 \(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractVector) = \(factorize(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides
 # so using LU is faster for AbstractMatrix right hand side
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractMatrix) = \(lufact(A), B)
+\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractMatrix) = \(lu(A), B)
 
 function _inv(A::HermOrSym)
     n = checksquare(A)
-    B = inv!(lufact(A))
+    B = inv!(lu(A))
     conjugate = isa(A, Hermitian)
     # symmetrize
     if A.uplo == 'U' # add to upper triangle

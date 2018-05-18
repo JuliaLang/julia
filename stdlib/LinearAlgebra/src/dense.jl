@@ -721,7 +721,7 @@ function inv(A::StridedMatrix{T}) where T
     elseif istril(AA)
         Ai = tril!(parent(inv(LowerTriangular(AA))))
     else
-        Ai = inv!(lufact(AA))
+        Ai = inv!(lu(AA))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
@@ -1118,9 +1118,9 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 | Triangular                 | Triangular                                     |
 | Diagonal                   | Diagonal                                       |
 | Bidiagonal                 | Bidiagonal                                     |
-| Tridiagonal                | LU (see [`lufact`](@ref))            |
+| Tridiagonal                | LU (see [`lu`](@ref))            |
 | Symmetric real tridiagonal | LDLt (see [`ldltfact`](@ref))      |
-| General square             | LU (see [`lufact`](@ref))            |
+| General square             | LU (see [`lu`](@ref))            |
 | General non-square         | QR (see [`qrfact`](@ref))            |
 
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
@@ -1201,7 +1201,7 @@ function factorize(A::StridedMatrix{T}) where T
                         return ldltfact!(SymTridiagonal(diag(A), diag(A, -1)))
                     end
                 end
-                return lufact(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
+                return lu(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
             end
         end
         if utri
@@ -1218,7 +1218,7 @@ function factorize(A::StridedMatrix{T}) where T
         if sym
             return factorize(Symmetric(A))
         end
-        return lufact(A)
+        return lu(A)
     end
     qrfact(A, Val(true))
 end
@@ -1367,7 +1367,7 @@ function cond(A::AbstractMatrix, p::Real=2)
     end
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
-_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lufact(A), p, norm(A, p))
+_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lu(A), p, norm(A, p))
 _cond1Inf(A::AbstractMatrix, p::Real)             = norm(A, p)*norm(inv(A), p)
 
 ## Lyapunov and Sylvester equation
