@@ -81,7 +81,6 @@ export
     diagm,
     dot,
     eig,
-    eigfact,
     eigfact!,
     eigmax,
     eigmin,

@@ -625,4 +625,4 @@ function eigvecs(M::Bidiagonal{T}) where T
     end
     Q #Actually Triangular
 end
-eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
+eig(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))

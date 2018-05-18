@@ -184,16 +184,16 @@ end
 (\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
 
 eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigfact(A::SymTridiagonal{T}) where T = eigfact!(copy_oftype(A, eigtype(T)))
+eig(A::SymTridiagonal{T}) where T = eigfact!(copy_oftype(A, eigtype(T)))
 
 eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
-eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T =
+eig(A::SymTridiagonal{T}, irange::UnitRange) where T =
     eigfact!(copy_oftype(A, eigtype(T)), irange)
 
 eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
-eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
+eig(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
     eigfact!(copy_oftype(A, eigtype(T)), vl, vu)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
@@ -214,7 +214,7 @@ eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigfact(A).vectors
+eigvecs(A::SymTridiagonal) = eig(A).vectors
 
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix

@@ -2432,7 +2432,7 @@ function logabsdet(A::Union{UpperTriangular{T},LowerTriangular{T}}) where T
     return abs_det, sgn
 end
 
-eigfact(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
+eig(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 
 # Generic singular systems
 for func in (:svd, :svdfact, :svdfact!, :svdvals)

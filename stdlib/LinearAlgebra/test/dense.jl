@@ -581,19 +581,19 @@ end
             @test all(z -> (0 < real(z) < π ||
                             abs(real(z)) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π) < abstol && imag(z) <= 0),
-                      eigfact(acos(A)).values)
+                      eig(acos(A)).values)
             @test all(z -> (-π/2 < real(z) < π/2 ||
                             abs(real(z) + π/2) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π/2) < abstol && imag(z) <= 0),
-                      eigfact(asin(A)).values)
+                      eig(asin(A)).values)
             @test all(z -> (-π < imag(z) < π && real(z) > 0 ||
                             0 <= imag(z) < π && abs(real(z)) < abstol ||
                             abs(imag(z) - π) < abstol && real(z) >= 0),
-                      eigfact(acosh(A)).values)
+                      eig(acosh(A)).values)
             @test all(z -> (-π/2 < imag(z) < π/2 ||
                             abs(imag(z) + π/2) < abstol && real(z) <= 0 ||
                             abs(imag(z) - π/2) < abstol && real(z) <= 0),
-                      eigfact(asinh(A)).values)
+                      eig(asinh(A)).values)
         end
     end
 end

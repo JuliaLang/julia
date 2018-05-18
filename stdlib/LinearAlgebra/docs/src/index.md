@@ -340,7 +340,6 @@ LinearAlgebra.eigvals!
 LinearAlgebra.eigmax
 LinearAlgebra.eigmin
 LinearAlgebra.eigvecs
-LinearAlgebra.eigfact
 LinearAlgebra.eigfact!
 LinearAlgebra.hessfact
 LinearAlgebra.hessfact!

@@ -1268,3 +1268,23 @@ export lufact
 @deprecate(lufact(A::AbstractMatrix{T}) where T, lu(A))
 @deprecate(lufact(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T, lu(A, pivot))
 @deprecate(lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T<:AbstractFloat}, lu(A, pivot))
+
+# deprecate eigfact to eig
+export eigfact
+@deprecate(eigfact(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T, eig(A; permute=permute, scale=scale))
+@deprecate(eigfact(x::Number), eig(x))
+@deprecate(eigfact(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}, eig(A, B))
+@deprecate(eigfact(A::Number, B::Number), eig(A, B))
+
+@deprecate(eigfact(A::SymTridiagonal{T}) where T, eig(A))
+@deprecate(eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T, eig(A, irange))
+@deprecate(eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T, eig(A, vl, vu))
+
+@deprecate(eigfact(M::Bidiagonal), eig(M))
+@deprecate(eigfact(A::RealHermSymComplexHerm), eig(A))
+@deprecate(eigfact(A::RealHermSymComplexHerm, irange::UnitRange), eig(A, irange))
+@deprecate(eigfact(A::RealHermSymComplexHerm, vl::Real, vh::Real), eig(A, vl, vh))
+
+@deprecate(eigfact(A::AbstractTriangular), eig(A))
+
+@deprecate(eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true), eig(D; permute=permute, scale=scale))
