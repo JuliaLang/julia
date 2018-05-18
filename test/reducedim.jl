@@ -151,7 +151,7 @@ end
     end
 
 end
-## findmin/findmax/minumum/maximum
+## findmin/findmax/minimum/maximum
 
 A = [1.0 5.0 6.0;
      5.0 2.0 4.0]
