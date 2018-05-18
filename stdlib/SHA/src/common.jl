@@ -2,14 +2,14 @@
 
 # update! takes in variable-length data, buffering it into blocklen()-sized pieces,
 # calling transform!() when necessary to update the internal hash state.
-function update!(context::T, data::U) where {T<:SHA_CTX,
-                                             U<:Union{Array{UInt8,1},NTuple{N,UInt8} where N}}
+function update!(context::T, data::U, datalen=length(data)) where {T<:SHA_CTX, U<:AbstractBytes}
     # We need to do all our arithmetic in the proper bitwidth
     UIntXXX = typeof(context.bytecount)
 
     # Process as many complete blocks as possible
-    len = convert(UIntXXX, length(data))
-    data_idx = convert(UIntXXX, 0)
+    0 ≤ datalen ≤ length(data) || throw(BoundsError(data, firstindex(data)+datalen-1))
+    len = convert(UIntXXX, datalen)
+    data_idx = convert(UIntXXX, firstindex(data)-1)
     usedspace = context.bytecount % blocklen(T)
     while len - data_idx + usedspace >= blocklen(T)
         # Fill up as much of the buffer as we can with the data given us

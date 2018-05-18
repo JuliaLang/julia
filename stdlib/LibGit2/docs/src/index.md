@@ -68,7 +68,7 @@ LibGit2.checkout!
 LibGit2.clone
 LibGit2.commit
 LibGit2.committer
-LibGit2.count(::Function, ::LibGit2.GitRevWalker; ::LibGit2.GitHash, ::Cint, ::Bool)
+LibGit2.count
 LibGit2.counthunks
 LibGit2.create_branch
 LibGit2.credentials_callback
@@ -108,7 +108,7 @@ LibGit2.isorphan
 LibGit2.isset
 LibGit2.iszero
 LibGit2.lookup_branch
-LibGit2.map(::Function, ::LibGit2.GitRevWalker; ::LibGit2.GitHash, ::AbstractString, ::Cint, ::Bool)
+LibGit2.map
 LibGit2.mirror_callback
 LibGit2.mirror_cb
 LibGit2.message

@@ -122,12 +122,11 @@ Base.Rounding.RoundNearestTiesUp
 Base.Rounding.RoundToZero
 Base.Rounding.RoundUp
 Base.Rounding.RoundDown
-Base.round{T <: AbstractFloat, MR, MI}(::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
+Base.round(::Complex{<: AbstractFloat}, ::RoundingMode, ::RoundingMode)
 Base.ceil
 Base.floor
 Base.trunc
 Base.unsafe_trunc
-Base.signif
 Base.min
 Base.max
 Base.minmax

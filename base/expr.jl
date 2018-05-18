@@ -32,23 +32,33 @@ end
 
 ## expressions ##
 
-copy(e::Expr) = (n = Expr(e.head);
-                 n.args = copy_exprargs(e.args);
-                 n.typ = e.typ;
-                 n)
+function copy(e::Expr)
+    n = Expr(e.head)
+    n.args = copy_exprargs(e.args)
+    n.typ = e.typ
+    return n
+end
 
 # copy parts of an AST that the compiler mutates
-copy_exprs(x::Expr) = copy(x)
 copy_exprs(@nospecialize(x)) = x
+copy_exprs(x::Expr) = copy(x)
 function copy_exprs(x::PhiNode)
     new_values = Vector{Any}(undef, length(x.values))
-    for i = 1:length(x.edges)
+    for i = 1:length(x.values)
         isassigned(x.values, i) || continue
         new_values[i] = copy_exprs(x.values[i])
     end
-    PhiNode(copy(x.edges), new_values)
+    return PhiNode(copy(x.edges), new_values)
 end
-copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
+function copy_exprs(x::PhiCNode)
+    new_values = Vector{Any}(undef, length(x.values))
+    for i = 1:length(x.values)
+        isassigned(x.values, i) || continue
+        new_values[i] = copy_exprs(x.values[i])
+    end
+    return PhiCNode(new_values)
+end
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)

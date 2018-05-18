@@ -86,7 +86,7 @@ function test_diagonal()
     @test !issub(Tuple{Integer,Integer}, @UnionAll T Tuple{T,T})
     @test issub(Tuple{Integer,Int}, (@UnionAll T @UnionAll S<:T Tuple{T,S}))
     @test issub(Tuple{Integer,Int}, (@UnionAll T @UnionAll T<:S<:T Tuple{T,S}))
-    @test !issub(Tuple{Integer,Int,Int}, (@UnionAll T @UnionAll T<:S<:T Tuple{T,S,S}))
+    @test issub(Tuple{Integer,Int,Int}, (@UnionAll T @UnionAll T<:S<:T Tuple{T,S,S}))
 
     @test issub_strict((@UnionAll R Tuple{R,R}),
                        (@UnionAll T @UnionAll S Tuple{T,S}))
@@ -132,6 +132,8 @@ function test_diagonal()
     @test  issub(Tuple{Tuple{T, T} where T>:Int}, Tuple{Tuple{T, T} where T>:Int})
     @test  issub(Tuple{Tuple{T, T} where T>:Int}, Tuple{Tuple{T, T}} where T>:Int)
     @test  issub(Tuple{Tuple{T, T}} where T>:Int, Tuple{Tuple{T, T} where T>:Int})
+    @test  issub(Vector{Tuple{T, T} where Number<:T<:Number},
+                 Vector{Tuple{Number, Number}})
 end
 
 # level 3: UnionAll
@@ -1292,3 +1294,13 @@ abstract type Foo24748{T1,T2,T3} end
 @test !(Tuple{Type{Union{Missing, Float64}}, Type{Vector{Float64}}} <: Tuple{Type{T}, Type{Vector{T}}} where T)
 @test [[1],[missing]] isa Vector{Vector}
 @test [[missing],[1]] isa Vector{Vector}
+
+# issue #26453
+@test (Tuple{A,A,Number} where A>:Number) <: Tuple{T,T,S} where T>:S where S
+@test (Tuple{T,T} where {S,T>:S}) == (Tuple{T,T} where {S,T>:S})
+f26453(x::T,y::T) where {S,T>:S} = 0
+@test f26453(1,2) == 0
+@test f26453(1,"") == 0
+g26453(x::T,y::T) where {S,T>:S} = T
+@test_throws UndefVarError(:T) g26453(1,1)
+@test issub_strict((Tuple{T,T} where T), (Tuple{T,T} where {S,T>:S}))

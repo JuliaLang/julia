@@ -755,18 +755,31 @@ end
     end
 end
 
-f1_exprs = get_expr_list(code_typed(f1, (Int,))[1][1])
-f2_exprs = get_expr_list(code_typed(f2, (Int,))[1][1])
+f1_ci = code_typed(f1, (Int,))[1][1]
+f2_ci = code_typed(f2, (Int,))[1][1]
 
-@test Meta.isexpr(f1_exprs[end], :return)
-@test Meta.isexpr(f2_exprs[end], :return) || Meta.isexpr(f2_exprs[end-1], :return)
+f1_exprs = get_expr_list(f1_ci)
+f2_exprs = get_expr_list(f2_ci)
 
-if Base.JLOptions().can_inline != 0
-    @test count_meta_loc(f1_exprs) == 1
-    @test count_meta_loc(f2_exprs) == 2
+if f1_ci.codelocs !== nothing # New style IR
+    if Base.JLOptions().can_inline != 0
+        @test length(f1_ci.linetable) == 3
+        @test length(f2_ci.linetable) >= 4
+    else
+        @test length(f1_ci.linetable) == 2
+        @test length(f2_ci.linetable) >= 3
+    end
 else
-    @test count_meta_loc(f1_exprs) == 0
-    @test count_meta_loc(f2_exprs) == 1
+    @test Meta.isexpr(f1_exprs[end], :return)
+    @test Meta.isexpr(f2_exprs[end-1], :return)
+
+    if Base.JLOptions().can_inline != 0
+        @test count_meta_loc(f1_exprs) == 1
+        @test count_meta_loc(f2_exprs) == 2
+    else
+        @test count_meta_loc(f1_exprs) == 0
+        @test count_meta_loc(f2_exprs) == 1
+    end
 end
 
 # Check that string and command literals are parsed to the appropriate macros
@@ -939,8 +952,8 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax a.[1]")
-@test Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax a.{1}")
+@test Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax \"a.[1]\"")
+@test Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax \"a.{1}\"")
 
 # Issue #21225
 let abstr = Meta.parse("abstract type X end")
@@ -1386,3 +1399,42 @@ end
 
 # issue #26717
 @test Meta.lower(@__MODULE__, :( :(:) = 2 )) == Expr(:error, "invalid assignment location \":(:)\"")
+
+# issue #17781
+let ex = Meta.lower(@__MODULE__, Meta.parse("
+    A = function (s, o...)
+        f(a, b) do
+        end
+    end,
+    B = function (s, o...)
+        f(a, b) do
+        end
+    end"))
+    @test isa(ex, Expr) && ex.head === :error
+    @test ex.args[1] == """
+invalid assignment location "function (s, o...)
+    # none, line 3
+    f(a, b) do
+        # none, line 4
+    end
+end\""""
+end
+
+# issue #26739
+@test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") eval(@__MODULE__, :(sin.[1]))
+
+# issue #26873
+f26873 = 0
+try
+    include_string(@__MODULE__, """f26873."a" """)
+    @test false
+catch e
+    @test e isa LoadError
+    @test e.error isa MethodError
+end
+
+@test Meta.lower(@__MODULE__, :(if true; break; end for i = 1:1)) == Expr(:error, "break or continue outside loop")
+@test Meta.lower(@__MODULE__, :([if true; break; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
+@test Meta.lower(@__MODULE__, :(Int[if true; break; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
+@test Meta.lower(@__MODULE__, :([if true; continue; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
+@test Meta.lower(@__MODULE__, :(Int[if true; continue; end for i = 1:1])) == Expr(:error, "break or continue outside loop")

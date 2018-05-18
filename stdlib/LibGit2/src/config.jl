@@ -192,35 +192,17 @@ function GitConfigIter(cfg::GitConfig, name::Regex)
     return GitConfigIter(ci_ptr[])
 end
 
-function Base.start(ci::GitConfigIter)
+function Base.iterate(ci::GitConfigIter, state=nothing)
     entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
     err = ccall((:git_config_next, :libgit2), Cint,
                  (Ptr{Ptr{ConfigEntry}}, Ptr{Cvoid}), entry_ptr_ptr, ci.ptr)
     if err == Cint(Error.GIT_OK)
-        state = unsafe_load(entry_ptr_ptr[])
+        return (unsafe_load(entry_ptr_ptr[]), nothing)
     elseif err == Cint(Error.ITEROVER)
-        state = nothing
+        return nothing
     else
         throw(GitError(err))
     end
-    return state
-end
-
-Base.done(ci::GitConfigIter, state) = state === nothing
-
-function Base.next(ci::GitConfigIter, state)
-    entry = notnothing(state)
-    entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
-    err = ccall((:git_config_next, :libgit2), Cint,
-                 (Ptr{Ptr{ConfigEntry}}, Ptr{Cvoid}), entry_ptr_ptr, ci.ptr)
-    if err == Cint(Error.GIT_OK)
-        state = unsafe_load(entry_ptr_ptr[])
-    elseif err == Cint(Error.ITEROVER)
-        state = nothing
-    else
-        throw(GitError(err))
-    end
-    return (entry, state)
 end
 
 Base.IteratorSize(::Type{GitConfigIter}) = Base.SizeUnknown()

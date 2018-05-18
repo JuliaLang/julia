@@ -519,7 +519,7 @@ function check_consistency(graph::Graph)
     for p0 in fix_inds
         @assert 1 ≤ p0 ≤ np
         @assert !gconstr[p0][end]
-        @assert count(gconstr[p0]) == 1
+        @assert count(gconstr[p0]) ≤ 1 # note: the 0 case should be handled by check_constraints
     end
 
     for (p,eq_cl) in eq_classes, (rvn,rvs) in eq_cl
@@ -1266,7 +1266,7 @@ function build_eq_classes_soft1!(graph::Graph, p0::Int)
 
     # disable the other versions by introducing additional constraints
     fill!(gconstr0, false)
-    gconstr0[repr_vers] = true
+    gconstr0[repr_vers] .= true
 
     return
 end

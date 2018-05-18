@@ -82,11 +82,12 @@ function depwarn(msg, funcsym)
         _id=(frame,funcsym),
         _group=:depwarn,
         caller=caller,
-        maxlog=1
+        maxlog=funcsym === nothing ? nothing : 1
     )
     nothing
 end
 
+firstcaller(bt::Vector, ::Nothing) = Ptr{Cvoid}(0), StackTraces.UNKNOWN
 firstcaller(bt::Vector, funcsym::Symbol) = firstcaller(bt, (funcsym,))
 function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
@@ -575,16 +576,18 @@ import .Iterators.enumerate
 
 # issue #5794
 @deprecate map(f, d::T) where {T<:AbstractDict}  T( f(p) for p in pairs(d) )
+# issue #26359 - map over sets
+@deprecate map(f, s::AbstractSet)  Set( f(v) for v in s )
 
 # issue #17086
 @deprecate isleaftype isconcretetype
 @deprecate isabstract isabstracttype
 
 # PR #22932
-@deprecate +(a::Number, b::AbstractArray) broadcast(+, a, b)
-@deprecate +(a::AbstractArray, b::Number) broadcast(+, a, b)
-@deprecate -(a::Number, b::AbstractArray) broadcast(-, a, b)
-@deprecate -(a::AbstractArray, b::Number) broadcast(-, a, b)
+@deprecate +(a::Number, b::AbstractArray) a .+ b
+@deprecate +(a::AbstractArray, b::Number) a .+ b
+@deprecate -(a::Number, b::AbstractArray) a .- b
+@deprecate -(a::AbstractArray, b::Number) a .- b
 
 @deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
 
@@ -1082,7 +1085,7 @@ end
 @deprecate_moved sum_kbn "KahanSummation"
 @deprecate_moved cumsum_kbn "KahanSummation"
 
-@deprecate isalnum(c::Char) isalpha(c) || isnumeric(c)
+@deprecate isalnum(c::Char) isletter(c) || isnumeric(c)
 @deprecate isgraph(c::Char) isprint(c) && !isspace(c)
 @deprecate isnumber(c::Char) isnumeric(c)
 
@@ -1113,6 +1116,10 @@ end
 # PR #25057
 @deprecate indices(a) axes(a)
 @deprecate indices(a, d) axes(a, d)
+
+# And similar _indices names in Broadcast
+@eval Broadcast Base.@deprecate_binding broadcast_indices broadcast_axes true
+@eval Broadcast Base.@deprecate_binding check_broadcast_indices check_broadcast_axes false
 
 # PR #25046
 export reload, workspace
@@ -1368,6 +1375,9 @@ export readandwrite
 
 @deprecate squeeze(A, dims) squeeze(A, dims=dims)
 
+@deprecate diff(A::AbstractMatrix, dim::Integer) diff(A, dims=dim)
+@deprecate unique(A::AbstractArray, dim::Int)    unique(A, dims=dim)
+
 # PR #25196
 @deprecate_binding ObjectIdDict IdDict{Any,Any}
 
@@ -1483,6 +1493,28 @@ function slicedim(A::AbstractVector, d::Integer, i::Number)
     end
 end
 
+# PR #26347: Deprecate implicit scalar broadcasting in setindex!
+_axes(::Ref) = ()
+_axes(x) = axes(x)
+setindex_shape_check(X::Base.Iterators.Repeated, I...) = nothing
+function deprecate_scalar_setindex_broadcast_message(v, I...)
+    value = (_axes(Base.Broadcast.broadcastable(v)) == () ? "x" : "(x,)")
+    "using `A[I...] = x` to implicitly broadcast `x` across many locations is deprecated. Use `A[I...] .= $value` instead."
+end
+deprecate_scalar_setindex_broadcast_message(v, ::Colon, ::Vararg{Colon}) =
+    "using `A[:] = x` to implicitly broadcast `x` across many locations is deprecated. Use `fill!(A, x)` instead."
+
+function _iterable(v, I...)
+    depwarn(deprecate_scalar_setindex_broadcast_message(v, I...), :setindex!)
+    Iterators.repeated(v)
+end
+function setindex!(B::BitArray, x, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+    depwarn(deprecate_scalar_setindex_broadcast_message(x, I0, I...), :setindex!)
+    B[I0, I...] .= (x,)
+    B
+end
+
+
 # PR #26283
 @deprecate contains(haystack, needle) occursin(needle, haystack)
 @deprecate contains(s::AbstractString, r::Regex, offset::Integer) occursin(r, s, offset=offset)
@@ -1508,7 +1540,7 @@ end
 @deprecate floor(x::Number, digits) floor(x; digits=digits)
 @deprecate ceil(x::Number, digits) ceil(x; digits=digits)
 @deprecate round(x::Number, digits) round(x; digits=digits)
-@deprecate signif(x::Number, digits) round(x; sigdigits=digits, base = base)
+@deprecate signif(x::Number, digits) round(x; sigdigits=digits)
 
 @deprecate trunc(x::Number, digits, base) trunc(x; digits=digits, base = base)
 @deprecate floor(x::Number, digits, base) floor(x; digits=digits, base = base)
@@ -1528,7 +1560,8 @@ end
 @deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
            collect(m.match for m in eachmatch(r, s, overlap = overlap)))
 
-@deprecate diff(A::AbstractMatrix) diff(A, 1)
+# remove depwarn for `diff` in multidimensional.jl
+# @deprecate diff(A::AbstractMatrix) diff(A, dims=1)
 
 # PR 26194
 export assert
@@ -1547,10 +1580,18 @@ end
 @deprecate_binding OccursIn Base.Fix2{typeof(in)} false
 
 # Remove ambiguous CartesianIndices and LinearIndices constructors that are ambiguous between an axis and an array (#26448)
-@eval IteratorsMD @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} CartesianIndices(inds)
-@eval IteratorsMD @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} CartesianIndices(inds)
-@eval IteratorsMD @deprecate LinearIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} LinearIndices(inds)
-@eval IteratorsMD @deprecate LinearIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} LinearIndices(inds)
+@eval IteratorsMD begin
+    import Base: LinearIndices
+    @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} CartesianIndices(inds)
+    @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} CartesianIndices(inds)
+    @deprecate LinearIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} LinearIndices(inds)
+    @deprecate LinearIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} LinearIndices(inds)
+    # preserve the case with N = 1 (only needed as long as the above deprecations are here)
+    CartesianIndices(inds::AbstractUnitRange{Int}) = CartesianIndices(axes(inds))
+    CartesianIndices(inds::AbstractUnitRange{<:Integer}) = CartesianIndices(axes(inds))
+    LinearIndices(inds::AbstractUnitRange{Int}) = LinearIndices(axes(inds))
+    LinearIndices(inds::AbstractUnitRange{<:Integer}) = LinearIndices(axes(inds))
+end
 
 # rename uninitialized
 @deprecate_binding uninitialized undef
@@ -1563,14 +1604,44 @@ end
 @deprecate Crand Libc.rand false
 @deprecate Csrand Libc.srand false
 
+# Deprecate `similar(f, axes)` (PR #26733)
+@noinline function similar(f, shape::Tuple)
+    depwarn("using similar(f, shape) to call `f` with axes `shape` is deprecated; call `f` directly and/or add methods such that it supports axes", :similar)
+    f(to_shape(shape))
+end
+@noinline function similar(f, dims::DimOrInd...)
+    depwarn("using similar(f, shape...) to call `f` with axes `shape` is deprecated; call `f` directly and/or add methods such that it supports axes", :similar)
+    f(to_shape(dims))
+end
+# Deprecate non-integer/axis arguments to zeros/ones to match fill/trues/falses
+@deprecate zeros(::Type{T}, dims...) where {T}                  zeros(T, convert(Dims, dims)...)
+@deprecate zeros(dims...)                                       zeros(convert(Dims, dims)...)
+@deprecate zeros(::Type{T}, dims::NTuple{N, Any}) where {T, N}  zeros(T, convert(Dims, dims))
+@deprecate zeros(dims::Tuple)                                   zeros(convert(Dims, dims))
+@deprecate ones(::Type{T}, dims...) where {T}                   ones(T, convert(Dims, dims)...)
+@deprecate ones(dims...)                                        ones(convert(Dims, dims)...)
+@deprecate ones(::Type{T}, dims::NTuple{N, Any}) where {T, N}   ones(T, convert(Dims, dims))
+@deprecate ones(dims::Tuple)                                    ones(convert(Dims, dims))
+
+# Deprecate varargs size: PR #26862
+@deprecate size(x, d1::Integer, d2::Integer) (size(x, d1), size(x, d2))
+@deprecate size(x, d1::Integer, d2::Integer, dx::Integer...) map(dim->size(x, dim), (d1, d2, dx...))
+
 @deprecate showcompact(x) show(IOContext(stdout, :compact => true), x)
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)
 @deprecate sprint(::typeof(showcompact), args...) sprint(show, args...; context=:compact => true)
+
+# PR 27075
+@deprecate broadcast_getindex(A, I...)      getindex.((A,), I...)
+@deprecate broadcast_setindex!(A, v, I...)  setindex!.((A,), v, I...)
 
 @deprecate isupper isuppercase
 @deprecate islower islowercase
 @deprecate ucfirst uppercasefirst
 @deprecate lcfirst lowercasefirst
+
+# Issue #26932
+@deprecate isalpha isletter
 
 function search(buf::IOBuffer, delim::UInt8)
     Base.depwarn("search(buf::IOBuffer, delim::UInt8) is deprecated: use occursin(delim, buf) or readuntil(buf, delim) instead", :search)
@@ -1580,10 +1651,23 @@ function search(buf::IOBuffer, delim::UInt8)
     return Int(q-p+1)
 end
 
+# Issue #27067
+@deprecate flipbits!(B::BitArray) B .= .!B
+
+@deprecate linearindices(x::AbstractArray) LinearIndices(x)
+
 # PR #26647
 # The `keep` argument in `split` and `rpslit` has been renamed to `keepempty`.
 # To remove this deprecation, remove the `keep` argument from the function signatures as well as
 # the internal logic that deals with the renaming. These live in base/strings/util.jl.
+
+# when this is removed, `isbitstype(typeof(x))` can be replaced with `isbits(x)`
+@deprecate isbits(@nospecialize(t::Type)) isbitstype(t)
+
+# Special string deprecation
+@deprecate start(s::AbstractString) firstindex(s)
+@deprecate next(s::AbstractString, i::Integer) iterate(s, i)
+@deprecate done(s::AbstractString, i::Integer) i > ncodeunits(s)
 
 # END 0.7 deprecations
 

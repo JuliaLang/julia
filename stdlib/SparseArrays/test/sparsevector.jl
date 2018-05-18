@@ -208,7 +208,7 @@ end
         let x = sprand(10, 10, 0.5)
             I = rand(1:size(x, 2), 10)
             bI = falses(size(x, 2))
-            bI[I] = true
+            bI[I] .= true
             r = x[1,bI]
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
@@ -218,7 +218,7 @@ end
         let x = sprand(10, 0.5)
             I = rand(1:length(x), 5)
             bI = falses(length(x))
-            bI[I] = true
+            bI[I] .= true
             r = x[bI]
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
@@ -1038,39 +1038,43 @@ end
     SparseArrays.fkeep!(xdrop, f_drop)
     @test exact_equal(xdrop, SparseVector(7, [1, 3, 4, 7], [3., -1., 1., 3.]))
 end
-@testset "dropzeros[!]" begin
-    let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegzeros = 5
-        for m in testdims
-            v = sprand(m, nzprob)
-            struczerosv = findall(x -> x == 0, v)
-            poszerosinds = unique(rand(struczerosv, targetnumposzeros))
-            negzerosinds = unique(rand(struczerosv, targetnumnegzeros))
-            vposzeros = setindex!(copy(v), 2, poszerosinds)
-            vnegzeros = setindex!(copy(v), -2, negzerosinds)
-            vbothsigns = setindex!(copy(vposzeros), -2, negzerosinds)
-            map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval, vposzeros.nzval)
-            map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval, vnegzeros.nzval)
-            map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval, vbothsigns.nzval)
-            for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
-                # Basic functionality / dropzeros!
-                @test dropzeros!(copy(vwithzeros)) == v
-                @test dropzeros!(copy(vwithzeros), trim = false) == v
-                # Basic functionality / dropzeros
-                @test dropzeros(vwithzeros) == v
-                @test dropzeros(vwithzeros, trim = false) == v
-                # Check trimming works as expected
-                @test length(dropzeros!(copy(vwithzeros)).nzval) == length(v.nzval)
-                @test length(dropzeros!(copy(vwithzeros)).nzind) == length(v.nzind)
-                @test length(dropzeros!(copy(vwithzeros), trim = false).nzval) == length(vwithzeros.nzval)
-                @test length(dropzeros!(copy(vwithzeros), trim = false).nzind) == length(vwithzeros.nzind)
-            end
-        end
-        # original dropzeros! test
-        xdrop = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
-        xdrop.nzval[[2, 4, 6]] = 0.0
-        SparseArrays.dropzeros!(xdrop)
-        @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
+
+@testset "dropzeros[!] with length=$m" for m in (10, 20, 30)
+    srand(123)
+    nzprob, targetnumposzeros, targetnumnegzeros = 0.4, 5, 5
+    v = sprand(m, nzprob)
+    struczerosv = findall(x -> x == 0, v)
+    poszerosinds = unique(rand(struczerosv, targetnumposzeros))
+    negzerosinds = unique(rand(struczerosv, targetnumnegzeros))
+    vposzeros = copy(v)
+    vposzeros[poszerosinds] .= 2
+    vnegzeros = copy(v)
+    vnegzeros[negzerosinds] .= -2
+    vbothsigns = copy(vposzeros)
+    vbothsigns[negzerosinds] .= -2
+    map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval, vposzeros.nzval)
+    map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval, vnegzeros.nzval)
+    map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval, vbothsigns.nzval)
+    for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
+        # Basic functionality / dropzeros!
+        @test dropzeros!(copy(vwithzeros)) == v
+        @test dropzeros!(copy(vwithzeros), trim = false) == v
+        # Basic functionality / dropzeros
+        @test dropzeros(vwithzeros) == v
+        @test dropzeros(vwithzeros, trim = false) == v
+        # Check trimming works as expected
+        @test length(dropzeros!(copy(vwithzeros)).nzval) == length(v.nzval)
+        @test length(dropzeros!(copy(vwithzeros)).nzind) == length(v.nzind)
+        @test length(dropzeros!(copy(vwithzeros), trim = false).nzval) == length(vwithzeros.nzval)
+        @test length(dropzeros!(copy(vwithzeros), trim = false).nzind) == length(vwithzeros.nzind)
     end
+end
+
+@testset "original dropzeros! test" begin
+    xdrop = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
+    xdrop.nzval[[2, 4, 6]] .= 0.0
+    SparseArrays.dropzeros!(xdrop)
+    @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
 end
 
 # It's tempting to share data between a SparseVector and a SparseMatrix,

@@ -104,17 +104,14 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
-    println(io, "Environment:")
-    for (k,v) in ENV
-        if occursin(r"JULIA", String(k))
-            println(io, "  $(k) = $(v)")
-        end
-    end
-    if verbose
-        for (k,v) in ENV
-            if occursin(r"PATH|FLAG|^TERM$|HOME", String(k))
-                println(io, "  $(k) = $(v)")
-            end
+    env_strs = [String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"JULIA", k)];
+                (verbose ?
+                 String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"PATH|FLAG|^TERM$|HOME", k)] :
+                 [])]
+    if !isempty(env_strs)
+        println(io, "Environment:")
+        for str in env_strs
+            println(io, str)
         end
     end
     if packages || verbose

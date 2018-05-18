@@ -135,13 +135,6 @@ using .Checked
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
-# Define the broadcast function, which is mostly implemented in
-# broadcast.jl, so that we can overload broadcast methods for
-# specific array types etc.
-#  --Here, just define fallback routines for broadcasting with no arguments
-broadcast(f) = f()
-broadcast!(f, X::AbstractArray) = (@inbounds for I in eachindex(X); X[I] = f(); end; X)
-
 # array structures
 include("indices.jl")
 include("array.jl")
@@ -155,6 +148,7 @@ include("reinterpretarray.jl")
 # type and dimensionality specified, accepting dims as series of Integers
 Vector{T}(::UndefInitializer, m::Integer) where {T} = Vector{T}(undef, Int(m))
 Matrix{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Matrix{T}(undef, Int(m), Int(n))
+Array{T,N}(::UndefInitializer, d::Vararg{Integer,N}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # type but not dimensionality specified, accepting dims as series of Integers
 Array{T}(::UndefInitializer, m::Integer) where {T} = Array{T,1}(undef, Int(m))
 Array{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Array{T,2}(undef, Int(m), Int(n))
@@ -163,6 +157,9 @@ Array{T}(::UndefInitializer, d::Integer...) where {T} = Array{T}(undef, convert(
 # dimensionality but not type specified, accepting dims as series of Integers
 Vector(::UndefInitializer, m::Integer) = Vector{Any}(undef, Int(m))
 Matrix(::UndefInitializer, m::Integer, n::Integer) = Matrix{Any}(undef, Int(m), Int(n))
+# Dimensions as a single tuple
+Array{T}(::UndefInitializer, d::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
+Array{T,N}(::UndefInitializer, d::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # empty vector constructor
 Vector() = Vector{Any}(undef, 0)
 
@@ -298,6 +295,9 @@ end
     end
 end
 
+# missing values
+include("missing.jl")
+
 # version
 include("version.jl")
 
@@ -350,6 +350,7 @@ INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
+include("accumulate.jl")
 
 # basic data structures
 include("ordering.jl")
@@ -420,9 +421,6 @@ include("client.jl")
 
 # statistics
 include("statistics.jl")
-
-# missing values
-include("missing.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -792,8 +790,8 @@ end
     @deprecate_stdlib triu        LinearAlgebra true
     @deprecate_stdlib vecdot      LinearAlgebra true
     @deprecate_stdlib vecnorm     LinearAlgebra true
-    # @deprecate_stdlib ⋅           LinearAlgebra true
-    # @deprecate_stdlib ×           LinearAlgebra true
+    @deprecate_stdlib $(:⋅)       LinearAlgebra true
+    @deprecate_stdlib $(:×)       LinearAlgebra true
 
     ## types that were re-exported from Base
     @deprecate_stdlib Diagonal        LinearAlgebra true

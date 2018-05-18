@@ -437,11 +437,11 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 # note: this early during bootstrap, `>=` is not yet available
 # note: we only define Int shift counts here; the generic case is handled later
 >>(x::BitInteger, y::Int) =
-    select_value(0 <= y, x >> unsigned(y), x << unsigned(-y))
+    ifelse(0 <= y, x >> unsigned(y), x << unsigned(-y))
 <<(x::BitInteger, y::Int) =
-    select_value(0 <= y, x << unsigned(y), x >> unsigned(-y))
+    ifelse(0 <= y, x << unsigned(y), x >> unsigned(-y))
 >>>(x::BitInteger, y::Int) =
-    select_value(0 <= y, x >>> unsigned(y), x << unsigned(-y))
+    ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
@@ -640,10 +640,10 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
 
-widen(::Type{<:Union{Int8, Int16}}) = Int32
+widen(::Type{<:Union{Int8, Int16}}) = Int
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen(::Type{<:Union{UInt8, UInt16}}) = UInt32
+widen(::Type{<:Union{UInt8, UInt16}}) = UInt
 widen(::Type{UInt32}) = UInt64
 widen(::Type{UInt64}) = UInt128
 
@@ -745,6 +745,8 @@ end
 for op in (:+, :-, :*, :&, :|, :xor)
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
-        return $op(a % T, b % T)
+        aT, bT = a % T, b % T
+        not_sametype((a, b), (aT, bT))
+        return $op(aT, bT)
     end
 end

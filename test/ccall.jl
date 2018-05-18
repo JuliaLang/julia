@@ -767,6 +767,7 @@ end
     @nospecialize(f, a, tt)
     # generic API 1
     cf = @cfunction $f Ref{T} (Ref{T},)
+    GC.gc()
     @test cf.ptr != C_NULL
     @test cf.f === f
     @test (cf._1 == C_NULL) == permanent
@@ -778,6 +779,7 @@ end
     end
     # generic API 2
     cf2 = @cfunction $f Any (Ref{S},)
+    GC.gc()
     @test cf2.ptr != C_NULL
     @test cf2.f === f
     @test (cf2._1 == C_NULL) == permanent
@@ -1422,3 +1424,12 @@ macro cglobal26297(sym)
 end
 cglobal26297() = @cglobal26297(:global_var)
 @test cglobal26297() != C_NULL
+
+# issue #26607
+noop_func_26607 = () -> nothing
+function callthis_26607(args)
+    @cfunction(noop_func_26607, Cvoid, ())
+    return nothing
+end
+@test callthis_26607(Int64(0)) === nothing
+@test callthis_26607(Int32(0)) === nothing

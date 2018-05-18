@@ -90,10 +90,11 @@ struct SHA1
         return new(bytes)
     end
 end
-SHA1(s::Union{String,SubString{String}}) = SHA1(hex2bytes(s))
+SHA1(s::AbstractString) = SHA1(hex2bytes(s))
 string(hash::SHA1) = bytes2hex(hash.bytes)
+print(io::IO, hash::SHA1) = print(io, string(hash))
 
-show(io::IO, hash::SHA1) = print(io, "SHA1(", string(hash), ")")
+show(io::IO, hash::SHA1) = print(io, "SHA1(\"", string(hash), "\")")
 isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
@@ -196,7 +197,7 @@ end
 
 find_env(env::Function) = find_env(env())
 
-load_path() = filter(env -> env ≠ nothing, map(find_env, LOAD_PATH))
+load_path() = String[env for env in map(find_env, LOAD_PATH) if env ≠ nothing]
 
 ## package identification: determine unique identity of package to be loaded ##
 
@@ -625,7 +626,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
+    base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? base_path : nothing
 end
 
@@ -1388,7 +1389,7 @@ function stale_cachefile(modpath::String, cachefile::String)
                 # Issue #13606: compensate for Docker images rounding mtimes
                 # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
                 ftime = mtime(f)
-                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
+                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, digits=6)
                     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                     return true
                 end
@@ -1404,16 +1405,6 @@ function stale_cachefile(modpath::String, cachefile::String)
     finally
         close(io)
     end
-end
-
-"""
-    @__LINE__ -> Int
-
-`@__LINE__` expands to the line number of the location of the macrocall.
-Returns `0` if the line number could not be determined.
-"""
-macro __LINE__()
-    return __source__.line
 end
 
 """

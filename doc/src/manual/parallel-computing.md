@@ -1580,6 +1580,8 @@ by using [`randjump`](@ref) function:
 
 
 ```julia-repl
+julia> using Random
+
 julia> function g_fix(r)
            a = zeros(1000)
            @threads for i in 1:1000

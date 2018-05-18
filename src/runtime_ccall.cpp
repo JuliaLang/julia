@@ -208,8 +208,7 @@ jl_value_t *jl_get_cfunction_trampoline(
                 permanent = true;
         }
         if (permanent) {
-            result = jl_valueof(malloc(sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type)));
-            jl_set_typeof(result, result_type);
+            result = jl_gc_permobj(sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type), result_type);
             memset(result, 0, jl_datatype_size(result_type));
         }
         else {

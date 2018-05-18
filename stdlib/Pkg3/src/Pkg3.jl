@@ -38,8 +38,13 @@ include("Operations.jl")
 include("API.jl")
 include("REPLMode.jl")
 
-import .API: add, rm, up, test, gc, init, build, installed, pin, free, checkout, develop, generate
+import .API: add, rm, up, test, gc, init, build, installed, pin, free, checkout, develop, generate, instantiate
+import .Display: status
 const update = up
+# legacy CI script support
+import .API: clone, dir
+
+
 import .REPLMode: @pkg_str
 export @pkg_str
 
@@ -50,7 +55,7 @@ function __init__()
     else
         atreplinit() do repl
             if isinteractive() && repl isa REPL.LineEditREPL
-                repl.interface = REPL.setup_interface(repl)
+                isdefined(repl, :interface) || (repl.interface = REPL.setup_interface(repl))
                 REPLMode.repl_init(repl)
             end
         end

@@ -208,19 +208,6 @@ end
 
     # #6080
     @test_deprecated r"Syntax `&argument`.*is deprecated" Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x)))
-
-    @test_logs eval(:(module DotEqualsDep
-        a=[1,2]
-        a.=3
-        0
-        end))
-    @test_logs include_string(@__MODULE__, """
-        a=[1,2]
-        a.=3
-        0""")
-    @test_deprecated include_string(@__MODULE__, """
-        a=[1,2]
-        a.=3""")
 end
 
 module LogTest

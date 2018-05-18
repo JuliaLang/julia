@@ -222,6 +222,9 @@ end
 import Base: asyncmap
 @deprecate asyncmap(f, s::AbstractSparseArray...; kwargs...) sparse(asyncmap(f, map(Array, s)...; kwargs...))
 
+# PR 26347: implicit scalar broadcasting within setindex!
+@deprecate setindex!(A::SparseMatrixCSC{<:Any,<:Any}, x, i::Union{Integer, AbstractVector{<:Integer}, Colon}, j::Union{Integer, AbstractVector{<:Integer}, Colon}) (A[i, j] .= x; A)
+
 #25395 keywords unlocked
 @deprecate dropzeros(x, trim)     dropzeros(x, trim = trim)
 @deprecate dropzeros!(x, trim)    dropzeros!(x, trim = trim)
@@ -233,6 +236,7 @@ Base.@deprecate_binding blkdiag blockdiag
 @deprecate complex(x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) complex.(x, y)
 @deprecate complex(x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) complex.(x, y)
 
+@deprecate diff(a::SparseMatrixCSC, dim::Integer) diff(a, dims=dim)
 
 # END 0.7 deprecations
 

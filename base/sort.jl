@@ -5,7 +5,7 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length, (:),
+using .Base: copymutable, LinearIndices, IndexStyle, viewindexing, IndexLinear, _length, (:),
     eachindex, axes, first, last, similar, start, next, done, zip, @views, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
@@ -56,13 +56,15 @@ export # not exported by Base
 ## functions requiring only ordering ##
 
 function issorted(itr, order::Ordering)
-    state = start(itr)
-    done(itr,state) && return true
-    prev, state = next(itr, state)
-    while !done(itr, state)
-        this, state = next(itr, state)
+    y = iterate(itr)
+    y === nothing && return true
+    prev, state = y
+    y = iterate(itr, state)
+    while y !== nothing
+        this, state = y
         lt(order, this, prev) && return false
         prev = this
+        y = iterate(itr, state)
     end
     return true
 end
@@ -95,8 +97,11 @@ issorted(itr;
 function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     inds = axes(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
-    @views v[k]
+    maybeview(v, k)
 end
+
+maybeview(v, k) = view(v, k)
+maybeview(v, k::Integer) = v[k]
 
 """
     partialsort!(v, k; by=<transform>, lt=<comparison>, rev=false)
@@ -716,7 +721,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     # do partial quicksort
     sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
 
-    @views ix[k]
+    maybeview(ix, k)
 end
 
 ## sortperm: the permutation to sort an array ##
@@ -899,7 +904,7 @@ function sort(A::AbstractArray;
 end
 
 @noinline function sort_chunks!(Av, n, alg, order)
-    inds = linearindices(Av)
+    inds = LinearIndices(Av)
     for s = first(inds):n:last(inds)
         sort!(Av, s, s+n-1, alg, order)
     end

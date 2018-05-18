@@ -53,11 +53,11 @@ end
 function valid_tparam(@nospecialize(x))
     if isa(x, Tuple)
         for t in x
-            isa(t, Symbol) || isbits(typeof(t)) || return false
+            isa(t, Symbol) || isbitstype(typeof(t)) || return false
         end
         return true
     end
-    return isa(x, Symbol) || isbits(typeof(x))
+    return isa(x, Symbol) || isbitstype(typeof(x))
 end
 
 has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
@@ -99,20 +99,6 @@ function tuple_tail_elem(@nospecialize(init), ct)
     return Vararg{widenconst(foldl((a, b) -> tmerge(a, tvar_extent(unwrapva(b))), init, ct))}
 end
 
-# t[n:end]
-function tupleparam_tail(t::SimpleVector, n)
-    lt = length(t)
-    if n > lt
-        va = t[lt]
-        if isvarargtype(va)
-            # assumes that we should never see Vararg{T, x}, where x is a constant (should be guaranteed by construction)
-            return Tuple{va}
-        end
-        return Tuple{}
-    end
-    return Tuple{t[n:lt]...}
-end
-
 # take a Tuple where one or more parameters are Unions
 # and return an array such that those Unions are removed
 # and `Union{return...} == ty`
@@ -138,24 +124,4 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
         end
     end
     return tunion
-end
-
-tuplelen(@nospecialize tpl) = nothing
-function tuplelen(tpl::DataType)
-    l = length(tpl.parameters)::Int
-    if l > 0
-        last = unwrap_unionall(tpl.parameters[l])
-        if isvarargtype(last)
-            N = last.parameters[2]
-            N isa Int || return nothing
-            l += N - 1
-        end
-    end
-    return l
-end
-tuplelen(tpl::UnionAll) = tuplelen(tpl.body)
-function tuplelen(tpl::Union)
-    la, lb = tuplelen(tpl.a), tuplelen(tpl.b)
-    la == lb && return la
-    return nothing
 end

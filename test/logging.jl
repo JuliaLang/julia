@@ -150,6 +150,33 @@ end
         # Reset to default
         disable_logging(BelowMinLevel)
     end
+
+    @testset "Log level filtering - ENV" begin
+        logger = TestLogger()
+        with_logger(logger) do
+            for (e, r) in (("", false),
+                           (",,,,", false),
+                           ("al", false),
+                           ("all", true),
+                           ("a,b,all,c", true),
+                           ("a,b,,c", false),
+                           ("Mainb", false),
+                           ("aMain", false),
+                           ("Main", true),
+                           ("a,b,Main,c", true),
+                           ("Base", true),
+                           ("a,b,Base,c", true),
+                           ("Filesystem", true),
+                           ("a,b,Filesystem,c", true),
+                           ("a,b,Base.Filesystem,c", false))
+                ENV["JULIA_DEBUG"] = e
+                @test CoreLogging.env_override_minlevel(:Main, Base.Filesystem) === r
+                @test CoreLogging.current_logger_for_env(BelowMinLevel, :Main, Base.Filesystem) === (r ? logger : nothing)
+                @test CoreLogging.current_logger_for_env(Info, :Main, Base.Filesystem) === logger
+            end
+        end
+    end
+    ENV["JULIA_DEBUG"] = ""
 end
 
 #-------------------------------------------------------------------------------

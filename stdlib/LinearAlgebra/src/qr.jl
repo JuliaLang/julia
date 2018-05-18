@@ -774,7 +774,7 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
     end
     ar = abs(A.factors[1])
     if ar == 0
-        B[1:nA, :] = 0
+        B[1:nA, :] .= 0
         return B, 0
     end
     rnk = 1
@@ -795,7 +795,7 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
     ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(lmul!(adjoint(A.Q), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
-    B[rnk+1:end,:] = zero(T)
+    B[rnk+1:end,:] .= zero(T)
     LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B,1:nA,1:nrhs))
     B[1:nA,:] = view(B, 1:nA, :)[invperm(A.p),:]
     return B, rnk
@@ -832,7 +832,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
         end
         LinearAlgebra.ldiv!(UpperTriangular(view(R, :, 1:minmn)), view(B, 1:minmn, :))
         if n > m # Apply elementary transformation to solution
-            B[m + 1:mB,1:nB] = zero(T)
+            B[m + 1:mB,1:nB] .= zero(T)
             for j = 1:nB
                 for k = 1:m
                     vBj = B[k,j]

@@ -78,6 +78,7 @@ _mul!(y::AbstractVector, A::AbstractMatrix, x::AbstractVector, _1, _2, _3) = gen
 _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector, ::AbstractStridedLayout, ::AbstractColumnMajor, _) where {T<:BlasFloat} =
     mul!(y, A, convert(Vector{T}, x))
 _mul!(y::AbstractVector{T}, A::AbstractMatrix{T}, x::AbstractVector{T}, ::AbstractStridedLayout, ::AbstractColumnMajor, ::AbstractStridedLayout) where {T<:BlasFloat} = gemv!(y, 'N', A, x)
+
 for elty in (Float32,Float64)
     @eval begin
         function _mul!(y::AbstractVector{Complex{$elty}}, A::AbstractMatrix{Complex{$elty}}, x::AbstractVector{$elty}, ::AbstractStridedLayout, ::AbstractColumnMajor, ::AbstractStridedLayout)
@@ -471,7 +472,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     end
 
     tile_size = 0
-    if isbits(R) && isbits(T) && isbits(S) && (tA == 'N' || tB != 'N')
+    if isbitstype(R) && isbitstype(T) && isbitstype(S) && (tA == 'N' || tB != 'N')
         tile_size = floor(Int, sqrt(tilebufsize / max(sizeof(R), sizeof(S), sizeof(T))))
     end
     @inbounds begin

@@ -11,8 +11,20 @@ function Base.show(io::IO, cfg::CFG)
     end
 end
 
-print_ssa(io::IO, val) = isa(val, SSAValue) ? Base.print(io, "%$(val.id)") :
-                         isa(val, Argument) ? Base.print(io, "%%$(val.n)") : Base.print(io, val)
+function print_ssa(io::IO, val)
+    if isa(val, SSAValue)
+        Base.print(io, "%$(val.id)")
+    elseif isa(val, Argument)
+        Base.print(io, "%%$(val.n)")
+    else
+        try
+            Base.print(io, val)
+        catch
+            Base.print(io, "<error printing>")
+        end
+    end
+end
+
 function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=true)
     if idx in used
         pad = " "^(maxsize-length(string(idx)))
@@ -80,23 +92,28 @@ function Base.show(io::IO, code::IRCode)
     used = IdSet{Int}()
     Base.println(io, "Code")
     foreach(stmt->scan_ssa_use!(used, stmt), code.stmts)
-    foreach(((_a, _b, node, _d),) -> scan_ssa_use!(used, node), code.new_nodes)
+    cfg = code.cfg
+    max_bb_idx_size = length(string(length(cfg.blocks)))
+    bb_idx = 1
+    if any(i->!isassigned(code.new_nodes, i), 1:length(code.new_nodes))
+        printstyled(io, :red, "ERROR: New node array has unset entry\n")
+    end
+    new_nodes = code.new_nodes[filter(i->isassigned(code.new_nodes, i), 1:length(code.new_nodes))]
+    foreach(nn -> scan_ssa_use!(used, nn.node), new_nodes)
+    perm = sortperm(new_nodes, by = x->x.pos)
+    new_nodes_perm = Iterators.Stateful(perm)
+
     if isempty(used)
         maxsize = 0
     else
         maxused = maximum(used)
         maxsize = length(string(maxused))
     end
-    cfg = code.cfg
-    max_bb_idx_size = length(string(length(cfg.blocks)))
-    bb_idx = 1
-    perm = sortperm(code.new_nodes, by = x->x[1])
-    new_nodes_perm = Iterators.Stateful(perm)
     for idx in eachindex(code.stmts)
         if !isassigned(code.stmts, idx)
             # This is invalid, but do something useful rather
             # than erroring, to make debugging easier
-            printstyled(:red, "UNDEF\n")
+            printstyled(io, :red, "UNDEF\n")
             continue
         end
         stmt = code.stmts[idx]
@@ -116,9 +133,9 @@ function Base.show(io::IO, code::IRCode)
             print_sep = true
         end
         floop = true
-        while !isempty(new_nodes_perm) && code.new_nodes[peek(new_nodes_perm)][1] == idx
+        while !isempty(new_nodes_perm) && new_nodes[peek(new_nodes_perm)].pos == idx
             node_idx = popfirst!(new_nodes_perm)
-            _, reverse_affinity, typ, node, line = code.new_nodes[node_idx]
+            new_node = new_nodes[node_idx]
             node_idx += length(code.stmts)
             if print_sep
                 if floop
@@ -129,13 +146,13 @@ function Base.show(io::IO, code::IRCode)
             end
             print_sep = true
             floop = false
-            print_ssa_typ = !isa(node, PiNode) && node_idx in used
+            print_ssa_typ = !isa(new_node.node, PiNode) && node_idx in used
             Base.with_output_color(:yellow, io) do io′
-                print_node(io′, node_idx, node, used, maxsize; color = false,
-                    print_typ=!print_ssa_typ || (isa(node, Expr) && typ != node.typ))
+                print_node(io′, node_idx, new_node.node, used, maxsize; color = false,
+                    print_typ=!print_ssa_typ || (isa(new_node.node, Expr) && typ != new_node.node.typ))
             end
             if print_ssa_typ
-                Base.printstyled(io, "::$(typ)", color=:red)
+                Base.printstyled(io, "::$(new_node.typ)", color=:red)
             end
             Base.println(io)
         end
@@ -158,10 +175,19 @@ function Base.show(io::IO, code::IRCode)
         end
         typ = code.types[idx]
         print_ssa_typ = !isa(stmt, PiNode) && idx in used
-        print_node(io, idx, stmt, used, maxsize,
-            print_typ=!print_ssa_typ || (isa(stmt, Expr) && typ != stmt.typ))
+        try
+            print_node(io, idx, stmt, used, maxsize,
+                print_typ=!print_ssa_typ || (isa(stmt, Expr) && typ != stmt.typ))
+        catch
+            print(io, "<error printing>")
+        end
         if print_ssa_typ
-            Base.printstyled(io, "::$(typ)", color=:red)
+            typ_str = try
+                string(typ)
+            catch
+                "<error_printing>"
+            end
+            Base.printstyled(io, "::$(typ_str)", color=:red)
         end
         Base.println(io)
     end

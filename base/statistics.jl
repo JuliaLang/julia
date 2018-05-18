@@ -16,18 +16,20 @@ julia> mean([√1, √2, √3])
 ```
 """
 function mean(f::Callable, iterable)
-    state = start(iterable)
-    if done(iterable, state)
+    y = iterate(iterable)
+    if y == nothing
         throw(ArgumentError("mean of empty collection undefined: $(repr(iterable))"))
     end
     count = 1
-    value, state = next(iterable, state)
+    value, state = y
     f_value = f(value)
     total = reduce_first(add_sum, f_value)
-    while !done(iterable, state)
-        value, state = next(iterable, state)
+    y = iterate(iterable, state)
+    while y !== nothing
+        value, state = y
         total += f(value)
         count += 1
+        y = iterate(iterable, state)
     end
     return total/count
 end
@@ -86,19 +88,21 @@ realXcY(x::Complex, y::Complex) = real(x)*real(y) + imag(x)*imag(y)
 var(iterable; corrected::Bool=true, mean=nothing) = _var(iterable, corrected, mean)
 
 function _var(iterable, corrected::Bool, mean)
-    state = start(iterable)
-    if done(iterable, state)
+    y = iterate(iterable)
+    if y === nothing
         throw(ArgumentError("variance of empty collection undefined: $(repr(iterable))"))
     end
     count = 1
-    value, state = next(iterable, state)
+    value, state = y
+    y = iterate(iterable, state)
     if mean === nothing
         # Use Welford algorithm as seen in (among other places)
         # Knuth's TAOCP, Vol 2, page 232, 3rd edition.
         M = value / 1
         S = real(zero(M))
-        while !done(iterable, state)
-            value, state = next(iterable, state)
+        while y !== nothing
+            value, state = y
+            y = iterate(iterable, state)
             count += 1
             new_M = M + (value - M) / count
             S = S + realXcY(value - M, value - new_M)
@@ -112,8 +116,9 @@ function _var(iterable, corrected::Bool, mean)
         # Department of Computer Science, Stanford University,
         # because user can provide mean value that is different to mean(iterable)
         sum2 = abs2(value - mean::Number)
-        while !done(iterable, state)
-            value, state = next(iterable, state)
+        while y !== nothing
+            value, state = y
+            y = iterate(iterable, state)
             count += 1
             sum2 += abs2(value - mean)
         end
@@ -137,7 +142,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
 
     if has_fast_linear_indexing(A) && lsiz > 16
         nslices = div(_length(A), lsiz)
-        ibase = first(linearindices(A))-1
+        ibase = first(LinearIndices(A))-1
         for i = 1:nslices
             @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
             ibase += lsiz
@@ -145,7 +150,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
         return R
     end
     indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
-    keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
+    keep, Idefault = Broadcast.shapeindexer(indsRt)
     if reducedim1(R, A)
         i1 = first(indices1(R))
         @inbounds for IA in CartesianIndices(indsAt)

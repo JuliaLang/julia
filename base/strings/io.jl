@@ -210,11 +210,12 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 # join is implemented using IO
 
 """
-    join(io::IO, strings, delim, [last])
+    join([io::IO,] strings, delim, [last])
 
 Join an array of `strings` into a single string, inserting the given delimiter between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
-two strings. For example,
+two strings. If `io` is given, the result is written to `io` rather than returned as
+as a `String`.  For example,
 
 # Examples
 ```jldoctest
@@ -234,7 +235,6 @@ function join(io::IO, strings, delim, last)
         print(io, str)
     end
 end
-
 function join(io::IO, strings, delim)
     a = Iterators.Stateful(strings)
     for str in a
@@ -243,6 +243,9 @@ function join(io::IO, strings, delim)
     end
 end
 join(io::IO, strings) = join(io, strings, "")
+# Hack around https://github.com/JuliaLang/julia/issues/26871
+join(io::IO, strings::Tuple{}, delim) = nothing
+join(io::IO, strings::Tuple{}, delim, last) = nothing
 
 join(strings) = sprint(join, strings)
 join(strings, delim) = sprint(join, strings, delim)

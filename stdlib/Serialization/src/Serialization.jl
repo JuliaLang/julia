@@ -67,7 +67,7 @@ const TAGS = Any[
     :(=), :(==), :(===), :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y, :a, :b, :c, :d, :e, :f,
     :g, :h, :i, :j, :k, :l, :m, :n, :o, :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z, :add_int,
     :sub_int, :mul_int, :add_float, :sub_float, :new, :mul_float, :bitcast, :start, :done, :next,
-    :indexed_next, :getfield, :meta, :eq_int, :slt_int, :sle_int, :ne_int, :push_loc, :pop_loc,
+    :indexed_iterate, :getfield, :meta, :eq_int, :slt_int, :sle_int, :ne_int, :push_loc, :pop_loc,
     :pop, :arrayset, :arrayref, :apply_type, :inbounds, :getindex, :setindex!, :Core, :!, :+,
     :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol("#temp#"), :tuple,
 
@@ -259,7 +259,7 @@ function serialize(s::AbstractSerializer, a::Array)
     else
         serialize(s, length(a))
     end
-    if isbits(elty)
+    if isbitstype(elty)
         serialize_array_data(s.io, a)
     else
         sizehint!(s.table, div(length(a),4))  # prepare for lots of pointers
@@ -855,7 +855,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     name = deserialize(s)::Symbol
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
-    sig = deserialize(s)::DataType
+    sig = deserialize(s)::Type
     sparam_syms = deserialize(s)::SimpleVector
     ambig = deserialize(s)::Union{Array{Any,1}, Nothing}
     nargs = deserialize(s)::Int32
@@ -918,7 +918,7 @@ function deserialize_array(s::AbstractSerializer)
         elty = UInt8
     end
     if isa(d1, Integer)
-        if elty !== Bool && isbits(elty)
+        if elty !== Bool && isbitstype(elty)
             a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
@@ -927,7 +927,7 @@ function deserialize_array(s::AbstractSerializer)
     else
         dims = convert(Dims, d1)::Dims
     end
-    if isbits(elty)
+    if isbitstype(elty)
         n = prod(dims)::Int
         if elty === Bool && n > 0
             A = Array{Bool, length(dims)}(undef, dims)
@@ -1135,7 +1135,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
     end
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
-    elseif isbits(t)
+    elseif isbitstype(t)
         if nf == 1
             f1 = deserialize(s)
             return ccall(:jl_new_struct, Any, (Any,Any...), t, f1)
@@ -1185,7 +1185,7 @@ function deserialize(s::AbstractSerializer, t::Type{Regex})
     pattern = deserialize(s)
     compile_options = deserialize(s)
     match_options = deserialize(s)
-    Regex(pattern, compile_options, match_options)
+    return Regex(pattern, compile_options, match_options)
 end
 
 ## StackTraces
@@ -1201,6 +1201,7 @@ function serialize(s::AbstractSerializer, frame::Base.StackTraces.StackFrame)
     write(s.io, frame.from_c)
     write(s.io, frame.inlined)
     write(s.io, frame.pointer)
+    nothing
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})

@@ -108,19 +108,20 @@ julia> round(357.913; sigdigits=4, base=2)
     julia> x < 115//100
     true
 
-    julia> round(x, 1)
+    julia> round(x, digits=1)
     1.2
     ```
 
 # Extensions
 
-To extend `round` to new numeric types, it is typically sufficient to define `Base._round(x::NewType, ::RoundingMode)`.
+To extend `round` to new numeric types, it is typically sufficient to define `Base.round(x::NewType, r::RoundingMode)`.
 """
 round(T::Type, x)
 
 round(::Type{T}, x::AbstractFloat, r::RoundingMode{:ToZero}) where {T<:Integer} = trunc(T, x)
-round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T, _round(x,r))
+round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T, round(x,r))
 
+# NOTE: this relies on the current keyword dispatch behaviour (#9498).
 function round(x::Real, r::RoundingMode=RoundNearest;
     digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base=10)
     isfinite(x) || return x
@@ -130,12 +131,14 @@ trunc(x::Real; kwargs...) = round(x, RoundToZero; kwargs...)
 floor(x::Real; kwargs...) = round(x, RoundDown; kwargs...)
 ceil(x::Real; kwargs...)  = round(x, RoundUp; kwargs...)
 
-_round(x, r::RoundingMode, digits::Nothing, sigdigits::Nothing, base) = _round(x, r)
-_round(x::Integer, r::RoundingMode) = x
+round(x::Integer, r::RoundingMode) = x
+
+# if we hit this method, it means that no `round(x, r)` method is defined
+_round(x::Real, r::RoundingMode, digits::Nothing, sigdigits::Nothing, base) = throw(MethodError(round, (x,r)))
 
 # round x to multiples of 1/invstep
 function _round_invstep(x, invstep, r::RoundingMode)
-    y = _round(x * invstep, r) / invstep
+    y = round(x * invstep, r) / invstep
     if !isfinite(y)
         return x
     end
@@ -145,7 +148,7 @@ end
 # round x to multiples of step
 function _round_step(x, step, r::RoundingMode)
     # TODO: use div with rounding mode
-    y = _round(x / step, r) * step
+    y = round(x / step, r) * step
     if !isfinite(y)
         if x > 0
             return (r == RoundUp ? oftype(x, Inf) : zero(x))
@@ -170,17 +173,17 @@ function _round(x, r::RoundingMode, digits::Integer, sigdigits::Nothing, base)
 end
 
 hidigit(x::Integer, base) = ndigits0z(x, base)
-function hidigit(x::Real, base)
+function hidigit(x::AbstractFloat, base)
     iszero(x) && return 0
-    fx = float(x)
     if base == 10
-        return 1 + floor(Int, log10(abs(fx)))
+        return 1 + floor(Int, log10(abs(x)))
     elseif base == 2
         return 1 + exponent(x)
     else
-        return 1 + floor(Int, log(base, abs(fx)))
+        return 1 + floor(Int, log(base, abs(x)))
     end
 end
+hidigit(x::Real, base) = hidigit(float(x), base)
 
 function _round(x, r::RoundingMode, digits::Nothing, sigdigits::Integer, base)
     h = hidigit(x, base)
@@ -191,12 +194,12 @@ _round(x, r::RoundingMode, digits::Integer, sigdigits::Integer, base) =
     throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
 
 # C-style round
-function _round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
+function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     y = trunc(x)
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function _round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
+function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
     y = floor(x)
     ifelse(x==y,y,copysign(floor(2*x-y),x))
 end

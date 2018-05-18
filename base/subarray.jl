@@ -86,7 +86,7 @@ end
 # Transform indices to be "dense"
 _trimmedindex(i::Real) = oftype(i, 1)
 _trimmedindex(i::AbstractUnitRange) = oftype(i, OneTo(length(i)))
-_trimmedindex(i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
+_trimmedindex(i::AbstractArray) = oftype(i, reshape(eachindex(IndexLinear(), i), axes(i)))
 
 ## SubArray creation
 # We always assume that the dimensionality of the parent matches the number of

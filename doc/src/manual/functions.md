@@ -460,32 +460,41 @@ call will fail, just as it would if too many arguments were given explicitly.
 ## Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore might not need to
-be passed explicitly in every call. For example, the library function [`parse(T, num, base = base)`](@ref)
-interprets a string as a number in some base. The `base` argument defaults to `10`. This behavior
-can be expressed concisely as:
+be passed explicitly in every call. For example, the function [`Date(y, [m, d])`](@ref)
+from `Dates` module constructs a `Date` type for a given year `y`, month `m` and day `d`.
+However, `m` and `d` arguments are optional and their default value is `1`.
+This behavior can be expressed concisely as:
 
 ```julia
-function parse(T, num; base = 10)
-    ###
+function Date(y::Int64, m::Int64=1, d::Int64=1)
+    err = validargs(Date, y, m, d)
+    err === nothing || throw(err)
+    return Date(UTD(totaldays(y, m, d)))
 end
 ```
 
-With this definition, the function can be called with either two or three arguments, and `10`
-is automatically passed when a third argument is not specified:
+Observe, that this definition calls another method of `Date` function that takes one argument
+of `UTInstant{Day}` type.
+
+With this definition, the function can be called with either one, two or three arguments, and
+`1` is automatically passed when any of the arguments is not specified:
 
 ```jldoctest
-julia> parse(Int, "12", base = 10)
-12
+julia> using Dates
 
-julia> parse(Int, "12", base = 3)
-5
+julia> Date(2000, 12, 12)
+2000-12-12
 
-julia> parse(Int, "12")
-12
+julia> Date(2000, 12)
+2000-12-01
+
+julia> Date(2000)
+2000-01-01
 ```
 
 Optional arguments are actually just a convenient syntax for writing multiple method definitions
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
+This can be checked for our `Date` function example by calling `methods` function.
 
 ## Keyword Arguments
 

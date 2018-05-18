@@ -24,6 +24,7 @@ include(mod, x) = Core.include(mod, x)
 
 # essential files and libraries
 include("essentials.jl")
+include("some.jl")
 include("ctypes.jl")
 include("generator.jl")
 include("reflection.jl")
@@ -100,9 +101,6 @@ using .Sort
 ############
 # compiler #
 ############
-
-inlining_enabled() = (JLOptions().can_inline == 1)
-coverage_enabled() = (JLOptions().code_coverage != 0)
 
 include("compiler/utilities.jl")
 include("compiler/validation.jl")

@@ -632,8 +632,8 @@ julia> A = Matrix(2.7182818*I, 2, 2)
 
 julia> log(A)
 2×2 Array{Float64,2}:
-  1.0  0.0
- -0.0  1.0
+ 1.0  0.0
+ 0.0  1.0
 ```
 """
 function log(A::AbstractMatrix)
@@ -1308,7 +1308,7 @@ function pinv(A::AbstractMatrix{T}, tol::Real) where T
     Sinv        = zeros(Stype, length(SVD.S))
     index       = SVD.S .> tol*maximum(SVD.S)
     Sinv[index] = one(Stype) ./ SVD.S[index]
-    Sinv[findall(.!isfinite.(Sinv))] = zero(Stype)
+    Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::AbstractMatrix{T}) where T

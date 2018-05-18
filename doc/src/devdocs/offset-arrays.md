@@ -18,8 +18,8 @@ the exported interfaces of Julia.
 As an overview, the steps are:
 
   * replace many uses of `size` with `axes`
-  * replace `1:length(A)` with `eachindex(A)`, or in some cases `linearindices(A)`
-  * replace `length(A)` with `length(linearindices(A))`
+  * replace `1:length(A)` with `eachindex(A)`, or in some cases `LinearIndices(A)`
+  * replace `length(A)` with `length(LinearIndices(A))`
   * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, axes(B))`
 
 These are described in more detail below.
@@ -74,21 +74,21 @@ at the top of any function.
 For bounds checking, note that there are dedicated functions `checkbounds` and `checkindex` which
 can sometimes simplify such tests.
 
-### Linear indexing (`linearindices`)
+### Linear indexing (`LinearIndices`)
 
 
 Some algorithms are most conveniently (or efficiently) written in terms of a single linear index, `A[i]` even if `A` is multi-dimensional. Regardless of the array's native indices, linear indices always range from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)): does `v[i]` mean linear indexing , or Cartesian indexing with the array's native indices?
 
-For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `linearindices(A)`. This will return `axes(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
+For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `LinearIndices(A)`. This will return `axes(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
 
 By this definition, 1-dimensional arrays always use Cartesian indexing with the array's native indices. To help enforce this, it's worth noting that the index conversion functions will throw an error if shape indicates a 1-dimensional array with unconventional indexing (i.e., is a `Tuple{UnitRange}` rather than a tuple of `OneTo`). For arrays with conventional indexing, these functions continue to work the same as always.
 
-Using `axes` and `linearindices`, here is one way you could rewrite `mycopy!`:
+Using `axes` and `LinearIndices`, here is one way you could rewrite `mycopy!`:
 
 ```julia
 function mycopy!(dest::AbstractVector, src::AbstractVector)
     axes(dest) == axes(src) || throw(DimensionMismatch("vectors must match"))
-    for i in linearindices(src)
+    for i in LinearIndices(src)
         @inbounds dest[i] = src[i]
     end
     dest

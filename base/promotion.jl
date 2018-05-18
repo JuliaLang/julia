@@ -125,19 +125,20 @@ Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
 """
-promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
-promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
+promote_typejoin(@nospecialize(a), @nospecialize(b)) = _promote_typejoin(a, b)::Type
+_promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
+_promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
+_promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
+_promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
+_promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
-promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
-promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
-promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
+_promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
+_promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
+_promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
+_promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
 
 # Returns length, isfixed
 function full_va_len(p)
@@ -274,25 +275,6 @@ end
 # TODO: promote(x::T, ys::T...) where {T} here to catch all circularities?
 
 ## promotions in arithmetic, etc. ##
-
-# Because of the promoting fallback definitions for Number, we need
-# a special case for undefined promote_rule on numeric types.
-# Otherwise, typejoin(T,S) is called (returning Number) so no conversion
-# happens, and +(promote(x,y)...) is called again, causing a stack
-# overflow.
-function promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
-    @_inline_meta
-    promote_to_supertype(T, S, typejoin(T,S))
-end
-
-# promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
-# for example this makes promote_type(Integer,Real) == Real without
-# promoting arbitrary pairs of numeric types to Number.
-promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = T
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = T
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = S
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
-    error("no promotion exists for ", T, " and ", S)
 
 promote() = ()
 promote(x) = (x,)
@@ -451,8 +433,8 @@ min(x::Real) = x
 max(x::Real) = x
 minmax(x::Real) = (x, x)
 
-max(x::T, y::T) where {T<:Real} = select_value(y < x, x, y)
-min(x::T, y::T) where {T<:Real} = select_value(y < x, y, x)
+max(x::T, y::T) where {T<:Real} = ifelse(y < x, x, y)
+min(x::T, y::T) where {T<:Real} = ifelse(y < x, y, x)
 minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)
 
 flipsign(x::T, y::T) where {T<:Signed} = no_op_err("flipsign", T)

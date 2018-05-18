@@ -83,7 +83,6 @@
     ADD_I(abs_float, 1) \
     ADD_I(copysign_float, 2) \
     ADD_I(flipsign_int, 2) \
-    ADD_I(select_value, 3) \
     ADD_I(ceil_llvm, 1) \
     ADD_I(floor_llvm, 1) \
     ADD_I(trunc_llvm, 1) \

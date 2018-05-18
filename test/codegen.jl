@@ -76,6 +76,9 @@ end
 function test_jl_dump_compiles_toplevel_thunks()
     tfile = tempname()
     io = open(tfile, "w")
+    # Make sure to cause compilation of the eval function
+    # before calling it below.
+    Core.eval(Main, Any[:(nothing)][1])
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
@@ -170,6 +173,12 @@ Base.unsafe_convert(::Type{Ref{PtrStruct}}, at::Tuple) =
 
 breakpoint_ptrstruct(a::RealStruct) =
     ccall(:jl_breakpoint, Cvoid, (Ref{PtrStruct},), a)
+
+@noinline r_typeassert(c) = c ? (1,1) : nothing
+function f_typeassert(c)
+    r_typeassert(c)::Tuple
+end
+@test !occursin("jl_subtype", get_llvm(f_typeassert, Tuple{Bool}))
 
 if opt_level > 0
     @test !occursin("%gcframe", get_llvm(pointer_not_safepoint, Tuple{}))

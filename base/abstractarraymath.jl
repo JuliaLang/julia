@@ -10,11 +10,12 @@ all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 ## Constructors ##
 
 """
-    vec(a::AbstractArray) -> Vector
+    vec(a::AbstractArray) -> AbstractVector
 
-Reshape the array `a` as a one-dimensional column vector. The resulting array
-shares the same underlying data as `a`, so modifying one will also modify the
-other.
+Reshape the array `a` as a one-dimensional column vector. Return `a` if it is
+already an `AbstractVector`. The resulting array
+shares the same underlying data as `a`, so it will only be mutable if `a` is
+mutable, in which case modifying one will also modify the other.
 
 # Examples
 ```jldoctest
@@ -31,6 +32,9 @@ julia> vec(a)
  5
  3
  6
+
+julia> vec(1:3)
+1:3
 ```
 
 See also [`reshape`](@ref).
@@ -111,7 +115,7 @@ julia> A = [1 2 3 4; 5 6 7 8]
  5  6  7  8
 
 julia> selectdim(A, 2, 3)
-2-element view(::Array{Int64,2}, Base.OneTo(2), 3) with eltype Int64:
+2-element view(::Array{Int64,2}, :, 3) with eltype Int64:
  3
  7
 ```
@@ -363,10 +367,6 @@ _rshps(shp, shp_i, sz, i, ::Tuple{}) =
 _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     "($n) cannot be less than number of dimensions of input ($N)"))
 
-# We need special handling when repeating arrays of arrays
-cat_fill!(R, X, inds) = (R[inds...] = X)
-cat_fill!(R, X::AbstractArray, inds) = fill!(view(R, inds...), X)
-
 @noinline function _repeat(A::AbstractArray, inner, outer)
     shape, inner_shape = rep_shapes(A, inner, outer)
 
@@ -385,7 +385,7 @@ cat_fill!(R, X::AbstractArray, inds) = fill!(view(R, inds...), X)
                 n = inner[i]
                 inner_indices[i] = (1:n) .+ ((c[i] - 1) * n)
             end
-            cat_fill!(R, A[c], inner_indices)
+            fill!(view(R, inner_indices...), A[c])
         end
     end
 

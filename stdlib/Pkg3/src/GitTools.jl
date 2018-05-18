@@ -14,12 +14,14 @@ Base.@kwdef mutable struct MiniProgressBar
     has_shown::Bool = false
 end
 
+const PROGRESS_BAR_PERCENTAGE_GRANULARITY = Ref(0.1)
+
 function showprogress(io::IO, p::MiniProgressBar)
     perc = p.current / p.max * 100
     prev_perc = p.prev / p.max * 100
     # Bail early if we are not updating the progress bar,
     # Saves printing to the terminal
-    if p.has_shown && !(perc - prev_perc > 0.1)
+    if p.has_shown && !((perc - prev_perc) > PROGRESS_BAR_PERCENTAGE_GRANULARITY[])
         return
     end
     p.prev = p.current
@@ -36,7 +38,6 @@ function showprogress(io::IO, p::MiniProgressBar)
 end
 
 function transfer_progress(progress::Ptr{LibGit2.TransferProgress}, p::Any)
-
     progress = unsafe_load(progress)
     @assert haskey(p, :transfer_progress)
     bar = p[:transfer_progress]

@@ -184,7 +184,7 @@ end
 end
 
 @testset "Signature" begin
-    sig = LibGit2.Signature("AAA", "AAA@BBB.COM", round(time(), 0), 0)
+    sig = LibGit2.Signature("AAA", "AAA@BBB.COM", round(time(); digits=0), 0)
     git_sig = convert(LibGit2.GitSignature, sig)
     sig2 = LibGit2.Signature(git_sig)
     close(git_sig)
@@ -520,7 +520,7 @@ mktempdir() do dir
     repo_url = "https://github.com/JuliaLang/Example.jl"
     cache_repo = joinpath(dir, "Example")
     test_repo = joinpath(dir, "Example.Test")
-    test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+    test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(); digits=0), 0)
     test_dir = "testdir"
     test_file = "$(test_dir)/testfile"
     config_file = "testconfig"
@@ -1018,7 +1018,7 @@ mktempdir() do dir
                 @test isa(tree, LibGit2.GitTree)
                 @test isa(LibGit2.GitObject(repo, "HEAD^{tree}"), LibGit2.GitTree)
                 @test LibGit2.Consts.OBJECT(typeof(tree)) == LibGit2.Consts.OBJ_TREE
-                @test count(tree) == 1
+                @test LibGit2.count(tree) == 1
 
                 # test showing the GitTree and its entries
                 tree_str = sprint(show, tree)
@@ -1077,7 +1077,7 @@ mktempdir() do dir
 
                 # test properties of the diff_tree
                 diff = LibGit2.diff_tree(repo, tree, "", cached=true)
-                @test count(diff) == 1
+                @test LibGit2.count(diff) == 1
                 @test_throws BoundsError diff[0]
                 @test_throws BoundsError diff[2]
                 @test LibGit2.Consts.DELTA_STATUS(diff[1].status) == LibGit2.Consts.DELTA_MODIFIED
@@ -1274,6 +1274,13 @@ mktempdir() do dir
         end
     end
 
+    @testset "Show closed repo" begin
+        # Make sure this doesn't crash
+        buf = IOBuffer()
+        Base.show(buf, LibGit2.with(identity, LibGit2.GitRepo(test_repo)))
+        @test String(take!(buf)) == "LibGit2.GitRepo(<closed>)"
+    end
+
     @testset "Fetch from cache repository" begin
         LibGit2.with(LibGit2.GitRepo(test_repo)) do repo
             # fetch changes
@@ -1396,11 +1403,11 @@ mktempdir() do dir
                 end
                 # test with specified oid
                 LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-                    @test count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME) == 1
+                    @test LibGit2.count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME) == 1
                 end
                 # test without specified oid
                 LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-                    @test count((oid,repo)->(oid == commit_oid1), walker, by=LibGit2.Consts.SORT_TIME) == 1
+                    @test LibGit2.count((oid,repo)->(oid == commit_oid1), walker, by=LibGit2.Consts.SORT_TIME) == 1
                 end
             finally
                 close(repo)
@@ -1428,10 +1435,10 @@ mktempdir() do dir
 
                 LibGit2.remove!(repo, test_file)
                 LibGit2.read!(repo)
-                @test count(idx) == 0
+                @test LibGit2.count(idx) == 0
                 LibGit2.add!(repo, test_file)
                 LibGit2.update!(repo, test_file)
-                @test count(idx) == 1
+                @test LibGit2.count(idx) == 1
             end
 
             # check non-existent file status
