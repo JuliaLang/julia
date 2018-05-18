@@ -108,11 +108,11 @@ and the package repository for version 0.6 of Julia would be
 
 ### `JULIA_HISTORY`
 
-The absolute path `Base.REPL.find_hist_file()` of the REPL's history file. If
-`$JULIA_HISTORY` is not set, then `Base.REPL.find_hist_file()` defaults to
+The absolute path `REPL.find_hist_file()` of the REPL's history file. If
+`$JULIA_HISTORY` is not set, then `REPL.find_hist_file()` defaults to
 
 ```
-$HOME/.julia_history
+$HOME/.julia/logs/repl_history.jl
 ```
 
 ### `JULIA_PKGRESOLVE_ACCURACY`
