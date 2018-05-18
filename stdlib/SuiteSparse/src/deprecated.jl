@@ -46,3 +46,12 @@ end
     LinearAlgebra.A_mul_B!(A::StridedMatrix, Q::QRSparseQ) = LinearAlgebra.mul!(A, Q)
     LinearAlgebra.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat) = LinearAlgebra.mul!(Q, A)
 end
+
+# deprecate lufact to lu
+@eval SuiteSparse.UMFPACK begin
+    @deprecate(lufact(A::SparseMatrixCSC), lu(A))
+    @deprecate(lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}), lu(S))
+    @deprecate(lufact(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes}, lu(A))
+    @deprecate(lufact(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti}) where {Ti<:UMFITypes}, lu(A))
+    @deprecate(lufact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat}, lu(A))
+end

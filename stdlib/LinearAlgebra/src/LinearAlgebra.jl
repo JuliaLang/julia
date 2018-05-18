@@ -112,7 +112,6 @@ export
     lowrankupdate,
     lowrankupdate!,
     lu,
-    lufact,
     lufact!,
     lyap,
     mul!,

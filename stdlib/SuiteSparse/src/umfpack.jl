@@ -6,7 +6,7 @@ export UmfpackLU
 
 import Base: (\), getproperty, show, size
 using LinearAlgebra
-import LinearAlgebra: Factorization, det, lufact, ldiv!
+import LinearAlgebra: Factorization, det, lu, ldiv!
 
 using SparseArrays
 import SparseArrays: nnz
@@ -108,7 +108,7 @@ Base.adjoint(F::UmfpackLU) = Adjoint(F)
 Base.transpose(F::UmfpackLU) = Transpose(F)
 
 """
-    lufact(A::SparseMatrixCSC) -> F::UmfpackLU
+    lu(A::SparseMatrixCSC) -> F::UmfpackLU
 
 Compute the LU factorization of a sparse matrix `A`.
 
@@ -138,12 +138,12 @@ The relation between `F` and `A` is
 - [`det`](@ref)
 
 !!! note
-    `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
+    `lu(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
     SuiteSparse. As this library only supports sparse matrices with [`Float64`](@ref) or
-    `ComplexF64` elements, `lufact` converts `A` into a copy that is of type
+    `ComplexF64` elements, `lu` converts `A` into a copy that is of type
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 """
-function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
+function lu(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
@@ -152,16 +152,16 @@ function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     finalizer(umfpack_free_symbolic, res)
     umfpack_numeric!(res)
 end
-lufact(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
-    lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
-lufact(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti}) where {Ti<:UMFITypes} =
-    lufact(convert(SparseMatrixCSC{ComplexF64,Ti}, A))
-lufact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat} =
+lu(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
+    lu(convert(SparseMatrixCSC{Float64,Ti}, A))
+lu(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti}) where {Ti<:UMFITypes} =
+    lu(convert(SparseMatrixCSC{ComplexF64,Ti}, A))
+lu(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat} =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
-    "Try lufact(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
-    "sparse floating point LU using UMFPACK or lufact(Array(A)) for generic ",
+    "Try lu(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
+    "sparse floating point LU using UMFPACK or lu(Array(A)) for generic ",
     "dense LU.")))
-lufact(A::SparseMatrixCSC) = lufact(float(A))
+lu(A::SparseMatrixCSC) = lu(float(A))
 
 
 size(F::UmfpackLU) = (F.m, F.n)

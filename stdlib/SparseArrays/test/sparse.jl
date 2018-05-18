@@ -1320,7 +1320,7 @@ end
 @testset "explicit zeros" begin
     if Base.USE_GPL_LIBS
         a = SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 2], [1.0, 0.0, 0.0, 1.0])
-        @test lufact(a)\[2.0, 3.0] ≈ [2.0, 3.0]
+        @test lu(a)\[2.0, 3.0] ≈ [2.0, 3.0]
         @test cholfact(a)\[2.0, 3.0] ≈ [2.0, 3.0]
     end
 end
@@ -1780,7 +1780,6 @@ end
     C, b = A[:, 1:4], fill(1., size(A, 1))
     @test !Base.USE_GPL_LIBS || factorize(C)\b ≈ Array(C)\b
     @test_throws ErrorException chol(A)
-    @test_throws ErrorException lu(A)
     @test_throws ErrorException eig(A)
     @test_throws ErrorException inv(A)
 end

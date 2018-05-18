@@ -266,7 +266,7 @@ end
         @test_throws DimensionMismatch LAPACK.gttrs!('N', x11, d, du, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, x11, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, du, x9, y10, x11)
-        A = lufact(Tridiagonal(dl,d,du))
+        A = lu(Tridiagonal(dl,d,du))
         b  = rand(elty,10,5)
         c = copy(b)
         dl,d,du,du2,ipiv = LAPACK.gttrf!(dl,d,du)

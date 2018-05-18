@@ -225,19 +225,19 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test 0.5\A1 == 0.5\Matrix(A1)
 
         # inversion
-        @test inv(A1) ≈ inv(lufact(Matrix(A1)))
+        @test inv(A1) ≈ inv(lu(Matrix(A1)))
         inv(Matrix(A1)) # issue #11298
         @test isa(inv(A1), t1)
         # make sure the call to LAPACK works right
         if elty1 <: BlasFloat
-            @test LinearAlgebra.inv!(copy(A1)) ≈ inv(lufact(Matrix(A1)))
+            @test LinearAlgebra.inv!(copy(A1)) ≈ inv(lu(Matrix(A1)))
         end
 
         # Determinant
-        @test det(A1) ≈ det(lufact(Matrix(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
-        @test logdet(A1) ≈ logdet(lufact(Matrix(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
+        @test det(A1) ≈ det(lu(Matrix(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
+        @test logdet(A1) ≈ logdet(lu(Matrix(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
         lada, ladb = logabsdet(A1)
-        flada, fladb = logabsdet(lufact(Matrix(A1)))
+        flada, fladb = logabsdet(lu(Matrix(A1)))
         @test lada ≈ flada atol=sqrt(eps(real(float(one(elty1)))))*n*n
         @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
@@ -425,7 +425,7 @@ for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         debug && println("\ntype of A: ", eltya, " type of b: ", eltyb, "\n")
 
         debug && println("Solve upper triangular system")
-        Atri = UpperTriangular(lufact(A).U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = UpperTriangular(lu(A).U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, Matrix(Atri)*fill(1., n, 2))
         x = Matrix(Atri) \ b
 
@@ -453,7 +453,7 @@ for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         end
 
         debug && println("Solve lower triangular system")
-        Atri = UpperTriangular(lufact(A).U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = UpperTriangular(lu(A).U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, Matrix(Atri)*fill(1., n, 2))
         x = Matrix(Atri)\b
 
