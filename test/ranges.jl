@@ -418,12 +418,19 @@ end
     end
     @test s == 2
 
-    # loops covering the full range of smaller integer types
+    # loops covering the full range of integers
     s = 0
     for i = typemin(UInt8):typemax(UInt8)
         s += 1
     end
     @test s == 256
+
+    s = 0
+    for i = typemin(UInt):typemax(UInt)
+        i == 10 && break
+        s += 1
+    end
+    @test s == 10
 
     s = 0
     for i = typemin(UInt8):one(UInt8):typemax(UInt8)
