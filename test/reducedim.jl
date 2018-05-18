@@ -352,3 +352,9 @@ end
                               T <: Base.SmallUnsigned ? UInt :
                               T)
 end
+
+@testset "argmin/argmax" begin
+    B = reshape(3^3:-1:1, (3, 3, 3))
+    @test B[argmax(B, dims=[2, 3])] == maximum(B, dims=[2, 3])
+    @test B[argmin(B, dims=[2, 3])] == minimum(B, dims=[2, 3])
+end
