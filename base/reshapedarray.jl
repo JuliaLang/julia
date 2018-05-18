@@ -28,10 +28,8 @@ struct ReshapedIndex{T}
 end
 
 # eachindex(A::ReshapedArray) = ReshapedArrayIterator(A)  # TODO: uncomment this line
-start(R::ReshapedArrayIterator) = start(R.iter)
-@inline done(R::ReshapedArrayIterator, i) = done(R.iter, i)
-@inline function next(R::ReshapedArrayIterator, i)
-    item, inext = next(R.iter, i)
+@inline function iterate(R::ReshapedArrayIterator, i...)
+    item, inext = iterate(R.iter, i...)
     ReshapedIndex(item), inext
 end
 length(R::ReshapedArrayIterator) = length(R.iter)

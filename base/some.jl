@@ -73,7 +73,7 @@ coalesce(x::Union{Nothing, Missing}, y...) = coalesce(y...)
 """
     notnothing(x)
 
-Throw an error if `x == nothing`, and return `x` if not.
+Throw an error if `x === nothing`, and return `x` if not.
 """
 notnothing(x::Any) = x
 notnothing(::Nothing) = throw(ArgumentError("nothing passed to notnothing"))

@@ -313,7 +313,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
             j, k = first(r), nextind(str,last(r))
         end
     end
-    if keepempty || !done(str,i)
+    if keepempty || i <= ncodeunits(str)
         push!(strs, SubString(str,i))
     end
     return strs

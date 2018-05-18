@@ -187,8 +187,8 @@ let
 
     @test lastindex(srep) == 7
 
-    @test next(srep, 3) == ('β',5)
-    @test next(srep, 7) == ('β',9)
+    @test iterate(srep, 3) == ('β',5)
+    @test iterate(srep, 7) == ('β',9)
 
     @test srep[7] == 'β'
     @test_throws BoundsError srep[8]
@@ -230,8 +230,8 @@ end
     @test_throws MethodError codeunit(tstr, true)
     @test_throws MethodError isvalid(tstr, 1)
     @test_throws MethodError isvalid(tstr, true)
-    @test_throws MethodError next(tstr, 1)
-    @test_throws MethodError next(tstr, true)
+    @test_throws MethodError iterate(tstr, 1)
+    @test_throws MethodError iterate(tstr, true)
     @test_throws MethodError lastindex(tstr)
 
     gstr = GenericString("12")
@@ -251,7 +251,7 @@ end
     @test first(eachindex("foobar")) === 1
     @test first(eachindex("")) === 1
     @test last(eachindex("foobar")) === lastindex("foobar")
-    @test done(eachindex("foobar"),7)
+    @test iterate(eachindex("foobar"),7) === nothing
     @test Int == eltype(Base.EachStringIndex) ==
                  eltype(Base.EachStringIndex{String}) ==
                  eltype(Base.EachStringIndex{GenericString}) ==
@@ -490,7 +490,7 @@ end
 @testset "issue #18280: next/nextind must return past String's underlying data" begin
     for s in ("Hello", "Σ", "こんにちは", "😊😁")
         local s
-        @test next(s, lastindex(s))[2] > sizeof(s)
+        @test iterate(s, lastindex(s))[2] > sizeof(s)
         @test nextind(s, lastindex(s)) > sizeof(s)
     end
 end
@@ -501,9 +501,7 @@ mutable struct CharStr <: AbstractString
     chars::Vector{Char}
     CharStr(x) = new(collect(x))
 end
-Base.start(x::CharStr) = start(x.chars)
-Base.next(x::CharStr, i::Int) = next(x.chars, i)
-Base.done(x::CharStr, i::Int) = done(x.chars, i)
+Base.iterate(x::CharStr, i::Integer=1) = iterate(x.chars, i)
 Base.lastindex(x::CharStr) = lastindex(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
@@ -737,100 +735,100 @@ end
 
 @test unsafe_wrap(Vector{UInt8},"\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
 
-@test next("a", 1)[2] == 2
+@test iterate("a", 1)[2] == 2
 @test nextind("a", 1) == 2
-@test next("az", 1)[2] == 2
+@test iterate("az", 1)[2] == 2
 @test nextind("az", 1) == 2
-@test next("a\xb1", 1)[2] == 2
+@test iterate("a\xb1", 1)[2] == 2
 @test nextind("a\xb1", 1) == 2
-@test next("a\xb1z", 1)[2] == 2
+@test iterate("a\xb1z", 1)[2] == 2
 @test nextind("a\xb1z", 1) == 2
-@test next("a\xb1\x83", 1)[2] == 2
+@test iterate("a\xb1\x83", 1)[2] == 2
 @test nextind("a\xb1\x83", 1) == 2
-@test next("a\xb1\x83\x84", 1)[2] == 2
+@test iterate("a\xb1\x83\x84", 1)[2] == 2
 @test nextind("a\xb1\x83\x84", 1) == 2
-@test next("a\xb1\x83\x84z", 1)[2] == 2
+@test iterate("a\xb1\x83\x84z", 1)[2] == 2
 @test nextind("a\xb1\x83\x84z", 1) == 2
 
-@test next("\x81", 1)[2] == 2
+@test iterate("\x81", 1)[2] == 2
 @test nextind("\x81", 1) == 2
-@test next("\x81z", 1)[2] == 2
+@test iterate("\x81z", 1)[2] == 2
 @test nextind("\x81z", 1) == 2
-@test next("\x81\xb1", 1)[2] == 2
+@test iterate("\x81\xb1", 1)[2] == 2
 @test nextind("\x81\xb1", 1) == 2
-@test next("\x81\xb1z", 1)[2] == 2
+@test iterate("\x81\xb1z", 1)[2] == 2
 @test nextind("\x81\xb1z", 1) == 2
-@test next("\x81\xb1\x83", 1)[2] == 2
+@test iterate("\x81\xb1\x83", 1)[2] == 2
 @test nextind("\x81\xb1\x83", 1) == 2
-@test next("\x81\xb1\x83\x84", 1)[2] == 2
+@test iterate("\x81\xb1\x83\x84", 1)[2] == 2
 @test nextind("\x81\xb1\x83\x84", 1) == 2
-@test next("\x81\xb1\x83\x84z", 1)[2] == 2
+@test iterate("\x81\xb1\x83\x84z", 1)[2] == 2
 @test nextind("\x81\xb1\x83\x84z", 1) == 2
 
-@test next("\xce", 1)[2] == 2
+@test iterate("\xce", 1)[2] == 2
 @test nextind("\xce", 1) == 2
-@test next("\xcez", 1)[2] == 2
+@test iterate("\xcez", 1)[2] == 2
 @test nextind("\xcez", 1) == 2
-@test next("\xce\xb1", 1)[2] == 3
+@test iterate("\xce\xb1", 1)[2] == 3
 @test nextind("\xce\xb1", 1) == 3
-@test next("\xce\xb1z", 1)[2] == 3
+@test iterate("\xce\xb1z", 1)[2] == 3
 @test nextind("\xce\xb1z", 1) == 3
-@test next("\xce\xb1\x83", 1)[2] == 3
+@test iterate("\xce\xb1\x83", 1)[2] == 3
 @test nextind("\xce\xb1\x83", 1) == 3
-@test next("\xce\xb1\x83\x84", 1)[2] == 3
+@test iterate("\xce\xb1\x83\x84", 1)[2] == 3
 @test nextind("\xce\xb1\x83\x84", 1) == 3
-@test next("\xce\xb1\x83\x84z", 1)[2] == 3
+@test iterate("\xce\xb1\x83\x84z", 1)[2] == 3
 @test nextind("\xce\xb1\x83\x84z", 1) == 3
 
-@test next("\xe2", 1)[2] == 2
+@test iterate("\xe2", 1)[2] == 2
 @test nextind("\xe2", 1) == 2
-@test next("\xe2z", 1)[2] == 2
+@test iterate("\xe2z", 1)[2] == 2
 @test nextind("\xe2z", 1) == 2
-@test next("\xe2\x88", 1)[2] == 3
+@test iterate("\xe2\x88", 1)[2] == 3
 @test nextind("\xe2\x88", 1) == 3
-@test next("\xe2\x88z", 1)[2] == 3
+@test iterate("\xe2\x88z", 1)[2] == 3
 @test nextind("\xe2\x88z", 1) == 3
-@test next("\xe2\x88\x83", 1)[2] == 4
+@test iterate("\xe2\x88\x83", 1)[2] == 4
 @test nextind("\xe2\x88\x83", 1) == 4
-@test next("\xe2\x88\x83z", 1)[2] == 4
+@test iterate("\xe2\x88\x83z", 1)[2] == 4
 @test nextind("\xe2\x88\x83z", 1) == 4
-@test next("\xe2\x88\x83\x84", 1)[2] == 4
+@test iterate("\xe2\x88\x83\x84", 1)[2] == 4
 @test nextind("\xe2\x88\x83\x84", 1) == 4
-@test next("\xe2\x88\x83\x84z", 1)[2] == 4
+@test iterate("\xe2\x88\x83\x84z", 1)[2] == 4
 @test nextind("\xe2\x88\x83\x84z", 1) == 4
 
-@test next("\xf0", 1)[2] == 2
+@test iterate("\xf0", 1)[2] == 2
 @test nextind("\xf0", 1) == 2
-@test next("\xf0z", 1)[2] == 2
+@test iterate("\xf0z", 1)[2] == 2
 @test nextind("\xf0z", 1) == 2
-@test next("\xf0\x9f", 1)[2] == 3
+@test iterate("\xf0\x9f", 1)[2] == 3
 @test nextind("\xf0\x9f", 1) == 3
-@test next("\xf0\x9fz", 1)[2] == 3
+@test iterate("\xf0\x9fz", 1)[2] == 3
 @test nextind("\xf0\x9fz", 1) == 3
-@test next("\xf0\x9f\x98", 1)[2] == 4
+@test iterate("\xf0\x9f\x98", 1)[2] == 4
 @test nextind("\xf0\x9f\x98", 1) == 4
-@test next("\xf0\x9f\x98z", 1)[2] == 4
+@test iterate("\xf0\x9f\x98z", 1)[2] == 4
 @test nextind("\xf0\x9f\x98z", 1) == 4
-@test next("\xf0\x9f\x98\x84", 1)[2] == 5
+@test iterate("\xf0\x9f\x98\x84", 1)[2] == 5
 @test nextind("\xf0\x9f\x98\x84", 1) == 5
-@test next("\xf0\x9f\x98\x84z", 1)[2] == 5
+@test iterate("\xf0\x9f\x98\x84z", 1)[2] == 5
 @test nextind("\xf0\x9f\x98\x84z", 1) == 5
 
-@test next("\xf8", 1)[2] == 2
+@test iterate("\xf8", 1)[2] == 2
 @test nextind("\xf8", 1) == 2
-@test next("\xf8z", 1)[2] == 2
+@test iterate("\xf8z", 1)[2] == 2
 @test nextind("\xf8z", 1) == 2
-@test next("\xf8\x9f", 1)[2] == 2
+@test iterate("\xf8\x9f", 1)[2] == 2
 @test nextind("\xf8\x9f", 1) == 2
-@test next("\xf8\x9fz", 1)[2] == 2
+@test iterate("\xf8\x9fz", 1)[2] == 2
 @test nextind("\xf8\x9fz", 1) == 2
-@test next("\xf8\x9f\x98", 1)[2] == 2
+@test iterate("\xf8\x9f\x98", 1)[2] == 2
 @test nextind("\xf8\x9f\x98", 1) == 2
-@test next("\xf8\x9f\x98z", 1)[2] == 2
+@test iterate("\xf8\x9f\x98z", 1)[2] == 2
 @test nextind("\xf8\x9f\x98z", 1) == 2
-@test next("\xf8\x9f\x98\x84", 1)[2] == 2
+@test iterate("\xf8\x9f\x98\x84", 1)[2] == 2
 @test nextind("\xf8\x9f\x98\x84", 1) == 2
-@test next("\xf8\x9f\x98\x84z", 1)[2] == 2
+@test iterate("\xf8\x9f\x98\x84z", 1)[2] == 2
 @test nextind("\xf8\x9f\x98\x84z", 1) == 2
 
 # codeunit vectors

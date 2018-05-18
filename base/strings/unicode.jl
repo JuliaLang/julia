@@ -3,8 +3,8 @@
 # Various Unicode functionality from the utf8proc library
 module Unicode
 
-import Base: show, ==, hash, string, Symbol, isless, length, eltype, start,
-             next, done, convert, isvalid, ismalformed, isoverlong
+import Base: show, ==, hash, string, Symbol, isless, length, eltype,
+             convert, isvalid, ismalformed, isoverlong, iterate
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -649,22 +649,22 @@ function length(g::GraphemeIterator{S}) where {S}
     return n
 end
 
-start(g::GraphemeIterator) = (start(g.s), Ref{Int32}(0))
-done(g::GraphemeIterator, i) = done(g.s, i[1])
-
-function next(g::GraphemeIterator, i_)
+function iterate(g::GraphemeIterator, i_=(Int32(0),firstindex(g.s)))
     s = g.s
-    i, state = i_
+    statei, i = i_
+    state = Ref{Int32}(statei)
     j = i
-    c0, k = next(s, i)
-    while !done(s, k) # loop until next grapheme is s[i:j]
-        c, ℓ = next(s, k)
+    y = iterate(s, i)
+    y === nothing && return nothing
+    c0, k = y
+    while k <= ncodeunits(s) # loop until next grapheme is s[i:j]
+        c, ℓ = iterate(s, k)
         isgraphemebreak!(state, c0, c) && break
         j = k
         k = ℓ
         c0 = c
     end
-    return (SubString(s, i, j), (k, state))
+    return (SubString(s, i, j), (state[], k))
 end
 
 ==(g1::GraphemeIterator, g2::GraphemeIterator) = g1.s == g2.s

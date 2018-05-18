@@ -44,7 +44,6 @@ end
 @eval Base @deprecate count(rb::$(GitRebase)) $(LibGit2.count)(rb)
 @eval Base @deprecate count(tree::$(GitTree)) $(LibGit2.count)(tree)
 @eval Base @deprecate count(f::Function, walker::$(GitRevWalker); kwargs...) $(LibGit2.count)(f, walker; kwargs...)
-@eval Base @deprecate map(f::Function, bi::$(GitBranchIter)) $(LibGit2.map)(f, bi)
 @eval Base @deprecate map(f::Function, walker::$(GitRevWalker); kwargs...) $(LibGit2.map)(f, walker; kwargs...)
 
 # PR #24594

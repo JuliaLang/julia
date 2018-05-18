@@ -29,9 +29,7 @@ struct StmtRange <: AbstractUnitRange{Int}
 end
 first(r::StmtRange) = r.first
 last(r::StmtRange) = r.last
-start(r::StmtRange) = 0
-done(r::StmtRange, state) = r.last - r.first < state
-next(r::StmtRange, state) = (r.first + state, state + 1)
+iterate(r::StmtRange, state=0) = (r.last - r.first < state) ? nothing : (r.first + state, state + 1)
 
 StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
 
@@ -326,31 +324,17 @@ function userefs(@nospecialize(x))
     return UseRefIterator(x, relevant)
 end
 
-start(it::UseRefIterator) = (it.use[1].op = 0; nothing)
-next(it::UseRefIterator, ::Nothing) = it.use
-@noinline function done(it::UseRefIterator, ::Nothing)
-    it.relevant || return true
+iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
+@noinline function iterate(it::UseRefIterator, ::Nothing)
+    it.relevant || return nothing
     use = it.use[1]
     while true
         use.op += 1
         y = use[]
-        y === OOBToken() && return true
-        y === UndefToken() || break
+        y === OOBToken() && return nothing
+        y === UndefToken() || return it.use
     end
-    return false
 end
-#iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
-#@noinline function iterate(it::UseRefIterator, ::Nothing)
-#    it.relevant || return nothing
-#    use = it.use[1]
-#    while true
-#        use.op += 1
-#        y = use[]
-#        y === OOBToken() && return nothing
-#        y === UndefToken() || break
-#    end
-#    return it.use
-#end
 
 function scan_ssa_use!(used, @nospecialize(stmt))
     if isa(stmt, SSAValue)
@@ -639,11 +623,6 @@ function getindex(view::TypesView, idx)
     end
 end
 
-start(compact::IncrementalCompact) = (compact.idx, 1)
-function done(compact::IncrementalCompact, (idx, _a)::Tuple{Int, Int})
-    return idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
-end
-
 function getindex(view::TypesView, idx::NewSSAValue)
     @assert isa(view.ir, IncrementalCompact)
     compact = view.ir
@@ -807,12 +786,15 @@ function process_newnode!(compact, new_idx, new_node_entry, idx, active_bb, do_r
         active_bb += 1
         finish_current_bb!(compact, old_result_idx)
     end
-    (old_result_idx == result_idx) && return next(compact, (idx, active_bb))
+    (old_result_idx == result_idx) && return iterate(compact, (idx, active_bb))
     return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx]), (compact.idx, active_bb)
 end
 
-function next(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
+function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=(compact.idx, 1))
     old_result_idx = compact.result_idx
+    if idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
+        return nothing
+    end
     if length(compact.result) < old_result_idx
         resize!(compact, old_result_idx)
     end
@@ -845,7 +827,7 @@ function next(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
         active_bb += 1
         finish_current_bb!(compact, old_result_idx)
     end
-    (old_result_idx == compact.result_idx) && return next(compact, (idx + 1, active_bb))
+    (old_result_idx == compact.result_idx) && return iterate(compact, (idx + 1, active_bb))
     compact.idx = idx + 1
     if !isassigned(compact.result, old_result_idx)
         @assert false
@@ -972,10 +954,7 @@ end
 function compact!(code::IRCode)
     compact = IncrementalCompact(code)
     # Just run through the iterator without any processing
-    state = start(compact)
-    while !done(compact, state)
-        _, state = next(compact, state)
-    end
+    foreach((args...)->nothing, compact)
     return finish(compact)
 end
 
@@ -985,9 +964,8 @@ end
 
 bbidxiter(ir) = BBIdxIter(ir)
 
-start(x::BBIdxIter) = (1, 1)
-done(x::BBIdxIter, (idx, bb)) = (idx > length(x.ir.stmts))
-function next(x::BBIdxIter, (idx, bb))
+function iterate(x::BBIdxIter, (idx, bb)=(1, 1))
+    idx > length(x.ir.stmts) && return nothing
     active_bb = x.ir.cfg.blocks[bb]
     next_bb = bb
     if idx == last(active_bb.stmts)

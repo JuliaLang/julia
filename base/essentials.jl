@@ -548,9 +548,7 @@ function length(v::SimpleVector)
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
-start(v::SimpleVector) = 1
-next(v::SimpleVector,i) = (v[i],i+1)
-done(v::SimpleVector,i) = (length(v) < i)
+iterate(v::SimpleVector, i=1) = (length(v) < i ? nothing : (v[i], i + 1))
 eltype(::Type{SimpleVector}) = Any
 keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
@@ -700,25 +698,6 @@ julia> start([4;2;3])
 function start end
 
 """
-    done(iter, state) -> Bool
-
-Test whether we are done iterating.
-
-# Examples
-```jldoctest
-julia> done(1:5, 3)
-false
-
-julia> done(1:5, 5)
-false
-
-julia> done(1:5, 6)
-true
-```
-"""
-function done end
-
-"""
     isempty(collection) -> Bool
 
 Determine whether a collection is empty (has no elements).
@@ -732,7 +711,11 @@ julia> isempty([1 2 3])
 false
 ```
 """
-isempty(itr) = done(itr, start(itr))
+function isempty(itr)
+    d = isdone(itr)
+    d !== missing && return d
+    iterate(itr) === nothing
+end
 
 """
     values(iterator)
@@ -783,3 +766,108 @@ ismissing(::Missing) = true
 
 function popfirst! end
 function peek end
+
+"""
+    @__LINE__ -> Int
+
+`@__LINE__` expands to the line number of the location of the macrocall.
+Returns `0` if the line number could not be determined.
+"""
+macro __LINE__()
+    return __source__.line
+end
+
+# Just for bootstrapping purposes below
+macro __FILE_SYMBOL__()
+    return Expr(:quote, __source__.file)
+end
+
+# Iteration
+"""
+    isdone(itr, state...) -> Union{Bool, Missing}
+
+This function provides a fast-path hint for iterator completion.
+This is useful for mutable iterators that want to avoid having elements
+consumed, if they are not going to be exposed to the user (e.g. to check
+for done-ness in `isempty` or `zip`). Mutable iterators that want to
+opt into this feature shoud define an isdone method that returns
+true/false depending on whether the iterator is done or not. Stateless
+iterators need not implement this function. If the result is `missing`,
+callers may go ahead and compute `iterate(x, state...) === nothing` to
+compute a definite answer.
+"""
+isdone(itr, state...) = missing
+
+"""
+    iterate(iter [, state]) -> Union{Nothing, Tuple{Any, Any}}
+
+Advance the iterator to obtain the next element. If no elements
+remain, nothing should be returned. Otherwise, a 2-tuple of the
+next element and the new iteration state should be returned.
+"""
+function iterate end
+
+# Compatibility with old iteration protocol
+function iterate(x, state)
+    @_inline_meta
+    done(x, state) && return nothing
+    return next(x, state)
+end
+const old_iterate_line_prev = (@__LINE__)
+iterate(x) = (@_inline_meta; iterate(x, start(x)))
+
+struct LegacyIterationCompat{I,T,S}
+    done::Bool
+    nextval::T
+    state::S
+    LegacyIterationCompat{I,T,S}() where {I,T,S} = new{I,T,S}(true)
+    LegacyIterationCompat{I,T,S}(nextval::T, state::S) where {I,T,S} = new{I,T,S}(false, nextval, state)
+end
+
+function has_non_default_iterate(T)
+    world = ccall(:jl_get_world_counter, UInt, ())
+    mt = Base._methods(iterate, Tuple{T}, -1, world)
+    # Check if this is the above method
+    if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == old_iterate_line_prev + 1)
+        return false
+    end
+    return true
+end
+
+const compat_start_line_prev = (@__LINE__)
+function start(itr::T) where {T}
+    has_non_default_iterate(T) || throw(MethodError(iterate, (itr,)))
+    y = iterate(itr)
+    y === nothing && return LegacyIterationCompat{T, Union{}, Union{}}()
+    val, state = y
+    LegacyIterationCompat{T, typeof(val), typeof(state)}(val, state)
+end
+
+function next(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S}
+    val, state = state.nextval, state.state
+    y = iterate(itr, state)
+    if y === nothing
+        return (val, LegacyIterationCompat{I,T,S}())
+    end
+    nextval, state = y
+    val, LegacyIterationCompat{I, typeof(nextval), typeof(state)}(nextval, state)
+end
+
+done(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S} = (@_inline_meta; state.done)
+# This is necessary to support the above compatibility layer,
+# eventually, this should just check for applicability of `iterate`
+function isiterable(T)::Bool
+    if !has_non_default_iterate(T)
+        world = ccall(:jl_get_world_counter, UInt, ())
+        mt = Base._methods(start, Tuple{T}, -1, world)
+        # Check if this is the fallback start method
+        if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == compat_start_line_prev + 2)
+            return false
+        end
+    end
+    return true
+end
+
+# This is required to avoid massive performance problems
+# due to the start(s::AbstractString) deprecation.
+iterate(s::AbstractString) = iterate(s, firstindex(s))
