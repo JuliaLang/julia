@@ -605,7 +605,7 @@ function test_cat(::Type{TestAbstractArray})
     D = [1:24...]
     i = rand(1:10)
 
-    @test cat(i) == Any[]
+    @test cat(;dims=i) == Any[]
     @test vcat() == Any[]
     @test hcat() == Any[]
     @test hcat(1, 1.0, 3, 3.0) == [1.0 1.0 3.0 3.0]

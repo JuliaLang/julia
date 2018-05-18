@@ -1844,7 +1844,7 @@ end
     @test issparse(vcat(spmat, spmat))
     @test issparse(hcat(spmat, spmat))
     @test issparse(hvcat((2,), spmat, spmat))
-    @test issparse(cat((1,2), spmat, spmat))
+    @test issparse(cat(spmat, spmat; dims=(1,2)))
     # Test that concatenations of a sparse matrice with a dense matrix/vector yield sparse arrays
     @test issparse(vcat(spmat, densemat))
     @test issparse(vcat(densemat, spmat))
@@ -1853,8 +1853,8 @@ end
         @test issparse(hcat(densearg, spmat))
         @test issparse(hvcat((2,), spmat, densearg))
         @test issparse(hvcat((2,), densearg, spmat))
-        @test issparse(cat((1,2), spmat, densearg))
-        @test issparse(cat((1,2), densearg, spmat))
+        @test issparse(cat(spmat, densearg; dims=(1,2)))
+        @test issparse(cat(densearg, spmat; dims=(1,2)))
     end
 end
 

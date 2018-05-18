@@ -1169,7 +1169,7 @@ promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK
-cat(catdim::Integer) = Vector{Any}()
+_cat(catdim::Integer) = Vector{Any}()
 
 typed_vcat(::Type{T}) where {T} = Vector{T}()
 typed_hcat(::Type{T}) where {T} = Vector{T}()
@@ -1310,19 +1310,20 @@ _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
 dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
 dims2cat(dims) = ntuple(in(dims), maximum(dims))
 
-cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
+_cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 
-function cat_t(dims, T::Type, X...)
+@inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
+@inline function _cat_t(dims, T::Type, X...)
     catdims = dims2cat(dims)
     shape = cat_shape(catdims, (), map(cat_size, X)...)
     A = cat_similar(X[1], T, shape)
     if T <: Number && count(!iszero, catdims) > 1
         fill!(A, zero(T))
     end
-    return _cat(A, shape, catdims, X...)
+    return __cat(A, shape, catdims, X...)
 end
 
-function _cat(A, shape::NTuple{N}, catdims, X...) where N
+function __cat(A, shape::NTuple{N}, catdims, X...) where N
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(undef, N)
     concat = copyto!(zeros(Bool, N), catdims)
@@ -1376,7 +1377,7 @@ julia> vcat(c...)
  4  5  6
 ```
 """
-vcat(X...) = cat(Val(1), X...)
+vcat(X...) = cat(X...; dims=Val(1))
 """
     hcat(A...)
 
@@ -1418,13 +1419,13 @@ julia> hcat(c...)
  3  6
 ```
 """
-hcat(X...) = cat(Val(2), X...)
+hcat(X...) = cat(X...; dims=Val(2))
 
-typed_vcat(T::Type, X...) = cat_t(Val(1), T, X...)
-typed_hcat(T::Type, X...) = cat_t(Val(2), T, X...)
+typed_vcat(T::Type, X...) = cat_t(T, X...; dims=Val(1))
+typed_hcat(T::Type, X...) = cat_t(T, X...; dims=Val(2))
 
 """
-    cat(dims, A...)
+    cat(A...; dims=dims)
 
 Concatenate the input arrays along the specified dimensions in the iterable `dims`. For
 dimensions not in `dims`, all input arrays should have the same size, which will also be the
@@ -1434,27 +1435,28 @@ a single number, the different arrays are tightly stacked along that dimension. 
 an iterable containing several dimensions, this allows one to construct block diagonal
 matrices and their higher-dimensional analogues by simultaneously increasing several
 dimensions for every new input array and putting zero blocks elsewhere. For example,
-`cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with
+`cat(matrices...; dims=(1,2))` builds a block diagonal matrix, i.e. a block matrix with
 `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
 diagonal.
 """
-cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(catdims, T, A...)
+@inline cat(A...; dims) = _cat(dims, A...)
+_cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(T, A...; dims=catdims)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
-vcat(A::AbstractArray) = cat(Val(1), A)
-vcat(A::AbstractArray, B::AbstractArray) = cat(Val(1), A, B)
-vcat(A::AbstractArray...) = cat(Val(1), A...)
-hcat(A::AbstractArray) = cat(Val(2), A)
-hcat(A::AbstractArray, B::AbstractArray) = cat(Val(2), A, B)
-hcat(A::AbstractArray...) = cat(Val(2), A...)
+vcat(A::AbstractArray) = cat(A; dims=Val(1))
+vcat(A::AbstractArray, B::AbstractArray) = cat(A, B; dims=Val(1))
+vcat(A::AbstractArray...) = cat(A...; dims=Val(1))
+hcat(A::AbstractArray) = cat(A; dims=Val(2))
+hcat(A::AbstractArray, B::AbstractArray) = cat(A, B; dims=Val(2))
+hcat(A::AbstractArray...) = cat(A...; dims=Val(2))
 
-typed_vcat(T::Type, A::AbstractArray) = cat_t(Val(1), T, A)
-typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val(1), T, A, B)
-typed_vcat(T::Type, A::AbstractArray...) = cat_t(Val(1), T, A...)
-typed_hcat(T::Type, A::AbstractArray) = cat_t(Val(2), T, A)
-typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val(2), T, A, B)
-typed_hcat(T::Type, A::AbstractArray...) = cat_t(Val(2), T, A...)
+typed_vcat(T::Type, A::AbstractArray) = cat_t(T, A; dims=Val(1))
+typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(T, A, B; dims=Val(1))
+typed_vcat(T::Type, A::AbstractArray...) = cat_t(T, A...; dims=Val(1))
+typed_hcat(T::Type, A::AbstractArray) = cat_t(T, A; dims=Val(2))
+typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(T, A, B; dims=Val(2))
+typed_hcat(T::Type, A::AbstractArray...) = cat_t(T, A...; dims=Val(2))
 
 # 2d horizontal and vertical concatenation
 
