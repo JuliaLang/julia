@@ -486,6 +486,31 @@ end
     return matches
 end
 
+function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)
+    loading_candidates = String[]
+    open(project_file) do io
+        state = :top
+        for line in eachline(io)
+            if state == :top
+                if occursin(Base.re_section, line)
+                    state = occursin(Base.re_section_deps, line) ? :deps : :other
+                elseif (m = match(Base.re_name_to_string, line)) != nothing
+                    root_name = String(m.captures[1])
+                    startswith(root_name, pkgstarts) && push!(loading_candidates, root_name)
+                end
+            elseif state == :deps
+                if (m = match(Base.re_key_to_string, line)) != nothing
+                    dep_name = m.captures[1]
+                    startswith(dep_name, pkgstarts) && push!(loading_candidates, dep_name)
+                end
+            elseif occursin(Base.re_section, line)
+                state = occursin(Base.re_section_deps, line) ? :deps : :other
+            end
+        end
+    end
+    return loading_candidates
+end
+
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
@@ -557,9 +582,13 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            for dir in [LOAD_PATH; pwd()]
+            for dir in [LOAD_PATH; pwd(); Base.find_env(LOAD_PATH)]
                 dir isa Function && (dir = dir())
-                dir isa AbstractString && isdir(dir) || continue
+                dir isa AbstractString || continue
+                if basename(dir) in Base.project_names && isfile(dir)
+                    append!(suggestions, project_deps_get_completion_candidates(s, dir))
+                end
+                isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&
                         pname != "REQUIRE" && startswith(pname, s)
