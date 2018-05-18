@@ -467,12 +467,13 @@ end
 
 iterate(r::StepRangeLen{T}, i=1) where {T} = i > length(r) ? nothing : (unsafe_getindex(r, i), i+1)
 
+iterate(r::AbstractUnitRange) = isless(last(r), first(r)) ? nothing : (first(r), first(r))
+
 function iterate(r::AbstractUnitRange{T}, i) where {T}
-    i == oftype(i, r.stop) + oneunit(T) && return nothing
-    (convert(T, i), i + oneunit(T))
+    i == last(r) && return nothing
+    next = convert(T, i + oneunit(T))
+    (next, next)
 end
-iterate(r::AbstractUnitRange{T}) where {T} = iterate(r, oftype(r.start + oneunit(T), r.start))
-iterate(r::OneTo{T}) where {T} = iterate(r, oneunit(T))
 
 # some special cases to favor default Int type to avoid overflow
 let smallint = (Int === Int64 ?
@@ -483,11 +484,6 @@ let smallint = (Int === Int64 ?
         (isempty(r) | (i == oftype(i, r.stop) + r.step)) && return nothing
         (i % T, i + r.step)
     end
-    function iterate(r::AbstractUnitRange{T}, i=convert(Int, r.start)) where {T<:smallint}
-        i == oftype(i, r.stop) + 1 && return nothing
-        (i % T, i + 1)
-    end
-    iterate(r::OneTo{T}) where {T<:smallint} = iterate(r, 1)
 end
 
 ## indexing
