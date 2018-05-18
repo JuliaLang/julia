@@ -9,7 +9,6 @@ import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
 import Base: ensureroom, peek, show, AnyDict, position
-using Base: coalesce
 
 abstract type TextInterface end
 abstract type ModeState end

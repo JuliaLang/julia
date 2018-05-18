@@ -33,11 +33,19 @@ function show(io::IO, x::Some)
 end
 
 """
-    coalesce(x, y...)
+    coalesce(x, y, args...)
 
 Return the first value in the arguments which is not equal to
-either [`nothing`](@ref) or [`missing`](@ref), or the last argument.
+either [`nothing`](@ref) or [`missing`](@ref), or throw an error
+if no argument matches this condition.
 Unwrap arguments of type [`Some`](@ref).
+
+This function will return `nothing` or `missing` if and only if
+the first valid argument which differs from these two values is
+`Some(nothing)` or `Some(missing)`. Therefore, the syntax
+`coalesce(x, Some(nothing))` or `coalesce(x, Some(missing))` can be used
+to indicate that `nothing` or `missing` should be returned when all
+arguments are `nothing` or `missing`.
 
 # Examples
 
@@ -51,9 +59,16 @@ julia> coalesce(missing, 1)
 julia> coalesce(1, nothing)
 1
 
-julia> coalesce(nothing, nothing) # returns nothing, but not printed in the REPL
+julia> coalesce(nothing, nothing, 1)
+1
 
-julia> coalesce(Some(1))
+julia> coalesce(nothing, nothing)
+ERROR: ArgumentError: coalesce requires that least one argument differs from `nothing` or `missing`.
+Pass `Some(nothing)` as the last argument to force returning `nothing`.
+Stacktrace:
+[...]
+
+julia> coalesce(Some(1), 0)
 1
 
 julia> coalesce(nothing, Some(1))
@@ -62,13 +77,21 @@ julia> coalesce(nothing, Some(1))
 """
 function coalesce end
 
-coalesce(x::Any) = x
-coalesce(x::Some) = x.value
-coalesce(x::Nothing) = nothing
-coalesce(x::Missing) = missing
-coalesce(x::Any, y...) = x
-coalesce(x::Some, y...) = x.value
-coalesce(x::Union{Nothing, Missing}, y...) = coalesce(y...)
+coalesce(x::Nothing, y) = y
+coalesce(x::Missing, y) = y
+coalesce(x::Nothing, y::Some) = y.value
+coalesce(x::Missing, y::Some) = y.value
+coalesce(x::Nothing, y::Union{Nothing, Missing}) =
+    throw(ArgumentError(
+        """coalesce requires that least one argument differs from `nothing` or `missing`.
+           Pass `Some(nothing)` as the last argument to force returning `nothing`."""))
+coalesce(x::Missing, y::Union{Nothing, Missing}) =
+    throw(ArgumentError(
+        """coalesce requires that least one argument differs from `nothing` or `missing`.
+           Pass `Some(nothing)` as the last argument to force returning `nothing`."""))
+coalesce(x::Any, y, args...) = x
+coalesce(x::Some, y, args...) = x.value
+coalesce(x::Union{Nothing, Missing}, y, args...) = coalesce(y, args...)
 
 """
     notnothing(x)
