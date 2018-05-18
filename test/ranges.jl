@@ -438,6 +438,13 @@ end
     end
     @test s == 256
 
+    s = 0
+    for i = typemin(UInt):1:typemax(UInt)
+        i == 10 && break
+        s += 1
+    end
+    @test s == 10
+
     # loops past typemax(Int)
     n = 0
     s = Int128(0)
