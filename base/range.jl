@@ -117,7 +117,7 @@ convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(
 ## ordinal ranges
 
 abstract type OrdinalRange{T,S} <: AbstractRange{T} end
-abstract type AbstractUnitRange{T} <: OrdinalRange{T,Int} end
+abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
 
 struct StepRange{T,S} <: OrdinalRange{T,S}
     start::T
@@ -374,7 +374,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 ```
 """
 step(r::StepRange) = r.step
-step(r::AbstractUnitRange) = 1
+step(r::AbstractUnitRange{T}) where{T} = oneunit(T)
 step(r::StepRangeLen{T}) where {T} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
 
