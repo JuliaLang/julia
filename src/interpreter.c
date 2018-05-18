@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <setjmp.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
@@ -455,6 +456,27 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         assert(jl_is_bool(cond));
         if (cond == jl_false) {
             jl_undefined_var_error((jl_sym_t*)args[0]);
+        }
+        return jl_nothing;
+    }
+    else if (head == assert_egal_sym) {
+        jl_value_t *a = eval_value(args[1], s);
+        JL_GC_PUSH1(&a);
+        jl_value_t *b = eval_value(args[2], s);
+        JL_GC_POP();
+        if (!jl_egal(a, b)) {
+            jl_sym_t *label = 0;
+            jl_value_t *l = args[0];
+            if (jl_is_quotenode(l))
+                l = jl_fieldref_noalloc(l, 0);
+            if (jl_is_long(l)) {
+                char label_name[20];
+                snprintf(label_name, sizeof(label_name), "Assertion #%zd", jl_unbox_long(l));
+                label = jl_symbol(label_name);
+            } else if (jl_is_symbol(l)) {
+                label = (jl_sym_t*)l;
+            }
+            jl_assert_egal_error(label);
         }
         return jl_nothing;
     }

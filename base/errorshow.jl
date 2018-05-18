@@ -148,6 +148,10 @@ function showerror(io::IO, ex::UndefVarError)
     print(io, "UndefVarError: $(ex.var) not defined")
 end
 
+function showerror(io::IO, ex::Core.AssertEgalError)
+    print(io, "AssertEgalError: An internal compiler error occurred: $(ex.label)")
+end
+
 function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
 end
