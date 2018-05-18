@@ -57,3 +57,19 @@ end
 
 # Proper unicode handling
 @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"
+
+@test_throws ErrorException match(r"a", "\xe2\x88") # 1 byte missing at end
+@test_throws ErrorException match(r"a", "\xe2\x08\x80") # byte 2 top bits not 0x80
+@test_throws ErrorException match(r"a", "\xf8\x89\x89\x80\x80") # 5-byte character is not allowed (RFC 3629)
+@test_throws ErrorException match(r"a", "\xf4\x9f\xbf\xbf") # code points greater than 0x10ffff are not defined
+@test_throws ErrorException match(r"a", "\Udfff") # code points 0xd800-0xdfff are not defined
+@test_throws ErrorException match(r"a", "\xc0\x80") #  overlong 2-byte sequence
+@test_throws ErrorException match(r"a", "\xff") # illegal byte (0xfe or 0xff)
+
+@test_throws ErrorException Regex("\xe2\x88") # 1 byte missing at end
+@test_throws ErrorException Regex("\xe2\x08\x80") # byte 2 top bits not 0x80
+@test_throws ErrorException Regex("\xf8\x89\x89\x80\x80") # 5-byte character is not allowed (RFC 3629)
+@test_throws ErrorException Regex("\xf4\x9f\xbf\xbf") # code points greater than 0x10ffff are not defined
+@test_throws ErrorException Regex("\Udfff") # code points 0xd800-0xdfff are not defined
+@test_throws ErrorException Regex("\xc0\x80") #  overlong 2-byte sequence
+@test_throws ErrorException Regex("\xff") # illegal byte (0xfe or 0xff)

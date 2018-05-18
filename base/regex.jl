@@ -4,8 +4,8 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX
-const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.ALT_BSUX
+const DEFAULT_MATCH_OPTS = zero(UInt32)
 
 mutable struct Regex
     pattern::String
