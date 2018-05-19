@@ -33,7 +33,7 @@ function show(io::IO, x::Some)
 end
 
 """
-    coalesce(x, y, args...)
+    coalesce(x, y...)
 
 Return the first value in the arguments which is not equal to
 either [`nothing`](@ref) or [`missing`](@ref), or throw an error
@@ -68,7 +68,7 @@ Pass `Some(nothing)` as the last argument to force returning `nothing`.
 Stacktrace:
 [...]
 
-julia> coalesce(Some(1), 0)
+julia> coalesce(Some(1))
 1
 
 julia> coalesce(nothing, Some(1))
@@ -77,21 +77,16 @@ julia> coalesce(nothing, Some(1))
 """
 function coalesce end
 
-coalesce(x::Nothing, y) = y
-coalesce(x::Missing, y) = y
-coalesce(x::Nothing, y::Some) = y.value
-coalesce(x::Missing, y::Some) = y.value
-coalesce(x::Nothing, y::Union{Nothing, Missing}) =
+coalesce(x::Any) = x
+_throw_coalesce_error(x) =
     throw(ArgumentError(
         """coalesce requires that least one argument differs from `nothing` or `missing`.
-           Pass `Some(nothing)` as the last argument to force returning `nothing`."""))
-coalesce(x::Missing, y::Union{Nothing, Missing}) =
-    throw(ArgumentError(
-        """coalesce requires that least one argument differs from `nothing` or `missing`.
-           Pass `Some(nothing)` as the last argument to force returning `nothing`."""))
-coalesce(x::Any, y, args...) = x
-coalesce(x::Some, y, args...) = x.value
-coalesce(x::Union{Nothing, Missing}, y, args...) = coalesce(y, args...)
+           Pass `Some($x)` as the last argument to force returning `$x`."""))
+coalesce(x::Nothing) = _throw_coalesce_error(x)
+coalesce(x::Missing) = _throw_coalesce_error(x)
+coalesce(x::Any, y...) = x
+coalesce(x::Some, y...) = x.value
+coalesce(x::Union{Nothing, Missing}, y...) = coalesce(y...)
 
 """
     notnothing(x)

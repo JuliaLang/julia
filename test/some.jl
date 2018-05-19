@@ -52,8 +52,8 @@
 # coalesce()
 
 for v in (nothing, missing)
-    @test_throws MethodError coalesce(1)
-    @test_throws MethodError coalesce(v)
+    @test coalesce(1) === 1
+    @test_throws ArgumentError coalesce(v)
     @test coalesce(v, 1) === 1
     @test coalesce(1, v) === 1
     @test_throws ArgumentError coalesce(v, v)
@@ -62,8 +62,8 @@ for v in (nothing, missing)
     @test coalesce(v, v, 2) === 2
     @test_throws ArgumentError coalesce(v, v, v)
 
-    @test_throws MethodError coalesce(Some(1))
-    @test_throws MethodError coalesce(Some(v))
+    @test coalesce(Some(1)) === 1
+    @test coalesce(Some(v)) === v
     @test coalesce(Some(1), 0) === 1
     @test coalesce(Some(v), 0) === v
     @test coalesce(v, Some(v)) === v
