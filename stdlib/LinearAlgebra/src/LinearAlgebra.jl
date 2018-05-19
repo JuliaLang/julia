@@ -128,7 +128,6 @@ export
     qrfact,
     lq,
     lqfact!,
-    lqfact,
     rank,
     rdiv!,
     schur,
