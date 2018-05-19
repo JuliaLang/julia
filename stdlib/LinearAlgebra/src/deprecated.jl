@@ -1288,3 +1288,10 @@ export eigfact
 @deprecate(eigfact(A::AbstractTriangular), eig(A))
 
 @deprecate(eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true), eig(D; permute=permute, scale=scale))
+
+# deprecate schurfact to schur
+export schurfact
+@deprecate(schurfact(A::StridedMatrix{<:BlasFloat}), schur(A))
+@deprecate(schurfact(A::StridedMatrix{T}) where T, schur(A))
+@deprecate(schurfact(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat}, schur(A))
+@deprecate(schurfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}, schur(A))

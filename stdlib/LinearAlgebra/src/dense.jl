@@ -638,12 +638,12 @@ function log(A::StridedMatrix)
         return triu!(parent(log(UpperTriangular(complex(A)))))
     else
         if isreal(A)
-            SchurF = schurfact(real(A))
+            SchurF = schur(real(A))
         else
-            SchurF = schurfact(A)
+            SchurF = schur(A)
         end
         if !istriu(SchurF.T)
-            SchurS = schurfact(complex(SchurF.T))
+            SchurS = schur(complex(SchurF.T))
             logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
             return SchurF.Z * logT * SchurF.Z'
         else
@@ -692,7 +692,7 @@ function sqrt(A::StridedMatrix{<:Real})
     if istriu(A)
         return triu!(parent(sqrt(UpperTriangular(A))))
     else
-        SchurF = schurfact(complex(A))
+        SchurF = schur(complex(A))
         R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
         return SchurF.vectors * R * SchurF.vectors'
     end
@@ -706,7 +706,7 @@ function sqrt(A::StridedMatrix{<:Complex})
     if istriu(A)
         return triu!(parent(sqrt(UpperTriangular(A))))
     else
-        SchurF = schurfact(A)
+        SchurF = schur(A)
         R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
         return SchurF.vectors * R * SchurF.vectors'
     end
@@ -944,7 +944,7 @@ function acos(A::AbstractMatrix)
         acosHermA = acos(Hermitian(A))
         return isa(acosHermA, Hermitian) ? copytri!(parent(acosHermA), 'U', true) : parent(acosHermA)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(-im * log(U + im * sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -975,7 +975,7 @@ function asin(A::AbstractMatrix)
         asinHermA = asin(Hermitian(A))
         return isa(asinHermA, Hermitian) ? copytri!(parent(asinHermA), 'U', true) : parent(asinHermA)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(-im * log(im * U + sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -1005,7 +1005,7 @@ function atan(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(atan(Hermitian(A))), 'U', true)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = im * UpperTriangular(SchurF.T)
     R = triu!(parent(log((I + U) / (I - U)) / 2im))
     return SchurF.Z * R * SchurF.Z'
@@ -1024,7 +1024,7 @@ function acosh(A::AbstractMatrix)
         acoshHermA = acosh(Hermitian(A))
         return isa(acoshHermA, Hermitian) ? copytri!(parent(acoshHermA), 'U', true) : parent(acoshHermA)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log(U + sqrt(U - I) * sqrt(U + I))))
     return SchurF.Z * R * SchurF.Z'
@@ -1042,7 +1042,7 @@ function asinh(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(asinh(Hermitian(A))), 'U', true)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log(U + sqrt(I + U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -1060,7 +1060,7 @@ function atanh(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(atanh(Hermitian(A))), 'U', true)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log((I + U) / (I - U)) / 2))
     return SchurF.Z * R * SchurF.Z'
