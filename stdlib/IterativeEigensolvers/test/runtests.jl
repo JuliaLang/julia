@@ -152,8 +152,8 @@ LinearAlgebra.A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T})
 
 let
     # Generate random isometry
-    (Q,R) = qr(randn(100,50))
-    Q = reshape(Q,(50,2,50))
+    (Q, R) = qr(randn(100, 50))
+    Q = reshape(Array(Q), (50, 2, 50))
     # Construct trace-preserving completely positive map from this
     Phi = CPM(copy(Q))
     (d,v,nconv,numiter,numop,resid) = eigs(Phi,nev=1,which=:LM)

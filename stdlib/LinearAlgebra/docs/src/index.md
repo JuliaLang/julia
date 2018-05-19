@@ -323,8 +323,6 @@ LinearAlgebra.lowrankdowndate!
 LinearAlgebra.ldltfact
 LinearAlgebra.ldltfact!
 LinearAlgebra.qr
-LinearAlgebra.qr!
-LinearAlgebra.qrfact
 LinearAlgebra.qrfact!
 LinearAlgebra.QR
 LinearAlgebra.QRCompactWY

@@ -136,7 +136,7 @@ Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 _default_tol(A::SparseMatrixCSC) =
     20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i)) for i in 1:size(A, 2))
 
-function LinearAlgebra.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
+function LinearAlgebra.qr(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
     E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
     H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
@@ -156,7 +156,7 @@ function LinearAlgebra.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) whe
 end
 
 """
-    qrfact(A) -> QRSparse
+    qr(A) -> QRSparse
 
 Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and column permutations
 are used such that `F.R = F.Q'*A[F.prow,F.pcol]`. The main application of this type is to
@@ -171,7 +171,7 @@ julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
   [3, 2]  =  1.0
   [4, 2]  =  1.0
 
-julia> qrfact(A)
+julia> qr(A)
 Base.SparseArrays.SPQR.QRSparse{Float64,Int64}
 Q factor:
 4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
@@ -195,8 +195,6 @@ Column permutation:
  2
 ```
 """
-LinearAlgebra.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
-
 LinearAlgebra.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
 
 function LinearAlgebra.lmul!(Q::QRSparseQ, A::StridedVecOrMat)
@@ -270,7 +268,7 @@ Extract factors of a QRSparse factorization. Possible values of `d` are
 
 # Examples
 ```jldoctest
-julia> F = qrfact(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
+julia> F = qr(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
 
 julia> F.Q
 4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
@@ -407,7 +405,7 @@ julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
   [2, 1]  =  1.0
   [4, 1]  =  1.0
 
-julia> qrfact(A)\\fill(1.0, 4)
+julia> qr(A)\\fill(1.0, 4)
 2-element Array{Float64,1}:
  1.0
  0.0

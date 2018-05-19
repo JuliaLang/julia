@@ -1121,7 +1121,7 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 | Tridiagonal                | LU (see [`lu`](@ref))            |
 | Symmetric real tridiagonal | LDLt (see [`ldltfact`](@ref))      |
 | General square             | LU (see [`lu`](@ref))            |
-| General non-square         | QR (see [`qrfact`](@ref))            |
+| General non-square         | QR (see [`qr`](@ref))            |
 
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
 will return a Cholesky factorization.
@@ -1220,7 +1220,7 @@ function factorize(A::StridedMatrix{T}) where T
         end
         return lu(A)
     end
-    qrfact(A, Val(true))
+    qr(A, Val(true))
 end
 factorize(A::Adjoint)   =   adjoint(factorize(parent(A)))
 factorize(A::Transpose) = transpose(factorize(parent(A)))

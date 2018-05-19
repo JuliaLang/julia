@@ -939,7 +939,7 @@ function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
         end
         return \(lu(A), B)
     else
-        return \(qrfact(A), B)
+        return \(qr(A), B)
     end
 end
 for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
@@ -962,7 +962,7 @@ for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
                 end
                 return \($xformop(lu(A)), B)
             else
-                return \($xformop(qrfact(A)), B)
+                return \($xformop(qr(A)), B)
             end
         end
     end
@@ -985,7 +985,7 @@ function factorize(A::SparseMatrixCSC)
         end
         return lu(A)
     else
-        return qrfact(A)
+        return qr(A)
     end
 end
 
