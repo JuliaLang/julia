@@ -340,8 +340,6 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         for var in must_used_vars
             @test occursin(string(var), str)
         end
-        @test !occursin("::Any", str)
-        @test !occursin("::ANY", str)
         # Check that we are not printing the bare slot numbers
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]

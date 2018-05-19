@@ -249,7 +249,7 @@ function inflate_ir(ci::CodeInfo)
             code[i] = stmt
         end
     end
-    ir = IRCode(code, copy(ci.ssavaluetypes), copy(ci.codelocs), copy(ci.ssaflags), cfg, copy(ci.slottypes), ci.linetable[1].mod, Any[])
+    ir = IRCode(code, copy(ci.ssavaluetypes), copy(ci.codelocs), copy(ci.ssaflags), cfg, ci.linetable, copy(ci.slottypes), ci.linetable[1].mod, Any[])
     return ir
 end
 

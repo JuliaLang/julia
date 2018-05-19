@@ -2,19 +2,7 @@
 
 # displaying type warnings
 
-"""
-    code_warntype([io::IO], f, types)
-
-Prints lowered and type-inferred ASTs for the methods matching the given generic function
-and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
-as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
-This serves as a warning of potential type instability. Not all non-leaf types are particularly
-problematic for performance, so the results need to be used judiciously.
-In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
-these are often intentional.
-See [`@code_warntype`](@ref man-code-warntype) for more information.
-"""
-function code_warntype(io::IO, f, @nospecialize(t))
+function code_warntype_legacy_ir(io::IO, ci::Core.CodeInfo, rettype)
     function slots_used(ci, slotnames)
         used = falses(length(slotnames))
         scan_exprs!(used, ci.code)
@@ -32,33 +20,71 @@ function code_warntype(io::IO, f, @nospecialize(t))
     end
 
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
-    for (src, rettype) in code_typed(f, t)
-        println(emph_io, "Variables:")
-        slotnames = Base.sourceinfo_slotnames(src)
-        used_slotids = slots_used(src, slotnames)
-        for i = 1:length(slotnames)
-            if used_slotids[i]
-                print(emph_io, "  ", slotnames[i])
-                if isa(src.slottypes, Array)
-                    show_expr_type(emph_io, src.slottypes[i], true)
-                end
-                print(emph_io, '\n')
-            elseif !('#' in slotnames[i] || '@' in slotnames[i])
-                print(emph_io, "  ", slotnames[i], "<optimized out>\n")
+    println(emph_io, "Variables:")
+    slotnames = Base.sourceinfo_slotnames(src)
+    used_slotids = slots_used(src, slotnames)
+    for i = 1:length(slotnames)
+        if used_slotids[i]
+            print(emph_io, "  ", slotnames[i])
+            if isa(src.slottypes, Array)
+                show_expr_type(emph_io, src.slottypes[i], true)
             end
+            print(emph_io, '\n')
+        elseif !('#' in slotnames[i] || '@' in slotnames[i])
+            print(emph_io, "  ", slotnames[i], "<optimized out>\n")
         end
-        print(emph_io, "\nBody:\n  ")
-        body = Expr(:body)
-        body.args = src.code
-        body.typ = rettype
-        # Fix slot names and types in function body
-        show_unquoted(IOContext(emph_io, :SOURCEINFO => src, :SOURCE_SLOTNAMES => slotnames),
-                      body, 2)
-        print(emph_io, '\n')
+    end
+    print(emph_io, "\nBody:\n  ")
+    body = Expr(:body)
+    body.args = src.code
+    body.typ = rettype
+    # Fix slot names and types in function body
+    show_unquoted(IOContext(emph_io, :SOURCEINFO => src, :SOURCE_SLOTNAMES => slotnames),
+                    body, 2)
+    print(emph_io, '\n')
+end
+
+function warntype_type_printer(io, ty)
+    if ty !== Union{} && (!isdispatchtuple(Tuple{ty}) || ty == Core.Box)
+        if ty isa Union && Base.is_expected_union(ty)
+            Base.emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
+        else
+            Base.emphasize(io, "::$ty")
+        end
+    else
+        Base.printstyled(io, "::$ty", color=:cyan)
+    end
+end
+
+"""
+    code_warntype([io::IO], f, types; verbose_linetable=false)
+
+Prints lowered and type-inferred ASTs for the methods matching the given generic function
+and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
+as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
+This serves as a warning of potential type instability. Not all non-leaf types are particularly
+problematic for performance, so the results need to be used judiciously.
+In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
+these are often intentional.
+If the `verbose_linetable` keyword is set, the linetable will be printed
+in verbose mode, showing all available information (rather than applying
+the usual heuristics).
+See [`@code_warntype`](@ref man-code-warntype) for more information.
+"""
+function code_warntype(io::IO, f, @nospecialize(t); verbose_linetable=false)
+    for (src, rettype) in code_typed(f, t)
+        if src.codelocs === nothing
+            code_warntype_legacy_ir(io, src, rettype)
+        else
+            print(io, "Body"); warntype_type_printer(io, rettype); println(io);
+            ir = Core.Compiler.inflate_ir(src)
+            Base.IRShow.show_ir(io, ir, warntype_type_printer;
+                                argnames=Base.sourceinfo_slotnames(src), verbose_linetable=verbose_linetable)
+        end
     end
     nothing
 end
-code_warntype(f, @nospecialize(t)) = code_warntype(stdout, f, t)
+code_warntype(f, @nospecialize(t); kwargs...) = code_warntype(stdout, f, t; kwargs...)
 
 import Base.CodegenParams
 

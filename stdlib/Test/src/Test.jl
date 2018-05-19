@@ -1274,22 +1274,11 @@ julia> typeof(f(1,2,3))
 Int64
 
 julia> @code_warntype f(1,2,3)
-Variables:
-  a<optimized out>
-  b::Int64
-  c<optimized out>
-
-Body:
-  begin
-      # meta: location operators.jl > 279
-      # meta: location int.jl < 49
-      Core.SSAValue(2) = (Base.slt_int)(1, b::Int64)::Bool
-      # meta: pop locations (2)
-      unless Core.SSAValue(2) goto 7
-      return 1
-      7:
-      return 1.0
-  end::UNION{FLOAT64, INT64}
+Body::UNION{FLOAT64, INT64}
+1 1 ─ %1 = Base.slt_int(1, %%b)::Bool
+  └──      goto 3 if not %1
+  2 ─      return 1
+  3 ─      return 1.0
 
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}

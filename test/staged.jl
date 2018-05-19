@@ -280,7 +280,7 @@ let a = Any[]
     @test occursin("x + x", string(code_lowered(f23168, (Vector{Any},Int))))
     @test occursin("2 * x", string(Base.uncompressed_ast(first(methods(f23168)))))
     @test occursin("2 * x", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
-    @test occursin("(Base.add_int)(x, x)", string(code_typed(f23168, (Vector{Any},Int))))
+    @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
 end
 
 # issue #18747
