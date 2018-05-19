@@ -2293,7 +2293,9 @@
                             (return (expand-forms `(call transpose ,(cadr e))))))
 
    'generator
-   (lambda (e) (expand-generator e #f '()))
+   (lambda (e)
+     (check-no-return e)
+     (expand-generator e #f '()))
 
    'flatten
    (lambda (e) (expand-generator (cadr e) #t '()))
@@ -2317,7 +2319,6 @@
                      (error "comprehension syntax with `:` ranges has been removed"))
                  (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)))
                              ranges)
-                      (not (has-return? (cadr (caddr e))))
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
                       (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
@@ -2326,6 +2327,10 @@
 (define (has-return? e)
   (expr-contains-p return? e (lambda (x) (not (function-def? x)))))
 
+(define (check-no-return e)
+  (if (has-return? e)
+      (error "\"return\" not allowed inside comprehension or generator")))
+
 (define (has-break-or-continue? e)
   (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
                    e
@@ -2333,6 +2338,7 @@
                                          (memq (car x) '(for while)))))))
 
 (define (lower-comprehension ty expr itrs)
+  (check-no-return expr)
   (if (has-break-or-continue? expr)
       (error "break or continue outside loop"))
   (let ((result    (gensy))
