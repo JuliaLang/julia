@@ -687,14 +687,33 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 """
     partialsortperm(v, k; by=<transform>, lt=<comparison>, rev=false)
 
-Return a partial permutation of the vector `v`, according to the order specified by
-`by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
-if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index,
-the index in `v` of the value which would be sorted at position `k` is returned;
-if `k` is a range, an array with the indices in `v` of the values which would be sorted in
-these positions is returned.
+Return a partial permutation `I` of the vector `v`, so that `v[I]` returns values of a fully
+sorted version of `v` at index `k`. If `k` is a range, a vector of indices is returned; if
+`k` is an integer, a single index is returned. The order is specified using the same
+keywords as `sort!`. The permutation is stable, meaning that indices of equal elements
+appear in ascending order.
 
-Note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+Note that this function is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2, 1];
+
+julia> v[partialsortperm(v, 1)]
+1
+
+julia> p = partialsortperm(v, 1:3)
+3-element view(::Array{Int64,1}, 1:3) with eltype Int64:
+ 2
+ 4
+ 3
+
+julia> v[p]
+3-element Array{Int64,1}:
+ 1
+ 1
+ 2
+```
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
