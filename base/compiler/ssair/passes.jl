@@ -834,8 +834,11 @@ function type_lift_pass!(ir::IRCode)
             # so lift all these nodes that have maybe undef values
             processed = IdDict{Int, Union{SSAValue, Bool}}()
             if !isa(val, SSAValue)
+                (isa(val, GlobalRef) || isexpr(val, :static_parameter)) && continue
                 if stmt.head === :undefcheck
                     ir.stmts[idx] = nothing
+                else
+                    ir.stmts[idx] = true
                 end
                 continue
             end

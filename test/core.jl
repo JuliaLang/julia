@@ -6089,3 +6089,17 @@ let A = [1], B = [], C = DelegateIterator([1]), D = DelegateIterator([]), E = An
     @test done(D, start(D))
     @test next(E, next(E, start(E))[2])[1] == "abc"
 end
+
+# Issue 27103
+function f27103()
+    a = @isdefined x
+    x = 3
+    b = @isdefined x
+    (a, b)
+end
+@test f27103() == (false, true)
+
+g27103() = @isdefined z27103
+@test g27103() == false
+z27103 = 1
+@test g27103() == true
