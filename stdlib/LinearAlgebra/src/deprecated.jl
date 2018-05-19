@@ -1275,3 +1275,8 @@ export schurfact
 @deprecate(schurfact(A::StridedMatrix{T}) where T, schur(A))
 @deprecate(schurfact(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat}, schur(A))
 @deprecate(schurfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}, schur(A))
+
+# deprecate lqfact to lq
+export lqfact
+@deprecate lqfact(A::StridedMatrix{<:BlasFloat}) lq(A)
+@deprecate lqfact(x::Number) lq(x)
