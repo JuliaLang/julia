@@ -720,13 +720,13 @@ export
 
 # types
     convert,
-    # getproperty,
-    # setproperty!,
+    getproperty,
+    setproperty!,
     fieldoffset,
     fieldname,
     fieldnames,
     fieldcount,
-    # propertynames,
+    propertynames,
     isabstracttype,
     isbitstype,
     isprimitivetype,
