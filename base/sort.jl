@@ -685,7 +685,7 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false)
+    partialsortperm(v, k; by=<transform>, lt=<comparison>, rev=false)
 
 Return a partial permutation of the vector `v`, according to the order specified by
 `by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
