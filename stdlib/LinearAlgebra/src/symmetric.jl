@@ -440,7 +440,7 @@ end
 function factorize(A::HermOrSym{T}) where T
     TT = typeof(sqrt(one(T)))
     if TT <: BlasFloat
-        return bkfact(A)
+        return bk(A)
     else # fallback
         return lu(A)
     end

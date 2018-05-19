@@ -19,7 +19,8 @@ using Base: @deprecate, depwarn
 @deprecate isposdef!(A::StridedMatrix, UL::Symbol) isposdef!(Hermitian(A, UL))
 
 # bkfact
-import .LinearAlgebra: bkfact, bkfact!
+export bkfact
+import .LinearAlgebra: bkfact!
 function bkfact(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A), rook::Bool = false)
     depwarn(string("`bkfact` with uplo and symmetric arguments is deprecated, ",
         "use `bkfact($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
@@ -1307,3 +1308,7 @@ export qrfact
 @deprecate(qrfact(v::AbstractVector), qr(v))
 @deprecate(qrfact(A::AbstractMatrix{T}) where T, qr(A))
 @deprecate(qrfact(A::AbstractMatrix{T}, arg) where T, qr(A, arg))
+
+# deprecate bkfact to bk
+# bkfact exported in a deprecation above
+@deprecate(bkfact(A::AbstractMatrix{T}, rook::Bool=false) where {T}, bk(A, rook))

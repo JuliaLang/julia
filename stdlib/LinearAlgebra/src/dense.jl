@@ -1113,7 +1113,7 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 | Properties of `A`          | type of factorization                          |
 |:---------------------------|:-----------------------------------------------|
 | Positive-definite          | Cholesky (see [`cholfact`](@ref))  |
-| Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bkfact`](@ref)) |
+| Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bk`](@ref)) |
 | Sparse Symmetric/Hermitian | LDLt (see [`ldltfact`](@ref))      |
 | Triangular                 | Triangular                                     |
 | Diagonal                   | Diagonal                                       |
