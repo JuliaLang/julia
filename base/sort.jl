@@ -729,13 +729,10 @@ end
 """
     sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Return a permutation vector of indices of `v` that puts it in sorted order. Specify `alg` to
-choose a particular sorting algorithm (see Sorting Algorithms). `MergeSort` is used by
-default, and since it is stable, the resulting permutation will be the lexicographically
-first one that puts the input array into sorted order – i.e. indices of equal elements
-appear in ascending order. If you choose a non-stable sorting algorithm such as `QuickSort`,
-a different permutation that puts the array into order may be returned. The order is
-specified using the same keywords as `sort!`.
+Return a permutation vector `I` that puts `v[I]` in sorted order. The order is specified
+using the same keywords as `sort!`. The permutation is guaranteed to be stable even if the
+sorting algorithm is unstable, meaning that indices of equal elements appear in ascending
+order.
 
 See also [`sortperm!`](@ref).
 
