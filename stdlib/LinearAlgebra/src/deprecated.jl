@@ -1280,3 +1280,10 @@ export schurfact
 export lqfact
 @deprecate lqfact(A::StridedMatrix{<:BlasFloat}) lq(A)
 @deprecate lqfact(x::Number) lq(x)
+
+# deprecate qrfact to qr
+export qrfact
+@deprecate(qrfact(x::Number), qr(x))
+@deprecate(qrfact(v::AbstractVector), qr(v))
+@deprecate(qrfact(A::AbstractMatrix{T}) where T, qr(A))
+@deprecate(qrfact(A::AbstractMatrix{T}, arg) where T, qr(A, arg))

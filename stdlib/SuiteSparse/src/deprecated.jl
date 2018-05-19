@@ -55,3 +55,10 @@ end
     @deprecate(lufact(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti}) where {Ti<:UMFITypes}, lu(A))
     @deprecate(lufact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat}, lu(A))
 end
+
+# deprecate qrfact to qr
+@eval SuiteSparse.SPQR begin
+    import LinearAlgebra: qrfact
+    @deprecate(qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv<:Union{ComplexF64,Float64}}, qr(A; tol=tol))
+    @deprecate(qrfact(A::SparseMatrixCSC; tol = _default_tol(A)), qr(A; tol=tol))
+end

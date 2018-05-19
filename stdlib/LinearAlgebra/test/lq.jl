@@ -47,7 +47,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
             let a = i == 1 ? a : view(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : view(b, 1:n - 1), n = i == 1 ? n : n - 1
                 lqa   = lq(a)
                 l,q   = lqa.L, lqa.Q
-                qra   = qrfact(a)
+                qra   = qr(a)
                 @testset "Basic ops" begin
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1

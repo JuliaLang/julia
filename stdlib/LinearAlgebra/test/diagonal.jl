@@ -360,9 +360,9 @@ end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
     D = Diagonal(randn(5))
-    Q = qrfact(randn(5, 5)).Q
+    Q = qr(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
-    Q = qrfact(randn(5, 5), Val(true)).Q
+    Q = qr(randn(5, 5), Val(true)).Q
     @test_throws ArgumentError lmul!(Q, D)
 end
 

@@ -236,6 +236,9 @@ This section lists changes that do not have deprecation warnings.
   * `lq` methods now return decomposition objects such as `LQ`
     rather than tuples of arrays ([#27159]).
 
+  * `qr` methods now return decomposition objects such as `QR`, `QRPivoted`,
+    and `QRCompactWY` rather than tuples of arrays ([#27159]).
+
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
@@ -697,8 +700,8 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
-  * `lufact`, `schurfact`, and `lqfact` have respectively been
-    deprecated to `lu`, `schur`, and `lq` ([#27159]).
+  * `lufact`, `schurfact`, `lqfact`, and `qrfact` have respectively
+    been deprecated to `lu`, `schur`, `lq`, and `qr` ([#27159]).
 
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.

@@ -1468,7 +1468,8 @@ timesofar("cat")
 
     b1 = bitrand(n1, n1)
     @check_bit_operation svd(b1)
-    @check_bit_operation qr(b1)
+    @test ((qrb1, qrb1A) = (qr(b1), qr(Array(b1)));
+            qrb1.Q == qrb1A.Q && qrb1.R == qrb1A.R)
 
     b1 = bitrand(v1)
     @check_bit_operation diagm(0 => b1) BitMatrix

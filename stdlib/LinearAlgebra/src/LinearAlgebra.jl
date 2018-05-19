@@ -126,7 +126,6 @@ export
     pinv,
     qr,
     qrfact!,
-    qrfact,
     lq,
     lqfact!,
     rank,

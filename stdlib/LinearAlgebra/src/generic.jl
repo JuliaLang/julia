@@ -864,7 +864,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         end
         return lu(A) \ B
     end
-    return qrfact(A,Val(true)) \ B
+    return qr(A,Val(true)) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
