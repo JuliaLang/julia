@@ -344,7 +344,6 @@ LinearAlgebra.eigfact
 LinearAlgebra.eigfact!
 LinearAlgebra.hessfact
 LinearAlgebra.hessfact!
-LinearAlgebra.schurfact
 LinearAlgebra.schurfact!
 LinearAlgebra.schur
 LinearAlgebra.ordschur

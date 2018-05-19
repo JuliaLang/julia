@@ -134,7 +134,6 @@ export
     rdiv!,
     schur,
     schurfact!,
-    schurfact,
     svd,
     svdfact!,
     svdfact,

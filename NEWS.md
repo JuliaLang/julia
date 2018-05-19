@@ -230,6 +230,9 @@ This section lists changes that do not have deprecation warnings.
   * `lu` methods now return decomposition objects such as `LU` rather than
     tuples of arrays or tuples of numbers ([#27159]).
 
+  * `schur` methods now return decomposition objects such as `Schur` and
+    `GeneralizedSchur` rather than tuples of arrays ([#27159]).
+
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
@@ -691,7 +694,8 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
-  * `lufact` has been deprecated to `lu` ([#27159]).
+  * `lufact` and `schurfact` have respectively been deprecated to
+    `lu` and `schur` ([#27159]).
 
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.
