@@ -73,15 +73,8 @@ for v in (nothing, missing)
     @test coalesce(v, Some(1), Some(2)) === 1
     @test coalesce(Some(1), v, Some(2)) === 1
 
-    @test_throws ArgumentError coalesce(v, missing)
-    @test_throws ArgumentError coalesce(v, nothing)
-    @test_throws ArgumentError coalesce(v, missing, v)
-    @test_throws ArgumentError coalesce(v, nothing, v)
-
-    @test coalesce(v, Some(missing)) === missing
-    @test coalesce(v, Some(nothing)) === nothing
-    @test coalesce(v, missing, Some(v)) === v
-    @test coalesce(v, nothing, Some(v)) === v
+    @test coalesce(v, Some(v)) === v
+    @test coalesce(v, v, Some(v)) === v
 
     @test coalesce(Some(Some(1)), 1) === Some(1)
     @test coalesce(v, Some(Some(1))) === Some(1)
@@ -94,6 +87,15 @@ for v in (nothing, missing)
     @test b isa Vector{Union{Missing, Nothing, String}}
     # the original operation from the issue, though it was not the source of the problem
     @test all(coalesce.(a, "replacement") .=== b)
+end
+
+for (x, y) in ((nothing, missing), (missing, nothing))
+    @test coalesce(x, y) === y
+    @test coalesce(x, y, 1) === y
+    @test coalesce(x, y, Some(1)) === y
+    @test coalesce(x, x, y) === y
+    @test coalesce(x, x, y, 1) === y
+    @test coalesce(x, x, y, Some(1)) === y
 end
 
 # notnothing()

@@ -40,12 +40,14 @@ either [`nothing`](@ref) or [`missing`](@ref), or throw an error
 if no argument matches this condition.
 Unwrap arguments of type [`Some`](@ref).
 
-This function will return `nothing` or `missing` if and only if
-the first valid argument which differs from these two values is
-`Some(nothing)` or `Some(missing)`. Therefore, the syntax
-`coalesce(x, Some(nothing))` or `coalesce(x, Some(missing))` can be used
-to indicate that `nothing` or `missing` should be returned when all
-arguments are `nothing` or `missing`.
+If both `nothing` and `missing` appear in the arguments, only equal to the one
+which appears first are skipped. Pass `nothing` or `missing` as the first argument
+to ensure that only arguments equal to this value are skipped.
+
+To indicate that `nothing` or `missing` should be returned when all arguments are
+`nothing` or `missing` rather than throwing an error, pass `Some(nothing)` or
+`Some(missing)` as the last argument.
+
 
 # Examples
 
@@ -73,6 +75,12 @@ julia> coalesce(Some(1))
 
 julia> coalesce(nothing, Some(1))
 1
+
+julia> coalesce(nothing, missing)
+missing
+
+julia> coalesce(missing, Some(missing))
+missing
 ```
 """
 function coalesce end
@@ -87,6 +95,8 @@ coalesce(x::Missing) = _throw_coalesce_error(x)
 coalesce(x::Any, y...) = x
 coalesce(x::Some, y...) = x.value
 coalesce(x::Union{Nothing, Missing}, y...) = coalesce(y...)
+coalesce(x::Nothing, y::Missing, args...) = missing
+coalesce(x::Missing, y::Nothing, args...) = nothing
 
 """
     notnothing(x)
