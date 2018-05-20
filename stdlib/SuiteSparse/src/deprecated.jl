@@ -74,3 +74,15 @@ end
                         kws...) where {T<:Real},
                 chol(A; kws...))
 end
+
+# deprecate ldltfact to ldlt
+@eval SuiteSparse.CHOLMOD begin
+    import LinearAlgebra: ldltfact
+    @deprecate(ldltfact(A::Sparse; shift::Real=0.0, perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[]), ldlt(A; shift=shift, perm=perm))
+    @deprecate(ldltfact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
+                        Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
+                        Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+                        Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+                        kws...) where {T<:Real},
+                ldlt(A; kws...))
+end

@@ -181,7 +181,7 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     return C
 end
 
-(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
+(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
 
 eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
 eig(A::SymTridiagonal{T}) where T = eigfact!(copy_oftype(A, eigtype(T)))

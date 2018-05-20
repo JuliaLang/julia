@@ -102,7 +102,7 @@ export
     kron,
     ldiv!,
     ldltfact!,
-    ldltfact,
+    ldlt,
     linreg,
     logabsdet,
     logdet,

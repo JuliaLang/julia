@@ -694,9 +694,9 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
-  * `lufact`, `eigfact`, `schurfact`, `lqfact`, `qrfact`, `bkfact`, and `cholfact`
-    have respectively been deprecated to `lu`, `eig`, `schur`, `lq`, `qr`, `bk`,
-    and `chol` ([#27159]).
+  * `lufact`, `eigfact`, `schurfact`, `lqfact`, `qrfact`, `bkfact`, `cholfact`,
+    and `ldltfact` have respectively been deprecated to `lu`, `eig`, `schur`,
+    `lq`, `qr`, `bk`, `chol`, and `ldlt` ([#27159]).
 
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.

@@ -1114,12 +1114,12 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 |:---------------------------|:-----------------------------------------------|
 | Positive-definite          | Cholesky (see [`chol`](@ref))  |
 | Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bk`](@ref)) |
-| Sparse Symmetric/Hermitian | LDLt (see [`ldltfact`](@ref))      |
+| Sparse Symmetric/Hermitian | LDLt (see [`ldlt`](@ref))      |
 | Triangular                 | Triangular                                     |
 | Diagonal                   | Diagonal                                       |
 | Bidiagonal                 | Bidiagonal                                     |
 | Tridiagonal                | LU (see [`lu`](@ref))            |
-| Symmetric real tridiagonal | LDLt (see [`ldltfact`](@ref))      |
+| Symmetric real tridiagonal | LDLt (see [`ldlt`](@ref))      |
 | General square             | LU (see [`lu`](@ref))            |
 | General non-square         | QR (see [`qr`](@ref))            |
 

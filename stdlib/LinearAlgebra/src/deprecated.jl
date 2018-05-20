@@ -1319,3 +1319,7 @@ export qrfact
 @deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{false}=Val(false)), chol(A, Val(false)))
 @deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0), chol(A, Val(true); tol=tol))
 @deprecate(cholfact(x::Number, uplo::Symbol=:U), chol(x, uplo))
+
+# deprecate ldltfact to ldlt
+export ldltfact
+@deprecate(ldltfact(M::SymTridiagonal{T}) where T, ldlt(M))
