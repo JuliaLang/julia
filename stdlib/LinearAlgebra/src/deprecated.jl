@@ -35,6 +35,7 @@ function bkfact!(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A
     return bkfact!(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
 end
 
+export lufact!
 @deprecate sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatrix} sqrtm(A, Val(realmatrix))
 @deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lufact(A, Val(false))
 @deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lufact(A, Val(true))
@@ -1328,3 +1329,10 @@ export ldltfact
 export hessfact
 @deprecate(hessfact(A::StridedMatrix{<:BlasFloat}), hess(A))
 @deprecate(hessfact(A::StridedMatrix{T}) where T, hess(A))
+
+# deprecate lufact! to lu!
+# lufact! exported in a deprecation above
+@deprecate(lufact!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T<:BlasFloat, lufact!(A, pivot))
+@deprecate(lufact!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
+@deprecate(lufact!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
+@deprecate(lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}, lu!(A, pivot))

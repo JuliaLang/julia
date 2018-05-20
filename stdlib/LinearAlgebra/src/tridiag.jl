@@ -399,7 +399,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         end
         new{T,V}(dl, d, du)
     end
-    # constructor used in lufact!
+    # constructor used in lu!
     function Tridiagonal{T,V}(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}}
         new{T,V}(dl, d, du, du2)
     end
