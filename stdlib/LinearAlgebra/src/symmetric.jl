@@ -474,15 +474,15 @@ end
 inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), Symbol(A.uplo))
 inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), Symbol(A.uplo))
 
-eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)...)
+eig!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)...)
 
 function eig(A::RealHermSymComplexHerm)
     T = eltype(A)
     S = eigtype(T)
-    eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
+    eig!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
 end
 
-eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
+eig!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
 
 """
     eig(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
@@ -504,10 +504,10 @@ The `UnitRange` `irange` specifies indices of the sorted eigenvalues to search f
 function eig(A::RealHermSymComplexHerm, irange::UnitRange)
     T = eltype(A)
     S = eigtype(T)
-    eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+    eig!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
 end
 
-eigfact!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal} =
+eig!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal} =
     Eigen(LAPACK.syevr!('V', 'V', A.uplo, A.data, convert(T, vl), convert(T, vh), 0, 0, -1.0)...)
 
 """
@@ -530,7 +530,7 @@ The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`
 function eig(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     T = eltype(A)
     S = eigtype(T)
-    eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+    eig!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
 end
 
 eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) =
@@ -624,11 +624,11 @@ end
 eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, 1:1)[1]
 
-function eigfact!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix}
+function eig!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
     GeneralizedEigen(vals, vecs)
 end
-function eigfact!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix}
+function eig!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
     GeneralizedEigen(vals, vecs)
 end

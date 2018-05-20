@@ -1336,3 +1336,18 @@ export hessfact
 @deprecate(lufact!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
 @deprecate(lufact!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
 @deprecate(lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}, lu!(A, pivot))
+
+# deprecate eigfact! to eig!
+export eigfact!
+@deprecate(eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasReal, eig!(A; permute=permute, scale=scale))
+@deprecate(eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasComplex, eig!(A; permute=permute, scale=scale))
+@deprecate(eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal, eig!(A, B))
+@deprecate(eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasComplex, eig!(A, B))
+@deprecate(eigfact!(A::SymTridiagonal{<:BlasReal}), eig!(A))
+@deprecate(eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange), eig!(A, irange))
+@deprecate(eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real), eig!(A, vl, vu))
+@deprecate(eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}), eig!(A))
+@deprecate(eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange), eig!(A, irange))
+@deprecate(eigfact!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal}, eig!(A, vl, vh))
+@deprecate(eigfact!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix}, eig!(A, B))
+@deprecate(eigfact!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix}, eig!(A, B))
