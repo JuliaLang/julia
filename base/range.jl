@@ -467,13 +467,6 @@ function iterate(r::OrdinalRange{T}, i) where {T}
     (next, next)
 end
 
-# In the case of floats we might not land exactly on the boundary due to rounding errors
-function iterate(r::StepRange{T}, i) where {T<:AbstractFloat}
-    next = convert(T, i + step(r))
-    ((next < min(r.start, r.stop)) | (next > max(r.start, r.stop))) && return nothing
-    (next, next)
-end
-
 ## indexing
 
 function getindex(v::UnitRange{T}, i::Integer) where T
