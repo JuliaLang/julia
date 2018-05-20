@@ -1360,3 +1360,12 @@ export schurfact!
 # deprecate lqfact! to lq!
 export lqfact!
 @deprecate(lqfact!(A::StridedMatrix{<:BlasFloat}), lq!(A))
+
+# deprecate qrfact! to qr!
+export qrfact!
+@deprecate(qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}), qr!(A, Val(false)))
+@deprecate(qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{true}), qr!(A, Val(true)))
+@deprecate(qrfact!(A::StridedMatrix{<:BlasFloat}), qr!(A))
+@deprecate(qrfact!(A::StridedMatrix, ::Val{false}), qr!(A, Val(false)))
+@deprecate(qrfact!(A::StridedMatrix, ::Val{true}), qr!(A, Val(true)))
+@deprecate(qrfact!(A::StridedMatrix), qr!(A))

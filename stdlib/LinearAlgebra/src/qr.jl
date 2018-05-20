@@ -240,16 +240,16 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 end
 
 # LAPACK version
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
-qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val(false))
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
+qr!(A::StridedMatrix{<:BlasFloat}) = qr!(A, Val(false))
 
 # Generic fallbacks
 
 """
-    qrfact!(A, pivot=Val(false))
+    qr!(A, pivot=Val(false))
 
-`qrfact!` is the same as [`qr`](@ref) when `A` is a subtype of
+`qr!` is the same as [`qr`](@ref) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
@@ -261,7 +261,7 @@ julia> a = [1. 2.; 3. 4.]
  1.0  2.0
  3.0  4.0
 
-julia> qrfact!(a)
+julia> qr!(a)
 LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
 Q factor:
 2×2 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
@@ -277,15 +277,15 @@ julia> a = [1 2; 3 4]
  1  2
  3  4
 
-julia> qrfact!(a)
+julia> qr!(a)
 ERROR: InexactError: Int64(Int64, -3.1622776601683795)
 Stacktrace:
 [...]
 ```
 """
-qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
-qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
-qrfact!(A::StridedMatrix) = qrfact!(A, Val(false))
+qr!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
+qr!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
+qr!(A::StridedMatrix) = qr!(A, Val(false))
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
@@ -358,12 +358,12 @@ true
 function qr(A::AbstractMatrix{T}, arg) where T
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
-    return qrfact!(AA, arg)
+    return qr!(AA, arg)
 end
 function qr(A::AbstractMatrix{T}) where T
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
-    return qrfact!(AA)
+    return qr!(AA)
 end
 qr(x::Number) = qr(fill(x,1,1))
 qr(v::AbstractVector) = qr(reshape(v, (length(v), 1)))

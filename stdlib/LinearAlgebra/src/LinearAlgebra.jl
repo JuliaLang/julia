@@ -124,7 +124,7 @@ export
     ordschur,
     pinv,
     qr,
-    qrfact!,
+    qr!,
     lq,
     lq!,
     rank,

@@ -698,8 +698,8 @@ Deprecated or removed
     `ldltfact`, and `hessfact` have respectively been deprecated to `lu`, `eig`,
     `schur`, `lq`, `qr`, `bk`, `chol`, `ldlt`, and `hess` ([#27159]).
 
-  * `lufact!`, `eigfact!`, `schurfact!`, and `lqfact!` have respectively
-    been deprecated to `lu!`, `eig!`, `schur!`, and `lq!` ([#27159]).
+  * `lufact!`, `eigfact!`, `schurfact!`, `lqfact!`, and `qrfact!` have
+    respectively been deprecated to `lu!`, `eig!`, `schur!`, `lq!`, and `qr!` ([#27159]).
 
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.

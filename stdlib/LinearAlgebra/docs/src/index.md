@@ -322,7 +322,7 @@ LinearAlgebra.lowrankdowndate!
 LinearAlgebra.ldlt
 LinearAlgebra.ldltfact!
 LinearAlgebra.qr
-LinearAlgebra.qrfact!
+LinearAlgebra.qr!
 LinearAlgebra.QR
 LinearAlgebra.QRCompactWY
 LinearAlgebra.QRPivoted
