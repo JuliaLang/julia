@@ -450,13 +450,11 @@ copy(r::AbstractRange) = r
 
 ## iteration
 
-function iterate(r::LinRange, i::Int=1)
+function iterate(r::Union{LinRange,StepRangeLen}, i::Int=1)
     @_inline_meta
     length(r) < i && return nothing
-    unsafe_getindex(r, i), i+1
+    unsafe_getindex(r, i), i + 1
 end
-
-iterate(r::StepRangeLen{T}, i=1) where {T} = i > length(r) ? nothing : (unsafe_getindex(r, i), i+1)
 
 iterate(r::OrdinalRange) = isempty(r) ? nothing : (first(r), first(r))
 
