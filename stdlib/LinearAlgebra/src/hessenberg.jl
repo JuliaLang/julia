@@ -7,28 +7,33 @@ struct Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
         new(factors, τ)
 end
 Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = Hessenberg{T,typeof(factors)}(factors, τ)
-
 Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 
+# iteration for destructuring into components
+Base.iterate(S::Hessenberg) = (S.Q, Val(:H))
+Base.iterate(S::Hessenberg, ::Val{:H}) = (S.H, Val(:done))
+Base.iterate(S::Hessenberg, ::Val{:done}) = nothing
 
 """
     hessfact!(A) -> Hessenberg
 
-`hessfact!` is the same as [`hessfact`](@ref), but saves space by overwriting
+`hessfact!` is the same as [`hess`](@ref), but saves space by overwriting
 the input `A`, instead of creating a copy.
 """
 hessfact!(A::StridedMatrix{<:BlasFloat}) = Hessenberg(A)
 
-hessfact(A::StridedMatrix{<:BlasFloat}) = hessfact!(copy(A))
+hess(A::StridedMatrix{<:BlasFloat}) = hessfact!(copy(A))
 
 """
-    hessfact(A) -> Hessenberg
+    hess(A) -> Hessenberg
 
 Compute the Hessenberg decomposition of `A` and return a `Hessenberg` object. If `F` is the
 factorization object, the unitary matrix can be accessed with `F.Q` and the Hessenberg
 matrix with `F.H`. When `Q` is extracted, the resulting type is the `HessenbergQ` object,
 and may be converted to a regular matrix with [`convert(Array, _)`](@ref)
  (or `Array(_)` for short).
+
+Iterating the decomposition produces the factors `F.Q` and `F.H`.
 
 # Examples
 ```jldoctest
@@ -38,16 +43,21 @@ julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
  4.0  4.0  1.0
  4.0  3.0  2.0
 
-julia> F = hessfact(A);
+julia> F = hess(A);
 
 julia> F.Q * F.H * F.Q'
 3×3 Array{Float64,2}:
  4.0  9.0  7.0
  4.0  4.0  1.0
  4.0  3.0  2.0
+
+julia> q, h = F; # destructuring via iteration
+
+julia> q == F.Q && h == F.H
+true
 ```
 """
-hessfact(A::StridedMatrix{T}) where T =
+hess(A::StridedMatrix{T}) where T =
     hessfact!(copy_oftype(A, eigtype(T)))
 
 struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}

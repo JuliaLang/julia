@@ -1323,3 +1323,8 @@ export qrfact
 # deprecate ldltfact to ldlt
 export ldltfact
 @deprecate(ldltfact(M::SymTridiagonal{T}) where T, ldlt(M))
+
+# deprecate hessfact to hess
+export hessfact
+@deprecate(hessfact(A::StridedMatrix{<:BlasFloat}), hess(A))
+@deprecate(hessfact(A::StridedMatrix{T}) where T, hess(A))

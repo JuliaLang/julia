@@ -337,7 +337,7 @@ LinearAlgebra.eigmax
 LinearAlgebra.eigmin
 LinearAlgebra.eigvecs
 LinearAlgebra.eigfact!
-LinearAlgebra.hessfact
+LinearAlgebra.hess
 LinearAlgebra.hessfact!
 LinearAlgebra.schurfact!
 LinearAlgebra.schur
