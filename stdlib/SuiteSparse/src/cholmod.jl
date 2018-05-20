@@ -8,7 +8,7 @@ import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
 using LinearAlgebra
 import LinearAlgebra: (\),
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
-                 issuccess, issymmetric, ldltfact, ldltfact!, logdet
+                 issuccess, issymmetric, ldlt, ldltfact!, logdet
 
 using SparseArrays
 import Libdl
@@ -1477,7 +1477,7 @@ Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F
 view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
-See also [`ldltfact`](@ref).
+See also [`ldlt`](@ref).
 
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
@@ -1493,7 +1493,7 @@ ldltfact!(F::Factor, A::Union{SparseMatrixCSC{T},
     shift = 0.0) where {T<:Real} =
     ldltfact!(F, Sparse(A), shift = shift)
 
-function ldltfact(A::Sparse; shift::Real=0.0,
+function ldlt(A::Sparse; shift::Real=0.0,
     perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
 
     cm = defaults(common_struct)
@@ -1514,13 +1514,13 @@ function ldltfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+    ldlt(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
 view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
-A fill-reducing permutation is used. `F = ldltfact(A)` is most frequently
+A fill-reducing permutation is used. `F = ldlt(A)` is most frequently
 used to solve systems of equations `A*x = b` with `F\\b`. The returned
 factorization object `F` also supports the methods [`diag`](@ref),
 [`det`](@ref), [`logdet`](@ref), and [`inv`](@ref).
@@ -1547,11 +1547,11 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
     Many other functions from CHOLMOD are wrapped but not exported from the
     `Base.SparseArrays.CHOLMOD` module.
 """
-ldltfact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
+ldlt(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
     Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
     Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
-    kws...) where {T<:Real} = ldltfact(Sparse(A); kws...)
+    kws...) where {T<:Real} = ldlt(Sparse(A); kws...)
 
 ## Rank updates
 

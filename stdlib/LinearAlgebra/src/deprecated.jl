@@ -1287,3 +1287,7 @@ export qrfact
 @deprecate(qrfact(v::AbstractVector), qr(v))
 @deprecate(qrfact(A::AbstractMatrix{T}) where T, qr(A))
 @deprecate(qrfact(A::AbstractMatrix{T}, arg) where T, qr(A, arg))
+
+# deprecate ldltfact to ldlt
+export ldltfact
+@deprecate(ldltfact(M::SymTridiagonal{T}) where T, ldlt(M))

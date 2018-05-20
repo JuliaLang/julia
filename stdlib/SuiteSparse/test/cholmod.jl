@@ -107,11 +107,11 @@ srand(123)
     x = fill(1., n)
     b = A*x
 
-    chma = ldltfact(A)                      # LDL' form
+    chma = ldlt(A)                      # LDL' form
     @test CHOLMOD.isvalid(chma)
     @test unsafe_load(pointer(chma)).is_ll == 0    # check that it is in fact an LDLt
     @test chma\b ≈ x
-    @test nnz(ldltfact(A, perm=1:size(A,1))) > nnz(chma)
+    @test nnz(ldlt(A, perm=1:size(A,1))) > nnz(chma)
     @test size(chma) == size(A)
     chmal = CHOLMOD.FactorComponent(chma, :L)
     @test size(chmal) == size(A)
@@ -373,19 +373,19 @@ end
     @test_throws ArgumentError cholfact(A1)
     @test_throws ArgumentError cholfact(A1)
     @test_throws ArgumentError cholfact(A1, shift=1.0)
-    @test_throws ArgumentError ldltfact(A1)
-    @test_throws ArgumentError ldltfact(A1, shift=1.0)
+    @test_throws ArgumentError ldlt(A1)
+    @test_throws ArgumentError ldlt(A1, shift=1.0)
     C = A1 + copy(adjoint(A1))
     λmaxC = eigmax(Array(C))
     b = fill(1., size(A1, 1))
     @test_throws LinearAlgebra.PosDefException cholfact(C - 2λmaxC*I)\b
     @test_throws LinearAlgebra.PosDefException cholfact(C, shift=-2λmaxC)\b
-    @test_throws ArgumentError ldltfact(C - C[1,1]*I)\b
-    @test_throws ArgumentError ldltfact(C, shift=-real(C[1,1]))\b
+    @test_throws ArgumentError ldlt(C - C[1,1]*I)\b
+    @test_throws ArgumentError ldlt(C, shift=-real(C[1,1]))\b
     @test !isposdef(cholfact(C - 2λmaxC*I))
     @test !isposdef(cholfact(C, shift=-2λmaxC))
-    @test !LinearAlgebra.issuccess(ldltfact(C - C[1,1]*I))
-    @test !LinearAlgebra.issuccess(ldltfact(C, shift=-real(C[1,1])))
+    @test !LinearAlgebra.issuccess(ldlt(C - C[1,1]*I))
+    @test !LinearAlgebra.issuccess(ldlt(C, shift=-real(C[1,1])))
     F = cholfact(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -406,7 +406,7 @@ end
         Ftmp = Ftmp'Ftmp + I
         @test logdet(cholfact(Ftmp)) ≈ logdet(Array(Ftmp))
     end
-    @test logdet(ldltfact(A1pd)) ≈ logdet(Array(A1pd))
+    @test logdet(ldlt(A1pd)) ≈ logdet(Array(A1pd))
     @test isposdef(A1pd)
     @test !isposdef(A1)
     @test !isposdef(A1 + copy(A1') |> t -> t - 2eigmax(Array(t))*I)
@@ -417,9 +417,9 @@ end
         F1 = CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L), shift=2))
         F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
         @test F1 == F2
-        @test CHOLMOD.Sparse(ldltfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(ldltfact(A1pd))
-        F1 = CHOLMOD.Sparse(ldltfact(Symmetric(A1pd, :L), shift=2))
-        F2 = CHOLMOD.Sparse(ldltfact(A1pd, shift=2))
+        @test CHOLMOD.Sparse(ldlt(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(ldlt(A1pd))
+        F1 = CHOLMOD.Sparse(ldlt(Symmetric(A1pd, :L), shift=2))
+        F2 = CHOLMOD.Sparse(ldlt(A1pd, shift=2))
         @test F1 == F2
     else
         @test !CHOLMOD.issymmetric(Sparse(A1pd, 0))
@@ -428,9 +428,9 @@ end
         F1 = CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L), shift=2))
         F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
         @test F1 == F2
-        @test CHOLMOD.Sparse(ldltfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(ldltfact(A1pd))
-        F1 = CHOLMOD.Sparse(ldltfact(Hermitian(A1pd, :L), shift=2))
-        F2 = CHOLMOD.Sparse(ldltfact(A1pd, shift=2))
+        @test CHOLMOD.Sparse(ldlt(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(ldlt(A1pd))
+        F1 = CHOLMOD.Sparse(ldlt(Hermitian(A1pd, :L), shift=2))
+        F2 = CHOLMOD.Sparse(ldlt(A1pd, shift=2))
         @test F1 == F2
     end
 
@@ -448,11 +448,11 @@ end
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
     @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
-    F = ldltfact(A1pd)
+    F = ldlt(A1pd)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
     @test CHOLMOD.Sparse(ldltfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
-    F = ldltfact(A1pdSparse, shift=2)
+    F = ldlt(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
     @test CHOLMOD.Sparse(ldltfact!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
@@ -554,8 +554,8 @@ end
         @test_throws CHOLMOD.CHOLMODException Fs.DUPt
     end
 
-    @testset "ldltfact, no permutation" begin
-        Fs = ldltfact(As, perm=[1:3;])
+    @testset "ldlt, no permutation" begin
+        Fs = ldlt(As, perm=[1:3;])
         @test Fs.p == [1:3;]
         @test sparse(Fs.LD) ≈ LDf
         @test sparse(Fs) ≈ As
@@ -583,13 +583,13 @@ end
         @test Fs.DUP\b ≈ L_f'\(D_f\b)
     end
 
-    @testset "ldltfact, with permutation" begin
-        Fs = ldltfact(As, perm=p)
+    @testset "ldlt, with permutation" begin
+        Fs = ldlt(As, perm=p)
         @test Fs.p == p
         @test sparse(Fs) ≈ As
         b = rand(3)
         Asp = As[p,p]
-        LDp = sparse(ldltfact(Asp, perm=[1,2,3]).LD)
+        LDp = sparse(ldlt(Asp, perm=[1,2,3]).LD)
         # LDp = sparse(Fs.LD)
         Lp, dp = SuiteSparse.CHOLMOD.getLd!(copy(LDp))
         Dp = sparse(Diagonal(dp))
@@ -618,7 +618,7 @@ end
 
     @testset "Element promotion and type inference" begin
         @inferred cholfact(As)\fill(1, size(As, 1))
-        @inferred ldltfact(As)\fill(1, size(As, 1))
+        @inferred ldlt(As)\fill(1, size(As, 1))
     end
 end
 
@@ -690,12 +690,12 @@ end
     @test cholfact(A)\B ≈ A\B
 end
 
-@testset "Make sure that ldltfact performs an LDLt (Issue #19032)" begin
+@testset "Make sure that ldlt performs an LDLt (Issue #19032)" begin
     m, n = 400, 500
     A = sprandn(m, n, .2)
     M = [I copy(A'); A -I]
     b = M * fill(1., m+n)
-    F = ldltfact(M)
+    F = ldlt(M)
     s = unsafe_load(pointer(F))
     @test s.is_super == 0
     @test F\b ≈ fill(1., m+n)
@@ -769,7 +769,7 @@ end
     AtA = A'*A
     C0 = [1., 2., 0, 0, 0]
     # Test both cholfact and LDLt with and without automatic permutations
-    for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, perm=1:5))
+    for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldlt(AtA), ldlt(AtA, perm=1:5))
         local F
         x0 = F\(b = fill(1., 5))
         #Test both sparse/dense and vectors/matrices
