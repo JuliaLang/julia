@@ -96,7 +96,7 @@ end
 let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid = UUID(uuidstr)
     @test uuid == eval(Meta.parse(repr(uuid))) # check show method
-    @test string(uuid) == uuidstr
+    @test string(uuid) == uuidstr == sprint(print, uuid)
     @test "check $uuid" == "check $uuidstr"
 end
 

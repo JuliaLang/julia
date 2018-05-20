@@ -50,8 +50,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         u = u.value
         a = Base.StringVector(36)
         for i in groupings
-            d = u & 0xf
-            a[i] = '0' + d + 39*(d > 9)
+            a[i] = hex_chars[1 + u & 0xf]
             u >>= 4
         end
         a[24] = a[19] = a[14] = a[9] = '-'
