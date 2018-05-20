@@ -130,7 +130,7 @@ export
     rank,
     rdiv!,
     schur,
-    schurfact!,
+    schur!,
     svd,
     svdfact!,
     svdfact,

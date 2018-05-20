@@ -1351,3 +1351,8 @@ export eigfact!
 @deprecate(eigfact!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal}, eig!(A, vl, vh))
 @deprecate(eigfact!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix}, eig!(A, B))
 @deprecate(eigfact!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix}, eig!(A, B))
+
+# deprecate schurfact! to schur!
+export schurfact!
+@deprecate(schurfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}, schur!(A, B))
+@deprecate(schurfact!(A::StridedMatrix{<:BlasFloat}), schur!(A))

@@ -339,7 +339,7 @@ LinearAlgebra.eigvecs
 LinearAlgebra.eig!
 LinearAlgebra.hess
 LinearAlgebra.hessfact!
-LinearAlgebra.schurfact!
+LinearAlgebra.schur!
 LinearAlgebra.schur
 LinearAlgebra.ordschur
 LinearAlgebra.ordschur!

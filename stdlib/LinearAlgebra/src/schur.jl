@@ -24,7 +24,7 @@ Base.iterate(S::Schur, ::Val{:done}) = nothing
 end
 
 """
-    schurfact!(A::StridedMatrix) -> F::Schur
+    schur!(A::StridedMatrix) -> F::Schur
 
 Same as [`schur`](@ref) but uses the input argument `A` as workspace.
 
@@ -35,7 +35,7 @@ julia> A = [5. 7.; -2. -4.]
   5.0   7.0
  -2.0  -4.0
 
-julia> F = schurfact!(A)
+julia> F = schur!(A)
 Schur{Float64,Array{Float64,2}}
 T factor:
 2×2 Array{Float64,2}:
@@ -56,7 +56,7 @@ julia> A
  0.0  -2.0
 ```
 """
-schurfact!(A::StridedMatrix{<:BlasFloat}) = Schur(LinearAlgebra.LAPACK.gees!('V', A)...)
+schur!(A::StridedMatrix{<:BlasFloat}) = Schur(LinearAlgebra.LAPACK.gees!('V', A)...)
 
 """
     schur(A::StridedMatrix) -> F::Schur
@@ -101,8 +101,8 @@ julia> t == F.T && z == F.Z && vals == F.values
 true
 ```
 """
-schur(A::StridedMatrix{<:BlasFloat}) = schurfact!(copy(A))
-schur(A::StridedMatrix{T}) where T = schurfact!(copy_oftype(A, eigtype(T)))
+schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
+schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
 
 schur(A::Symmetric) = schur(copyto!(similar(parent(A)), A))
 schur(A::Hermitian) = schur(copyto!(similar(parent(A)), A))
@@ -216,11 +216,11 @@ Base.iterate(S::GeneralizedSchur, ::Val{:done}) = nothing
 end
 
 """
-    schurfact!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
+    schur!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
 
 Same as [`schur`](@ref) but uses the input matrices `A` and `B` as workspace.
 """
-schurfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+schur!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
     GeneralizedSchur(LinearAlgebra.LAPACK.gges!('V', 'V', A, B)...)
 
 """
@@ -236,10 +236,10 @@ generalized eigenvalues of `A` and `B` can be obtained with `F.α./F.β`.
 Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 `F.α`, and `F.β`.
 """
-schur(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schurfact!(copy(A),copy(B))
+schur(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schur!(copy(A),copy(B))
 function schur(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return schurfact!(copy_oftype(A, S), copy_oftype(B, S))
+    return schur!(copy_oftype(A, S), copy_oftype(B, S))
 end
 
 """
