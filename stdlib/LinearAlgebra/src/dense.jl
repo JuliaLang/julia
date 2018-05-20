@@ -418,7 +418,7 @@ function schurpow(A::AbstractMatrix, p)
             retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
         end
     else
-        S,Q,d = schur(complex(A))
+        S,Q,d = schurfact(complex(A))
         # Integer part
         R = S ^ floor(p)
         # Real part
@@ -605,7 +605,7 @@ matrix function is returned whenever possible.
 If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
 used, if `A` is triangular an improved version of the inverse scaling and squaring method is
 employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur form
-([`schur`](@ref)) is computed and the triangular algorithm is used on the
+([`schurfact`](@ref)) is computed and the triangular algorithm is used on the
 triangular factor.
 
 [^AH12]: Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling and squaring algorithms for the matrix logarithm", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. [doi:10.1137/110852553](https://doi.org/10.1137/110852553)
@@ -662,7 +662,7 @@ that is the unique matrix ``X`` with eigenvalues having positive real part such 
 
 If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
 used to compute the square root. Otherwise, the square root is determined by means of the
-Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schur`](@ref))
+Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schurfact`](@ref))
 and then the complex square root of the triangular factor.
 
 [^BH83]:
@@ -1409,8 +1409,8 @@ julia> A*X + X*B + C
 ```
 """
 function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) where T<:BlasFloat
-    RA, QA = schur(A)
-    RB, QB = schur(B)
+    RA, QA = schurfact(A)
+    RB, QB = schurfact(B)
 
     D = -(adjoint(QA) * (C*QB))
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
@@ -1453,7 +1453,7 @@ julia> A*X + X*A' + B
 ```
 """
 function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
-    R, Q = schur(A)
+    R, Q = schurfact(A)
 
     D = -(adjoint(Q) * (C*Q))
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)

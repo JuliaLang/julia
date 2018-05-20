@@ -1009,6 +1009,98 @@ Deprecated or removed
 
   * `gradient` is deprecated and will be removed in the next release ([#23816]).
 
+  * `lu(A::AbstractMatrix[, pivot])` has been deprecated in favor of `lufact(A[, pivot])`.
+    Whereas `lu(A[, pivot])` returns a tuple of arrays, `lufact(A[, pivot])` returns an `LU` object.
+    So for a direct replacement, use `(lufact(A[, pivot])...,)`. But going forward, consider using
+    the direct result of `lufact(A[, pivot])` instead, either destructured into its components
+    (`l, u, p = lufact(A[, pivot])`) or as an `LU` object (`lup = lufact(A)`) ([#26997]).
+
+  * `lu(x::Number)` has been deprecated in favor of `lufact(x::Number)`.
+    Whereas `lu(x::Number)` returns a tuple of numbers, `lufact(x::Number)` returns a tuple of arrays
+    for consistency with other `lufact` methods. So for a direct replacement, use `first.((lufact(x)...,))`.
+    But going forward, consider using the direct result of `lufact(x)` instead, either destructured
+    into its components (`l, u, p = lufact(x)`) or as an `LU` object (`lup = lufact(x)`) ([#26997]).
+
+  * `eig(A[, args...])` has been deprecated in favor of `eigfact(A[, args...])`.
+    Whereas the former returns a tuple of arrays, the latter returns an `Eigen` object.
+    So for a direct replacement, use `(eigfact(A[, args...])...,)`.
+    But going forward, consider using the direct result of
+    `eigfact(A[, args...])` instead, either destructured into its components
+    (`vals, vecs = eigfact(A[, args...])`) or as an `Eigen` object
+    (`eigf = eigfact(A[, args...])`) ([#26997]).
+
+  * `eig(A::AbstractMatrix, B::AbstractMatrix)` and `eig(A::Number, B::Number)`
+    have been deprecated in favor of `eigfact(A, B)`. Whereas the former each return
+    a tuple of arrays, the latter returns a `GeneralizedEigen` object. So for a direct
+    replacement, use `(eigfact(A, B)...,)`. But going forward, consider using the
+    direct result of `eigfact(A, B)` instead, either destructured into its components
+    (`vals, vecs = eigfact(A, B)`), or as a
+    `GeneralizedEigen` object (`eigf = eigfact(A, B)`) ([#26997]).
+
+  * `schur(A::AbstractMatrix)` has been deprecated in favor of `schurfact(A)`.
+    Whereas the former returns a tuple of arrays, the latter returns a `Schur` object.
+    So for a direct replacement, use `(schurfact(A)...,)`. But going forward, consider
+    using the direct result of `schurfact(A)` instead, either destructured into
+    its components (`T, Z, λ = schurfact(A)`) or as a `Schur` object
+    (`schurf = schurfact(A)`) ([#26997]).
+
+  * `schur(A::StridedMatrix, B::StridedMatrix)` has been deprecated in favor of
+    `schurfact(A, B)`. Whereas the former returns a tuple of arrays, the latter
+    returns a `GeneralizedSchur` object. So for a direct replacement, use
+    `(schurfact(A, B)...,)`. But going forward, consider using the direct result
+    of `schurfact(A, B)` instead, either destructured into its components
+    (`S, T, Q, Z, α, β = schurfact(A, B)`) or as a `GeneralizedSchur` object
+    (`schurf = schurfact(A, B)`) ([#26997]).
+
+  * `svd(A::Abstractarray; thin=true)` has been deprecated in favor of
+    `svdfact(A; full=false)`. Note that the `thin` keyword and its replacement
+    `full` have opposite meanings. Additionally, whereas `svd` returns a
+    tuple of arrays `(U, S, V)` such that `A ≈ U*Diagonal(S)*V'`, `svdfact` returns
+    an `SVD` object that nominally provides `U, S, Vt` such that `A ≈ U*Diagonal(S)*Vt`.
+    So for a direct replacement,
+    use `((U, S, Vt) = svdfact(A[; full=...]); (U, S, copy(Vt')))`. But going forward,
+    consider using the direct result of `svdfact(A[; full=...])` instead,
+    either destructured into its components (`U, S, Vt = svdfact(A[; full=...])`)
+    or as an `SVD` object (`svdf = svdfact(A[; full=...])`) ([#26997]).
+
+  * `svd(x::Number; thin=true)` has been deprecated in favor of
+    `svdfact(x; full=false)`. Note that the `thin` keyword and its replacement
+    `full` have opposite meanings. Additionally, whereas `svd(x::Number[; thin=...])`
+    returns a tuple of numbers `(u, s, v)` such that `x ≈ u*s*conj(v)`,
+    `svdfact(x::Number[; full=...])` returns
+    an `SVD` object that nominally provides `u, s, vt` such that `x ≈ u*Diagonal(s)*conj(vt)`.
+    So for a direct replacement,
+    use `((u, s, vt) = first.((svdfact(x[; full=...]...,)); (u, s, conj(vt)))`.
+    But going forward,
+    consider using the direct result of `svdfact(x[; full=...])` instead,
+    either destructured into its components (`U, S, Vt = svdfact(A[; full=...])`)
+    or as an `SVD` object (`svdf = svdfact(x[; full=...])`) ([#26997]).
+
+  * `svd(A::Abstractarray, B::AbstractArray)` has been deprecated in favor of
+    `svdfact(A, B)`. Whereas the former returns a tuple of arrays,
+    the latter returns a `GeneralizedSVD` object. So for a direct replacement,
+    use `(svdfact(A, B)...,)`. But going forward,
+    consider using the direct result of `svdfact(A, B)` instead,
+    either destructured into its components (`U, V, Q, D1, D2, R0 = svdfact(A, B)`)
+    or as a `GeneralizedSVD` object (`gsvdf = svdfact(A, B)`) ([#26997]).
+
+  * `svd(x::Number, y::Number)` has been deprecated in favor of
+    `svdfact(x, y)`. Whereas the former returns a tuple of numbers,
+    the latter returns a `GeneralizedSVD` object. So for a direct replacement,
+    use `first.((svdfact(x, y)...,))`. But going forward,
+    consider using the direct result of `svdfact(x, ys)` instead,
+    either destructured into its components (`U, V, Q, D1, D2, R0 = svdfact(x, y)`)
+    or as a `GeneralizedSVD` object (`gsvdf = svdfact(x, y)`) ([#26997]).
+
+  * `lq(A; thin=true)` has been deprecated in favor of `lqfact(A)`.
+     Whereas `lq(A; thin=true)` returns a tuple of arrays, `lqfact` returns
+     an `LQ` object. So for a direct replacement of `lqfact(A; thin=true)`,
+     use `(F = lqfact(A); (F.L, Array(F.Q)))`, and for `lqfact(A; thin=false)`
+     use `(F = lqfact(A); k = size(F.Q.factors, 2); (F.L, lmul!(F.Q, Matrix{eltype(F.Q)}(I, k, k))))`.
+     But going forward, consider using the direct result of `lqfact(A)` instead,
+     either destructured into its components (`L, Q = lqfact(A)`)
+     or as an `LQ` object (`lqf = lqfact(A)`) ([#26997]).
+
   * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
     ([#17046]).
 

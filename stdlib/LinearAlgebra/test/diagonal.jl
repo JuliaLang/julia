@@ -262,7 +262,7 @@ srand(1)
     end
 
     @testset "svd (#11120/#11247)" begin
-        U, s, V = svd(D)
+        U, s, V = (F = svdfact(D); (F.U, F.S, F.V))
         @test (U*Diagonal(s))*V' ≈ D
         @test svdvals(D) == s
         @test svdfact(D).V == V

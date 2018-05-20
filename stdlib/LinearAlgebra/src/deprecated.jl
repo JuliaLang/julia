@@ -1260,3 +1260,177 @@ end
 @deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(C, Diagonal(a), B)
 
 Base.@deprecate_binding trace tr
+
+# deprecate lu(...) in favor of lufact and factorization destructuring
+export lu
+function lu(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true))
+    depwarn(string("`lu(A[, pivot])` has been deprecated in favor of ",
+        "`lufact(A[, pivot])`. Whereas `lu(A[, pivot])` returns a tuple of arrays, ",
+        "`lufact(A[, pivot])` returns an `LU` object. So for a direct replacement, ",
+        "use `(lufact(A[, pivot])...,)`. But going forward, consider using the direct ",
+        "result of `lufact(A[, pivot])` instead, either destructured into its components ",
+        "(`l, u, p = lufact(A[, pivot])`) or as an `LU` object (`lup = lufact(A)`)."), :lu)
+    return (lufact(A, pivot)...,)
+end
+function lu(x::Number)
+    depwarn(string("`lu(x::Number)` has been deprecated in favor of `lufact(x::Number)`. ",
+        "Whereas `lu(x::Number)` returns a tuple of numbers, `lufact(x::Number)` ",
+        "returns a tuple of arrays for consistency with other `lufact` methods. ",
+        "So for a direct replacement, use `first.((lufact(x)...,))`. But going ",
+        "forward, consider using the direct result of `lufact(x)` instead, either ",
+        "destructured into its components (`l, u, p = lufact(x)`) or as an ",
+        "`LU` object (`lup = lufact(x)`)."), :lu)
+    return first.((lufact(x)...,))
+end
+
+# deprecate eig(...) in favor of eigfact and factorization destructuring
+export eig
+function eig(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+    depwarn(string("`eig(A[, permute, scale])` has been deprecated in favor of ",
+        "`eigfact(A[, permute, scale])`. Whereas `eig(A[, permute, scale])` ",
+        "returns a tuple of arrays, `eigfact(A[, permute, scale])` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigfact(A[, permute, scale])...,)`. But going forward, consider ",
+        "using the direct result of `eigfact(A[, permute, scale])` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigfact(A[, permute, scale])`) ",
+        "or as an `Eigen` object (`eigf = eigfact(A[, permute, scale])`)."), :eig)
+    return (eigfact(A, permute=permute, scale=scale)...,)
+end
+function eig(A::AbstractMatrix, args...)
+    depwarn(string("`eig(A, args...)` has been deprecated in favor of ",
+        "`eigfact(A, args...)`. Whereas `eig(A, args....)` ",
+        "returns a tuple of arrays, `eigfact(A, args...)` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigfact(A, args...)...,)`. But going forward, consider ",
+        "using the direct result of `eigfact(A, args...)` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigfact(A, args...)`) ",
+        "or as an `Eigen` object (`eigf = eigfact(A, args...)`)."), :eig)
+    return (eigfact(A, args...)...,)
+end
+eig(A::AbstractMatrix, B::AbstractMatrix) = _geneig(A, B)
+eig(A::Number, B::Number) = _geneig(A, B)
+function _geneig(A, B)
+    depwarn(string("`eig(A::AbstractMatrix, B::AbstractMatrix)` and ",
+    "`eig(A::Number, B::Number)` have been deprecated in favor of ",
+    "`eigfact(A, B)`. Whereas the former each return a tuple of arrays, ",
+    "the latter returns a `GeneralizedEigen` object. So for a direct ",
+    "replacement, use `(eigfact(A, B)...,)`. But going forward, consider ",
+    "using the direct result of `eigfact(A, B)` instead, either ",
+    "destructured into its components (`vals, vecs = eigfact(A, B)`), ",
+    "or as a `GeneralizedEigen` object (`eigf = eigfact(A, B)`)."), :eig)
+    return (eigfact(A, B)...,)
+end
+
+# deprecate schur(...) in favor of schurfact(...) and factorization destructuring
+export schur
+function schur(A::Union{StridedMatrix,Symmetric,Hermitian,UpperTriangular,LowerTriangular,Tridiagonal})
+    depwarn(string("`schur(A::AbstractMatrix)` has been deprecated in favor of ",
+        "`schurfact(A)`. Whereas the former returns a tuple of arrays, the ",
+        "latter returns a `Schur` object. So for a direct replacement, ",
+        "use `(schurfact(A)...,)`. But going forward, consider using ",
+        "the direct result of `schurfact(A)` instead, either destructured ",
+        "into its components (`T, Z, λ = schurfact(A)`) or as a `Schur` ",
+        "object (`schurf = schurfact(A)`)."), :schur)
+    return (schurfact(A)...,)
+end
+function schur(A::StridedMatrix, B::StridedMatrix)
+    depwarn(string("`schur(A::StridedMatrix, B::StridedMatrix)` has been ",
+        "deprecated in favor of `schurfact(A, B)`. Whereas the former returns ",
+        "a tuple of arrays, the latter returns a `GeneralizedSchur` object. ",
+        "So for a direct replacement, use `(schurfact(A, B)...,)`. But going ",
+        "forward, consider using the direct result of `schurfact(A, B)` instead, ",
+        "either destructured into its components (`S, T, Q, Z, α, β = schurfact(A, B)`) ",
+        " or as a `GeneralizedSchur` object (`schurf = schurfact(A, B)`)."), :schur)
+    return (schurfact(A, B)...,)
+end
+
+# deprecate svd(...) in favor of svdfact(...) and factorization destructuring
+export svd
+function svd(A::AbstractArray; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+    depwarn(string("`svd(A::Abstractarray; thin=true)` has been deprecated ",
+        "in favor of `svdfact(A; full=false)`. Note that the `thin` keyword ",
+        "and its replacement `full` have opposite meanings. Additionally, whereas ",
+        "`svd` returns a tuple of arrays `(U, S, V)` such that `A ≈ U*Diagonal(S)*V'`, ",
+        "`svdfact` returns an `SVD` object that nominally provides `U, S, Vt` ",
+        "such that `A ≈ U*Diagonal(S)*Vt`. So for a direct replacement, use ",
+        "`((U, S, Vt) = svdfact(A[; full=...]); (U, S, copy(Vt')))`. But going forward, ",
+        "consider using the direct result of `svdfact(A[; full=...])` instead, ",
+        "either destructured into its components (`U, S, Vt = svdfact(A[; full=...])`) ",
+        "or as an `SVD` object (`svdf = svdfact(A[; full=...])`)."), :svd)
+    F = svdfact(A, full = (thin != nothing ? !thin : full))
+    return F.U, F.S, copy(F.Vt')
+end
+function svd(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+    depwarn(string("`svd(x::Number; thin=true)` has been deprecated ",
+        "in favor of `svdfact(x; full=false)`. Note that the `thin` keyword ",
+        "and its replacement `full` have opposite meanings. Additionally, whereas ",
+        "`svd(x::Number[; thin=...])` returns a tuple of numbers `(u, s, v)` ",
+        " such that `x ≈ u*s*conj(v)`, `svdfact(x::Number[; full=...])` returns ",
+        "an `SVD` object that nominally provides `u, s, vt` such that ",
+        "`x ≈ u*s*vt`. So for a direct replacement, use ",
+        "`((u, s, vt) = first.((svdfact(A[; full=...])...,)); (u, s, conj(vt)))`. ",
+        "But going forward, ",
+        "consider using the direct result of `svdfact(A[; full=...])` instead, ",
+        "either destructured into its components (`u, s, vt = svdfact(A[; full=...])`) ",
+        "or as an `SVD` object (`svdf = svdfact(A[; full=...])`)."), :svd)
+    u, s, v = first.((svdfact(x)...,))
+    return u, s, conj(vt)
+end
+
+function svd(A::AbstractMatrix, B::AbstractMatrix)
+    depwarn(string("`svd(A::Abstractarray, B::AbstractArray)` has been deprecated ",
+        "in favor of `svdfact(A, B)`. Whereas the former returns a tuple of arrays, ",
+        "the latter returns a `GeneralizedSVD` object. So for a direct replacement, ",
+        "use `(svdfact(A, B)...,)`. But going forward, ",
+        "consider using the direct result of `svdfact(A, B)` instead, ",
+        "either destructured into its components ",
+        "(`U, V, Q, D1, D2, R0 = svdfact(A, B)`) ",
+        "or as a `GeneralizedSVD` object (`gsvdf = svdfact(A, B)`)."), :svd)
+    return (svdfact(A, B)...,)
+end
+function svd(x::Number, y::Number)
+    depwarn(string("`svd(x::Number, y::Number)` has been deprecated ",
+        "in favor of `svdfact(x, y)`. Whereas the former returns a tuple of numbers, ",
+        "the latter returns a `GeneralizedSVD` object. So for a direct replacement, ",
+        "use `first.((svdfact(x, y)...,))`. But going forward, ",
+        "consider using the direct result of `svdfact(x, y)` instead, ",
+        "either destructured into its components ",
+        "(`U, V, Q, D1, D2, R0 = svdfact(x, y)`) ",
+        "or as a `GeneralizedSVD` object (`gsvdf = svdfact(x, y)`)."), :svd)
+    return first.((svdfact(x, y)...,))
+end
+
+@inline function _simpledepsvd(A)
+    depwarn(string("`svd(A)` has been deprecated ",
+        "in favor of `svdfact(A)`. Whereas `svd` ",
+        "returns a tuple of arrays `(U, S, V)` such that `A ≈ U*Diagonal(S)*V'`, ",
+        "`svdfact` returns an `SVD` object that nominally provides `U, S, Vt` ",
+        "such that `A ≈ U*Diagonal(S)*Vt`. So for a direct replacement, use ",
+        "`((U, S, Vt) = svdfact(A); (U, S, copy(Vt')))`. But going forward, ",
+        "consider using the direct result of `svdfact(A)` instead, ",
+        "either destructured into its components (`U, S, Vt = svdfact(A)`) ",
+        "or as an `SVD` object (`svdf = svdfact(A)`)."), :svd)
+    U, S, Vt = svdfact(A)
+    return U, S, copy(Vt')
+end
+svd(A::BitMatrix) = _simpledepsvd(float(A))
+svd(D::Diagonal{<:Number}) = _simpledepsvd(D)
+svd(A::AbstractTriangular) = _simpledepsvd(copyto!(similar(parent(A)), A))
+
+# deprecate lq(...) in favor of lqfact(...) and factorization destructuring
+export lq
+function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+    depwarn(string("`lq(A; thin=true)` has been deprecated in favor of `lqfact(A)`. ",
+        "Whereas `lq(A; thin=true)` returns a tuple of arrays, `lqfact` returns ",
+        "an `LQ` object. So for a direct replacement of `lqfact(A; thin=true)`, ",
+        "use `(F = lqfact(A); (F.L, Array(F.Q)))`, and for `lqfact(A; thin=false)` ",
+        "use `(F = lqfact(A); k = size(F.Q.factors, 2); (F.L, lmul!(F.Q, Matrix{eltype(F.Q)}(I, k, k))))`. ",
+        "But going forward, consider using the direct result of `lqfact(A)` instead, ",
+        "either destructured into its components (`L, Q = lqfact(A)`) ",
+        "or as an `LQ` object (`lqf = lqfact(A)`)."), :lq)
+    F = lqfact(A)
+    retQ = !full ? Array(F.Q) : (k = size(F.Q.factors, 2); lmul!(F.Q, Matrix{eltype(F.Q)}(I, k, k)))
+    return F.L, retQ
+end

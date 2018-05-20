@@ -42,7 +42,7 @@ dimg  = randn(n)/2
     if eltya <: BlasFloat
         @testset "LU factorization for Number" begin
             num = rand(eltya)
-            @test lu(num) == (one(eltya),num,1)
+            @test (lufact(num)...,) == (hcat(one(eltya)), hcat(num), [1])
             @test convert(Array, lufact(num)) ≈ eltya[num]
         end
         @testset "Balancing in eigenvector calculations" begin
@@ -51,7 +51,7 @@ dimg  = randn(n)/2
                                        -eps(real(one(eltya)))/4  eps(real(one(eltya)))/2  -1.0     0;
                                        -0.5     -0.5       0.1     1.0])
             F = eigfact(A, permute=false, scale=false)
-            eig(A, permute=false, scale=false)
+            (eigfact(A, permute=false, scale=false)...,)
             @test F.vectors*Diagonal(F.values)/F.vectors ≈ A
             F = eigfact(A)
             # @test norm(F.vectors*Diagonal(F.values)/F.vectors - A) > 0.01
@@ -67,7 +67,7 @@ dimg  = randn(n)/2
         lua   = factorize(a)
         @test_throws ErrorException lua.Z
         l,u,p = lua.L, lua.U, lua.p
-        ll,ul,pl = lu(a)
+        ll,ul,pl = lufact(a)
         @test ll * ul ≈ a[pl,:]
         @test l*u ≈ a[p,:]
         @test (l*u)[invperm(p),:] ≈ a

@@ -231,8 +231,8 @@ srand(1)
 
         @testset "Eigensystems" begin
             if relty <: AbstractFloat
-                d1, v1 = eig(T)
-                d2, v2 = eig(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
+                d1, v1 = eigfact(T)
+                d2, v2 = eigfact(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
                 @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
@@ -244,8 +244,8 @@ srand(1)
             if (elty <: BlasReal)
                 @test AbstractArray(svdfact(T)) ≈ AbstractArray(svdfact!(copy(Tfull)))
                 @test svdvals(Tfull) ≈ svdvals(T)
-                u1, d1, v1 = svd(Tfull)
-                u2, d2, v2 = svd(T)
+                u1, d1, v1 = (F = svdfact(Tfull); (F.U, F.S, copy(F.Vt')))
+                u2, d2, v2 = (F = svdfact(T); (F.U, F.S, copy(F.Vt')))
                 @test d1 ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(u1, u2)
@@ -253,7 +253,7 @@ srand(1)
                 end
                 @test 0 ≈ vecnorm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*Diagonal(d1)*v1'-Tfull))
                 @inferred svdvals(T)
-                @inferred svd(T)
+                @inferred svdfact(T)
             end
         end
 

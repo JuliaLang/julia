@@ -87,7 +87,7 @@ end
 
 ## norm and rank
 
-svd(A::BitMatrix) = svd(float(A))
+svdfact(A::BitMatrix) = svdfact(float(A))
 qr(A::BitMatrix) = qr(float(A))
 
 ## kron

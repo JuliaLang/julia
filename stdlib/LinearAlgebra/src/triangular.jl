@@ -2156,7 +2156,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         R[i,i+1] = i / sqrt((2 * i)^2 - 1)
         R[i+1,i] = R[i,i+1]
     end
-    x,V = eig(R)
+    x,V = eigfact(R)
     w = Vector{Float64}(undef, m)
     for i = 1:m
         x[i] = (x[i] + 1) / 2
@@ -2435,7 +2435,7 @@ end
 eigfact(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 
 # Generic singular systems
-for func in (:svd, :svdfact, :svdfact!, :svdvals)
+for func in (:svdfact, :svdfact!, :svdvals)
     @eval begin
         ($func)(A::AbstractTriangular) = ($func)(copyto!(similar(parent(A)), A))
     end

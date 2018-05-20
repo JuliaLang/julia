@@ -39,7 +39,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
         α = rand(eltya)
         aα = fill(α,1,1)
         @test lqfact(α).L*lqfact(α).Q ≈ lqfact(aα).L*lqfact(aα).Q
-        @test lq(α)[1]*lq(α)[2] ≈ lqfact(aα).L*lqfact(aα).Q
+        @test ((αL, αQ) = lqfact(α); αL*αQ ≈ lqfact(aα).L*lqfact(aα).Q)
         @test abs(lqfact(α).Q[1,1]) ≈ one(eltya)
         tab = promote_type(eltya,eltyb)
 
@@ -103,43 +103,6 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
             @test_throws BoundsError size(q,-1)
         end
     end
-end
-
-@testset "correct form of Q from lq(...) (#23729)" begin
-    # where the original matrix (say A) is square or has more rows than columns,
-    # then A's factorization's triangular factor (say L) should have the same shape
-    # as A independent of factorization form ("full", "reduced"/"thin"), and A's factorization's
-    # orthogonal factor (say Q) should be a square matrix of order of A's number of
-    # columns independent of factorization form ("full", "reduced"/"thin"), and L and Q
-    # should have multiplication-compatible shapes.
-    local m, n = 4, 2
-    A = randn(m, n)
-    for full in (false, true)
-        L, Q = lq(A, full = full)
-        @test size(L) == (m, n)
-        @test size(Q) == (n, n)
-        @test isapprox(A, L*Q)
-    end
-    # where the original matrix has strictly fewer rows than columns ...
-    m, n = 2, 4
-    A = randn(m, n)
-    # ... then, for a rectangular/"thin" factorization of A, L should be a square matrix
-    # of order of A's number of rows, Q should have the same shape as A,
-    # and L and Q should have multiplication-compatible shapes
-    Lrect, Qrect = lq(A, full = false)
-    @test size(Lrect) == (m, m)
-    @test size(Qrect) == (m, n)
-    @test isapprox(A, Lrect * Qrect)
-    # ... and, for a full factorization of A, L should have the
-    # same shape as A, Q should be a square matrix of order of A's number of columns,
-    # and L and Q should have multiplication-compatible shape. but instead the L returned
-    # has no zero-padding on the right / is L for the rectangular/"thin" factorization,
-    # so for L and Q to have multiplication-compatible shapes, L must be zero-padded
-    # to have the shape of A.
-    Lfull, Qfull = lq(A, full = true)
-    @test size(Lfull) == (m, m)
-    @test size(Qfull) == (n, n)
-    @test isapprox(A, [Lfull zeros(m, n - m)] * Qfull)
 end
 
 @testset "getindex on LQPackedQ (#23733)" begin

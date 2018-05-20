@@ -10,6 +10,14 @@ struct SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
 end
 SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U)}(U, S, Vt)
 
+# iteration for destructuring into factors
+Base.start(::SVD) = Val(:U)
+Base.next(F::SVD, ::Val{:U}) = (F.U, Val(:S))
+Base.next(F::SVD, ::Val{:S}) = (F.S, Val(:Vt))
+Base.next(F::SVD, ::Val{:Vt}) = (F.Vt, Val(:done))
+Base.done(F::SVD, ::Val{:done}) = true
+Base.done(F::SVD, ::Any) = false
+
 """
     svdfact!(A; full::Bool = false) -> SVD
 
@@ -92,6 +100,11 @@ julia> F.U * Diagonal(F.S) * F.Vt
  0.0  0.0  3.0  0.0  0.0
  0.0  0.0  0.0  0.0  0.0
  0.0  2.0  0.0  0.0  0.0
+
+julia> U, S, Vt = svdfact(A); # destructuring via iteration
+
+julia> U*Diagonal(S)*Vt ≈ A
+true
 ```
 """
 function svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T
@@ -125,62 +138,6 @@ function svdfact(x::Integer; full::Bool = false, thin::Union{Bool,Nothing} = not
     return svdfact(float(x), full = full)
 end
 
-"""
-    svd(A; full::Bool = false) -> U, S, V
-
-Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
-`A == U * Diagonal(S) * V'`. The singular values in `S` are sorted in descending order.
-
-If `full = false` (default), a "thin" SVD is returned. For a ``M
-\\times N`` matrix `A`, in the full factorization `U` is `M \\times M`
-and `V` is `N \\times N`, while in the thin factorization `U` is `M
-\\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
-number of singular values.
-
-`svd` is a wrapper around [`svdfact`](@ref), extracting all parts
-of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
-efficient.
-
-# Examples
-```jldoctest
-julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
-
-julia> U, S, V = svd(A);
-
-julia> U * Diagonal(S) * V'
-4×5 Array{Float64,2}:
- 1.0  0.0  0.0  0.0  2.0
- 0.0  0.0  3.0  0.0  0.0
- 0.0  0.0  0.0  0.0  0.0
- 0.0  2.0  0.0  0.0  0.0
-```
-"""
-function svd(A::AbstractArray; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g `svd(A; full = $(!thin))`."), :svd)
-        full::Bool = !thin
-    end
-    F = svdfact(A, full = full)
-    F.U, F.S, copy(F.Vt')
-end
-function svd(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svd(A; full = $(!thin))`."), :svd)
-        full::Bool = !thin
-    end
-    return first.(svd(fill(x, 1, 1)))
-end
 
 function getproperty(F::SVD, d::Symbol)
     if d == :V
@@ -278,6 +235,17 @@ function GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractM
     GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
 end
 
+# iteration for destructuring into factors
+Base.start(::GeneralizedSVD) = Val(:U)
+Base.next(F::GeneralizedSVD, ::Val{:U}) = (F.U, Val(:V))
+Base.next(F::GeneralizedSVD, ::Val{:V}) = (F.V, Val(:Q))
+Base.next(F::GeneralizedSVD, ::Val{:Q}) = (F.Q, Val(:D1))
+Base.next(F::GeneralizedSVD, ::Val{:D1}) = (F.D1, Val(:D2))
+Base.next(F::GeneralizedSVD, ::Val{:D2}) = (F.D2, Val(:R0))
+Base.next(F::GeneralizedSVD, ::Val{:R0}) = (F.R0, Val(:done))
+Base.done(F::GeneralizedSVD, ::Val{:done}) = true
+Base.done(F::GeneralizedSVD, ::Any) = false
+
 """
     svdfact!(A, B) -> GeneralizedSVD
 
@@ -341,10 +309,10 @@ For an M-by-N matrix `A` and P-by-N matrix `B`,
 - `U` is a M-by-M orthogonal matrix,
 - `V` is a P-by-P orthogonal matrix,
 - `Q` is a N-by-N orthogonal matrix,
-- `R0` is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is
-           nonsingular upper block triangular,
 - `D1` is a M-by-(K+L) diagonal matrix with 1s in the first K entries,
 - `D2` is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,
+- `R0` is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is
+           nonsingular upper block triangular,
 
 `K+L` is the effective numerical rank of the matrix `[A; B]`.
 
@@ -377,6 +345,14 @@ julia> F.V*F.D2*F.R0*F.Q'
 2×2 Array{Float64,2}:
  0.0  1.0
  1.0  0.0
+
+julia> U, V, Q, D1, D2, R0 = svdfact(A, B); # destructuring via iteration
+
+julia> U*D1*R0*Q' ≈ A
+true
+
+julia> V*D2*R0*Q' ≈ B
+true
 ```
 """
 function svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
@@ -387,46 +363,6 @@ end
 # and might introduce bugs or inconsistencies relative to the 1x1 matrix
 # version
 svdfact(x::Number, y::Number) = svdfact(fill(x, 1, 1), fill(y, 1, 1))
-
-"""
-    svd(A, B) -> U, V, Q, D1, D2, R0
-
-Wrapper around [`svdfact`](@ref) extracting all parts of the
-factorization to a tuple. Direct use of
-`svdfact` is therefore generally more efficient. The function returns the generalized SVD of
-`A` and `B`, returning `U`, `V`, `Q`, `D1`, `D2`, and `R0` such that `A = U*D1*R0*Q'` and `B =
-V*D2*R0*Q'`.
-
-# Examples
-```jldoctest
-julia> A = [1. 0.; 0. -1.]
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
-
-julia> B = [0. 1.; 1. 0.]
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
-
-julia> U, V, Q, D1, D2, R0 = svd(A, B);
-
-julia> U*D1*R0*Q'
-2×2 Array{Float64,2}:
- 1.0   0.0
- 0.0  -1.0
-
-julia> V*D2*R0*Q'
-2×2 Array{Float64,2}:
- 0.0  1.0
- 1.0  0.0
-```
-"""
-function svd(A::AbstractMatrix, B::AbstractMatrix)
-    F = svdfact(A, B)
-    F.U, F.V, F.Q, F.D1, F.D2, F.R0
-end
-svd(x::Number, y::Number) = first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
 
 @inline function getproperty(F::GeneralizedSVD{T}, d::Symbol) where T
     Fa = getfield(F, :a)

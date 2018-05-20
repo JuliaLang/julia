@@ -1467,7 +1467,7 @@ timesofar("cat")
     @check_bit_operation diff(b1, dims=2) Matrix{Int}
 
     b1 = bitrand(n1, n1)
-    @check_bit_operation svd(b1)
+    @check_bit_operation svdfact(b1)
     @check_bit_operation qr(b1)
 
     b1 = bitrand(v1)
