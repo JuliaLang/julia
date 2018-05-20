@@ -1299,3 +1299,8 @@ export ldltfact
 @deprecate(lufact!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
 @deprecate(lufact!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
 @deprecate(lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}, lu!(A, pivot))
+
+# deprecate schurfact! to schur!
+export schurfact!
+@deprecate(schurfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}, schur!(A, B))
+@deprecate(schurfact!(A::StridedMatrix{<:BlasFloat}), schur!(A))
