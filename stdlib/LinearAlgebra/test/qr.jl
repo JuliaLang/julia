@@ -65,7 +65,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 if eltya != Int
                     @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab}, q)
                     ac = copy(a)
-                    @test qrfact!(a[:, 1:5])\b == qrfact!(view(ac, :, 1:5))\b
+                    @test qr!(a[:, 1:5])\b == qr!(view(ac, :, 1:5))\b
                 end
                 qrstring = sprint((t, s) -> show(t, "text/plain", s), qra)
                 rstring  = sprint((t, s) -> show(t, "text/plain", s), r)
