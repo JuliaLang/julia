@@ -126,7 +126,7 @@ export
     qr,
     qrfact!,
     lq,
-    lqfact!,
+    lq!,
     rank,
     rdiv!,
     schur,

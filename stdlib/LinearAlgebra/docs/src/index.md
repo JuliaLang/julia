@@ -326,7 +326,7 @@ LinearAlgebra.qrfact!
 LinearAlgebra.QR
 LinearAlgebra.QRCompactWY
 LinearAlgebra.QRPivoted
-LinearAlgebra.lqfact!
+LinearAlgebra.lq!
 LinearAlgebra.lq
 LinearAlgebra.bk
 LinearAlgebra.bkfact!
