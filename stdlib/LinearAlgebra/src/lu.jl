@@ -29,22 +29,22 @@ adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
 # StridedMatrix
-function lufact!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T<:BlasFloat
+function lu!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T<:BlasFloat
     if pivot === Val(false)
         return generic_lufact!(A, pivot)
     end
     lpt = LAPACK.getrf!(A)
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
-function lufact!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true))
+function lu!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true))
     copytri!(A.data, A.uplo, isa(A, Hermitian))
-    lufact!(A.data, pivot)
+    lu!(A.data, pivot)
 end
 
 """
-    lufact!(A, pivot=Val(true)) -> LU
+    lu!(A, pivot=Val(true)) -> LU
 
-`lufact!` is the same as [`lu`](@ref), but saves space by overwriting the
+`lu!` is the same as [`lu`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
 exception is thrown if the factorization produces a number not representable by the
 element type of `A`, e.g. for integer types.
@@ -56,7 +56,7 @@ julia> A = [4. 3.; 6. 3.]
  4.0  3.0
  6.0  3.0
 
-julia> F = lufact!(A)
+julia> F = lu!(A)
 LU{Float64,Array{Float64,2}}
 L factor:
 2×2 Array{Float64,2}:
@@ -72,13 +72,13 @@ julia> iA = [4 3; 6 3]
  4  3
  6  3
 
-julia> lufact!(iA)
+julia> lu!(iA)
 ERROR: InexactError: Int64(Int64, 0.6666666666666666)
 Stacktrace:
 [...]
 ```
 """
-lufact!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true)) = generic_lufact!(A, pivot)
+lu!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true)) = generic_lufact!(A, pivot)
 function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true)) where {T,Pivot}
     m, n = size(A)
     minmn = min(m,n)
@@ -130,7 +130,7 @@ end
 # floating point types doesn't have to be promoted for LU, but should default to pivoting
 function lu(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
             pivot::Union{Val{false}, Val{true}} = Val(true)) where {T<:AbstractFloat}
-    lufact!(copy(A), pivot)
+    lu!(copy(A), pivot)
 end
 
 # for all other types we must promote to a type which is stable under division
@@ -202,20 +202,20 @@ function lu(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S)
     copyto!(AA, A)
-    lufact!(AA, pivot)
+    lu!(AA, pivot)
 end
 # We can't assume an ordered field so we first try without pivoting
 function lu(A::AbstractMatrix{T}) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S)
     copyto!(AA, A)
-    F = lufact!(AA, Val(false))
+    F = lu!(AA, Val(false))
     if issuccess(F)
         return F
     else
         AA = similar(A, S)
         copyto!(AA, A)
-        return lufact!(AA, Val(true))
+        return lu!(AA, Val(true))
     end
 end
 
@@ -385,7 +385,7 @@ end
 # Tridiagonal
 
 # See dgttrf.f
-function lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}
+function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}
     n = size(A, 1)
     info = 0
     ipiv = Vector{BlasInt}(undef, n)

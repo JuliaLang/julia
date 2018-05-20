@@ -312,7 +312,7 @@ LinearAlgebra.LowerTriangular
 LinearAlgebra.UpperTriangular
 LinearAlgebra.UniformScaling
 LinearAlgebra.lu
-LinearAlgebra.lufact!
+LinearAlgebra.lu!
 LinearAlgebra.chol
 LinearAlgebra.cholfact
 LinearAlgebra.cholfact!
