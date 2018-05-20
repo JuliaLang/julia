@@ -565,6 +565,10 @@ endif
 ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread
 SANITIZE_LDFLAGS += -fsanitize=thread
+ifeq ($(SANITIZE_THREAD_ONLYJL),1)
+SANITIZE_OPTS += -fsanitize-blacklist=$(JULIAHOME)/contrib/tsanrt.blacklist
+SANITIZE_LDFLAGS += -fsanitize-blacklist=$(JULIAHOME)/contrib/tsanrt.blacklist
+endif
 endif
 ifeq ($(SANITIZE_OPTS),)
 $(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)

@@ -1,0 +1,4 @@
+# In order to only sanitize Julia user code we blacklist everything else.
+src:*.c
+src:*.cpp
+
