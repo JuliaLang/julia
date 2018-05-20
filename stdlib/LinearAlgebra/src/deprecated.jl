@@ -1304,3 +1304,7 @@ export ldltfact
 export schurfact!
 @deprecate(schurfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}, schur!(A, B))
 @deprecate(schurfact!(A::StridedMatrix{<:BlasFloat}), schur!(A))
+
+# deprecate lqfact! to lq!
+export lqfact!
+@deprecate(lqfact!(A::StridedMatrix{<:BlasFloat}), lq!(A))

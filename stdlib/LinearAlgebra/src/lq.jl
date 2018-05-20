@@ -30,12 +30,12 @@ LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typ
 
 
 """
-    lqfact!(A) -> LQ
+    lq!(A) -> LQ
 
 Compute the LQ factorization of `A`, using the input
 matrix as a workspace. See also [`lq`](@ref).
 """
-lqfact!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
+lq!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
 """
     lq(A) -> S::LQ
 
@@ -70,7 +70,7 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::StridedMatrix{<:BlasFloat})  = lqfact!(copy(A))
+lq(A::StridedMatrix{<:BlasFloat})  = lq!(copy(A))
 lq(x::Number) = lq(fill(x,1,1))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
