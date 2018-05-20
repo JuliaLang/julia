@@ -353,9 +353,11 @@ reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
 """
-    sizeof(T)
+    sizeof(T::DataType)
+    sizeof(obj)
 
-Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
+Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
+Size, in bytes, of object `obj` if it is not `DataType`.
 
 # Examples
 ```jldoctest
@@ -364,9 +366,15 @@ julia> sizeof(Float32)
 
 julia> sizeof(ComplexF64)
 16
+
+julia> sizeof(1.0)
+8
+
+julia> sizeof([1.0:10.0;])
+80
 ```
 
-If `T` does not have a specific size, an error is thrown.
+If `DataType` `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
 julia> sizeof(AbstractArray)
