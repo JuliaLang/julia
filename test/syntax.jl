@@ -1420,6 +1420,10 @@ invalid assignment location "function (s, o...)
 end\""""
 end
 
+# issue #15229
+@test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
+    Expr(:error, "local variable name \"x\" conflicts with an argument")
+
 # issue #26739
 @test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") eval(@__MODULE__, :(sin.[1]))
 
