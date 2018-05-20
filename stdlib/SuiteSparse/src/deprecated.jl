@@ -62,3 +62,15 @@ end
     @deprecate(qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv<:Union{ComplexF64,Float64}}, qr(A; tol=tol))
     @deprecate(qrfact(A::SparseMatrixCSC; tol = _default_tol(A)), qr(A; tol=tol))
 end
+
+# deprecate cholfact to chol
+@eval SuiteSparse.CHOLMOD begin
+    import LinearAlgebra: cholfact
+    @deprecate(cholfact(A::Sparse; shift::Real=0.0, perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[]), chol(A; shift=shift, perm=perm))
+    @deprecate(cholfact(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
+                        Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
+                        Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+                        Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+                        kws...) where {T<:Real},
+                chol(A; kws...))
+end

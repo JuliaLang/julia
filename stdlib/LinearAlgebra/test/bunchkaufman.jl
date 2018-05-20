@@ -132,7 +132,7 @@ end
 
 @testset "test example due to @timholy in PR 15354" begin
     A = rand(6,5); A = complex(A'*A) # to avoid calling the real-lhs-complex-rhs method
-    F = cholfact(A);
+    F = chol(A);
     v6 = rand(ComplexF64, 6)
     v5 = view(v6, 1:5)
     @test F\v5 == F\v6[1:5]

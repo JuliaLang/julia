@@ -7,6 +7,7 @@ using Base: @deprecate, depwarn
 @deprecate cond(F::LinearAlgebra.LU, p::Integer) cond(convert(AbstractArray, F), p)
 
 # PR #22188
+export cholfact
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val(false))
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
 @deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val(false))
@@ -1312,3 +1313,9 @@ export qrfact
 # deprecate bkfact to bk
 # bkfact exported in a deprecation above
 @deprecate(bkfact(A::AbstractMatrix{T}, rook::Bool=false) where {T}, bk(A, rook))
+
+# deprecate cholfact to chol
+# cholfact exported in a deprecation above
+@deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{false}=Val(false)), chol(A, Val(false)))
+@deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0), chol(A, Val(true); tol=tol))
+@deprecate(cholfact(x::Number, uplo::Symbol=:U), chol(x, uplo))

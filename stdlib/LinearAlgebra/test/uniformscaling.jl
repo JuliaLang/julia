@@ -192,11 +192,11 @@ end
     end
 end
 
-@testset "chol" begin
+@testset "legacychol" begin
     for T in (Float64, ComplexF32, BigFloat, Int)
         λ = T(4)
-        @test chol(λ*I) ≈ √λ*I
-        @test_throws LinearAlgebra.PosDefException chol(-λ*I)
+        @test LinearAlgebra.legacychol(λ*I) ≈ √λ*I
+        @test_throws LinearAlgebra.PosDefException LinearAlgebra.legacychol(-λ*I)
     end
 end
 

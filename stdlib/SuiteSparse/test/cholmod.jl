@@ -117,12 +117,12 @@ srand(123)
     @test size(chmal) == size(A)
     @test size(chmal, 1) == size(A, 1)
 
-    chma = cholfact(A)                      # LL' form
+    chma = chol(A)                      # LL' form
     @test CHOLMOD.isvalid(chma)
     @test unsafe_load(pointer(chma)).is_ll == 1    # check that it is in fact an LLt
     @test chma\b ≈ x
     @test nnz(chma) == 489
-    @test nnz(cholfact(A, perm=1:size(A,1))) > nnz(chma)
+    @test nnz(chol(A, perm=1:size(A,1))) > nnz(chma)
     @test size(chma) == size(A)
     chmal = CHOLMOD.FactorComponent(chma, :L)
     @test size(chmal) == size(A)
@@ -153,7 +153,7 @@ end
         2.249,-1.0,2.279,1.4,-1.0,1.0,-1.0,1.0,1.0,1.0], 0)
     afiro2 = CHOLMOD.aat(afiro, CHOLMOD.SuiteSparse_long[0:50;], CHOLMOD.SuiteSparse_long(1))
     CHOLMOD.change_stype!(afiro2, -1)
-    chmaf = cholfact(afiro2)
+    chmaf = chol(afiro2)
     y = afiro'*fill(1., size(afiro,1))
     sol = chmaf\(afiro*y) # least squares solution
     @test CHOLMOD.isvalid(sol)
@@ -370,23 +370,23 @@ end
     end
 
     # Factor
-    @test_throws ArgumentError cholfact(A1)
-    @test_throws ArgumentError cholfact(A1)
-    @test_throws ArgumentError cholfact(A1, shift=1.0)
+    @test_throws ArgumentError chol(A1)
+    @test_throws ArgumentError chol(A1)
+    @test_throws ArgumentError chol(A1, shift=1.0)
     @test_throws ArgumentError ldltfact(A1)
     @test_throws ArgumentError ldltfact(A1, shift=1.0)
     C = A1 + copy(adjoint(A1))
     λmaxC = eigmax(Array(C))
     b = fill(1., size(A1, 1))
-    @test_throws LinearAlgebra.PosDefException cholfact(C - 2λmaxC*I)\b
-    @test_throws LinearAlgebra.PosDefException cholfact(C, shift=-2λmaxC)\b
+    @test_throws LinearAlgebra.PosDefException chol(C - 2λmaxC*I)\b
+    @test_throws LinearAlgebra.PosDefException chol(C, shift=-2λmaxC)\b
     @test_throws ArgumentError ldltfact(C - C[1,1]*I)\b
     @test_throws ArgumentError ldltfact(C, shift=-real(C[1,1]))\b
-    @test !isposdef(cholfact(C - 2λmaxC*I))
-    @test !isposdef(cholfact(C, shift=-2λmaxC))
+    @test !isposdef(chol(C - 2λmaxC*I))
+    @test !isposdef(chol(C, shift=-2λmaxC))
     @test !LinearAlgebra.issuccess(ldltfact(C - C[1,1]*I))
     @test !LinearAlgebra.issuccess(ldltfact(C, shift=-real(C[1,1])))
-    F = cholfact(A1pd)
+    F = chol(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
     @test tmp.size > 0
@@ -404,7 +404,7 @@ end
     let # to test supernodal, we must use a larger matrix
         Ftmp = sprandn(100, 100, 0.1)
         Ftmp = Ftmp'Ftmp + I
-        @test logdet(cholfact(Ftmp)) ≈ logdet(Array(Ftmp))
+        @test logdet(chol(Ftmp)) ≈ logdet(Array(Ftmp))
     end
     @test logdet(ldltfact(A1pd)) ≈ logdet(Array(A1pd))
     @test isposdef(A1pd)
@@ -413,9 +413,9 @@ end
 
     if elty <: Real
         @test CHOLMOD.issymmetric(Sparse(A1pd, 0))
-        @test CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
-        F1 = CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L), shift=2))
-        F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
+        @test CHOLMOD.Sparse(chol(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(chol(A1pd))
+        F1 = CHOLMOD.Sparse(chol(Symmetric(A1pd, :L), shift=2))
+        F2 = CHOLMOD.Sparse(chol(A1pd, shift=2))
         @test F1 == F2
         @test CHOLMOD.Sparse(ldltfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(ldltfact(A1pd))
         F1 = CHOLMOD.Sparse(ldltfact(Symmetric(A1pd, :L), shift=2))
@@ -424,9 +424,9 @@ end
     else
         @test !CHOLMOD.issymmetric(Sparse(A1pd, 0))
         @test CHOLMOD.ishermitian(Sparse(A1pd, 0))
-        @test CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
-        F1 = CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L), shift=2))
-        F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
+        @test CHOLMOD.Sparse(chol(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(chol(A1pd))
+        F1 = CHOLMOD.Sparse(chol(Hermitian(A1pd, :L), shift=2))
+        F2 = CHOLMOD.Sparse(chol(A1pd, shift=2))
         @test F1 == F2
         @test CHOLMOD.Sparse(ldltfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(ldltfact(A1pd))
         F1 = CHOLMOD.Sparse(ldltfact(Hermitian(A1pd, :L), shift=2))
@@ -435,7 +435,7 @@ end
     end
 
     ### cholfact!/ldltfact!
-    F = cholfact(A1pd)
+    F = chol(A1pd)
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
     @test unsafe_load(pointer(F)).is_ll == 0
     CHOLMOD.change_factor!(elty, true, false, true, true, F)
@@ -444,7 +444,7 @@ end
     @test size(F, 3) == 1
     @test_throws ArgumentError size(F, 0)
 
-    F = cholfact(A1pdSparse, shift=2)
+    F = chol(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
     @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
@@ -504,8 +504,8 @@ end
     p = [2,3,1]
     p_inv = [3,1,2]
 
-    @testset "cholfact, no permutation" begin
-        Fs = cholfact(As, perm=[1:3;])
+    @testset "chol, no permutation" begin
+        Fs = chol(As, perm=[1:3;])
         @test Fs.p == [1:3;]
         @test sparse(Fs.L) ≈ Lf
         @test sparse(Fs) ≈ As
@@ -527,11 +527,11 @@ end
         @test_throws CHOLMOD.CHOLMODException Fs.DUPt
     end
 
-    @testset "cholfact, with permutation" begin
-        Fs = cholfact(As, perm=p)
+    @testset "chol, with permutation" begin
+        Fs = chol(As, perm=p)
         @test Fs.p == p
         Afp = Af[p,p]
-        Lfp = cholfact(Afp).L
+        Lfp = chol(Afp).L
         @test sparse(Fs.L) ≈ Lfp
         @test sparse(Fs) ≈ As
         b = rand(3)
@@ -617,19 +617,19 @@ end
     end
 
     @testset "Element promotion and type inference" begin
-        @inferred cholfact(As)\fill(1, size(As, 1))
+        @inferred chol(As)\fill(1, size(As, 1))
         @inferred ldltfact(As)\fill(1, size(As, 1))
     end
 end
 
 @testset "Issue 11745 - row and column pointers were not sorted in sparse(Factor)" begin
     A = Float64[10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]
-    @test sparse(cholfact(sparse(A))) ≈ A
+    @test sparse(chol(sparse(A))) ≈ A
 end
 GC.gc()
 
 @testset "Issue 11747 - Wrong show method defined for FactorComponent" begin
-    v = cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10])).L
+    v = chol(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10])).L
     for s in (sprint(show, MIME("text/plain"), v), sprint(show, v))
         @test occursin("method:  simplicial", s)
         @test !occursin("#undef", s)
@@ -637,7 +637,7 @@ GC.gc()
 end
 
 @testset "Issue 14076" begin
-    @test cholfact(sparse([1,2,3,4], [1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == fill(1, 4)
+    @test chol(sparse([1,2,3,4], [1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == fill(1, 4)
 end
 
 @testset "Issue 14134" begin
@@ -650,7 +650,7 @@ end
     @test_throws ArgumentError size(Anew)
     @test_throws ArgumentError Anew[1]
     @test_throws ArgumentError Anew[2,1]
-    F = cholfact(A)
+    F = chol(A)
     serialize(b, F)
     seekstart(b)
     Fnew = deserialize(b)
@@ -669,17 +669,17 @@ end
 
 @testset "Further issue with promotion #14894" begin
     x = fill(1., 5)
-    @test cholfact(sparse(Float16(1)I, 5, 5))\x == x
-    @test cholfact(Symmetric(sparse(Float16(1)I, 5, 5)))\x == x
-    @test cholfact(Hermitian(sparse(Complex{Float16}(1)I, 5, 5)))\x == x
-    @test_throws MethodError cholfact(sparse(BigFloat(1)I, 5, 5))
-    @test_throws MethodError cholfact(Symmetric(sparse(BigFloat(1)I, 5, 5)))
-    @test_throws MethodError cholfact(Hermitian(sparse(Complex{BigFloat}(1)I, 5, 5)))
+    @test chol(sparse(Float16(1)I, 5, 5))\x == x
+    @test chol(Symmetric(sparse(Float16(1)I, 5, 5)))\x == x
+    @test chol(Hermitian(sparse(Complex{Float16}(1)I, 5, 5)))\x == x
+    @test_throws MethodError chol(sparse(BigFloat(1)I, 5, 5))
+    @test_throws MethodError chol(Symmetric(sparse(BigFloat(1)I, 5, 5)))
+    @test_throws MethodError chol(Hermitian(sparse(Complex{BigFloat}(1)I, 5, 5)))
 end
 
 @testset "test \\ for Factor and StridedVecOrMat" begin
     x = rand(5)
-    A = cholfact(sparse(Diagonal(x.\1)))
+    A = chol(sparse(Diagonal(x.\1)))
     @test A\view(fill(1.,10),1:2:10) ≈ x
     @test A\view(Matrix(1.0I, 5, 5), :, :) ≈ Matrix(Diagonal(x))
 end
@@ -687,7 +687,7 @@ end
 @testset "Real factorization and complex rhs" begin
     A = sprandn(5, 5, 0.4) |> t -> t't + I
     B = complex.(randn(5, 2), randn(5, 2))
-    @test cholfact(A)\B ≈ A\B
+    @test chol(A)\B ≈ A\B
 end
 
 @testset "Make sure that ldltfact performs an LDLt (Issue #19032)" begin
@@ -699,7 +699,7 @@ end
     s = unsafe_load(pointer(F))
     @test s.is_super == 0
     @test F\b ≈ fill(1., m+n)
-    F2 = cholfact(M)
+    F2 = chol(M)
     @test !LinearAlgebra.issuccess(F2)
     ldltfact!(F2, M)
     @test LinearAlgebra.issuccess(F2)
@@ -708,8 +708,8 @@ end
 
 @testset "Test that imaginary parts in Hermitian{T,SparseMatrixCSC{T}} are ignored" begin
     A = sparse([1,2,3,4,1], [1,2,3,4,2], [complex(2.0,1),2,2,2,1])
-    Fs = cholfact(Hermitian(A))
-    Fd = cholfact(Hermitian(Array(A)))
+    Fs = chol(Hermitian(A))
+    Fd = chol(Hermitian(Array(A)))
     @test sparse(Fs) ≈ Hermitian(A)
     @test Fs\fill(1., 4) ≈ Fd\fill(1., 4)
 end
@@ -768,8 +768,8 @@ end
         1.02371, -0.502384, 1.10686, 0.262229, -1.6935, 0.525239])
     AtA = A'*A
     C0 = [1., 2., 0, 0, 0]
-    # Test both cholfact and LDLt with and without automatic permutations
-    for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, perm=1:5))
+    # Test both chol and LDLt with and without automatic permutations
+    for F in (chol(AtA), chol(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, perm=1:5))
         local F
         x0 = F\(b = fill(1., 5))
         #Test both sparse/dense and vectors/matrices
@@ -805,9 +805,9 @@ end
 @testset "Issue #22335" begin
     local A, F
     A = sparse(1.0I, 3, 3)
-    @test LinearAlgebra.issuccess(cholfact(A))
+    @test LinearAlgebra.issuccess(chol(A))
     A[3, 3] = -1
-    F = cholfact(A)
+    F = chol(A)
     @test !LinearAlgebra.issuccess(F)
     @test LinearAlgebra.issuccess(ldltfact!(F, A))
     A[3, 3] = 1

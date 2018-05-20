@@ -314,7 +314,6 @@ LinearAlgebra.UniformScaling
 LinearAlgebra.lu
 LinearAlgebra.lufact!
 LinearAlgebra.chol
-LinearAlgebra.cholfact
 LinearAlgebra.cholfact!
 LinearAlgebra.lowrankupdate
 LinearAlgebra.lowrankdowndate

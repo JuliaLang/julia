@@ -22,7 +22,7 @@ end
 Test that a factorization of a matrix succeeded.
 
 ```jldoctest
-julia> F = cholfact([1 0; 0 1]);
+julia> F = chol([1 0; 0 1]);
 
 julia> LinearAlgebra.issuccess(F)
 true
