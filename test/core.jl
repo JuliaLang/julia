@@ -6103,3 +6103,17 @@ g27103() = @isdefined z27103
 @test g27103() == false
 z27103 = 1
 @test g27103() == true
+
+# Issue 27181
+struct A27181
+    typ::Type
+end
+
+struct C27181
+    val
+end
+
+function f27181()
+    invoke(A27181(C27181).typ, Tuple{Any}, nothing)
+end
+@test f27181() == C27181(nothing)
