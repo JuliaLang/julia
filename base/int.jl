@@ -437,11 +437,11 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 # note: this early during bootstrap, `>=` is not yet available
 # note: we only define Int shift counts here; the generic case is handled later
 >>(x::BitInteger, y::Int) =
-    select_value(0 <= y, x >> unsigned(y), x << unsigned(-y))
+    ifelse(0 <= y, x >> unsigned(y), x << unsigned(-y))
 <<(x::BitInteger, y::Int) =
-    select_value(0 <= y, x << unsigned(y), x >> unsigned(-y))
+    ifelse(0 <= y, x << unsigned(y), x >> unsigned(-y))
 >>>(x::BitInteger, y::Int) =
-    select_value(0 <= y, x >>> unsigned(y), x << unsigned(-y))
+    ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
@@ -492,7 +492,9 @@ mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 
 """
-    trunc([T,] x, [digits; base = 10])
+    trunc([T,] x)
+    trunc(x; digits::Integer= [, base = 10])
+    trunc(x; sigdigits::Integer= [, base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
 is less than or equal to `x`.
@@ -500,12 +502,14 @@ is less than or equal to `x`.
 `trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits` and `base` work as for [`round`](@ref).
+`digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function trunc end
 
 """
-    floor([T,] x, [digits; base = 10])
+    floor([T,] x)
+    floor(x; digits::Integer= [, base = 10])
+    floor(x; sigdigits::Integer= [, base = 10])
 
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
 equal to `x`.
@@ -513,12 +517,14 @@ equal to `x`.
 `floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits` and `base` work as for [`round`](@ref).
+`digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function floor end
 
 """
-    ceil([T,] x, [digits; base = 10])
+    ceil([T,] x)
+    ceil(x; digits::Integer= [, base = 10])
+    ceil(x; sigdigits::Integer= [, base = 10])
 
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
 equal to `x`.
@@ -526,14 +532,9 @@ equal to `x`.
 `ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
 representable.
 
-`digits` and `base` work as for [`round`](@ref).
+`digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function ceil end
-
-round(x::Integer) = x
-trunc(x::Integer) = x
-floor(x::Integer) = x
- ceil(x::Integer) = x
 
 round(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 trunc(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
@@ -639,10 +640,10 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
 
-widen(::Type{<:Union{Int8, Int16}}) = Int32
+widen(::Type{<:Union{Int8, Int16}}) = Int
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen(::Type{<:Union{UInt8, UInt16}}) = UInt32
+widen(::Type{<:Union{UInt8, UInt16}}) = UInt
 widen(::Type{UInt32}) = UInt64
 widen(::Type{UInt64}) = UInt128
 
@@ -744,6 +745,8 @@ end
 for op in (:+, :-, :*, :&, :|, :xor)
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
-        return $op(a % T, b % T)
+        aT, bT = a % T, b % T
+        not_sametype((a, b), (aT, bT))
+        return $op(aT, bT)
     end
 end

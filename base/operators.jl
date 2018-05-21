@@ -348,7 +348,7 @@ julia> ifelse(1 > 2, 1, 2)
 2
 ```
 """
-ifelse(c::Bool, x, y) = select_value(c, x, y)
+ifelse
 
 """
     cmp(x,y)
@@ -804,21 +804,38 @@ function which computes the boolean negation of `f`.
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
-julia> filter(isalpha, str)
+julia> filter(isletter, str)
 "εδxyδfxfyε"
 
-julia> filter(!isalpha, str)
+julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
 """
 !(f::Function) = (x...)->!f(x...)
 
 """
+    Fix1(f, x)
+
+A type representing a partially-applied version of the two-argument function
+`f`, with the first argument fixed to the value "x". In other words,
+`Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+"""
+struct Fix1{F,T} <: Function
+    f::F
+    x::T
+
+    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+end
+
+(f::Fix1)(y) = f.f(f.x, y)
+
+"""
     Fix2(f, x)
 
-A type representing a partially-applied version of function `f`, with the second
-argument fixed to the value "x".
-In other words, `Fix2(f, x)` behaves similarly to `y->f(y, x)`.
+A type representing a partially-applied version of the two-argument function
+`f`, with the second argument fixed to the value "x". In other words,
+`Fix2(f, x)` behaves similarly to `y->f(y, x)`.
 """
 struct Fix2{F,T} <: Function
     f::F

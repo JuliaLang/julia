@@ -14,7 +14,8 @@ using ..Types, ..Display, ..Operations
 ############
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
                    CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
-                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE)
+                   CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE, CMD_PRECOMPILE,
+                   CMD_INSTANTIATE)
 
 struct Command
     kind::CommandKind
@@ -52,6 +53,8 @@ const cmds = Dict(
     "develop"   => CMD_DEVELOP,
     "dev"       => CMD_DEVELOP,
     "generate"  => CMD_GENERATE,
+    "precompile" => CMD_PRECOMPILE,
+    "instantiate" => CMD_INSTANTIATE,
 )
 
 #################
@@ -135,11 +138,11 @@ let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(
     global const name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
-function parse_package(word::AbstractString; context=nothing)# ::PackageSpec
+function parse_package(word::AbstractString; context=nothing)::PackageSpec
     word = replace(word, "~" => homedir())
     if context in (CMD_ADD, CMD_DEVELOP) && isdir(word)
         pkg = PackageSpec()
-        pkg.repo = Types.GitRepo(word)
+        pkg.repo = Types.GitRepo(abspath(word))
         return pkg
     elseif occursin(uuid_re, word)
         return PackageSpec(UUID(word))
@@ -163,14 +166,22 @@ end
 ################
 # REPL parsing #
 ################
-const lex_re = r"^[\?\./\+\-](?!\-) | [^@\#\s]+\s*=\s*[^@\#\s]+ | \#\s*[^@\#\s]* | @\s*[^@\#\s]* | [^@\#\s]+"x
+const lex_re = r"^[\?\./\+\-](?!\-) | [^@\#\s;]+\s*=\s*[^@\#\s;]+ | \#\s*[^@\#\s;]* | @\s*[^@\#\s;]* | [^@\#\s;]+|;"x
 
 const Token = Union{Command, Option, VersionRange, String, Rev}
 
-function tokenize(cmd::String)::Vector{Token}
+function tokenize(cmd::String)::Vector{Vector{Token}}
+    words = map(m->m.match, eachmatch(lex_re, cmd))
+    commands = Vector{Token}[]
+    while !isempty(words)
+        push!(commands, tokenize!(words))
+    end
+    return commands
+end
+
+function tokenize!(words::Vector{<:AbstractString})::Vector{Token}
     print_first_command_header()
     tokens = Token[]
-    words = map(m->m.match, eachmatch(lex_re, cmd))
     help_mode = false
     preview_mode = false
     # First parse a Command or a modifier (help / preview) + Command
@@ -196,7 +207,9 @@ function tokenize(cmd::String)::Vector{Token}
     # Now parse the arguments / options to the command
     while !isempty(words)
         word = popfirst!(words)
-        if first(word) == '-'
+        if word == ";"
+            return tokens
+        elseif first(word) == '-'
             push!(tokens, parse_option(word))
         elseif first(word) == '@'
             push!(tokens, VersionRange(strip(word[2:end])))
@@ -209,14 +222,17 @@ function tokenize(cmd::String)::Vector{Token}
     return tokens
 end
 
+
 #############
 # Execution #
 #############
 
 function do_cmd(repl::REPL.AbstractREPL, input::String; do_rethrow=false)
     try
-        tokens = tokenize(input)
-        do_cmd!(tokens, repl)
+        commands = tokenize(input)
+        for command in commands
+            do_cmd!(command, repl)
+        end
     catch err
         if do_rethrow
             rethrow(err)
@@ -269,6 +285,8 @@ function do_cmd!(tokens::Vector{Token}, repl)
     cmd.kind == CMD_PIN      ? Base.invokelatest(           do_pin!, ctx, tokens) :
     cmd.kind == CMD_FREE     ? Base.invokelatest(          do_free!, ctx, tokens) :
     cmd.kind == CMD_GENERATE ? Base.invokelatest(      do_generate!, ctx, tokens) :
+    cmd.kind == CMD_PRECOMPILE ? Base.invokelatest(  do_precompile!, ctx, tokens) :
+    cmd.kind == CMD_INSTANTIATE ? Base.invokelatest(do_instantiate!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -282,6 +300,8 @@ backspace when the input line is empty or press Ctrl+C.
 **Synopsis**
 
     pkg> [--env=...] cmd [opts] [args]
+
+Multiple commands can be given on the same line by interleaving a `;` between the commands.
 
 **Environment**
 
@@ -322,7 +342,11 @@ What action you want the package manager to take:
 
 `develop`: clone the full package repo locally for development
 
-`free`: undos a `pin` or `develop`
+`free`: undoes a `pin`, `develop`, or stops tracking a repo.
+
+`precompile`: precompile all the project dependencies
+
+`instantiate`: downloads all the dependencies for the project
 """
 
 const helps = Dict(
@@ -365,6 +389,9 @@ const helps = Dict(
     may be specified by `@1`, `@1.2`, `@1.2.3`, allowing any version with a prefix
     that matches, or ranges thereof, such as `@1.2-3.4.5`. A git-revision can be
     specified by `#branch` or `#commit`.
+
+    If a local path is used as an argument to `add`, the path needs to be a git repository.
+    The project will then track that git repository just like if it is was tracking a remote repository online.
 
     **Examples**
     ```
@@ -466,6 +493,17 @@ const helps = Dict(
     pkg> develop Example#c37b675
     pkg> develop https://github.com/JuliaLang/Example.jl#master
     ```
+    """, CMD_PRECOMPILE => md"""
+        precompile
+
+    Precompile all the dependencies of the project by running `import` on all of them in a new process.
+    """, CMD_INSTANTIATE => md"""
+        instantiate
+        instantiate [-m|--manifest]
+        instantiate [-p|--project]
+
+    Download all the dependencies for the current project at the version given by the project's manifest.
+    If no manifest exists or the `--project` option is given, resolve and download the dependencies compatible with the project.
     """
 )
 
@@ -712,6 +750,31 @@ function do_generate!(ctx::Context, tokens::Vector{Token})
     API.generate(pkg)
 end
 
+function do_precompile!(ctx::Context, tokens::Vector{Token})
+    if !isempty(tokens)
+        cmderror("`precompile` does not take any arguments")
+    end
+    API.precompile(ctx)
+end
+
+function do_instantiate!(ctx::Context, tokens::Vector{Token})
+    manifest = nothing
+    for token in tokens
+        if token isa Option
+            if token.kind == OPT_MANIFEST
+                manifest = true
+            elseif token.kind == OPT_PROJECT
+            manifest = false
+            else
+                cmderror("invalid option for `instantiate`: $(token)")
+            end
+        else
+            cmderror("invalid argument for `instantiate` :$(token)")
+        end
+    end
+    API.instantiate(ctx; manifest=manifest)
+end
+
 
 ######################
 # REPL mode creation #
@@ -769,9 +832,9 @@ function complete_option(s, i1, i2)
 end
 
 function complete_package(s, i1, i2, lastcommand, project_opt)
-    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP]
+    if lastcommand in [CMD_STATUS, CMD_RM, CMD_UP, CMD_TEST, CMD_BUILD, CMD_FREE, CMD_PIN, CMD_CHECKOUT]
         return complete_installed_package(s, i1, i2, project_opt)
-    elseif lastcommand in [CMD_ADD]
+    elseif lastcommand in [CMD_ADD, CMD_DEVELOP]
         return complete_remote_package(s, i1, i2)
     end
     return String[], 0:-1, false
@@ -802,7 +865,7 @@ end
 function completions(full, index)
     pre = full[1:index]
 
-    pre_words = split(pre, ' ', keep=true)
+    pre_words = split(pre, ' ', keepempty=true)
 
     # first word should always be a command
     if isempty(pre_words)
@@ -817,7 +880,7 @@ function completions(full, index)
 
         # tokenize input, don't offer any completions for invalid commands
         tokens = try
-            tokenize(join(pre_words[1:end-1], ' '))
+            tokenize(join(pre_words[1:end-1], ' '))[end]
         catch
             return String[], 0:-1, false
         end
@@ -849,9 +912,23 @@ function completions(full, index)
     end
 end
 
+function promptf()
+    env = EnvCache()
+    proj_dir = dirname(env.project_file)
+    if startswith(pwd(), proj_dir) && env.pkg != nothing && !isempty(env.pkg.name)
+        name = env.pkg.name
+    else
+        name = basename(proj_dir)
+    end
+    prefix = string("(", name, ") ")
+    return prefix * "pkg> "
+end
+
 # Set up the repl Pkg REPLMode
 function create_mode(repl, main)
-    pkg_mode = LineEdit.Prompt("pkg> ";
+
+
+    pkg_mode = LineEdit.Prompt(promptf;
         prompt_prefix = Base.text_colors[:blue],
         prompt_suffix = "",
         complete = PkgCompletionProvider(),

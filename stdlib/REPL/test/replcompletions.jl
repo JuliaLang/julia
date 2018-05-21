@@ -523,6 +523,26 @@ temp_pkg_dir_noinit() do
 end
 
 path = joinpath(tempdir(),randstring())
+pushfirst!(LOAD_PATH, path)
+try
+    mkpath(path)
+    write(joinpath(path, "Project.toml"),
+        """
+        name = "MyProj"
+
+        [deps]
+        MyPack = "09ebe64f-f76c-4f21-bef2-bd9be6c77e76"
+        """)
+        c, r, res = test_complete("using MyP")
+        @test "MyPack" in c
+        @test "MyProj" in c
+finally
+    @test popfirst!(LOAD_PATH) == path
+    rm(path, recursive=true)
+end
+
+
+path = joinpath(tempdir(),randstring())
 push!(LOAD_PATH, path)
 try
     # Should not throw an error even though the path do no exist
@@ -712,27 +732,27 @@ end
 end
 
 #test that it can auto complete with spaces in file/path
-let path = tempdir(),
-    space_folder = randstring() * " α",
-    dir = joinpath(path, space_folder),
+mktempdir() do path
+    space_folder = randstring() * " α"
+    dir = joinpath(path, space_folder)
     dir_space = replace(space_folder, " " => "\\ ")
 
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
             s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
-            c,r = test_scomplete(s)
+            c, r = test_scomplete(s)
             @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file" in c
 
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
-            c,r = test_complete(s)
+            c, r = test_complete(s)
             @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file\"" in c
         end
         # Test for issue #10324
         s = "cd(\"$dir_space"
-        c,r = test_complete(s)
+        c, r = test_complete(s)
         @test r == 5:15
         @test s[r] ==  dir_space
 
@@ -744,11 +764,11 @@ let path = tempdir(),
                 if !(c in ['\'','$']) # As these characters hold special meaning
                     # in shell commands the shell path completion cannot complete
                     # paths with these characters
-                    c,r,res = test_scomplete(test_dir)
+                    c, r, res = test_scomplete(test_dir)
                     @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                     @test res
                 end
-                c,r,res  = test_complete("\""*test_dir)
+                c, r, res = test_complete("\""*test_dir)
                 @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                 @test res
             finally

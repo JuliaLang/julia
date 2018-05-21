@@ -60,7 +60,7 @@ function WeakKeyDict(kv)
     try
         Base.dict_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
     catch e
-        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow(e)
@@ -104,7 +104,7 @@ getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key),
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 length(t::WeakKeyDict) = length(t.ht)
 
-function start(t::WeakKeyDict{K,V}) where V where K
+function iterate(t::WeakKeyDict{K,V}) where V where K
     gc_token = Ref{Bool}(false) # no keys will be deleted via finalizers until this token is gc'd
     finalizer(gc_token) do r
         if r[]
@@ -113,15 +113,15 @@ function start(t::WeakKeyDict{K,V}) where V where K
         end
     end
     s = lock(t.lock)
-    gc_token[] = true
-    return (start(t.ht), gc_token)
+    iterate(t, (gc_token,))
 end
-done(t::WeakKeyDict, i) = done(t.ht, i[1])
-function next(t::WeakKeyDict{K,V}, i)  where V where K
-    gc_token = i[2]
-    wkv, i = next(t.ht, i[1])
+function iterate(t::WeakKeyDict{K,V}, state) where V where K
+    gc_token = first(state)
+    y = iterate(t.ht, tail(state)...)
+    y === nothing && return nothing
+    wkv, i = y
     kv = Pair{K,V}(wkv[1].value::K, wkv[2])
-    return (kv, (i, gc_token))
+    return (kv, (gc_token, i))
 end
 
 filter!(f, d::WeakKeyDict) = filter_in_one_pass!(f, d)

@@ -347,9 +347,9 @@ function _jl_spawn(file, argv, cmd::Cmd, stdio)
     loop = eventloop()
     handles = Tuple{Cint, UInt}[ # assuming little-endian layout
         let h = rawhandle(io)
-            h === C_NULL    && return (0x00, UInt(0))
-            h isa OS_HANDLE && return (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h)))
-            h isa Ptr{Cvoid} && return (0x04, UInt(h))
+            h === C_NULL     ? (0x00, UInt(0)) :
+            h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
+            h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
             error("invalid spawn handle $h from $io")
         end
         for io in stdio]
@@ -795,7 +795,7 @@ arg_gen(x::AbstractString) = String[cstr(x)]
 arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)
-    if applicable(start, head)
+    if isiterable(typeof(head))
         vals = String[]
         for x in head
             push!(vals, cstr(string(x)))
@@ -834,10 +834,10 @@ wait(x::ProcessChain) = for p in x.processes; wait(p); end
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
 # allow the elements of the Cmd to be accessed as an array or iterator
-for f in (:length, :firstindex, :lastindex, :start, :keys, :first, :last)
+for f in (:length, :firstindex, :lastindex, :keys, :first, :last, :iterate)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
 eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))
-for f in (:next, :done, :getindex)
+for f in (:iterate, :getindex)
     @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)
 end

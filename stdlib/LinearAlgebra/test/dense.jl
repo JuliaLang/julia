@@ -340,7 +340,7 @@ end
     dim=2
     S=zeros(Complex,dim,dim)
     T=zeros(Complex,dim,dim)
-    T[:] = 1
+    fill!(T, 1)
     z = 2.5 + 1.5im
     S[1] = z
     @test S*T == [z z; 0 0]

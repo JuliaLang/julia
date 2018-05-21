@@ -170,7 +170,7 @@ The optional keyword argument `context` can be set to an `IO` or [`IOContext`](@
 object whose attributes are used for the I/O stream passed to `show`.
 
 Note that `repr(x)` is usually similar to how the value of `x` would
-be entered in Julia.  See also [`repr("text/plain", x)`](@ref) to instead
+be entered in Julia.  See also [`repr(MIME("text/plain"), x)`](@ref) to instead
 return a "pretty-printed" version of `x` designed more for human consumption,
 equivalent to the REPL display of `x`.
 
@@ -181,6 +181,12 @@ julia> repr(1)
 
 julia> repr(zeros(3))
 "[0.0, 0.0, 0.0]"
+
+julia> repr(big(1/3))
+"3.33333333333333314829616256247390992939472198486328125e-01"
+
+julia> repr(big(1/3), context=:compact => true)
+"3.33333e-01"
 
 ```
 """
@@ -210,11 +216,12 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 # join is implemented using IO
 
 """
-    join(io::IO, strings, delim, [last])
+    join([io::IO,] strings, delim, [last])
 
 Join an array of `strings` into a single string, inserting the given delimiter between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
-two strings. For example,
+two strings. If `io` is given, the result is written to `io` rather than returned as
+as a `String`.  For example,
 
 # Examples
 ```jldoctest
@@ -234,7 +241,6 @@ function join(io::IO, strings, delim, last)
         print(io, str)
     end
 end
-
 function join(io::IO, strings, delim)
     a = Iterators.Stateful(strings)
     for str in a
@@ -243,6 +249,9 @@ function join(io::IO, strings, delim)
     end
 end
 join(io::IO, strings) = join(io, strings, "")
+# Hack around https://github.com/JuliaLang/julia/issues/26871
+join(io::IO, strings::Tuple{}, delim) = nothing
+join(io::IO, strings::Tuple{}, delim, last) = nothing
 
 join(strings) = sprint(join, strings)
 join(strings, delim) = sprint(join, strings, delim)

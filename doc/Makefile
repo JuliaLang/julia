@@ -69,5 +69,5 @@ check: deps
 # The deploy target should only be called in Travis builds
 deploy: deps
 	@echo "Deploying HTML documentation."
-	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy doctest
 	@echo "Build & deploy of docs finished."

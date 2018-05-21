@@ -43,19 +43,18 @@ function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     convert(T, d)
 end
 
-function parseint_next(s::AbstractString, startpos::Int, endpos::Int)
+function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
     (0 < startpos <= endpos) || (return Char(0), 0, 0)
     j = startpos
-    c = @inbounds s[startpos]
-    startpos = nextind(s, startpos)
-    return c, startpos, j
+    c, startpos = iterate(s,startpos)::Tuple{Char, Int}
+    c, startpos, j
 end
 
 function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos::Int, endpos::Int)
-    c, i, j = parseint_next(s, startpos, endpos)
+    c, i, j = parseint_iterate(s, startpos, endpos)
 
     while isspace(c)
-        c, i, j = parseint_next(s,i,endpos)
+        c, i, j = parseint_iterate(s,i,endpos)
     end
     (j == 0) && (return 0, 0, 0)
 
@@ -63,22 +62,21 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     if signed
         if c == '-' || c == '+'
             (c == '-') && (sgn = -1)
-            c, i, j = parseint_next(s,i,endpos)
+            c, i, j = parseint_iterate(s,i,endpos)
         end
     end
 
     while isspace(c)
-        c, i, j = parseint_next(s,i,endpos)
+        c, i, j = parseint_iterate(s,i,endpos)
     end
     (j == 0) && (return 0, 0, 0)
 
     if base == 0
-        if c == '0' && i ≤ lastindex(s)
-            c = @inbounds s[i]
-            i = nextind(s, i)
+        if c == '0' && i <= ncodeunits(s)
+            c, i = iterate(s,i)::Tuple{Char, Int}
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
-                c, i, j = parseint_next(s,i,endpos)
+                c, i, j = parseint_iterate(s,i,endpos)
             end
         else
             base = 10
@@ -101,7 +99,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
         return nothing
     end
-    c, i = parseint_next(s,i,endpos)
+    c, i = parseint_iterate(s,i,endpos)
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
         return nothing
@@ -125,8 +123,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             n *= sgn
             return n
         end
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
         isspace(c) && break
     end
     (T <: Signed) && (n *= sgn)
@@ -147,12 +144,10 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             return nothing
         end
         (i > endpos) && return n
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
     end
     while i <= endpos
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
         if !isspace(c)
             raise && throw(ArgumentError("extra characters after whitespace in $(repr(SubString(s,startpos,endpos)))"))
             return nothing
@@ -229,17 +224,14 @@ function parsefloat_preamble(s::AbstractString, base::Int)
     c = ' '
     sign = 1
     while i ≤ lastindex(s) && isspace(c)
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
     end
     if c in ('-', '+')
         sign = (c == '-') ? -1 : 1
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
     end
     while i ≤ lastindex(s) && isspace(c)
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
     end
     i > lastindex(s) && throw(ArgumentError("input string is empty or only contains whitespace"))
     startpos = i-1
@@ -248,8 +240,7 @@ end
 
 function _rest_is_space(s, i, T)
     while i ≤ lastindex(s)
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
         isspace(c) || throw(ArgumentError("cannot parse $s as $T"))
     end
     true
@@ -276,8 +267,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
     b = T(base)
     res = zero(T)
     while i ≤ lastindex(s)
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
         isspace(c) && break
         c == '.' && break
         if baseunder15 && lowercase(c) == 'e'
@@ -292,8 +282,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
     n = 0
     while i ≤ lastindex(s)
         n -= 1
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
         isspace(c) && break
         baseunder15 && lowercase(c) == 'e' && break
         tmp = parse(Int, c, base=base)
@@ -304,8 +293,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
     expsign = 1
     exponent = 0
     while baseunder15 && i ≤ lastindex(s)
-        c = @inbounds s[i]
-        i = nextind(s, i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
         isspace(c) && break
         if c == '-'
             expsign = -1

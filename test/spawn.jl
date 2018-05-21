@@ -267,7 +267,7 @@ let fname = tempname(), p
     oldhandle = OLD_STDERR.handle
     OLD_STDERR.status = Base.StatusClosing
     OLD_STDERR.handle = C_NULL
-    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, cfunction(thrash, Cvoid, Tuple{Ptr{Cvoid}}))
+    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, @cfunction(thrash, Cvoid, (Ptr{Cvoid},)))
     sleep(1)
     import Base.zzzInvalidIdentifier
     """
@@ -528,4 +528,11 @@ end
 # Second argument of shell_parse
 let s = "   \$abc   "
     @test s[Base.shell_parse(s)[2]] == "abc"
+end
+
+# Logging macros should not output to finalized streams (#26687)
+let
+    cmd = `$(Base.julia_cmd()) -e 'finalizer(x->@info(x), "Hello")'`
+    output = readchomp(pipeline(cmd, stderr=catcmd))
+    @test occursin("Info: Hello", output)
 end

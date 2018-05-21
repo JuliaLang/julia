@@ -322,8 +322,8 @@ end
 @test occursin(r"^@doc \(macro with \d+ method[s]?\)$", repr("text/plain", getfield(Base, Symbol("@doc"))))
 
 method_defs_lineno = @__LINE__() + 1
-Base.Symbol() = throw(ErrorException("1"))
-(::Symbol)() = throw(ErrorException("2"))
+String() = throw(ErrorException("1"))
+(::String)() = throw(ErrorException("2"))
 EightBitType() = throw(ErrorException("3"))
 (::EightBitType)() = throw(ErrorException("4"))
 EightBitTypeT() = throw(ErrorException("5"))
@@ -338,10 +338,10 @@ let err_str,
     sp = Base.source_path()
     sn = basename(sp)
 
-    @test sprint(show, which(Symbol, Tuple{})) ==
-        "Symbol() in $curmod_str at $sp:$(method_defs_lineno + 0)"
-    @test sprint(show, which(:a, Tuple{})) ==
-        "(::Symbol)() in $curmod_str at $sp:$(method_defs_lineno + 1)"
+    @test sprint(show, which(String, Tuple{})) ==
+        "String() in $curmod_str at $sp:$(method_defs_lineno + 0)"
+    @test sprint(show, which("a", Tuple{})) ==
+        "(::String)() in $curmod_str at $sp:$(method_defs_lineno + 1)"
     @test sprint(show, which(EightBitType, Tuple{})) ==
         "$(curmod_prefix)EightBitType() in $curmod_str at $sp:$(method_defs_lineno + 2)"
     @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) ==
@@ -359,10 +359,10 @@ let err_str,
     @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
     @test repr("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
-    err_str = @except_stackframe Symbol() ErrorException
-    @test err_str == "Symbol() at $sn:$(method_defs_lineno + 0)"
-    err_str = @except_stackframe :a() ErrorException
-    @test err_str == "(::Symbol)() at $sn:$(method_defs_lineno + 1)"
+    err_str = @except_stackframe String() ErrorException
+    @test err_str == "String() at $sn:$(method_defs_lineno + 0)"
+    err_str = @except_stackframe "a"() ErrorException
+    @test err_str == "(::String)() at $sn:$(method_defs_lineno + 1)"
     err_str = @except_stackframe EightBitType() ErrorException
     @test err_str == "$(curmod_prefix)EightBitType() at $sn:$(method_defs_lineno + 2)"
     err_str = @except_stackframe i() ErrorException

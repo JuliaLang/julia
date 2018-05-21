@@ -2,11 +2,11 @@
 
 ## [Iteration](@id lib-collections-iteration)
 
-Sequential iteration is implemented by the methods [`start`](@ref), [`done`](@ref), and [`next`](@ref).
+Sequential iteration is implemented by the [`iterate`](@ref) function.
 The general `for` loop:
 
 ```julia
-for i = I   # or  "for i in I"
+for i in iter   # or  "for i = iter"
     # body
 end
 ```
@@ -14,10 +14,11 @@ end
 is translated into:
 
 ```julia
-state = start(I)
-while !done(I, state)
-    (i, state) = next(I, state)
+next = iterate(iter)
+while next !== nothing
+    (i, state) = next
     # body
+    next = iterate(iter, state)
 end
 ```
 
@@ -26,9 +27,7 @@ See the [manual section on the iteration interface](@ref man-interface-iteration
 iterable type.
 
 ```@docs
-Base.start
-Base.done
-Base.next
+Base.iterate
 Base.IteratorSize
 Base.IteratorEltype
 ```
@@ -77,6 +76,7 @@ Fully implemented by:
 
 ```@docs
 Base.in
+Base.:∉
 Base.eltype
 Base.indexin
 Base.unique
@@ -127,7 +127,6 @@ Base.last
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)
-Base.issubset(::Any, ::Any)
 Base.filter
 Base.filter!
 Base.replace(::Any, ::Pair...)
@@ -240,6 +239,9 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.:⊈
+Base.:⊊
+Base.issetequal
 ```
 
 Fully implemented by:

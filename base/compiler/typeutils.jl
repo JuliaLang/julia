@@ -1,7 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const _TYPE_NAME = Type.body.name
+#####################
+# lattice utilities #
+#####################
 
+function rewrap(@nospecialize(t), @nospecialize(u))
+    isa(t, Const) && return t
+    isa(t, Conditional) && return t
+    return rewrap_unionall(t, u)
+end
+
+const _TYPE_NAME = Type.body.name
 isType(@nospecialize t) = isa(t, DataType) && (t::DataType).name === _TYPE_NAME
 
 # true if Type{T} is inlineable as constant T
@@ -24,13 +33,13 @@ function issingletontype(@nospecialize t)
 end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
 
 # equivalent to isdispatchtuple(Tuple{v}) || v == Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
 function isdispatchelem(@nospecialize v)
     return (v === Bottom) || (v === typeof(Bottom)) ||
-        (isconcretetype(v) && !iskindtype(v)) ||
-        (isType(v) && !has_free_typevars(v))
+        isconcretedispatch(v) || (isType(v) && !has_free_typevars(v))
 end
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
@@ -44,11 +53,11 @@ end
 function valid_tparam(@nospecialize(x))
     if isa(x, Tuple)
         for t in x
-            isa(t, Symbol) || isbits(typeof(t)) || return false
+            isa(t, Symbol) || isbitstype(typeof(t)) || return false
         end
         return true
     end
-    return isa(x, Symbol) || isbits(typeof(x))
+    return isa(x, Symbol) || isbitstype(typeof(x))
 end
 
 has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
@@ -73,22 +82,21 @@ function tvar_extent(@nospecialize t)
     return t
 end
 
+_typename(@nospecialize a) = Union{}
+_typename(a::TypeVar) = Core.TypeName
+function _typename(a::Union)
+    ta = _typename(a.a)
+    tb = _typename(a.b)
+    ta === tb && return ta # same type-name
+    (ta === Union{} || tb === Union{}) && return Union{} # threw an error
+    (ta isa Const && tb isa Const) && return Union{} # will throw an error (different type-names)
+    return Core.TypeName # uncertain result
+end
+_typename(union::UnionAll) = _typename(union.body)
+_typename(a::DataType) = Const(a.name)
+
 function tuple_tail_elem(@nospecialize(init), ct)
     return Vararg{widenconst(foldl((a, b) -> tmerge(a, tvar_extent(unwrapva(b))), init, ct))}
-end
-
-# t[n:end]
-function tupleparam_tail(t::SimpleVector, n)
-    lt = length(t)
-    if n > lt
-        va = t[lt]
-        if isvarargtype(va)
-            # assumes that we should never see Vararg{T, x}, where x is a constant (should be guaranteed by construction)
-            return Tuple{va}
-        end
-        return Tuple{}
-    end
-    return Tuple{t[n:lt]...}
 end
 
 # take a Tuple where one or more parameters are Unions

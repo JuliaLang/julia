@@ -36,7 +36,7 @@ jl_sym_t *top_sym;     jl_sym_t *colons_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
-jl_sym_t *unreachable_sym;
+jl_sym_t *unreachable_sym; jl_sym_t *tuple_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *body_sym;    jl_sym_t *globalref_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
@@ -45,8 +45,11 @@ jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *underscore_sym;
-jl_sym_t *abstracttype_sym; jl_sym_t *primtype_sym;
-jl_sym_t *structtype_sym; jl_sym_t *foreigncall_sym;
+jl_sym_t *abstracttype_sym;
+jl_sym_t *primtype_sym;
+jl_sym_t *structtype_sym;
+jl_sym_t *foreigncall_sym;
+jl_sym_t *cfunction_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
@@ -321,6 +324,7 @@ void jl_init_frontend(void)
     call_sym = jl_symbol("call");
     invoke_sym = jl_symbol("invoke");
     foreigncall_sym = jl_symbol("foreigncall");
+    cfunction_sym = jl_symbol("cfunction");
     quote_sym = jl_symbol("quote");
     inert_sym = jl_symbol("inert");
     top_sym = jl_symbol("top");
@@ -334,6 +338,7 @@ void jl_init_frontend(void)
     label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
     unreachable_sym = jl_symbol("unreachable");
+    tuple_sym = jl_symbol("tuple");
     lambda_sym = jl_symbol("lambda");
     module_sym = jl_symbol("module");
     export_sym = jl_symbol("export");
@@ -993,7 +998,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             // unreachable
         }
         *ctx = mfunc->def.method->module;
-        result = jl_call_method_internal(mfunc, margs, nargs);
+        result = mfunc->invoke(mfunc, margs, nargs);
     }
     JL_CATCH {
         if (jl_loaderror_type == NULL) {

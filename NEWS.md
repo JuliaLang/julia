@@ -230,7 +230,7 @@ This section lists changes that do not have deprecation warnings.
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
-  * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
+  * `getindex(s::String, r::UnitRange{Int})` now throws `StringIndexError` if `last(r)`
     is not a valid index into `s` ([#22572]).
 
   * `ntuple(f, n::Integer)` throws `ArgumentError` if `n` is negative.
@@ -388,11 +388,6 @@ This section lists changes that do not have deprecation warnings.
     Its return value has been removed. Use the `process_running` function
     to determine if a process has already exited.
 
-  * Broadcasting has been redesigned with an extensible public interface. The new API is
-    documented at https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1.
-    `AbstractArray` types that specialized broadcasting using the old internal API will
-    need to switch to the new API. ([#20740])
-
   * The logging system has been redesigned - `info` and `warn` are deprecated
     and replaced with the logging macros `@info`, `@warn`, `@debug` and
     `@error`.  The `logging` function is also deprecated and replaced with
@@ -417,6 +412,15 @@ This section lists changes that do not have deprecation warnings.
 
   * `findn(x::AbstractArray)` has been deprecated in favor of `findall(!iszero, x)`, which
     now returns cartesian indices for multidimensional arrays (see below, [#25532]).
+
+  * Broadcasting operations are no longer fused into a single operation by Julia's parser.
+    Instead, a lazy `Broadcasted` object is created to represent the fused expression and
+    then realized with `copy(bc::Broadcasted)` or `copyto!(dest, bc::Broadcasted)`
+    to evaluate the wrapper. Consequently, package authors generally need to specialize
+    `copy` and `copyto!` methods rather than `broadcast` and `broadcast!`. This also allows
+    for more customization and control of fused broadcasts. See the
+    [Interfaces chapter](https://docs.julialang.org/en/latest/manual/interfaces/#man-interfaces-broadcasting-1)
+    for more information.
 
   * `find` has been renamed to `findall`. `findall`, `findfirst`, `findlast`, `findnext`
     now take and/or return the same type of indices as `keys`/`pairs` for `AbstractArray`,
@@ -459,6 +463,15 @@ This section lists changes that do not have deprecation warnings.
   * `parse(::Type, ::Char)` now uses a default base of 10, like other number parsing
     methods, instead of 36 ([#26576]).
 
+  * `isequal` for `Ptr`s now compares element types; `==` still compares only addresses
+    ([#26858]).
+
+  * `widen` on 8- and 16-bit integer types now widens to the platform word size (`Int`)
+    instead of to a 32-bit type ([#26859]).
+
+  * `mv`,`cp`, `touch`, `mkdir`, `mkpath` now return the path that was created/modified
+    rather than `nothing` ([#27071]).
+
 Library improvements
 --------------------
 
@@ -467,6 +480,9 @@ Library improvements
 
   * `Char` is now a subtype of `AbstractChar`, and most of the functions that
     take character arguments now accept any `AbstractChar` ([#26286]).
+
+  * `bytes2hex` now accepts an optional `io` argument to output to a hexadecimal stream
+    without allocating a `String` first ([#27121]).
 
   * `String(array)` now accepts an arbitrary `AbstractVector{UInt8}`. For `Vector`
     inputs, it "steals" the memory buffer, leaving them with an empty buffer which
@@ -624,8 +640,10 @@ Library improvements
       other containers, by taking the multiplicity of the arguments into account.
       Use `unique` to get the old behavior.
 
-  * The type `LinearIndices` has been added, providing conversion from
-    cartesian indices to linear indices using the normal indexing operation. ([#24715])
+  * The `linearindices` function has been deprecated in favor of the new
+    `LinearIndices` type, which additionnally provides conversion from
+    cartesian indices to linear indices using the normal indexing operation.
+    ([#24715], [#26775]).
 
   * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
     like other `AbstractDict` subtypes and its constructors mirror the
@@ -636,8 +654,9 @@ Library improvements
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
     the buffer ([#25944]).
 
-  * `trunc`, `floor`, `ceil`, `round`, and `signif` specify `base` using a
-    keyword argument. ([#26156])
+  * `trunc`, `floor`, `ceil`, and `round` specify `digits`, `sigdigits` and `base` using
+    keyword arguments. ([#26156], [#26670])
+
 
 Compiler/Runtime improvements
 -----------------------------
@@ -669,6 +688,12 @@ Deprecated or removed
     Instead, reshape the array or add trailing indices so the dimensionality and number of indices
     match ([#14770], [#23628]).
 
+  * The use of a positional dimension argument has largely been deprecated in favor of a
+    `dims` keyword argument. This includes the functions `sum`, `prod`, `maximum`,
+    `minimum`, `all`, `any`, `findmax`, `findmin`, `mean`, `varm`, `std`, `var`, `cov`,
+    `cor`, `median`, `mapreducedim`, `reducedim`, `sort`, `accumulate`, `accumulate!`,
+    `cumsum`, `cumsum!`, `cumprod`, `cumprod!`, `flipdim`, and `squeeze` ([#25501]).
+
   * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
     `axes(a, d)` ([#25057]).
 
@@ -681,6 +706,21 @@ Deprecated or removed
     `Vector(3)` is now `Vector(undef, 3)`, `Matrix{Int}((2, 4))` is now,
     `Matrix{Int}(undef, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
     `Array{Float32,3}(undef, 11, 13, 17)` ([#24781]).
+
+  * Previously `setindex!(A, x, I...)` (and the syntax `A[I...] = x`) supported two
+    different modes of operation when supplied with a set of non-scalar indices `I`
+    (e.g., at least one index is an `AbstractArray`) depending upon the value of `x`
+    on the right hand side. If `x` is an `AbstractArray`, its _contents_ are copied
+    elementwise into the locations in `A` selected by `I` and it must have the same
+    number of elements as `I` selects locations. Otherwise, if `x` is not an
+    `AbstractArray`, then its _value_ is implicitly broadcast to all locations to
+    all locations in `A` selected by `I`. This latter behavior—implicitly broadcasting
+    "scalar"-like values across many locations—is now deprecated in favor of explicitly
+    using the broadcasted assignment syntax `A[I...] .= x` or `fill!(view(A, I...), x)`
+    ([#26347]).
+
+  * `broadcast_getindex(A, I...)` and `broadcast_setindex!(A, v, I...)` are deprecated in
+    favor of `getindex.((A,), I...)` and `setindex!.((A,), v, I...)`, respectively ([#27075]).
 
   * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
 
@@ -698,9 +738,9 @@ Deprecated or removed
   * `slicedim(A, d, i)` has been deprecated in favor of `copy(selectdim(A, d, i))`. The new
     `selectdim` function now always returns a view into `A`; in many cases the `copy` is
     not necessary. Previously, `slicedim` on a vector `V` over dimension `d=1` and scalar
-	index `i` would return the just selected element (unless `V` was a `BitVector`). This
-	has now been made consistent: `selectdim` now always returns a view into the original
-	array, with a zero-dimensional view in this specific case ([#26009]).
+    index `i` would return the just selected element (unless `V` was a `BitVector`). This
+    has now been made consistent: `selectdim` now always returns a view into the original
+    array, with a zero-dimensional view in this specific case ([#26009]).
 
   * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
     output ([#12131]).
@@ -752,6 +792,19 @@ Deprecated or removed
     with different element type and/or shape depending on `opts...`. Where strictly
     necessary, consider `fill!(similar(A[, opts...]), {one(eltype(A)) | zero(eltype(A))})`.
     For an algebraic multiplicative identity, consider `one(A)` ([#24656]).
+
+  * The `similar(dims->f(..., dims...), [T], axes...)` method to add offset array support
+    to a function `f` that would otherwise create a non-offset array has been deprecated.
+    Instead, call `f(..., axes...)` directly and, if needed, the offset array implementation
+    should add offset axis support to the function `f` directly ([#26733]).
+
+  * The functions `ones` and `zeros` used to accept any objects as dimensional arguments,
+    implicitly converting them to `Int`s.  This is now deprecated; only `Integer`s or
+    `AbstractUnitRange`s are accepted as arguments.  Instead, convert the arguments before
+    calling `ones` or `zeros` ([#26733]).
+
+  * The variadic `size(A, dim1, dim2, dims...)` method to return a tuple of multiple
+    dimension lengths of `A` has been deprecated ([#26862]).
 
   * The `Operators` module is deprecated. Instead, import required operators explicitly
     from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
@@ -919,6 +972,9 @@ Deprecated or removed
   * `map` on dictionaries previously operated on `key=>value` pairs. This behavior is deprecated,
     and in the future `map` will operate only on values ([#5794]).
 
+  * `map` on sets previously returned a `Set`, possibly changing the order or number of elements. This
+    behavior is deprecated and in the future `map` will preserve order and number of elements ([#26980]).
+
   * Previously, broadcast defaulted to treating its arguments as scalars if they were not
     arrays. This behavior is deprecated, and in the future `broadcast` will default to
     iterating over all its arguments. Wrap arguments you wish to be treated as scalars with
@@ -928,6 +984,9 @@ Deprecated or removed
   * Automatically broadcasted `+` and `-` for `array + scalar`, `scalar - array`, and so-on have
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead ([#22880], [#22932]).
+
+  * `flipbits!(B)` is deprecated in favor of using in-place broadcast to negate each element:
+    `B .= .!B` ([#27067]).
 
   * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`.
     Concrete types are those that might equal `typeof(x)` for some `x`;
@@ -994,6 +1053,8 @@ Deprecated or removed
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
 
   * `isnumber` has been renamed to `isnumeric` ([#25021]).
+
+  * `isalpha` has been renamed to `isletter` ([#26932]).
 
   * `is_assigned_char` and `normalize_string` have been renamed to `isassigned` and
     `normalize`, and moved to the new `Unicode` standard library module.
@@ -1129,6 +1190,8 @@ Deprecated or removed
 
   * `isupper`, `islower`, `ucfirst` and `lcfirst` have been deprecated in favor of `isuppercase`,
     `islowercase`, `uppercasefirst` and `lowercasefirst`, respectively ([#26442]).
+
+  * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.
 
 Command-line option changes
 ---------------------------
@@ -1439,3 +1502,6 @@ Command-line option changes
 [#26436]: https://github.com/JuliaLang/julia/issues/26436
 [#26442]: https://github.com/JuliaLang/julia/issues/26442
 [#26600]: https://github.com/JuliaLang/julia/issues/26600
+[#26670]: https://github.com/JuliaLang/julia/issues/26670
+[#26775]: https://github.com/JuliaLang/julia/issues/26775
+[#26932]: https://github.com/JuliaLang/julia/issues/26932

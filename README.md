@@ -265,13 +265,8 @@ If you do choose to use the `USE_SYSTEM_*` flags, note that `/usr/local` is not 
 to add `LDFLAGS=-L/usr/local/lib` and `CPPFLAGS=-I/usr/local/include` to your `Make.user`, though doing so may interfere with
 other dependencies.
 
-Some known issues on FreeBSD are:
-
-* The x86 architecture does not support threading due to lack of compiler runtime library support, so you may need to
-  set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
-
-* The `Pkg` test suite segfaults on FreeBSD 11.1, likely due to a change in FreeBSD's default handling of stack guarding.
-  See [issue #23328](https://github.com/JuliaLang/julia/issues/23328) for more information.
+Note that the x86 architecture does not support threading due to lack of compiler runtime library support, so you may need to
+set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
 
 ### Windows
 
@@ -293,10 +288,15 @@ Building Julia requires that the following software be installed:
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
-- **[awk]**                     - helper tool for Makefiles.
+- **[awk]**                     — helper tool for Makefiles.
 - **[patch]**                   — for modifying source code.
 - **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
 - **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
+
+On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
+```
+sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config
+```
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 

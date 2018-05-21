@@ -968,12 +968,20 @@ cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 # More special functions
-include(joinpath("special", "exp.jl"))
-include(joinpath("special", "exp10.jl"))
-include(joinpath("special", "hyperbolic.jl"))
-include(joinpath("special", "trig.jl"))
-include(joinpath("special", "gamma.jl"))
-include(joinpath("special", "rem_pio2.jl"))
-include(joinpath("special", "log.jl"))
+include("special/exp.jl")
+include("special/exp10.jl")
+include("special/hyperbolic.jl")
+include("special/trig.jl")
+include("special/gamma.jl")
+include("special/rem_pio2.jl")
+include("special/log.jl")
+
+# `missing` definitions for functions in this module
+for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
+          :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
+          :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
+          :(log2), :(exponent), :(sqrt), :(gamma), :(lgamma))
+    @eval $(f)(::Missing) = missing
+end
 
 end # module

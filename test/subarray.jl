@@ -24,7 +24,7 @@ function Agen_slice(A::AbstractArray, I...)
             push!(sd, i)
         end
     end
-    squeeze(B, sd)
+    squeeze(B, dims=sd)
 end
 
 _Agen(A, i1) = [A[j1] for j1 in i1]
@@ -354,7 +354,7 @@ sA = view(A, 2:2, 1:5, :)
 @test size(sA) == (1, 5, 8)
 @test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
 @test sA[1, 2, 1:8][:] == [5:15:120;]
-sA[2:5:end] = -1
+sA[2:5:end] .= -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 @test @inferred(strides(sA)) == (1,3,15)
@@ -363,10 +363,12 @@ sA[2:5:end] = -1
 test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == [1:2;]
-sA[1:3,1:5] = -2
+sA[1:3,1:5] .= -2
 @test all(A[:,:,5] .== -2)
-sA[:] = -3
+fill!(sA, -3)
 @test all(A[:,:,5] .== -3)
+sA[:] .= 4
+@test all(A[:,:,5] .== 4)
 @test @inferred(strides(sA)) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
@@ -413,7 +415,7 @@ sA = view(A, 2, :, 1:8)
 @test sA[2, 1:8][:] == [5:15:120;]
 @test sA[:,1] == [2:3:14;]
 @test sA[2:5:end] == [5:15:110;]
-sA[2:5:end] = -1
+sA[2:5:end] .= -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 test_bounds(sA)
@@ -441,7 +443,7 @@ A = rand(2, 2, 3)
 msk = fill(true, 2, 2)
 msk[2,1] = false
 sA = view(A, :, :, 1)
-sA[msk] = 1.0
+sA[msk] .= 1.0
 @test sA[msk] == fill(1, count(msk))
 
 # bounds checking upon construction; see #4044, #10296
@@ -524,14 +526,14 @@ let foo = [X]
 end
 
 # test @views macro
-@views let f!(x) = (x[1:end-1] .+= x[2:end].^2; nothing)
+@views let f!(x) = x[1:end-1] .+= x[2:end].^2
     x = [1,2,3,4]
     f!(x)
     @test x == [5,11,19,4]
     @test x[1:3] isa SubArray
     @test x[2] === 11
     @test Dict((1:3) => 4)[1:3] === 4
-    x[1:2] = 0
+    x[1:2] .= 0
     @test x == [0,0,19,4]
     x[1:2] .= 5:6
     @test x == [5,6,19,4]
@@ -582,6 +584,13 @@ end
 let
     s = view(reshape(1:6, 2, 3), 1:2, 1:2)
     @test @inferred(s[2,2,1]) === 4
+end
+
+# issue #18581: slices with OneTo axes can be linear
+let
+    A18581 = rand(5, 5)
+    B18581 = view(A18581, :, axes(A18581,2))
+    @test IndexStyle(B18581) === IndexLinear()
 end
 
 @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4

@@ -622,8 +622,8 @@ function norm(p::Point{<:Real})
 end
 ```
 
-(Equivalently, one could define `function norm{T<:Real}(p::Point{T})` or
-`function norm(p::Point{T} where T<:Real)`; see [UnionAll Types](@ref).)
+(Equivalently, one could define `function norm(p::Point{T} where T<:Real)` or
+`function norm(p::Point{T}) where T<:Real`; see [UnionAll Types](@ref).)
 
 More examples will be discussed later in [Methods](@ref).
 

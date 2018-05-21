@@ -1170,7 +1170,7 @@ Sometimes you can enable better optimization by promising certain program proper
     and could change or disappear in future versions of Julia.
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
-and may cause a segmentation fault if bounds checking is turned off. Use `linearindices(x)` or `eachindex(x)`
+and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
 instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
 
 Note: While `@simd` needs to be placed directly in front of a loop, both `@inbounds` and `@fastmath`

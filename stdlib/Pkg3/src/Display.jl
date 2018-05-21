@@ -52,15 +52,15 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
         diff = manifest_diff(ctx, m₀, m₁)
         if !use_as_api
-            printpkgstyle(ctx, :Status, pathrepr(ctx, env.project_file); ignore_indent=true)
-            print_diff(ctx, diff)
+            printpkgstyle(ctx, :Status, pathrepr(ctx, env.project_file), #=ignore_indent=# true)
+            print_diff(ctx, diff, #=status=# true)
         end
     end
     if mode == PKGMODE_MANIFEST
         diff = manifest_diff(ctx, manifest₀, manifest₁)
         if !use_as_api
-            printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file); ignore_indent=true)
-            print_diff(ctx, diff)
+            printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file), #=ignore_indent=# true)
+            print_diff(ctx, diff, #=status=# true)
         end
     elseif mode == PKGMODE_COMBINED
         p = not_in_project(merge(project₀["deps"], project₁["deps"]))
@@ -69,8 +69,8 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         c_diff = filter!(x->x.old != x.new, manifest_diff(ctx, m₀, m₁))
         if !isempty(c_diff)
             if !use_as_api
-                printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file); ignore_indent=true)
-                print_diff(ctx, c_diff)
+                printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file), #=ignore_indent=# true)
+                print_diff(ctx, c_diff, #=status=# true)
             end
             diff = Base.vcat(c_diff, diff)
         end
@@ -113,16 +113,17 @@ vstring(ctx::Context, a::VerInfo) =
     string((a.ver == nothing && a.hash != nothing) ? "[$(string(a.hash)[1:16])]" : "",
            a.ver != nothing ? "v$(a.ver)" : "",
            a.path != nothing ? " [$(pathrepr(ctx, a.path))]" : "",
-           a.repo != nothing ? " #$(revstring(a.repo.rev))" : "",
+           a.repo != nothing ? " #$(revstring(a.repo.rev)) [$(a.repo.url)]" : "",
            a.pinned == true ? " ⚲" : "",
            )
 
 Base.:(==)(a::VerInfo, b::VerInfo) =
-    a.hash == b.hash && a.ver == b.ver && a.pinned == b.pinned
+    a.hash == b.hash && a.ver == b.ver && a.pinned == b.pinned && a.repo == b.repo
 
 ≈(a::VerInfo, b::VerInfo) = a.hash == b.hash &&
     (a.ver == nothing || b.ver == nothing || a.ver == b.ver) &&
-    (a.pinned == b.pinned)
+    (a.pinned == b.pinned) &&
+    (a.repo == nothing || b.repo == nothing || a.repo == b.repo)
 
 struct DiffEntry
     uuid::UUID
@@ -131,10 +132,12 @@ struct DiffEntry
     new::Union{VerInfo,Nothing}
 end
 
-function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry})
+function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry}, status=false)
     same = all(x.old == x.new for x in diff)
+    some_packages_not_downloaded = false
     for x in diff
-        warnings = String[]
+        package_downloaded = Base.locate_package(Base.PkgId(x.uuid, x.name)) !== nothing
+        package_downloaded || (some_packages_not_downloaded = true)
         if x.old != nothing && x.new != nothing
             if x.old ≈ x.new
                 verb = ' '
@@ -149,12 +152,8 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry})
                     verb = '~'
                 else
                     verb = '?'
-                    msg = x.old.hash == x.new.hash ?
-                        "hashes match but versions don't: $(x.old.ver) ≠ $(x.new.ver)" :
-                        "versions match but hashes don't: $(x.old.hash) ≠ $(x.new.hash)"
-                    push!(warnings, msg)
                 end
-                vstr = (x.old.ver == x.new.ver && x.old.pinned == x.new.pinned) ?
+                vstr = (x.old.ver == x.new.ver && x.old.pinned == x.new.pinned && x.old.repo == x.new.repo) ?
                       vstring(ctx, x.new) :
                       vstring(ctx, x.old) * " ⇒ " * vstring(ctx, x.new)
             end
@@ -169,12 +168,20 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry})
             vstr = "[unknown]"
         end
         v = same ? "" : " $verb"
+        if verb != '-' && status == true && !package_downloaded
+            printstyled(io, "→", color=:red)
+        else
+            print(io, " ")
+        end
         printstyled(io, " [$(string(x.uuid)[1:8])]"; color = color_dark)
         printstyled(io, "$v $(x.name) $vstr\n"; color = colors[verb])
     end
+    if status == true && some_packages_not_downloaded
+        @warn "Some packages (indicated with a red arrow) are not downloaded, use `instantiate` to instantiate the current environment"
+    end
 end
 # TODO: Use the Context stream
-print_diff(ctx::Context, diff::Vector{DiffEntry}) = print_diff(stdout, ctx, diff)
+print_diff(ctx::Context, diff::Vector{DiffEntry}, status=true) = print_diff(stdout, ctx, diff, status)
 
 function manifest_by_uuid(manifest::Dict)
     entries = Dict{UUID,Dict}()

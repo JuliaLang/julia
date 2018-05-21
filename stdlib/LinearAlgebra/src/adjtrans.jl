@@ -58,7 +58,7 @@ Lazy adjoint (conjugate transposition) (also postfix `'`).
 Note that `adjoint` is applied recursively to elements.
 
 This operation is intended for linear algebra usage - for general data manipulation see
-[`permutedims`](@ref).
+[`permutedims`](@ref Base.permutedims).
 
 # Examples
 ```jldoctest
@@ -83,7 +83,7 @@ but not always, yields `Transpose(A)`, where `Transpose` is a lazy transpose wra
 that this operation is recursive.
 
 This operation is intended for linear algebra usage - for general data manipulation see
-[`permutedims`](@ref), which is non-recursive.
+[`permutedims`](@ref Base.permutedims), which is non-recursive.
 
 # Examples
 ```jldoctest
@@ -195,7 +195,7 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
 function *(u::TransposeAbsVec, v::AbstractVector)
     @boundscheck length(u) == length(v) || throw(DimensionMismatch())
-    return sum(@inbounds(return u[k]*v[k]) for k in 1:length(u))
+    return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
 end
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)

@@ -1249,7 +1249,7 @@
                      (let ((dollarex (parse-atom s)))
                        `(|.| ,ex (inert ($ ,dollarex)))))
                     (else
-                     (let ((name (parse-atom s)))
+                     (let ((name (parse-atom s #f)))
                        (if (and (pair? name) (eq? (car name) 'macrocall))
                            `(macrocall (|.| ,ex (quote ,(cadr name))) ; move macrocall outside by rewriting A.@B as @A.B
                                        ,@(cddr name))
@@ -1969,11 +1969,9 @@
   (cond ((eq? (car e) 'tuple)  (map =-to-kw (cdr e)))
         ((eq? (car e) 'block)
          (cond ((length= e 1) '())
-               ((length= e 2) (list (cadr e)))
+               ((length= e 2) (list (=-to-kw (cadr e))))
                ((length= e 3)
-                (if (assignment? (caddr e))
-                    `((parameters (kw ,@(cdr (caddr e)))) ,(cadr e))
-                    `((parameters ,(caddr e)) ,(cadr e))))
+                `((parameters ,(=-to-kw (caddr e))) ,(=-to-kw (cadr e))))
                (else
                 (error "more than one semicolon in argument list"))))
         (else
@@ -2382,7 +2380,7 @@
             (let ((startloc  (line-number-node s))
                   (head (if (eq? (peek-token s) '|.|)
                             (begin (take-token s) '__dot__)
-                            (parse-unary-prefix s))))
+                            (parse-atom s #f))))
               (peek-token s)
               (if (ts:space? s)
                   (maybe-docstring

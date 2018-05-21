@@ -117,7 +117,7 @@ function IOBuffer(;
         append=flags.append,
         truncate=flags.truncate,
         maxsize=maxsize)
-    buf.data[:] = 0
+    fill!(buf.data, 0)
     return buf
 end
 
@@ -171,7 +171,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isbits(T) && isa(a,Array)
+    if isbitstype(T) && isa(a,Array)
         nb = UInt(nel * sizeof(T))
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
@@ -246,7 +246,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     if n > length(io.data)
         resize!(io.data, n)
     end
-    io.data[io.size+1:n] = 0
+    io.data[io.size+1:n] .= 0
     io.size = n
     io.ptr = min(io.ptr, n+1)
     ismarked(io) && io.mark > n && unmark(io)

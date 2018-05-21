@@ -98,6 +98,9 @@ vals = Any[
 
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))
+end
+
+for a in vals
     if a isa AbstractArray
         @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
     end
@@ -222,4 +225,19 @@ let vals_expr = :(Any[Vector, (Array{T,1} where T), 1, 2, Union{Int, String}, Un
         @test i != j || (a === b)
         @test (a === b) == (objectid(a) == objectid(b))
     end
+end
+
+# issue #26038
+let p1 = Ptr{Int8}(1), p2 = Ptr{Int32}(1), p3 = Ptr{Int8}(2)
+    @test p1 == p2
+    @test !isequal(p1, p2)
+    @test p1 != p3
+    @test hash(p1) != hash(p2)
+    @test hash(p1) != hash(p3)
+    @test hash(p1) == hash(Ptr{Int8}(1))
+
+    @test p1 < p3
+    @test !(p1 < p2)
+    @test isless(p1, p3)
+    @test_throws MethodError isless(p1, p2)
 end

@@ -324,7 +324,6 @@ export
     sign,
     signbit,
     signed,
-    signif,
     significand,
     sin,
     sinc,
@@ -358,8 +357,6 @@ export
     axes,
     broadcast!,
     broadcast,
-    broadcast_getindex,
-    broadcast_setindex!,
     cat,
     checkbounds,
     checkindex,
@@ -393,7 +390,6 @@ export
     isperm,
     issorted,
     last,
-    linearindices,
     mapslices,
     max,
     maximum!,
@@ -471,7 +467,6 @@ export
 
 # bitarrays
     falses,
-    flipbits!,
     trues,
 
 # dequeues
@@ -568,10 +563,10 @@ export
     escape_string,
     hex2bytes,
     hex2bytes!,
-    isalpha,
     isascii,
     iscntrl,
     isdigit,
+    isletter,
     islowercase,
     isnumeric,
     isprint,
@@ -656,6 +651,7 @@ export
     done,
     next,
     start,
+    iterate,
 
     enumerate,  # re-exported from Iterators
     zip,
@@ -724,14 +720,15 @@ export
 
 # types
     convert,
-    # getproperty,
-    # setproperty!,
+    getproperty,
+    setproperty!,
     fieldoffset,
     fieldname,
     fieldnames,
     fieldcount,
-    # propertynames,
+    propertynames,
     isabstracttype,
+    isbitstype,
     isprimitivetype,
     isstructtype,
     isconcretetype,
@@ -924,7 +921,7 @@ export
     withenv,
 
 # C interface
-    cfunction,
+    @cfunction,
     cglobal,
     disable_sigint,
     pointer,

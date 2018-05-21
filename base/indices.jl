@@ -4,6 +4,49 @@ Dims{N} = NTuple{N,Int}
 DimsInteger{N} = NTuple{N,Integer}
 Indices{N} = NTuple{N,AbstractUnitRange}
 
+## Traits for array types ##
+
+abstract type IndexStyle end
+struct IndexLinear <: IndexStyle end
+struct IndexCartesian <: IndexStyle end
+
+"""
+    IndexStyle(A)
+    IndexStyle(typeof(A))
+
+`IndexStyle` specifies the "native indexing style" for array `A`. When
+you define a new `AbstractArray` type, you can choose to implement
+either linear indexing or cartesian indexing.  If you decide to
+implement linear indexing, then you must set this trait for your array
+type:
+
+    Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
+
+The default is `IndexCartesian()`.
+
+Julia's internal indexing machinery will automatically (and invisibly)
+convert all indexing operations into the preferred style. This allows users
+to access elements of your array using any indexing style, even when explicit
+methods have not been provided.
+
+If you define both styles of indexing for your `AbstractArray`, this
+trait can be used to select the most performant indexing style. Some
+methods check this trait on their inputs, and dispatch to different
+algorithms depending on the most efficient access pattern. In
+particular, [`eachindex`](@ref) creates an iterator whose type depends
+on the setting of this trait.
+"""
+IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
+IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
+IndexStyle(::Type{<:Array}) = IndexLinear()
+IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
+
+IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
+IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), IndexStyle(B...))
+IndexStyle(::IndexLinear, ::IndexLinear) = IndexLinear()
+IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
+
 # array shape rules
 
 promote_shape(::Tuple{}, ::Tuple{}) = ()
@@ -155,7 +198,6 @@ function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
         throw_setindex_mismatch(X, (i,j))
     end
 end
-setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 
 # convert to a supported index type (array or Int)
 """
@@ -213,7 +255,7 @@ given tuple of indices and the dimensional indices of `A` in tandem. As such,
 not all index types are guaranteed to propagate to `Base.to_index`.
 """
 to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, axes(A), I))
-to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (linearindices(A),), I))
+to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (eachindex(IndexLinear(), A),), I))
 to_indices(A, inds, ::Tuple{}) = ()
 to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
     (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
@@ -246,6 +288,89 @@ length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
 unsafe_length(S::Slice) = first(S.indices) == 1 ? unsafe_length(S.indices) : errmsg(S)
 getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
-start(S::Slice) = start(S.indices)
-next(S::Slice, s) = next(S.indices, s)
-done(S::Slice, s) = done(S.indices, s)
+iterate(S::Slice, s...) = iterate(S.indices, s...)
+
+"""
+    LinearIndices(A::AbstractArray)
+
+Return a `LinearIndices` array with the same shape and [`axes`](@ref) as `A`,
+holding the linear index of each entry in `A`. Indexing this array with
+cartesian indices allows mapping them to linear indices.
+
+For arrays with conventional indexing (indices start at 1), or any multidimensional
+array, linear indices range from 1 to `length(A)`. However, for `AbstractVector`s
+linear indices are `axes(A, 1)`, and therefore do not start at 1 for vectors with
+unconventional indexing.
+
+Calling this function is the "safe" way to write algorithms that
+exploit linear indexing.
+
+# Examples
+```jldoctest
+julia> A = fill(1, (5,6,7));
+
+julia> b = LinearIndices(A);
+
+julia> extrema(b)
+(1, 210)
+```
+
+    LinearIndices(inds::CartesianIndices) -> R
+    LinearIndices(sz::Dims) -> R
+    LinearIndices(istart:istop, jstart:jstop, ...) -> R
+
+Return a `LinearIndices` array with the specified shape or [`axes`](@ref).
+
+# Example
+
+The main purpose of this constructor is intuitive conversion
+from cartesian to linear indexing:
+
+```jldoctest
+julia> linear = LinearIndices((1:3, 1:2))
+LinearIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
+ 1  4
+ 2  5
+ 3  6
+
+julia> linear[1,2]
+4
+```
+"""
+struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
+    indices::R
+end
+
+LinearIndices(::Tuple{}) = LinearIndices{0,typeof(())}(())
+LinearIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = LinearIndices{N,typeof(inds)}(inds)
+LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
+    LinearIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
+LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(map(Base.OneTo, sz))
+LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
+    LinearIndices(map(i->first(i):last(i), inds))
+LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
+
+# AbstractArray implementation
+IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
+axes(iter::LinearIndices) = iter.indices
+size(iter::LinearIndices) = map(unsafe_length, iter.indices)
+function getindex(iter::LinearIndices, i::Int)
+    @_inline_meta
+    @boundscheck checkbounds(iter, i)
+    i
+end
+function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
+    @_inline_meta
+    @boundscheck checkbounds(iter, i)
+    @inbounds (first(iter):last(iter))[i]
+end
+# More efficient iteration — predominantly for non-vector LinearIndices
+# but one-dimensional LinearIndices must be special-cased to support OffsetArrays
+iterate(iter::LinearIndices{1}, s...) = iterate(iter.indices[1], s...)
+iterate(iter::LinearIndices, i=1) = i > length(iter) ? nothing : (i, i+1)
+
+# Needed since firstindex and lastindex are defined in terms of LinearIndices
+first(iter::LinearIndices) = 1
+first(iter::LinearIndices{1}) = (@_inline_meta; first(iter.indices[1]))
+last(iter::LinearIndices) = (@_inline_meta; length(iter))
+last(iter::LinearIndices{1}) = (@_inline_meta; last(iter.indices[1]))

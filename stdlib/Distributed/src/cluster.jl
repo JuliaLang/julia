@@ -42,8 +42,7 @@ mutable struct WorkerConfig
 
     function WorkerConfig()
         wc = new()
-        for n in 1:length(WorkerConfig.types)
-            T = eltype(fieldtype(WorkerConfig, n))
+        for n in 1:fieldcount(WorkerConfig)
             setfield!(wc, n, nothing)
         end
         wc
@@ -1046,6 +1045,9 @@ function disable_nagle(sock)
     end
 end
 
+wp_bind_addr(p::LocalProcess) = p.bind_addr
+wp_bind_addr(p) = p.config.bind_addr
+
 function check_same_host(pids)
     if myid() != 1
         return remotecall_fetch(check_same_host, 1, pids)
@@ -1056,8 +1058,8 @@ function check_same_host(pids)
         if all(p -> (p==1) || (isa(map_pid_wrkr[p].manager, LocalManager)), pids)
             return true
         else
-            first_bind_addr = notnothing(map_pid_wrkr[pids[1]].config.bind_addr)
-            return all(p -> (p != 1) && (notnothing(map_pid_wrkr[p].config.bind_addr) == first_bind_addr), pids[2:end])
+            first_bind_addr = notnothing(wp_bind_addr(map_pid_wrkr[pids[1]]))
+            return all(p -> notnothing(wp_bind_addr(map_pid_wrkr[p])) == first_bind_addr, pids[2:end])
         end
     end
 end
@@ -1153,8 +1155,8 @@ end
 
 function load_machine_file(path::AbstractString)
     machines = []
-    for line in split(read(path, String),'\n'; keep=false)
-        s = split(line, '*'; keep = false)
+    for line in split(read(path, String),'\n'; keepempty=false)
+        s = split(line, '*'; keepempty=false)
         map!(strip, s, s)
         if length(s) > 1
             cnt = all(isdigit, s[1]) ? parse(Int,s[1]) : Symbol(s[1])

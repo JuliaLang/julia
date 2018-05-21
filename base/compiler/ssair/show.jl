@@ -1,16 +1,36 @@
+if Pair != Base.Pair
+import Base: Base, IOContext, string, join, sprint
+IOContext(io::IO, KV::Pair) = IOContext(io, Base.Pair(KV[1], KV[2]))
+length(s::String) = Base.length(s)
+^(s::String, i::Int) = Base.:^(s, i)
+end
+
 function Base.show(io::IO, cfg::CFG)
     foreach(pairs(cfg.blocks)) do (idx, block)
-        println("$idx\t=>\t", join(block.succs, ", "))
+        Base.println("$idx\t=>\t", join(block.succs, ", "))
     end
 end
 
-print_ssa(io::IO, val) = isa(val, SSAValue) ? print(io, "%$(val.id)") : print(io, val)
+function print_ssa(io::IO, val)
+    if isa(val, SSAValue)
+        Base.print(io, "%$(val.id)")
+    elseif isa(val, Argument)
+        Base.print(io, "%%$(val.n)")
+    else
+        try
+            Base.print(io, val)
+        catch
+            Base.print(io, "<error printing>")
+        end
+    end
+end
+
 function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=true)
     if idx in used
         pad = " "^(maxsize-length(string(idx)))
-        print(io, "%$idx $pad= ")
+        Base.print(io, "%$idx $pad= ")
     else
-        print(io, " "^(maxsize+4))
+        Base.print(io, " "^(maxsize+4))
     end
     if isa(stmt, PhiNode)
         args = map(1:length(stmt.edges)) do i
@@ -21,71 +41,91 @@ function print_node(io::IO, idx, stmt, used, maxsize; color = true, print_typ=tr
                 end
             "$e => $v"
         end
-        print(io, "φ ", '(', join(args, ", "), ')')
+        Base.print(io, "φ ", '(', join(args, ", "), ')')
+    elseif isa(stmt, PhiCNode)
+        Base.print(io, "φᶜ ", '(', join(map(x->sprint(print_ssa, x), stmt.values), ", "), ')')
     elseif isa(stmt, PiNode)
-        print(io, "π (")
+        Base.print(io, "π (")
         print_ssa(io, stmt.val)
-        print(io, ", ")
+        Base.print(io, ", ")
         if color
-            printstyled(io, stmt.typ, color=:red)
+            Base.printstyled(io, stmt.typ, color=:red)
         else
-            print(io, stmt.typ)
+            Base.print(io, stmt.typ)
         end
-        print(io, ")")
+        Base.print(io, ")")
+    elseif isa(stmt, UpsilonNode)
+        Base.print(io, "ϒ (")
+        isdefined(stmt, :val) ?
+            print_ssa(io, stmt.val) :
+            Base.print(io, "#undef")
+        Base.print(io, ")")
     elseif isa(stmt, ReturnNode)
         if !isdefined(stmt, :val)
-            print(io, "unreachable")
+            Base.print(io, "unreachable")
         else
-            print(io, "return ")
+            Base.print(io, "return ")
             print_ssa(io, stmt.val)
         end
     elseif isa(stmt, GotoIfNot)
-        print(io, "goto ", stmt.dest, " if not ")
+        Base.print(io, "goto ", stmt.dest, " if not ")
         print_ssa(io, stmt.cond)
     elseif isexpr(stmt, :call)
         print_ssa(io, stmt.args[1])
-        print(io, "(")
-        print(io, join(map(arg->sprint(io->print_ssa(io, arg)), stmt.args[2:end]), ", "))
-        print(io, ")")
+        Base.print(io, "(")
+        Base.print(io, join(map(arg->sprint(io->print_ssa(io, arg)), stmt.args[2:end]), ", "))
+        Base.print(io, ")")
         if print_typ && stmt.typ !== Any
-            print(io, "::$(stmt.typ)")
+            Base.print(io, "::$(stmt.typ)")
         end
     elseif isexpr(stmt, :new)
-        print(io, "new(")
-        print(io, join(map(arg->sprint(io->print_ssa(io, arg)), stmt.args), ", "))
-        print(io, ")")
+        Base.print(io, "new(")
+        Base.print(io, join(map(arg->sprint(io->print_ssa(io, arg)), stmt.args), ", "))
+        Base.print(io, ")")
     else
-        print(io, stmt)
+        Base.print(io, stmt)
     end
 end
 
 function Base.show(io::IO, code::IRCode)
     io = IOContext(io, :color=>true)
-    used = Set{Int}()
-    println(io, "Code")
+    used = IdSet{Int}()
+    Base.println(io, "Code")
     foreach(stmt->scan_ssa_use!(used, stmt), code.stmts)
-    foreach(((_a, _b, node, _d),) -> scan_ssa_use!(used, node), code.new_nodes)
+    cfg = code.cfg
+    max_bb_idx_size = length(string(length(cfg.blocks)))
+    bb_idx = 1
+    if any(i->!isassigned(code.new_nodes, i), 1:length(code.new_nodes))
+        printstyled(io, :red, "ERROR: New node array has unset entry\n")
+    end
+    new_nodes = code.new_nodes[filter(i->isassigned(code.new_nodes, i), 1:length(code.new_nodes))]
+    foreach(nn -> scan_ssa_use!(used, nn.node), new_nodes)
+    perm = sortperm(new_nodes, by = x->x.pos)
+    new_nodes_perm = Iterators.Stateful(perm)
+
     if isempty(used)
         maxsize = 0
     else
         maxused = maximum(used)
         maxsize = length(string(maxused))
     end
-    cfg = code.cfg
-    max_bb_idx_size = length(string(length(cfg.blocks)))
-    bb_idx = 1
-    perm = sortperm(code.new_nodes, by = x->x[1])
-    new_nodes_perm = Iterators.Stateful(perm)
-    for (idx, stmt) in Iterators.enumerate(code.stmts)
+    for idx in eachindex(code.stmts)
+        if !isassigned(code.stmts, idx)
+            # This is invalid, but do something useful rather
+            # than erroring, to make debugging easier
+            printstyled(io, :red, "UNDEF\n")
+            continue
+        end
+        stmt = code.stmts[idx]
         bbrange = cfg.blocks[bb_idx].stmts
         bbrange = bbrange.first:bbrange.last
         bb_pad = max_bb_idx_size - length(string(bb_idx))
         bb_start_str = string("$(bb_idx) ",length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄",  "─"^(bb_pad)," ")
         if idx != last(bbrange)
             if idx == first(bbrange)
-                print(io, bb_start_str)
+                Base.print(io, bb_start_str)
             else
-                print(io, "│  "," "^max_bb_idx_size)
+                Base.print(io, "│  "," "^max_bb_idx_size)
             end
         end
         print_sep = false
@@ -93,47 +133,62 @@ function Base.show(io::IO, code::IRCode)
             print_sep = true
         end
         floop = true
-        while !isempty(new_nodes_perm) && code.new_nodes[Base.peek(new_nodes_perm)][1] == idx
+        while !isempty(new_nodes_perm) && new_nodes[peek(new_nodes_perm)].pos == idx
             node_idx = popfirst!(new_nodes_perm)
-            _, typ, node, line = code.new_nodes[node_idx]
+            new_node = new_nodes[node_idx]
             node_idx += length(code.stmts)
             if print_sep
                 if floop
-                    print(io, bb_start_str)
+                    Base.print(io, bb_start_str)
                 else
-                    print(io, "│  "," "^max_bb_idx_size)
+                    Base.print(io, "│  "," "^max_bb_idx_size)
                 end
             end
             print_sep = true
             floop = false
-            print_ssa_typ = !isa(node, PiNode) && node_idx in used
+            print_ssa_typ = !isa(new_node.node, PiNode) && node_idx in used
             Base.with_output_color(:yellow, io) do io′
-                print_node(io′, node_idx, node, used, maxsize; color = false,
-                    print_typ=!print_ssa_typ || (isa(node, Expr) && typ != node.typ))
+                print_node(io′, node_idx, new_node.node, used, maxsize; color = false,
+                    print_typ=!print_ssa_typ || (isa(new_node.node, Expr) && typ != new_node.node.typ))
             end
             if print_ssa_typ
-                printstyled(io, "::$(typ)", color=:red)
+                Base.printstyled(io, "::$(new_node.typ)", color=:red)
             end
-            println(io)
+            Base.println(io)
         end
         if print_sep
             if idx == first(bbrange) && floop
-                print(io, bb_start_str)
+                Base.print(io, bb_start_str)
             else
-                print(io, idx == last(bbrange) ? string("└", "─"^(1+max_bb_idx_size), " ") :
+                Base.print(io, idx == last(bbrange) ? string("└", "─"^(1+max_bb_idx_size), " ") :
                     string("│  ", " "^max_bb_idx_size))
             end
         end
         if idx == last(bbrange)
             bb_idx += 1
         end
+        if !isassigned(code.types, idx)
+            # Again, this is an error, but can happen if passes don't update their type information
+            printstyled(io, "::UNDEF", color=:red)
+            println(io)
+            continue
+        end
         typ = code.types[idx]
         print_ssa_typ = !isa(stmt, PiNode) && idx in used
-        print_node(io, idx, stmt, used, maxsize,
-            print_typ=!print_ssa_typ || (isa(stmt, Expr) && typ != stmt.typ))
-        if print_ssa_typ
-            printstyled(io, "::$(typ)", color=:red)
+        try
+            print_node(io, idx, stmt, used, maxsize,
+                print_typ=!print_ssa_typ || (isa(stmt, Expr) && typ != stmt.typ))
+        catch
+            print(io, "<error printing>")
         end
-        println(io)
+        if print_ssa_typ
+            typ_str = try
+                string(typ)
+            catch
+                "<error_printing>"
+            end
+            Base.printstyled(io, "::$(typ_str)", color=:red)
+        end
+        Base.println(io)
     end
 end

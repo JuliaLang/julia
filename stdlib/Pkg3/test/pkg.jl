@@ -15,6 +15,9 @@ include("utils.jl")
 
 const TEST_PKG = (name = "Example", uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a"))
 
+# Make the progress bar less verbose since some CI does not support \r
+Pkg3.GitTools.PROGRESS_BAR_PERCENTAGE_GRANULARITY[] = 33
+
 temp_pkg_dir() do project_path
     @testset "simple add and remove with preview" begin
         Pkg3.init(project_path)
@@ -143,6 +146,40 @@ temp_pkg_dir() do project_path
     end
 
     Pkg3.rm(TEST_PKG.name)
+
+    @testset "legacy CI script" begin
+        mktempdir() do dir
+            LibGit2.with(LibGit2.clone("https://github.com/JuliaLang/Example.jl", joinpath(dir, "Example.jl"))) do r
+                cd(joinpath(dir, "Example.jl")) do
+                    let Pkg = Pkg3
+                        Pkg.clone(pwd())
+                        Pkg.build("Example")
+                        Pkg.test("Example"; coverage=true)
+                        @test isfile(Pkg.dir("Example", "src", "Example.jl"))
+                    end
+                end
+            end
+        end
+    end
+
+    @testset "add julia" begin
+        @test_throws CommandError Pkg3.add("julia")
+    end
+
+    @testset "up in Project without manifest" begin
+        mktempdir() do dir
+            cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
+            cd(joinpath(dir, "UnregisteredWithProject")) do
+                try
+                    pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                    Pkg3.up()
+                    @test haskey(Pkg3.installed(), "Example")
+                finally
+                    popfirst!(LOAD_PATH)
+                end
+            end
+        end
+    end
 end
 
 temp_pkg_dir() do project_path

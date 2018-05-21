@@ -179,6 +179,13 @@
                               ""))
                         "")
                     (string.rep "    " ilvl) "end"))
+	   ((do)
+	    (let ((call (cadr e))
+		  (args (cdr (cadr (caddr e))))
+		  (body (caddr (caddr e))))
+	      (deparse-block (string (deparse call) " do" (if (null? args) "" " ")
+				     (deparse-arglist args))
+			     (cdr body) ilvl)))
            ((struct)
             (string (if (eq? (cadr e) 'true) "mutable " "")
                     "struct "
@@ -222,7 +229,8 @@
            ((copyast)      (deparse (cadr e)))
            ((quote inert)
             (if (and (symbol? (cadr e))
-                     (not (= (string.char (string (cadr e)) 0) #\=)))
+                     (not (memv (string.char (string (cadr e)) 0)
+                                '(#\= #\:))))
                 (string ":" (deparse (cadr e)))
                 (string ":(" (deparse (cadr e)) ")")))
            (else

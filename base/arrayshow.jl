@@ -415,7 +415,7 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 
 # typeinfo aware (necessarily)
 function show(io::IO, X::AbstractArray)
-    @assert ndims(X) != 1
+    ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
     io = IOContext(io, :typeinfo => eltype(X), :compact => true)
     isempty(X) ?
@@ -442,8 +442,6 @@ function show_vector(io::IO, v, opn='[', cls=']')
         show_delim_array(io, v, opn, ",", cls, false)
     end
 end
-
-show(io::IO, X::AbstractVector) = show_vector(io, X)
 
 
 ## Logic for displaying type information

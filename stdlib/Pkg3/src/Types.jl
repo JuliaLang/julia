@@ -9,7 +9,7 @@ using REPL.TerminalMenus
 
 using ..TOML
 import ..Pkg3
-import Pkg3: depots, logdir
+import Pkg3: GitTools, depots, logdir
 
 import Base: SHA1, AbstractEnv
 using SHA
@@ -42,10 +42,10 @@ end
 uuid5(namespace::UUID, key::AbstractString) = uuid5(namespace, String(key))
 
 const uuid_dns = UUID(0x6ba7b810_9dad_11d1_80b4_00c04fd430c8)
-const uuid_julia = uuid5(uuid_dns, "julialang.org")
-const uuid_package = uuid5(uuid_julia, "package")
-const uuid_registry = uuid5(uuid_julia, "registry")
-
+const uuid_julia_project = uuid5(uuid_dns, "julialang.org")
+const uuid_package = uuid5(uuid_julia_project, "package")
+const uuid_registry = uuid5(uuid_julia_project, "registry")
+const uuid_julia = uuid5(uuid_package, "julia")
 
 ## user-friendly representation of package IDs ##
 function pkgID(p::UUID, uuid_to_name::Dict{UUID,String})
@@ -384,6 +384,7 @@ end
 
 GitRepo(url::String, revspec) = GitRepo(url, revspec, nothing)
 GitRepo(url::String) = GitRepo(url, "", nothing)
+Base.:(==)(repo1::GitRepo, repo2::GitRepo) = (repo1.url == repo2.url && repo1.rev == repo2.rev && repo1.git_tree_sha1 == repo2.git_tree_sha1)
 
 mutable struct PackageSpec
     name::String
@@ -467,17 +468,33 @@ mutable struct EnvCache
             for entry in LOAD_PATH
                 project_file = Base.find_env(entry)
                 project_file isa String && !isdir(project_file) && break
+                project_file = nothing
             end
-            project_file === nothing && error("No Pkg3 environment found in LOAD_PATH")
+            if project_file == nothing
+                project_dir = nothing
+                for entry in LOAD_PATH
+                    project_dir = Base.find_env(entry)
+                    project_dir isa String && isdir(project_dir) && break
+                    project_dir = nothing
+                end
+                project_dir == nothing && error("No Pkg3 environment found in LOAD_PATH")
+                project_file = joinpath(project_dir, Base.project_names[end])
+            end
         elseif env isa AbstractEnv
             project_file = Base.find_env(env)
             project_file === nothing && error("package environment does not exist: $env")
         elseif env isa String
-            isdir(env) && error("environment is a package directory: $env")
-            project_file = endswith(env, ".toml") ? abspath(env) :
-                                                    abspath(env, Base.project_names[end])
+            if isdir(env)
+                isempty(readdir(env)) || error("environment is a package directory: $env")
+                project_file = joinpath(env, Base.project_names[end])
+            else
+                project_file = endswith(env, ".toml") ? abspath(env) :
+                    abspath(env, Base.project_names[end])
+            end
         end
-        @assert project_file isa String && (isfile(project_file) || !ispath(project_file))
+        @assert project_file isa String &&
+            (isfile(project_file) || !ispath(project_file) ||
+             isdir(project_file) && isempty(readdir(project_file)))
         project_dir = dirname(project_file)
         git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
 
@@ -529,7 +546,7 @@ is_project_uuid(env::EnvCache, uuid::UUID) =
 ###########
 # Context #
 ###########
-stdlib_dir() = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
+stdlib_dir() = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
 stdlib_path(stdlib::String) = joinpath(stdlib_dir(), stdlib)
 function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
@@ -553,6 +570,8 @@ Base.@kwdef mutable struct Context
     num_concurrent_downloads::Int = 8
     graph_verbose::Bool = false
     stdlibs::Dict{UUID,String} = gather_stdlib_uuids()
+    # Remove next field when support for Pkg2 CI scripts is removed
+    old_pkg2_clone_name::String = ""
 end
 
 function Context!(ctx::Context; kwargs...)
@@ -602,7 +621,7 @@ function read_manifest(io::IO)
     return manifest
 end
 function read_manifest(file::String)
-        try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
+    try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
     catch err
         err isa ErrorException && startswith(err.msg, "ambiguious dependency") || rethrow(err)
         err.msg *= "In manifest file: $file"
@@ -612,7 +631,7 @@ end
 
 
 const refspecs = ["+refs/*:refs/remotes/cache/*"]
-const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$"
+const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?(?:\/)?$"
 
 # Windows sometimes throw on `isdir`...
 function isdir_windows_workaround(path::String)
@@ -623,7 +642,9 @@ function isdir_windows_workaround(path::String)
 end
 
 function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
+    creds = LibGit2.CachedCredentials()
     env = ctx.env
+    new_uuids = UUID[]
     for pkg in pkgs
         pkg.repo == nothing && continue
         pkg.special_action = PKGSPEC_DEVELOPED
@@ -634,7 +655,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             pkg.path = abspath(pkg.repo.url)
             folder_already_downloaded = true
             project_path = pkg.repo.url
-            parse_package!(env, pkg, project_path)
+            parse_package!(ctx, pkg, project_path)
         else
             # We save the repo in case another environement wants to
             # develop from the same repo, this avoids having to reclone it
@@ -643,14 +664,12 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             mkpath(clone_path)
             repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
             repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-                printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
-                r = LibGit2.clone(pkg.repo.url, repo_path)
-                LibGit2.fetch(r, remoteurl=pkg.repo.url, refspecs=refspecs)
+                r = GitTools.clone(pkg.repo.url, repo_path)
+                GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
                 r, true
             end
             if !just_cloned
-                printpkgstyle(ctx, :Updating, "repo from $(pkg.repo.url)")
-                LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+                GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
             end
             close(repo)
 
@@ -659,11 +678,17 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             cp(repo_path, project_path; force=true)
             repo = LibGit2.GitRepo(project_path)
             rev = pkg.repo.rev
-            isempty(rev) && (rev = LibGit2.branch(repo))
+            if isempty(rev)
+                if LibGit2.isattached(repo)
+                    rev = LibGit2.branch(repo)
+                else
+                    rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                end
+            end
             gitobject, isbranch = checkout_rev!(repo, rev)
             close(repo); close(gitobject)
 
-            parse_package!(env, pkg, project_path)
+            parse_package!(ctx, pkg, project_path)
             dev_pkg_path = joinpath(Pkg3.devdir(), pkg.name)
             if isdir(dev_pkg_path)
                 if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
@@ -674,15 +699,19 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
             else
                 mkpath(dev_pkg_path)
                 mv(project_path, dev_pkg_path; force=true)
+                push!(new_uuids, pkg.uuid)
             end
             pkg.path = dev_pkg_path
         end
         @assert pkg.path != nothing
     end
+    return new_uuids
 end
 
 function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
+    creds = LibGit2.CachedCredentials()
     env = ctx.env
+    new_uuids = UUID[]
     for pkg in pkgs
         pkg.repo == nothing && continue
         pkg.special_action = PKGSPEC_REPO_ADDED
@@ -691,16 +720,20 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
         mkpath(clones_dir)
         repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
         repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-            printpkgstyle(ctx, :Cloning, "package from $(pkg.repo.url)")
-            r = LibGit2.clone(pkg.repo.url, repo_path, isbare=true)
-            LibGit2.fetch(r, remoteurl=pkg.repo.url, refspecs=refspecs)
+            r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
+            GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
             r, true
         end
         info = manifest_info(env, pkg.uuid)
         pinned = (info != nothing && get(info, "pinned", false))
-        if upgrade_or_add  && !pinned && !just_cloned
-            printpkgstyle(ctx, :Updating, "repo from $(pkg.repo.url)")
-            LibGit2.fetch(repo, remoteurl=pkg.repo.url, refspecs=refspecs)
+        if upgrade_or_add && !pinned && !just_cloned
+            rev = pkg.repo.rev
+            try
+                GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+            catch e
+                e isa LibGit2.GitError || rethrow(e)
+                cmderror("failed to fetch from $(pkg.repo.url), error: $e")
+            end
         end
         if upgrade_or_add && !pinned
             rev = pkg.repo.rev
@@ -711,7 +744,13 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
         end
 
         # see if we can get rev as a branch
-        isempty(rev) && (rev = LibGit2.branch(repo); pkg.repo.rev = rev)
+        if isempty(rev)
+            if LibGit2.isattached(repo)
+                rev = LibGit2.branch(repo)
+            else
+                rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+            end
+        end
         gitobject, isbranch = checkout_rev!(repo, rev)
         if !isbranch
             # If the user gave a shortened commit SHA, might as well update it to the full one
@@ -741,34 +780,46 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             LibGit2.checkout_tree(repo, git_tree, options=opts)
         end
         close(repo); close(git_tree); close(gitobject)
-        parse_package!(env, pkg, project_path)
+        parse_package!(ctx, pkg, project_path)
         if !folder_already_downloaded
             version_path = Pkg3.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
             mkpath(version_path)
             mv(project_path, version_path; force=true)
+            push!(new_uuids, pkg.uuid)
         end
         @assert pkg.version isa VersionNumber
     end
+    return new_uuids
 end
 
-function parse_package!(env, pkg, project_path)
+function parse_package!(ctx, pkg, project_path)
+    env = ctx.env
     found_project_file = false
     for projname in project_names
-        if isfile(joinpath(project_path, "Project.toml"))
+        if isfile(joinpath(project_path, projname))
             found_project_file = true
             project_data = parse_toml(project_path, "Project.toml")
             pkg.uuid = UUID(project_data["uuid"])
             pkg.name = project_data["name"]
-            pkg.version = VersionNumber(get(project_data, "version", "0.0"))
+            if haskey(project_data, "version")
+                pkg.version = VersionNumber(project_data["version"])
+            else
+                @warn "project file for $(pkg.name) is missing a `version` entry"
+                Pkg3.Operations.set_maximum_version_registry!(env, pkg)
+            end
             break
         end
     end
     if !found_project_file
         @warn "packages will require to have a [Julia]Project.toml file in the future"
-        # This is an old style package, get the name from the url.
-        m = match(reg_pkg, pkg.repo.url)
-        m === nothing && cmderror("cannot determine package name from URL: $(pkg.repo.url)")
-        pkg.name = m.captures[1]
+        if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
+            pkg.name = ctx.old_pkg2_clone_name
+        else
+            # This is an old style package, get the name from src/PackageName
+            m = match(reg_pkg, pkg.repo.url)
+            m === nothing && cmderror("cannot determine package name from URL: $(pkg.repo.url)")
+            pkg.name = m.captures[1]
+        end
         reg_uuids = registered_uuids(env, pkg.name)
         is_registered = !isempty(reg_uuids)
         if !is_registered
@@ -963,11 +1014,11 @@ function registries(; clone_default=true)::Vector{String}
     if clone_default
         if !ispath(user_regs)
             mkpath(user_regs)
+            creds = LibGit2.CachedCredentials()
             printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
             for (reg, url) in DEFAULT_REGISTRIES
-                printpkgstyle(stdout, :Cloning, "registry $reg from $(repr(url))")
                 path = joinpath(user_regs, reg)
-                repo = LibGit2.clone(url, path)
+                repo = GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)
                 close(repo)
             end
         end
@@ -1168,16 +1219,16 @@ function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothin
 end
 
 # TODO: redirect to ctx stream
-function printpkgstyle(io::IO, cmd::Symbol, text::String...; ignore_indent=false)
+function printpkgstyle(io::IO, cmd::Symbol, text::String, ignore_indent=false)
     indent = textwidth(string(:Downloaded))
     ignore_indent && (indent = 0)
     printstyled(io, lpad(string(cmd), indent), color=:green, bold=true)
-    println(io, " ", text...)
+    println(io, " ", text)
 end
 
 # TODO: use ctx specific context
-function printpkgstyle(ctx::Context, cmd::Symbol, text::String...; kwargs...)
-    printpkgstyle(stdout, cmd, text...; kwargs...)
+function printpkgstyle(ctx::Context, cmd::Symbol, text::String, ignore_indent=false)
+    printpkgstyle(stdout, cmd, text)
 end
 
 

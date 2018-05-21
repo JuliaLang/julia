@@ -1,14 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-include("compiler/ssair/driver.jl")
-
 #####################
 # OptimizationState #
 #####################
 
 mutable struct OptimizationState
     linfo::MethodInstance
-    vararg_type_container #::Type
+    result_vargs::Vector{Any}
     backedges::Vector{Any}
     src::CodeInfo
     mod::Module
@@ -25,7 +23,7 @@ mutable struct OptimizationState
         end
         src = frame.src
         next_label = max(label_counter(src.code), length(src.code)) + 10
-        return new(frame.linfo, frame.vararg_type_container,
+        return new(frame.linfo, frame.result.vargs,
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
                    next_label, frame.min_valid, frame.max_valid,
@@ -55,8 +53,8 @@ mutable struct OptimizationState
             nargs = 0
         end
         next_label = max(label_counter(src.code), length(src.code)) + 10
-        vararg_type_container = nothing # if you want something more accurate, set it yourself :P
-        return new(linfo, vararg_type_container,
+        result_vargs = Any[] # if you want something more accurate, set it yourself :P
+        return new(linfo, result_vargs,
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
                    next_label,
@@ -70,6 +68,8 @@ function OptimizationState(linfo::MethodInstance, params::Params)
     src === nothing && return nothing
     return OptimizationState(linfo, src, params)
 end
+
+include("compiler/ssair/driver.jl")
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
@@ -98,11 +98,6 @@ function add_backedge!(li::MethodInstance, caller::OptimizationState)
     push!(caller.backedges, li)
     update_valid_age!(li, caller)
     nothing
-end
-
-function is_specializable_vararg_slot(@nospecialize(arg), sv::OptimizationState)
-    return (isa(arg, Slot) && slot_id(arg) == sv.nargs &&
-            isa(sv.vararg_type_container, DataType))
 end
 
 ###########
@@ -218,6 +213,9 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # const SLOT_CALLED      = 64
 
+const IR_FLAG_INBOUNDS = 0x01
+
+
 # known affect-free calls (also effect-free)
 const _PURE_BUILTINS = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 
@@ -252,7 +250,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
             isa(sig,DataType) &&
             sig == Tuple{sig.parameters[1],Any,Any,Any,Vararg{Any}})
             inlineable = true
-        elseif (name === :next || name === :done || name === :unsafe_convert ||
+        elseif (name === :iterate || name === :unsafe_convert ||
                 name === :cconvert)
             cost_threshold *= 4
         end
@@ -263,7 +261,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
     return inlineable
 end
 
-const enable_new_optimizer = RefValue(false)
+const enable_new_optimizer = RefValue(true)
 
 # converge the optimization work
 function optimize(me::InferenceState)
@@ -279,37 +277,33 @@ function optimize(me::InferenceState)
         me.linfo.inInference = false
     elseif me.optimize
         opt = OptimizationState(me)
-        # This pass is required for the AST to be valid in codegen
-        # if any `SSAValue` is created by type inference. Ref issue #6068
-        # This (and `reindex_labels!`) needs to be run for `!me.optimize`
-        # if we start to create `SSAValue` in type inference when not
-        # optimizing and use unoptimized IR in codegen.
-        gotoifnot_elim_pass!(opt)
-        inlining_pass!(opt, opt.src.propagate_inbounds)
-        any_enter = any_phi = false
         if enable_new_optimizer[]
-            any_enter = any(x->isa(x, Expr) && x.head == :enter, opt.src.code)
-            any_phi = any(x->isa(x, PhiNode) || (isa(x, Expr) && x.head == :(=) && isa(x.args[2], PhiNode)), opt.src.code)
-        end
-        if enable_new_optimizer[] && !any_enter && isa(def, Method)
             reindex_labels!(opt)
             nargs = Int(opt.nargs) - 1
             if def isa Method
-                topline = LineInfoNode(opt.mod, def.name, def.file, def.line, 0)
+                topline = LineInfoNode(opt.mod, def.name, def.file, Int(def.line), 0)
             else
-                topline = LineInfoNode(opt.mod, NullLineInfo.name, NullLineInfo.file, 0, 0)
+                topline = LineInfoNode(opt.mod, NullLineInfo.method, NullLineInfo.file, 0, 0)
             end
             linetable = [topline]
-            ir = run_passes(opt.src, nargs, linetable)
-            replace_code!(opt.src, ir, nargs, linetable)
-            push!(opt.src.code, LabelNode(length(opt.src.code) + 1))
-            any_phi = true
-        elseif !any_phi
+            @timeit "optimizer" ir = run_passes(opt.src, nargs, linetable, opt)
+            force_noinline = any(x->isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
+            #@timeit "legacy conversion" replace_code!(opt.src, ir, nargs, linetable)
+            replace_code_newstyle!(opt.src, ir, nargs, linetable)
+        else
+            # This pass is required for the AST to be valid in codegen
+            # if any `SSAValue` is created by type inference. Ref issue #6068
+            # This (and `reindex_labels!`) needs to be run for `!me.optimize`
+            # if we start to create `SSAValue` in type inference when not
+            # optimizing and use unoptimized IR in codegen.
+            gotoifnot_elim_pass!(opt)
+            inlining_pass!(opt, opt.src.propagate_inbounds)
             # Clean up after inlining
             gotoifnot_elim_pass!(opt)
             basic_dce_pass!(opt)
             void_use_elim_pass!(opt)
-            if !enable_new_optimizer[]
+            any_phi = any(x->isa(x, PhiNode) || (isa(x, Expr) && x.head == :(=) && isa(x.args[2], PhiNode)), opt.src.code)
+            if !any_phi && !enable_new_optimizer[]
                 copy_duplicated_expr_pass!(opt)
                 split_undef_flag_pass!(opt)
                 fold_constant_getfield_pass!(opt)
@@ -321,13 +315,13 @@ function optimize(me::InferenceState)
                 basic_dce_pass!(opt)
                 void_use_elim_pass!(opt)
             end
-        end
-        # Pop metadata before label reindexing
-        let code = opt.src.code::Array{Any,1}
-            meta_elim_pass!(code, coverage_enabled())
-            filter!(x -> x !== nothing, code)
-            force_noinline = peekmeta(code, :noinline)[1]
-            reindex_labels!(opt)
+            # Pop metadata before label reindexing
+            let code = opt.src.code::Array{Any,1}
+                meta_elim_pass!(code, coverage_enabled())
+                filter!(x -> x !== nothing, code)
+                force_noinline = peekmeta(code, :noinline)[1]
+                reindex_labels!(opt)
+            end
         end
         me.min_valid = opt.min_valid
         me.max_valid = opt.max_valid
@@ -367,7 +361,7 @@ function optimize(me::InferenceState)
 
         if proven_pure && !coverage_enabled()
             # use constant calling convention
-            # Do not emit `jlcall_api == 2` if coverage is enabled
+            # Do not emit `jl_fptr_const_return` if coverage is enabled
             # so that we don't need to add coverage support
             # to the `jl_call_method_internal` fast path
             # Still set pure flag to make sure `inference` tests pass
@@ -400,7 +394,7 @@ function optimize(me::InferenceState)
         me.src.inlineable = false
     elseif !me.src.inlineable && isa(def, Method)
         bonus = 0
-        if me.bestguess ⊑ Tuple && !isbits(widenconst(me.bestguess))
+        if me.bestguess ⊑ Tuple && !isbitstype(widenconst(me.bestguess))
             bonus = me.params.inline_tupleret_bonus
         end
         me.src.inlineable = isinlineable(def, me.src, me.mod, me.params, bonus)
@@ -438,7 +432,7 @@ function finish(me::InferenceState)
         end
 
         # don't store inferred code if we've decided to interpret this function
-        if !already_inferred && me.linfo.jlcall_api != 4
+        if !already_inferred && invoke_api(me.linfo) != 4
             const_flags = (me.const_ret) << 1 | me.const_api
             if me.const_ret
                 if isa(me.bestguess, Const)
@@ -462,7 +456,7 @@ function finish(me::InferenceState)
                     def = me.linfo.def::Method
                     keeptree = me.optimize &&
                         (me.src.inlineable ||
-                         ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any), me.linfo.specTypes, def.sig, def) != 0)
+                         ccall(:jl_isa_compileable_sig, Int32, (Any, Any), me.linfo.specTypes, def) != 0)
                     if keeptree
                         # compress code for non-toplevel thunks
                         inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
@@ -710,7 +704,7 @@ end
 # since codegen optimizations of functions like `is` will depend on knowing it
 function widen_slot_type(@nospecialize(ty), untypedload::Bool)
     if isa(ty, DataType)
-        if untypedload || isbits(ty) || isdefined(ty, :instance)
+        if untypedload || isbitstype(ty) || isdefined(ty, :instance)
             return ty
         end
     elseif isa(ty, Union)
@@ -769,17 +763,26 @@ function substitute!(
         head = e.head
         if head === :static_parameter
             return quoted(spvals[e.args[1]])
+        elseif head === :cfunction
+            @assert !isa(spsig, UnionAll) || !isempty(spvals)
+            if !(e.args[2] isa QuoteNode) # very common no-op
+                e.args[2] = substitute!(e.args[2], na, argexprs, spsig, spvals, offset, boundscheck)
+            end
+            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
+            e.args[4] = svec(Any[
+                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                for argt
+                in e.args[4] ]...)
         elseif head === :foreigncall
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
                 if i == 2
                     e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
                 elseif i == 3
-                    argtuple = Any[
+                    e.args[3] = svec(Any[
                         ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
                         for argt
-                        in e.args[3] ]
-                    e.args[3] = svec(argtuple...)
+                        in e.args[3] ]...)
                 elseif i == 4
                     @assert isa((e.args[4]::QuoteNode).value, Symbol)
                 elseif i == 5
@@ -883,7 +886,7 @@ function effect_free(@nospecialize(e), src, mod::Module, allow_volatile::Bool)
                         return false
                     elseif is_known_call(e, getfield, src, mod)
                         nargs = length(ea)
-                        (3 < nargs < 4) || return false
+                        (3 <= nargs <= 4) || return false
                         et = exprtype(e, src, mod)
                         # TODO: check ninitialized
                         if !isa(et, Const) && !isconstType(et)
@@ -916,8 +919,7 @@ function effect_free(@nospecialize(e), src, mod::Module, allow_volatile::Bool)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
-            isconcretetype(typ) || return false
-            !iskindtype(typ) || return false
+            isconcretedispatch(typ) || return false
             typ = typ::DataType
             if !allow_volatile && typ.mutable
                 return false
@@ -1150,6 +1152,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                 f === Core.sizeof || f === isdefined ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
+                istopfunction(topmod, f, :isbitstype) ||
                 istopfunction(topmod, f, :promote_type) ||
                 (f === Core.kwfunc && length(argexprs) == 2) ||
                 (is_inlineable_constant(val) &&
@@ -1168,7 +1171,9 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         invoke_tt = widenconst(atypes[3])
         if !(isconcretetype(ft) || ft <: Type) || !isType(invoke_tt) ||
                 has_free_typevars(invoke_tt) || has_free_typevars(ft) || (ft <: Builtin)
-            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+            # TODO: this can be rather aggressive at preventing inlining of closures
+            # XXX: this is wrong for `ft <: Type`, since we are failing to check that
+            #      the result doesn't have subtypes, or to do an intersection lookup
             return NOT_FOUND
         end
         if !(isa(invoke_tt.parameters[1], Type) &&
@@ -1320,17 +1325,25 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     isa(linfo, MethodInstance) || return invoke_NF(argexprs0, e.typ, atypes0, sv,
                                                    atype_unlimited, invoke_data)
     linfo = linfo::MethodInstance
-    if linfo.jlcall_api == 2
+    if invoke_api(linfo) == 2
         # in this case function can be inlined to a constant
         add_backedge!(linfo, sv)
+        # XXX: @vtjnash thinks this should be `argexprs0`, but doing so exposes a
+        # downstream optimizer problem that breaks tests, so we're going to avoid
+        # changing it for now. ref
+        # https://github.com/JuliaLang/julia/pull/26826#issuecomment-386381103
         return inline_as_constant(linfo.inferred_const, argexprs, sv, invoke_data)
     end
 
-    # see if the method has a InferenceResult in the current cache
+    # See if the method has a InferenceResult in the current cache
     # or an existing inferred code info store in `.inferred`
+    #
+    # Above, we may have rewritten trailing varargs in `atypes` to a tuple type. However,
+    # inference populates the cache with the pre-rewrite version (`atypes0`), so here, we
+    # check against that instead.
     haveconst = false
-    for i in 1:length(atypes)
-        a = atypes[i]
+    for i in 1:length(atypes0)
+        a = atypes0[i]
         if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
             # have new information from argtypes that wasn't available from the signature
             haveconst = true
@@ -1338,7 +1351,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         end
     end
     if haveconst
-        inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Nothing, InferenceResult}
+        inf_result = cache_lookup(linfo, atypes0, sv.params.cache) # Union{Nothing, InferenceResult}
     else
         inf_result = nothing
     end
@@ -1500,7 +1513,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
                     end
                 end
                 edges = Any[newlabels[edge::Int + 1] - 1 for edge in edges]
-                a.args[2] = PhiNode(edges, a.args[2].values)
+                a.args[2] = PhiNode(edges, copy_exprargs(a.args[2].values))
             elseif a.head === :meta && length(a.args) > 0
                 a1 = a.args[1]
                 if a1 === :push_loc
@@ -1881,8 +1894,7 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
         ft = Bool
     else
         f = nothing
-        if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
-            # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+        if has_free_typevars(ft)
             return e
         end
     end
@@ -1994,8 +2006,8 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
                         tmpv = newvar!(sv, t)
                         push!(newstmts, Expr(:(=), tmpv, aarg))
                     end
-                    if is_specializable_vararg_slot(aarg, sv)
-                        tp = sv.vararg_type_container.parameters
+                    if is_specializable_vararg_slot(aarg, sv.nargs, sv.result_vargs)
+                        tp = sv.result_vargs
                     else
                         tp = t.parameters
                     end
@@ -2039,8 +2051,7 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
                 ft = Bool
             else
                 f = nothing
-                if !(isconcretetype(ft) || (widenconst(ft) <: Type)) || has_free_typevars(ft)
-                    # TODO: this is really aggressive at preventing inlining of closures. maybe drop `isconcretetype` requirement?
+                if has_free_typevars(ft)
                     return e
                 end
             end
@@ -2457,7 +2468,11 @@ end
 
 # Check if the use is still valid.
 # The code that invalidate this use is responsible for adding new def(s) if any.
-check_valid(def::ValueDef, changes::IdDict) = !haskey(changes, def.stmts=>def.stmtidx)
+function check_valid(def::ValueDef, changes::IdDict)
+    haskey(changes, def.stmts=>def.stmtidx) && return false
+    isdefined(def, :assign) && haskey(changes, def.assign) && return false
+    return true
+end
 
 
 function remove_invalid!(info::ValueInfo, changes::IdDict)
@@ -2704,7 +2719,7 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
     # There are other cases that we can merge
     # but those require control flow analysis.
     var_has_static_undef(ctx.sv.src, key.first, key.second) && return false
-    local defkey
+    local defkey, deftyp
     for def in info.defs
         # No NewvarNode def for variables that aren't used undefined
         defex = (def.assign::Expr).args[2]
@@ -2726,6 +2741,12 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
             end
         else
             return @isdefined(defkey)
+        end
+        new_deftyp = exprtype(defex, ctx.sv.src, ctx.sv.mod)
+        if @isdefined(deftyp) && deftyp != new_deftyp
+            return true
+        else
+            deftyp = new_deftyp
         end
     end
 
@@ -2751,8 +2772,18 @@ function merge_value_ssa!(ctx::AllocOptContext, info, key)
     if defkey.second
         # SSAValue def
         replace_v = SSAValue(defkey.first - 1)
+        # don't replace TypedSlots with SSAValues
+        replace_typ = exprtype(replace_v, ctx.sv.src, ctx.sv.mod)
+        if !(replace_typ ⊑ deftyp)
+            return false
+        end
     else
         replace_v = SlotNumber(defkey.first)
+        # don't lose type information from TypedSlots
+        replace_typ = exprtype(replace_v, ctx.sv.src, ctx.sv.mod)
+        if !(replace_typ ⊑ deftyp)
+            replace_v = TypedSlot(defkey.first, deftyp)
+        end
     end
     for use in info.uses
         if isdefined(use, :expr)
@@ -3069,7 +3100,7 @@ function structinfo_new(ctx::AllocOptContext, ex::Expr, vt::DataType)
             si.defs[i] = ex.args[i + 1]
         else
             ft = fieldtype(vt, i)
-            if isbits(ft)
+            if isbitstype(ft)
                 ex = Expr(:new, ft)
                 ex.typ = ft
                 si.defs[i] = ex
@@ -3606,7 +3637,7 @@ function split_struct_alloc_single!(ctx::AllocOptContext, info, key, nf, has_pre
         if !@isdefined(fld_name)
             fld_name = :struct_field
         end
-        need_preserved_root = has_preserve && !isbits(field_typ)
+        need_preserved_root = has_preserve && !isbitstype(field_typ)
         local var_slot
         if !has_def
             # If there's no direct use of the field
@@ -4222,6 +4253,7 @@ function reindex_labels!(body::Vector{Any})
             elseif el.head === :(=)
                 if isa(el.args[2], PhiNode)
                     edges = Any[mapping[edge::Int + 1] - 1 for edge in el.args[2].edges]
+                    @assert all(x->x >= 0, edges)
                     el.args[2] = PhiNode(convert(Vector{Any}, edges), el.args[2].values)
                 end
             end

@@ -46,7 +46,8 @@ An `Char` value represents a single character: it is just a 32-bit primitive typ
 representation and appropriate arithmetic behaviors, and which can be converted
 to a numeric value representing a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
-  other subtypes of `AbstractChar`, e.g. to optimize operations for other [text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
+other subtypes of `AbstractChar`, e.g. to optimize operations for other
+[text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
 input and shown:
 
 ```jldoctest
@@ -452,8 +453,36 @@ I have $100 in my account.
 ## Triple-Quoted String Literals
 
 When strings are created using triple-quotes (`"""..."""`) they have some special behavior that
-can be useful for creating longer blocks of text. First, if the opening `"""` is followed by a
-newline, the newline is stripped from the resulting string.
+can be useful for creating longer blocks of text.
+
+First, triple-quoted strings are also dedented to the level of the least-indented line.
+This is useful for defining strings within code that is indented. For example:
+
+```jldoctest
+julia> str = """
+           Hello,
+           world.
+         """
+"  Hello,\n  world.\n"
+```
+
+In this case the final (empty) line before the closing `"""` sets the indentation level.
+
+The dedentation level is determined as the longest common starting sequence of spaces or
+tabs in all lines, excluding the line following the opening `"""` and lines containing
+only spaces or tabs (the line containing the closing `"""` is always included).
+Then for all lines, excluding the text following the opening `"""`, the common starting
+sequence is removed (including lines containing only spaces and tabs if they start with
+this sequence), e.g.:
+```jldoctest
+julia> """    This
+         is
+           a test"""
+"    This\nis\n  a test"
+```
+
+Next, if the opening `"""` is followed by a newline,
+the newline is stripped from the resulting string.
 
 ```julia
 """hello"""
@@ -474,20 +503,20 @@ but
 hello"""
 ```
 
-will contain a literal newline at the beginning. Trailing whitespace is left unaltered. They can
-contain `"` symbols without escaping. Triple-quoted strings are also dedented to the level of
-the least-indented line. This is useful for defining strings within code that is indented. For
-example:
+will contain a literal newline at the beginning.
+
+Stripping of the newline is performed after the dedentation for example:
 
 ```jldoctest
-julia> str = """
-           Hello,
-           world.
-         """
-"  Hello,\n  world.\n"
+julia> """
+         Hello,
+         world."""
+"Hello,\nworld."
 ```
 
-In this case the final (empty) line before the closing `"""` sets the indentation level.
+Trailing whitespace is left unaltered.
+
+Triple-quoted string literals can contain `"` symbols without escaping.
 
 Note that line breaks in literal strings, whether single- or triple-quoted, result in a newline
 (LF) character `\n` in the string, even if your editor uses a carriage return `\r` (CR) or CRLF
@@ -571,11 +600,8 @@ Some other useful functions include:
   * [`lastindex(str)`](@ref) gives the maximal (byte) index that can be used to index into `str`.
   * [`length(str)`](@ref) the number of characters in `str`.
   * [`length(str, i, j)`](@ref) the number of valid character indices in `str` from `i` to `j`.
-  * [`i = start(str)`](@ref start) gives the first valid index at which a character can be found in `str`
-    (typically 1).
-  * [`c, j = next(str,i)`](@ref next) returns next character at or after the index `i` and the next valid
-    character index following that. With [`start`](@ref) and [`lastindex`](@ref), can be used to iterate
-    through the characters in `str`.
+  * [`ncodeunits(str)`](@ref) number of [code units](https://en.wikipedia.org/wiki/Character_encoding#Terminology) in a string.
+  * [`codeunit(str, i)`](@ref) gives the code unit value in the string `str` at index `i`.
   * [`thisind(str, i)`](@ref) given an arbitrary index into a string find the first index of the character into which the index points.
   * [`nextind(str, i, n=1)`](@ref) find the start of the `n`th character starting after index `i`.
   * [`prevind(str, i, n=1)`](@ref) find the start of the `n`th character starting before index `i`.
@@ -811,9 +837,10 @@ for regular expressions containing quotation marks or newlines).
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 
-Another useful non-standard string literal is the byte-array string literal: `b"..."`. This form
-lets you use string notation to express literal byte arrays -- i.e. arrays of
-[`UInt8`](@ref) values. The rules for byte array literals are the following:
+Another useful non-standard string literal is the byte-array string literal: `b"..."`. This
+form lets you use string notation to express read only literal byte arrays -- i.e. arrays of
+[`UInt8`](@ref) values. The type of those objects is `CodeUnits{UInt8, String}`.
+The rules for byte array literals are the following:
 
   * ASCII characters and ASCII escapes produce a single byte.
   * `\x` and octal escape sequences produce the *byte* corresponding to the escape value.
@@ -839,12 +866,35 @@ julia> b"DATA\xff\u2200"
 
 The ASCII string "DATA" corresponds to the bytes 68, 65, 84, 65. `\xff` produces the single byte 255.
 The Unicode escape `\u2200` is encoded in UTF-8 as the three bytes 226, 136, 128. Note that the
-resulting byte array does not correspond to a valid UTF-8 string -- if you try to use this as
-a regular string literal, you will get a syntax error:
+resulting byte array does not correspond to a valid UTF-8 string:
 
-```julia-repl
-julia> "DATA\xff\u2200"
-ERROR: syntax: invalid UTF-8 sequence
+```jldoctest
+julia> isvalid("DATA\xff\u2200")
+false
+```
+
+As it was mentioned `CodeUnits{UInt8,String}` type behaves like read only array of `UInt8` and
+if you need a standard vector you can convert it using `Vector{UInt8}`:
+
+```jldoctest
+julia> x = b"123"
+3-element Base.CodeUnits{UInt8,String}:
+ 0x31
+ 0x32
+ 0x33
+
+julia> x[1]
+0x31
+
+julia> x[1] = 0x32
+ERROR: setindex! not defined for Base.CodeUnits{UInt8,String}
+[...]
+
+julia> Vector{UInt8}(x)
+3-element Array{UInt8,1}:
+ 0x31
+ 0x32
+ 0x33
 ```
 
 Also observe the significant distinction between `\xff` and `\uff`: the former escape sequence
@@ -879,8 +929,9 @@ some confusion regarding the matter.
 
 ## [Version Number Literals](@id man-version-number-literals)
 
-Version numbers can easily be expressed with non-standard string literals of the form `v"..."`.
-Version number literals create `VersionNumber` objects which follow the specifications of [semantic versioning](http://semver.org),
+Version numbers can easily be expressed with non-standard string literals of the form [`v"..."`](@ref @v_str).
+Version number literals create [`VersionNumber`](@ref) objects which follow the
+specifications of [semantic versioning](http://semver.org),
 and therefore are composed of major, minor and patch numeric values, followed by pre-release and
 build alpha-numeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
 `0`, minor version `2`, patch version `1`, pre-release `rc1` and build `win64`. When entering

@@ -287,6 +287,24 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     return (jl_value_t*)newm;
 }
 
+jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast)
+{
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 3);
+    args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
+    args[2] = jl_toplevel_eval_flex(m, f, fast, 0);
+    if (jl_is_module(args[1])) {
+        JL_TYPECHK("getfield", symbol, args[2]);
+        args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
+    }
+    else {
+        args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
+        args[0] = jl_apply(args, 3);
+    }
+    JL_GC_POP();
+    return args[0];
+}
+
 // module referenced by (top ...) from within m
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
@@ -321,6 +339,10 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
     else if (head == method_sym || head == abstracttype_sym || head == primtype_sym ||
              head == structtype_sym || jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
+    }
+    else if (head == cfunction_sym) {
+        *has_intrinsics = 1;
+        return;
     }
     else if (head == foreigncall_sym) {
         *has_intrinsics = 1;
@@ -593,7 +615,10 @@ static jl_code_info_t *expr_to_code_info(jl_value_t *expr)
     jl_gc_wb(src, src->slotflags);
     src->ssavaluetypes = jl_box_long(0);
     jl_gc_wb(src, src->ssavaluetypes);
-    src->signature_for_inference_heuristics = jl_nothing;
+    src->method_for_inference_limit_heuristics = jl_nothing;
+    src->codelocs = jl_nothing;
+    src->linetable = jl_nothing;
+    src->ssaflags = jl_alloc_array_1d(jl_array_uint8_type, 0);
 
     JL_GC_POP();
     return src;
@@ -611,7 +636,19 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
 
     jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == module_sym) {
+    if (ex->head == dot_sym) {
+        if (jl_expr_nargs(ex) != 2)
+            jl_error("syntax: malformed \".\" expression");
+        jl_value_t *lhs = jl_exprarg(ex, 0);
+        jl_value_t *rhs = jl_exprarg(ex, 1);
+        // only handle `a.b` syntax here
+        if (jl_is_quotenode(rhs) && jl_is_symbol(jl_fieldref(rhs,0)))
+            return jl_eval_dot_expr(m, lhs, rhs, fast);
+    }
+    if (ptls->in_pure_callback) {
+        jl_error("eval cannot be used in a generated function");
+    }
+    else if (ex->head == module_sym) {
         return jl_eval_module_expr(m, ex);
     }
     else if (ex->head == importall_sym) {
@@ -803,12 +840,15 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
         // worthwhile and also unsound (see #24316).
         // TODO: This is still not correct since an `eval` can happen elsewhere, but it
         // helps in common cases.
+        size_t last_age = ptls->world_age;
+        size_t world = jl_world_counter;
+        ptls->world_age = world;
         if (!has_defs) {
-            size_t world = jl_get_ptls_states()->world_age;
             jl_type_infer(&li, world, 0);
         }
         jl_value_t *dummy_f_arg = NULL;
-        result = jl_call_method_internal(li, &dummy_f_arg, 1);
+        result = li->invoke(li, &dummy_f_arg, 1);
+        ptls->world_age = last_age;
     }
     else {
         // use interpreter
