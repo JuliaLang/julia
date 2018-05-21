@@ -1436,7 +1436,7 @@ end
 
 # issue #27178 (cfunction special case in inlining)
 mutable struct CallThisFunc27178{FCN_TYPE}
-  fcn::FCN_TYPE
+    fcn::FCN_TYPE
 end
 
 callback27178(cb::CTF) where CTF<:CallThisFunc27178 = nothing
