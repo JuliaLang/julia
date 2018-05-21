@@ -544,7 +544,7 @@ function norm(A)
     if isa(A, Vector)
         return sqrt(real(dot(A,A)))
     elseif isa(A, Matrix)
-        return maximum(svd(A)[2])
+        return maximum(svdvals(A))
     else
         error("norm: invalid argument")
     end
@@ -555,7 +555,7 @@ This can be written more concisely and efficiently as:
 
 ```julia
 norm(x::Vector) = sqrt(real(dot(x,x)))
-norm(A::Matrix) = maximum(svd(A)[2])
+norm(A::Matrix) = maximum(svdvals(A))
 ```
 
 ## Write "type-stable" functions

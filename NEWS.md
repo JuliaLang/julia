@@ -239,6 +239,9 @@ This section lists changes that do not have deprecation warnings.
   * `qr` methods now return decomposition objects such as `QR`, `QRPivoted`,
     and `QRCompactWY` rather than tuples of arrays ([#27159]).
 
+  * `svd` methods now return decomposition objects such as `SVD` and
+    `GeneralizedSVD` rather than tuples of arrays or tuples of numbers ([#27159]).
+
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
@@ -700,8 +703,8 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
-  * `lufact`, `schurfact`, `lqfact`, `qrfact`, and `ldltfact` have respectively
-    been deprecated to `lu`, `schur`, `lq`, `qr`, and `ldlt` ([#27159]).
+  * `lufact`, `schurfact`, `lqfact`, `qrfact`, `ldltfact`, and `svdfact` have
+    respectively been deprecated to `lu`, `schur`, `lq`, `qr`, `ldlt`, and `svd` ([#27159]).
 
   * `lufact!`, `schurfact!`, `lqfact!`, `qrfact!`, `ldltfact!`, and `svdfact!`
     have respectively been deprecated to `lu!`, `schur!`, `lq!`, `qr!`, `ldlt!`,

@@ -1292,7 +1292,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
             return B
         end
     end
-    SVD         = svdfact(A, full = false)
+    SVD         = svd(A, full = false)
     Stype       = eltype(SVD.S)
     Sinv        = zeros(Stype, length(SVD.S))
     index       = SVD.S .> tol*maximum(SVD.S)
@@ -1344,7 +1344,7 @@ julia> nullspace(M, 2)
 function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
-    SVD = svdfact(A, full=true)
+    SVD = svd(A, full=true)
     indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end

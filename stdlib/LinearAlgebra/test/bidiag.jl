@@ -242,14 +242,14 @@ srand(1)
 
         @testset "Singular systems" begin
             if (elty <: BlasReal)
-                @test AbstractArray(svdfact(T)) ≈ AbstractArray(svd!(copy(Tfull)))
+                @test AbstractArray(svd(T)) ≈ AbstractArray(svd!(copy(Tfull)))
                 @test svdvals(Tfull) ≈ svdvals(T)
                 u1, d1, v1 = svd(Tfull)
                 u2, d2, v2 = svd(T)
                 @test d1 ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(u1, u2)
-                    test_approx_eq_modphase(v1, v2)
+                    test_approx_eq_modphase(copy(v1), copy(v2))
                 end
                 @test 0 ≈ vecnorm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*Diagonal(d1)*v1'-Tfull))
                 @inferred svdvals(T)
