@@ -4,7 +4,7 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.ALT_BSUX
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.ALT_BSUX | PCRE.UCP
 const DEFAULT_MATCH_OPTS = zero(UInt32)
 
 mutable struct Regex
@@ -40,11 +40,15 @@ end
 function Regex(pattern::AbstractString, flags::AbstractString)
     options = DEFAULT_COMPILER_OPTS
     for f in flags
-        options |= f=='i' ? PCRE.CASELESS  :
-                   f=='m' ? PCRE.MULTILINE :
-                   f=='s' ? PCRE.DOTALL    :
-                   f=='x' ? PCRE.EXTENDED  :
-                   throw(ArgumentError("unknown regex flag: $f"))
+        if f == 'a'
+            options &= ~PCRE.UCP
+        else
+            options |= f=='i' ? PCRE.CASELESS  :
+                       f=='m' ? PCRE.MULTILINE :
+                       f=='s' ? PCRE.DOTALL    :
+                       f=='x' ? PCRE.EXTENDED  :
+                       throw(ArgumentError("unknown regex flag: $f"))
+        end
     end
     Regex(pattern, options, DEFAULT_MATCH_OPTS)
 end
@@ -72,8 +76,12 @@ after the ending quote, to change its behaviour:
 - `s` allows the `.` modifier to match newlines.
 - `x` enables "comment mode": whitespace is enabled except when escaped with `\\`, and `#`
   is treated as starting a comment.
+- `a` disables `UCP` mode (enables ASCII mode). By default `\\B`, `\\b`, `\\D`, `\\d`, `\\S`,
+  `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
+  these sequences only match ASCII characters.
 
-For example, this regex has all three flags enabled:
+
+For example, this regex has the first three flags enabled:
 
 ```jldoctest
 julia> match(r"a+.*b+.*?d\$"ism, "Goodbye,\\nOh, angry,\\nBad world\\n")
@@ -83,15 +91,16 @@ RegexMatch("angry,\\nBad world")
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
 function show(io::IO, re::Regex)
-    imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
+    imsxa = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED|PCRE.UCP
     opts = re.compile_options
-    if (opts & ~imsx) == DEFAULT_COMPILER_OPTS
+    if (opts & ~imsxa) == (DEFAULT_COMPILER_OPTS & ~imsxa)
         print(io, 'r')
         print_quoted_literal(io, re.pattern)
         if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
         if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
         if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
         if (opts & PCRE.EXTENDED ) != 0; print(io, 'x'); end
+        if (opts & PCRE.UCP      ) == 0; print(io, 'a'); end
     else
         print(io, "Regex(")
         show(io, re.pattern)

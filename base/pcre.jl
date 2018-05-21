@@ -49,7 +49,8 @@ const COMPILE_MASK      =
       NO_START_OPTIMIZE |
       NO_UTF_CHECK      |
       UNGREEDY          |
-      UTF
+      UTF               |
+      UCP
 
 const EXECUTE_MASK      =
       NEWLINE_ANY       |
