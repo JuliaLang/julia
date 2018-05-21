@@ -189,16 +189,16 @@ end
     S2 = svd(Array(A))
 
     ## singular values match:
-    @test S1[1].S ≈ S2[2][1:2]
+    @test S1[1].S ≈ S2.S[1:2]
     @testset "singular vectors" begin
         ## 1st left singular vector
         s1_left = sign(S1[1].U[3,1]) * S1[1].U[:,1]
-        s2_left = sign(S2[1][3,1]) * S2[1][:,1]
+        s2_left = sign(S2.U[3,1]) * S2.U[:,1]
         @test s1_left ≈ s2_left
 
         ## 1st right singular vector
         s1_right = sign(S1[1].V[3,1]) * S1[1].V[:,1]
-        s2_right = sign(S2[3][3,1]) * S2[3][:,1]
+        s2_right = sign(S2.V[3,1]) * S2.V[:,1]
         @test s1_right ≈ s2_right
     end
     # Issue number 10329
@@ -213,7 +213,7 @@ end
     end
     @testset "passing guess for Krylov vectors" begin
         S1 = svds(A, nsv = 2, v0=rand(eltype(A),size(A,2)))
-        @test S1[1].S ≈ S2[2][1:2]
+        @test S1[1].S ≈ S2.S[1:2]
     end
 
     @test_throws ArgumentError svds(A,nsv=0)
@@ -251,21 +251,21 @@ end
     S2 = svd(Array(A))
 
     ## singular values match:
-    @test S1[1].S ≈ S2[2][1:2]
+    @test S1[1].S ≈ S2.S[1:2]
     @testset "singular vectors" begin
         ## left singular vectors
         s1_left = abs.(S1[1].U[:,1:2])
-        s2_left = abs.(S2[1][:,1:2])
+        s2_left = abs.(S2.U[:,1:2])
         @test s1_left ≈ s2_left
 
         ## right singular vectors
         s1_right = abs.(S1[1].V[:,1:2])
-        s2_right = abs.(S2[3][:,1:2])
+        s2_right = abs.(S2.V[:,1:2])
         @test s1_right ≈ s2_right
     end
     @testset "passing guess for Krylov vectors" begin
         S1 = svds(A, nsv = 2, v0=rand(eltype(A),size(A,2)))
-        @test S1[1].S ≈ S2[2][1:2]
+        @test S1[1].S ≈ S2.S[1:2]
     end
 
     @test_throws ArgumentError svds(A,nsv=0)

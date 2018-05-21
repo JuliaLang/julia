@@ -1397,3 +1397,15 @@ export svdfact!
 @deprecate(svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T<:BlasFloat, svd!(A; full=full, thin=thin))
 @deprecate(svdfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat, svd!(A, B))
 @deprecate(svdfact!(A::AbstractTriangular), svd!(A))
+
+# deprecate svdfact to svd
+export svdfact
+@deprecate(svdfact(D::Diagonal), svd(D))
+@deprecate(svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T, svd(A; full=full, thin=thin))
+@deprecate(svdfact(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd(x; full=full, thin=thin))
+@deprecate(svdfact(x::Integer; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd(x; full=full, thin=thin))
+@deprecate(svdfact(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}, svd(A, B))
+@deprecate(svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}, svd(A, B))
+@deprecate(svdfact(x::Number, y::Number), svd(x, y))
+@deprecate(svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd(M; full=full, thin=thin))
+@deprecate(svdfact(A::AbstractTriangular), svd(A))

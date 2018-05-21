@@ -246,6 +246,9 @@ This section lists changes that do not have deprecation warnings.
     `CholeskyPivoted`, and `SuiteSparse.CHOLMOD.Factor` rather than
     tuples of arrays or tuples of numbers or numbers ([#27159]).
 
+  * `svd` methods now return decomposition objects such as `SVD` and
+    `GeneralizedSVD` rather than tuples of arrays or tuples of numbers ([#27159]).
+
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
@@ -695,8 +698,8 @@ Deprecated or removed
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
   * `lufact`, `eigfact`, `schurfact`, `lqfact`, `qrfact`, `bkfact`, `cholfact`,
-    `ldltfact`, and `hessfact` have respectively been deprecated to `lu`, `eig`,
-    `schur`, `lq`, `qr`, `bk`, `chol`, `ldlt`, and `hess` ([#27159]).
+    `ldltfact`, `hessfact`, and `svdfact` have respectively been deprecated to
+    `lu`, `eig`, `schur`, `lq`, `qr`, `bk`, `chol`, `ldlt`, `hess`, and `svd` ([#27159]).
 
   * `lufact!`, `eigfact!`, `schurfact!`, `lqfact!`, `qrfact!`, `cholfact!`,
     `bkfact!`, `ldltfact!`, `hessfact!`, and `svdfact!` have respectively been

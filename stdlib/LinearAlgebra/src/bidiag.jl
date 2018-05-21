@@ -199,12 +199,12 @@ function svd!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,No
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.uplo, 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
-function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+function svd(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
+        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
             "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
+            "e.g. `svd(A; full = $(!thin))`."), :svd)
         full::Bool = !thin
     end
     return svd!(copy(M), full = full)

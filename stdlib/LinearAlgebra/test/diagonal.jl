@@ -265,7 +265,7 @@ srand(1)
         U, s, V = svd(D)
         @test (U*Diagonal(s))*V' ≈ D
         @test svdvals(D) == s
-        @test svdfact(D).V == V
+        @test svd(D).V == V
     end
 end
 

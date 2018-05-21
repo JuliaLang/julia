@@ -132,7 +132,6 @@ export
     schur!,
     svd,
     svd!,
-    svdfact,
     svdvals!,
     svdvals,
     sylvester,
