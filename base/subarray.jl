@@ -320,6 +320,82 @@ find_extended_inds(::ScalarIndex, I...) = (@_inline_meta; find_extended_inds(I..
 find_extended_inds(i1, I...) = (@_inline_meta; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
 
+MemoryLayout(A::SubArray) = subarraylayout(MemoryLayout(parent(A)), parentindices(A))
+subarraylayout(_1, _2) = UnknownLayout()
+subarraylayout(_1, _2, _3)= UnknownLayout()
+subarraylayout(::DenseColumnMajor, ::Tuple{I}) where I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex} =
+    DenseColumnMajor()  # A[:] is DenseColumnMajor if A is DenseColumnMajor
+subarraylayout(ml::AbstractColumnMajor, inds) = _column_subarraylayout1(ml, inds)
+subarraylayout(::AbstractRowMajor, ::Tuple{I}) where I =
+    UnknownLayout()  # A[:] does not have any structure if A is AbstractRowMajor
+subarraylayout(ml::AbstractRowMajor, inds) = _row_subarraylayout1(ml, reverse(inds))
+subarraylayout(ml::AbstractStridedLayout, inds) = _strided_subarraylayout(ml, inds)
+
+_column_subarraylayout1(::DenseColumnMajor, inds::Tuple{I,Vararg{Int}}) where I<:Union{Int,AbstractCartesianIndex} =
+    DenseColumnMajor() # view(A,1,1,2) is a scalar, which we include in DenseColumnMajor
+_column_subarraylayout1(::DenseColumnMajor, inds::Tuple{I,Vararg{Int}}) where I<:Slice =
+    DenseColumnMajor() # view(A,:,1,2) is a DenseColumnMajor vector
+_column_subarraylayout1(::DenseColumnMajor, inds::Tuple{I,Vararg{Int}}) where I<:AbstractUnitRange{Int} =
+    DenseColumnMajor() # view(A,1:3,1,2) is a DenseColumnMajor vector
+_column_subarraylayout1(par, inds::Tuple{I,Vararg{Int}}) where I<:Union{Int,AbstractCartesianIndex} =
+    DenseColumnMajor() # view(A,1,1,2) is a scalar, which we include in DenseColumnMajor
+_column_subarraylayout1(par, inds::Tuple{I,Vararg{Int}}) where I<:AbstractUnitRange{Int} =
+    DenseColumnMajor() # view(A,1:3,1,2) is a DenseColumnMajor vector
+_column_subarraylayout1(::DenseColumnMajor, inds::Tuple{I,Vararg{Any}}) where I<:Slice =
+    _column_subarraylayout(DenseColumnMajor(), DenseColumnMajor(), tail(inds))
+_column_subarraylayout1(par::DenseColumnMajor, inds::Tuple{I,Vararg{Any}}) where I<:AbstractUnitRange{Int} =
+    _column_subarraylayout(par, ColumnMajor(), tail(inds))
+_column_subarraylayout1(par, inds::Tuple{I,Vararg{Any}}) where I<:AbstractUnitRange{Int} =
+    _column_subarraylayout(par, ColumnMajor(), tail(inds))
+_column_subarraylayout1(par::DenseColumnMajor, inds::Tuple{I,Vararg{Any}}) where I<:Union{RangeIndex,AbstractCartesianIndex} =
+    _column_subarraylayout(par, StridedLayout(), tail(inds))
+_column_subarraylayout1(par, inds::Tuple{I,Vararg{Any}}) where I<:Union{RangeIndex,AbstractCartesianIndex} =
+    _column_subarraylayout(par, StridedLayout(), tail(inds))
+_column_subarraylayout1(par, inds) = UnknownLayout()
+_column_subarraylayout(par, ret, ::Tuple{}) = ret
+_column_subarraylayout(par, ret, ::Tuple{I}) where I = UnknownLayout()
+_column_subarraylayout(::DenseColumnMajor, ::DenseColumnMajor, inds::Tuple{I,Vararg{Int}}) where I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex} =
+    DenseColumnMajor() # A[:,1:3,1,2] is DenseColumnMajor if A is DenseColumnMajor
+_column_subarraylayout(par::DenseColumnMajor, ::DenseColumnMajor, inds::Tuple{I, Vararg{Int}}) where I<:Slice =
+    DenseColumnMajor()
+_column_subarraylayout(par::DenseColumnMajor, ::DenseColumnMajor, inds::Tuple{I, Vararg{Any}}) where I<:Slice =
+    _column_subarraylayout(par, DenseColumnMajor(), tail(inds))
+_column_subarraylayout(par, ::AbstractColumnMajor, inds::Tuple{I, Vararg{Any}}) where I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex} =
+    _column_subarraylayout(par, ColumnMajor(), tail(inds))
+_column_subarraylayout(par, ::AbstractStridedLayout, inds::Tuple{I, Vararg{Any}}) where I<:Union{RangeIndex,AbstractCartesianIndex} =
+    _column_subarraylayout(par, StridedLayout(), tail(inds))
+
+_row_subarraylayout1(par, inds::Tuple{I,Vararg{Int}}) where I<:Union{Int,AbstractCartesianIndex} =
+    DenseColumnMajor() # view(A,1,1,2) is a scalar, which we include in DenseColumnMajor
+_row_subarraylayout1(::DenseRowMajor, inds::Tuple{I,Vararg{Int}}) where I<:Slice =
+    DenseColumnMajor() # view(A,1,2,:) is a DenseColumnMajor vector
+_row_subarraylayout1(par, inds::Tuple{I,Vararg{Int}}) where I<:AbstractUnitRange{Int} =
+    DenseColumnMajor() # view(A,1,2,1:3) is a DenseColumnMajor vector
+_row_subarraylayout1(::DenseRowMajor, inds::Tuple{I,Vararg{Any}}) where I<:Slice =
+    _row_subarraylayout(DenseRowMajor(), DenseRowMajor(), tail(inds))
+_row_subarraylayout1(par, inds::Tuple{I,Vararg{Any}}) where I<:AbstractUnitRange{Int} =
+    _row_subarraylayout(par, RowMajor(), tail(inds))
+_row_subarraylayout1(par, inds::Tuple{I,Vararg{Any}}) where I<:Union{RangeIndex,AbstractCartesianIndex} =
+    _row_subarraylayout(par, StridedLayout(), tail(inds))
+_row_subarraylayout1(par, inds) = UnknownLayout()
+_row_subarraylayout(par, ret, ::Tuple{}) = ret
+_row_subarraylayout(par, ret, ::Tuple{I}) where I = UnknownLayout()
+_row_subarraylayout(::DenseRowMajor, ::DenseRowMajor, inds::Tuple{I,Vararg{Int}}) where I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex} =
+    DenseRowMajor() # A[1,2,1:3,:] is DenseRowMajor if A is DenseRowMajor
+_row_subarraylayout(par::DenseRowMajor, ::DenseRowMajor, inds::Tuple{I, Vararg{Int}}) where I<:Slice =
+    DenseRowMajor()
+_row_subarraylayout(par::DenseRowMajor, ::DenseRowMajor, inds::Tuple{I, Vararg{Any}}) where I<:Slice =
+    _row_subarraylayout(par, DenseRowMajor(), tail(inds))
+_row_subarraylayout(par::AbstractRowMajor, ::AbstractRowMajor, inds::Tuple{I, Vararg{Any}}) where I<:Union{AbstractUnitRange{Int},Int,AbstractCartesianIndex} =
+    _row_subarraylayout(par, RowMajor(), tail(inds))
+_row_subarraylayout(par::AbstractRowMajor, ::AbstractStridedLayout, inds::Tuple{I, Vararg{Any}}) where I<:Union{RangeIndex,AbstractCartesianIndex} =
+    _row_subarraylayout(par, StridedLayout(), tail(inds))
+
+_strided_subarraylayout(par, inds) = UnknownLayout()
+_strided_subarraylayout(par, ::Tuple{}) = StridedLayout()
+_strided_subarraylayout(par, inds::Tuple{I, Vararg{Any}}) where I<:Union{RangeIndex,AbstractCartesianIndex} =
+    _strided_subarraylayout(par, tail(inds))
+
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 

@@ -35,7 +35,7 @@ function rmul!(X::Array{T}, s::Real) where T<:BlasComplex
 end
 
 
-function isone(A::StridedMatrix)
+function isone(A::AbstractMatrix)
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -45,7 +45,7 @@ function isone(A::StridedMatrix)
     end
 end
 
-@inline function _isone_triacheck(A::StridedMatrix, m::Int)
+@inline function _isone_triacheck(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in i:m
         if i == j
             isone(A[i,i]) || return false
@@ -57,7 +57,7 @@ end
 end
 
 # Inner loop over rows to be friendly to the CPU cache
-@inline function _isone_cachefriendly(A::StridedMatrix, m::Int)
+@inline function _isone_cachefriendly(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in 1:m
         if i == j
             isone(A[i,i]) || return false
@@ -126,7 +126,11 @@ function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray
     end
     return s
 end
-strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+strides(a::DenseArray) = size_to_strides(1, size(a)...)
+strides(a::ReshapedArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
+strides(a::ReinterpretArray) = _dense_strides(size(a), MemoryLayout(parent(a)))
+_dense_strides(sz, ::DenseColumnMajor) = size_to_strides(1, sz...)
+_dense_strides(sz, ::DenseRowMajor) = reverse(size_to_strides(1, sz...))
 
 function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
@@ -496,12 +500,19 @@ julia> exp(A)
  0.0      2.71828
 ```
 """
-exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
-exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
+exp(A::AbstractMatrix{<:BlasFloat}) = exp!(copy(A))
+exp(A::AbstractMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function exp!(A::StridedMatrix{T}) where T<:BlasFloat
+exp!(A::AbstractMatrix) = _exp!(A, MemoryLayout(A))
+exp!(A::AbstractMatrix, _) =
+    throw(ArgumentError("exp! not implemented for non-BlasFloat types."))
+function exp!(A::AbstractMatrix{T}, _) where T<:BlasFloat
+    A .= exp!(Matrix{T}(A))
+    A
+end
+function _exp!(A::AbstractMatrix{T}, ::AbstractColumnMajor) where T<:BlasFloat
     n = checksquare(A)
     if ishermitian(A)
         return copytri!(parent(exp(Hermitian(A))), 'U', true)
@@ -585,7 +596,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
 end
 
 ## Swap rows i and j and columns i and j in X
-function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
+function rcswap!(i::Integer, j::Integer, X::AbstractMatrix{<:Number})
     for k = 1:size(X,1)
         X[k,i], X[k,j] = X[k,j], X[k,i]
     end
@@ -595,7 +606,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    log(A{T}::StridedMatrix{T})
+    log(A{T}::AbstractMatrix{T})
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -625,7 +636,7 @@ julia> log(A)
  0.0  1.0
 ```
 """
-function log(A::StridedMatrix)
+function log(A::AbstractMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
         logHermA = log(Hermitian(A))
@@ -684,7 +695,7 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
-function sqrt(A::StridedMatrix{<:Real})
+function sqrt(A::AbstractMatrix{<:Real})
     if issymmetric(A)
         return copytri!(parent(sqrt(Symmetric(A))), 'U')
     end
@@ -697,7 +708,7 @@ function sqrt(A::StridedMatrix{<:Real})
         return SchurF.vectors * R * SchurF.vectors'
     end
 end
-function sqrt(A::StridedMatrix{<:Complex})
+function sqrt(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
         return isa(sqrtHermA, Hermitian) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
@@ -1147,7 +1158,7 @@ julia> factorize(A) # factorize will check to see that A is already factorized
 This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
 (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
 """
-function factorize(A::StridedMatrix{T}) where T
+function factorize(A::AbstractMatrix{T}) where T
     m, n = size(A)
     if m == n
         if m == 1 return A[1] end
@@ -1271,7 +1282,7 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
-function pinv(A::StridedMatrix{T}, tol::Real) where T
+function pinv(A::AbstractMatrix{T}, tol::Real) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
@@ -1300,7 +1311,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
-function pinv(A::StridedMatrix{T}) where T
+function pinv(A::AbstractMatrix{T}) where T
     tol = eps(real(float(one(T))))*min(size(A)...)
     return pinv(A, tol)
 end
@@ -1408,7 +1419,7 @@ julia> A*X + X*B + C
  -3.77476e-15  4.44089e-16
 ```
 """
-function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) where T<:BlasFloat
+function sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where T<:BlasFloat
     RA, QA = schur(A)
     RB, QB = schur(B)
 

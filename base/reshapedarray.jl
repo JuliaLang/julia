@@ -251,4 +251,9 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
+
+MemoryLayout(A::ReshapedArray) = reshapedmemorylayout(MemoryLayout(parent(A)))
+reshapedmemorylayout(::MemoryLayout) = UnknownLayout()
+reshapedmemorylayout(::DenseColumnMajor) = DenseColumnMajor()
+
 unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, parent(a))

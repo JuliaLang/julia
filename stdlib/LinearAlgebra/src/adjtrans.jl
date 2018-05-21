@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: @propagate_inbounds, _return_type, _default_type, @_inline_meta
-import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
+import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar, conj
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
 
@@ -118,6 +118,8 @@ const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 wrapperop(A::Adjoint) = adjoint
 wrapperop(A::Transpose) = transpose
 
+
+
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))
@@ -126,6 +128,37 @@ axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
+
+
+# MemoryLayout of transposed and adjoint matrices
+struct ConjLayout{ML<:MemoryLayout} <: MemoryLayout
+    layout::ML
+end
+
+conjlayout(_1, _2) = UnknownLayout()
+conjlayout(::Type{<:Complex}, M::ConjLayout) = M.layout
+conjlayout(::Type{<:Complex}, M::AbstractStridedLayout) = ConjLayout(M)
+conjlayout(::Type{<:Real}, M::MemoryLayout) = M
+
+
+Base.subarraylayout(M::ConjLayout, t::Tuple) = ConjLayout(Base.subarraylayout(M.layout, t))
+
+MemoryLayout(A::Transpose) = transposelayout(MemoryLayout(parent(A)))
+MemoryLayout(A::Adjoint) = adjointlayout(eltype(A), MemoryLayout(parent(A)))
+transposelayout(_) = UnknownLayout()
+transposelayout(::StridedLayout) = StridedLayout()
+transposelayout(::ColumnMajor) = RowMajor()
+transposelayout(::RowMajor) = ColumnMajor()
+transposelayout(::DenseColumnMajor) = DenseRowMajor()
+transposelayout(::DenseRowMajor) = DenseColumnMajor()
+transposelayout(M::ConjLayout) = ConjLayout(transposelayout(M.layout))
+adjointlayout(::Type{T}, M::MemoryLayout) where T = transposelayout(conjlayout(T, M))
+
+
+# Adjoints and transposes conform to the strided array interface if their parent does
+Base.unsafe_convert(::Type{Ptr{T}}, A::AdjOrTrans{T,S}) where {T,S} = Base.unsafe_convert(Ptr{T}, parent(A))
+strides(A::AdjOrTrans) = (stride(parent(A),2), stride(parent(A),1))
+
 @propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrapperop(v)(v.parent[i])
 @propagate_inbounds getindex(A::AdjOrTransAbsMat, i::Int, j::Int) = wrapperop(A)(A.parent[j, i])
 @propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i); v)
@@ -137,6 +170,15 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 # conversion of underlying storage
 convert(::Type{Adjoint{T,S}}, A::Adjoint) where {T,S} = Adjoint{T,S}(convert(S, A.parent))
 convert(::Type{Transpose{T,S}}, A::Transpose) where {T,S} = Transpose{T,S}(convert(S, A.parent))
+convert(::Type{AbstractArray{T}}, A::Transpose{T}) where {T} = A
+convert(::Type{AbstractArray{T}}, A::Adjoint{T}) where {T} = A
+convert(::Type{AbstractMatrix{T}}, A::Transpose{T}) where {T} = A
+convert(::Type{AbstractMatrix{T}}, A::Adjoint{T}) where {T} = A
+convert(::Type{AbstractArray{T}}, A::Adjoint) where {T} = Adjoint(convert(AbstractArray{T}, A.parent))
+convert(::Type{AbstractArray{T}}, A::Transpose) where {T} = Transpose(convert(AbstractArray{T}, A.parent))
+convert(::Type{AbstractMatrix{T}}, A::Adjoint) where {T} = Adjoint(convert(AbstractArray{T}, A.parent))
+convert(::Type{AbstractMatrix{T}}, A::Transpose) where {T} = Transpose(convert(AbstractArray{T}, A.parent))
+
 
 # for vectors, the semantics of the wrapped and unwrapped types differ
 # so attempt to maintain both the parent and wrapper type insofar as possible
@@ -193,10 +235,8 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 # Adjoint/Transpose-vector * vector
 *(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
-function *(u::TransposeAbsVec, v::AbstractVector)
-    @boundscheck length(u) == length(v) || throw(DimensionMismatch())
-    return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
-end
+*(u::TransposeAbsVec, v::AbstractVector) = dotu(u.parent, v)
+
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
 # Adjoint/Transpose-vector * Adjoint/Transpose-vector
@@ -226,16 +266,3 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 /(u::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A) \ u.parent)
 /(u::AdjointAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)
 /(u::TransposeAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = transpose(conj(A.parent) \ u.parent) # technically should be transpose(copy(transpose(copy(A))) \ u.parent)
-
-# dismabiguation methods
-*(A::AdjointAbsVec, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
-*(A::TransposeAbsVec, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractMatrix}) = copy(A) * B
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
-# Adj/Trans-vector * Trans/Adj-vector, shouldn't exist, here for ambiguity resolution? TODO: test removal
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
-# Adj/Trans-matrix * Trans/Adj-vector, shouldn't exist, here for ambiguity resolution? TODO: test removal
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))

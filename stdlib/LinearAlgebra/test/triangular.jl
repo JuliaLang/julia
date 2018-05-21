@@ -549,6 +549,93 @@ end
                    sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))))
 end
 
+@testset "triangular MemoryLayout" begin
+    A = [1.0 2; 3 4]
+    B = [1.0+im 2; 3 4]
+    for (TriType, TriLayout, TriLayoutTrans) in ((UpperTriangular, LinearAlgebra.UpperTriangularLayout, LinearAlgebra.LowerTriangularLayout),
+                                 (UnitUpperTriangular, LinearAlgebra.UnitUpperTriangularLayout, LinearAlgebra.UnitLowerTriangularLayout),
+                                 (LowerTriangular, LinearAlgebra.LowerTriangularLayout, LinearAlgebra.UpperTriangularLayout),
+                                 (UnitLowerTriangular, LinearAlgebra.UnitLowerTriangularLayout, LinearAlgebra.UnitUpperTriangularLayout))
+        @test Base.MemoryLayout(TriType(A)) == TriLayout(Base.DenseColumnMajor())
+        @test Base.MemoryLayout(TriType(transpose(A))) == Base.UnknownLayout()
+        @test Base.MemoryLayout(TriType(A')) == Base.UnknownLayout()
+        @test Base.MemoryLayout(transpose(TriType(A))) == TriLayoutTrans(Base.DenseRowMajor())
+        @test Base.MemoryLayout(TriType(A)') == TriLayoutTrans(Base.DenseRowMajor())
+
+        @test Base.MemoryLayout(TriType(B)) == TriLayout(Base.DenseColumnMajor())
+        @test Base.MemoryLayout(TriType(transpose(B))) == Base.UnknownLayout()
+        @test Base.MemoryLayout(TriType(B')) == Base.UnknownLayout()
+        @test Base.MemoryLayout(transpose(TriType(B))) == TriLayoutTrans(Base.DenseRowMajor())
+        @test Base.MemoryLayout(TriType(B)') == TriLayoutTrans(LinearAlgebra.ConjLayout(Base.DenseRowMajor()))
+    end
+
+    A = randn(Float64, 100, 100)
+    x = randn(Float64, 100)
+    @test all(UpperTriangular(A)*x .=== UpperTriangular(view(A',:,:)')*x .===
+              view(UpperTriangular(A), Base.OneTo(100), :)*x .===
+              BLAS.trmv!('U', 'N', 'N', A, copy(x)))
+    @test all(UnitUpperTriangular(A)*x .=== UnitUpperTriangular(view(A',:,:)')*x .===
+              view(UnitUpperTriangular(A), Base.OneTo(100), :)*x .===
+              BLAS.trmv!('U', 'N', 'U', A, copy(x)))
+    @test all(LowerTriangular(A)*x .=== LowerTriangular(view(A',:,:)')*x .===
+              view(LowerTriangular(A), Base.OneTo(100), :)*x .===
+              BLAS.trmv!('L', 'N', 'N', A, copy(x)))
+    @test all(UnitLowerTriangular(A)*x .=== UnitLowerTriangular(view(A',:,:)')*x .===
+              view(UnitLowerTriangular(A), Base.OneTo(100), :)*x .===
+              BLAS.trmv!('L', 'N', 'U', A, copy(x)))
+    @test all(UpperTriangular(A)'*x .=== UpperTriangular(view(A',:,:)')'*x .===
+              view(UpperTriangular(A)', Base.OneTo(100), :)*x .===
+              BLAS.trmv!('U', 'T', 'N', A, copy(x)))
+    @test all(UnitUpperTriangular(A)'*x .=== UnitUpperTriangular(view(A',:,:)')'*x .===
+              view(UnitUpperTriangular(A)', Base.OneTo(100), :)*x .===
+              BLAS.trmv!('U', 'T', 'U', A, copy(x)))
+    @test all(LowerTriangular(A)'*x .=== LowerTriangular(view(A',:,:)')'*x .===
+              view(LowerTriangular(A)', Base.OneTo(100), :)*x .===
+              BLAS.trmv!('L', 'T', 'N', A, copy(x)))
+    @test all(UnitLowerTriangular(A)'*x .=== UnitLowerTriangular(view(A',:,:)')'*x .===
+              view(UnitLowerTriangular(A)', Base.OneTo(100), :)*x .===
+              BLAS.trmv!('L', 'T', 'U', A, copy(x)))
+
+    A = randn(ComplexF64, 100, 100)
+    x = randn(ComplexF64, 100)
+    @test all(UpperTriangular(A)*x .=== UpperTriangular(view(A',:,:)')*x .===
+              view(UpperTriangular(A), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'N', 'N', A, copy(x)))
+    @test all(UnitUpperTriangular(A)*x .=== UnitUpperTriangular(view(A',:,:)')*x .===
+              view(UnitUpperTriangular(A), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'N', 'U', A, copy(x)))
+    @test all(LowerTriangular(A)*x .=== LowerTriangular(view(A',:,:)')*x .===
+              view(LowerTriangular(A), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'N', 'N', A, copy(x)))
+    @test all(UnitLowerTriangular(A)*x .=== UnitLowerTriangular(view(A',:,:)')*x .===
+              view(UnitLowerTriangular(A), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'N', 'U', A, copy(x)))
+    @test all(transpose(UpperTriangular(A))*x .=== transpose(UpperTriangular(view(A',:,:)'))*x .===
+              view(transpose(UpperTriangular(A)), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'T', 'N', A, copy(x)))
+    @test all(transpose(UnitUpperTriangular(A))*x .=== transpose(UnitUpperTriangular(view(A',:,:)'))*x .===
+              view(transpose(UnitUpperTriangular(A)), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'T', 'U', A, copy(x)))
+    @test all(transpose(LowerTriangular(A))*x .=== transpose(LowerTriangular(view(A',:,:)'))*x .===
+              view(transpose(LowerTriangular(A)), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'T', 'N', A, copy(x)))
+    @test all(transpose(UnitLowerTriangular(A))*x .=== transpose(UnitLowerTriangular(view(A',:,:)'))*x .===
+              view(transpose(UnitLowerTriangular(A)), :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'T', 'U', A, copy(x)))
+    @test all(UpperTriangular(A)'*x .=== UpperTriangular(view(A',:,:)')'*x .===
+              view(UpperTriangular(A)', :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'C', 'N', A, copy(x)))
+    @test all(UnitUpperTriangular(A)'*x .=== UnitUpperTriangular(view(A',:,:)')'*x .===
+              view(UnitUpperTriangular(A)', :, Base.OneTo(100))*x .===
+              BLAS.trmv!('U', 'C', 'U', A, copy(x)))
+    @test all(LowerTriangular(A)'*x .=== LowerTriangular(view(A',:,:)')'*x .===
+              view(LowerTriangular(A)', :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'C', 'N', A, copy(x)))
+    @test all(UnitLowerTriangular(A)'*x .=== UnitLowerTriangular(view(A',:,:)')'*x .===
+              view(UnitLowerTriangular(A)', :, Base.OneTo(100))*x .===
+              BLAS.trmv!('L', 'C', 'U', A, copy(x)))
+end
+
 @testset "adjoint/transpose triangular/vector multiplication" begin
     for elty in (Float64, ComplexF64), trity in (UpperTriangular, LowerTriangular)
         A1 = trity(rand(elty, 1, 1))

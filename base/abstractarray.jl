@@ -345,6 +345,138 @@ size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
 
+abstract type MemoryLayout end
+struct UnknownLayout <: MemoryLayout end
+abstract type AbstractStridedLayout <: MemoryLayout end
+abstract type AbstractIncreasingStrides <: AbstractStridedLayout end
+abstract type AbstractColumnMajor <: AbstractIncreasingStrides end
+struct DenseColumnMajor <: AbstractColumnMajor end
+struct ColumnMajor <: AbstractColumnMajor end
+struct IncreasingStrides <: AbstractIncreasingStrides end
+abstract type AbstractDecreasingStrides <: AbstractStridedLayout end
+abstract type AbstractRowMajor <: AbstractDecreasingStrides end
+struct DenseRowMajor <: AbstractRowMajor end
+struct RowMajor <: AbstractRowMajor end
+struct DecreasingStrides <: AbstractIncreasingStrides end
+struct StridedLayout <: AbstractStridedLayout end
+
+"""
+    UnknownLayout()
+
+is returned by `MemoryLayout(A)` if it is unknown how the entries of an array `A`
+are stored in memory.
+"""
+UnknownLayout
+
+"""
+    AbstractStridedLayout
+
+is an abstract type whose subtypes are returned by `MemoryLayout(A)`
+if an array `A` has storage laid out at regular offsets in memory,
+and which can therefore be passed to external C and Fortran functions expecting
+this memory layout.
+
+Julia's internal linear algebra machinery will automatically (and invisibly)
+dispatch to BLAS and LAPACK routines if the memory layout is BLAS compatible and
+the element type is a `Float32`, `Float64`, `ComplexF32`, or `ComplexF64`.
+In this case, one must implement the strided array interface, which requires
+overrides of `strides(A::MyMatrix)` and `unknown_convert(::Type{Ptr{T}}, A::MyMatrix)`.
+"""
+AbstractStridedLayout
+
+"""
+    DenseColumnMajor()
+
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+equivalent to an `Array`, so that `stride(A,1) == 1` and
+`stride(A,i) ≡ size(A,i-1) * stride(A,i-1)` for `2 ≤ i ≤ ndims(A)`. In particular,
+if `A` is a matrix then `strides(A) == `(1, size(A,1))`.
+
+Arrays with `DenseColumnMajor` memory layout must conform to the `DenseArray` interface.
+"""
+DenseColumnMajor
+
+"""
+    ColumnMajor()
+
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a column major array, so that `stride(A,1) == 1` and
+`stride(A,i) ≥ size(A,i-1) * stride(A,i-1)` for `2 ≤ i ≤ ndims(A)`.
+
+Arrays with `ColumnMajor` memory layout must conform to the `DenseArray` interface.
+"""
+ColumnMajor
+
+"""
+    IncreasingStrides()
+
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a strided array with  increasing strides, so that `stride(A,1) ≥ 1` and
+`stride(A,i) ≥ size(A,i-1) * stride(A,i-1)` for `2 ≤ i ≤ ndims(A)`.
+"""
+IncreasingStrides
+
+"""
+    DenseRowMajor()
+
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a row major array with dense entries, so that `stride(A,ndims(A)) == 1` and
+`stride(A,i) ≡ size(A,i+1) * stride(A,i+1)` for `1 ≤ i ≤ ndims(A)-1`. In particular,
+if `A` is a matrix then `strides(A) == `(size(A,2), 1)`.
+"""
+DenseRowMajor
+
+"""
+    RowMajor()
+
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a row major array, so that `stride(A,ndims(A)) == 1` and
+stride(A,i) ≥ size(A,i+1) * stride(A,i+1)` for `1 ≤ i ≤ ndims(A)-1`.
+
+If `A` is a matrix  with `RowMajor` memory layout, then
+`transpose(A)` should return a matrix whose layout is `ColumnMajor`.
+"""
+RowMajor
+
+"""
+    DecreasingStrides()
+
+is returned by `MemoryLayout(A)` if an array `A` has storage in memory
+as a strided array with decreasing strides, so that `stride(A,ndims(A)) ≥ 1` and
+stride(A,i) ≥ size(A,i+1) * stride(A,i+1)` for `1 ≤ i ≤ ndims(A)-1`.
+"""
+DecreasingStrides
+
+"""
+    StridedLayout()
+
+is returned by `MemoryLayout(A)` if an array `A` has storage laid out at regular
+offsets in memory. `Array`s with `StridedLayout` must conform to the `DenseArray` interface.
+"""
+StridedLayout
+
+"""
+    MemoryLayout(A)
+
+specifies the layout in memory for an array `A`. When
+you define a new `AbstractArray` type, you can choose to override
+`MemoryLayout` to indicate how an array is stored in memory.
+For example, if your matrix is column major with `stride(A,2) == size(A,1)`,
+then override as follows:
+
+    Base.MemoryLayout(::MyMatrix) = Base.DenseColumnMajor()
+
+The default is `Base.UnknownLayout()` to indicate that the layout
+in memory is unknown.
+
+Julia's internal linear algebra machinery will automatically (and invisibly)
+dispatch to BLAS and LAPACK routines if the memory layout is compatible.
+"""
+MemoryLayout(A::AbstractArray{T}) where T = UnknownLayout()
+MemoryLayout(A::DenseArray{T}) where T = DenseColumnMajor()
+
+
+
 function isassigned(a::AbstractArray, i::Int...)
     try
         a[i...]
@@ -378,6 +510,50 @@ function trailingsize(inds::Indices)
     @_inline_meta
     prod(map(unsafe_length, inds))
 end
+
+## Traits for array types ##
+
+abstract type IndexStyle end
+struct IndexLinear <: IndexStyle end
+struct IndexCartesian <: IndexStyle end
+
+"""
+    IndexStyle(A)
+    IndexStyle(typeof(A))
+
+`IndexStyle` specifies the "native indexing style" for array `A`. When
+you define a new `AbstractArray` type, you can choose to implement
+either linear indexing or cartesian indexing.  If you decide to
+implement linear indexing, then you must set this trait for your array
+type:
+
+    Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
+
+The default is `IndexCartesian()`.
+
+Julia's internal indexing machinery will automatically (and invisibly)
+convert all indexing operations into the preferred style. This allows users
+to access elements of your array using any indexing style, even when explicit
+methods have not been provided.
+
+If you define both styles of indexing for your `AbstractArray`, this
+trait can be used to select the most performant indexing style. Some
+methods check this trait on their inputs, and dispatch to different
+algorithms depending on the most efficient access pattern. In
+particular, [`eachindex`](@ref) creates an iterator whose type depends
+on the setting of this trait.
+"""
+IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
+IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
+IndexStyle(::Type{<:Array}) = IndexLinear()
+IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
+
+IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
+IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), IndexStyle(B...))
+IndexStyle(::IndexLinear, ::IndexLinear) = IndexLinear()
+IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
+
 
 ## Bounds checking ##
 
