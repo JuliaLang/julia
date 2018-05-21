@@ -74,3 +74,16 @@ end
                         kws...) where {T<:Real},
                 ldlt(A; kws...))
 end
+
+# deprecate ldltfact! to ldlt!
+@eval SuiteSparse.CHOLMOD begin
+    import LinearAlgebra: ldltfact!
+    @deprecate(ldltfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv, ldlt!(F, A; shift=shift))
+    @deprecate(ldltfact!(F::Factor, A::Union{SparseMatrixCSC{T},
+                         SparseMatrixCSC{Complex{T}},
+                         Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
+                         Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+                         Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+                         shift = 0.0) where {T<:Real},
+               ldlt!(F, A; shift=shift))
+end

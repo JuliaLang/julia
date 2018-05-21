@@ -8,7 +8,7 @@ import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
 using LinearAlgebra
 import LinearAlgebra: (\),
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
-                 issuccess, issymmetric, ldlt, ldltfact!, logdet
+                 issuccess, issymmetric, ldlt, ldlt!, logdet
 
 using SparseArrays
 import Libdl
@@ -1456,7 +1456,7 @@ cholfact(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
     kws...) where {T<:Real} = cholfact(Sparse(A); kws...)
 
 
-function ldltfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
+function ldlt!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
     cm = defaults(common_struct)
     set_print_level(cm, 0)
 
@@ -1470,7 +1470,7 @@ function ldltfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
 end
 
 """
-    ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
+    ldlt!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
@@ -1485,13 +1485,13 @@ See also [`ldlt`](@ref).
     be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 """
-ldltfact!(F::Factor, A::Union{SparseMatrixCSC{T},
+ldlt!(F::Factor, A::Union{SparseMatrixCSC{T},
     SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
     Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
     Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
     shift = 0.0) where {T<:Real} =
-    ldltfact!(F, Sparse(A), shift = shift)
+    ldlt!(F, Sparse(A), shift = shift)
 
 function ldlt(A::Sparse; shift::Real=0.0,
     perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
@@ -1508,7 +1508,7 @@ function ldlt(A::Sparse; shift::Real=0.0,
     F = fact_(A, cm; perm = perm)
 
     # Compute the numerical factorization
-    ldltfact!(F, A; shift = shift)
+    ldlt!(F, A; shift = shift)
 
     return F
 end
@@ -1716,7 +1716,7 @@ function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
     if issuccess(F)
         return \(F, B)
     else
-        ldltfact!(F, A)
+        ldlt!(F, A)
         if issuccess(F)
             return \(F, B)
         else
@@ -1730,7 +1730,7 @@ function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrM
     if issuccess(F)
         return \(adjoint(F), B)
     else
-        ldltfact!(F, A)
+        ldlt!(F, A)
         if issuccess(F)
             return \(adjoint(F), B)
         else

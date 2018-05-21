@@ -434,7 +434,7 @@ end
         @test F1 == F2
     end
 
-    ### cholfact!/ldltfact!
+    ### cholfact!/ldlt!
     F = cholfact(A1pd)
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
     @test unsafe_load(pointer(F)).is_ll == 0
@@ -450,11 +450,11 @@ end
 
     F = ldlt(A1pd)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test CHOLMOD.Sparse(ldltfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(ldlt!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldlt(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test CHOLMOD.Sparse(ldltfact!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(ldlt!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     @test isa(CHOLMOD.factor_to_sparse!(F), CHOLMOD.Sparse)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.factor_to_sparse!(F)
@@ -701,7 +701,7 @@ end
     @test F\b ≈ fill(1., m+n)
     F2 = cholfact(M)
     @test !LinearAlgebra.issuccess(F2)
-    ldltfact!(F2, M)
+    ldlt!(F2, M)
     @test LinearAlgebra.issuccess(F2)
     @test F2\b ≈ fill(1., m+n)
 end
@@ -809,7 +809,7 @@ end
     A[3, 3] = -1
     F = cholfact(A)
     @test !LinearAlgebra.issuccess(F)
-    @test LinearAlgebra.issuccess(ldltfact!(F, A))
+    @test LinearAlgebra.issuccess(ldlt!(F, A))
     A[3, 3] = 1
     @test A[:, 3:-1:1]\fill(1., 3) == [1, 1, 1]
 end

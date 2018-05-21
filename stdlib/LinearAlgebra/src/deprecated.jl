@@ -1317,3 +1317,7 @@ export qrfact!
 @deprecate(qrfact!(A::StridedMatrix, ::Val{false}), qr!(A, Val(false)))
 @deprecate(qrfact!(A::StridedMatrix, ::Val{true}), qr!(A, Val(true)))
 @deprecate(qrfact!(A::StridedMatrix), qr!(A))
+
+# deprecate ldltfact! to ldlt!
+export ldltfact!
+@deprecate(ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}, ldlt!(S))
