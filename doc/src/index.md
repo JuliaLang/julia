@@ -4,122 +4,78 @@ Welcome to the documentation for Julia 0.7.
 
 Please read the [release notes](NEWS.md) to see what has changed since the last release.
 
-* [Manual](#Manual-1)
-* [Base](#Base-1)
-* [Standard Library](#Standard-Library-1)
-* [Developer Documentation](#Developer-Documentation-1)
+### [Introduction](@id man-introduction)
 
-## Manual
+Scientific computing has traditionally required the highest performance, yet domain experts have
+largely moved to slower dynamic languages for daily work. We believe there are many good reasons
+to prefer dynamic languages for these applications, and we do not expect their use to diminish.
+Fortunately, modern language design and compiler techniques make it possible to mostly eliminate
+the performance trade-off and provide a single environment productive enough for prototyping and
+efficient enough for deploying performance-intensive applications. The Julia programming language
+fills this role: it is a flexible dynamic language, appropriate for scientific and numerical computing,
+with performance comparable to traditional statically-typed languages.
 
-  * [Introduction](@ref man-introduction)
-  * [Getting Started](@ref man-getting-started)
-  * [Variables](@ref)
-  * [Integers and Floating-Point Numbers](@ref)
-  * [Mathematical Operations and Elementary Functions](@ref)
-  * [Complex and Rational Numbers](@ref)
-  * [Strings](@ref man-strings)
-  * [Functions](@ref man-functions)
-  * [Control Flow](@ref)
-  * [Scope of Variables](@ref scope-of-variables)
-  * [Types](@ref man-types)
-  * [Methods](@ref)
-  * [Constructors](@ref man-constructors)
-  * [Conversion and Promotion](@ref conversion-and-promotion)
-  * [Interfaces](@ref)
-  * [Modules](@ref modules)
-  * [Documentation](@ref)
-  * [Metaprogramming](@ref)
-  * [Multi-dimensional Arrays](@ref man-multi-dim-arrays)
-  * [Missing Values](@ref missing)
-  * [Networking and Streams](@ref)
-  * [Parallel Computing](@ref)
-  * [Running External Programs](@ref)
-  * [Calling C and Fortran Code](@ref)
-  * [Handling Operating System Variation](@ref)
-  * [Environment Variables](@ref)
-  * [Embedding Julia](@ref)
-  * [Packages](@ref)
-  * [Profiling](@ref)
-  * [Stack Traces](@ref)
-  * [Performance Tips](@ref man-performance-tips)
-  * [Workflow Tips](@ref man-workflow-tips)
-  * [Style Guide](@ref)
-  * [Frequently Asked Questions](@ref)
-  * [Noteworthy Differences from other Languages](@ref)
-  * [Unicode Input](@ref)
+Because Julia's compiler is different from the interpreters used for languages like Python or
+R, you may find that Julia's performance is unintuitive at first. If you find that something is
+slow, we highly recommend reading through the [Performance Tips](@ref man-performance-tips) section before trying anything
+else. Once you understand how Julia works, it's easy to write code that's nearly as fast as C.
 
-## Base
+Julia features optional typing, multiple dispatch, and good performance, achieved using type inference
+and [just-in-time (JIT) compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation),
+implemented using [LLVM](https://en.wikipedia.org/wiki/Low_Level_Virtual_Machine). It is multi-paradigm,
+combining features of imperative, functional, and object-oriented programming. Julia provides
+ease and expressiveness for high-level numerical computing, in the same way as languages such
+as R, MATLAB, and Python, but also supports general programming. To achieve this, Julia builds
+upon the lineage of mathematical programming languages, but also borrows much from popular dynamic
+languages, including [Lisp](https://en.wikipedia.org/wiki/Lisp_(programming_language)), [Perl](https://en.wikipedia.org/wiki/Perl_(programming_language)),
+[Python](https://en.wikipedia.org/wiki/Python_(programming_language)), [Lua](https://en.wikipedia.org/wiki/Lua_(programming_language)),
+and [Ruby](https://en.wikipedia.org/wiki/Ruby_(programming_language)).
 
-  * [Essentials](@ref)
-  * [Collections and Data Structures](@ref)
-  * [Mathematics](@ref)
-  * [Numbers](@ref lib-numbers)
-  * [Strings](@ref lib-strings)
-  * [Arrays](@ref lib-arrays)
-  * [Tasks](@ref)
-  * [Distributed Computing](@ref)
-  * [Multi-Threading](@ref)
-  * [Shared Arrays](@ref)
-  * [Constants](@ref lib-constants)
-  * [Filesystem](@ref)
-  * [I/O and Network](@ref)
-  * [Punctuation](@ref)
-  * [Sorting and Related Functions](@ref)
-  * [Package Manager Functions](@ref)
-  * [Iteration utilities](@ref)
-  * [C Interface](@ref)
-  * [C Standard Library](@ref)
-  * [Dynamic Linker](@ref)
-  * [StackTraces](@ref)
-  * [SIMD Support](@ref)
+The most significant departures of Julia from typical dynamic languages are:
 
-## Standard Library
+  * The core language imposes very little; Julia Base and the standard library is written in Julia itself, including
+    primitive operations like integer arithmetic
+  * A rich language of types for constructing and describing objects, that can also optionally be
+    used to make type declarations
+  * The ability to define function behavior across many combinations of argument types via [multiple dispatch](https://en.wikipedia.org/wiki/Multiple_dispatch)
+  * Automatic generation of efficient, specialized code for different argument types
+  * Good performance, approaching that of statically-compiled languages like C
 
-  * [The Julia REPL](@ref)
-  * [Base64](@ref)
-  * [CRC32c](@ref)
-  * [SHA](@ref)
-  * [Dates](@ref)
-  * [Delimited Files](@ref)
-  * [Distributed Computing](@ref)
-  * [File Events](@ref lib-filewatching)
-  * [Iterative Eigensolvers](@ref lib-itereigen)
-  * [Memory-mapped I/O](@ref)
-  * [Printf](@ref)
-  * [Profiling](@ref lib-profiling)
-  * [Random Numbers](@ref)
-  * [Shared Arrays](@ref)
-  * [Linear Algebra](@ref)
-  * [Logging](@ref)
-  * [Sparse Arrays](@ref)
-  * [Unicode](@ref)
-  * [Unit Testing](@ref)
+Although one sometimes speaks of dynamic languages as being "typeless", they are definitely not:
+every object, whether primitive or user-defined, has a type. The lack of type declarations in
+most dynamic languages, however, means that one cannot instruct the compiler about the types of
+values, and often cannot explicitly talk about types at all. In static languages, on the other
+hand, while one can -- and usually must -- annotate types for the compiler, types exist only at
+compile time and cannot be manipulated or expressed at run time. In Julia, types are themselves
+run-time objects, and can also be used to convey information to the compiler.
 
-## Developer Documentation
+While the casual programmer need not explicitly use types or multiple dispatch, they are the core
+unifying features of Julia: functions are defined on different combinations of argument types,
+and applied by dispatching to the most specific matching definition. This model is a good fit
+for mathematical programming, where it is unnatural for the first argument to "own" an operation
+as in traditional object-oriented dispatch. Operators are just functions with special notation
+-- to extend addition to new user-defined data types, you define new methods for the `+` function.
+Existing code then seamlessly applies to the new data types.
 
-  * [Reflection and introspection](@ref)
-  * Documentation of Julia's Internals
-      * [Initialization of the Julia runtime](@ref)
-      * [Julia ASTs](@ref)
-      * [More about types](@ref)
-      * [Memory layout of Julia Objects](@ref)
-      * [Eval of Julia code](@ref)
-      * [Calling Conventions](@ref)
-      * [High-level Overview of the Native-Code Generation Process](@ref)
-      * [Julia Functions](@ref)
-      * [Base.Cartesian](@ref)
-      * [Talking to the compiler (the `:meta` mechanism)](@ref)
-      * [SubArrays](@ref)
-      * [System Image Building](@ref)
-      * [Working with LLVM](@ref)
-      * [printf() and stdio in the Julia runtime](@ref)
-      * [Bounds checking](@ref)
-      * [Proper maintenance and care of multi-threading locks](@ref)
-      * [Arrays with custom indices](@ref man-custom-indices)
-      * [Module loading](@ref)
-      * [Inference](@ref)
-  * Developing/debugging Julia's C code
-      * [Reporting and analyzing crashes (segfaults)](@ref)
-      * [gdb debugging tips](@ref)
-      * [Using Valgrind with Julia](@ref)
-      * [Sanitizer support](@ref)
+Partly because of run-time type inference (augmented by optional type annotations), and partly
+because of a strong focus on performance from the inception of the project, Julia's computational
+efficiency exceeds that of other dynamic languages, and even rivals that of statically-compiled
+languages. For large scale numerical problems, speed always has been, continues to be, and probably
+always will be crucial: the amount of data being processed has easily kept pace with Moore's Law
+over the past decades.
+
+Julia aims to create an unprecedented combination of ease-of-use, power, and efficiency in a single
+language. In addition to the above, some advantages of Julia over comparable systems include:
+
+  * Free and open source ([MIT licensed](https://github.com/JuliaLang/julia/blob/master/LICENSE.md))
+  * User-defined types are as fast and compact as built-ins
+  * No need to vectorize code for performance; devectorized code is fast
+  * Designed for parallelism and distributed computation
+  * Lightweight "green" threading ([coroutines](https://en.wikipedia.org/wiki/Coroutine))
+  * Unobtrusive yet powerful type system
+  * Elegant and extensible conversions and promotions for numeric and other types
+  * Efficient support for [Unicode](https://en.wikipedia.org/wiki/Unicode), including but not limited
+    to [UTF-8](https://en.wikipedia.org/wiki/UTF-8)
+  * Call C functions directly (no wrappers or special APIs needed)
+  * Powerful shell-like capabilities for managing other processes
+  * Lisp-like macros and other metaprogramming facilities
