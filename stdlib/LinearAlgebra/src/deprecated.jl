@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+ # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: @deprecate, depwarn
 
@@ -1321,3 +1321,10 @@ export qrfact!
 # deprecate ldltfact! to ldlt!
 export ldltfact!
 @deprecate(ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}, ldlt!(S))
+
+# deprecate svdfact! to svd!
+export svdfact!
+@deprecate(svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd!(M; full=full, thin=thin))
+@deprecate(svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T<:BlasFloat, svd!(A; full=full, thin=thin))
+@deprecate(svdfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat, svd!(A, B))
+@deprecate(svdfact!(A::AbstractTriangular), svd!(A))

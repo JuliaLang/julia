@@ -188,12 +188,12 @@ similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), simil
 
 #Singular values
 svdvals!(M::Bidiagonal{<:BlasReal}) = LAPACK.bdsdc!(M.uplo, 'N', M.dv, M.ev)[1]
-function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+function svd!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
+        Base.depwarn(string("the `thin` keyword argument in `svd!(A; thin = $(thin))` has ",
             "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svdfact!(A; full = $(!thin))`."), :svdfact!)
+            "e.g. `svd!(A; full = $(!thin))`."), :svd!)
         full::Bool = !thin
     end
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.uplo, 'I', M.dv, M.ev)
@@ -207,7 +207,7 @@ function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = 
             "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
         full::Bool = !thin
     end
-    return svdfact!(copy(M), full = full)
+    return svd!(copy(M), full = full)
 end
 
 ####################

@@ -242,7 +242,7 @@ srand(1)
 
         @testset "Singular systems" begin
             if (elty <: BlasReal)
-                @test AbstractArray(svdfact(T)) ≈ AbstractArray(svdfact!(copy(Tfull)))
+                @test AbstractArray(svdfact(T)) ≈ AbstractArray(svd!(copy(Tfull)))
                 @test svdvals(Tfull) ≈ svdvals(T)
                 u1, d1, v1 = svd(Tfull)
                 u2, d2, v2 = svd(T)
