@@ -254,7 +254,7 @@ function _represents_nan_or_inf(s, i, nan_or_inf, T)
     _rest_is_space(s, i+3, T)
 end
 
-function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
+function parse_base_not_10(::Type{T}, s::AbstractString, base::Integer) where T<:AbstractFloat
     base = check_valid_base(base, 23) #do not allow base > 23: 'n' would be ambiguous
     sign, i = parsefloat_preamble(s, base)
 
@@ -306,6 +306,11 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString; base::Integer=10)
     _rest_is_space(s, i, T)
 
     return sign*res*b^(expsign*exponent)
+end
+
+function parse(::Type{T}, s::AbstractString; base::Integer=10) where {T<:AbstractFloat}
+    base != 10 && return parse_base_not_10(T, s, base)
+    return convert(T, tryparse_internal(T, s))
 end
 
 function tryparse(::Type{Float64}, s::String)

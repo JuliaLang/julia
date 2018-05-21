@@ -307,6 +307,9 @@ end
     @test parse(Float64, "1e6", base=10) === 1000000.0
 
     @test parse(BigFloat, "2.3e-23", base=5) == big"2.129919999999999999999999999999999999999999999999999999999999999999999999999986e-09"
+    # @test parse(BigFloat, "1.6295587921142578125e+03") == big"1.6295587921142578125e+03"
+    # ([parse(Float64, x) for x = split("0,1\n", ",")])[2] == 1.0
+    # parse(Float64, SubString("10", 1, 1)) === 1.0
 
     @test_throws ArgumentError parse(Float64, "1.2e2 some nonesense", base=10)
     @test_throws ArgumentError parse(Float64, "1 .2e2", base=10)
