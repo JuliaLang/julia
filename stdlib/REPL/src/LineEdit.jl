@@ -1299,7 +1299,7 @@ end
 keymap_fcn(f::Nothing, c) = (s, p) -> return :ok
 function keymap_fcn(f::Function, c)
     return function (s, p)
-        r = eval(Expr(:call,f,s, p, c))
+        r = Base.invokelatest(f, s, p, c)
         if isa(r, Symbol)
             return r
         else
