@@ -699,8 +699,9 @@ Deprecated or removed
     `schur`, `lq`, `qr`, `bk`, `chol`, `ldlt`, and `hess` ([#27159]).
 
   * `lufact!`, `eigfact!`, `schurfact!`, `lqfact!`, `qrfact!`, `cholfact!`,
-    `bkfact!`, `ldltfact!`, and `hessfact!` have respectively been deprecated to
-    `lu!`, `eig!`, `schur!`, `lq!`, `qr!`, `chol!`, `bk!`, `ldlt!`, and `hess!` ([#27159]).
+    `bkfact!`, `ldltfact!`, `hessfact!`, and `svdfact!` have respectively been
+    deprecated to `lu!`, `eig!`, `schur!`, `lq!`, `qr!`, `chol!`, `bk!`,
+    `ldlt!`, `hess!`, and `svd!` ([#27159]).
 
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.

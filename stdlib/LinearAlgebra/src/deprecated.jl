@@ -1391,3 +1391,9 @@ export ldltfact!
 export hessfact!
 @deprecate(hessfact!(A::StridedMatrix{<:BlasFloat}), hess!(A))
 
+# deprecate svdfact! to svd!
+export svdfact!
+@deprecate(svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd!(M; full=full, thin=thin))
+@deprecate(svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T<:BlasFloat, svd!(A; full=full, thin=thin))
+@deprecate(svdfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat, svd!(A, B))
+@deprecate(svdfact!(A::AbstractTriangular), svd!(A))

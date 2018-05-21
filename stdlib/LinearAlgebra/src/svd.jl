@@ -11,9 +11,9 @@ end
 SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U)}(U, S, Vt)
 
 """
-    svdfact!(A; full::Bool = false) -> SVD
+    svd!(A; full::Bool = false) -> SVD
 
-`svdfact!` is the same as [`svdfact`](@ref), but saves space by
+`svd!` is the same as [`svdfact`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy.
 
 # Examples
@@ -25,7 +25,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  0.0  0.0  0.0  0.0
  0.0  2.0  0.0  0.0  0.0
 
-julia> F = svdfact!(A);
+julia> F = svd!(A);
 
 julia> F.U * Diagonal(F.S) * F.Vt
 4×5 Array{Float64,2}:
@@ -42,12 +42,12 @@ julia> A
   0.0       0.0  -2.0  0.0  0.0
 ```
 """
-function svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T<:BlasFloat
+function svd!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T<:BlasFloat
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
+        Base.depwarn(string("the `thin` keyword argument in `svd!(A; thin = $(thin))` has ",
             "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svdfact!(A; full = $(!thin))`."), :svdfact!)
+            "e.g. `svd!(A; full = $(!thin))`."), :svd!)
         full::Bool = !thin
     end
     m,n = size(A)
@@ -102,7 +102,7 @@ function svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Not
             "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
         full::Bool = !thin
     end
-    svdfact!(copy_oftype(A, eigtype(T)), full = full)
+    svd!(copy_oftype(A, eigtype(T)), full = full)
 end
 function svdfact(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
@@ -279,9 +279,9 @@ function GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractM
 end
 
 """
-    svdfact!(A, B) -> GeneralizedSVD
+    svd!(A, B) -> GeneralizedSVD
 
-`svdfact!` is the same as [`svdfact`](@ref), but modifies the arguments
+`svd!` is the same as [`svdfact`](@ref), but modifies the arguments
 `A` and `B` in-place, instead of making copies.
 
 # Examples
@@ -296,7 +296,7 @@ julia> B = [0. 1.; 1. 0.]
  0.0  1.0
  1.0  0.0
 
-julia> F = svdfact!(A, B);
+julia> F = svd!(A, B);
 
 julia> F.U*F.D1*F.R0*F.Q'
 2×2 Array{Float64,2}:
@@ -319,7 +319,7 @@ julia> B
  0.0  -1.0
 ```
 """
-function svdfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
+function svd!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
     if LAPACK.version() < v"3.6.0"
         U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', A, B)
@@ -328,7 +328,7 @@ function svdfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     end
     GeneralizedSVD(U, V, Q, a, b, Int(k), Int(l), R)
 end
-svdfact(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svdfact!(copy(A),copy(B))
+svdfact(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svd!(copy(A),copy(B))
 
 """
     svdfact(A, B) -> GeneralizedSVD
@@ -381,7 +381,7 @@ julia> F.V*F.D2*F.R0*F.Q'
 """
 function svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA),TB)
-    return svdfact!(copy_oftype(A, S), copy_oftype(B, S))
+    return svd!(copy_oftype(A, S), copy_oftype(B, S))
 end
 # This method can be heavily optimized but it is probably not critical
 # and might introduce bugs or inconsistencies relative to the 1x1 matrix

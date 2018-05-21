@@ -131,7 +131,7 @@ export
     schur,
     schur!,
     svd,
-    svdfact!,
+    svd!,
     svdfact,
     svdvals!,
     svdvals,
