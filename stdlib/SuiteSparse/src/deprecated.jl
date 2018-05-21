@@ -86,3 +86,16 @@ end
                         kws...) where {T<:Real},
                 ldlt(A; kws...))
 end
+
+# deprecate cholfact! to chol!
+@eval SuiteSparse.CHOLMOD begin
+    import LinearAlgebra: cholfact!
+    @deprecate(cholfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv, chol!(F, A; shift=shift))
+    @deprecate(cholfact!(F::Factor, A::Union{SparseMatrixCSC{T},
+                         SparseMatrixCSC{Complex{T}},
+                         Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
+                         Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+                         Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+                         shift = 0.0) where {T<:Real},
+               chol!(F, A; shift=shift))
+end

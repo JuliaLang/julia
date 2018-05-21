@@ -1369,3 +1369,13 @@ export qrfact!
 @deprecate(qrfact!(A::StridedMatrix, ::Val{false}), qr!(A, Val(false)))
 @deprecate(qrfact!(A::StridedMatrix, ::Val{true}), qr!(A, Val(true)))
 @deprecate(qrfact!(A::StridedMatrix), qr!(A))
+
+# deprecate cholfact! to chol!
+export cholfact!
+@deprecate(cholfact!(A::RealHermSymComplexHerm, ::Val{false}=Val(false)), chol!(A, Val(false)))
+@deprecate(cholfact!(A::StridedMatrix, ::Val{false}=Val(false)), chol!(A, Val(false)))
+@deprecate(cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, ::Val{true}; tol = 0.0), chol!(A, Val(true); tol=tol))
+@deprecate(cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0), chol!(A, Val(true); tol=tol))
+@deprecate(cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0), chol!(A, Val(true); tol=tol))
+
+

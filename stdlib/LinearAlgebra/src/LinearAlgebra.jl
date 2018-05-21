@@ -67,7 +67,7 @@ export
     bkfact,
     bkfact!,
     chol,
-    cholfact!,
+    chol!,
     cond,
     condskeel,
     copyto!,

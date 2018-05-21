@@ -4,14 +4,14 @@
 # Cholesky Factorization #
 ##########################
 
-# The dispatch structure in the legacychol!, legacychol, chol, and cholfact! methods is a bit
+# The dispatch structure in the legacychol!, legacychol, chol, and chol! methods is a bit
 # complicated and some explanation is therefore provided in the following
 #
 # In the methods below, LAPACK is called when possible, i.e. StridedMatrices with Float32,
 # Float64, Complex{Float32}, and Complex{Float64} element types. For other element or
 # matrix types, the unblocked Julia implementation in _chol! is used. For chol
-# and cholfact! pivoting is supported through a Val(Bool) argument. A type argument is
-# necessary for type stability since the output of chol and cholfact! is either
+# and chol! pivoting is supported through a Val(Bool) argument. A type argument is
+# necessary for type stability since the output of chol and chol! is either
 # Cholesky or PivotedCholesky. The latter is only
 # supported for the four LAPACK element types. For other types, e.g. BigFloats Val(true) will
 # give an error. It is required that the input is Hermitian (including real symmetric) either
@@ -21,7 +21,7 @@
 # The internal structure is as follows
 # - _chol! returns the factor and info without checking positive definiteness
 # - legacychol/legacychol! returns the factor and checks for positive definiteness
-# - chol/cholfact! returns Cholesky without checking positive definiteness
+# - chol/chol! returns Cholesky without checking positive definiteness
 
 # FixMe? The dispatch below seems overly complicated. One simplification could be to
 # merge the two Cholesky types into one. It would remove the need for Val completely but
@@ -201,10 +201,10 @@ legacychol(x::Number, args...) = ((C, info) = _chol!(x, nothing); @assertposdef 
 
 
 
-# cholfact!. Destructive methods for computing Cholesky factorization of real symmetric
+# chol!. Destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
 ## No pivoting (default)
-function cholfact!(A::RealHermSymComplexHerm, ::Val{false}=Val(false))
+function chol!(A::RealHermSymComplexHerm, ::Val{false}=Val(false))
     if A.uplo == 'U'
         CU, info = _chol!(A.data, UpperTriangular)
         Cholesky(CU.data, 'U', info)
@@ -216,7 +216,7 @@ end
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact!(A, Val(false)) -> Cholesky
+    chol!(A, Val(false)) -> Cholesky
 
 The same as [`chol`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if
@@ -230,25 +230,25 @@ julia> A = [1 2; 2 50]
  1   2
  2  50
 
-julia> cholfact!(A)
+julia> chol!(A)
 ERROR: InexactError: Int64(Int64, 6.782329983125268)
 Stacktrace:
 [...]
 ```
 """
-function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
+function chol!(A::StridedMatrix, ::Val{false}=Val(false))
     checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return Cholesky(A, 'U', convert(BlasInt, -1))
     else
-        return cholfact!(Hermitian(A), Val(false))
+        return chol!(Hermitian(A), Val(false))
     end
 end
 
 
 ## With pivoting
 ### BLAS/LAPACK element types
-function cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
+function chol!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
                    ::Val{true}; tol = 0.0)
     AA, piv, rank, info = LAPACK.pstrf!(A.uplo, A.data, tol)
     return CholeskyPivoted{eltype(AA),typeof(AA)}(AA, A.uplo, piv, rank, tol, info)
@@ -256,25 +256,25 @@ end
 
 ### Non BLAS/LAPACK element types (generic). Since generic fallback for pivoted Cholesky
 ### is not implemented yet we throw an error
-cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0) =
+chol!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0) =
     throw(ArgumentError("generic pivoted Cholesky factorization is not implemented yet"))
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted
+    chol!(A, Val(true); tol = 0.0) -> CholeskyPivoted
 
 The same as [`chol`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if the
 factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
-function cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0)
+function chol!(A::StridedMatrix, ::Val{true}; tol = 0.0)
     checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
                                tol, convert(BlasInt, -1))
     else
-        return cholfact!(Hermitian(A), Val(true); tol = tol)
+        return chol!(Hermitian(A), Val(true); tol = tol)
     end
 end
 
@@ -324,7 +324,7 @@ true
 ```
 """
 chol(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
-    ::Val{false}=Val(false)) = cholfact!(cholcopy(A))
+    ::Val{false}=Val(false)) = chol!(cholcopy(A))
 
 
 ## With pivoting
@@ -341,7 +341,7 @@ The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
 """
 chol(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
-    ::Val{true}; tol = 0.0) = cholfact!(cholcopy(A), Val(true); tol = tol)
+    ::Val{true}; tol = 0.0) = chol!(cholcopy(A), Val(true); tol = tol)
 
 ## Number
 function chol(x::Number, uplo::Symbol=:U)
