@@ -621,7 +621,7 @@ function read_manifest(io::IO)
     return manifest
 end
 function read_manifest(file::String)
-        try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
+    try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
     catch err
         err isa ErrorException && startswith(err.msg, "ambiguious dependency") || rethrow(err)
         err.msg *= "In manifest file: $file"
@@ -1219,16 +1219,16 @@ function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothin
 end
 
 # TODO: redirect to ctx stream
-function printpkgstyle(io::IO, cmd::Symbol, text::String...; ignore_indent=false)
+function printpkgstyle(io::IO, cmd::Symbol, text::String, ignore_indent=false)
     indent = textwidth(string(:Downloaded))
     ignore_indent && (indent = 0)
     printstyled(io, lpad(string(cmd), indent), color=:green, bold=true)
-    println(io, " ", text...)
+    println(io, " ", text)
 end
 
 # TODO: use ctx specific context
-function printpkgstyle(ctx::Context, cmd::Symbol, text::String...; kwargs...)
-    printpkgstyle(stdout, cmd, text...; kwargs...)
+function printpkgstyle(ctx::Context, cmd::Symbol, text::String, ignore_indent=false)
+    printpkgstyle(stdout, cmd, text)
 end
 
 
