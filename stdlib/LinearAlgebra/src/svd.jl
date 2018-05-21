@@ -16,14 +16,6 @@ Base.iterate(S::SVD, ::Val{:S}) = (S.S, Val(:V))
 Base.iterate(S::SVD, ::Val{:V}) = (S.V, Val(:done))
 Base.iterate(S::SVD, ::Val{:done}) = nothing
 
-# # indexing for destructuring into components
-@inline function Base.getindex(S::SVD, i::Integer)
-    i == 1 ? (return S.U) :
-    i == 2 ? (return S.S) :
-    i == 3 ? (return S.V) :
-        throw(BoundsError(S, i))
-end
-
 """
     svd!(A; full::Bool = false) -> SVD
 

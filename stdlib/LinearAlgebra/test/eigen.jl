@@ -29,8 +29,8 @@ aimg  = randn(n,n)/2
         α = rand(eltya)
         β = rand(eltya)
         eab = eig(α,β)
-        @test eab[1] == eigvals(fill(α,1,1),fill(β,1,1))
-        @test eab[2] == eigvecs(fill(α,1,1),fill(β,1,1))
+        @test eab.values == eigvals(fill(α,1,1),fill(β,1,1))
+        @test eab.vectors == eigvecs(fill(α,1,1),fill(β,1,1))
 
         @testset "non-symmetric eigen decomposition" begin
             d, v = eig(a)
