@@ -50,9 +50,9 @@ bimg  = randn(n,2)/2
             @testset for rook in (false, true)
                 @test inv(bk(Symmetric(transpose(a) + a, uplo), rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
                 if eltya <: BlasFloat
-                    # test also bkfact! without explicit type tag
-                    # no bkfact! method for Int ... yet
-                    @test inv(bkfact!(transpose(a) + a, rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
+                    # test also bk! without explicit type tag
+                    # no bk! method for Int ... yet
+                    @test inv(bk!(transpose(a) + a, rook))*(transpose(a) + a) ≈ Matrix(I, n, n)
                 end
                 @test size(bc1) == size(bc1.LD)
                 @test size(bc1, 1) == size(bc1.LD, 1)

@@ -20,8 +20,7 @@ export cholfact
 @deprecate isposdef!(A::StridedMatrix, UL::Symbol) isposdef!(Hermitian(A, UL))
 
 # bkfact
-export bkfact
-import .LinearAlgebra: bkfact!
+export bkfact, bkfact!
 function bkfact(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A), rook::Bool = false)
     depwarn(string("`bkfact` with uplo and symmetric arguments is deprecated, ",
         "use `bkfact($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
@@ -1378,4 +1377,8 @@ export cholfact!
 @deprecate(cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0), chol!(A, Val(true); tol=tol))
 @deprecate(cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0), chol!(A, Val(true); tol=tol))
 
-
+# deprecate bkfact! to bk!
+export bkfact!
+@deprecate(bkfact!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false), bk!(A, rook))
+@deprecate(bkfact!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false), bk!(A, rook))
+@deprecate(bkfact!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false), bk!(A, rook))
