@@ -82,10 +82,10 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 put!(backend.response_channel, lasterr)
             else
                 backend.in_eval = true
-                value = eval(Main, ast)
+                value = Core.eval(Main, ast)
                 backend.in_eval = false
                 # note: value wrapped carefully here to ensure it doesn't get passed through expand
-                eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
+                Core.eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 put!(backend.response_channel, (value, nothing))
             end
             break

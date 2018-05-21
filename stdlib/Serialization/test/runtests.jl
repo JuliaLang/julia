@@ -331,7 +331,7 @@ main_ex = quote
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.
-eval(Main, main_ex)
+Core.eval(Main, main_ex)
 
 # Task
 create_serialization_stream() do s # user-defined type array

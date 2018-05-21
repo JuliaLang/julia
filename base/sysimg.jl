@@ -63,15 +63,11 @@ let SOURCE_PATH = ""
 end
 INCLUDE_STATE = 1 # include = Core.include
 
-baremodule MainInclude
-export include
-include(fname::AbstractString) = Main.Base.include(Main, fname)
-end
-
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
-eval(m, x) = Core.eval(m, x)
+eval(m::Module, x) = Core.eval(m, x)
+
 VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
 convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
@@ -417,7 +413,6 @@ include("stacktraces.jl")
 using .StackTraces
 
 include("initdefs.jl")
-include("client.jl")
 
 # statistics
 include("statistics.jl")
@@ -449,6 +444,8 @@ include("deprecated.jl")
 
 # Some basic documentation
 include("docs/basedocs.jl")
+
+include("client.jl")
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
