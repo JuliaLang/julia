@@ -320,7 +320,7 @@ LinearAlgebra.lowrankdowndate
 LinearAlgebra.lowrankupdate!
 LinearAlgebra.lowrankdowndate!
 LinearAlgebra.ldlt
-LinearAlgebra.ldltfact!
+LinearAlgebra.ldlt!
 LinearAlgebra.qr
 LinearAlgebra.qr!
 LinearAlgebra.QR

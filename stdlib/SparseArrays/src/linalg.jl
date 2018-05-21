@@ -994,7 +994,7 @@ end
 #     if LinearAlgebra.issuccess(F)
 #         return F
 #     else
-#         ldltfact!(F, A)
+#         ldlt!(F, A)
 #         return F
 #     end
 # end
@@ -1003,7 +1003,7 @@ function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatri
     if LinearAlgebra.issuccess(F)
         return F
     else
-        ldltfact!(F, A)
+        ldlt!(F, A)
         return F
     end
 end

@@ -100,7 +100,7 @@ export
     istriu,
     kron,
     ldiv!,
-    ldltfact!,
+    ldlt!,
     ldlt,
     linreg,
     logabsdet,

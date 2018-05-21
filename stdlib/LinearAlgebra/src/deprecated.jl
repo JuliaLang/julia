@@ -1382,3 +1382,7 @@ export bkfact!
 @deprecate(bkfact!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false), bk!(A, rook))
 @deprecate(bkfact!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false), bk!(A, rook))
 @deprecate(bkfact!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false), bk!(A, rook))
+
+# deprecate ldltfact! to ldlt!
+export ldltfact!
+@deprecate(ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}, ldlt!(S))

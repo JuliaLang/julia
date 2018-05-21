@@ -17,7 +17,7 @@ Factorization{T}(F::LDLt{S,U}) where {T,S,U} = LDLt{T,U}(F)
 
 # SymTridiagonal
 """
-    ldltfact!(S::SymTridiagonal) -> LDLt
+    ldlt!(S::SymTridiagonal) -> LDLt
 
 Same as [`ldlt`](@ref), but saves space by overwriting the input `S`, instead of creating a copy.
 
@@ -29,7 +29,7 @@ julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
  1.0  4.0  2.0
   ⋅   2.0  5.0
 
-julia> ldltS = ldltfact!(S);
+julia> ldltS = ldlt!(S);
 
 julia> ldltS === S
 false
@@ -41,7 +41,7 @@ julia> S
   ⋅        0.545455  3.90909
 ```
 """
-function ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}
+function ldlt!(S::SymTridiagonal{T,V}) where {T<:Real,V}
     n = size(S,1)
     d = S.dv
     e = S.ev
@@ -86,7 +86,7 @@ julia> S \\ b
 """
 function ldlt(M::SymTridiagonal{T}) where T
     S = typeof(zero(T)/one(T))
-    return S == T ? ldltfact!(copy(M)) : ldltfact!(SymTridiagonal{S}(M))
+    return S == T ? ldlt!(copy(M)) : ldlt!(SymTridiagonal{S}(M))
 end
 
 factorize(S::SymTridiagonal) = ldlt(S)
