@@ -89,7 +89,7 @@ export
     factorize,
     givens,
     hess,
-    hessfact!,
+    hess!,
     isdiag,
     ishermitian,
     isposdef,

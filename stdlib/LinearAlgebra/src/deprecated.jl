@@ -1386,3 +1386,8 @@ export bkfact!
 # deprecate ldltfact! to ldlt!
 export ldltfact!
 @deprecate(ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}, ldlt!(S))
+
+# deprecate hessfact! to hess!
+export hessfact!
+@deprecate(hessfact!(A::StridedMatrix{<:BlasFloat}), hess!(A))
+
