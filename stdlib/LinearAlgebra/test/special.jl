@@ -138,7 +138,7 @@ end
         @test issparse(hcat(specialmata, specialmatb))
         @test issparse(vcat(specialmata, specialmatb))
         @test issparse(hvcat((1,1), specialmata, specialmatb))
-        @test issparse(cat((1,2), specialmata, specialmatb))
+        @test issparse(cat(specialmata, specialmatb; dims=(1,2)))
     end
     # Test concatenating pairwise combinations of special matrices with sparse matrices,
     # dense matrices, or dense vectors
@@ -157,8 +157,8 @@ end
             @test issparse(hcat(othermatorvec, specialmat))
             @test issparse(hvcat((2,), specialmat, othermatorvec))
             @test issparse(hvcat((2,), othermatorvec, specialmat))
-            @test issparse(cat((1,2), specialmat, othermatorvec))
-            @test issparse(cat((1,2), othermatorvec, specialmat))
+            @test issparse(cat(specialmat, othermatorvec; dims=(1,2)))
+            @test issparse(cat(othermatorvec, specialmat; dims=(1,2)))
         end
     end
 end
@@ -199,7 +199,7 @@ end
         @test issparse(vcat(annospcmata, annospcmatb))
         @test issparse(hcat(annospcmata, annospcmatb))
         @test issparse(hvcat((2,), annospcmata, annospcmatb))
-        @test issparse(cat((1,2), annospcmata, annospcmatb))
+        @test issparse(cat(annospcmata, annospcmatb; dims=(1,2)))
     end
     # Test that concatenations of pairwise combinations of annotated sparse/special
     # matrices and other matrix/vector types yield sparse matrices
@@ -215,8 +215,8 @@ end
             @test issparse(hcat(other, annospcmat))
             @test issparse(hvcat((2,), annospcmat, other))
             @test issparse(hvcat((2,), other, annospcmat))
-            @test issparse(cat((1,2), annospcmat, other))
-            @test issparse(cat((1,2), other, annospcmat))
+            @test issparse(cat(annospcmat, other; dims=(1,2)))
+            @test issparse(cat(other, annospcmat; dims=(1,2)))
         end
     end
     # The preceding tests should cover multi-way combinations of those types, but for good
@@ -227,8 +227,8 @@ end
     @test issparse(hcat(annodmats[2], annospcmats[4], spvec, densevec, diagmat))
     @test issparse(hvcat((5,), diagmat, densevec, spvec, annodmats[1], annospcmats[1]))
     @test issparse(hvcat((5,), spvec, annodmats[2], diagmat, densevec, annospcmats[2]))
-    @test issparse(cat((1,2), annodmats[1], diagmat, annospcmats[3], densevec, spvec))
-    @test issparse(cat((1,2), spvec, diagmat, densevec, annospcmats[4], annodmats[2]))
+    @test issparse(cat(annodmats[1], diagmat, annospcmats[3], densevec, spvec; dims=(1,2)))
+    @test issparse(cat(spvec, diagmat, densevec, annospcmats[4], annodmats[2]; dims=(1,2)))
     # Test that concatenations strictly involving un/annotated dense matrices/vectors
     # yield dense arrays
     for densemata in (densemat, annodmats...)
@@ -243,8 +243,8 @@ end
             @test !issparse(hcat(otherdense, densemata))
             @test !issparse(hvcat((2,), densemata, otherdense))
             @test !issparse(hvcat((2,), otherdense, densemata))
-            @test !issparse(cat((1,2), densemata, otherdense))
-            @test !issparse(cat((1,2), otherdense, densemata))
+            @test !issparse(cat(densemata, otherdense; dims=(1,2)))
+            @test !issparse(cat(otherdense, densemata; dims=(1,2)))
         end
     end
 end

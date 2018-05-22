@@ -4,11 +4,6 @@ using Base: @deprecate, depwarn
 
 # BEGIN 0.7 deprecations
 
-# PR #22475
-import Base: cat
-@deprecate cat(::Type{Val{N}}, A::_SparseConcatGroup...) where {N} cat(Val(N), A...)
-@deprecate cat(::Type{Val{N}}, A::_DenseConcatGroup...) where {N} cat(Val(N), A...)
-
 # deprecate remaining vectorized methods over SparseVectors (zero-preserving)
 for op in (:floor, :ceil, :trunc, :round,
         :log1p, :expm1,  :sinpi,

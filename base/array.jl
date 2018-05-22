@@ -1514,7 +1514,7 @@ function vcat(arrays::Vector{T}...) where T
     return arr
 end
 
-cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
+_cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
 
 ## find ##
 

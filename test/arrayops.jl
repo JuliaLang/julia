@@ -282,17 +282,17 @@ end
     sz = (5,8,7)
     A = reshape(1:prod(sz),sz...)
     @test A[2:6] == [2:6;]
-    @test A[1:3,2,2:4] == cat(2,46:48,86:88,126:128)
+    @test A[1:3,2,2:4] == cat(46:48,86:88,126:128; dims=2)
     @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
     @test reshape(A, Val(2))[:,3:9] == reshape(11:45,5,7)
     rng = (2,2:3,2:2:5)
     tmp = zeros(Int,map(maximum,rng)...)
     tmp[rng...] = A[rng...]
-    @test  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
+    @test  tmp == cat(zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132]; dims=3)
 
-    @test cat([1,2],1,2,3.,4.,5.) == diagm(0 => [1,2,3.,4.,5.])
+    @test cat(1,2,3.,4.,5.; dims=[1,2]) == diagm(0 => [1,2,3.,4.,5.])
     blk = [1 2;3 4]
-    tmp = cat([1,3],blk,blk)
+    tmp = cat(blk,blk; dims=[1,3])
     @test tmp[1:2,1:2,1] == blk
     @test tmp[1:2,1:2,2] == zero(blk)
     @test tmp[3:4,1:2,1] == zero(blk)
@@ -659,9 +659,9 @@ let A, B, C, D
     @test unique(B', dims=2)' == C
 
     # Along third dimension
-    D = cat(3, B, B)
-    @test unique(D, dims=1) == cat(3, C, C)
-    @test unique(D, dims=3) == cat(3, B)
+    D = cat(B, B, dims=3)
+    @test unique(D, dims=1) == cat(C, C, dims=3)
+    @test unique(D, dims=3) == cat(B, dims=3)
 
     # With hash collisions
     @test map(x -> x.x, unique(map(HashCollision, B), dims=1)) == C
@@ -950,7 +950,7 @@ end
     A[[true,false,true], 5] .= 7
     @test A == [1 1 1 1 7; 2 1 3 4 1; 1 1 1 1 7]
 
-    B = cat(3, 1, 2, 3)
+    B = cat(1, 2, 3; dims=3)
     @test B[:,:,[true, false, true]] == reshape([1,3], 1, 1, 2)  # issue #5454
 end
 
@@ -1979,8 +1979,8 @@ fill!(B, 2)
 copyto!(B, A)
 copyto!(S, A)
 
-@test cat(1, A, B, S) == cat(1, A, A, A)
-@test cat(2, A, B, S) == cat(2, A, A, A)
+@test cat(A, B, S; dims=1) == cat(A, A, A; dims=1)
+@test cat(A, B, S; dims=2) == cat(A, A, A; dims=2)
 
 @test cumsum(A, dims=1) == cumsum(B, dims=1) == cumsum(S, dims=1)
 @test cumsum(A, dims=2) == cumsum(B, dims=2) == cumsum(S, dims=2)
@@ -2198,7 +2198,7 @@ end # module AutoRetType
         @test isa(vcat(densearray, densearray), Array)
         @test isa(hcat(densearray, densearray), Array)
         @test isa(hvcat((2,), densearray, densearray), Array)
-        @test isa(cat((1,2), densearray, densearray), Array)
+        @test isa(cat(densearray, densearray; dims=(1,2)), Array)
     end
     @test isa([[1,2,3]'; [1,2,3]'], Matrix{Int})
     @test isa([[1,2,3]' [1,2,3]'], Adjoint{Int, Vector{Int}})
@@ -2209,8 +2209,8 @@ end # module AutoRetType
     @test isa(hcat(densevec, densemat), Array)
     @test isa(hvcat((2,), densemat, densevec), Array)
     @test isa(hvcat((2,), densevec, densemat), Array)
-    @test isa(cat((1,2), densemat, densevec), Array)
-    @test isa(cat((1,2), densevec, densemat), Array)
+    @test isa(cat(densemat, densevec; dims=(1,2)), Array)
+    @test isa(cat(densevec, densemat; dims=(1,2)), Array)
 end
 
 @testset "type constructor Array{T, N}(undef, d...) works (especially for N>3)" begin
