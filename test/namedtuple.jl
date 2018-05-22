@@ -232,3 +232,7 @@ end
 y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
 @test y isa Vector{NamedTuple{(:a,:b), T} where T<:Tuple}
 @test isequal(y, [(a=1, b=missing), (a=1, b=3)])
+
+# issue #27187
+@test reduce(merge,[(a = 1, b = 2), (c = 3, d = 4)]) == (a = 1, b = 2, c = 3, d = 4)
+@test typeintersect(NamedTuple{()}, NamedTuple{names, Tuple{Int,Int}} where names) == Union{}

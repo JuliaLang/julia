@@ -2056,11 +2056,15 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     break;
                 newparams[i] = ii;
             }
-            jl_value_t *res;
-            if (i < np)
-                res = jl_bottom_type;
-            else
-                res = jl_apply_type(xd->name->wrapper, newparams, np);
+            jl_value_t *res = jl_bottom_type;
+            if (i >= np) {
+                JL_TRY {
+                    res = jl_apply_type(xd->name->wrapper, newparams, np);
+                }
+                JL_CATCH {
+                    res = jl_bottom_type;
+                }
+            }
             JL_GC_POP();
             return res;
         }
