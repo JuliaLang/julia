@@ -1030,6 +1030,9 @@ mutable struct Stateful{T, VS}
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
     taken::Int
+    @inline function Stateful{<:Any, Any}(itr::T) where {T}
+        new{T, Any}(itr, iterate(itr), 0)
+    end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
         new{T, VS}(itr, iterate(itr)::VS, 0)
