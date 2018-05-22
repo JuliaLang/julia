@@ -1219,7 +1219,7 @@ function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Nothin
 end
 
 # TODO: redirect to ctx stream
-function printpkgstyle(io::IO, cmd::Symbol, text::String, ignore_indent=false)
+function printpkgstyle(io::IO, cmd::Symbol, text::String, ignore_indent::Bool=false)
     indent = textwidth(string(:Downloaded))
     ignore_indent && (indent = 0)
     printstyled(io, lpad(string(cmd), indent), color=:green, bold=true)
@@ -1227,7 +1227,7 @@ function printpkgstyle(io::IO, cmd::Symbol, text::String, ignore_indent=false)
 end
 
 # TODO: use ctx specific context
-function printpkgstyle(ctx::Context, cmd::Symbol, text::String, ignore_indent=false)
+function printpkgstyle(ctx::Context, cmd::Symbol, text::String, ignore_indent::Bool=false)
     printpkgstyle(stdout, cmd, text)
 end
 
