@@ -177,6 +177,7 @@ makedocs(
 ENV["TRAVIS_JULIA_VERSION"] = "nightly"
 
 deploydocs(
+    julia = "nightly",
     repo = "github.com/JuliaLang/julia.git",
     target = "_build/html/en",
     dirname = "en",

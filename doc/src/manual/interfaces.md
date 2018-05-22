@@ -525,7 +525,7 @@ list can — and often does — include other nested `Broadcasted` wrappers.
 For a complete example, let's say you have created a type, `ArrayAndChar`, that stores an
 array and a single character:
 
-```jldoctest ArrayAndChar
+```jldoctest ArrayAndChar; output = false
 struct ArrayAndChar{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
     char::Char
@@ -540,14 +540,14 @@ Base.showarg(io::IO, A::ArrayAndChar, toplevel) = print(io, typeof(A), " with ch
 
 You might want broadcasting to preserve the `char` "metadata." First we define
 
-```jldoctest ArrayAndChar
+```jldoctest ArrayAndChar; output = false
 Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()
 # output
 
 ```
 
 This means we must also define a corresponding `similar` method:
-```jldoctest ArrayAndChar; filter = r"(^find_aac \(generic function with 5 methods\)$|^$)"
+```jldoctest ArrayAndChar; output = false
 function Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ArrayAndChar}}, ::Type{ElType}) where ElType
     # Scan the inputs for the ArrayAndChar:
     A = find_aac(bc)
@@ -562,7 +562,7 @@ find_aac(x) = x
 find_aac(a::ArrayAndChar, rest) = a
 find_aac(::Any, rest) = find_aac(rest)
 # output
-
+find_aac (generic function with 5 methods)
 ```
 
 From these definitions, one obtains the following behavior:
