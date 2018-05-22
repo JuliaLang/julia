@@ -472,6 +472,11 @@ This section lists changes that do not have deprecation warnings.
   * `mv`,`cp`, `touch`, `mkdir`, `mkpath` now return the path that was created/modified
     rather than `nothing` ([#27071]).
 
+  * Regular expressions now default to UCP mode. Escape sequences such as `\w`
+    will now match based on unicode character properties, e.g. `r"\w+"` will
+    match `café` (not just `caf`). Add the `a` modifier (e.g. `r"\w+"a`) to
+    restore the previous behavior ([#27189]).
+
 Library improvements
 --------------------
 

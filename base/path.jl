@@ -27,7 +27,7 @@ if Sys.isunix()
 elseif Sys.iswindows()
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
-    const path_absolute_re  = r"^(?:\w+:)?[/\\]"
+    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"
     const path_directory_re = r"(?:^|[/\\])\.{0,2}$"
     const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
