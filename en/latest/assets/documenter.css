@@ -460,10 +460,6 @@ article section.docstring a.source-link {
     font-size: smaller;
 }
 
-#search-results .category:before {
-    content: " ";
-}
-
 /* Overriding the <code> block style of highligh.js.
  * We have to override the padding and the background-color, since we style this
  * part ourselves. Specifically, we style the <pre> surrounding the <code>, while

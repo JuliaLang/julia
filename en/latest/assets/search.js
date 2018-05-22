@@ -220,7 +220,7 @@ require(["jquery", "lunr", "lodash"], function($, lunr, _) {
                 link.text(data.title)
                 link.attr('href', documenterBaseURL+'/'+result.ref)
                 cat = $('<span class="category">('+data.category+')</span>')
-                li = $('<li>').append(link).append(cat)
+                li = $('<li>').append(link).append(" ").append(cat)
                 $('#search-results').append(li)
             })
         }
