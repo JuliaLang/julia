@@ -286,25 +286,6 @@ for f in (:exp2, :expm1)
 end
 
 """
-    cbrt(x::Real)
-
-Return the cube root of `x`, i.e. ``x^{1/3}``. Negative values are accepted
-(returning the negative real root when ``x < 0``).
-
-The prefix operator `∛` is equivalent to `cbrt`.
-
-# Examples
-```jldoctest
-julia> cbrt(big(27))
-3.0
-
-julia> cbrt(big(-27))
--3.0
-```
-"""
-cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
-
-"""
     exp2(x)
 
 Compute the base 2 exponential of `x`, in other words ``2^x``.
@@ -1041,6 +1022,10 @@ Return the high word of `x` as a `UInt32`.
 @inline highword(x::Float64) = highword(reinterpret(UInt64, x))
 @inline highword(x::UInt64)  = (x >>> 32) % UInt32
 @inline highword(x::Float32) = reinterpret(UInt32, x)
+
+@inline fromhighword(::Type{Float64}, u::UInt32) = reinterpret(Float64, UInt64(u) << 32)
+@inline fromhighword(::Type{Float32}, u::UInt32) = reinterpret(Float32, u)
+
 
 """
     poshighword(x)
