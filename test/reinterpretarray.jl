@@ -49,3 +49,22 @@ let A = collect(reshape(1:20, 5, 4))
     @test view(R, :, :) isa StridedArray
     @test reshape(R, :) isa StridedArray
 end
+
+# Error on reinterprets that would expose padding
+struct S1
+    a::Int8
+    b::Int64
+end
+
+struct S2
+    a::Int16
+    b::Int64
+end
+
+A1 = S1[S1(0, 0)]
+A2 = S2[S2(0, 0)]
+@test reinterpret(S1, A2)[1] == S1(0, 0)
+@test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S2(1, 2))
+@test_throws Base.PaddingError reinterpret(S2, A1)[1]
+reinterpret(S2, A1)[1] = S2(1, 2)
+@test A1[1] == S1(1, 2)

@@ -137,8 +137,6 @@ include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
 include("views.jl")
-include("reinterpretarray.jl")
-
 
 # ## dims-type-converting Array constructors for convenience
 # type and dimensionality specified, accepting dims as series of Integers
@@ -205,6 +203,7 @@ include("reduce.jl")
 
 ## core structures
 include("reshapedarray.jl")
+include("reinterpretarray.jl")
 include("bitarray.jl")
 include("bitset.jl")
 
