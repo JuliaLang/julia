@@ -719,7 +719,7 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
 
 """
-    partialsortperm!(ix, v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false, initialized=false)
+    partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `1:length(ix)`.
