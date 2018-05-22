@@ -423,14 +423,13 @@ function install_git(
         GitTools.clone(urls[1], repo_path; isbare=true, header = "[$uuid] $name from $(urls[1])", credentials=creds)
     end
     git_hash = LibGit2.GitHash(hash.bytes)
-    for i = 2:length(urls)
-        try with(LibGit2.GitObject, repo, git_hash) do g
+    for url in urls
+        try LibGit2.with(LibGit2.GitObject, repo, git_hash) do g
             end
             break # object was found, we can stop
         catch err
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
         end
-        url = urls[i]
         GitTools.fetch(repo, url, refspecs=refspecs, credentials=creds)
     end
     tree = try

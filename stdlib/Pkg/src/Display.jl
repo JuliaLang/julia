@@ -168,7 +168,7 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry}, status=false)
             vstr = "[unknown]"
         end
         v = same ? "" : " $verb"
-        if verb != '-' && status == true && !package_downloaded
+        if verb != '-' && status && !package_downloaded
             printstyled(io, "→", color=:red)
         else
             print(io, " ")
@@ -176,12 +176,12 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry}, status=false)
         printstyled(io, " [$(string(x.uuid)[1:8])]"; color = color_dark)
         printstyled(io, "$v $(x.name) $vstr\n"; color = colors[verb])
     end
-    if status == true && some_packages_not_downloaded
+    if status && some_packages_not_downloaded
         @warn "Some packages (indicated with a red arrow) are not downloaded, use `instantiate` to instantiate the current environment"
     end
 end
 # TODO: Use the Context stream
-print_diff(ctx::Context, diff::Vector{DiffEntry}, status=true) = print_diff(stdout, ctx, diff, status)
+print_diff(ctx::Context, diff::Vector{DiffEntry}, status=false) = print_diff(stdout, ctx, diff, status)
 
 function manifest_by_uuid(manifest::Dict)
     entries = Dict{UUID,Dict}()
