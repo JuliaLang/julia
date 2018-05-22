@@ -1433,3 +1433,13 @@ function callthis_26607(args)
 end
 @test callthis_26607(Int64(0)) === nothing
 @test callthis_26607(Int32(0)) === nothing
+
+# issue #27178 (cfunction special case in inlining)
+mutable struct CallThisFunc27178{FCN_TYPE}
+    fcn::FCN_TYPE
+end
+
+callback27178(cb::CTF) where CTF<:CallThisFunc27178 = nothing
+@inline make_cfunc27178(cbi::CI) where CI = @cfunction(callback27178, Cvoid, (Ref{CI},))
+get_c_func(fcn::FCN_TYPE) where {FCN_TYPE<:Function} = return make_cfunc27178(CallThisFunc27178(fcn))
+@test isa(get_c_func(sin), Ptr)
