@@ -472,6 +472,11 @@ This section lists changes that do not have deprecation warnings.
   * `mv`,`cp`, `touch`, `mkdir`, `mkpath` now return the path that was created/modified
     rather than `nothing` ([#27071]).
 
+  * Regular expressions now default to UCP mode. Escape sequences such as `\w`
+    will now match based on unicode character properties, e.g. `r"\w+"` will
+    match `café` (not just `caf`). Add the `a` modifier (e.g. `r"\w+"a`) to
+    restore the previous behavior ([#27189]).
+
 Library improvements
 --------------------
 
@@ -480,6 +485,9 @@ Library improvements
 
   * `Char` is now a subtype of `AbstractChar`, and most of the functions that
     take character arguments now accept any `AbstractChar` ([#26286]).
+
+  * `bytes2hex` now accepts an optional `io` argument to output to a hexadecimal stream
+    without allocating a `String` first ([#27121]).
 
   * `String(array)` now accepts an arbitrary `AbstractVector{UInt8}`. For `Vector`
     inputs, it "steals" the memory buffer, leaving them with an empty buffer which
@@ -687,7 +695,7 @@ Deprecated or removed
     `dims` keyword argument. This includes the functions `sum`, `prod`, `maximum`,
     `minimum`, `all`, `any`, `findmax`, `findmin`, `mean`, `varm`, `std`, `var`, `cov`,
     `cor`, `median`, `mapreducedim`, `reducedim`, `sort`, `accumulate`, `accumulate!`,
-    `cumsum`, `cumsum!`, `cumprod`, `cumprod!`, `flipdim`, and `squeeze` ([#25501]).
+    `cumsum`, `cumsum!`, `cumprod`, `cumprod!`, `flipdim`, `squeeze`, and `cat` ([#25501], [#26660], [#27100]).
 
   * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
     `axes(a, d)` ([#25057]).

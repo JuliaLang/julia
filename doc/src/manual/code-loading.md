@@ -2,7 +2,7 @@
 
 Julia has two mechanisms for loading code:
 
-1. **Code inclusion:** e.g. `include("source.jl")`. Inclusion allows you to split a single program across multiple source files. The expression `include("source.jl")` causes the contents of the file `source.jl` to be evaluated inside of the module where the `include` call occurs. If `include("source.jl")` is called multiple times, `source.jl` is evaluated multiple times. The included path, `source.jl`, is interpreted relative to the file where the `include` call occurs. This makes it simple to relocate a subtree of source files. In the REPL, included paths are interpreted relative to the current working directory, `pwd()`.
+1. **Code inclusion:** e.g. `include("source.jl")`. Inclusion allows you to split a single program across multiple source files. The expression `include("source.jl")` causes the contents of the file `source.jl` to be evaluated in the global scope of the module where the `include` call occurs. If `include("source.jl")` is called multiple times, `source.jl` is evaluated multiple times. The included path, `source.jl`, is interpreted relative to the file where the `include` call occurs. This makes it simple to relocate a subtree of source files. In the REPL, included paths are interpreted relative to the current working directory, `pwd()`.
 2. **Package loading:** e.g. `import X` or `using X`. The import mechanism allows you to load a package—i.e. an independent, reusable collection of Julia code, wrapped in a module—and makes the resulting module available by the name `X` inside of the importing module. If the same `X` package is imported multiple times in the same Julia session, it is only loaded the first time—on subsequent imports, the importing module gets a reference to the same module. It should be noted, however, that `import X` can load different packages in different contexts: `X` can refer to one package named `X` in the main project but potentially different packages named `X` in each dependency. More on this below.
 
 Code inclusion is quite straightforward: it simply parses and evaluates a source file in the context of the caller. Package loading is built on top of code inclusion and is quite a bit more complex. The rest of this chapter, therefore, focuses on the behavior and mechanics of package loading.
@@ -35,7 +35,7 @@ An *environment* determines what `import X` and `using X` mean in various code c
 
 These three kinds of environment each serve a different purpose:
 
-* Project environments provide **reproducibility.** By checking a project environment into version control—i.e. a git repository—along with the rest of the project's source code, you can reproduce the exact state of the project _and_ all of its dependencies since the manifest file captures the exact version of every dependency and can be rematerialized easily.
+* Project environments provide **reproducibility.** By checking a project environment into version control—e.g. a git repository—along with the rest of the project's source code, you can reproduce the exact state of the project _and_ all of its dependencies since the manifest file captures the exact version of every dependency and can be rematerialized easily.
 * Package directories provide low-overhead **convenience** when a project environment would be overkill: are handy when you have a set of packages and just want to put them somewhere and use them as they are without having to create and maintain a project environment for them.
 * Stacked environments allow for **augmentation** of the primary environment with additional tools. You can push an environment including development tools onto the stack and they will be available from the REPL and scripts but not from inside of packages.
 
@@ -85,7 +85,7 @@ roots = Dict(
 
 Given this `roots` map, in the code of `App` the statement `import Priv` will cause Julia to look up `roots[:Priv]`, which yields `ba13f791-ae1d-465a-978b-69c3ad90f72b`, the UUID of the `Priv` package that is to be loaded in that context. This UUID identifies which `Priv` package to load and use when the main application evaluates `import Priv`.
 
-**The dependency graph** of a project environment is determined by the contents of the manifest file, if present, or if there is no manifest file, `graph` is empty. A manifest file contains a stanza for each direct or indirect dependency of a project, including for each one, its UUID and exact version information and optionally an explicit path to its source code. Consider the following example manifest file for `App`:
+**The dependency graph** of a project environment is determined by the contents of the manifest file, if present, or if there is no manifest file, `graph` is empty. A manifest file contains a stanza for each direct or indirect dependency of a project, including for each one, its UUID and a source tree hash or an explicit path to the source code. Consider the following example manifest file for `App`:
 
 ```toml
 [[Priv]] # the private one
@@ -177,15 +177,15 @@ paths = Dict{Tuple{UUID,Symbol},String}(
         "/home/me/projects/App/deps/Priv/src/Priv.jl",
     # Priv – the public one:
     (UUID("2d15fe94-a1f7-436c-a4d8-07a9a496e01c"), :Priv) =>
-        # package installed in the user depot:
+        # package installed in the system depot:
         "/usr/local/julia/packages/Priv/HDkr/src/Priv.jl",
     # Pub:
     (UUID("ba13f791-ae1d-465a-978b-69c3ad90f72b"), :Pub) =>
-        # package installed in the system depot:
+        # package installed in the user depot:
         "/home/me/.julia/packages/Pub/oKpw/src/Pub.jl",
     # Zebra:
     (UUID("f7a24cb4-21fc-4002-ac70-f0e3a0dd3f62"), :Zebra) =>
-        # package installed in the user depot:
+        # package installed in the system depot:
         "/usr/local/julia/packages/Zebra/me9k/src/Zebra.jl",
 )
 ```
@@ -200,7 +200,7 @@ This example map includes three different kinds of package locations:
 
 Package directories provide a kind of environment that approximates package loading in Julia 0.6 and earlier, and which resembles package loading in many other dynamic languages. The set of packages available in a package directory corresponds to the set of subdirectories it contains that look like packages: if `X/src/X.jl` is a file in a package directory, then `X` is considered to be a package and `X/src/X.jl` is the file you load to get `X`. Which packages can "see" each other as dependencies depends on whether they contain project files or not and what appears in the `[deps]` sections of those project files.
 
-**The roots map** is determined by the subdirectories of a package directory for which `X/src/X.jl` exists and whether `X/Project.toml` exists and has a top-level `uuid` entry. Specifically `:X => uuid` goes in `roots` for each such `X` where `uuid` is defined as:
+**The roots map** is determined by the subdirectories `X` of a package directory for which `X/src/X.jl` exists and whether `X/Project.toml` exists and has a top-level `uuid` entry. Specifically `:X => uuid` goes in `roots` for each such `X` where `uuid` is defined as:
 
 1. If `X/Project.toml` exists and has a `uuid` entry, then `uuid` is that value.
 2. If `X/Project.toml` exists and but does *not* have a top-level UUID entry, `uuid` is a dummy UUID generated by hashing the canonical path of `X/Project.toml`.

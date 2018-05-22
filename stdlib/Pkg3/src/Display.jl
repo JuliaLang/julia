@@ -52,15 +52,15 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
         diff = manifest_diff(ctx, m₀, m₁)
         if !use_as_api
-            printpkgstyle(ctx, :Status, pathrepr(ctx, env.project_file); ignore_indent=true)
-            print_diff(ctx, diff; status = true)
+            printpkgstyle(ctx, :Status, pathrepr(ctx, env.project_file), #=ignore_indent=# true)
+            print_diff(ctx, diff, #=status=# true)
         end
     end
     if mode == PKGMODE_MANIFEST
         diff = manifest_diff(ctx, manifest₀, manifest₁)
         if !use_as_api
-            printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file); ignore_indent=true)
-            print_diff(ctx, diff; status = true)
+            printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file), #=ignore_indent=# true)
+            print_diff(ctx, diff, #=status=# true)
         end
     elseif mode == PKGMODE_COMBINED
         p = not_in_project(merge(project₀["deps"], project₁["deps"]))
@@ -69,8 +69,8 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         c_diff = filter!(x->x.old != x.new, manifest_diff(ctx, m₀, m₁))
         if !isempty(c_diff)
             if !use_as_api
-                printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file); ignore_indent=true)
-                print_diff(ctx, c_diff; status = true)
+                printpkgstyle(ctx, :Status, pathrepr(ctx, env.manifest_file), #=ignore_indent=# true)
+                print_diff(ctx, c_diff, #=status=# true)
             end
             diff = Base.vcat(c_diff, diff)
         end
@@ -132,7 +132,7 @@ struct DiffEntry
     new::Union{VerInfo,Nothing}
 end
 
-function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry}; status=false)
+function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry}, status=false)
     same = all(x.old == x.new for x in diff)
     some_packages_not_downloaded = false
     for x in diff
@@ -181,7 +181,7 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry}; status=false)
     end
 end
 # TODO: Use the Context stream
-print_diff(ctx::Context, diff::Vector{DiffEntry}; kwargs...) = print_diff(stdout, ctx, diff; kwargs...)
+print_diff(ctx::Context, diff::Vector{DiffEntry}, status=true) = print_diff(stdout, ctx, diff, status)
 
 function manifest_by_uuid(manifest::Dict)
     entries = Dict{UUID,Dict}()

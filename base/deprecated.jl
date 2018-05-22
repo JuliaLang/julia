@@ -20,7 +20,6 @@
 
 macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
-    @gensym oldmtname
     if isa(old, Symbol)
         oldname = Expr(:quote, old)
         newname = Expr(:quote, new)
@@ -28,10 +27,9 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", $oldmtname)
+                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
                   $(esc(new))(args...)
-              end),
-            :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
+              end))
     elseif isa(old, Expr) && (old.head == :call || old.head == :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
@@ -53,10 +51,9 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", $oldmtname)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
                   $(esc(new))
-              end),
-            :(const $oldmtname = Core.Typeof($(esc(oldsym))).name.mt.name))
+              end))
     else
         error("invalid usage of @deprecate")
     end
@@ -328,9 +325,16 @@ end
 @deprecate fill_to_length(t, val, ::Type{Val{N}}) where {N} fill_to_length(t, val, Val(N)) false
 @deprecate literal_pow(a, b, ::Type{Val{N}}) where {N} literal_pow(a, b, Val(N)) false
 @eval IteratorsMD @deprecate split(t, V::Type{Val{n}}) where {n} split(t, Val(n)) false
-@deprecate cat(::Type{Val{N}}, A::AbstractArray...) where {N} cat(Val(N), A...)
-@deprecate cat_t(::Type{Val{N}}, ::Type{T}, A, B) where {N,T} cat_t(Val(N), T, A, B) false
+@deprecate cat(::Type{Val{N}}, A::AbstractArray...) where {N} cat(A..., dims=Val(N))
+@deprecate cat_t(::Type{Val{N}}, ::Type{T}, A, B) where {N,T} cat_t(T, A, B, dims=Val(N)) false
 @deprecate reshape(A::AbstractArray, ::Type{Val{N}}) where {N} reshape(A, Val(N))
+
+# Issue #
+@deprecate cat(dims, As...) cat(As..., dims=dims)
+@deprecate cat_t(dims, ::Type{T}, As...) where {T}  cat_t(T, As...; dims=dims) false
+# Disambiguate
+cat_t(::Type{T}, ::Type{S}, As...; dims=dims) where {T,S} = _cat_t(T, S, As...; dims=dims)
+
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
 
@@ -1673,6 +1677,10 @@ function Rounding.setrounding(::Type{T}, r::RoundingMode) where {T<:Union{Float3
     depwarn("""`setrounding` for `Float32` and `Float64` has been deprecated, and will not be available in future versions.""", :setrounding)
     Rounding.setrounding_raw(T, Rounding.to_fenv(r))
 end
+
+# issue #27093
+# in src/jlfrontend.scm a call to `@deprecate` is generated for per-module `eval(m, x)`
+@eval Core Main.Base.@deprecate(eval(e), Core.eval(Main, e))
 
 # END 0.7 deprecations
 

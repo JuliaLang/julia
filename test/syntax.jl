@@ -31,7 +31,7 @@ let
         ex1 = Meta.parse(ex1); ex2 = Meta.parse(ex2)
         @test ex1.head === :call && (ex1.head === ex2.head)
         @test ex1.args[2] === 5 && ex2.args[2] === 5
-        @test eval(Main, undot(ex1.args[1])) === eval(Main, undot(ex2.args[1]))
+        @test Core.eval(Main, undot(ex1.args[1])) === Core.eval(Main, undot(ex2.args[1]))
         @test ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
     end
 end
@@ -581,7 +581,7 @@ let thismodule = @__MODULE__,
     ex = Meta.lower(thismodule, :(@M16096.iter))
     @test isa(ex, Expr)
     @test !isdefined(M16096, :foo16096)
-    local_foo16096 = eval(@__MODULE__, ex)
+    local_foo16096 = Core.eval(@__MODULE__, ex)
     @test local_foo16096(2.0) == 1
     @test !@isdefined foo16096
     @test !@isdefined it
@@ -927,7 +927,7 @@ macro m20729()
     return ex
 end
 
-@test_throws ErrorException eval(@__MODULE__, :(@m20729))
+@test_throws ErrorException Core.eval(@__MODULE__, :(@m20729))
 @test Meta.lower(@__MODULE__, :(@m20729)) == Expr(:error, "undefined reference in AST")
 
 macro err20000()
@@ -1217,7 +1217,7 @@ end
 @test Meta.parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), LineNumberNode(1, :none), "x"))
 
 # misplaced top-level expressions
-@test_throws ErrorException("syntax: \"\$\" expression outside quote") eval(@__MODULE__, Meta.parse("x->\$x"))
+@test_throws ErrorException("syntax: \"\$\" expression outside quote") Core.eval(@__MODULE__, Meta.parse("x->\$x"))
 @test Meta.lower(@__MODULE__, Expr(:$, :x)) == Expr(:error, "\"\$\" expression outside quote")
 @test Meta.lower(@__MODULE__, :(x->import Foo)) == Expr(:error, "\"import\" expression not at top level")
 @test Meta.lower(@__MODULE__, :(x->module Foo end)) == Expr(:error, "\"module\" expression not at top level")
@@ -1420,8 +1420,12 @@ invalid assignment location "function (s, o...)
 end\""""
 end
 
+# issue #15229
+@test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
+    Expr(:error, "local variable name \"x\" conflicts with an argument")
+
 # issue #26739
-@test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") eval(@__MODULE__, :(sin.[1]))
+@test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") Core.eval(@__MODULE__, :(sin.[1]))
 
 # issue #26873
 f26873 = 0
@@ -1438,3 +1442,9 @@ end
 @test Meta.lower(@__MODULE__, :(Int[if true; break; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
 @test Meta.lower(@__MODULE__, :([if true; continue; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
 @test Meta.lower(@__MODULE__, :(Int[if true; continue; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
+
+@test Meta.lower(@__MODULE__, :(return 0 for i=1:2)) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :([ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :(Int[ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
+@test [ ()->return 42 for i = 1:1 ][1]() == 42
+@test Function[ identity() do x; return 2x; end for i = 1:1 ][1](21) == 42

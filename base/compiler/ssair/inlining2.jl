@@ -937,8 +937,9 @@ end
 function compute_invoke_data(@nospecialize(atypes), argexprs::Vector{Any}, sv::OptimizationState)
     ft = widenconst(atypes[2])
     invoke_tt = widenconst(atypes[3])
-    if !(isconcretetype(ft) || ft <: Type) || !isType(invoke_tt) ||
-            has_free_typevars(invoke_tt) || has_free_typevars(ft) || (ft <: Builtin)
+    mt = argument_mt(ft)
+    if mt === nothing || !isType(invoke_tt) || has_free_typevars(invoke_tt) ||
+            has_free_typevars(ft) || (ft <: Builtin)
         # TODO: this can be rather aggressive at preventing inlining of closures
         # XXX: this is wrong for `ft <: Type`, since we are failing to check that
         #      the result doesn't have subtypes, or to do an intersection lookup
@@ -953,7 +954,7 @@ function compute_invoke_data(@nospecialize(atypes), argexprs::Vector{Any}, sv::O
     invoke_entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt),
                             invoke_types, sv.params.world)
     invoke_entry === nothing && return nothing
-    invoke_data = InvokeData(ft.name.mt, invoke_entry,
+    invoke_data = InvokeData(mt, invoke_entry,
                              invoke_types, nothing, nothing)
     atype0 = atypes[2]
     argexpr0 = argexprs[2]
@@ -1054,6 +1055,13 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
         head = e.head
         if head === :static_parameter
             return quoted(spvals[e.args[1]])
+        elseif head === :cfunction
+            @assert !isa(spsig, UnionAll) || !isempty(spvals)
+            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
+            e.args[4] = svec(Any[
+                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                for argt
+                in e.args[4] ]...)
         elseif head === :foreigncall
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)

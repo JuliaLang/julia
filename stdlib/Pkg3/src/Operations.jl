@@ -842,7 +842,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
     for (uuid, name, hash_or_path, build_file) in builds
         log_file = splitext(build_file)[1] * ".log"
         printpkgstyle(ctx, :Building,
-            rpad(name * " ", max_name + 1, "─"), "→ ", Types.pathrepr(ctx, log_file))
+            rpad(name * " ", max_name + 1, "─") * "→ ", Types.pathrepr(ctx, log_file))
         code = """
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
@@ -1121,7 +1121,7 @@ function init(ctx::Context)
         cmderror("Project already initialized at $project_file")
     mkpath(dirname(project_file))
     touch(project_file)
-    printpkgstyle(ctx, :Initialized, "project at ", abspath(project_file))
+    printpkgstyle(ctx, :Initialized, "project at " * abspath(project_file))
 end
 
 end # module

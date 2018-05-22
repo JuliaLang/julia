@@ -73,3 +73,7 @@ end
 @test_throws ErrorException Regex("\Udfff") # code points 0xd800-0xdfff are not defined
 @test_throws ErrorException Regex("\xc0\x80") #  overlong 2-byte sequence
 @test_throws ErrorException Regex("\xff") # illegal byte (0xfe or 0xff)
+
+# 'a' flag to disable UCP
+@test match(r"\w+", "Düsseldorf").match == "Düsseldorf"
+@test match(r"\w+"a, "Düsseldorf").match == "D"

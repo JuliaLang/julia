@@ -28,6 +28,7 @@ Base.require
 Base.compilecache
 Base.__precompile__
 Base.include
+Base.MainInclude.include
 Base.include_string
 Base.include_dependency
 Base.which(::Any, ::Any)
@@ -204,6 +205,7 @@ Base.:(∘)
 
 ```@docs
 Core.eval
+Base.MainInclude.eval
 Base.@eval
 Base.evalfile
 Base.esc

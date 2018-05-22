@@ -57,7 +57,6 @@ const PAGES = [
     "Home" => "index.md",
     hide("NEWS.md"),
     "Manual" => [
-        "manual/introduction.md",
         "manual/getting-started.md",
         "manual/variables.md",
         "manual/integers-and-floating-point-numbers.md",
@@ -169,6 +168,7 @@ makedocs(
     pages     = PAGES,
     html_prettyurls = ("deploy" in ARGS),
     html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/stable/" : nothing,
+    assets = ["assets/julia-manual.css", ]
 )
 
 
@@ -177,6 +177,7 @@ makedocs(
 ENV["TRAVIS_JULIA_VERSION"] = "nightly"
 
 deploydocs(
+    julia = "nightly",
     repo = "github.com/JuliaLang/julia.git",
     target = "_build/html/en",
     dirname = "en",

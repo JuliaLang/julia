@@ -66,9 +66,6 @@ julia> struct Squares
 
 julia> Base.iterate(S::Squares, state=1) = state > S.count ? nothing : (state*state, state+1)
 
-julia> Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
-
-julia> Base.length(S::Squares) = S.count
 ```
 
 With only [`iterate`](@ref) definition, the `Squares` type is already pretty powerful.
@@ -104,7 +101,13 @@ There are a few more methods we can extend to give Julia more information about 
 collection.  We know that the elements in a `Squares` sequence will always be `Int`. By extending
 the [`eltype`](@ref) method, we can give that information to Julia and help it make more specialized
 code in the more complicated methods. We also know the number of elements in our sequence, so
-we can extend [`length`](@ref), too.
+we can extend [`length`](@ref), too:
+
+```jldoctest squaretype
+julia> Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
+
+julia> Base.length(S::Squares) = S.count
+```
 
 Now, when we ask Julia to [`collect`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
 of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
@@ -525,7 +528,7 @@ list can — and often does — include other nested `Broadcasted` wrappers.
 For a complete example, let's say you have created a type, `ArrayAndChar`, that stores an
 array and a single character:
 
-```jldoctest ArrayAndChar
+```jldoctest ArrayAndChar; output = false
 struct ArrayAndChar{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
     char::Char
@@ -540,14 +543,14 @@ Base.showarg(io::IO, A::ArrayAndChar, toplevel) = print(io, typeof(A), " with ch
 
 You might want broadcasting to preserve the `char` "metadata." First we define
 
-```jldoctest ArrayAndChar
+```jldoctest ArrayAndChar; output = false
 Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()
 # output
 
 ```
 
 This means we must also define a corresponding `similar` method:
-```jldoctest ArrayAndChar; filter = r"(^find_aac \(generic function with 5 methods\)$|^$)"
+```jldoctest ArrayAndChar; output = false
 function Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ArrayAndChar}}, ::Type{ElType}) where ElType
     # Scan the inputs for the ArrayAndChar:
     A = find_aac(bc)
@@ -562,7 +565,7 @@ find_aac(x) = x
 find_aac(a::ArrayAndChar, rest) = a
 find_aac(::Any, rest) = find_aac(rest)
 # output
-
+find_aac (generic function with 5 methods)
 ```
 
 From these definitions, one obtains the following behavior:

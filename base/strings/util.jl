@@ -547,10 +547,13 @@ end
     throw(ArgumentError("byte is not an ASCII hexadecimal digit"))
 
 """
-    bytes2hex(bin_arr::Array{UInt8, 1}) -> String
+    bytes2hex(a::AbstractArray{UInt8}) -> String
+    bytes2hex(io::IO, a::AbstractArray{UInt8})
 
-Convert an array of bytes to its hexadecimal representation.
-All characters are in lower-case.
+Convert an array `a` of bytes to its hexadecimal string representation, either
+returning a `String` via `bytes2hex(a)` or writing the string to an `io` stream
+via `bytes2hex(io, a)`.  The hexadecimal characters are all lowercase.
+
 # Examples
 ```jldoctest
 julia> a = string(12345, base = 16)
@@ -565,8 +568,10 @@ julia> bytes2hex(b)
 "3039"
 ```
 """
+function bytes2hex end
+
 function bytes2hex(a::AbstractArray{UInt8})
-    b = Vector{UInt8}(undef, 2*length(a))
+    b = Base.StringVector(2*length(a))
     i = 0
     for x in a
         b[i += 1] = hex_chars[1 + x >> 4]
@@ -574,6 +579,11 @@ function bytes2hex(a::AbstractArray{UInt8})
     end
     return String(b)
 end
+
+bytes2hex(io::IO, a::AbstractArray{UInt8}) =
+    for x in a
+        print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
+    end
 
 # check for pure ASCII-ness
 

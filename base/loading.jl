@@ -91,10 +91,11 @@ struct SHA1
     end
 end
 SHA1(s::AbstractString) = SHA1(hex2bytes(s))
-string(hash::SHA1) = bytes2hex(hash.bytes)
-print(io::IO, hash::SHA1) = print(io, string(hash))
 
-show(io::IO, hash::SHA1) = print(io, "SHA1(\"", string(hash), "\")")
+string(hash::SHA1) = bytes2hex(hash.bytes)
+print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
+show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
+
 isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
@@ -1077,30 +1078,32 @@ function include_relative(mod::Module, _path::String)
 end
 
 """
-    include(m::Module, path::AbstractString)
+    Base.include([m::Module,] path::AbstractString)
 
-Evaluate the contents of the input source file into module `m`. Returns the result
-of the last evaluated expression of the input file. During including, a task-local include
-path is set to the directory containing the file. Nested calls to `include` will search
-relative to that path. This function is typically used to load source
+Evaluate the contents of the input source file in the global scope of module `m`.
+Every module (except those defined with `baremodule`) has its own 1-argument
+definition of `include`, which evaluates the file in that module.
+Returns the result of the last evaluated expression of the input file. During including,
+a task-local include path is set to the directory containing the file. Nested calls to
+`include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
 """
-include # defined in sysimg.jl
+Base.include # defined in sysimg.jl
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](@ref), evaluate all expressions,
+Load the file using [`Base.include`](@ref), evaluate all expressions,
 and return the value of the last one.
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
-    return eval(Module(:__anon__),
-                Expr(:toplevel,
-                     :(const ARGS = $args),
-                     :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
-                     :(eval(m, x) = $(Expr(:core, :eval))(m, x)),
-                     :(include(x) = $(Expr(:top, :include))(__anon__, x)),
-                     :(include($path))))
+    return Core.eval(Module(:__anon__),
+        Expr(:toplevel,
+             :(const ARGS = $args),
+             :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
+             :(@deprecate eval(m, x) Core.eval(m, x)),
+             :(include(x) = $(Expr(:top, :include))(__anon__, x)),
+             :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
@@ -1109,7 +1112,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     code_object = """
         while !eof(stdin)
             code = readuntil(stdin, '\\0')
-            eval(Main, Meta.parse(code))
+            eval(Meta.parse(code))
         end
         """
     io = open(pipeline(detach(`$(julia_cmd()) -O0

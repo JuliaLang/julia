@@ -212,18 +212,10 @@ end
 let x = rand(2,2)
     (:)(a,b) = x
     @test Float64[ i for i = 1:2 ] == x
-    @test Float64[ i+j for i = 1:2, j = 1:2 ] == cat(4,
-                                                     cat(3, x[1].+x, x[2].+x),
-                                                     cat(3, x[3].+x, x[4].+x))
+    @test Float64[ i+j for i = 1:2, j = 1:2 ] == cat(cat(x[1].+x, x[2].+x; dims=3),
+                                                     cat(x[3].+x, x[4].+x; dims=3); dims=4)
 end
 
 let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
-end
-
-# comprehensions with `return`
-let f() = [ return 2 for i=1:2 ],
-    g() = Int[return 2 for i=1:2 ]
-    @test f() == [2, 2]
-    @test g() == [2, 2]
 end

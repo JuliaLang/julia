@@ -448,28 +448,28 @@ ENDIAN_BOM
 """
     ntoh(x)
 
-Converts the endianness of a value from Network byte order (big-endian) to that used by the Host.
+Convert the endianness of a value from Network byte order (big-endian) to that used by the Host.
 """
 ntoh(x)
 
 """
     hton(x)
 
-Converts the endianness of a value from that used by the Host to Network byte order (big-endian).
+Convert the endianness of a value from that used by the Host to Network byte order (big-endian).
 """
 hton(x)
 
 """
     ltoh(x)
 
-Converts the endianness of a value from Little-endian to that used by the Host.
+Convert the endianness of a value from Little-endian to that used by the Host.
 """
 ltoh(x)
 
 """
     htol(x)
 
-Converts the endianness of a value from that used by the Host to Little-endian.
+Convert the endianness of a value from that used by the Host to Little-endian.
 """
 htol(x)
 

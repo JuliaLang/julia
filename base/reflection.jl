@@ -214,7 +214,7 @@ isconst(m::Module, s::Symbol) =
 Tests whether variable `s` is defined in the current scope.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> function f()
            println(@isdefined x)
            x = 3
@@ -548,6 +548,13 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
+argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
+function argument_mt(@nospecialize t)
+    dt = argument_datatype(t)
+    (dt === nothing || !isdefined(dt.name, :mt)) && return nothing
+    dt.name.mt
+end
+
 """
     fieldcount(t::Type)
 
@@ -556,7 +563,7 @@ An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
     if t isa UnionAll || t isa Union
-        t = ccall(:jl_argument_datatype, Any, (Any,), t)
+        t = argument_datatype(t)
         if t === nothing
             error("type does not have a definite number of fields")
         end

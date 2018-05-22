@@ -82,7 +82,7 @@ let ex = quote
         test_dict_ℂ = Dict(1=>2)
     end
     ex.head = :toplevel
-    eval(Main, ex)
+    Core.eval(Main, ex)
 end
 
 function temp_pkg_dir_noinit(fn::Function)

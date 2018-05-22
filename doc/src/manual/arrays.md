@@ -83,11 +83,11 @@ converted to that type using [`convert`](@ref).
 
 Arrays can be constructed and also concatenated using the following functions:
 
-| Function               | Description                                          |
-|:---------------------- |:---------------------------------------------------- |
-| [`cat(k, A...)`](@ref) | concatenate input n-d arrays along the dimension `k` |
-| [`vcat(A...)`](@ref)   | shorthand for `cat(1, A...)`                         |
-| [`hcat(A...)`](@ref)   | shorthand for `cat(2, A...)`                         |
+| Function                    | Description                                     |
+|:--------------------------- |:----------------------------------------------- |
+| [`cat(A...; dims=k)`](@ref) | concatenate input arrays along dimension(s) `k` |
+| [`vcat(A...)`](@ref)        | shorthand for `cat(A...; dims=1)`               |
+| [`hcat(A...)`](@ref)        | shorthand for `cat(A...; dims=2)`               |
 
 Scalar values passed to these functions are treated as 1-element arrays.
 
