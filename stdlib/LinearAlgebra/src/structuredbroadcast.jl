@@ -7,7 +7,7 @@ StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()
 StructuredMatrixStyle{T}(::Val{N}) where {T,N} = Broadcast.DefaultArrayStyle{N}()
 
 const StructuredMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}
-Broadcast.BroadcastStyle(::Type{T}) where {T<:StructuredMatrix} = StructuredMatrixStyle{T}()
+Broadcast.BroadcastStyle(S::StructuredMatrix) = StructuredMatrixStyle{typeof(S)}()
 
 # Promotion of broadcasts between structured matrices. This is slightly unusual
 # as we define them symmetrically. This allows us to have a fallback to DefaultArrayStyle{2}().

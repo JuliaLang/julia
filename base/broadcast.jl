@@ -17,12 +17,12 @@ export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dot
 
 """
 `BroadcastStyle` is an abstract type and trait-function used to determine behavior of
-objects under broadcasting. `BroadcastStyle(typeof(x))` returns the style associated
+objects under broadcasting. `BroadcastStyle(x)` returns the style associated
 with `x`. To customize the broadcasting behavior of a type, one can declare a style
 by defining a type/method pair
 
     struct MyContainerStyle <: BroadcastStyle end
-    Base.BroadcastStyle(::Type{<:MyContainer}) = MyContainerStyle()
+    Base.BroadcastStyle(::MyContainer) = MyContainerStyle()
 
 One then writes method(s) (at least [`similar`](@ref)) operating on
 `Broadcasted{MyContainerStyle}`. There are also several pre-defined subtypes of `BroadcastStyle`
@@ -36,14 +36,13 @@ abstract type BroadcastStyle end
 parameter `C`. You can use this as an alternative to creating custom subtypes of `BroadcastStyle`,
 for example
 
-    Base.BroadcastStyle(::Type{<:MyContainer}) = Broadcast.Style{MyContainer}()
+    Base.BroadcastStyle(::MyContainer) = Broadcast.Style{MyContainer}()
 """
 struct Style{T} <: BroadcastStyle end
 
-BroadcastStyle(::Type{<:Tuple}) = Style{Tuple}()
+BroadcastStyle(::Tuple) = Style{Tuple}()
 
 struct Unknown <: BroadcastStyle end
-BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
 
 """
 `Broadcast.AbstractArrayStyle{N} <: BroadcastStyle` is the abstract supertype for any style
@@ -52,12 +51,12 @@ The `N` parameter is the dimensionality, which can be handy for AbstractArray ty
 that only support specific dimensionalities:
 
     struct SparseMatrixStyle <: Broadcast.AbstractArrayStyle{2} end
-    Base.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatrixStyle()
+    Base.BroadcastStyle(::SparseMatrixCSC) = SparseMatrixStyle()
 
 For AbstractArray types that support arbitrary dimensionality, `N` can be set to `Any`:
 
     struct MyArrayStyle <: Broadcast.AbstractArrayStyle{Any} end
-    Base.BroadcastStyle(::Type{<:MyArray}) = MyArrayStyle()
+    Base.BroadcastStyle(::MyArray) = MyArrayStyle()
 
 In cases where you want to be able to mix multiple `AbstractArrayStyle`s and keep track
 of dimensionality, your style needs to support a `Val` constructor:
@@ -96,9 +95,9 @@ DefaultArrayStyle(::Val{N}) where N = DefaultArrayStyle{N}()
 DefaultArrayStyle{M}(::Val{N}) where {N,M} = DefaultArrayStyle{N}()
 const DefaultVectorStyle = DefaultArrayStyle{1}
 const DefaultMatrixStyle = DefaultArrayStyle{2}
-BroadcastStyle(::Type{<:AbstractArray{T,N}}) where {T,N} = DefaultArrayStyle{N}()
-BroadcastStyle(::Type{<:Ref}) = DefaultArrayStyle{0}()
-BroadcastStyle(::Type{T}) where {T} = DefaultArrayStyle{ndims(T)}()
+BroadcastStyle(::AbstractArray{T,N}) where {T,N} = DefaultArrayStyle{N}()
+BroadcastStyle(::Ref) = DefaultArrayStyle{0}()
+BroadcastStyle(v::Any) = DefaultArrayStyle{ndims(v)}()
 
 # `ArrayConflict` is an internal type signaling that two or more different `AbstractArrayStyle`
 # objects were supplied as arguments, and that no rule was defined for resolving the
@@ -221,9 +220,9 @@ _axes(::Broadcasted, axes::Tuple) = axes
 _axes(bc::Broadcasted{Style{Tuple}}, ::Nothing) = (Base.OneTo(length(longest_tuple(nothing, bc.args))),)
 _axes(bc::Broadcasted{<:AbstractArrayStyle{0}}, ::Nothing) = ()
 
-BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
-BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
-    throw(ArgumentError("Broadcasted{Unknown} wrappers do not have a style assigned"))
+BroadcastStyle(::Broadcasted{Style}) where {Style} = Style()
+BroadcastStyle(::Broadcasted{S}) where {S<:Union{Nothing,Unknown}} =
+    throw(ArgumentError("Broadcasted{$S} wrappers do not have a style assigned"))
 
 argtype(::Type{Broadcasted{Style,Axes,F,Args}}) where {Style,Axes,F,Args} = Args
 argtype(bc::Broadcasted) = argtype(typeof(bc))
@@ -400,7 +399,7 @@ longest(::Tuple{}, ::Tuple{}) = ()
 
 # combine_styles operates on values (arbitrarily many)
 combine_styles() = DefaultArrayStyle{0}()
-combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
+combine_styles(c) = result_style(BroadcastStyle(c))
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
@@ -589,12 +588,12 @@ Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 """
     Broadcast.broadcastable(x)
 
-Return either `x` or an object like `x` such that it supports `axes`, indexing, and its type supports `ndims`.
+Return either `x` or an object like `x` such that it supports `axes`, indexing, and `ndims`.
 
 If `x` supports iteration, the returned value should have the same `axes` and indexing
 behaviors as [`collect(x)`](@ref).
 
-If `x` is not an `AbstractArray` but it supports `axes`, indexing, and its type supports
+If `x` is not an `AbstractArray` but it supports `axes`, indexing, and
 `ndims`, then `broadcastable(::typeof(x))` may be implemented to just return itself.
 Further, if `x` defines its own [`BroadcastStyle`](@ref), then it must define its
 `broadcastable` method to return itself for the custom style to have any effect.
