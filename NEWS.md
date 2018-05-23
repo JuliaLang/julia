@@ -688,6 +688,8 @@ Library improvements
   * `Sys.which()` provides a cross-platform method to find executable files, similar to
     the Unix `which` command. ([#26559])
 
+  * `lstrip`, `rstrip` and `strip` now correctly handle unicode whitespace ([#27211]), and accept a predicate function to determine which characters should be removed ([#27232])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -1560,3 +1562,5 @@ Command-line option changes
 [#26670]: https://github.com/JuliaLang/julia/issues/26670
 [#26775]: https://github.com/JuliaLang/julia/issues/26775
 [#26932]: https://github.com/JuliaLang/julia/issues/26932
+[#27211]: https://github.com/JuliaLang/julia/issues/27211
+[#27232]: https://github.com/JuliaLang/julia/issues/27232
