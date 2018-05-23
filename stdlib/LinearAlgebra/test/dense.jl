@@ -47,7 +47,7 @@ bimg  = randn(n,2)/2
     @testset "Positive definiteness" begin
         @test !isposdef(ainit)
         @test isposdef(apd)
-        if eltya != Int # cannot perform cholfact! for Matrix{Int}
+        if eltya != Int # cannot perform cholesky! for Matrix{Int}
             @test !isposdef!(copy(ainit))
             @test isposdef!(copy(apd))
         end

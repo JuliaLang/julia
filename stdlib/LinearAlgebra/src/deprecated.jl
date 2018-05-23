@@ -7,7 +7,7 @@ using Base: @deprecate, depwarn
 @deprecate cond(F::LinearAlgebra.LU, p::Integer) cond(convert(AbstractArray, F), p)
 
 # PR #22188
-export cholfact
+export cholfact, cholfact!
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val(false))
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
 @deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val(false))
@@ -1402,3 +1402,11 @@ export eigfact!
 @deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{false}=Val(false)), cholesky(A, Val(false)))
 @deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0), cholesky(A, Val(true); tol=tol))
 @deprecate(cholfact(x::Number, uplo::Symbol=:U), cholesky(x, uplo))
+
+# deprecate cholfact! to cholesky!
+# cholfact! exported from deprecation above
+@deprecate(cholfact!(A::RealHermSymComplexHerm, ::Val{false}=Val(false)), cholesky!(A, Val(false)))
+@deprecate(cholfact!(A::StridedMatrix, ::Val{false}=Val(false)), cholesky!(A, Val(false)))
+@deprecate(cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+@deprecate(cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+@deprecate(cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))

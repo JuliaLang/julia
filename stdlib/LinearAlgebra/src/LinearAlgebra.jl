@@ -67,7 +67,7 @@ export
     bunchkaufman!,
     chol,
     cholesky,
-    cholfact!,
+    cholesky!,
     cond,
     condskeel,
     copyto!,

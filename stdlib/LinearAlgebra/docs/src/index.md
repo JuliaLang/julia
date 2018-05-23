@@ -315,7 +315,7 @@ LinearAlgebra.lu
 LinearAlgebra.lu!
 LinearAlgebra.chol
 LinearAlgebra.cholesky
-LinearAlgebra.cholfact!
+LinearAlgebra.cholesky!
 LinearAlgebra.lowrankupdate
 LinearAlgebra.lowrankdowndate
 LinearAlgebra.lowrankupdate!

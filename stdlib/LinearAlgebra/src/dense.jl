@@ -89,7 +89,7 @@ julia> A
  2.0  6.78233
 ```
 """
-isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact!(Hermitian(A)))
+isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky!(Hermitian(A)))
 
 """
     isposdef(A) -> Bool

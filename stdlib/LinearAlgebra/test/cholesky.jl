@@ -68,7 +68,7 @@ end
             @test_throws DimensionMismatch chol(A)
             @test_throws DimensionMismatch LinearAlgebra.chol!(A)
             @test_throws DimensionMismatch cholesky(A)
-            @test_throws DimensionMismatch cholfact!(A)
+            @test_throws DimensionMismatch cholesky!(A)
         end
 
         #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
@@ -100,7 +100,7 @@ end
             capds = cholesky(apds)
             unary_ops_tests(apds, capds, ε*κ*n)
             if eltya <: BlasReal
-                capds = cholfact!(copy(apds))
+                capds = cholesky!(copy(apds))
                 unary_ops_tests(apds, capds, ε*κ*n)
             end
             ulstring = sprint((t, s) -> show(t, "text/plain", s), capds.UL)
@@ -108,9 +108,9 @@ end
         else
             capdh = cholesky(apdh)
             unary_ops_tests(apdh, capdh, ε*κ*n)
-            capdh = cholfact!(copy(apdh))
+            capdh = cholesky!(copy(apdh))
             unary_ops_tests(apdh, capdh, ε*κ*n)
-            capdh = cholfact!(copy(apd))
+            capdh = cholesky!(copy(apd))
             unary_ops_tests(apd, capdh, ε*κ*n)
             ulstring = sprint((t, s) -> show(t, "text/plain", s), capdh.UL)
             @test sprint((t, s) -> show(t, "text/plain", s), capdh) == "$(typeof(capdh))\nU factor:\n$ulstring"
@@ -186,8 +186,8 @@ end
                 @test_throws PosDefException logdet(C)
             end
 
-            # Test generic cholfact!
-            @testset "generic cholfact!" begin
+            # Test generic cholesky!
+            @testset "generic cholesky!" begin
                 if eltya <: Complex
                     A = complex.(randn(5,5), randn(5,5))
                 else
@@ -264,14 +264,14 @@ end
     C = complex.(R, R)
     for A in (R, C)
         @test !LinearAlgebra.issuccess(cholesky(A))
-        @test !LinearAlgebra.issuccess(cholfact!(copy(A)))
+        @test !LinearAlgebra.issuccess(cholesky!(copy(A)))
         @test_throws PosDefException chol(A)
         @test_throws PosDefException LinearAlgebra.chol!(copy(A))
     end
 end
 
 @testset "fail for non-BLAS element types" begin
-    @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val(true))
+    @test_throws ArgumentError cholesky!(Hermitian(rand(Float16, 5,5)), Val(true))
 end
 
 end # module TestCholesky

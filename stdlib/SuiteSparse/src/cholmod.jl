@@ -7,7 +7,7 @@ import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
 
 using LinearAlgebra
 import LinearAlgebra: (\),
-                 cholesky, cholfact!, det, diag, ishermitian, isposdef,
+                 cholesky, cholesky!, det, diag, ishermitian, isposdef,
                  issuccess, issymmetric, ldlt, ldlt!, logdet
 
 using SparseArrays
@@ -1367,7 +1367,7 @@ function fact_(A::Sparse{<:VTypes}, cm::Array{UInt8};
     return F
 end
 
-function cholfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
+function cholesky!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
     # Makes it an LLt
     unsafe_store!(common_final_ll[], 1)
 
@@ -1378,7 +1378,7 @@ function cholfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
 end
 
 """
-    cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
+    cholesky!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic
 factorization `F`. `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/
@@ -1393,13 +1393,13 @@ See also [`cholesky`](@ref).
     be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}`
     as appropriate.
 """
-cholfact!(F::Factor, A::Union{SparseMatrixCSC{T},
+cholesky!(F::Factor, A::Union{SparseMatrixCSC{T},
         SparseMatrixCSC{Complex{T}},
         Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
         Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
         Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
     shift = 0.0) where {T<:Real} =
-    cholfact!(F, Sparse(A); shift = shift)
+    cholesky!(F, Sparse(A); shift = shift)
 
 function cholesky(A::Sparse; shift::Real=0.0,
     perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
@@ -1411,7 +1411,7 @@ function cholesky(A::Sparse; shift::Real=0.0,
     F = fact_(A, cm; perm = perm)
 
     # Compute the numerical factorization
-    cholfact!(F, A; shift = shift)
+    cholesky!(F, A; shift = shift)
 
     return F
 end

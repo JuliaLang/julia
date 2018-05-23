@@ -434,19 +434,19 @@ end
         @test F1 == F2
     end
 
-    ### cholfact!/ldlt!
+    ### cholesky!/ldlt!
     F = cholesky(A1pd)
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
     @test unsafe_load(pointer(F)).is_ll == 0
     CHOLMOD.change_factor!(elty, true, false, true, true, F)
-    @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(cholesky!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
     @test size(F, 3) == 1
     @test_throws ArgumentError size(F, 0)
 
     F = cholesky(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(cholesky!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldlt(A1pd)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
