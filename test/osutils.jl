@@ -18,6 +18,12 @@
     else
         @test Sys.windows_version() >= v"1.0.0-"
     end
+    if !Sys.islinux()
+        @test Sys.glibc_version() == v"0.0.0"
+        @test !Sys.isglibc()
+    else
+        @test Sys.glibc_version() >= v"0.0.0"
+    end
 end
 
 @testset "@static" begin
