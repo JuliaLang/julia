@@ -496,26 +496,8 @@ appropriate representable value. However, the manner in which this rounding is d
 changed if required according to the rounding modes presented in the [IEEE 754
 standard](https://en.wikipedia.org/wiki/IEEE_754-2008).
 
-```jldoctest
-julia> x = 1.1; y = 0.1;
-
-julia> x + y
-1.2000000000000002
-
-julia> setrounding(Float64,RoundDown) do
-           x + y
-       end
-1.2
-```
-
 The default mode used is always [`RoundNearest`](@ref), which rounds to the nearest representable
 value, with ties rounded towards the nearest value with an even least significant bit.
-
-!!! warning
-    Rounding is generally only correct for basic arithmetic functions ([`+`](@ref), [`-`](@ref),
-    [`*`](@ref), [`/`](@ref) and [`sqrt`](@ref)) and type conversion operations. Many other
-    functions assume the default [`RoundNearest`](@ref) mode is set, and can give erroneous results
-    when operating under other rounding modes.
 
 ### Background and References
 

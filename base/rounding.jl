@@ -137,28 +137,6 @@ equivalent to:
     setrounding(T, old)
 
 See [`RoundingMode`](@ref) for available rounding modes.
-
-!!! warning
-
-    This feature is still experimental, and may give unexpected or incorrect values. A
-    known problem is the interaction with compiler optimisations, e.g.
-
-        julia> setrounding(Float64,RoundDown) do
-                   1.1 + 0.1
-               end
-        1.2000000000000002
-
-    Here the compiler is *constant folding*, that is evaluating a known constant
-    expression at compile time, however the rounding mode is only changed at runtime, so
-    this is not reflected in the function result. This can be avoided by moving constants
-    outside the expression, e.g.
-
-        julia> x = 1.1; y = 0.1;
-
-        julia> setrounding(Float64,RoundDown) do
-                   x + y
-               end
-        1.2
 """
 function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
     old_rounding_raw = rounding_raw(T)
