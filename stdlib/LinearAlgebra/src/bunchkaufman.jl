@@ -24,24 +24,24 @@ Base.iterate(S::BunchKaufman, ::Val{:done}) = nothing
 
 
 """
-    bkfact!(A, rook::Bool=false) -> BunchKaufman
+    bunchkaufman!(A, rook::Bool=false) -> BunchKaufman
 
-`bkfact!` is the same as [`bunchkaufman`](@ref), but saves space by overwriting the
+`bunchkaufman!` is the same as [`bunchkaufman`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy.
 """
-function bkfact!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false)
+function bunchkaufman!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false)
     LD, ipiv, info = rook ? LAPACK.sytrf_rook!(A.uplo, A.data) : LAPACK.sytrf!(A.uplo, A.data)
     BunchKaufman(LD, ipiv, A.uplo, true, rook, info)
 end
-function bkfact!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false)
+function bunchkaufman!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false)
     LD, ipiv, info = rook ? LAPACK.hetrf_rook!(A.uplo, A.data) : LAPACK.hetrf!(A.uplo, A.data)
     BunchKaufman(LD, ipiv, A.uplo, false, rook, info)
 end
-function bkfact!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false)
+function bunchkaufman!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false)
     if ishermitian(A)
-        return bkfact!(Hermitian(A), rook)
+        return bunchkaufman!(Hermitian(A), rook)
     elseif issymmetric(A)
-        return bkfact!(Symmetric(A), rook)
+        return bunchkaufman!(Symmetric(A), rook)
     else
         throw(ArgumentError("Bunch-Kaufman decomposition is only valid for symmetric or Hermitian matrices"))
     end
@@ -99,7 +99,7 @@ true
 ```
 """
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false) where {T} =
-    bkfact!(copy_oftype(A, typeof(sqrt(one(T)))), rook)
+    bunchkaufman!(copy_oftype(A, typeof(sqrt(one(T)))), rook)
 
 convert(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) where {T} = B
 convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =

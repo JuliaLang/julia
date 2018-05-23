@@ -707,9 +707,9 @@ Deprecated or removed
     and `bkfact` have respectively been deprecated to `lu`, `schur`, `lq`,
     `qr`, `ldlt`, `svd`, and `bunchkaufman` ([#27159]).
 
-  * `lufact!`, `schurfact!`, `lqfact!`, `qrfact!`, `ldltfact!`, and `svdfact!`
-    have respectively been deprecated to `lu!`, `schur!`, `lq!`, `qr!`, `ldlt!`,
-    and `svd!` ([#27159]).
+  * `lufact!`, `schurfact!`, `lqfact!`, `qrfact!`, `ldltfact!`, `svdfact!`,
+    and `bkfact!` have respectively been deprecated to
+    `lu!`, `schur!`, `lq!`, `qr!`, `ldlt!`, `svd!`, and `bunchkaufman!` ([#27159]).
 
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.

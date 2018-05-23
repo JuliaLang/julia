@@ -64,7 +64,7 @@ export
     axpy!,
     axpby!,
     bunchkaufman,
-    bkfact!,
+    bunchkaufman!,
     chol,
     cholfact,
     cholfact!,

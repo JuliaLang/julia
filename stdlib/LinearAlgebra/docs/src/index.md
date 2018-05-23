@@ -330,7 +330,7 @@ LinearAlgebra.QRPivoted
 LinearAlgebra.lq!
 LinearAlgebra.lq
 LinearAlgebra.bunchkaufman
-LinearAlgebra.bkfact!
+LinearAlgebra.bunchkaufman!
 LinearAlgebra.eig
 LinearAlgebra.eigvals
 LinearAlgebra.eigvals!
