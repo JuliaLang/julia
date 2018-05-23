@@ -39,7 +39,6 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
         α = rand(eltya)
         aα = fill(α,1,1)
         @test lq(α).L*lq(α).Q ≈ lq(aα).L*lq(aα).Q
-        @test lq(α)[1]*lq(α)[2] ≈ lq(aα).L*lq(aα).Q
         @test abs(lq(α).Q[1,1]) ≈ one(eltya)
         tab = promote_type(eltya,eltyb)
 

@@ -227,7 +227,7 @@ end
         for j in 2:i
             d[j] = d[1]
         end
-        A = qr(randn(rng, 20, 20))[1]*Diagonal(d)*qr(randn(rng, 20, 20))[1]
+        A = qr(randn(rng, 20, 20)).Q*Diagonal(d)*qr(randn(rng, 20, 20)).Q
         @testset "Number of singular values: $j" for j in 2:6
             # Default size of subspace
             F = svds(A, nsv = j, v0 = v0)

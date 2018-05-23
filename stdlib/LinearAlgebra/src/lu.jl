@@ -17,14 +17,6 @@ Base.iterate(S::LU, ::Val{:U}) = (S.U, Val(:p))
 Base.iterate(S::LU, ::Val{:p}) = (S.p, Val(:done))
 Base.iterate(S::LU, ::Val{:done}) = nothing
 
-# indexing for destructuring into components
-@inline function Base.getindex(S::LU, i::Integer)
-    i == 1 ? (return S.L) :
-    i == 2 ? (return S.U) :
-    i == 3 ? (return S.p) :
-        throw(BoundsError(S, i))
-end
-
 adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 

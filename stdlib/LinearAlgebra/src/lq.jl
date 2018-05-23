@@ -14,13 +14,6 @@ Base.iterate(S::LQ) = (S.L, Val(:Q))
 Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
 Base.iterate(S::LQ, ::Val{:done}) = nothing
 
-# indexing for destructuring into components
-@inline function Base.getindex(S::LQ, i::Integer)
-    i == 1 ? (return S.L) :
-    i == 2 ? (return S.Q) :
-        throw(BoundsError(S, i))
-end
-
 struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}

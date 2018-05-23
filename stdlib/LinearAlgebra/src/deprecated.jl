@@ -1,4 +1,4 @@
- # This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: @deprecate, depwarn
 
@@ -1450,4 +1450,127 @@ function _geneig(A, B)
     "destructured into its components (`vals, vecs = eigen(A, B)`), ",
     "or as a `GeneralizedEigen` object (`X = eigen(A, B)`)."), :eig)
     return (eigen(A, B)...,)
+end
+
+# deprecate transitional decomposition getindex methods out of the blocks
+function Base.getindex(S::LU, i::Integer)
+    depwarn(string("decomposition functions (e.g. `lu`) now return decomposition ",
+        "objects (e.g. `LU`), and indexing such objects is deprecated. Instead ",
+        "extract components via their accessors (e.g. `X.L`, `X.S`, and `X.p` for ",
+        "`X::LU`), or destructure the decomposition via iteration ",
+        "(e.g. `l, u, p = X` for `X::LU`)."), :getindex)
+    i == 1 ? (return S.L) :
+    i == 2 ? (return S.U) :
+    i == 3 ? (return S.p) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::Union{Eigen,GeneralizedEigen}, i::Integer)
+    depwarn(string("decomposition functions (e.g. `eig`) now return decomposition ",
+        "objects (e.g. `Eigen` and `GeneralizedEigen`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.values` and `X.vectors` for `X::Union{Eigen,GeneralizedEigen}`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `vals, vecs = X` for `X::Union{Eigen,GeneralizedEigen}`)."), :getindex)
+    i == 1 ? (return S.values) :
+    i == 2 ? (return S.vectors) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::Schur, i::Integer)
+    depwarn(string("decomposition functions (e.g. `schur`) now return decomposition ",
+        "objects (e.g. `Schur`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.T`, `X.Z`, and `X.values` for `X::Schur`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `t, z, vals = X` for `X::Schur`)."), :getindex)
+    i == 1 ? (return S.T) :
+    i == 2 ? (return S.Z) :
+    i == 3 ? (return S.values) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::GeneralizedSchur, i::Integer)
+    depwarn(string("decomposition functions (e.g. `schur`) now return decomposition ",
+        "objects (e.g. `GeneralizedSchur`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.S`, `X.T`, `X.Q`, `X.Z`, `X.α`, and `X.β` for `X::GeneralizedSchur`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `s, t, q, z, α, β = X` for `X::GeneralizedSchur`)."), :getindex)
+    i == 1 ? (return S.S) :
+    i == 2 ? (return S.T) :
+    i == 3 ? (return S.Q) :
+    i == 4 ? (return S.Z) :
+    i == 5 ? (return S.α) :
+    i == 6 ? (return S.β) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::LQ, i::Integer)
+    depwarn(string("decomposition functions (e.g. `lq`) now return decomposition ",
+        "objects (e.g. `LQ`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.L` and `X.Q` for `X::LQ`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `l, q = X` for `X::LQ`)."), :getindex)
+    i == 1 ? (return S.L) :
+    i == 2 ? (return S.Q) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::QR, i::Integer)
+    depwarn(string("decomposition functions (e.g. `qr`) now return decomposition ",
+        "objects (e.g. `QR`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.Q` and `X.R` for `X::QR`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `q, r = X` for `X::QR`)."), :getindex)
+    i == 1 ? (return S.Q) :
+    i == 2 ? (return S.R) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::QRCompactWY, i::Integer)
+    depwarn(string("decomposition functions (e.g. `qr`) now return decomposition ",
+        "objects (e.g. `QRCompactWY`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.Q` and `X.R` for `X::QR`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `q, r = X` for `X::QR`)."), :getindex)
+    i == 1 ? (return S.Q) :
+    i == 2 ? (return S.R) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::QRPivoted, i::Integer)
+    depwarn(string("decomposition functions (e.g. `qr`) now return decomposition ",
+        "objects (e.g. `QRPivoted`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.Q`, `X.R`, and `X.p` for `X::QRPivoted`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `q, r, p = X` for `X::QRPivoted`)."), :getindex)
+    i == 1 ? (return S.Q) :
+    i == 2 ? (return S.R) :
+    i == 3 ? (return S.p) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::SVD, i::Integer)
+    depwarn(string("decomposition functions (e.g. `svd`) now return decomposition ",
+        "objects (e.g. `SVD`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.U`, `X.S`, and `X.V` for `X::SVD`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `u, s, v = X` for `X::SVD`)."), :getindex)
+    i == 1 ? (return S.U) :
+    i == 2 ? (return S.S) :
+    i == 3 ? (return S.V) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::GeneralizedSVD, i::Integer)
+    depwarn(string("decomposition functions (e.g. `svd`) now return decomposition ",
+        "objects (e.g. `GeneralizedSVD`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.U`, `X.V`, `X.Q`, `X.D1`, `X.D2`, and `X.R0` for `X::GeneralizedSVD`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `u, v, q, d1, d2, r0 = X` for `X::GeneralizedSVD`)."), :getindex)
+    i == 1 ? (return S.U) :
+    i == 2 ? (return S.V) :
+    i == 3 ? (return S.Q) :
+    i == 4 ? (return S.D1) :
+    i == 5 ? (return S.D2) :
+    i == 6 ? (return S.R0) :
+        throw(BoundsError(S, i))
 end

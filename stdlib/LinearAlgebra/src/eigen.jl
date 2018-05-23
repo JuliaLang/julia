@@ -25,13 +25,6 @@ Base.iterate(S::Union{Eigen,GeneralizedEigen}) = (S.values, Val(:vectors))
 Base.iterate(S::Union{Eigen,GeneralizedEigen}, ::Val{:vectors}) = (S.vectors, Val(:done))
 Base.iterate(S::Union{Eigen,GeneralizedEigen}, ::Val{:done}) = nothing
 
-# indexing for destructuring into components
-@inline function Base.getindex(S::Union{Eigen,GeneralizedEigen}, i::Integer)
-    i == 1 ? (return S.values) :
-    i == 2 ? (return S.vectors) :
-        throw(BoundsError(S, i))
-end
-
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
 """

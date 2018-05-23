@@ -46,14 +46,6 @@ Base.iterate(S::QR) = (S.Q, Val(:R))
 Base.iterate(S::QR, ::Val{:R}) = (S.R, Val(:done))
 Base.iterate(S::QR, ::Val{:done}) = nothing
 
-# indexing for destructuring into components
-@inline function Base.getindex(S::QR, i::Integer)
-    i == 1 ? (return S.Q) :
-    i == 2 ? (return S.R) :
-        throw(BoundsError(S, i))
-end
-
-
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
 """
     QRCompactWY <: Factorization
@@ -114,13 +106,6 @@ Base.iterate(S::QRCompactWY) = (S.Q, Val(:R))
 Base.iterate(S::QRCompactWY, ::Val{:R}) = (S.R, Val(:done))
 Base.iterate(S::QRCompactWY, ::Val{:done}) = nothing
 
-# indexing for destructuring into components
-@inline function Base.getindex(S::QRCompactWY, i::Integer)
-    i == 1 ? (return S.Q) :
-    i == 2 ? (return S.R) :
-        throw(BoundsError(S, i))
-end
-
 """
     QRPivoted <: Factorization
 
@@ -169,15 +154,6 @@ Base.iterate(S::QRPivoted) = (S.Q, Val(:R))
 Base.iterate(S::QRPivoted, ::Val{:R}) = (S.R, Val(:p))
 Base.iterate(S::QRPivoted, ::Val{:p}) = (S.p, Val(:done))
 Base.iterate(S::QRPivoted, ::Val{:done}) = nothing
-
-# indexing for destructuring into components
-@inline function Base.getindex(S::QRPivoted, i::Integer)
-    i == 1 ? (return S.Q) :
-    i == 2 ? (return S.R) :
-    i == 3 ? (return S.p) :
-        throw(BoundsError(S, i))
-end
-
 
 function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
     m, n = size(A)
@@ -308,7 +284,7 @@ The returned object `F` stores the factorization in a packed format:
 
  - otherwise `F` is a [`QR`](@ref) object.
 
-The individual components of the factorization `F` can be accessed by indexing with a symbol:
+The individual components of the decomposition `F` can be retrieved via property accessors:
 
  - `F.Q`: the orthogonal/unitary matrix `Q`
  - `F.R`: the upper triangular matrix `R`

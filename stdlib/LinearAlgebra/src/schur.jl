@@ -15,14 +15,6 @@ Base.iterate(S::Schur, ::Val{:Z}) = (S.Z, Val(:values))
 Base.iterate(S::Schur, ::Val{:values}) = (S.values, Val(:done))
 Base.iterate(S::Schur, ::Val{:done}) = nothing
 
-# indexing for destructuring into components
-@inline function Base.getindex(S::Schur, i::Integer)
-    i == 1 ? (return S.T) :
-    i == 2 ? (return S.Z) :
-    i == 3 ? (return S.values) :
-        throw(BoundsError(S, i))
-end
-
 """
     schur!(A::StridedMatrix) -> F::Schur
 
@@ -203,17 +195,6 @@ Base.iterate(S::GeneralizedSchur, ::Val{:Z}) = (S.Z, Val(:α))
 Base.iterate(S::GeneralizedSchur, ::Val{:α}) = (S.α, Val(:β))
 Base.iterate(S::GeneralizedSchur, ::Val{:β}) = (S.β, Val(:done))
 Base.iterate(S::GeneralizedSchur, ::Val{:done}) = nothing
-
-# indexing for destructuring into components
-@inline function Base.getindex(S::GeneralizedSchur, i::Integer)
-    i == 1 ? (return S.S) :
-    i == 2 ? (return S.T) :
-    i == 3 ? (return S.Q) :
-    i == 4 ? (return S.Z) :
-    i == 5 ? (return S.α) :
-    i == 6 ? (return S.β) :
-        throw(BoundsError(S, i))
-end
 
 """
     schur!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
