@@ -1778,7 +1778,6 @@ end
     @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
     C, b = A[:, 1:4], fill(1., size(A, 1))
     @test !Base.USE_GPL_LIBS || factorize(C)\b ≈ Array(C)\b
-    @test_throws ErrorException chol(A)
     @test_throws ErrorException eigen(A)
     @test_throws ErrorException inv(A)
 end
