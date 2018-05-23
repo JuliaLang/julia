@@ -116,13 +116,20 @@ end
 const _default_delims = [' ','\t','\n','\v','\f','\r']
 
 """
-    lstrip(s::AbstractString[, chars::Chars])
+    lstrip(s::AbstractString)
+    lstrip(f, s::AbstractString)
+    lstrip(s::AbstractString, chars::Chars)
 
-Return `s` with any leading whitespace and delimiters removed.
-The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
-`\\f`, and `\\r`.
-If `chars` (a character, or vector or set of characters) is provided,
-instead remove characters contained in it.
+Remove leading characters from `s`.
+
+The default behaviour is to remove leading whitespace and delimiters: any characters for
+which [`isspace`](@ref) is `true`.
+
+If a predicate `f` is provided, then remove any leading characters `c` such that `f(c)` is
+`true`.
+
+If `chars` (a character, or vector or set of characters) is provided, instead remove
+leading characters contained in `chars`.
 
 # Examples
 ```jldoctest
@@ -133,22 +140,32 @@ julia> lstrip(a)
 "March"
 ```
 """
-function lstrip(s::AbstractString, chars::Chars=_default_delims)
+function lstrip(f, s::AbstractString)
     e = lastindex(s)
     for (i, c) in pairs(s)
-        !(c in chars) && return SubString(s, i, e)
+        !f(c) && return SubString(s, i, e)
     end
     SubString(s, e+1, e)
 end
+lstrip(s::AbstractString) = lstrip(isspace, f)
+lstrip(s::AbstractString, chars::Chars) = lstrip(c -> c in chars, s)
+
 
 """
-    rstrip(s::AbstractString[, chars::Chars])
+    rstrip(s::AbstractString)
+    rstrip(f, s::AbstractString)
+    rstrip(s::AbstractString, chars::Chars)
 
-Return `s` with any trailing whitespace and delimiters removed.
-The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
-`\\f`, and `\\r`.
-If `chars` (a character, or vector or set of characters) is provided,
-instead remove characters contained in it.
+Remove trailing characters from `s`.
+
+The default behaviour is to remove trailing whitespace and delimiters: any characters for
+which [`isspace`](@ref) is `true`.
+
+If a predicate `f` is provided, then remove any trailing characters `c` such that `f(c)`
+is `true`.
+
+If `chars` (a character, or vector or set of characters) is provided, instead remove
+trailing characters contained in `chars`.
 
 # Examples
 ```jldoctest
@@ -159,28 +176,44 @@ julia> rstrip(a)
 "March"
 ```
 """
-function rstrip(s::AbstractString, chars::Chars=_default_delims)
+function rstrip(f, s::AbstractString)
     for (i, c) in Iterators.reverse(pairs(s))
-        c in chars || return SubString(s, 1, i)
+        f(c) || return SubString(s, 1, i)
     end
     SubString(s, 1, 0)
 end
+rstrip(s::AbstractString) = rstrip(isspace, f)
+rstrip(s::AbstractString, chars::Chars) = rstrip(c -> c in chars, s)
 
 """
-    strip(s::AbstractString, [chars::Chars])
+    strip(s::AbstractString)
+    strip(f, s::AbstractString)
+    strip(s::AbstractString, chars::Chars)
 
-Return `s` with any leading and trailing whitespace removed.
-If `chars` (a character, or vector or set of characters) is provided,
-instead remove characters contained in it.
+Remove leading and trailing characters from `s`.
+
+The default behaviour is to remove leading or trailing whitespace and delimiters: any
+characters for which [`isspace`](@ref) is `true`.
+
+If a predicate `f` is provided, then remove any leading or trailing characters `c` such
+that `f(c)` is `true`.
+
+If `chars` (a character, or vector or set of characters) is provided, instead remove
+leading or trailing characters contained in `chars`.
 
 # Examples
 ```jldoctest
 julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 "3, 5"
 ```
+
+# See also
+- [`lstrip`](@ref)
+- [`rstrip`](@ref)
 """
-strip(s::AbstractString) = lstrip(rstrip(s))
-strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
+strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
+strip(s::AbstractString) = strip(isspace, f)
+strip(s::AbstractString, chars::Chars) = strip(c -> c in chars, s)
 
 ## string padding functions ##
 
