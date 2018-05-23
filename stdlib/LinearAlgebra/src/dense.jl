@@ -109,7 +109,7 @@ julia> isposdef(A)
 true
 ```
 """
-isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
+isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 # the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
@@ -1112,7 +1112,7 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 
 | Properties of `A`          | type of factorization                          |
 |:---------------------------|:-----------------------------------------------|
-| Positive-definite          | Cholesky (see [`cholfact`](@ref))  |
+| Positive-definite          | Cholesky (see [`cholesky`](@ref))  |
 | Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bunchkaufman`](@ref)) |
 | Sparse Symmetric/Hermitian | LDLt (see [`ldlt`](@ref))      |
 | Triangular                 | Triangular                                     |
@@ -1208,7 +1208,7 @@ function factorize(A::StridedMatrix{T}) where T
             return UpperTriangular(A)
         end
         if herm
-            cf = cholfact(A)
+            cf = cholesky(A)
             if cf.info == 0
                 return cf
             else

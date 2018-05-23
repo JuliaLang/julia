@@ -7,7 +7,7 @@ import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
 
 using LinearAlgebra
 import LinearAlgebra: (\),
-                 cholfact, cholfact!, det, diag, ishermitian, isposdef,
+                 cholesky, cholfact!, det, diag, ishermitian, isposdef,
                  issuccess, issymmetric, ldlt, ldlt!, logdet
 
 using SparseArrays
@@ -1385,7 +1385,7 @@ factorization `F`. `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@r
 [`Hermitian`](@ref) view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
-See also [`cholfact`](@ref).
+See also [`cholesky`](@ref).
 
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
@@ -1401,7 +1401,7 @@ cholfact!(F::Factor, A::Union{SparseMatrixCSC{T},
     shift = 0.0) where {T<:Real} =
     cholfact!(F, Sparse(A); shift = shift)
 
-function cholfact(A::Sparse; shift::Real=0.0,
+function cholesky(A::Sparse; shift::Real=0.0,
     perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
 
     cm = defaults(common_struct)
@@ -1417,14 +1417,14 @@ function cholfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
+    cholesky(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
 view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used.
-`F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
+`F = cholesky(A)` is most frequently used to solve systems of equations with `F\\b`,
 but also the methods [`diag`](@ref), [`det`](@ref), and
 [`logdet`](@ref) are defined for `F`.
 You can also extract individual factors from `F`, using `F.L`.
@@ -1449,11 +1449,11 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
     Many other functions from CHOLMOD are wrapped but not exported from the
     `Base.SparseArrays.CHOLMOD` module.
 """
-cholfact(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
+cholesky(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
     Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
     Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
-    kws...) where {T<:Real} = cholfact(Sparse(A); kws...)
+    kws...) where {T<:Real} = cholesky(Sparse(A); kws...)
 
 
 function ldlt!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
@@ -1712,7 +1712,7 @@ const RealHermSymComplexHermF64SSL = Union{
     Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
     Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}
 function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
-    F = cholfact(A)
+    F = cholesky(A)
     if issuccess(F)
         return \(F, B)
     else
@@ -1726,7 +1726,7 @@ function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
 end
 function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrMat)
     A = adjA.parent
-    F = cholfact(A)
+    F = cholesky(A)
     if issuccess(F)
         return \(adjoint(F), B)
     else

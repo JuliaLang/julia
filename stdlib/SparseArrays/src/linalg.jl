@@ -990,7 +990,7 @@ function factorize(A::SparseMatrixCSC)
 end
 
 # function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
-#     F = cholfact(A)
+#     F = cholesky(A)
 #     if LinearAlgebra.issuccess(F)
 #         return F
 #     else
@@ -999,7 +999,7 @@ end
 #     end
 # end
 function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
-    F = cholfact(A)
+    F = cholesky(A)
     if LinearAlgebra.issuccess(F)
         return F
     else
@@ -1008,7 +1008,7 @@ function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatri
     end
 end
 
-chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
+chol(A::SparseMatrixCSC) = error("Use cholesky() instead of chol() for sparse matrices.")
 eig(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eig() for sparse matrices.")
 
 function Base.cov(X::SparseMatrixCSC; dims::Int=1, corrected::Bool=true)

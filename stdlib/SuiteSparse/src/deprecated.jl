@@ -87,3 +87,15 @@ end
                          shift = 0.0) where {T<:Real},
                ldlt!(F, A; shift=shift))
 end
+
+# deprecate cholfact to cholesky
+@eval SuiteSparse.CHOLMOD begin
+    import LinearAlgebra: cholfact
+    @deprecate(cholfact(A::Sparse; shift::Real=0.0, perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[]), cholesky(A; shift=shift, perm=perm))
+    @deprecate(cholfact(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
+                        Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
+                        Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+                        Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+                        kws...) where {T<:Real},
+               cholesky(A; kws...))
+end

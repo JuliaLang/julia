@@ -704,9 +704,9 @@ Deprecated or removed
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
   * `lufact`, `schurfact`, `lqfact`, `qrfact`, `ldltfact`, `svdfact`,
-    `bkfact`, `hessfact`, and `eigfact` have respectively been deprecated to
-    `lu`, `schur`, `lq`, `qr`, `ldlt`, `svd`, `bunchkaufman`,
-    `hessenberg`, and `eigen` ([#27159]).
+    `bkfact`, `hessfact`, `eigfact`, and `cholfact` have respectively been
+    deprecated to `lu`, `schur`, `lq`, `qr`, `ldlt`, `svd`, `bunchkaufman`,
+    `hessenberg`, `eigen`, and `cholesky` ([#27159]).
 
   * `lufact!`, `schurfact!`, `lqfact!`, `qrfact!`, `ldltfact!`, `svdfact!`,
     `bkfact!`, `hessfact!`, and `eigfact!` have respectively been deprecated to
