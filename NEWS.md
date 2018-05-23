@@ -227,6 +227,28 @@ This section lists changes that do not have deprecation warnings.
   * `readuntil` now does *not* include the delimiter in its result, matching the
     behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
 
+  * `lu` methods now return decomposition objects such as `LU` rather than
+    tuples of arrays or tuples of numbers ([#27159]).
+
+  * `eig` methods now return decomposition objects such as `Eigen` and
+    `GeneralizedEigen` rather than tuples of arrays or tuples of numbers ([#27159]).
+
+  * `schur` methods now return decomposition objects such as `Schur` and
+    `GeneralizedSchur` rather than tuples of arrays ([#27159]).
+
+  * `lq` methods now return decomposition objects such as `LQ`
+    rather than tuples of arrays ([#27159]).
+
+  * `qr` methods now return decomposition objects such as `QR`, `QRPivoted`,
+    and `QRCompactWY` rather than tuples of arrays ([#27159]).
+
+  * `chol` methods now return decomposition objects such as `Cholesky`,
+    `CholeskyPivoted`, and `SuiteSparse.CHOLMOD.Factor` rather than
+    tuples of arrays or tuples of numbers or numbers ([#27159]).
+
+  * `svd` methods now return decomposition objects such as `SVD` and
+    `GeneralizedSVD` rather than tuples of arrays or tuples of numbers ([#27159]).
+
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
 
@@ -687,6 +709,15 @@ Deprecated or removed
 
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
+
+  * `lufact`, `eigfact`, `schurfact`, `lqfact`, `qrfact`, `bkfact`, `cholfact`,
+    `ldltfact`, `hessfact`, and `svdfact` have respectively been deprecated to
+    `lu`, `eig`, `schur`, `lq`, `qr`, `bk`, `chol`, `ldlt`, `hess`, and `svd` ([#27159]).
+
+  * `lufact!`, `eigfact!`, `schurfact!`, `lqfact!`, `qrfact!`, `cholfact!`,
+    `bkfact!`, `ldltfact!`, `hessfact!`, and `svdfact!` have respectively been
+    deprecated to `lu!`, `eig!`, `schur!`, `lq!`, `qr!`, `chol!`, `bk!`,
+    `ldlt!`, `hess!`, and `svd!` ([#27159]).
 
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.

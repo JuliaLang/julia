@@ -63,11 +63,10 @@ export
 # Functions
     axpy!,
     axpby!,
-    bkfact,
-    bkfact!,
+    bk,
+    bk!,
     chol,
-    cholfact,
-    cholfact!,
+    chol!,
     cond,
     condskeel,
     copyto!,
@@ -81,8 +80,7 @@ export
     diagm,
     dot,
     eig,
-    eigfact,
-    eigfact!,
+    eig!,
     eigmax,
     eigmin,
     eigvals,
@@ -90,8 +88,8 @@ export
     eigvecs,
     factorize,
     givens,
-    hessfact,
-    hessfact!,
+    hess,
+    hess!,
     isdiag,
     ishermitian,
     isposdef,
@@ -102,8 +100,8 @@ export
     istriu,
     kron,
     ldiv!,
-    ldltfact!,
-    ldltfact,
+    ldlt!,
+    ldlt,
     linreg,
     logabsdet,
     logdet,
@@ -112,8 +110,7 @@ export
     lowrankupdate,
     lowrankupdate!,
     lu,
-    lufact,
-    lufact!,
+    lu!,
     lyap,
     mul!,
     lmul!,
@@ -126,19 +123,15 @@ export
     ordschur,
     pinv,
     qr,
-    qrfact!,
-    qrfact,
+    qr!,
     lq,
-    lqfact!,
-    lqfact,
+    lq!,
     rank,
     rdiv!,
     schur,
-    schurfact!,
-    schurfact,
+    schur!,
     svd,
-    svdfact!,
-    svdfact,
+    svd!,
     svdvals!,
     svdvals,
     sylvester,
@@ -255,9 +248,9 @@ end
 Compute `A \\ B` in-place and store the result in `Y`, returning the result.
 
 The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+factorization object (e.g. produced by [`factorize`](@ref) or [`chol`](@ref)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+(although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
 """
@@ -269,9 +262,9 @@ ldiv!(Y, A, B)
 Compute `A \\ B` in-place and overwriting `B` to store the result.
 
 The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+factorization object (e.g. produced by [`factorize`](@ref) or [`chol`](@ref)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+(although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
 """
@@ -284,9 +277,9 @@ ldiv!(A, B)
 Compute `A / B` in-place and overwriting `A` to store the result.
 
 The argument `B` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+factorization object (e.g. produced by [`factorize`](@ref) or [`chol`](@ref)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+(although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `rdiv!` usually also require fine-grained
 control over the factorization of `B`.
 """

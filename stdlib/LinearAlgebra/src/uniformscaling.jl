@@ -360,10 +360,10 @@ function _chol!(J::UniformScaling, uplo)
     UniformScaling(c), info
 end
 
-chol!(J::UniformScaling, uplo) = ((J, info) = _chol!(J, uplo); @assertposdef J info)
+legacychol!(J::UniformScaling, uplo) = ((J, info) = _chol!(J, uplo); @assertposdef J info)
 
 """
-    chol(J::UniformScaling) -> C
+    legacychol(J::UniformScaling) -> C
 
 Compute the square root of a non-negative UniformScaling `J`.
 
@@ -374,7 +374,7 @@ UniformScaling{Float64}
 4.0*I
 ```
 """
-chol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposdef C info)
+legacychol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposdef C info)
 
 
 ## Matrix construction from UniformScaling
