@@ -72,6 +72,7 @@ function edit(path::AbstractString, line::Integer=0)
             systemerror(:edit, ccall((:ShellExecuteW, "shell32"), stdcall, Int,
                                      (Ptr{Cvoid}, Cwstring, Cwstring, Ptr{Cvoid}, Ptr{Cvoid}, Cint),
                                      C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
+            line_unsupported = true
     elseif background
         run(pipeline(cmd, stderr=stderr), wait=false)
     else
@@ -98,7 +99,12 @@ edit(file, line::Integer) = error("could not find source file for function")
 if Sys.iswindows()
     function less(file::AbstractString, line::Integer)
         pager = shell_split(get(ENV, "PAGER", "more"))
-        g = pager[1] == "more" ? "" : "g"
+        if pager[1] == "more"
+            g = ""
+            line -= 1 #Windows' more wants 'lines to skip', not 'line to start at'
+        else
+            g = "g"
+        end
         run(Cmd(`$pager +$(line)$(g) \"$file\"`, windows_verbatim = true))
         nothing
     end
