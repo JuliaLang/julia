@@ -520,7 +520,7 @@ let
             :Random,
             :UUIDs,
             :Future,
-            :Pkg,
+            :OldPkg,
             :LinearAlgebra,
             :IterativeEigensolvers,
             :SparseArrays,
@@ -529,7 +529,7 @@ let
             :Distributed,
             :Test,
             :REPL,
-            :Pkg3,
+            :Pkg,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
