@@ -495,31 +495,36 @@ end
 
 # Test completion of packages
 mkp(p) = ((@assert !isdir(p)); mkpath(p))
-temp_pkg_dir_noinit() do
-    # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
-    # but not <Mod>/ if no corresponding .jl file is found
-    pkg_dir = OldPkg.dir("CompletionFooPackage", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
+push!(LOAD_PATH, OldPkg.dir)
+try
+    temp_pkg_dir_noinit() do
+        # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
+        # but not <Mod>/ if no corresponding .jl file is found
+        pkg_dir = OldPkg.dir("CompletionFooPackage", "src")
+        mkp(pkg_dir)
+        touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
 
-    pkg_dir = OldPkg.dir("CompletionFooPackage2.jl", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
+        pkg_dir = OldPkg.dir("CompletionFooPackage2.jl", "src")
+        mkp(pkg_dir)
+        touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
 
-    touch(OldPkg.dir("CompletionFooPackage3.jl"))
+        touch(OldPkg.dir("CompletionFooPackage3.jl"))
 
-    mkp(OldPkg.dir("CompletionFooPackageNone"))
-    mkp(OldPkg.dir("CompletionFooPackageNone2.jl"))
+        mkp(OldPkg.dir("CompletionFooPackageNone"))
+        mkp(OldPkg.dir("CompletionFooPackageNone2.jl"))
 
-    s = "using Completion"
-    c,r = test_complete(s)
-    @test "CompletionFoo" in c #The module
-    @test "CompletionFooPackage" in c #The package
-    @test "CompletionFooPackage2" in c #The package
-    @test "CompletionFooPackage3" in c #The package
-    @test !("CompletionFooPackageNone" in c) #The package
-    @test !("CompletionFooPackageNone2" in c) #The package
-    @test s[r] == "Completion"
+        s = "using Completion"
+        c,r = test_complete(s)
+        @test "CompletionFoo" in c #The module
+        @test "CompletionFooPackage" in c #The package
+        @test "CompletionFooPackage2" in c #The package
+        @test "CompletionFooPackage3" in c #The package
+        @test !("CompletionFooPackageNone" in c) #The package
+        @test !("CompletionFooPackageNone2" in c) #The package
+        @test s[r] == "Completion"
+    end
+finally
+    @test pop!(LOAD_PATH) == OldPkg.dir
 end
 
 path = joinpath(tempdir(),randstring())

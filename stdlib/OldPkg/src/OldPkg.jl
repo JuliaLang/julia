@@ -86,13 +86,6 @@ custom METADATA setup.
 """
 init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Dir.init(meta,branch)
 
-function __init__()
-    if !Base.creating_sysimg
-        vers = "v$(VERSION.major).$(VERSION.minor)"
-        push!(Base.LOAD_PATH, dir)
-    end
-end
-
 """
     edit()
 
