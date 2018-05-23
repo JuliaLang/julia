@@ -375,7 +375,9 @@ function unescape_string(io, s::AbstractString)
                           c == 'v' ? '\v' :
                           c == 'f' ? '\f' :
                           c == 'r' ? '\r' :
-                          c == 'e' ? '\e' : c)
+                          c == 'e' ? '\e' :
+                          (c == '\\' || c == '"') ? c :
+                          throw(ArgumentError("invalid escape sequence \\$c")))
             end
         else
             print(io, c)
