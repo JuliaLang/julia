@@ -11,15 +11,6 @@ pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
 pushfirst!(LOAD_PATH, @__DIR__)
 Pkg.instantiate()
 
-Pkg.pkg"st --manifest"
-@show LOAD_PATH
-@show DEPOT_PATH
-println(readdir(joinpath(@__DIR__, "deps", "packages")))
-println(readdir(joinpath(@__DIR__, "deps", "packages", "Compat")))
-pkg = Base.identify_package("Compat")
-@show pkg
-
-
 using Documenter
 
 # Include the `build_sysimg` file.
