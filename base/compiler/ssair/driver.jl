@@ -151,7 +151,7 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, linetab
     @timeit "domtree 1" domtree = construct_domtree(cfg)
     ir = let code = Any[nothing for _ = 1:length(code)]
              argtypes = ci.slottypes[1:(nargs+1)]
-            IRCode(code, Any[], lines, flags, cfg, argtypes, mod, meta)
+            IRCode(code, Any[], lines, flags, cfg, linetable, argtypes, mod, meta)
         end
     @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs)
     return ir

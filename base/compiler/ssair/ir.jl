@@ -163,18 +163,19 @@ struct IRCode
     lines::Vector{Int}
     flags::Vector{UInt8}
     argtypes::Vector{Any}
+    linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::Vector{NewNode}
     mod::Module
     meta::Vector{Any}
 
     function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
-            cfg::CFG, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
-        return new(stmts, types, lines, flags, argtypes, cfg, NewNode[], mod, meta)
+            cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
+        return new(stmts, types, lines, flags, argtypes, linetable, cfg, NewNode[], mod, meta)
     end
     function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
             cfg::CFG, new_nodes::Vector{NewNode})
-        return new(stmts, types, lines, flags, ir.argtypes, cfg, new_nodes, ir.mod, ir.meta)
+        return new(stmts, types, lines, flags, ir.argtypes, ir.linetable, cfg, new_nodes, ir.mod, ir.meta)
     end
 end
 
@@ -336,7 +337,22 @@ iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
     end
 end
 
-function scan_ssa_use!(used, @nospecialize(stmt))
+# This function is used from the show code, which may have a different
+# `push!`/`used` type since it's in Base.
+function scan_ssa_use!(push!, used, @nospecialize(stmt))
+    if isa(stmt, SSAValue)
+        push!(used, stmt.id)
+    end
+    for useref in userefs(stmt)
+        val = useref[]
+        if isa(val, SSAValue)
+            push!(used, val.id)
+        end
+    end
+end
+
+# Manually specialized copy of the above with push! === Compiler.push!
+function scan_ssa_use!(used::IdSet, @nospecialize(stmt))
     if isa(stmt, SSAValue)
         push!(used, stmt.id)
     end

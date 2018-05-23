@@ -1216,3 +1216,28 @@ end
     @test summary(BigInt(1):BigInt(10)) == "10-element UnitRange{BigInt}"
     @test summary(Base.OneTo(BigInt(10))) == "10-element Base.OneTo{BigInt}"
 end
+
+# Tests for code_typed linetable annotations
+function compute_annotations(f, types)
+    src = code_typed(f, types)[1][1]
+    ir = Core.Compiler.inflate_ir(src)
+    la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
+    max_loc_method = maximum(length(s) for s in la)
+    join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
+end
+
+g_line() = leaf() # Deliberately not implemented to end up as a leaf after inlining
+
+# Test that separate instances of the same function do not get merged
+function f_line()
+   g_line()
+   g_line()
+   g_line()
+   nothing
+end
+h_line() = f_line()
+@test compute_annotations(h_line, Tuple{}) == """
+    │╻╷ f_line
+    ││╻  g_line
+    ││╻  g_line
+    │"""
