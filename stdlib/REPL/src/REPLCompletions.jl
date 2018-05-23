@@ -5,7 +5,7 @@ module REPLCompletions
 export completions, shell_completions, bslash_completions
 
 using Base.Meta
-using Base: propertynames, coalesce
+using Base: propertynames
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)

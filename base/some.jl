@@ -36,8 +36,18 @@ end
     coalesce(x, y...)
 
 Return the first value in the arguments which is not equal to
-either [`nothing`](@ref) or [`missing`](@ref), or the last argument.
+either [`nothing`](@ref) or [`missing`](@ref), or throw an error
+if no argument matches this condition.
 Unwrap arguments of type [`Some`](@ref).
+
+If both `nothing` and `missing` appear in the arguments, only equal to the one
+which appears first are skipped. Pass `nothing` or `missing` as the first argument
+to ensure that only arguments equal to this value are skipped.
+
+To indicate that `nothing` or `missing` should be returned when all arguments are
+`nothing` or `missing` rather than throwing an error, pass `Some(nothing)` or
+`Some(missing)` as the last argument.
+
 
 # Examples
 
@@ -51,24 +61,42 @@ julia> coalesce(missing, 1)
 julia> coalesce(1, nothing)
 1
 
-julia> coalesce(nothing, nothing) # returns nothing, but not printed in the REPL
+julia> coalesce(nothing, nothing, 1)
+1
+
+julia> coalesce(nothing, nothing)
+ERROR: ArgumentError: coalesce requires that least one argument differs from `nothing` or `missing`.
+Pass `Some(nothing)` as the last argument to force returning `nothing`.
+Stacktrace:
+[...]
 
 julia> coalesce(Some(1))
 1
 
 julia> coalesce(nothing, Some(1))
 1
+
+julia> coalesce(nothing, missing)
+missing
+
+julia> coalesce(missing, Some(missing))
+missing
 ```
 """
 function coalesce end
 
 coalesce(x::Any) = x
-coalesce(x::Some) = x.value
-coalesce(x::Nothing) = nothing
-coalesce(x::Missing) = missing
+_throw_coalesce_error(x) =
+    throw(ArgumentError(
+        """coalesce requires that least one argument differs from `nothing` or `missing`.
+           Pass `Some($x)` as the last argument to force returning `$x`."""))
+coalesce(x::Nothing) = _throw_coalesce_error(x)
+coalesce(x::Missing) = _throw_coalesce_error(x)
 coalesce(x::Any, y...) = x
 coalesce(x::Some, y...) = x.value
 coalesce(x::Union{Nothing, Missing}, y...) = coalesce(y...)
+coalesce(x::Nothing, y::Missing, args...) = missing
+coalesce(x::Missing, y::Nothing, args...) = nothing
 
 """
     notnothing(x)
