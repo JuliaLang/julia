@@ -508,6 +508,13 @@ function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwarg
             pkg.path !== nothing && continue
             urls[pkg.uuid] = String[]
             hashes[pkg.uuid] = SHA1(info["git-tree-sha1"])
+
+            if haskey(info, "repo-url")
+                pkg.repo = Types.GitRepo(
+                    info["repo-url"],
+                    info["repo-rev"],
+                    SHA1(info["git-tree-sha1"]))
+            end
         end
     end
     _, urls_ref = Operations.version_data!(ctx, pkgs)
@@ -515,7 +522,7 @@ function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwarg
         append!(urls[uuid], url)
         urls[uuid] = unique(urls[uuid])
     end
-    new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
+    new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=false)
     new_apply = Operations.apply_versions(ctx, pkgs, hashes, urls)
     Operations.build_versions(ctx, union(new_apply, new_git))
 end
