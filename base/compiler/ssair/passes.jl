@@ -101,11 +101,11 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks, du, phin
     end
 end
 
-function simple_walk(compact::IncrementalCompact, defssa::Union{SSAValue, NewSSAValue, OldSSAValue}, pi_callback=(pi,idx)->nothing)
+function simple_walk(compact::IncrementalCompact, defssa::AnySSAValue, pi_callback=(pi,idx)->nothing)
     while true
         if isa(defssa, OldSSAValue) && already_inserted(compact, defssa)
             rename = compact.ssa_rename[defssa.id]
-            if isa(rename, Union{SSAValue, OldSSAValue, NewSSAValue})
+            if isa(rename, AnySSAValue)
                 defssa = rename
                 continue
             end
@@ -123,7 +123,7 @@ function simple_walk(compact::IncrementalCompact, defssa::Union{SSAValue, NewSSA
             else
                 return def.val
             end
-        elseif isa(def, Union{SSAValue, OldSSAValue, NewSSAValue})
+        elseif isa(def, AnySSAValue)
             pi_callback(def, defssa)
             defssa = def
         elseif isa(def, Union{PhiNode, PhiCNode, Expr, GlobalRef})
@@ -180,9 +180,9 @@ function walk_to_defs(compact, defssa, typeconstraint, visited_phinodes=Any[])
                 if isa(defssa, OldSSAValue) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
-                if isa(val, Union{SSAValue, OldSSAValue, NewSSAValue})
+                if isa(val, AnySSAValue)
                     new_def, new_constraint = simple_walk_constraint(compact, val, typeconstraint)
-                    if isa(new_def, Union{SSAValue, OldSSAValue, NewSSAValue})
+                    if isa(new_def, AnySSAValue)
                         if !(new_def in visited)
                             push!(worklist, (new_def, new_constraint))
                         end
@@ -240,13 +240,13 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
     maybe_undef = false
     for leaf in leaves
         leaf_key = leaf
-        if isa(leaf, Union{SSAValue, OldSSAValue, NewSSAValue})
+        if isa(leaf, AnySSAValue)
             if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
                 leaf = compact.ssa_rename[leaf.id]
-                if isa(leaf, Union{SSAValue, OldSSAValue, NewSSAValue})
+                if isa(leaf, AnySSAValue)
                     leaf = simple_walk(compact, leaf)
                 end
-                if isa(leaf, Union{SSAValue, OldSSAValue, NewSSAValue})
+                if isa(leaf, AnySSAValue)
                     def = compact[leaf]
                 else
                     def = leaf
@@ -338,8 +338,6 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
 end
 
 make_MaybeUndef(typ) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
-
-const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 
 function lift_comparison!(compact::IncrementalCompact, idx::Int,
         @nospecialize(c1), @nospecialize(c2), stmt::Expr,
