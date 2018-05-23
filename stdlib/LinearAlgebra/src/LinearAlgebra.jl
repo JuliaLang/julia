@@ -82,7 +82,7 @@ export
     dot,
     eig,
     eigen,
-    eigfact!,
+    eigen!,
     eigmax,
     eigmin,
     eigvals,

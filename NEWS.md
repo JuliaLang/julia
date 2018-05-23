@@ -709,9 +709,9 @@ Deprecated or removed
     `hessenberg`, and `eigen` ([#27159]).
 
   * `lufact!`, `schurfact!`, `lqfact!`, `qrfact!`, `ldltfact!`, `svdfact!`,
-    `bkfact!`, and `hessfact!` have respectively been deprecated to
+    `bkfact!`, `hessfact!`, and `eigfact!` have respectively been deprecated to
     `lu!`, `schur!`, `lq!`, `qr!`, `ldlt!`, `svd!`, `bunchkaufman!`,
-    and `hessenberg!` ([#27159]).
+    `hessenberg!`, and `eigen!` ([#27159]).
 
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.

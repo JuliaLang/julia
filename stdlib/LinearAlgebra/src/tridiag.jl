@@ -183,18 +183,18 @@ end
 
 (\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
 
-eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigen(A::SymTridiagonal{T}) where T = eigfact!(copy_oftype(A, eigtype(T)))
+eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
+eigen(A::SymTridiagonal{T}) where T = eigen!(copy_oftype(A, eigtype(T)))
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
+eigen!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
 eigen(A::SymTridiagonal{T}, irange::UnitRange) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), irange)
+    eigen!(copy_oftype(A, eigtype(T)), irange)
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
+eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
 eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), vl, vu)
+    eigen!(copy_oftype(A, eigtype(T)), vl, vu)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
 eigvals(A::SymTridiagonal{T}) where T = eigvals!(copy_oftype(A, eigtype(T)))

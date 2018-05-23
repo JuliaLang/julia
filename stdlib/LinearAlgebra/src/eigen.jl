@@ -35,15 +35,15 @@ end
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
 """
-    eigfact!(A, [B])
+    eigen!(A, [B])
 
 Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
 """
-function eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasReal
+function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasReal
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    issymmetric(A) && return eigfact!(Symmetric(A))
+    issymmetric(A) && return eigen!(Symmetric(A))
     A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
     iszero(WI) && return Eigen(WR, VR)
     evec = zeros(Complex{T}, n, n)
@@ -63,10 +63,10 @@ function eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) whe
     return Eigen(complex.(WR, WI), evec)
 end
 
-function eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasComplex
+function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasComplex
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    ishermitian(A) && return eigfact!(Hermitian(A))
+    ishermitian(A) && return eigen!(Hermitian(A))
     return Eigen(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]...)
 end
 
@@ -122,7 +122,7 @@ true
 function eigen(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T
     AA = copy_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA), permute = permute, scale = scale)
-    return eigfact!(AA, permute = permute, scale = scale)
+    return eigen!(AA, permute = permute, scale = scale)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
@@ -340,8 +340,8 @@ inv(A::Eigen) = A.vectors * inv(Diagonal(A.values)) / A.vectors
 det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
-function eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal
-    issymmetric(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
+function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal
+    issymmetric(A) && isposdef(B) && return eigen!(Symmetric(A), Symmetric(B))
     n = size(A, 1)
     alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     iszero(alphai) && return GeneralizedEigen(alphar ./ beta, vr)
@@ -363,8 +363,8 @@ function eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal
     return GeneralizedEigen(complex.(alphar, alphai)./beta, vecs)
 end
 
-function eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasComplex
-    ishermitian(A) && isposdef(B) && return eigfact!(Hermitian(A), Hermitian(B))
+function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasComplex
+    ishermitian(A) && isposdef(B) && return eigen!(Hermitian(A), Hermitian(B))
     alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     return GeneralizedEigen(alpha./beta, vr)
 end
@@ -411,7 +411,7 @@ true
 """
 function eigen(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA),TB)
-    return eigfact!(copy_oftype(A, S), copy_oftype(B, S))
+    return eigen!(copy_oftype(A, S), copy_oftype(B, S))
 end
 
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))

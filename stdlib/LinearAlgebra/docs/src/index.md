@@ -338,7 +338,7 @@ LinearAlgebra.eigmax
 LinearAlgebra.eigmin
 LinearAlgebra.eigvecs
 LinearAlgebra.eigen
-LinearAlgebra.eigfact!
+LinearAlgebra.eigen!
 LinearAlgebra.hessenberg
 LinearAlgebra.hessenberg!
 LinearAlgebra.schur!
