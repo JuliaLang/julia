@@ -28,12 +28,12 @@ aimg  = randn(n,n)/2
 
         α = rand(eltya)
         β = rand(eltya)
-        eab = eig(α,β)
-        @test eab[1] == eigvals(fill(α,1,1),fill(β,1,1))
-        @test eab[2] == eigvecs(fill(α,1,1),fill(β,1,1))
+        eab = eigen(α,β)
+        @test eab.values == eigvals(fill(α,1,1),fill(β,1,1))
+        @test eab.vectors == eigvecs(fill(α,1,1),fill(β,1,1))
 
         @testset "non-symmetric eigen decomposition" begin
-            d, v = eig(a)
+            d, v = eigen(a)
             for i in 1:size(a,2)
                 @test a*v[:,i] ≈ d[i]*v[:,i]
             end
@@ -70,7 +70,7 @@ aimg  = randn(n,n)/2
             @test eigvecs(f) === f.vectors
             @test_throws ErrorException f.Z
 
-            d,v = eig(asym_sg, a_sg'a_sg)
+            d,v = eigen(asym_sg, a_sg'a_sg)
             @test d == f.values
             @test v == f.vectors
         end
@@ -89,7 +89,7 @@ aimg  = randn(n,n)/2
             @test eigvecs(a1_nsg, a2_nsg) == f.vectors
             @test_throws ErrorException f.Z
 
-            d,v = eig(a1_nsg, a2_nsg)
+            d,v = eigen(a1_nsg, a2_nsg)
             @test d == f.values
             @test v == f.vectors
         end
@@ -98,11 +98,11 @@ end
 
 @testset "eigenvalue computations with NaNs" begin
     for eltya in (NaN16, NaN32, NaN)
-        @test_throws(ArgumentError, eig(fill(eltya, 1, 1)))
-        @test_throws(ArgumentError, eig(fill(eltya, 2, 2)))
+        @test_throws(ArgumentError, eigen(fill(eltya, 1, 1)))
+        @test_throws(ArgumentError, eigen(fill(eltya, 2, 2)))
         test_matrix = rand(typeof(eltya),3,3)
         test_matrix[2,2] = eltya
-        @test_throws(ArgumentError, eig(test_matrix))
+        @test_throws(ArgumentError, eigen(test_matrix))
     end
 end
 

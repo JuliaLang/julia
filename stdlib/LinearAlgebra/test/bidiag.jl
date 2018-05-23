@@ -231,8 +231,8 @@ srand(1)
 
         @testset "Eigensystems" begin
             if relty <: AbstractFloat
-                d1, v1 = eig(T)
-                d2, v2 = eig(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
+                d1, v1 = eigen(T)
+                d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
                 @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])

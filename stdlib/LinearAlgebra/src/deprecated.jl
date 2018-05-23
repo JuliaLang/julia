@@ -1410,3 +1410,44 @@ export eigfact!
 @deprecate(cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
 @deprecate(cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
 @deprecate(cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+
+# deprecate eig in favor of eigen and destructuring via iteration
+# deprecate eig(...) in favor of eigfact and factorization destructuring
+export eig
+function eig(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+    depwarn(string("`eig(A[, permute, scale])` has been deprecated in favor of ",
+        "`eigen(A[, permute, scale])`. Whereas `eig(A[, permute, scale])` ",
+        "returns a tuple of arrays, `eigen(A[, permute, scale])` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigen(A[, permute, scale])...,)`. But going forward, consider ",
+        "using the direct result of `eigen(A[, permute, scale])` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigen(A[, permute, scale])`) ",
+        "or as an `Eigen` object (`X = eigen(A[, permute, scale])`)."), :eig)
+    return (eigen(A; permute=permute, scale=scale)...,)
+end
+function eig(A::AbstractMatrix, args...)
+    depwarn(string("`eig(A, args...)` has been deprecated in favor of ",
+        "`eigen(A, args...)`. Whereas `eig(A, args....)` ",
+        "returns a tuple of arrays, `eigen(A, args...)` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigen(A, args...)...,)`. But going forward, consider ",
+        "using the direct result of `eigen(A, args...)` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigen(A, args...)`) ",
+        "or as an `Eigen` object (`X = eigen(A, args...)`)."), :eig)
+    return (eigen(A, args...)...,)
+end
+eig(A::AbstractMatrix, B::AbstractMatrix) = _geneig(A, B)
+eig(A::Number, B::Number) = _geneig(A, B)
+function _geneig(A, B)
+    depwarn(string("`eig(A::AbstractMatrix, B::AbstractMatrix)` and ",
+    "`eig(A::Number, B::Number)` have been deprecated in favor of ",
+    "`eigen(A, B)`. Whereas the former each return a tuple of arrays, ",
+    "the latter returns a `GeneralizedEigen` object. So for a direct ",
+    "replacement, use `(eigen(A, B)...,)`. But going forward, consider ",
+    "using the direct result of `eigen(A, B)` instead, either ",
+    "destructured into its components (`vals, vecs = eigen(A, B)`), ",
+    "or as a `GeneralizedEigen` object (`X = eigen(A, B)`)."), :eig)
+    return (eigen(A, B)...,)
+end

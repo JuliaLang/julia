@@ -1009,7 +1009,7 @@ function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatri
 end
 
 chol(A::SparseMatrixCSC) = error("Use cholesky() instead of chol() for sparse matrices.")
-eig(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eig() for sparse matrices.")
+eigen(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eigen() for sparse matrices.")
 
 function Base.cov(X::SparseMatrixCSC; dims::Int=1, corrected::Bool=true)
     vardim = dims

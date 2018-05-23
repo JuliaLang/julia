@@ -243,7 +243,7 @@ end
                         w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, b, a)
                         evecs = LAPACK.stein!(b, a, w)
 
-                        (e, v) = eig(SymTridiagonal(b, a))
+                        (e, v) = eigen(SymTridiagonal(b, a))
                         @test e ≈ w
                         test_approx_eq_vecs(v, evecs)
                     end
@@ -266,10 +266,10 @@ end
                     end
                     @testset "eigenvalues/eigenvectors of symmetric tridiagonal" begin
                         if elty === Float32 || elty === Float64
-                            DT, VT = @inferred eig(A)
-                            @inferred eig(A, 2:4)
-                            @inferred eig(A, 1.0, 2.0)
-                            D, Vecs = eig(fA)
+                            DT, VT = @inferred eigen(A)
+                            @inferred eigen(A, 2:4)
+                            @inferred eigen(A, 1.0, 2.0)
+                            D, Vecs = eigen(fA)
                             @test DT ≈ D
                             @test abs.(VT'Vecs) ≈ Matrix(elty(1)I, n, n)
                             test_approx_eq_modphase(eigvecs(A), eigvecs(fA))

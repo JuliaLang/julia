@@ -713,6 +713,21 @@ Deprecated or removed
     `lu!`, `schur!`, `lq!`, `qr!`, `ldlt!`, `svd!`, `bunchkaufman!`,
     `hessenberg!`, and `eigen!` ([#27159]).
 
+  * `eig(A[, args...])` has been deprecated in favor of `eigen(A[, args...])`.
+    Whereas the former returns a tuple of arrays, the latter returns an `Eigen` object.
+    So for a direct replacement, use `(eigen(A[, args...])...,)`. But going forward,
+    consider using the direct result of `eigen(A[, args...])` instead, either
+    destructured into its components (`vals, vecs = eigen(A[, args...])`) or
+    as an `Eigen` object (`X = eigen(A[, args...])`) ([#26997], [#27159], [#27212]).
+
+  * `eig(A::AbstractMatrix, B::AbstractMatrix)` and `eig(A::Number, B::Number)`
+    have been deprecated in favor of `eigen(A, B)`. Whereas the former each return
+    a tuple of arrays, the latter returns a `GeneralizedEigen` object. So for a direct
+    replacement, use `(eigen(A, B)...,)`. But going forward, consider using the
+    direct result of `eigen(A, B)` instead, either destructured into its components
+    (`vals, vecs = eigen(A, B)`), or as a `GeneralizedEigen` object
+    (`X = eigen(A, B)`) ([#26997], [#27159], [#27212]).
+
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.
     Instead, reshape the array or add trailing indices so the dimensionality and number of indices

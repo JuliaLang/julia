@@ -26,7 +26,7 @@ aimg  = randn(n,n)/2
                             view(apd, 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 
-        d,v = eig(a)
+        d,v = eigen(a)
         f   = schur(a)
         @test f.vectors*f.Schur*f.vectors' ≈ a
         @test sort(real(f.values)) ≈ sort(real(d))
