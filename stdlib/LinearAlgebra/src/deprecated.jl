@@ -333,7 +333,7 @@ end
 # (3) stdlib/LinearAlgebra/src/lq.jl
 
 
-@deprecate chol!(x::Number, uplo) chol(x) false
+@deprecate chol!(x::Number, uplo) sqrt(x) false
 
 ### deprecations for lazier, less jazzy linalg transition in the next several blocks ###
 
@@ -1410,6 +1410,11 @@ export eigfact!
 @deprecate(cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
 @deprecate(cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
 @deprecate(cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+
+# deprecate chol to cholesky with getproperty
+@deprecate(chol(A::RealHermSymComplexHerm), cholesky(A).U)
+@deprecate(chol(A::AbstractMatrix), cholesky(A).U)
+@deprecate(chol(x::Number, args...), sqrt(A))
 
 # deprecate eig in favor of eigen and destructuring via iteration
 # deprecate eig(...) in favor of eigfact and factorization destructuring

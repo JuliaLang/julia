@@ -53,7 +53,7 @@ function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{B
 end
 
 # make a copy that allow inplace Cholesky factorization
-@inline choltype(A) = promote_type(typeof(chol(one(eltype(A)))), Float32)
+@inline choltype(A) = promote_type(typeof(sqrt(one(eltype(A)))), Float32)
 @inline cholcopy(A) = copy_oftype(A, choltype(A))
 
 # _chol!. Internal methods for calling unpivoted Cholesky
@@ -144,62 +144,7 @@ function chol!(A::StridedMatrix)
     @assertposdef C info
 end
 
-
-
-# chol. Non-destructive methods for computing Cholesky factor of a real symmetric or
-# Hermitian matrix. Promotes elements to a type that is stable under square roots.
-function chol(A::RealHermSymComplexHerm)
-    AA = similar(A, choltype(A), size(A))
-    if A.uplo == 'U'
-        copyto!(AA, A.data)
-    else
-        adjoint!(AA, A.data)
-    end
-    chol!(Hermitian(AA, :U))
-end
-
 ## for StridedMatrices, check that matrix is symmetric/Hermitian
-"""
-    chol(A) -> U
-
-Compute the Cholesky factorization of a positive definite matrix `A`
-and return the [`UpperTriangular`](@ref) matrix `U` such that `A = U'U`.
-
-# Examples
-```jldoctest
-julia> A = [1. 2.; 2. 50.]
-2×2 Array{Float64,2}:
- 1.0   2.0
- 2.0  50.0
-
-julia> U = chol(A)
-2×2 UpperTriangular{Float64,Array{Float64,2}}:
- 1.0  2.0
-  ⋅   6.78233
-
-julia> U'U
-2×2 Array{Float64,2}:
- 1.0   2.0
- 2.0  50.0
-```
-"""
-chol(A::AbstractMatrix) = chol!(cholcopy(A))
-
-## Numbers
-"""
-    chol(x::Number) -> y
-
-Compute the square root of a non-negative number `x`.
-
-# Examples
-```jldoctest
-julia> chol(16)
-4.0
-```
-"""
-chol(x::Number, args...) = ((C, info) = _chol!(x, nothing); @assertposdef C info)
-
-
 
 # cholesky!. Destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
