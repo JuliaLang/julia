@@ -317,12 +317,13 @@ size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
+    info     = getfield(C, :info)
     if d == :U
-        return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return @assertposdef UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors')) info
     elseif d == :L
-        return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return @assertposdef LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors')) info
     elseif d == :UL
-        return Symbol(Cuplo) == :U ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors)
+        return @assertposdef (Symbol(Cuplo) == :U ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors)) info
     else
         return getfield(C, d)
     end
@@ -334,12 +335,16 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d == :U
+        chkfullrank(C)
         return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :L
+        chkfullrank(C)
         return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :p
+        chkfullrank(C)
         return getfield(C, :piv)
     elseif d == :P
+        chkfullrank(C)
         n = size(C, 1)
         P = zeros(T, n, n)
         for i = 1:n
