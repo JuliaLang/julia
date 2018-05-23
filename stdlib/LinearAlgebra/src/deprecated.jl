@@ -8,12 +8,12 @@ using Base: @deprecate, depwarn
 
 # PR #22188
 export cholfact, cholfact!
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val(false))
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val(false))
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholfact(Hermitian(A, uplo))
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val(true), tol = tol)
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val(true), tol = tol)
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholesky!(Hermitian(A, uplo), Val(false))
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholesky!(Hermitian(A, uplo))
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholesky(Hermitian(A, uplo), Val(false))
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholesky(Hermitian(A, uplo))
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholesky!(Hermitian(A, uplo), Val(true), tol = tol)
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholesky(Hermitian(A, uplo), Val(true), tol = tol)
 
 # PR #22245
 @deprecate isposdef(A::AbstractMatrix, UL::Symbol) isposdef(Hermitian(A, UL))
@@ -23,31 +23,31 @@ export cholfact, cholfact!
 export bkfact, bkfact!
 function bkfact(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A), rook::Bool = false)
     depwarn(string("`bkfact` with uplo and symmetric arguments is deprecated, ",
-        "use `bkfact($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
+        "use `bunchkaufman($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
         :bkfact)
-    return bkfact(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
+    return bunchkaufman(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
 end
 function bkfact!(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A), rook::Bool = false)
     depwarn(string("`bkfact!` with uplo and symmetric arguments is deprecated, ",
-        "use `bkfact!($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
+        "use `bunchkaufman!($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
         :bkfact!)
-    return bkfact!(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
+    return bunchkaufman!(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
 end
 
 export lufact!
 @deprecate sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatrix} sqrtm(A, Val(realmatrix))
-@deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lufact(A, Val(false))
-@deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lufact(A, Val(true))
-@deprecate lufact!(A::AbstractMatrix, ::Type{Val{false}}) lufact!(A, Val(false))
-@deprecate lufact!(A::AbstractMatrix, ::Type{Val{true}}) lufact!(A, Val(true))
-@deprecate qrfact(A::AbstractMatrix, ::Type{Val{false}}) qrfact(A, Val(false))
-@deprecate qrfact(A::AbstractMatrix, ::Type{Val{true}}) qrfact(A, Val(true))
-@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{false}}) qrfact!(A, Val(false))
-@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{true}}) qrfact!(A, Val(true))
-@deprecate cholfact(A::AbstractMatrix, ::Type{Val{false}}) cholfact(A, Val(false))
-@deprecate cholfact(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact(A, Val(true); tol = tol)
-@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{false}}) cholfact!(A, Val(false))
-@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact!(A, Val(true); tol = tol)
+@deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lu(A, Val(false))
+@deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lu(A, Val(true))
+@deprecate lufact!(A::AbstractMatrix, ::Type{Val{false}}) lu!(A, Val(false))
+@deprecate lufact!(A::AbstractMatrix, ::Type{Val{true}}) lu!(A, Val(true))
+@deprecate qrfact(A::AbstractMatrix, ::Type{Val{false}}) qr(A, Val(false))
+@deprecate qrfact(A::AbstractMatrix, ::Type{Val{true}}) qr(A, Val(true))
+@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{false}}) qr!(A, Val(false))
+@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{true}}) qr!(A, Val(true))
+@deprecate cholfact(A::AbstractMatrix, ::Type{Val{false}}) cholesky(A, Val(false))
+@deprecate cholfact(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholesky(A, Val(true); tol = tol)
+@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{false}}) cholesky!(A, Val(false))
+@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholesky!(A, Val(true); tol = tol)
 
 # PR #22703
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
