@@ -703,8 +703,9 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
-  * `lufact`, `schurfact`, `lqfact`, `qrfact`, `ldltfact`, and `svdfact` have
-    respectively been deprecated to `lu`, `schur`, `lq`, `qr`, `ldlt`, and `svd` ([#27159]).
+  * `lufact`, `schurfact`, `lqfact`, `qrfact`, `ldltfact`, `svdfact`,
+    and `bkfact` have respectively been deprecated to `lu`, `schur`, `lq`,
+    `qr`, `ldlt`, `svd`, and `bunchkaufman` ([#27159]).
 
   * `lufact!`, `schurfact!`, `lqfact!`, `qrfact!`, `ldltfact!`, and `svdfact!`
     have respectively been deprecated to `lu!`, `schur!`, `lq!`, `qr!`, `ldlt!`,

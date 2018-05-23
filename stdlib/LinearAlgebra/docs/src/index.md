@@ -329,7 +329,7 @@ LinearAlgebra.QRCompactWY
 LinearAlgebra.QRPivoted
 LinearAlgebra.lq!
 LinearAlgebra.lq
-LinearAlgebra.bkfact
+LinearAlgebra.bunchkaufman
 LinearAlgebra.bkfact!
 LinearAlgebra.eig
 LinearAlgebra.eigvals

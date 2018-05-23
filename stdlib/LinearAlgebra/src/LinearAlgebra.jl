@@ -63,7 +63,7 @@ export
 # Functions
     axpy!,
     axpby!,
-    bkfact,
+    bunchkaufman,
     bkfact!,
     chol,
     cholfact,
