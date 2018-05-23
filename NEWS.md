@@ -1196,6 +1196,8 @@ Deprecated or removed
 
   * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.
 
+  * `setrounding` has been deprecated for `Float32` and `Float64`, as the behaviour was too unreliable ([#26935]).
+
 Command-line option changes
 ---------------------------
 
@@ -1508,3 +1510,4 @@ Command-line option changes
 [#26670]: https://github.com/JuliaLang/julia/issues/26670
 [#26775]: https://github.com/JuliaLang/julia/issues/26775
 [#26932]: https://github.com/JuliaLang/julia/issues/26932
+[#26935]: https://github.com/JuliaLang/julia/issues/26935
