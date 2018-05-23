@@ -4,7 +4,7 @@
 # Cholesky Factorization #
 ##########################
 
-# The dispatch structure in the chol!, chol, cholesky, and cholesky! methods is a bit
+# The dispatch structure in the chol!, cholesky, and cholesky! methods is a bit
 # complicated and some explanation is therefore provided in the following
 #
 # In the methods below, LAPACK is called when possible, i.e. StridedMatrices with Float32,
@@ -20,7 +20,7 @@
 
 # The internal structure is as follows
 # - _chol! returns the factor and info without checking positive definiteness
-# - chol/chol! returns the factor and checks for positive definiteness
+# - chol! returns the factor and checks for positive definiteness
 # - cholesky/cholesky! returns Cholesky without checking positive definiteness
 
 # FixMe? The dispatch below seems overly complicated. One simplification could be to

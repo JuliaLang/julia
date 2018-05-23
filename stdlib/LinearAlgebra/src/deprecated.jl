@@ -1415,6 +1415,7 @@ export eigfact!
 @deprecate(chol(A::RealHermSymComplexHerm), cholesky(A).U)
 @deprecate(chol(A::AbstractMatrix), cholesky(A).U)
 @deprecate(chol(x::Number, args...), sqrt(A))
+@deprecate(chol(J::UniformScaling), UniformScaling(sqrt(J.λ)))
 
 # deprecate eig in favor of eigen and destructuring via iteration
 # deprecate eig(...) in favor of eigfact and factorization destructuring
