@@ -237,14 +237,14 @@ Stores the given string `substr` as a SubstitutionString, for use in regular exp
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
 ```jldoctest
-julia> Base.SubstitutionString("Hello \\\\g<name>, it's \\\\1")
+julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
 s"Hello \\\\g<name>, it's \\\\1"
 
 julia> subst = s"Hello \\g<name>, it's \\1"
 s"Hello \\\\g<name>, it's \\\\1"
 
 julia> typeof(subst)
-Base.SubstitutionString{String}
+SubstitutionString{String}
 
 ```
 

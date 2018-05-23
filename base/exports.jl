@@ -84,6 +84,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    SubstitutionString,
     Timer,
     UnitRange,
     Val,
