@@ -855,7 +855,7 @@ current `include` path but does not use it to search for files (see help for `in
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
-When searching for files, `require` first looks for package code under  in the global array
+When searching for files, `require` first looks for package code in the global array
 `LOAD_PATH`. `require` is case-sensitive on all platforms, including those with
 case-insensitive filesystems like macOS and Windows.
 
