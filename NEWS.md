@@ -228,19 +228,19 @@ This section lists changes that do not have deprecation warnings.
     behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
 
   * `lu` methods now return decomposition objects such as `LU` rather than
-    tuples of arrays or tuples of numbers ([#27159]).
+    tuples of arrays or tuples of numbers ([#26997], [#27159], [#27212]).
 
   * `schur` methods now return decomposition objects such as `Schur` and
-    `GeneralizedSchur` rather than tuples of arrays ([#27159]).
+    `GeneralizedSchur` rather than tuples of arrays ([#26997], [#27159], [#27212]).
 
   * `lq` methods now return decomposition objects such as `LQ`
-    rather than tuples of arrays ([#27159]).
+    rather than tuples of arrays ([#26997], [#27159], [#27212]).
 
   * `qr` methods now return decomposition objects such as `QR`, `QRPivoted`,
-    and `QRCompactWY` rather than tuples of arrays ([#27159]).
+    and `QRCompactWY` rather than tuples of arrays ([#26997], [#27159], [#27212]).
 
   * `svd` methods now return decomposition objects such as `SVD` and
-    `GeneralizedSVD` rather than tuples of arrays or tuples of numbers ([#27159]).
+    `GeneralizedSVD` rather than tuples of arrays or tuples of numbers ([#26997], [#27159], [#27212]).
 
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
@@ -706,12 +706,12 @@ Deprecated or removed
   * `lufact`, `schurfact`, `lqfact`, `qrfact`, `ldltfact`, `svdfact`,
     `bkfact`, `hessfact`, `eigfact`, and `cholfact` have respectively been
     deprecated to `lu`, `schur`, `lq`, `qr`, `ldlt`, `svd`, `bunchkaufman`,
-    `hessenberg`, `eigen`, and `cholesky` ([#27159]).
+    `hessenberg`, `eigen`, and `cholesky` ([#26997], [#27159], [#27212]).
 
   * `lufact!`, `schurfact!`, `lqfact!`, `qrfact!`, `ldltfact!`, `svdfact!`,
     `bkfact!`, `hessfact!`, and `eigfact!` have respectively been deprecated to
     `lu!`, `schur!`, `lq!`, `qr!`, `ldlt!`, `svd!`, `bunchkaufman!`,
-    `hessenberg!`, and `eigen!` ([#27159]).
+    `hessenberg!`, and `eigen!` ([#26997], [#27159], [#27212]).
 
   * `eig(A[, args...])` has been deprecated in favor of `eigen(A[, args...])`.
     Whereas the former returns a tuple of arrays, the latter returns an `Eigen` object.
