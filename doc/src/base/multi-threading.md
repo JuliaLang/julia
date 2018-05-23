@@ -1,4 +1,3 @@
-
 # Multi-Threading
 
 This experimental interface supports Julia's multi-threading capabilities. Types and functions
