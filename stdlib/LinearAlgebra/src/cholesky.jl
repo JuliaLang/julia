@@ -4,7 +4,7 @@
 # Cholesky Factorization #
 ##########################
 
-# The dispatch structure in the chol!, cholesky, and cholesky! methods is a bit
+# The dispatch structure in the cholesky, and cholesky! methods is a bit
 # complicated and some explanation is therefore provided in the following
 #
 # In the methods below, LAPACK is called when possible, i.e. StridedMatrices with Float32,
@@ -20,7 +20,6 @@
 
 # The internal structure is as follows
 # - _chol! returns the factor and info without checking positive definiteness
-# - chol! returns the factor and checks for positive definiteness
 # - cholesky/cholesky! returns Cholesky without checking positive definiteness
 
 # FixMe? The dispatch below seems overly complicated. One simplification could be to
@@ -130,18 +129,6 @@ function _chol!(x::Number, uplo)
     rxr = sqrt(abs(rx))
     rval =  convert(promote_type(typeof(x), typeof(rxr)), rxr)
     rx == abs(x) ? (rval, convert(BlasInt, 0)) : (rval, convert(BlasInt, 1))
-end
-
-# chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
-# matrix
-function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
-    C, info = _chol!(A.uplo == 'U' ? A.data : LinearAlgebra.copytri!(A.data, 'L', true), UpperTriangular)
-    @assertposdef C info
-end
-function chol!(A::StridedMatrix)
-    checksquare(A)
-    C, info = _chol!(A)
-    @assertposdef C info
 end
 
 ## for StridedMatrices, check that matrix is symmetric/Hermitian

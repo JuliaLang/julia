@@ -1411,11 +1411,13 @@ export eigfact!
 @deprecate(cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
 @deprecate(cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
 
-# deprecate chol to cholesky with getproperty
+# deprecate chol[!] to cholesky[!] with getproperty
 @deprecate(chol(A::RealHermSymComplexHerm), cholesky(A).U)
 @deprecate(chol(A::AbstractMatrix), cholesky(A).U)
 @deprecate(chol(x::Number, args...), sqrt(A))
 @deprecate(chol(J::UniformScaling), UniformScaling(sqrt(J.λ)))
+@deprecate(chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}), cholesky!(A).U, false)
+@deprecate(chol!(A::StridedMatrix), cholesky!(A).U, false)
 
 # deprecate eig in favor of eigen and destructuring via iteration
 # deprecate eig(...) in favor of eigfact and factorization destructuring
