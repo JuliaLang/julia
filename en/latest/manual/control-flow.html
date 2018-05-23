@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Control Flow · The Julia Language</title><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-28835595-6', 'auto');
+ga('send', 'pageview');
+</script><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link href="../assets/documenter.css" rel="stylesheet" type="text/css"/><link href="../assets/julia-manual.css" rel="stylesheet" type="text/css"/></head><body><nav class="toc"><a href="../index.html"><img class="logo" src="../assets/logo.png" alt="The Julia Language logo"/></a><h1>The Julia Language</h1><select id="version-selector" onChange="window.location.href=this.value" style="visibility: hidden"></select><form class="search" id="search-form" action="../search.html"><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../index.html">Home</a></li><li><span class="toctext">Manual</span><ul><li><a class="toctext" href="getting-started.html">Getting Started</a></li><li><a class="toctext" href="variables.html">Variables</a></li><li><a class="toctext" href="integers-and-floating-point-numbers.html">Integers and Floating-Point Numbers</a></li><li><a class="toctext" href="mathematical-operations.html">Mathematical Operations and Elementary Functions</a></li><li><a class="toctext" href="complex-and-rational-numbers.html">Complex and Rational Numbers</a></li><li><a class="toctext" href="strings.html">Strings</a></li><li><a class="toctext" href="functions.html">Functions</a></li><li class="current"><a class="toctext" href="control-flow.html">Control Flow</a><ul class="internal"><li><a class="toctext" href="#man-compound-expressions-1">Compound Expressions</a></li><li><a class="toctext" href="#man-conditional-evaluation-1">Conditional Evaluation</a></li><li><a class="toctext" href="#Short-Circuit-Evaluation-1">Short-Circuit Evaluation</a></li><li><a class="toctext" href="#man-loops-1">Repeated Evaluation: Loops</a></li><li><a class="toctext" href="#Exception-Handling-1">Exception Handling</a></li><li><a class="toctext" href="#man-tasks-1">Tasks (aka Coroutines)</a></li></ul></li><li><a class="toctext" href="variables-and-scoping.html">Scope of Variables</a></li><li><a class="toctext" href="types.html">Types</a></li><li><a class="toctext" href="methods.html">Methods</a></li><li><a class="toctext" href="constructors.html">Constructors</a></li><li><a class="toctext" href="conversion-and-promotion.html">Conversion and Promotion</a></li><li><a class="toctext" href="interfaces.html">Interfaces</a></li><li><a class="toctext" href="modules.html">Modules</a></li><li><a class="toctext" href="documentation.html">Documentation</a></li><li><a class="toctext" href="metaprogramming.html">Metaprogramming</a></li><li><a class="toctext" href="arrays.html">Multi-dimensional Arrays</a></li><li><a class="toctext" href="missing.html">Missing Values</a></li><li><a class="toctext" href="networking-and-streams.html">Networking and Streams</a></li><li><a class="toctext" href="parallel-computing.html">Parallel Computing</a></li><li><a class="toctext" href="running-external-programs.html">Running External Programs</a></li><li><a class="toctext" href="calling-c-and-fortran-code.html">Calling C and Fortran Code</a></li><li><a class="toctext" href="handling-operating-system-variation.html">Handling Operating System Variation</a></li><li><a class="toctext" href="environment-variables.html">Environment Variables</a></li><li><a class="toctext" href="embedding.html">Embedding Julia</a></li><li><a class="toctext" href="packages.html">Packages</a></li><li><a class="toctext" href="code-loading.html">Code Loading</a></li><li><a class="toctext" href="profile.html">Profiling</a></li><li><a class="toctext" href="stacktraces.html">Stack Traces</a></li><li><a class="toctext" href="performance-tips.html">Performance Tips</a></li><li><a class="toctext" href="workflow-tips.html">Workflow Tips</a></li><li><a class="toctext" href="style-guide.html">Style Guide</a></li><li><a class="toctext" href="faq.html">Frequently Asked Questions</a></li><li><a class="toctext" href="noteworthy-differences.html">Noteworthy Differences from other Languages</a></li><li><a class="toctext" href="unicode-input.html">Unicode Input</a></li></ul></li><li><span class="toctext">Base</span><ul><li><a class="toctext" href="../base/base.html">Essentials</a></li><li><a class="toctext" href="../base/collections.html">Collections and Data Structures</a></li><li><a class="toctext" href="../base/math.html">Mathematics</a></li><li><a class="toctext" href="../base/numbers.html">Numbers</a></li><li><a class="toctext" href="../base/strings.html">Strings</a></li><li><a class="toctext" href="../base/arrays.html">Arrays</a></li><li><a class="toctext" href="../base/parallel.html">Tasks</a></li><li><a class="toctext" href="../base/multi-threading.html">Multi-Threading</a></li><li><a class="toctext" href="../base/constants.html">Constants</a></li><li><a class="toctext" href="../base/file.html">Filesystem</a></li><li><a class="toctext" href="../base/io-network.html">I/O and Network</a></li><li><a class="toctext" href="../base/punctuation.html">Punctuation</a></li><li><a class="toctext" href="../base/sort.html">Sorting and Related Functions</a></li><li><a class="toctext" href="../base/iterators.html">Iteration utilities</a></li><li><a class="toctext" href="../base/c.html">C Interface</a></li><li><a class="toctext" href="../base/libc.html">C Standard Library</a></li><li><a class="toctext" href="../base/stacktraces.html">StackTraces</a></li><li><a class="toctext" href="../base/simd-types.html">SIMD Support</a></li></ul></li><li><span class="toctext">Standard Library</span><ul><li><a class="toctext" href="../stdlib/Base64.html">Base64</a></li><li><a class="toctext" href="../stdlib/CRC32c.html">CRC32c</a></li><li><a class="toctext" href="../stdlib/Dates.html">Dates</a></li><li><a class="toctext" href="../stdlib/DelimitedFiles.html">Delimited Files</a></li><li><a class="toctext" href="../stdlib/Distributed.html">Distributed Computing</a></li><li><a class="toctext" href="../stdlib/FileWatching.html">File Events</a></li><li><a class="toctext" href="../stdlib/InteractiveUtils.html">Interactive Utilities</a></li><li><a class="toctext" href="../stdlib/IterativeEigensolvers.html">Iterative Eigensolvers</a></li><li><a class="toctext" href="../stdlib/LibGit2.html">LibGit2</a></li><li><a class="toctext" href="../stdlib/Libdl.html">Dynamic Linker</a></li><li><a class="toctext" href="../stdlib/LinearAlgebra.html">Linear Algebra</a></li><li><a class="toctext" href="../stdlib/Logging.html">Logging</a></li><li><a class="toctext" href="../stdlib/Markdown.html">Markdown</a></li><li><a class="toctext" href="../stdlib/Mmap.html">Memory-mapped I/O</a></li><li><a class="toctext" href="../stdlib/Pkg.html">Package Manager Functions</a></li><li><a class="toctext" href="../stdlib/Pkg3.html">Pkg3.jl</a></li><li><a class="toctext" href="../stdlib/Printf.html">Printf</a></li><li><a class="toctext" href="../stdlib/Profile.html">Profiling</a></li><li><a class="toctext" href="../stdlib/REPL.html">The Julia REPL</a></li><li><a class="toctext" href="../stdlib/Random.html">Random Numbers</a></li><li><a class="toctext" href="../stdlib/SHA.html">SHA</a></li><li><a class="toctext" href="../stdlib/Serialization.html">Serialization</a></li><li><a class="toctext" href="../stdlib/SharedArrays.html">Shared Arrays</a></li><li><a class="toctext" href="../stdlib/Sockets.html">Sockets</a></li><li><a class="toctext" href="../stdlib/SparseArrays.html">Sparse Arrays</a></li><li><a class="toctext" href="../stdlib/Test.html">Unit Testing</a></li><li><a class="toctext" href="../stdlib/UUIDs.html">UUIDs</a></li><li><a class="toctext" href="../stdlib/Unicode.html">Unicode</a></li></ul></li><li><span class="toctext">Developer Documentation</span><ul><li><a class="toctext" href="../devdocs/reflection.html">Reflection and introspection</a></li><li><span class="toctext">Documentation of Julia&#39;s Internals</span><ul><li><a class="toctext" href="../devdocs/init.html">Initialization of the Julia runtime</a></li><li><a class="toctext" href="../devdocs/ast.html">Julia ASTs</a></li><li><a class="toctext" href="../devdocs/types.html">More about types</a></li><li><a class="toctext" href="../devdocs/object.html">Memory layout of Julia Objects</a></li><li><a class="toctext" href="../devdocs/eval.html">Eval of Julia code</a></li><li><a class="toctext" href="../devdocs/callconv.html">Calling Conventions</a></li><li><a class="toctext" href="../devdocs/compiler.html">High-level Overview of the Native-Code Generation Process</a></li><li><a class="toctext" href="../devdocs/functions.html">Julia Functions</a></li><li><a class="toctext" href="../devdocs/cartesian.html">Base.Cartesian</a></li><li><a class="toctext" href="../devdocs/meta.html">Talking to the compiler (the <code>:meta</code> mechanism)</a></li><li><a class="toctext" href="../devdocs/subarrays.html">SubArrays</a></li><li><a class="toctext" href="../devdocs/sysimg.html">System Image Building</a></li><li><a class="toctext" href="../devdocs/llvm.html">Working with LLVM</a></li><li><a class="toctext" href="../devdocs/stdio.html">printf() and stdio in the Julia runtime</a></li><li><a class="toctext" href="../devdocs/boundscheck.html">Bounds checking</a></li><li><a class="toctext" href="../devdocs/locks.html">Proper maintenance and care of multi-threading locks</a></li><li><a class="toctext" href="../devdocs/offset-arrays.html">Arrays with custom indices</a></li><li><a class="toctext" href="../devdocs/require.html">Module loading</a></li><li><a class="toctext" href="../devdocs/inference.html">Inference</a></li></ul></li><li><span class="toctext">Developing/debugging Julia&#39;s C code</span><ul><li><a class="toctext" href="../devdocs/backtraces.html">Reporting and analyzing crashes (segfaults)</a></li><li><a class="toctext" href="../devdocs/debuggingtips.html">gdb debugging tips</a></li><li><a class="toctext" href="../devdocs/valgrind.html">Using Valgrind with Julia</a></li><li><a class="toctext" href="../devdocs/sanitizers.html">Sanitizer support</a></li></ul></li></ul></li></ul></nav><article id="docs"><header><nav><ul><li>Manual</li><li><a href="control-flow.html">Control Flow</a></li></ul><a class="edit-page" href="https://github.com/JuliaLang/julia/blob/master/doc/src/manual/control-flow.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/><div id="topbar"><span>Control Flow</span><a class="fa fa-bars" href="#"></a></div></header><h1><a class="nav-anchor" id="Control-Flow-1" href="#Control-Flow-1">Control Flow</a></h1><p>Julia provides a variety of control flow constructs:</p><ul><li><a href="control-flow.html#man-compound-expressions-1">Compound Expressions</a>: <code>begin</code> and <code>(;)</code>.</li><li><a href="control-flow.html#man-conditional-evaluation-1">Conditional Evaluation</a>: <code>if</code>-<code>elseif</code>-<code>else</code> and <code>?:</code> (ternary operator).</li><li><a href="control-flow.html#Short-Circuit-Evaluation-1">Short-Circuit Evaluation</a>: <code>&amp;&amp;</code>, <code>||</code> and chained comparisons.</li><li><a href="control-flow.html#man-loops-1">Repeated Evaluation: Loops</a>: <code>while</code> and <code>for</code>.</li><li><a href="control-flow.html#Exception-Handling-1">Exception Handling</a>: <code>try</code>-<code>catch</code>, <a href="../base/base.html#Base.error"><code>error</code></a> and <a href="../base/base.html#Core.throw"><code>throw</code></a>.</li><li><a href="control-flow.html#man-tasks-1">Tasks (aka Coroutines)</a>: <a href="../base/parallel.html#Base.yieldto"><code>yieldto</code></a>.</li></ul><p>The first five control flow mechanisms are standard to high-level programming languages. <a href="../base/parallel.html#Core.Task"><code>Task</code></a>s are not so standard: they provide non-local control flow, making it possible to switch between temporarily-suspended computations. This is a powerful construct: both exception handling and cooperative multitasking are implemented in Julia using tasks. Everyday programming requires no direct usage of tasks, but certain problems can be solved much more easily by using tasks.</p><h2><a class="nav-anchor" id="man-compound-expressions-1" href="#man-compound-expressions-1">Compound Expressions</a></h2><p>Sometimes it is convenient to have a single expression which evaluates several subexpressions in order, returning the value of the last subexpression as its value. There are two Julia constructs that accomplish this: <code>begin</code> blocks and <code>(;)</code> chains. The value of both compound expression constructs is that of the last subexpression. Here&#39;s an example of a <code>begin</code> block:</p><pre><code class="language-julia-repl">julia&gt; z = begin
+           x = 1
+           y = 2
+           x + y
+       end
+3</code></pre><p>Since these are fairly small, simple expressions, they could easily be placed onto a single line, which is where the <code>(;)</code> chain syntax comes in handy:</p><pre><code class="language-julia-repl">julia&gt; z = (x = 1; y = 2; x + y)
+3</code></pre><p>This syntax is particularly useful with the terse single-line function definition form introduced in <a href="faq.html#Functions-1">Functions</a>. Although it is typical, there is no requirement that <code>begin</code> blocks be multiline or that <code>(;)</code> chains be single-line:</p><pre><code class="language-julia-repl">julia&gt; begin x = 1; y = 2; x + y end
+3
+
+julia&gt; (x = 1;
+        y = 2;
+        x + y)
+3</code></pre><h2><a class="nav-anchor" id="man-conditional-evaluation-1" href="#man-conditional-evaluation-1">Conditional Evaluation</a></h2><p>Conditional evaluation allows portions of code to be evaluated or not evaluated depending on the value of a boolean expression. Here is the anatomy of the <code>if</code>-<code>elseif</code>-<code>else</code> conditional syntax:</p><pre><code class="language-julia">if x &lt; y
+    println(&quot;x is less than y&quot;)
+elseif x &gt; y
+    println(&quot;x is greater than y&quot;)
+else
+    println(&quot;x is equal to y&quot;)
+end</code></pre><p>If the condition expression <code>x &lt; y</code> is <code>true</code>, then the corresponding block is evaluated; otherwise the condition expression <code>x &gt; y</code> is evaluated, and if it is <code>true</code>, the corresponding block is evaluated; if neither expression is true, the <code>else</code> block is evaluated. Here it is in action:</p><pre><code class="language-julia-repl">julia&gt; function test(x, y)
+           if x &lt; y
+               println(&quot;x is less than y&quot;)
+           elseif x &gt; y
+               println(&quot;x is greater than y&quot;)
+           else
+               println(&quot;x is equal to y&quot;)
+           end
+       end
+test (generic function with 1 method)
+
+julia&gt; test(1, 2)
+x is less than y
+
+julia&gt; test(2, 1)
+x is greater than y
+
+julia&gt; test(1, 1)
+x is equal to y</code></pre><p>The <code>elseif</code> and <code>else</code> blocks are optional, and as many <code>elseif</code> blocks as desired can be used. The condition expressions in the <code>if</code>-<code>elseif</code>-<code>else</code> construct are evaluated until the first one evaluates to <code>true</code>, after which the associated block is evaluated, and no further condition expressions or blocks are evaluated.</p><p><code>if</code> blocks are &quot;leaky&quot;, i.e. they do not introduce a local scope. This means that new variables defined inside the <code>if</code> clauses can be used after the <code>if</code> block, even if they weren&#39;t defined before. So, we could have defined the <code>test</code> function above as</p><pre><code class="language-julia-repl">julia&gt; function test(x,y)
+           if x &lt; y
+               relation = &quot;less than&quot;
+           elseif x == y
+               relation = &quot;equal to&quot;
+           else
+               relation = &quot;greater than&quot;
+           end
+           println(&quot;x is &quot;, relation, &quot; y.&quot;)
+       end
+test (generic function with 1 method)
+
+julia&gt; test(2, 1)
+x is greater than y.</code></pre><p>The variable <code>relation</code> is declared inside the <code>if</code> block, but used outside. However, when depending on this behavior, make sure all possible code paths define a value for the variable. The following change to the above function results in a runtime error</p><pre><code class="language-julia-repl">julia&gt; function test(x,y)
+           if x &lt; y
+               relation = &quot;less than&quot;
+           elseif x == y
+               relation = &quot;equal to&quot;
+           end
+           println(&quot;x is &quot;, relation, &quot; y.&quot;)
+       end
+test (generic function with 1 method)
+
+julia&gt; test(1,2)
+x is less than y.
+
+julia&gt; test(2,1)
+ERROR: UndefVarError: relation not defined
+Stacktrace:
+ [1] test(::Int64, ::Int64) at ./none:7</code></pre><p><code>if</code> blocks also return a value, which may seem unintuitive to users coming from many other languages. This value is simply the return value of the last executed statement in the branch that was chosen, so</p><pre><code class="language-julia-repl">julia&gt; x = 3
+3
+
+julia&gt; if x &gt; 0
+           &quot;positive!&quot;
+       else
+           &quot;negative...&quot;
+       end
+&quot;positive!&quot;</code></pre><p>Note that very short conditional statements (one-liners) are frequently expressed using Short-Circuit Evaluation in Julia, as outlined in the next section.</p><p>Unlike C, MATLAB, Perl, Python, and Ruby – but like Java, and a few other stricter, typed languages – it is an error if the value of a conditional expression is anything but <code>true</code> or <code>false</code>:</p><pre><code class="language-julia-repl">julia&gt; if 1
+           println(&quot;true&quot;)
+       end
+ERROR: TypeError: non-boolean (Int64) used in boolean context</code></pre><p>This error indicates that the conditional was of the wrong type: <a href="../base/numbers.html#Core.Int64"><code>Int64</code></a> rather than the required <a href="../base/numbers.html#Core.Bool"><code>Bool</code></a>.</p><p>The so-called &quot;ternary operator&quot;, <code>?:</code>, is closely related to the <code>if</code>-<code>elseif</code>-<code>else</code> syntax, but is used where a conditional choice between single expression values is required, as opposed to conditional execution of longer blocks of code. It gets its name from being the only operator in most languages taking three operands:</p><pre><code class="language-julia">a ? b : c</code></pre><p>The expression <code>a</code>, before the <code>?</code>, is a condition expression, and the ternary operation evaluates the expression <code>b</code>, before the <code>:</code>, if the condition <code>a</code> is <code>true</code> or the expression <code>c</code>, after the <code>:</code>, if it is <code>false</code>. Note that the spaces around <code>?</code> and <code>:</code> are mandatory: an expression like <code>a?b:c</code> is not a valid ternary expression (but a newline is acceptable after both the <code>?</code> and the <code>:</code>).</p><p>The easiest way to understand this behavior is to see an example. In the previous example, the <code>println</code> call is shared by all three branches: the only real choice is which literal string to print. This could be written more concisely using the ternary operator. For the sake of clarity, let&#39;s try a two-way version first:</p><pre><code class="language-julia-repl">julia&gt; x = 1; y = 2;
+
+julia&gt; println(x &lt; y ? &quot;less than&quot; : &quot;not less than&quot;)
+less than
+
+julia&gt; x = 1; y = 0;
+
+julia&gt; println(x &lt; y ? &quot;less than&quot; : &quot;not less than&quot;)
+not less than</code></pre><p>If the expression <code>x &lt; y</code> is true, the entire ternary operator expression evaluates to the string <code>&quot;less than&quot;</code> and otherwise it evaluates to the string <code>&quot;not less than&quot;</code>. The original three-way example requires chaining multiple uses of the ternary operator together:</p><pre><code class="language-julia-repl">julia&gt; test(x, y) = println(x &lt; y ? &quot;x is less than y&quot;    :
+                            x &gt; y ? &quot;x is greater than y&quot; : &quot;x is equal to y&quot;)
+test (generic function with 1 method)
+
+julia&gt; test(1, 2)
+x is less than y
+
+julia&gt; test(2, 1)
+x is greater than y
+
+julia&gt; test(1, 1)
+x is equal to y</code></pre><p>To facilitate chaining, the operator associates from right to left.</p><p>It is significant that like <code>if</code>-<code>elseif</code>-<code>else</code>, the expressions before and after the <code>:</code> are only evaluated if the condition expression evaluates to <code>true</code> or <code>false</code>, respectively:</p><pre><code class="language-julia-repl">julia&gt; v(x) = (println(x); x)
+v (generic function with 1 method)
+
+julia&gt; 1 &lt; 2 ? v(&quot;yes&quot;) : v(&quot;no&quot;)
+yes
+&quot;yes&quot;
+
+julia&gt; 1 &gt; 2 ? v(&quot;yes&quot;) : v(&quot;no&quot;)
+no
+&quot;no&quot;</code></pre><h2><a class="nav-anchor" id="Short-Circuit-Evaluation-1" href="#Short-Circuit-Evaluation-1">Short-Circuit Evaluation</a></h2><p>Short-circuit evaluation is quite similar to conditional evaluation. The behavior is found in most imperative programming languages having the <code>&amp;&amp;</code> and <code>||</code> boolean operators: in a series of boolean expressions connected by these operators, only the minimum number of expressions are evaluated as are necessary to determine the final boolean value of the entire chain. Explicitly, this means that:</p><ul><li>In the expression <code>a &amp;&amp; b</code>, the subexpression <code>b</code> is only evaluated if <code>a</code> evaluates to <code>true</code>.</li><li>In the expression <code>a || b</code>, the subexpression <code>b</code> is only evaluated if <code>a</code> evaluates to <code>false</code>.</li></ul><p>The reasoning is that <code>a &amp;&amp; b</code> must be <code>false</code> if <code>a</code> is <code>false</code>, regardless of the value of <code>b</code>, and likewise, the value of <code>a || b</code> must be true if <code>a</code> is <code>true</code>, regardless of the value of <code>b</code>. Both <code>&amp;&amp;</code> and <code>||</code> associate to the right, but <code>&amp;&amp;</code> has higher precedence than <code>||</code> does. It&#39;s easy to experiment with this behavior:</p><pre><code class="language-julia-repl">julia&gt; t(x) = (println(x); true)
+t (generic function with 1 method)
+
+julia&gt; f(x) = (println(x); false)
+f (generic function with 1 method)
+
+julia&gt; t(1) &amp;&amp; t(2)
+1
+2
+true
+
+julia&gt; t(1) &amp;&amp; f(2)
+1
+2
+false
+
+julia&gt; f(1) &amp;&amp; t(2)
+1
+false
+
+julia&gt; f(1) &amp;&amp; f(2)
+1
+false
+
+julia&gt; t(1) || t(2)
+1
+true
+
+julia&gt; t(1) || f(2)
+1
+true
+
+julia&gt; f(1) || t(2)
+1
+2
+true
+
+julia&gt; f(1) || f(2)
+1
+2
+false</code></pre><p>You can easily experiment in the same way with the associativity and precedence of various combinations of <code>&amp;&amp;</code> and <code>||</code> operators.</p><p>This behavior is frequently used in Julia to form an alternative to very short <code>if</code> statements. Instead of <code>if &lt;cond&gt; &lt;statement&gt; end</code>, one can write <code>&lt;cond&gt; &amp;&amp; &lt;statement&gt;</code> (which could be read as: &lt;cond&gt; <em>and then</em> &lt;statement&gt;). Similarly, instead of <code>if ! &lt;cond&gt; &lt;statement&gt; end</code>, one can write <code>&lt;cond&gt; || &lt;statement&gt;</code> (which could be read as: &lt;cond&gt; <em>or else</em> &lt;statement&gt;).</p><p>For example, a recursive factorial routine could be defined like this:</p><pre><code class="language-julia-repl">julia&gt; function fact(n::Int)
+           n &gt;= 0 || error(&quot;n must be non-negative&quot;)
+           n == 0 &amp;&amp; return 1
+           n * fact(n-1)
+       end
+fact (generic function with 1 method)
+
+julia&gt; fact(5)
+120
+
+julia&gt; fact(0)
+1
+
+julia&gt; fact(-1)
+ERROR: n must be non-negative
+Stacktrace:
+ [1] error at ./error.jl:33 [inlined]
+ [2] fact(::Int64) at ./none:2
+ [3] top-level scope</code></pre><p>Boolean operations <em>without</em> short-circuit evaluation can be done with the bitwise boolean operators introduced in <a href="mathematical-operations.html#Mathematical-Operations-and-Elementary-Functions-1">Mathematical Operations and Elementary Functions</a>: <code>&amp;</code> and <code>|</code>. These are normal functions, which happen to support infix operator syntax, but always evaluate their arguments:</p><pre><code class="language-julia-repl">julia&gt; f(1) &amp; t(2)
+1
+2
+false
+
+julia&gt; t(1) | t(2)
+1
+2
+true</code></pre><p>Just like condition expressions used in <code>if</code>, <code>elseif</code> or the ternary operator, the operands of <code>&amp;&amp;</code> or <code>||</code> must be boolean values (<code>true</code> or <code>false</code>). Using a non-boolean value anywhere except for the last entry in a conditional chain is an error:</p><pre><code class="language-julia-repl">julia&gt; 1 &amp;&amp; true
+ERROR: TypeError: non-boolean (Int64) used in boolean context</code></pre><p>On the other hand, any type of expression can be used at the end of a conditional chain. It will be evaluated and returned depending on the preceding conditionals:</p><pre><code class="language-julia-repl">julia&gt; true &amp;&amp; (x = (1, 2, 3))
+(1, 2, 3)
+
+julia&gt; false &amp;&amp; (x = (1, 2, 3))
+false</code></pre><h2><a class="nav-anchor" id="man-loops-1" href="#man-loops-1">Repeated Evaluation: Loops</a></h2><p>There are two constructs for repeated evaluation of expressions: the <code>while</code> loop and the <code>for</code> loop. Here is an example of a <code>while</code> loop:</p><pre><code class="language-julia-repl">julia&gt; i = 1;
+
+julia&gt; while i &lt;= 5
+           println(i)
+           global i += 1
+       end
+1
+2
+3
+4
+5</code></pre><p>The <code>while</code> loop evaluates the condition expression (<code>i &lt;= 5</code> in this case), and as long it remains <code>true</code>, keeps also evaluating the body of the <code>while</code> loop. If the condition expression is <code>false</code> when the <code>while</code> loop is first reached, the body is never evaluated.</p><p>The <code>for</code> loop makes common repeated evaluation idioms easier to write. Since counting up and down like the above <code>while</code> loop does is so common, it can be expressed more concisely with a <code>for</code> loop:</p><pre><code class="language-julia-repl">julia&gt; for i = 1:5
+           println(i)
+       end
+1
+2
+3
+4
+5</code></pre><p>Here the <code>1:5</code> is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The <code>for</code> loop iterates through these values, assigning each one in turn to the variable <code>i</code>. One rather important distinction between the previous <code>while</code> loop form and the <code>for</code> loop form is the scope during which the variable is visible. If the variable <code>i</code> has not been introduced in another scope, in the <code>for</code> loop form, it is visible only inside of the <code>for</code> loop, and not outside/afterwards. You&#39;ll either need a new interactive session instance or a different variable name to test this:</p><pre><code class="language-julia-repl">julia&gt; for j = 1:5
+           println(j)
+       end
+1
+2
+3
+4
+5
+
+julia&gt; j
+ERROR: UndefVarError: j not defined</code></pre><p>See <a href="variables-and-scoping.html#scope-of-variables-1">Scope of Variables</a> for a detailed explanation of variable scope and how it works in Julia.</p><p>In general, the <code>for</code> loop construct can iterate over any container. In these cases, the alternative (but fully equivalent) keyword <code>in</code> or <code>∈</code> is typically used instead of <code>=</code>, since it makes the code read more clearly:</p><pre><code class="language-julia-repl">julia&gt; for i in [1,4,0]
+           println(i)
+       end
+1
+4
+0
+
+julia&gt; for s ∈ [&quot;foo&quot;,&quot;bar&quot;,&quot;baz&quot;]
+           println(s)
+       end
+foo
+bar
+baz</code></pre><p>Various types of iterable containers will be introduced and discussed in later sections of the manual (see, e.g., <a href="arrays.html#man-multi-dim-arrays-1">Multi-dimensional Arrays</a>).</p><p>It is sometimes convenient to terminate the repetition of a <code>while</code> before the test condition is falsified or stop iterating in a <code>for</code> loop before the end of the iterable object is reached. This can be accomplished with the <code>break</code> keyword:</p><pre><code class="language-julia-repl">julia&gt; i = 1;
+
+julia&gt; while true
+           println(i)
+           if i &gt;= 5
+               break
+           end
+           global i += 1
+       end
+1
+2
+3
+4
+5
+
+julia&gt; for j = 1:1000
+           println(j)
+           if j &gt;= 5
+               break
+           end
+       end
+1
+2
+3
+4
+5</code></pre><p>Without the <code>break</code> keyword, the above <code>while</code> loop would never terminate on its own, and the <code>for</code> loop would iterate up to 1000. These loops are both exited early by using <code>break</code>.</p><p>In other circumstances, it is handy to be able to stop an iteration and move on to the next one immediately. The <code>continue</code> keyword accomplishes this:</p><pre><code class="language-julia-repl">julia&gt; for i = 1:10
+           if i % 3 != 0
+               continue
+           end
+           println(i)
+       end
+3
+6
+9</code></pre><p>This is a somewhat contrived example since we could produce the same behavior more clearly by negating the condition and placing the <code>println</code> call inside the <code>if</code> block. In realistic usage there is more code to be evaluated after the <code>continue</code>, and often there are multiple points from which one calls <code>continue</code>.</p><p>Multiple nested <code>for</code> loops can be combined into a single outer loop, forming the cartesian product of its iterables:</p><pre><code class="language-julia-repl">julia&gt; for i = 1:2, j = 3:4
+           println((i, j))
+       end
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)</code></pre><p>With this syntax, iterables may still refer to outer loop variables; e.g. <code>for i = 1:n, j = 1:i</code> is valid. However a <code>break</code> statement inside such a loop exits the entire nest of loops, not just the inner one. Both variables (<code>i</code> and <code>j</code>) are set to their current iteration values each time the inner loop runs. Therefore, assignments to <code>i</code> will not be visible to subsequent iterations:</p><pre><code class="language-julia-repl">julia&gt; for i = 1:2, j = 3:4
+           println((i, j))
+           i = 0
+       end
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)</code></pre><p>If this example were rewritten to use a <code>for</code> keyword for each variable, then the output would be different: the second and fourth values would contain <code>0</code>.</p><h2><a class="nav-anchor" id="Exception-Handling-1" href="#Exception-Handling-1">Exception Handling</a></h2><p>When an unexpected condition occurs, a function may be unable to return a reasonable value to its caller. In such cases, it may be best for the exceptional condition to either terminate the program while printing a diagnostic error message, or if the programmer has provided code to handle such exceptional circumstances then allow that code to take the appropriate action.</p><h3><a class="nav-anchor" id="Built-in-Exceptions-1" href="#Built-in-Exceptions-1">Built-in <code>Exception</code>s</a></h3><p><code>Exception</code>s are thrown when an unexpected condition has occurred. The built-in <code>Exception</code>s listed below all interrupt the normal flow of control.</p><table><tr><th><code>Exception</code></th></tr><tr><td><a href="../base/base.html#Core.ArgumentError"><code>ArgumentError</code></a></td></tr><tr><td><a href="../base/base.html#Core.BoundsError"><code>BoundsError</code></a></td></tr><tr><td><code>CompositeException</code></td></tr><tr><td><a href="../base/base.html#Core.DivideError"><code>DivideError</code></a></td></tr><tr><td><a href="../base/base.html#Core.DomainError"><code>DomainError</code></a></td></tr><tr><td><a href="../base/base.html#Base.EOFError"><code>EOFError</code></a></td></tr><tr><td><a href="../base/base.html#Core.ErrorException"><code>ErrorException</code></a></td></tr><tr><td><a href="../base/base.html#Core.InexactError"><code>InexactError</code></a></td></tr><tr><td><a href="../base/base.html#Core.InitError"><code>InitError</code></a></td></tr><tr><td><a href="../base/base.html#Core.InterruptException"><code>InterruptException</code></a></td></tr><tr><td><code>InvalidStateException</code></td></tr><tr><td><a href="../base/base.html#Base.KeyError"><code>KeyError</code></a></td></tr><tr><td><a href="../base/base.html#Core.LoadError"><code>LoadError</code></a></td></tr><tr><td><a href="../base/base.html#Core.OutOfMemoryError"><code>OutOfMemoryError</code></a></td></tr><tr><td><a href="../base/base.html#Core.ReadOnlyMemoryError"><code>ReadOnlyMemoryError</code></a></td></tr><tr><td><a href="../stdlib/Distributed.html#Distributed.RemoteException"><code>RemoteException</code></a></td></tr><tr><td><a href="../base/base.html#Core.MethodError"><code>MethodError</code></a></td></tr><tr><td><a href="../base/base.html#Core.OverflowError"><code>OverflowError</code></a></td></tr><tr><td><a href="../base/base.html#Base.Meta.ParseError"><code>Meta.ParseError</code></a></td></tr><tr><td><a href="../base/base.html#Base.SystemError"><code>SystemError</code></a></td></tr><tr><td><a href="../base/base.html#Core.TypeError"><code>TypeError</code></a></td></tr><tr><td><a href="../base/base.html#Core.UndefRefError"><code>UndefRefError</code></a></td></tr><tr><td><a href="../base/base.html#Core.UndefVarError"><code>UndefVarError</code></a></td></tr><tr><td><a href="../base/base.html#Base.StringIndexError"><code>StringIndexError</code></a></td></tr></table><p>For example, the <a href="../base/math.html#Base.sqrt-Tuple{Real}"><code>sqrt</code></a> function throws a <a href="../base/base.html#Core.DomainError"><code>DomainError</code></a> if applied to a negative real value:</p><pre><code class="language-julia-repl">julia&gt; sqrt(-1)
+ERROR: DomainError with -1.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
+[...]</code></pre><p>You may define your own exceptions in the following way:</p><pre><code class="language-julia-repl">julia&gt; struct MyCustomException &lt;: Exception end</code></pre><h3><a class="nav-anchor" id="The-[throw](@ref)-function-1" href="#The-[throw](@ref)-function-1">The <a href="../base/base.html#Core.throw"><code>throw</code></a> function</a></h3><p>Exceptions can be created explicitly with <a href="../base/base.html#Core.throw"><code>throw</code></a>. For example, a function defined only for nonnegative numbers could be written to <a href="../base/base.html#Core.throw"><code>throw</code></a> a <a href="../base/base.html#Core.DomainError"><code>DomainError</code></a> if the argument is negative:</p><pre><code class="language-julia-repl">julia&gt; f(x) = x&gt;=0 ? exp(-x) : throw(DomainError(x, &quot;argument must be nonnegative&quot;))
+f (generic function with 1 method)
+
+julia&gt; f(1)
+0.36787944117144233
+
+julia&gt; f(-1)
+ERROR: DomainError with -1:
+argument must be nonnegative
+Stacktrace:
+ [1] f(::Int64) at ./none:1</code></pre><p>Note that <a href="../base/base.html#Core.DomainError"><code>DomainError</code></a> without parentheses is not an exception, but a type of exception. It needs to be called to obtain an <code>Exception</code> object:</p><pre><code class="language-julia-repl">julia&gt; typeof(DomainError(nothing)) &lt;: Exception
+true
+
+julia&gt; typeof(DomainError) &lt;: Exception
+false</code></pre><p>Additionally, some exception types take one or more arguments that are used for error reporting:</p><pre><code class="language-julia-repl">julia&gt; throw(UndefVarError(:x))
+ERROR: UndefVarError: x not defined</code></pre><p>This mechanism can be implemented easily by custom exception types following the way <a href="../base/base.html#Core.UndefVarError"><code>UndefVarError</code></a> is written:</p><pre><code class="language-julia-repl">julia&gt; struct MyUndefVarError &lt;: Exception
+           var::Symbol
+       end
+
+julia&gt; Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, &quot; not defined&quot;)</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>When writing an error message, it is preferred to make the first word lowercase. For example, <code>size(A) == size(B) || throw(DimensionMismatch(&quot;size of A not equal to size of B&quot;))</code></p><p>is preferred over</p><p><code>size(A) == size(B) || throw(DimensionMismatch(&quot;Size of A not equal to size of B&quot;))</code>.</p><p>However, sometimes it makes sense to keep the uppercase first letter, for instance if an argument to a function is a capital letter: <code>size(A,1) == size(B,2) || throw(DimensionMismatch(&quot;A has first dimension...&quot;))</code>.</p></div></div><h3><a class="nav-anchor" id="Errors-1" href="#Errors-1">Errors</a></h3><p>The <a href="../base/base.html#Base.error"><code>error</code></a> function is used to produce an <a href="../base/base.html#Core.ErrorException"><code>ErrorException</code></a> that interrupts the normal flow of control.</p><p>Suppose we want to stop execution immediately if the square root of a negative number is taken. To do this, we can define a fussy version of the <a href="../base/math.html#Base.sqrt-Tuple{Real}"><code>sqrt</code></a> function that raises an error if its argument is negative:</p><pre><code class="language-julia-repl">julia&gt; fussy_sqrt(x) = x &gt;= 0 ? sqrt(x) : error(&quot;negative x not allowed&quot;)
+fussy_sqrt (generic function with 1 method)
+
+julia&gt; fussy_sqrt(2)
+1.4142135623730951
+
+julia&gt; fussy_sqrt(-1)
+ERROR: negative x not allowed
+Stacktrace:
+ [1] error at ./error.jl:33 [inlined]
+ [2] fussy_sqrt(::Int64) at ./none:1
+ [3] top-level scope</code></pre><p>If <code>fussy_sqrt</code> is called with a negative value from another function, instead of trying to continue execution of the calling function, it returns immediately, displaying the error message in the interactive session:</p><pre><code class="language-julia-repl">julia&gt; function verbose_fussy_sqrt(x)
+           println(&quot;before fussy_sqrt&quot;)
+           r = fussy_sqrt(x)
+           println(&quot;after fussy_sqrt&quot;)
+           return r
+       end
+verbose_fussy_sqrt (generic function with 1 method)
+
+julia&gt; verbose_fussy_sqrt(2)
+before fussy_sqrt
+after fussy_sqrt
+1.4142135623730951
+
+julia&gt; verbose_fussy_sqrt(-1)
+before fussy_sqrt
+ERROR: negative x not allowed
+Stacktrace:
+ [1] error at ./error.jl:33 [inlined]
+ [2] fussy_sqrt at ./none:1 [inlined]
+ [3] verbose_fussy_sqrt(::Int64) at ./none:3
+ [4] top-level scope</code></pre><h3><a class="nav-anchor" id="The-try/catch-statement-1" href="#The-try/catch-statement-1">The <code>try/catch</code> statement</a></h3><p>The <code>try/catch</code> statement allows for <code>Exception</code>s to be tested for. For example, a customized square root function can be written to automatically call either the real or complex square root method on demand using <code>Exception</code>s :</p><pre><code class="language-julia-repl">julia&gt; f(x) = try
+           sqrt(x)
+       catch
+           sqrt(complex(x, 0))
+       end
+f (generic function with 1 method)
+
+julia&gt; f(1)
+1.0
+
+julia&gt; f(-1)
+0.0 + 1.0im</code></pre><p>It is important to note that in real code computing this function, one would compare <code>x</code> to zero instead of catching an exception. The exception is much slower than simply comparing and branching.</p><p><code>try/catch</code> statements also allow the <code>Exception</code> to be saved in a variable. The following contrived example calculates the square root of the second element of <code>x</code> if <code>x</code> is indexable, otherwise assumes <code>x</code> is a real number and returns its square root:</p><pre><code class="language-julia-repl">julia&gt; sqrt_second(x) = try
+           sqrt(x[2])
+       catch y
+           if isa(y, DomainError)
+               sqrt(complex(x[2], 0))
+           elseif isa(y, BoundsError)
+               sqrt(x)
+           end
+       end
+sqrt_second (generic function with 1 method)
+
+julia&gt; sqrt_second([1 4])
+2.0
+
+julia&gt; sqrt_second([1 -4])
+0.0 + 2.0im
+
+julia&gt; sqrt_second(9)
+3.0
+
+julia&gt; sqrt_second(-9)
+ERROR: DomainError with -9.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
+[...]</code></pre><p>Note that the symbol following <code>catch</code> will always be interpreted as a name for the exception, so care is needed when writing <code>try/catch</code> expressions on a single line. The following code will <em>not</em> work to return the value of <code>x</code> in case of an error:</p><pre><code class="language-julia">try bad() catch x end</code></pre><p>Instead, use a semicolon or insert a line break after <code>catch</code>:</p><pre><code class="language-julia">try bad() catch; x end
+
+try bad()
+catch
+    x
+end</code></pre><p>The <code>catch</code> clause is not strictly necessary; when omitted, the default return value is <code>nothing</code>.</p><pre><code class="language-julia-repl">julia&gt; try error() end # Returns nothing</code></pre><p>The power of the <code>try/catch</code> construct lies in the ability to unwind a deeply nested computation immediately to a much higher level in the stack of calling functions. There are situations where no error has occurred, but the ability to unwind the stack and pass a value to a higher level is desirable. Julia provides the <a href="../base/base.html#Base.rethrow"><code>rethrow</code></a>, <a href="../base/base.html#Base.backtrace"><code>backtrace</code></a> and <a href="../base/base.html#Base.catch_backtrace"><code>catch_backtrace</code></a> functions for more advanced error handling.</p><h3><a class="nav-anchor" id="finally-Clauses-1" href="#finally-Clauses-1"><code>finally</code> Clauses</a></h3><p>In code that performs state changes or uses resources like files, there is typically clean-up work (such as closing files) that needs to be done when the code is finished. Exceptions potentially complicate this task, since they can cause a block of code to exit before reaching its normal end. The <code>finally</code> keyword provides a way to run some code when a given block of code exits, regardless of how it exits.</p><p>For example, here is how we can guarantee that an opened file is closed:</p><pre><code class="language-julia">f = open(&quot;file&quot;)
+try
+    # operate on file f
+finally
+    close(f)
+end</code></pre><p>When control leaves the <code>try</code> block (for example due to a <code>return</code>, or just finishing normally), <code>close(f)</code> will be executed. If the <code>try</code> block exits due to an exception, the exception will continue propagating. A <code>catch</code> block may be combined with <code>try</code> and <code>finally</code> as well. In this case the <code>finally</code> block will run after <code>catch</code> has handled the error.</p><h2><a class="nav-anchor" id="man-tasks-1" href="#man-tasks-1">Tasks (aka Coroutines)</a></h2><p>Tasks are a control flow feature that allows computations to be suspended and resumed in a flexible manner. This feature is sometimes called by other names, such as symmetric coroutines, lightweight threads, cooperative multitasking, or one-shot continuations.</p><p>When a piece of computing work (in practice, executing a particular function) is designated as a <a href="../base/parallel.html#Core.Task"><code>Task</code></a>, it becomes possible to interrupt it by switching to another <a href="../base/parallel.html#Core.Task"><code>Task</code></a>. The original <a href="../base/parallel.html#Core.Task"><code>Task</code></a> can later be resumed, at which point it will pick up right where it left off. At first, this may seem similar to a function call. However there are two key differences. First, switching tasks does not use any space, so any number of task switches can occur without consuming the call stack. Second, switching among tasks can occur in any order, unlike function calls, where the called function must finish executing before control returns to the calling function.</p><p>This kind of control flow can make it much easier to solve certain problems. In some problems, the various pieces of required work are not naturally related by function calls; there is no obvious &quot;caller&quot; or &quot;callee&quot; among the jobs that need to be done. An example is the producer-consumer problem, where one complex procedure is generating values and another complex procedure is consuming them. The consumer cannot simply call a producer function to get a value, because the producer may have more values to generate and so might not yet be ready to return. With tasks, the producer and consumer can both run as long as they need to, passing values back and forth as necessary.</p><p>Julia provides a <a href="../base/parallel.html#Base.Channel"><code>Channel</code></a> mechanism for solving this problem. A <a href="../base/parallel.html#Base.Channel"><code>Channel</code></a> is a waitable first-in first-out queue which can have multiple tasks reading from and writing to it.</p><p>Let&#39;s define a producer task, which produces values via the <a href="../base/parallel.html#Base.put!-Tuple{Channel,Any}"><code>put!</code></a> call. To consume values, we need to schedule the producer to run in a new task. A special <a href="../base/parallel.html#Base.Channel"><code>Channel</code></a> constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel. We can then <a href="../base/parallel.html#Base.take!-Tuple{Channel}"><code>take!</code></a> values repeatedly from the channel object:</p><pre><code class="language-julia-repl">julia&gt; function producer(c::Channel)
+           put!(c, &quot;start&quot;)
+           for n=1:4
+               put!(c, 2n)
+           end
+           put!(c, &quot;stop&quot;)
+       end;
+
+julia&gt; chnl = Channel(producer);
+
+julia&gt; take!(chnl)
+&quot;start&quot;
+
+julia&gt; take!(chnl)
+2
+
+julia&gt; take!(chnl)
+4
+
+julia&gt; take!(chnl)
+6
+
+julia&gt; take!(chnl)
+8
+
+julia&gt; take!(chnl)
+&quot;stop&quot;</code></pre><p>One way to think of this behavior is that <code>producer</code> was able to return multiple times. Between calls to <a href="../base/parallel.html#Base.put!-Tuple{Channel,Any}"><code>put!</code></a>, the producer&#39;s execution is suspended and the consumer has control.</p><p>The returned <a href="../base/parallel.html#Base.Channel"><code>Channel</code></a> can be used as an iterable object in a <code>for</code> loop, in which case the loop variable takes on all the produced values. The loop is terminated when the channel is closed.</p><pre><code class="language-julia-repl">julia&gt; for x in Channel(producer)
+           println(x)
+       end
+start
+2
+4
+6
+8
+stop</code></pre><p>Note that we did not have to explicitly close the channel in the producer. This is because the act of binding a <a href="../base/parallel.html#Base.Channel"><code>Channel</code></a> to a <a href="../base/parallel.html#Core.Task"><code>Task</code></a> associates the open lifetime of a channel with that of the bound task. The channel object is closed automatically when the task terminates. Multiple channels can be bound to a task, and vice-versa.</p><p>While the <a href="../base/parallel.html#Core.Task"><code>Task</code></a> constructor expects a 0-argument function, the <a href="../base/parallel.html#Base.Channel"><code>Channel</code></a> method which creates a channel bound task expects a function that accepts a single argument of type <a href="../base/parallel.html#Base.Channel"><code>Channel</code></a>. A common pattern is for the producer to be parameterized, in which case a partial function application is needed to create a 0 or 1 argument <a href="functions.html#man-anonymous-functions-1">anonymous function</a>.</p><p>For <a href="../base/parallel.html#Core.Task"><code>Task</code></a> objects this can be done either directly or by use of a convenience macro:</p><pre><code class="language-julia">function mytask(myarg)
+    ...
+end
+
+taskHdl = Task(() -&gt; mytask(7))
+# or, equivalently
+taskHdl = @task mytask(7)</code></pre><p>To orchestrate more advanced work distribution patterns, <a href="../stdlib/Sockets.html#Base.bind"><code>bind</code></a> and <a href="../base/parallel.html#Base.schedule"><code>schedule</code></a> can be used in conjunction with <a href="../base/parallel.html#Core.Task"><code>Task</code></a> and <a href="../base/parallel.html#Base.Channel"><code>Channel</code></a> constructors to explicitly link a set of channels with a set of producer/consumer tasks.</p><p>Note that currently Julia tasks are not scheduled to run on separate CPU cores. True kernel threads are discussed under the topic of <a href="parallel-computing.html#Parallel-Computing-1">Parallel Computing</a>.</p><h3><a class="nav-anchor" id="Core-task-operations-1" href="#Core-task-operations-1">Core task operations</a></h3><p>Let us explore the low level construct <a href="../base/parallel.html#Base.yieldto"><code>yieldto</code></a> to understand how task switching works. <code>yieldto(task,value)</code> suspends the current task, switches to the specified <code>task</code>, and causes that task&#39;s last <a href="../base/parallel.html#Base.yieldto"><code>yieldto</code></a> call to return the specified <code>value</code>. Notice that <a href="../base/parallel.html#Base.yieldto"><code>yieldto</code></a> is the only operation required to use task-style control flow; instead of calling and returning we are always just switching to a different task. This is why this feature is also called &quot;symmetric coroutines&quot;; each task is switched to and from using the same mechanism.</p><p><a href="../base/parallel.html#Base.yieldto"><code>yieldto</code></a> is powerful, but most uses of tasks do not invoke it directly. Consider why this might be. If you switch away from the current task, you will probably want to switch back to it at some point, but knowing when to switch back, and knowing which task has the responsibility of switching back, can require considerable coordination. For example, <a href="../base/parallel.html#Base.put!-Tuple{Channel,Any}"><code>put!</code></a> and <a href="../base/parallel.html#Base.take!-Tuple{Channel}"><code>take!</code></a> are blocking operations, which, when used in the context of channels maintain state to remember who the consumers are. Not needing to manually keep track of the consuming task is what makes <a href="../base/parallel.html#Base.put!-Tuple{Channel,Any}"><code>put!</code></a> easier to use than the low-level <a href="../base/parallel.html#Base.yieldto"><code>yieldto</code></a>.</p><p>In addition to <a href="../base/parallel.html#Base.yieldto"><code>yieldto</code></a>, a few other basic functions are needed to use tasks effectively.</p><ul><li><a href="../base/parallel.html#Base.current_task"><code>current_task</code></a> gets a reference to the currently-running task.</li><li><a href="../base/parallel.html#Base.istaskdone"><code>istaskdone</code></a> queries whether a task has exited.</li><li><a href="../base/parallel.html#Base.istaskstarted"><code>istaskstarted</code></a> queries whether a task has run yet.</li><li><a href="../base/parallel.html#Base.task_local_storage-Tuple{Any}"><code>task_local_storage</code></a> manipulates a key-value store specific to the current task.</li></ul><h3><a class="nav-anchor" id="Tasks-and-events-1" href="#Tasks-and-events-1">Tasks and events</a></h3><p>Most task switches occur as a result of waiting for events such as I/O requests, and are performed by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks, and executes an event loop that restarts tasks based on external events such as message arrival.</p><p>The basic function for waiting for an event is <a href="../stdlib/Distributed.html#Base.wait"><code>wait</code></a>. Several objects implement <a href="../stdlib/Distributed.html#Base.wait"><code>wait</code></a>; for example, given a <code>Process</code> object, <a href="../stdlib/Distributed.html#Base.wait"><code>wait</code></a> will wait for it to exit. <a href="../stdlib/Distributed.html#Base.wait"><code>wait</code></a> is often implicit; for example, a <a href="../stdlib/Distributed.html#Base.wait"><code>wait</code></a> can happen inside a call to <a href="../base/io-network.html#Base.read"><code>read</code></a> to wait for data to be available.</p><p>In all of these cases, <a href="../stdlib/Distributed.html#Base.wait"><code>wait</code></a> ultimately operates on a <a href="../base/parallel.html#Base.Condition"><code>Condition</code></a> object, which is in charge of queueing and restarting tasks. When a task calls <a href="../stdlib/Distributed.html#Base.wait"><code>wait</code></a> on a <a href="../base/parallel.html#Base.Condition"><code>Condition</code></a>, the task is marked as non-runnable, added to the condition&#39;s queue, and switches to the scheduler. The scheduler will then pick another task to run, or block waiting for external events. If all goes well, eventually an event handler will call <a href="../base/parallel.html#Base.notify"><code>notify</code></a> on the condition, which causes tasks waiting for that condition to become runnable again.</p><p>A task created explicitly by calling <a href="../base/parallel.html#Core.Task"><code>Task</code></a> is initially not known to the scheduler. This allows you to manage tasks manually using <a href="../base/parallel.html#Base.yieldto"><code>yieldto</code></a> if you wish. However, when such a task waits for an event, it still gets restarted automatically when the event happens, as you would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily waiting for any events. This is done by calling <a href="../base/parallel.html#Base.schedule"><code>schedule</code></a>, or using the <a href="../stdlib/Distributed.html#Base.@async"><code>@async</code></a> macro (see <a href="parallel-computing.html#Parallel-Computing-1">Parallel Computing</a> for more details).</p><h3><a class="nav-anchor" id="Task-states-1" href="#Task-states-1">Task states</a></h3><p>Tasks have a <code>state</code> field that describes their execution status. A <a href="../base/parallel.html#Core.Task"><code>Task</code></a> <code>state</code> is one of the following symbols:</p><table><tr><th>Symbol</th><th>Meaning</th></tr><tr><td><code>:runnable</code></td><td>Currently running, or available to be switched to</td></tr><tr><td><code>:waiting</code></td><td>Blocked waiting for a specific event</td></tr><tr><td><code>:queued</code></td><td>In the scheduler&#39;s run queue about to be restarted</td></tr><tr><td><code>:done</code></td><td>Successfully finished executing</td></tr><tr><td><code>:failed</code></td><td>Finished with an uncaught exception</td></tr></table><footer><hr/><a class="previous" href="functions.html"><span class="direction">Previous</span><span class="title">Functions</span></a><a class="next" href="variables-and-scoping.html"><span class="direction">Next</span><span class="title">Scope of Variables</span></a></footer></article></body></html>
