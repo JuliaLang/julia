@@ -10,6 +10,8 @@
 
 import .Base.unsafe_trunc
 import .Base.Math.@horner
+import .Base.TwicePrecision
+
 
 # Float64 lookup table.
 # to generate values:
@@ -408,237 +410,134 @@ end
 # ====================================================
 
 # Constants and utilities
-log_small_x(::Type{Float32}) = 2f0^-126
-log_small_x(::Type{Float64}) = 2.0^-1022
 
-log_subnormal_k(::Type{Float32}) = Int32(25)
-log_subnormal_k(::Type{Float64}) = Int32(54)
-log_subnormal_scale(::Type{Float32}) = 2f0^25
-log_subnormal_scale(::Type{Float64}) = 1.80143985094819840000e+16 # almost 2.0^54 but lowword == 0
-
-log_k_shift(::Type{Float32}) = Int32(23)
-log_k_shift(::Type{Float64}) = Int32(20)
-
-log_i(::Type{Float32}, hx) = (hx + Int32(0x4afb0d)) & Int32(0x800000)
-log_i(::Type{Float64}, hx) = (hx + Int32(0x95f64)) & Int32(0x100000)
-
-log_set_highword(x::Float32, hx, i) = set_highword(x, hx|(i ⊻ Int32(0x3f800000)))
-log_set_highword(x::Float64, hx, i) = set_highword(x, hx|(i ⊻ Int32(0x3ff00000)))
-
-log_mask(::Type{Float32}) = Int32(0x007fffff)
-log_mask(::Type{Float64}) = Int32(0x000fffff)
+highword(u::UInt32) = u
+highword(u::UInt64) = (u >> 32) % UInt32
+highword(x::Float32) = reinterpret(UInt32, x)
+highword(x::Float64) = highword(reinterpret(UInt64, x))
 
 # Argument reduction
-@inline function log_range_reduction(x::T) where T <: Union{Float32, Float64}
-	k = Int32(0)
-	if x < log_small_x(T)
-        k -= log_subnormal_k(T)
-        x *= log_subnormal_scale(T) # subnormal number, scale up x
+"""
+    k, f = _log_range_reduction(x)
+
+Given `realmin(x) < x < Inf`, compute
+
+    x == 2^k * (1+f)
+
+where `k` is an integer and `√2/2 ~< 1+f ~< √2`.
+"""
+@inline function _log_range_reduction(x::T) where T <: Union{Float32, Float64}
+    u = reinterpret(Unsigned, x)
+    k = (u >> significand_bits(T))%Int - exponent_bias(T) # exponent(T)
+
+    h = highword(u)  # assume that x > 0
+    if h & highword(significand_mask(T)) >= highword(sqrt(T(2))) & highword(significand_mask(T))
+        k += 1
+        w = exponent_half(T)
+    else
+        w = exponent_one(T)
+    end
+    x = reinterpret(T, (u & significand_mask(T)) | w)
+    f = x-1
+    return f, k
+end
+
+
+_trunc_lo(x::Float64) = reinterpret(Float64, reinterpret(UInt64, x) & 0xffff_ffff_0000_0000)
+_trunc_lo(x::Float32) = reinterpret(Float32, reinterpret(UInt32, x) & 0xffff_f000)
+
+
+"""
+    _log_kernel(f, y, invlnb, invl2b)
+
+The kernel function of the logarithm.
+ - `f, y` are the output of `_log_range_reduction`
+ - `invlnb` is `1/log(base)` (computed using extended precision)
+ - `invlog2b` is `1/log2(base)` (computed using extended precision, or 1)
+"""
+@inline function _log_kernel(f::T, k, invlnb, invlog2b) where {T<:Union{Float32,Float64}}
+    s  = f/(2+f)
+    s² = s * s
+    s⁴ = s² * s²
+    if T == Float32
+        t = s² * @horner(s⁴, 0.6666666f0, 0.28498787f0) +
+            s⁴ * @horner(s⁴, 0.40000972f0, 0.24279079f0)
+    elseif T == Float64
+        t = s² * @horner(s⁴, 6.666666666666735130e-01,
+                         2.857142874366239149e-01,
+                         1.818357216161805012e-01,
+                         1.479819860511658591e-01) +
+            s⁴ * @horner(s⁴, 3.999999999940941908e-01,
+                         2.222219843214978396e-01,
+                         1.531383769920937332e-01)
+    end
+    hf² = f*f/2
+    r = s*(hf²+t) # log(1+f) - f + f^2/2
+
+    A_hi = _trunc_lo(f - hf²)
+    A_lo = (f - A_hi) - hf² + r
+
+    if invlog2b isa TwicePrecision
+        B_hi = k*invlog2b.hi
+        B_lo = k*invlog2b.lo
+    else
+        B_hi = T(k*invlog2b)
+        B_lo = -zero(T) # exploit the fact that -0.0 + x is a no-op
     end
 
-    hx = Int32(highword(x))
-    k += (hx>>log_k_shift(T))-exponent_bias(T)
-    hx &= log_mask(T)
-    i = log_i(T, hx)
-	x = log_set_highword(x, hx, i) # normalize x or x/2 */
-	k += i>>log_k_shift(T)
-	y = T(k)
-	f = x - T(1.0)
-	hfsq = T(0.5)*f*f;
-    r = k_log1p(f)
-    return hx, i, f, hfsq, r, y
+    V_hi = A_hi*invlnb.hi
+    V_lo = B_lo + (A_lo+A_hi)*invlnb.lo + A_lo*invlnb.hi
+    if T == Float32
+        return V_lo + V_hi + B_hi
+    elseif T == Float64
+        # Extra precision in for adding y*log10_2hi is not strictly needed
+        # since there is no very large cancellation near x = sqrt(2) or
+        # x = 1/sqrt(2), but we do it anyway since it costs little on CPUs
+        # with some parallelism and it reduces the error for many args.
+
+        W_hi = B_hi + V_hi
+        W_lo = V_lo + ((B_hi - W_hi) + V_hi)
+        return W_hi + W_lo
+    end
 end
 
-# kernel functions (log functions post reduction)
-@inline function log10_kernel(::Type{Float32}, hx, i, f, hfsq, r, y)
-    ivln10hi   =  4.3432617188f-01
-    ivln10lo   = -3.1689971365f-05
-    log10_2hi  =  3.0102920532f-01
-    log10_2lo  =  7.9034151668f-07
+@inline function _log_base(x::T, invlnb, invlog2b) where {T}
+    j = 0
+    if x <= realmin(T)
+        if x <= 0
+            if x == 0
+                return -T(Inf) # log(+-0)
+            else
+                throw(DomainError(x, "log(b,x) is only defined for non-negative x."))
+            end
+        end
+        x *= maxintfloat(T)/2
+        j -= significand_bits(T)
+    elseif !isfinite(x)
+        return x # +Inf/NaN
+    end
+    # x == 1       && return T(0) # logk(1) = +0 for any k
 
-	# See e_log2f.c and e_log2.c for details.
-	#if (sizeof(float_t) > sizeof(float))
-	#	return (r - hfsq + f) * ((float_t)ivln10lo + ivln10hi) +
-    #        y * ((float_t)log10_2lo + log10_2hi)
-    #end
-	hi = f - hfsq
-	hx = highword(hi)
-	hi = reinterpret(Float32, hx&0xfffff000)
-	lo = (f - hi) - hfsq + r
-    return y*log10_2lo + (lo + hi)*ivln10lo +
-           lo*ivln10hi + hi*ivln10hi + y*log10_2hi
-end
-@inline function log10_kernel(::Type{Float64}, hx, i, f, hfsq, r, y)
-    ivln10hi   =  4.34294481878168880939e-01
-    ivln10lo   =  2.50829467116452752298e-11
-    log10_2hi  =  3.01029995663611771306e-01
-    log10_2lo  =  3.69423907715893078616e-13
-        # See e_log2.c for most details. */
-    hi = f - hfsq
-    hi = zero_out_lowword(hi)
-	lo = (f - hi) - hfsq + r
-	val_hi = hi*ivln10hi
-	y2 = y*log10_2hi
-	val_lo = y*log10_2lo + (lo+hi)*ivln10lo + lo*ivln10hi
-
-	# Extra precision in for adding y*log10_2hi is not strictly needed
-	# since there is no very large cancellation near x = sqrt(2) or
-	# x = 1/sqrt(2), but we do it anyway since it costs little on CPUs
-	# with some parallelism and it reduces the error for many args.
-
-	w = y2 + val_hi
-	val_lo += (y2 - w) + val_hi
-	val_hi = w
-
-	return val_lo + val_hi
+    f, k = _log_range_reduction(x)
+    _log_kernel(f, k+j, invlnb, invlog2b)
 end
 
-zero_out_lowword(x::Float64) = reinterpret(Float64, reinterpret(UInt64, x)&0xffffffff00000000)
 
-highword(x::Float32) = reinterpret(UInt32, x)
-
-set_highword(x::Float32, hw) = reinterpret(Float32, hw)
-set_highword(x::Float64, hw) = reinterpret(Float64, (UInt64(hw)<<32)|(reinterpret(UInt64, x)<<32)>>32)
 
 # Wrapper function for logs
-@inline log10(x::Real) = log10(float(x))
-function log10(x::T) where T<:Union{Float32, Float64}
-    # domain error
-    # Take care of common special cases
-    x == 0 && return -T(Inf) # log(+-0)=-inf */
-    x < 0 && return T(NaN) # log(-#) = NaN */
-    isnan(x) && return x
-    x == T(1.0) && T(0.0) # logk(1) = +0 for any k
-    # Do range reduction
-    hx, i, f, hfsq, r, y = log_range_reduction(x)
-    # Compute logk of reduced argument x
-    log10_kernel(T, hx, i, f, hfsq, r, y)
-end
+invln2x(::Type{Float32}) = TwicePrecision(1.4428710938f+00, -1.7605285393f-04)
+invln2x(::Type{Float64}) = TwicePrecision(1.44269504072144627571e+00, 1.67517131648865118353e-10)
 
-# Wrapper function for logs
-@inline log2(x::Real) = log2(float(x))
-function log2(x::T) where T<:Union{Float32, Float64}
-    # domain error
-    # Take care of common special cases
-    x == 0 && return -T(Inf) # log(+-0)
-    x < 0 && return T(NaN) # log(<0) = NaN
-    isnan(x) && return x
-    x == T(1.0) && T(0.0) # logk(1) = +0 for any k
-    # Do range reduction
-    hx, i, f, hfsq, r, y = log_range_reduction(x)
-    # Compute logk of reduced argument x
-    log2_kernel(T, hx, i, f, hfsq, r, y)
-end
+log2(x::Real) = log2(float(x))
+log2(x::T) where T<:Union{Float32, Float64} =
+    _log_base(x, invln2x(T), 1)
 
-# Return the base 2 logarithm of x.  See e_log.c and k_log.h for most
-# comments.
-#
-# This reduces x to {k, 1+f} exactly as in e_log.c, then calls the kernel,
-# then does the combining and scaling steps
-#    log2(x) = (f - 0.5*f*f + k_log1p(f)) / ln2 + k
-# in not-quite-routine extra precision.
+invln10x(::Type{Float32}) = TwicePrecision(4.3432617188f-01, -3.1689971365f-05)
+invln10x(::Type{Float64}) = TwicePrecision(4.34294481878168880939e-01, 2.50829467116452752298e-11)
 
+invlb10x(::Type{Float32}) = TwicePrecision(3.0102920532f-01, 7.9034151668f-07)
+invlb10x(::Type{Float64}) = TwicePrecision(3.01029995663611771306e-01, 3.69423907715893078616e-13)
 
-@inline function log2_kernel(T::Type{Float64}, hx, i, f, hfsq, r, y)
-    ivln2hi =  1.44269504072144627571e+00
-    ivln2lo =  1.67517131648865118353e-10
-
-    # f-hfsq must (for args near 1) be evaluated in extra precision
-    # to avoid a large cancellation when x is near sqrt(2) or 1/sqrt(2).
-    # This is fairly efficient since f-hfsq only depends on f, so can
-    # be evaluated in parallel with R.  Not combining hfsq with R also
-    # keeps R small (though not as small as a true `lo' term would be),
-    # so that extra precision is not needed for terms involving R.
-    #
-    # Compiler bugs involving extra precision used to break Dekker's
-    # theorem for spitting f-hfsq as hi+lo, unless double_t was used
-    # or the multi-precision calculations were avoided when double_t
-    # has extra precision.  These problems are now automatically
-    # avoided as a side effect of the optimization of combining the
-    # Dekker splitting step with the clear-low-bits step.
-    #
-    # y must (for args near sqrt(2) and 1/sqrt(2)) be added in extra
-    # precision to avoid a very large cancellation when x is very near
-    # these values.  Unlike the above cancellations, this problem is
-    # specific to base 2.  It is strange that adding +-1 is so much
-    # harder than adding +-ln2 or +-log10_2.
-    #
-    # This uses Dekker's theorem to normalize y+val_hi, so the
-    # compiler bugs are back in some configurations, sigh.  And I
-    # don't want to used double_t to avoid them, since that gives a
-    # pessimization and the support for avoiding the pessimization
-    # is not yet available.
-    #
-    # The multi-precision calculations for the multiplications are
-    # routine.
-
-	hi = f - hfsq
-	hi = zero_out_lowword(hi)
-	lo = (f - hi) - hfsq + r
-	val_hi = hi*ivln2hi
-	val_lo = (lo+hi)*ivln2lo + lo*ivln2hi
-
-	# spadd(val_hi, val_lo, y), except for not using double_t:
-	w = y + val_hi
-	val_lo += (y - w) + val_hi
-	val_hi = w
-
-	return val_lo + val_hi
-end
-
-@inline function log2_kernel(T::Type{Float32}, hx, i, f, hfsq, r, y)
-    # We no longer need to avoid falling into the multi-precision
-    # calculations due to compiler bugs breaking Dekker's theorem.
-    # Keep avoiding this as an optimization.  See e_log2.c for more
-    # details (some details are here only because the optimization
-    # is not yet available in double precision).
-    #
-    # Another compiler bug turned up.  With gcc on i386,
-    # (ivln2lo + ivln2hi) would be evaluated in float precision
-    # despite runtime evaluations using double precision.  So we
-    # must cast one of its terms to float_t.  This makes the whole
-    # expression have type float_t, so return is forced to waste
-    # time clobbering its extra precision.
-    ivln2hi =  1.4428710938f+00
-    ivln2lo = -1.7605285393f-04
-
-	hi = f - hfsq
-    hx = highword(hi)
-    hi = set_highword(hi, hx&0xfffff000)
-	lo = (f - hi) - hfsq + r
-	return (lo+hi)*ivln2lo + lo*ivln2hi + hi*ivln2hi + y
-end
-
-
-const Lg1 = 6.666666666666735130e-01
-const Lg2 = 3.999999999940941908e-01
-const Lg3 = 2.857142874366239149e-01
-const Lg4 = 2.222219843214978396e-01
-const Lg5 = 1.818357216161805012e-01
-const Lg6 = 1.531383769920937332e-01
-const Lg7 = 1.479819860511658591e-01
-
-const lg1 = 0.6666666f0
-const lg2 = 0.40000972f0
-const lg3 = 0.28498787f0
-const lg4 = 0.24279079f0
-
-_log1p_t1(w::Float32) = @horner(w, lg2, lg4)
-_log1p_t1(w::Float64) = @horner(w, Lg2, Lg4, Lg6)
-_log1p_t2(w::Float32) = @horner(w, lg1, lg3)
-_log1p_t2(w::Float64) = @horner(w, Lg1, Lg3, Lg5, Lg7)
-"""
-    _log1p(f::Union{Float32, Float64})
-
-Return log(1+f) - f for 1+f in ~[sqrt(2)/2, sqrt(2)].
-"""
-@inline function k_log1p(f::T) where T<:Union{Float32, Float64}
- 	s  = f/(T(2.0) + f)
-	z  = s*s
-	w  = z*z
-	t1 = w*_log1p_t1(w)
-	t2 = z*_log1p_t2(w)
-	R  = t2 + t1
-	hfsq = T(0.5)*f*f
-	return s*(hfsq+R)
-end
+log10(x::Real) = log10(float(x))
+log10(x::T) where T<:Union{Float32, Float64} =
+    _log_base(x, invln10x(T), invlb10x(T))
