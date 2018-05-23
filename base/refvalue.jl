@@ -29,3 +29,6 @@ unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid
 
 getindex(b::RefValue) = b.x
 setindex!(b::RefValue, x) = (b.x = x; b)
+
+(b::RefValue)() = b.x
+(b::RefValue)(x) = (b.x = x; b)
