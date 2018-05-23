@@ -35,7 +35,7 @@ struct UnionSplit
     fully_covered::Bool
     atype::Any
     isinvoke::Bool
-    cases::Vector{Pair{Type, Any}}
+    cases::Vector{Pair{Any, Any}}
     bbs::Vector{Int}
 end
 UnionSplit(idx, fully_covered, atype, isinvoke, cases) = UnionSplit(idx, fully_covered, atype, isinvoke, cases, Int[])
@@ -861,7 +861,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             continue
         end
 
-        cases = Pair{Type, Any}[]
+        cases = Pair{Any, Any}[]
         # TODO: This could be better
         signature_union = Union{Any[match[1]::Type for match in meth]...}
         signature_fully_covered = atype <: signature_union
@@ -880,7 +880,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                 fully_covered = false
                 continue
             end
-            push!(cases, Pair{Type,Any}(metharg, case))
+            push!(cases, Pair{Any,Any}(metharg, case))
             push!(split_out_sigs, metharg)
         end
 
@@ -904,7 +904,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                     case = analyze_method!(idx, f, ft, metharg′, methsp, method, stmt, atypes, sv, metharg′, isinvoke, isapply, invoke_data)
                     if case !== nothing
                         found_any = true
-                        push!(cases, Pair{Type,Any}(metharg′, case))
+                        push!(cases, Pair{Any,Any}(metharg′, case))
                     end
                     break
                 end
@@ -924,7 +924,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             fully_covered = true
             case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
             case == nothing && continue
-            push!(cases, Pair{Type,Any}(metharg, case))
+            push!(cases, Pair{Any,Any}(metharg, case))
         end
 
         # If we only have one case and that case is fully covered, we may either
