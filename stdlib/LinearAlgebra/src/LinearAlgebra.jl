@@ -91,7 +91,7 @@ export
     factorize,
     givens,
     hessenberg,
-    hessfact!,
+    hessenberg!,
     isdiag,
     ishermitian,
     isposdef,

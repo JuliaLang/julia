@@ -1355,3 +1355,7 @@ export bkfact!
 export hessfact
 @deprecate(hessfact(A::StridedMatrix{<:BlasFloat}), hessenberg(A))
 @deprecate(hessfact(A::StridedMatrix{T}) where T, hessenberg(A))
+
+# deprecate hessfact! to hessenberg!
+export hessenberg!
+@deprecate(hessfact!(A::StridedMatrix{<:BlasFloat}), hessenberg!(A))

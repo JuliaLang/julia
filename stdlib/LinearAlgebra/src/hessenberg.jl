@@ -15,14 +15,14 @@ Base.iterate(S::Hessenberg, ::Val{:H}) = (S.H, Val(:done))
 Base.iterate(S::Hessenberg, ::Val{:done}) = nothing
 
 """
-    hessfact!(A) -> Hessenberg
+    hessenberg!(A) -> Hessenberg
 
-`hessfact!` is the same as [`hessenberg`](@ref), but saves space by overwriting
+`hessenberg!` is the same as [`hessenberg`](@ref), but saves space by overwriting
 the input `A`, instead of creating a copy.
 """
-hessfact!(A::StridedMatrix{<:BlasFloat}) = Hessenberg(A)
+hessenberg!(A::StridedMatrix{<:BlasFloat}) = Hessenberg(A)
 
-hessenberg(A::StridedMatrix{<:BlasFloat}) = hessfact!(copy(A))
+hessenberg(A::StridedMatrix{<:BlasFloat}) = hessenberg!(copy(A))
 
 """
     hessenberg(A) -> Hessenberg
@@ -58,7 +58,7 @@ true
 ```
 """
 hessenberg(A::StridedMatrix{T}) where T =
-    hessfact!(copy_oftype(A, eigtype(T)))
+    hessenberg!(copy_oftype(A, eigtype(T)))
 
 struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
