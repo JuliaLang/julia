@@ -353,30 +353,6 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
     return hvcat(rows, promote_to_arrays(n,1, promote_to_array_type(A), A...)...)
 end
 
-
-## Cholesky
-function _chol!(J::UniformScaling, uplo)
-    c, info = _chol!(J.λ, uplo)
-    UniformScaling(c), info
-end
-
-chol!(J::UniformScaling, uplo) = ((J, info) = _chol!(J, uplo); @assertposdef J info)
-
-"""
-    chol(J::UniformScaling) -> C
-
-Compute the square root of a non-negative UniformScaling `J`.
-
-# Examples
-```jldoctest
-julia> chol(16I)
-UniformScaling{Float64}
-4.0*I
-```
-"""
-chol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposdef C info)
-
-
 ## Matrix construction from UniformScaling
 function Matrix{T}(s::UniformScaling, dims::Dims{2}) where {T}
     A = zeros(T, dims)

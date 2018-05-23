@@ -192,14 +192,6 @@ end
     end
 end
 
-@testset "chol" begin
-    for T in (Float64, ComplexF32, BigFloat, Int)
-        λ = T(4)
-        @test chol(λ*I) ≈ √λ*I
-        @test_throws LinearAlgebra.PosDefException chol(-λ*I)
-    end
-end
-
 @testset "Matrix/Array construction from UniformScaling" begin
     I2_33 = [2 0 0; 0 2 0; 0 0 2]
     I2_34 = [2 0 0 0; 0 2 0 0; 0 0 2 0]

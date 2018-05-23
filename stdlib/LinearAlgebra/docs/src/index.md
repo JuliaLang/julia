@@ -313,7 +313,6 @@ LinearAlgebra.UpperTriangular
 LinearAlgebra.UniformScaling
 LinearAlgebra.lu
 LinearAlgebra.lu!
-LinearAlgebra.chol
 LinearAlgebra.cholesky
 LinearAlgebra.cholesky!
 LinearAlgebra.lowrankupdate
