@@ -198,6 +198,72 @@ function fetch(t::Task)
     task_result(t)
 end
 
+
+## lexically-scoped waiting for multiple items
+
+function sync_end(refs)
+    c_ex = CompositeException()
+    for r in refs
+        try
+            _wait(r)
+        catch ex
+            if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
+                rethrow(ex)
+            end
+        finally
+            if isa(r, Task) && istaskfailed(r)
+                push!(c_ex, CapturedException(task_result(r), r.backtrace))
+            end
+        end
+    end
+
+    if !isempty(c_ex)
+        throw(c_ex)
+    end
+    nothing
+end
+
+const sync_varname = gensym(:sync)
+
+"""
+    @sync
+
+Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+are complete. All exceptions thrown by enclosed async operations are collected and thrown as
+a `CompositeException`.
+"""
+macro sync(block)
+    var = esc(sync_varname)
+    quote
+        let $var = Any[]
+            v = $(esc(block))
+            sync_end($var)
+            v
+        end
+    end
+end
+
+# schedule an expression to run asynchronously
+
+"""
+    @async
+
+Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+"""
+macro async(expr)
+    thunk = esc(:(()->($expr)))
+    var = esc(sync_varname)
+    quote
+        local task = Task($thunk)
+        if $(Expr(:isdefined, var))
+            push!($var, task)
+            get_task_tls(task)[:SUPPRESS_EXCEPTION_PRINTING] = true
+        end
+        schedule(task)
+    end
+end
+
+
 suppress_excp_printing(t::Task) = isa(t.storage, IdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
 
 function register_taskdone_hook(t::Task, hook)
@@ -237,7 +303,7 @@ function task_done_hook(t::Task)
         if !suppress_excp_printing(t)
             let bt = t.backtrace
                 # run a new task to print the error for us
-                @schedule with_output_color(Base.error_color(), stderr) do io
+                @async with_output_color(Base.error_color(), stderr) do io
                     print(io, "ERROR (unhandled task failure): ")
                     showerror(io, result, bt)
                     println(io)
@@ -262,87 +328,6 @@ function task_done_hook(t::Task)
         end
     end
 end
-
-
-## dynamically-scoped waiting for multiple items
-sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWNS, ())))
-
-function sync_end()
-    spawns = get(task_local_storage(), :SPAWNS, ())
-    if spawns === ()
-        error("sync_end() without sync_begin()")
-    end
-    refs = spawns[1]
-    task_local_storage(:SPAWNS, spawns[2])
-
-    c_ex = CompositeException()
-    for r in refs
-        try
-            _wait(r)
-        catch ex
-            if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
-                rethrow(ex)
-            end
-        finally
-            if isa(r, Task) && istaskfailed(r)
-                push!(c_ex, CapturedException(task_result(r), r.backtrace))
-            end
-        end
-    end
-
-    if !isempty(c_ex)
-        throw(c_ex)
-    end
-    nothing
-end
-
-"""
-    @sync
-
-Wait until all dynamically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@parallel`
-are complete. All exceptions thrown by enclosed async operations are collected and thrown as
-a `CompositeException`.
-"""
-macro sync(block)
-    quote
-        sync_begin()
-        v = $(esc(block))
-        sync_end()
-        v
-    end
-end
-
-function sync_add(r)
-    spawns = get(task_local_storage(), :SPAWNS, ())
-    if spawns !== ()
-        push!(spawns[1], r)
-        if isa(r, Task)
-            tls_r = get_task_tls(r)
-            tls_r[:SUPPRESS_EXCEPTION_PRINTING] = true
-        end
-    end
-    r
-end
-
-function async_run_thunk(thunk)
-    t = Task(thunk)
-    sync_add(t)
-    enq_work(t)
-    t
-end
-
-"""
-    @async
-
-Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local
-machine's scheduler queue. Additionally it adds the task to the set of items that the
-nearest enclosing `@sync` waits for.
-"""
-macro async(expr)
-    thunk = esc(:(()->($expr)))
-    :(async_run_thunk($thunk))
-end
-
 
 """
     timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)

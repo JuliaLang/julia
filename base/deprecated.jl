@@ -1677,6 +1677,8 @@ end
 # in src/jlfrontend.scm a call to `@deprecate` is generated for per-module `eval(m, x)`
 @eval Core Main.Base.@deprecate(eval(e), Core.eval(Main, e))
 
+@eval @deprecate $(Symbol("@schedule")) $(Symbol("@async"))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

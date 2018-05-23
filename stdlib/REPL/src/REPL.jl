@@ -102,7 +102,7 @@ end
 
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     backend = REPLBackend(repl_channel, response_channel, false)
-    backend.backend_task = @schedule begin
+    backend.backend_task = @async begin
         # include looks at this to determine the relative include path
         # nothing means cwd
         while true

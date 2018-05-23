@@ -980,8 +980,8 @@ A task created explicitly by calling [`Task`](@ref) is initially not known to th
 allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
 a task waits for an event, it still gets restarted automatically when the event happens, as you
 would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily
-waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@schedule`](@ref)
-or [`@async`](@ref) macros (see [Parallel Computing](@ref) for more details).
+waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@async`](@ref)
+macro (see [Parallel Computing](@ref) for more details).
 
 ### Task states
 

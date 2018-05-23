@@ -13,7 +13,6 @@ Base.task_local_storage(::Function, ::Any, ::Any)
 Base.Condition
 Base.notify
 Base.schedule
-Base.@schedule
 Base.@task
 Base.sleep
 Base.Channel
