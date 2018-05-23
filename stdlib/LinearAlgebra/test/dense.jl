@@ -382,7 +382,7 @@ end
         @test exp(A5) ≈ eA5
 
         # Hessenberg
-        @test hessfact(A1).H ≈ convert(Matrix{elty},
+        @test hessenberg(A1).H ≈ convert(Matrix{elty},
                                                  [4.000000000000000  -1.414213562373094  -1.414213562373095
                                                   -1.414213562373095   4.999999999999996  -0.000000000000000
                                                   0  -0.000000000000002   3.000000000000000])

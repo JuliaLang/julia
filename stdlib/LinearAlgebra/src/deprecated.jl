@@ -1350,3 +1350,8 @@ export bkfact!
 @deprecate(bkfact!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false), bunchkaufman!(A, rook))
 @deprecate(bkfact!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false), bunchkaufman!(A, rook))
 @deprecate(bkfact!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false), bunchkaufman!(A, rook))
+
+# deprecate hessfact to hessenberg
+export hessfact
+@deprecate(hessfact(A::StridedMatrix{<:BlasFloat}), hessenberg(A))
+@deprecate(hessfact(A::StridedMatrix{T}) where T, hessenberg(A))

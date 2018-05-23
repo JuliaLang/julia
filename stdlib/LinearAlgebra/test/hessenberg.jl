@@ -18,7 +18,7 @@ let n = 10
                     Areal)
 
         if eltya != BigFloat
-            H = hessfact(A)
+            H = hessenberg(A)
             @test size(H.Q, 1) == size(A, 1)
             @test size(H.Q, 2) == size(A, 2)
             @test size(H.Q) == size(A)

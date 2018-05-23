@@ -90,7 +90,7 @@ export
     eigvecs,
     factorize,
     givens,
-    hessfact,
+    hessenberg,
     hessfact!,
     isdiag,
     ishermitian,

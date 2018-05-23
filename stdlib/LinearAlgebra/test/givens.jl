@@ -37,7 +37,7 @@ using LinearAlgebra: rmul!, lmul!
         G, _ = givens(one(elty),zero(elty),11,12)
         @test_throws DimensionMismatch lmul!(G, A)
         @test_throws DimensionMismatch rmul!(A, adjoint(G))
-        @test abs.(A) ≈ abs.(hessfact(Ac).H)
+        @test abs.(A) ≈ abs.(hessenberg(Ac).H)
         @test norm(R*Matrix{elty}(I, 10, 10)) ≈ one(elty)
 
         I10 = Matrix{elty}(I, 10, 10)
