@@ -231,7 +231,7 @@ end
     @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
-        fA = eigfact(A)
+        fA = eigen(A)
         @test fA.values  ≈ Aw
         @test fA.vectors ≈ Avr
     end
@@ -660,7 +660,7 @@ end
 
 # Issue 14065 (and 14220)
 let A = [NaN NaN; NaN NaN]
-    @test_throws ArgumentError eigfact(A)
+    @test_throws ArgumentError eigen(A)
 end
 
 end # module TestLAPACK

@@ -476,7 +476,7 @@ inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), Symbol(A.uplo))
 
 eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)...)
 
-function eigfact(A::RealHermSymComplexHerm)
+function eigen(A::RealHermSymComplexHerm)
     T = eltype(A)
     S = eigtype(T)
     eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
@@ -485,11 +485,13 @@ end
 eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
 
 """
-    eigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
+    eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
 
 Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
-which contains the eigenvalues in `F[:values]` and the eigenvectors in the columns of the
-matrix `F[:vectors]`. (The `k`th eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
+which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
+matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+
+Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 
@@ -499,7 +501,7 @@ The `UnitRange` `irange` specifies indices of the sorted eigenvalues to search f
     If `irange` is not `1:n`, where `n` is the dimension of `A`, then the returned factorization
     will be a *truncated* factorization.
 """
-function eigfact(A::RealHermSymComplexHerm, irange::UnitRange)
+function eigen(A::RealHermSymComplexHerm, irange::UnitRange)
     T = eltype(A)
     S = eigtype(T)
     eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
@@ -509,11 +511,13 @@ eigfact!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where
     Eigen(LAPACK.syevr!('V', 'V', A.uplo, A.data, convert(T, vl), convert(T, vh), 0, 0, -1.0)...)
 
 """
-    eigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen
+    eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen
 
 Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
-which contains the eigenvalues in `F[:values]` and the eigenvectors in the columns of the
-matrix `F[:vectors]`. (The `k`th eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
+which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
+matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+
+Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 
@@ -523,7 +527,7 @@ The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`
     If [`vl`, `vu`] does not contain all eigenvalues of `A`, then the returned factorization
     will be a *truncated* factorization.
 """
-function eigfact(A::RealHermSymComplexHerm, vl::Real, vh::Real)
+function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     T = eltype(A)
     S = eigtype(T)
     eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
@@ -634,7 +638,7 @@ eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatr
 eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix} =
     LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
 
-eigvecs(A::HermOrSym) = eigvecs(eigfact(A))
+eigvecs(A::HermOrSym) = eigvecs(eigen(A))
 
 function svdvals!(A::RealHermSymComplexHerm)
     vals = eigvals!(A)
@@ -656,7 +660,7 @@ function sympow(A::Symmetric, p::Integer)
 end
 function ^(A::Symmetric{<:Real}, p::Real)
     isinteger(p) && return integerpow(A, p)
-    F = eigfact(A)
+    F = eigen(A)
     if all(λ -> λ ≥ 0, F.values)
         return Symmetric((F.vectors * Diagonal((F.values).^p)) * F.vectors')
     else
@@ -680,7 +684,7 @@ function ^(A::Hermitian, p::Integer)
 end
 function ^(A::Hermitian{T}, p::Real) where T
     isinteger(p) && return integerpow(A, p)
-    F = eigfact(A)
+    F = eigen(A)
     if all(λ -> λ ≥ 0, F.values)
         retmat = (F.vectors * Diagonal((F.values).^p)) * F.vectors'
         if T <: Real
@@ -699,12 +703,12 @@ end
 for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh)
     @eval begin
         function ($func)(A::HermOrSym{<:Real})
-            F = eigfact(A)
+            F = eigen(A)
             return Symmetric((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
         end
         function ($func)(A::Hermitian{<:Complex})
             n = checksquare(A)
-            F = eigfact(A)
+            F = eigen(A)
             retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
             for i = 1:n
                 retmat[i,i] = real(retmat[i,i])
@@ -717,7 +721,7 @@ end
 for func in (:acos, :asin)
     @eval begin
         function ($func)(A::HermOrSym{<:Real})
-            F = eigfact(A)
+            F = eigen(A)
             if all(λ -> -1 ≤ λ ≤ 1, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
             else
@@ -727,7 +731,7 @@ for func in (:acos, :asin)
         end
         function ($func)(A::Hermitian{<:Complex})
             n = checksquare(A)
-            F = eigfact(A)
+            F = eigen(A)
             if all(λ -> -1 ≤ λ ≤ 1, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
                 for i = 1:n
@@ -742,7 +746,7 @@ for func in (:acos, :asin)
 end
 
 function acosh(A::HermOrSym{<:Real})
-    F = eigfact(A)
+    F = eigen(A)
     if all(λ -> λ ≥ 1, F.values)
         retmat = (F.vectors * Diagonal(acosh.(F.values))) * F.vectors'
     else
@@ -752,7 +756,7 @@ function acosh(A::HermOrSym{<:Real})
 end
 function acosh(A::Hermitian{<:Complex})
     n = checksquare(A)
-    F = eigfact(A)
+    F = eigen(A)
     if all(λ -> λ ≥ 1, F.values)
         retmat = (F.vectors * Diagonal(acosh.(F.values))) * F.vectors'
         for i = 1:n
@@ -766,7 +770,7 @@ end
 
 function sincos(A::HermOrSym{<:Real})
     n = checksquare(A)
-    F = eigfact(A)
+    F = eigen(A)
     S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
     for i in 1:n
         S.diag[i], C.diag[i] = sincos(F.values[i])
@@ -775,7 +779,7 @@ function sincos(A::HermOrSym{<:Real})
 end
 function sincos(A::Hermitian{<:Complex})
     n = checksquare(A)
-    F = eigfact(A)
+    F = eigen(A)
     S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
     for i in 1:n
         S.diag[i], C.diag[i] = sincos(F.values[i])
@@ -792,7 +796,7 @@ end
 for func in (:log, :sqrt)
     @eval begin
         function ($func)(A::HermOrSym{<:Real})
-            F = eigfact(A)
+            F = eigen(A)
             if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
             else
@@ -803,7 +807,7 @@ for func in (:log, :sqrt)
 
         function ($func)(A::Hermitian{<:Complex})
             n = checksquare(A)
-            F = eigfact(A)
+            F = eigen(A)
             if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
                 for i = 1:n

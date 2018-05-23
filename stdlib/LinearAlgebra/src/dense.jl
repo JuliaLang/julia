@@ -478,7 +478,7 @@ Compute the matrix exponential of `A`, defined by
 e^A = \\sum_{n=0}^{\\infty} \\frac{A^n}{n!}.
 ```
 
-For symmetric or Hermitian `A`, an eigendecomposition ([`eigfact`](@ref)) is
+For symmetric or Hermitian `A`, an eigendecomposition ([`eigen`](@ref)) is
 used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 [^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](https://doi.org/10.1137/090768539)
@@ -602,7 +602,7 @@ the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`
 the eigenvalues ``\\lambda`` of ``X``. If `A` has nonpositive eigenvalues, a nonprincipal
 matrix function is returned whenever possible.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used, if `A` is triangular an improved version of the inverse scaling and squaring method is
 employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur form
 ([`schur`](@ref)) is computed and the triangular algorithm is used on the
@@ -660,7 +660,7 @@ If `A` has no negative real eigenvalues, compute the principal matrix square roo
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
 ``X^2 = A``. Otherwise, a nonprincipal square root is returned.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used to compute the square root. Otherwise, the square root is determined by means of the
 Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schur`](@ref))
 and then the complex square root of the triangular factor.
@@ -732,7 +732,7 @@ end
 
 Compute the matrix cosine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the cosine. Otherwise, the cosine is determined by calling [`exp`](@ref).
 
 # Examples
@@ -765,7 +765,7 @@ end
 
 Compute the matrix sine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the sine. Otherwise, the sine is determined by calling [`exp`](@ref).
 
 # Examples
@@ -851,7 +851,7 @@ end
 
 Compute the matrix tangent of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the tangent. Otherwise, the tangent is determined by calling [`exp`](@ref).
 
 # Examples
@@ -924,7 +924,7 @@ end
 
 Compute the inverse matrix cosine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the inverse cosine. Otherwise, the inverse cosine is determined by using
 [`log`](@ref) and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute
 this function, see [^AH16_1].
@@ -955,7 +955,7 @@ end
 
 Compute the inverse matrix sine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the inverse sine. Otherwise, the inverse sine is determined by using [`log`](@ref)
 and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute this function,
 see [^AH16_2].
@@ -986,7 +986,7 @@ end
 
 Compute the inverse matrix tangent of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the inverse tangent. Otherwise, the inverse tangent is determined by using
 [`log`](@ref).  For the theory and logarithmic formulas used to compute this function, see
 [^AH16_3].

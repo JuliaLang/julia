@@ -207,7 +207,7 @@ srand(1)
     @test factorize(D) == D
 
     @testset "Eigensystem" begin
-        eigD = eigfact(D)
+        eigD = eigen(D)
         @test Diagonal(eigD.values) ≈ D
         @test eigD.vectors == Matrix(I, size(D))
     end

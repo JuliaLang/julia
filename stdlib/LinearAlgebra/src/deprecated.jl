@@ -1359,3 +1359,22 @@ export hessfact
 # deprecate hessfact! to hessenberg!
 export hessenberg!
 @deprecate(hessfact!(A::StridedMatrix{<:BlasFloat}), hessenberg!(A))
+
+# deprecate eigfact to eigen
+export eigfact
+@deprecate(eigfact(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T, eigen(A; permute=permute, scale=scale))
+@deprecate(eigfact(x::Number), eigen(x))
+@deprecate(eigfact(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}, eigen(A, B))
+@deprecate(eigfact(A::Number, B::Number), eigen(A, B))
+
+@deprecate(eigfact(A::SymTridiagonal{T}) where T, eigen(A))
+@deprecate(eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T, eigen(A))
+@deprecate(eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T, eigen(A))
+
+@deprecate(eigfact(M::Bidiagonal), eigen(M))
+
+@deprecate(eigfact(A::RealHermSymComplexHerm), eigen(A))
+@deprecate(eigfact(A::RealHermSymComplexHerm, irange::UnitRange), eigen(A, irange))
+@deprecate(eigfact(A::RealHermSymComplexHerm, vl::Real, vh::Real), eigen(A, vl, vh))
+@deprecate(eigfact(A::AbstractTriangular), eigen(A))
+@deprecate(eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true), eigen(D; permute=permute, scale=scale))
