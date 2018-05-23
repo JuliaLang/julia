@@ -198,7 +198,7 @@ Legend:
 
 ### Matrix factorizations
 
-| Matrix type               | LAPACK | [`eig`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
+| Matrix type               | LAPACK | [`eigen`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
 |:------------------------- |:------ |:------------- |:----------------- |:----------------- |:------------- |:----------------- |
 | [`Symmetric`](@ref)       | SY     |               | ARI               |                   |               |                   |
 | [`Hermitian`](@ref)       | HE     |               | ARI               |                   |               |                   |
@@ -331,7 +331,6 @@ LinearAlgebra.lq!
 LinearAlgebra.lq
 LinearAlgebra.bunchkaufman
 LinearAlgebra.bunchkaufman!
-LinearAlgebra.eig
 LinearAlgebra.eigvals
 LinearAlgebra.eigvals!
 LinearAlgebra.eigmax
