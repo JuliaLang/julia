@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Methods · The Julia Language</title><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-28835595-6', 'auto');
+ga('send', 'pageview');
+</script><link rel="canonical" href="https://docs.julialang.org/en/stable/manual/methods/index.html"/><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link href="../../assets/documenter.css" rel="stylesheet" type="text/css"/><link href="../../assets/julia-manual.css" rel="stylesheet" type="text/css"/></head><body><nav class="toc"><a href="../../index.html"><img class="logo" src="../../assets/logo.png" alt="The Julia Language logo"/></a><h1>The Julia Language</h1><select id="version-selector" onChange="window.location.href=this.value" style="visibility: hidden"></select><form class="search" id="search-form" action="../../search/"><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../../">Home</a></li><li><span class="toctext">Manual</span><ul><li><a class="toctext" href="../getting-started/">Getting Started</a></li><li><a class="toctext" href="../variables/">Variables</a></li><li><a class="toctext" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a></li><li><a class="toctext" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a></li><li><a class="toctext" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a></li><li><a class="toctext" href="../strings/">Strings</a></li><li><a class="toctext" href="../functions/">Functions</a></li><li><a class="toctext" href="../control-flow/">Control Flow</a></li><li><a class="toctext" href="../variables-and-scoping/">Scope of Variables</a></li><li><a class="toctext" href="../types/">Types</a></li><li class="current"><a class="toctext" href>Methods</a><ul class="internal"><li><a class="toctext" href="#Defining-Methods-1">Defining Methods</a></li><li><a class="toctext" href="#man-ambiguities-1">Method Ambiguities</a></li><li><a class="toctext" href="#Parametric-Methods-1">Parametric Methods</a></li><li><a class="toctext" href="#Redefining-Methods-1">Redefining Methods</a></li><li><a class="toctext" href="#Design-Patterns-with-Parametric-Methods-1">Design Patterns with Parametric Methods</a></li><li><a class="toctext" href="#Parametrically-constrained-Varargs-methods-1">Parametrically-constrained Varargs methods</a></li><li><a class="toctext" href="#Note-on-Optional-and-keyword-Arguments-1">Note on Optional and keyword Arguments</a></li><li><a class="toctext" href="#Function-like-objects-1">Function-like objects</a></li><li><a class="toctext" href="#Empty-generic-functions-1">Empty generic functions</a></li><li><a class="toctext" href="#man-method-design-ambiguities-1">Method design and the avoidance of ambiguities</a></li></ul></li><li><a class="toctext" href="../constructors/">Constructors</a></li><li><a class="toctext" href="../conversion-and-promotion/">Conversion and Promotion</a></li><li><a class="toctext" href="../interfaces/">Interfaces</a></li><li><a class="toctext" href="../modules/">Modules</a></li><li><a class="toctext" href="../documentation/">Documentation</a></li><li><a class="toctext" href="../metaprogramming/">Metaprogramming</a></li><li><a class="toctext" href="../arrays/">Multi-dimensional Arrays</a></li><li><a class="toctext" href="../missing/">Missing Values</a></li><li><a class="toctext" href="../networking-and-streams/">Networking and Streams</a></li><li><a class="toctext" href="../parallel-computing/">Parallel Computing</a></li><li><a class="toctext" href="../running-external-programs/">Running External Programs</a></li><li><a class="toctext" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a></li><li><a class="toctext" href="../handling-operating-system-variation/">Handling Operating System Variation</a></li><li><a class="toctext" href="../environment-variables/">Environment Variables</a></li><li><a class="toctext" href="../embedding/">Embedding Julia</a></li><li><a class="toctext" href="../packages/">Packages</a></li><li><a class="toctext" href="../code-loading/">Code Loading</a></li><li><a class="toctext" href="../profile/">Profiling</a></li><li><a class="toctext" href="../stacktraces/">Stack Traces</a></li><li><a class="toctext" href="../performance-tips/">Performance Tips</a></li><li><a class="toctext" href="../workflow-tips/">Workflow Tips</a></li><li><a class="toctext" href="../style-guide/">Style Guide</a></li><li><a class="toctext" href="../faq/">Frequently Asked Questions</a></li><li><a class="toctext" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a></li><li><a class="toctext" href="../unicode-input/">Unicode Input</a></li></ul></li><li><span class="toctext">Base</span><ul><li><a class="toctext" href="../../base/base/">Essentials</a></li><li><a class="toctext" href="../../base/collections/">Collections and Data Structures</a></li><li><a class="toctext" href="../../base/math/">Mathematics</a></li><li><a class="toctext" href="../../base/numbers/">Numbers</a></li><li><a class="toctext" href="../../base/strings/">Strings</a></li><li><a class="toctext" href="../../base/arrays/">Arrays</a></li><li><a class="toctext" href="../../base/parallel/">Tasks</a></li><li><a class="toctext" href="../../base/multi-threading/">Multi-Threading</a></li><li><a class="toctext" href="../../base/constants/">Constants</a></li><li><a class="toctext" href="../../base/file/">Filesystem</a></li><li><a class="toctext" href="../../base/io-network/">I/O and Network</a></li><li><a class="toctext" href="../../base/punctuation/">Punctuation</a></li><li><a class="toctext" href="../../base/sort/">Sorting and Related Functions</a></li><li><a class="toctext" href="../../base/iterators/">Iteration utilities</a></li><li><a class="toctext" href="../../base/c/">C Interface</a></li><li><a class="toctext" href="../../base/libc/">C Standard Library</a></li><li><a class="toctext" href="../../base/stacktraces/">StackTraces</a></li><li><a class="toctext" href="../../base/simd-types/">SIMD Support</a></li></ul></li><li><span class="toctext">Standard Library</span><ul><li><a class="toctext" href="../../stdlib/Base64/">Base64</a></li><li><a class="toctext" href="../../stdlib/CRC32c/">CRC32c</a></li><li><a class="toctext" href="../../stdlib/Dates/">Dates</a></li><li><a class="toctext" href="../../stdlib/DelimitedFiles/">Delimited Files</a></li><li><a class="toctext" href="../../stdlib/Distributed/">Distributed Computing</a></li><li><a class="toctext" href="../../stdlib/FileWatching/">File Events</a></li><li><a class="toctext" href="../../stdlib/InteractiveUtils/">Interactive Utilities</a></li><li><a class="toctext" href="../../stdlib/IterativeEigensolvers/">Iterative Eigensolvers</a></li><li><a class="toctext" href="../../stdlib/LibGit2/">LibGit2</a></li><li><a class="toctext" href="../../stdlib/Libdl/">Dynamic Linker</a></li><li><a class="toctext" href="../../stdlib/LinearAlgebra/">Linear Algebra</a></li><li><a class="toctext" href="../../stdlib/Logging/">Logging</a></li><li><a class="toctext" href="../../stdlib/Markdown/">Markdown</a></li><li><a class="toctext" href="../../stdlib/Mmap/">Memory-mapped I/O</a></li><li><a class="toctext" href="../../stdlib/Pkg/">Package Manager Functions</a></li><li><a class="toctext" href="../../stdlib/Pkg3/">Pkg3.jl</a></li><li><a class="toctext" href="../../stdlib/Printf/">Printf</a></li><li><a class="toctext" href="../../stdlib/Profile/">Profiling</a></li><li><a class="toctext" href="../../stdlib/REPL/">The Julia REPL</a></li><li><a class="toctext" href="../../stdlib/Random/">Random Numbers</a></li><li><a class="toctext" href="../../stdlib/SHA/">SHA</a></li><li><a class="toctext" href="../../stdlib/Serialization/">Serialization</a></li><li><a class="toctext" href="../../stdlib/SharedArrays/">Shared Arrays</a></li><li><a class="toctext" href="../../stdlib/Sockets/">Sockets</a></li><li><a class="toctext" href="../../stdlib/SparseArrays/">Sparse Arrays</a></li><li><a class="toctext" href="../../stdlib/Test/">Unit Testing</a></li><li><a class="toctext" href="../../stdlib/UUIDs/">UUIDs</a></li><li><a class="toctext" href="../../stdlib/Unicode/">Unicode</a></li></ul></li><li><span class="toctext">Developer Documentation</span><ul><li><a class="toctext" href="../../devdocs/reflection/">Reflection and introspection</a></li><li><span class="toctext">Documentation of Julia&#39;s Internals</span><ul><li><a class="toctext" href="../../devdocs/init/">Initialization of the Julia runtime</a></li><li><a class="toctext" href="../../devdocs/ast/">Julia ASTs</a></li><li><a class="toctext" href="../../devdocs/types/">More about types</a></li><li><a class="toctext" href="../../devdocs/object/">Memory layout of Julia Objects</a></li><li><a class="toctext" href="../../devdocs/eval/">Eval of Julia code</a></li><li><a class="toctext" href="../../devdocs/callconv/">Calling Conventions</a></li><li><a class="toctext" href="../../devdocs/compiler/">High-level Overview of the Native-Code Generation Process</a></li><li><a class="toctext" href="../../devdocs/functions/">Julia Functions</a></li><li><a class="toctext" href="../../devdocs/cartesian/">Base.Cartesian</a></li><li><a class="toctext" href="../../devdocs/meta/">Talking to the compiler (the <code>:meta</code> mechanism)</a></li><li><a class="toctext" href="../../devdocs/subarrays/">SubArrays</a></li><li><a class="toctext" href="../../devdocs/sysimg/">System Image Building</a></li><li><a class="toctext" href="../../devdocs/llvm/">Working with LLVM</a></li><li><a class="toctext" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li><li><a class="toctext" href="../../devdocs/boundscheck/">Bounds checking</a></li><li><a class="toctext" href="../../devdocs/locks/">Proper maintenance and care of multi-threading locks</a></li><li><a class="toctext" href="../../devdocs/offset-arrays/">Arrays with custom indices</a></li><li><a class="toctext" href="../../devdocs/require/">Module loading</a></li><li><a class="toctext" href="../../devdocs/inference/">Inference</a></li></ul></li><li><span class="toctext">Developing/debugging Julia&#39;s C code</span><ul><li><a class="toctext" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li><li><a class="toctext" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li><li><a class="toctext" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li><li><a class="toctext" href="../../devdocs/sanitizers/">Sanitizer support</a></li></ul></li></ul></li></ul></nav><article id="docs"><header><nav><ul><li>Manual</li><li><a href>Methods</a></li></ul><a class="edit-page" href="https://github.com/JuliaLang/julia/blob/master/doc/src/manual/methods.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/><div id="topbar"><span>Methods</span><a class="fa fa-bars" href="#"></a></div></header><h1><a class="nav-anchor" id="Methods-1" href="#Methods-1">Methods</a></h1><p>Recall from <a href="../functions/#man-functions-1">Functions</a> that a function is an object that maps a tuple of arguments to a return value, or throws an exception if no appropriate value can be returned. It is common for the same conceptual function or operation to be implemented quite differently for different types of arguments: adding two integers is very different from adding two floating-point numbers, both of which are distinct from adding an integer to a floating-point number. Despite their implementation differences, these operations all fall under the general concept of &quot;addition&quot;. Accordingly, in Julia, these behaviors all belong to a single object: the <code>+</code> function.</p><p>To facilitate using many different implementations of the same concept smoothly, functions need not be defined all at once, but can rather be defined piecewise by providing specific behaviors for certain combinations of argument types and counts. A definition of one possible behavior for a function is called a <em>method</em>. Thus far, we have presented only examples of functions defined with a single method, applicable to all types of arguments. However, the signatures of method definitions can be annotated to indicate the types of arguments in addition to their number, and more than a single method definition may be provided. When a function is applied to a particular tuple of arguments, the most specific method applicable to those arguments is applied. Thus, the overall behavior of a function is a patchwork of the behaviors of its various method definitions. If the patchwork is well designed, even though the implementations of the methods may be quite different, the outward behavior of the function will appear seamless and consistent.</p><p>The choice of which method to execute when a function is applied is called <em>dispatch</em>. Julia allows the dispatch process to choose which of a function&#39;s methods to call based on the number of arguments given, and on the types of all of the function&#39;s arguments. This is different than traditional object-oriented languages, where dispatch occurs based only on the first argument, which often has a special argument syntax, and is sometimes implied rather than explicitly written as an argument. <a href="#footnote-1">[1]</a> Using all of a function&#39;s arguments to choose which method should be invoked, rather than just the first, is known as <a href="https://en.wikipedia.org/wiki/Multiple_dispatch">multiple dispatch</a>. Multiple dispatch is particularly useful for mathematical code, where it makes little sense to artificially deem the operations to &quot;belong&quot; to one argument more than any of the others: does the addition operation in <code>x + y</code> belong to <code>x</code> any more than it does to <code>y</code>? The implementation of a mathematical operator generally depends on the types of all of its arguments. Even beyond mathematical operations, however, multiple dispatch ends up being a powerful and convenient paradigm for structuring and organizing programs.</p><div class="footnote" id="footnote-1"><a href="#footnote-1"><strong>[1]</strong></a><p>In C++ or Java, for example, in a method call like <code>obj.meth(arg1,arg2)</code>, the object obj &quot;receives&quot; the method call and is implicitly passed to the method via the <code>this</code> keyword, rather than as an explicit method argument. When the current <code>this</code> object is the receiver of a method call, it can be omitted altogether, writing just <code>meth(arg1,arg2)</code>, with <code>this</code> implied as the receiving object.</p></div><h2><a class="nav-anchor" id="Defining-Methods-1" href="#Defining-Methods-1">Defining Methods</a></h2><p>Until now, we have, in our examples, defined only functions with a single method having unconstrained argument types. Such functions behave just like they would in traditional dynamically typed languages. Nevertheless, we have used multiple dispatch and methods almost continually without being aware of it: all of Julia&#39;s standard functions and operators, like the aforementioned <code>+</code> function, have many methods defining their behavior over various possible combinations of argument type and count.</p><p>When defining a function, one can optionally constrain the types of parameters it is applicable to, using the <code>::</code> type-assertion operator, introduced in the section on <a href="../types/#Composite-Types-1">Composite Types</a>:</p><pre><code class="language-julia-repl">julia&gt; f(x::Float64, y::Float64) = 2x + y
+f (generic function with 1 method)</code></pre><p>This function definition applies only to calls where <code>x</code> and <code>y</code> are both values of type <a href="../../base/numbers/#Core.Float64"><code>Float64</code></a>:</p><pre><code class="language-julia-repl">julia&gt; f(2.0, 3.0)
+7.0</code></pre><p>Applying it to any other types of arguments will result in a <a href="../../base/base/#Core.MethodError"><code>MethodError</code></a>:</p><pre><code class="language-julia-repl">julia&gt; f(2.0, 3)
+ERROR: MethodError: no method matching f(::Float64, ::Int64)
+Closest candidates are:
+  f(::Float64, !Matched::Float64) at none:1
+
+julia&gt; f(Float32(2.0), 3.0)
+ERROR: MethodError: no method matching f(::Float32, ::Float64)
+Closest candidates are:
+  f(!Matched::Float64, ::Float64) at none:1
+
+julia&gt; f(2.0, &quot;3.0&quot;)
+ERROR: MethodError: no method matching f(::Float64, ::String)
+Closest candidates are:
+  f(::Float64, !Matched::Float64) at none:1
+
+julia&gt; f(&quot;2.0&quot;, &quot;3.0&quot;)
+ERROR: MethodError: no method matching f(::String, ::String)</code></pre><p>As you can see, the arguments must be precisely of type <a href="../../base/numbers/#Core.Float64"><code>Float64</code></a>. Other numeric types, such as integers or 32-bit floating-point values, are not automatically converted to 64-bit floating-point, nor are strings parsed as numbers. Because <code>Float64</code> is a concrete type and concrete types cannot be subclassed in Julia, such a definition can only be applied to arguments that are exactly of type <code>Float64</code>. It may often be useful, however, to write more general methods where the declared parameter types are abstract:</p><pre><code class="language-julia-repl">julia&gt; f(x::Number, y::Number) = 2x - y
+f (generic function with 2 methods)
+
+julia&gt; f(2.0, 3)
+1.0</code></pre><p>This method definition applies to any pair of arguments that are instances of <a href="../../base/numbers/#Core.Number"><code>Number</code></a>. They need not be of the same type, so long as they are each numeric values. The problem of handling disparate numeric types is delegated to the arithmetic operations in the expression <code>2x - y</code>.</p><p>To define a function with multiple methods, one simply defines the function multiple times, with different numbers and types of arguments. The first method definition for a function creates the function object, and subsequent method definitions add new methods to the existing function object. The most specific method definition matching the number and types of the arguments will be executed when the function is applied. Thus, the two method definitions above, taken together, define the behavior for <code>f</code> over all pairs of instances of the abstract type <code>Number</code> – but with a different behavior specific to pairs of <a href="../../base/numbers/#Core.Float64"><code>Float64</code></a> values. If one of the arguments is a 64-bit float but the other one is not, then the <code>f(Float64,Float64)</code> method cannot be called and the more general <code>f(Number,Number)</code> method must be used:</p><pre><code class="language-julia-repl">julia&gt; f(2.0, 3.0)
+7.0
+
+julia&gt; f(2, 3.0)
+1.0
+
+julia&gt; f(2.0, 3)
+1.0
+
+julia&gt; f(2, 3)
+1</code></pre><p>The <code>2x + y</code> definition is only used in the first case, while the <code>2x - y</code> definition is used in the others. No automatic casting or conversion of function arguments is ever performed: all conversion in Julia is non-magical and completely explicit. <a href="../conversion-and-promotion/#conversion-and-promotion-1">Conversion and Promotion</a>, however, shows how clever application of sufficiently advanced technology can be indistinguishable from magic. <a href="#footnote-Clarke61">[Clarke61]</a></p><p>For non-numeric values, and for fewer or more than two arguments, the function <code>f</code> remains undefined, and applying it will still result in a <a href="../../base/base/#Core.MethodError"><code>MethodError</code></a>:</p><pre><code class="language-julia-repl">julia&gt; f(&quot;foo&quot;, 3)
+ERROR: MethodError: no method matching f(::String, ::Int64)
+Closest candidates are:
+  f(!Matched::Number, ::Number) at none:1
+
+julia&gt; f()
+ERROR: MethodError: no method matching f()
+Closest candidates are:
+  f(!Matched::Float64, !Matched::Float64) at none:1
+  f(!Matched::Number, !Matched::Number) at none:1</code></pre><p>You can easily see which methods exist for a function by entering the function object itself in an interactive session:</p><pre><code class="language-julia-repl">julia&gt; f
+f (generic function with 2 methods)</code></pre><p>This output tells us that <code>f</code> is a function object with two methods. To find out what the signatures of those methods are, use the <a href="../../base/base/#Base.methods"><code>methods</code></a> function:</p><pre><code class="language-julia-repl">julia&gt; methods(f)
+# 2 methods for generic function &quot;f&quot;:
+[1] f(x::Float64, y::Float64) in Main at none:1
+[2] f(x::Number, y::Number) in Main at none:1</code></pre><p>which shows that <code>f</code> has two methods, one taking two <code>Float64</code> arguments and one taking arguments of type <code>Number</code>. It also indicates the file and line number where the methods were defined: because these methods were defined at the REPL, we get the apparent line number <code>none:1</code>.</p><p>In the absence of a type declaration with <code>::</code>, the type of a method parameter is <code>Any</code> by default, meaning that it is unconstrained since all values in Julia are instances of the abstract type <code>Any</code>. Thus, we can define a catch-all method for <code>f</code> like so:</p><pre><code class="language-julia-repl">julia&gt; f(x,y) = println(&quot;Whoa there, Nelly.&quot;)
+f (generic function with 3 methods)
+
+julia&gt; f(&quot;foo&quot;, 1)
+Whoa there, Nelly.</code></pre><p>This catch-all is less specific than any other possible method definition for a pair of parameter values, so it will only be called on pairs of arguments to which no other method definition applies.</p><p>Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single most powerful and central feature of the Julia language. Core operations typically have dozens of methods:</p><pre><code class="language-julia-repl">julia&gt; methods(+)
+# 180 methods for generic function &quot;+&quot;:
+[1] +(x::Bool, z::Complex{Bool}) in Base at complex.jl:227
+[2] +(x::Bool, y::Bool) in Base at bool.jl:89
+[3] +(x::Bool) in Base at bool.jl:86
+[4] +(x::Bool, y::T) where T&lt;:AbstractFloat in Base at bool.jl:96
+[5] +(x::Bool, z::Complex) in Base at complex.jl:234
+[6] +(a::Float16, b::Float16) in Base at float.jl:373
+[7] +(x::Float32, y::Float32) in Base at float.jl:375
+[8] +(x::Float64, y::Float64) in Base at float.jl:376
+[9] +(z::Complex{Bool}, x::Bool) in Base at complex.jl:228
+[10] +(z::Complex{Bool}, x::Real) in Base at complex.jl:242
+[11] +(x::Char, y::Integer) in Base at char.jl:40
+[12] +(c::BigInt, x::BigFloat) in Base.MPFR at mpfr.jl:307
+[13] +(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) in Base.GMP at gmp.jl:392
+[14] +(a::BigInt, b::BigInt, c::BigInt, d::BigInt) in Base.GMP at gmp.jl:391
+[15] +(a::BigInt, b::BigInt, c::BigInt) in Base.GMP at gmp.jl:390
+[16] +(x::BigInt, y::BigInt) in Base.GMP at gmp.jl:361
+[17] +(x::BigInt, c::Union{UInt16, UInt32, UInt64, UInt8}) in Base.GMP at gmp.jl:398
+...
+[180] +(a, b, c, xs...) in Base at operators.jl:424</code></pre><p>Multiple dispatch together with the flexible parametric type system give Julia its ability to abstractly express high-level algorithms decoupled from implementation details, yet generate efficient, specialized code to handle each case at run time.</p><h2><a class="nav-anchor" id="man-ambiguities-1" href="#man-ambiguities-1">Method Ambiguities</a></h2><p>It is possible to define a set of function methods such that there is no unique most specific method applicable to some combinations of arguments:</p><pre><code class="language-julia-repl">julia&gt; g(x::Float64, y) = 2x + y
+g (generic function with 1 method)
+
+julia&gt; g(x, y::Float64) = x + 2y
+g (generic function with 2 methods)
+
+julia&gt; g(2.0, 3)
+7.0
+
+julia&gt; g(2, 3.0)
+8.0
+
+julia&gt; g(2.0, 3.0)
+ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
+  g(x, y::Float64) in Main at none:1
+  g(x::Float64, y) in Main at none:1
+Possible fix, define
+  g(::Float64, ::Float64)</code></pre><p>Here the call <code>g(2.0, 3.0)</code> could be handled by either the <code>g(Float64, Any)</code> or the <code>g(Any, Float64)</code> method, and neither is more specific than the other. In such cases, Julia raises a <a href="../../base/base/#Core.MethodError"><code>MethodError</code></a> rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate method for the intersection case:</p><pre><code class="language-julia-repl">julia&gt; g(x::Float64, y::Float64) = 2x + 2y
+g (generic function with 3 methods)
+
+julia&gt; g(2.0, 3)
+7.0
+
+julia&gt; g(2, 3.0)
+8.0
+
+julia&gt; g(2.0, 3.0)
+10.0</code></pre><p>It is recommended that the disambiguating method be defined first, since otherwise the ambiguity exists, if transiently, until the more specific method is defined.</p><p>In more complex cases, resolving method ambiguities involves a certain element of design; this topic is explored further <a href="#man-method-design-ambiguities-1">below</a>.</p><h2><a class="nav-anchor" id="Parametric-Methods-1" href="#Parametric-Methods-1">Parametric Methods</a></h2><p>Method definitions can optionally have type parameters qualifying the signature:</p><pre><code class="language-julia-repl">julia&gt; same_type(x::T, y::T) where {T} = true
+same_type (generic function with 1 method)
+
+julia&gt; same_type(x,y) = false
+same_type (generic function with 2 methods)</code></pre><p>The first method applies whenever both arguments are of the same concrete type, regardless of what type that is, while the second method acts as a catch-all, covering all other cases. Thus, overall, this defines a boolean function that checks whether its two arguments are of the same type:</p><pre><code class="language-julia-repl">julia&gt; same_type(1, 2)
+true
+
+julia&gt; same_type(1, 2.0)
+false
+
+julia&gt; same_type(1.0, 2.0)
+true
+
+julia&gt; same_type(&quot;foo&quot;, 2.0)
+false
+
+julia&gt; same_type(&quot;foo&quot;, &quot;bar&quot;)
+true
+
+julia&gt; same_type(Int32(1), Int64(2))
+false</code></pre><p>Such definitions correspond to methods whose type signatures are <code>UnionAll</code> types (see <a href="../types/#UnionAll-Types-1">UnionAll Types</a>).</p><p>This kind of definition of function behavior by dispatch is quite common – idiomatic, even – in Julia. Method type parameters are not restricted to being used as the types of arguments: they can be used anywhere a value would be in the signature of the function or body of the function. Here&#39;s an example where the method type parameter <code>T</code> is used as the type parameter to the parametric type <code>Vector{T}</code> in the method signature:</p><pre><code class="language-julia-repl">julia&gt; myappend(v::Vector{T}, x::T) where {T} = [v..., x]
+myappend (generic function with 1 method)
+
+julia&gt; myappend([1,2,3],4)
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia&gt; myappend([1,2,3],2.5)
+ERROR: MethodError: no method matching myappend(::Array{Int64,1}, ::Float64)
+Closest candidates are:
+  myappend(::Array{T,1}, !Matched::T) where T at none:1
+
+julia&gt; myappend([1.0,2.0,3.0],4.0)
+4-element Array{Float64,1}:
+ 1.0
+ 2.0
+ 3.0
+ 4.0
+
+julia&gt; myappend([1.0,2.0,3.0],4)
+ERROR: MethodError: no method matching myappend(::Array{Float64,1}, ::Int64)
+Closest candidates are:
+  myappend(::Array{T,1}, !Matched::T) where T at none:1</code></pre><p>As you can see, the type of the appended element must match the element type of the vector it is appended to, or else a <a href="../../base/base/#Core.MethodError"><code>MethodError</code></a> is raised. In the following example, the method type parameter <code>T</code> is used as the return value:</p><pre><code class="language-julia-repl">julia&gt; mytypeof(x::T) where {T} = T
+mytypeof (generic function with 1 method)
+
+julia&gt; mytypeof(1)
+Int64
+
+julia&gt; mytypeof(1.0)
+Float64</code></pre><p>Just as you can put subtype constraints on type parameters in type declarations (see <a href="../types/#Parametric-Types-1">Parametric Types</a>), you can also constrain type parameters of methods:</p><pre><code class="language-julia-repl">julia&gt; same_type_numeric(x::T, y::T) where {T&lt;:Number} = true
+same_type_numeric (generic function with 1 method)
+
+julia&gt; same_type_numeric(x::Number, y::Number) = false
+same_type_numeric (generic function with 2 methods)
+
+julia&gt; same_type_numeric(1, 2)
+true
+
+julia&gt; same_type_numeric(1, 2.0)
+false
+
+julia&gt; same_type_numeric(1.0, 2.0)
+true
+
+julia&gt; same_type_numeric(&quot;foo&quot;, 2.0)
+ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
+Closest candidates are:
+  same_type_numeric(!Matched::T&lt;:Number, ::T&lt;:Number) where T&lt;:Number at none:1
+  same_type_numeric(!Matched::Number, ::Number) at none:1
+
+julia&gt; same_type_numeric(&quot;foo&quot;, &quot;bar&quot;)
+ERROR: MethodError: no method matching same_type_numeric(::String, ::String)
+
+julia&gt; same_type_numeric(Int32(1), Int64(2))
+false</code></pre><p>The <code>same_type_numeric</code> function behaves much like the <code>same_type</code> function defined above, but is only defined for pairs of numbers.</p><p>Parametric methods allow the same syntax as <code>where</code> expressions used to write types (see <a href="../types/#UnionAll-Types-1">UnionAll Types</a>). If there is only a single parameter, the enclosing curly braces (in <code>where {T}</code>) can be omitted, but are often preferred for clarity. Multiple parameters can be separated with commas, e.g. <code>where {T, S&lt;:Real}</code>, or written using nested <code>where</code>, e.g. <code>where S&lt;:Real where T</code>.</p><h2><a class="nav-anchor" id="Redefining-Methods-1" href="#Redefining-Methods-1">Redefining Methods</a></h2><p>When redefining a method or adding new methods, it is important to realize that these changes don&#39;t take effect immediately. This is key to Julia&#39;s ability to statically infer and compile code to run fast, without the usual JIT tricks and overhead. Indeed, any new method definition won&#39;t be visible to the current runtime environment, including Tasks and Threads (and any previously defined <code>@generated</code> functions). Let&#39;s start with an example to see what this means:</p><pre><code class="language-julia-repl">julia&gt; function tryeval()
+           @eval newfun() = 1
+           newfun()
+       end
+tryeval (generic function with 1 method)
+
+julia&gt; tryeval()
+ERROR: MethodError: no method matching newfun()
+The applicable method may be too new: running in world age xxxx1, while current world is xxxx2.
+Closest candidates are:
+  newfun() at none:1 (method too new to be called from this world context.)
+ in tryeval() at none:1
+ ...
+
+julia&gt; newfun()
+1</code></pre><p>In this example, observe that the new definition for <code>newfun</code> has been created, but can&#39;t be immediately called. The new global is immediately visible to the <code>tryeval</code> function, so you could write <code>return newfun</code> (without parentheses). But neither you, nor any of your callers, nor the functions they call, or etc. can call this new method definition!</p><p>But there&#39;s an exception: future calls to <code>newfun</code> <em>from the REPL</em> work as expected, being able to both see and call the new definition of <code>newfun</code>.</p><p>However, future calls to <code>tryeval</code> will continue to see the definition of <code>newfun</code> as it was <em>at the previous statement at the REPL</em>, and thus before that call to <code>tryeval</code>.</p><p>You may want to try this for yourself to see how it works.</p><p>The implementation of this behavior is a &quot;world age counter&quot;. This monotonically increasing value tracks each method definition operation. This allows describing &quot;the set of method definitions visible to a given runtime environment&quot; as a single number, or &quot;world age&quot;. It also allows comparing the methods available in two worlds just by comparing their ordinal value. In the example above, we see that the &quot;current world&quot; (in which the method <code>newfun</code> exists), is one greater than the task-local &quot;runtime world&quot; that was fixed when the execution of <code>tryeval</code> started.</p><p>Sometimes it is necessary to get around this (for example, if you are implementing the above REPL). Fortunately, there is an easy solution: call the function using <a href="../../base/base/#Base.invokelatest"><code>Base.invokelatest</code></a>:</p><pre><code class="language-julia-repl">julia&gt; function tryeval2()
+           @eval newfun2() = 2
+           Base.invokelatest(newfun2)
+       end
+tryeval2 (generic function with 1 method)
+
+julia&gt; tryeval2()
+2</code></pre><p>Finally, let&#39;s take a look at some more complex examples where this rule comes into play. Define a function <code>f(x)</code>, which initially has one method:</p><pre><code class="language-julia-repl">julia&gt; f(x) = &quot;original definition&quot;
+f (generic function with 1 method)</code></pre><p>Start some other operations that use <code>f(x)</code>:</p><pre><code class="language-julia-repl">julia&gt; g(x) = f(x)
+g (generic function with 1 method)
+
+julia&gt; t = @async f(wait()); yield();</code></pre><p>Now we add some new methods to <code>f(x)</code>:</p><pre><code class="language-julia-repl">julia&gt; f(x::Int) = &quot;definition for Int&quot;
+f (generic function with 2 methods)
+
+julia&gt; f(x::Type{Int}) = &quot;definition for Type{Int}&quot;
+f (generic function with 3 methods)</code></pre><p>Compare how these results differ:</p><pre><code class="language-julia-repl">julia&gt; f(1)
+&quot;definition for Int&quot;
+
+julia&gt; g(1)
+&quot;definition for Int&quot;
+
+julia&gt; fetch(schedule(t, 1))
+&quot;original definition&quot;
+
+julia&gt; t = @async f(wait()); yield();
+
+julia&gt; fetch(schedule(t, 1))
+&quot;definition for Int&quot;</code></pre><h2><a class="nav-anchor" id="Design-Patterns-with-Parametric-Methods-1" href="#Design-Patterns-with-Parametric-Methods-1">Design Patterns with Parametric Methods</a></h2><p>While complex dispatch logic is not required for performance or usability, sometimes it can be the best way to express some algorithm. Here are a few common design patterns that come up sometimes when using dispatch in this way.</p><h3><a class="nav-anchor" id="Extracting-the-type-parameter-from-a-super-type-1" href="#Extracting-the-type-parameter-from-a-super-type-1">Extracting the type parameter from a super-type</a></h3><p>Here is the correct code template for returning the element-type <code>T</code> of any arbitrary subtype of <code>AbstractArray</code>:</p><pre><code class="language-julia">abstract type AbstractArray{T, N} end
+eltype(::Type{&lt;:AbstractArray{T}}) where {T} = T</code></pre><p>using so-called triangular dispatch.  Note that if <code>T</code> is a <code>UnionAll</code> type, as e.g. <code>eltype(Array{T} where T &lt;: Integer)</code>, then <code>Any</code> is returned (as does the the version of <code>eltype</code> in <code>Base</code>).</p><p>Another way, which used to be the only correct way before the advent of triangular dispatch in Julia v0.6, is:</p><pre><code class="language-julia">abstract type AbstractArray{T, N} end
+eltype(::Type{AbstractArray}) = Any
+eltype(::Type{AbstractArray{T}}) where {T} = T
+eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
+eltype(::Type{A}) where {A&lt;:AbstractArray} = eltype(supertype(A))</code></pre><p>Another possibility is the following, which could useful to adapt to cases where the parameter <code>T</code> would need to be matched more narrowly:</p><pre><code class="language-julia">eltype(::Type{AbstractArray{T, N} where {T&lt;:S, N&lt;:M}}) where {M, S} = Any
+eltype(::Type{AbstractArray{T, N} where {T&lt;:S}}) where {N, S} = Any
+eltype(::Type{AbstractArray{T, N} where {N&lt;:M}}) where {M, T} = T
+eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
+eltype(::Type{A}) where {A &lt;: AbstractArray} = eltype(supertype(A))</code></pre><p>One common mistake is to try and get the element-type by using introspection:</p><pre><code class="language-julia">eltype_wrong(::Type{A}) where {A&lt;:AbstractArray} = A.parameters[1]</code></pre><p>However, it is not hard to construct cases where this will fail:</p><pre><code class="language-julia">struct BitVector &lt;: AbstractArray{Bool, 1}; end</code></pre><p>Here we have created a type <code>BitVector</code> which has no parameters, but where the element-type is still fully specified, with <code>T</code> equal to <code>Bool</code>!</p><h3><a class="nav-anchor" id="Building-a-similar-type-with-a-different-type-parameter-1" href="#Building-a-similar-type-with-a-different-type-parameter-1">Building a similar type with a different type parameter</a></h3><p>When building generic code, there is often a need for constructing a similar object with some change made to the layout of the type, also necessitating a change of the type parameters. For instance, you might have some sort of abstract array with an arbitrary element type and want to write your computation on it with a specific element type. We must implement a method for each <code>AbstractArray{T}</code> subtype that describes how to compute this type transform. There is no general transform of one subtype into another subtype with a different parameter. (Quick review: do you see why this is?)</p><p>The subtypes of <code>AbstractArray</code> typically implement two methods to achieve this: A method to convert the input array to a subtype of a specific <code>AbstractArray{T, N}</code> abstract type; and a method to make a new uninitialized array with a specific element type. Sample implementations of these can be found in Julia Base. Here is a basic example usage of them, guaranteeing that <code>input</code> and <code>output</code> are of the same type:</p><pre><code class="language-julia">input = convert(AbstractArray{Eltype}, input)
+output = similar(input, Eltype)</code></pre><p>As an extension of this, in cases where the algorithm needs a copy of the input array, <a href="../../base/base/#Base.convert"><code>convert</code></a> is insufficient as the return value may alias the original input. Combining <a href="../../base/arrays/#Base.similar"><code>similar</code></a> (to make the output array) and <a href="../../base/c/#Base.copyto!"><code>copyto!</code></a> (to fill it with the input data) is a generic way to express the requirement for a mutable copy of the input argument:</p><pre><code class="language-julia">copy_with_eltype(input, Eltype) = copyto!(similar(input, Eltype), input)</code></pre><h3><a class="nav-anchor" id="Iterated-dispatch-1" href="#Iterated-dispatch-1">Iterated dispatch</a></h3><p>In order to dispatch a multi-level parametric argument list, often it is best to separate each level of dispatch into distinct functions. This may sound similar in approach to single-dispatch, but as we shall see below, it is still more flexible.</p><p>For example, trying to dispatch on the element-type of an array will often run into ambiguous situations. Instead, commonly code will dispatch first on the container type, then recurse down to a more specific method based on eltype. In most cases, the algorithms lend themselves conveniently to this hierarchical approach, while in other cases, this rigor must be resolved manually. This dispatching branching can be observed, for example, in the logic to sum two matrices:</p><pre><code class="language-julia"># First dispatch selects the map algorithm for element-wise summation.
++(a::Matrix, b::Matrix) = map(+, a, b)
+# Then dispatch handles each element and selects the appropriate
+# common element type for the computation.
++(a, b) = +(promote(a, b)...)
+# Once the elements have the same type, they can be added.
+# For example, via primitive operations exposed by the processor.
++(a::Float64, b::Float64) = Core.add(a, b)</code></pre><h3><a class="nav-anchor" id="Trait-based-dispatch-1" href="#Trait-based-dispatch-1">Trait-based dispatch</a></h3><p>A natural extension to the iterated dispatch above is to add a layer to method selection that allows to dispatch on sets of types which are independent from the sets defined by the type hierarchy. We could construct such a set by writing out a <code>Union</code> of the types in question, but then this set would not be extensible as <code>Union</code>-types cannot be altered after creation. However, such an extensible set can be programmed with a design pattern often referred to as a <a href="https://github.com/JuliaLang/julia/issues/2345#issuecomment-54537633">&quot;Holy-trait&quot;</a>.</p><p>This pattern is implemented by defining a generic function which computes a different singleton value (or type) for each trait-set to which the function arguments may belong to.  If this function is pure there is no impact on performance compared to normal dispatch.</p><p>The example in the previous section glossed over the implementation details of <a href="../../base/collections/#Base.map"><code>map</code></a> and <a href="../../base/base/#Base.promote"><code>promote</code></a>, which both operate in terms of these traits. When iterating over a matrix, such as in the implementation of <code>map</code>, one important question is what order to use to traverse the data. When <code>AbstractArray</code> subtypes implement the <a href="../../base/arrays/#Base.IndexStyle"><code>Base.IndexStyle</code></a> trait, other functions such as <code>map</code> can dispatch on this information to pick the best algorithm (see <a href="../interfaces/#man-interface-array-1">Abstract Array Interface</a>). This means that each subtype does not need to implement a custom version of <code>map</code>, since the generic definitions + trait classes will enable the system to select the fastest version. Here a toy implementation of <code>map</code> illustrating the trait-based dispatch:</p><pre><code class="language-julia">map(f, a::AbstractArray, b::AbstractArray) = map(Base.IndexStyle(a, b), f, a, b)
+# generic implementation:
+map(::Base.IndexCartesian, f, a::AbstractArray, b::AbstractArray) = ...
+# linear-indexing implementation (faster)
+map(::Base.IndexLinear, f, a::AbstractArray, b::AbstractArray) = ...</code></pre><p>This trait-based approach is also present in the <a href="../../base/base/#Base.promote"><code>promote</code></a> mechanism employed by the scalar <code>+</code>. It uses <a href="../../base/base/#Base.promote_type"><code>promote_type</code></a>, which returns the optimal common type to compute the operation given the two types of the operands. This makes it possible to reduce the problem of implementing every function for every pair of possible type arguments, to the much smaller problem of implementing a conversion operation from each type to a common type, plus a table of preferred pair-wise promotion rules.</p><h3><a class="nav-anchor" id="Output-type-computation-1" href="#Output-type-computation-1">Output-type computation</a></h3><p>The discussion of trait-based promotion provides a transition into our next design pattern: computing the output element type for a matrix operation.</p><p>For implementing primitive operations, such as addition, we use the <a href="../../base/base/#Base.promote_type"><code>promote_type</code></a> function to compute the desired output type. (As before, we saw this at work in the <code>promote</code> call in the call to <code>+</code>).</p><p>For more complex functions on matrices, it may be necessary to compute the expected return type for a more complex sequence of operations. This is often performed by the following steps:</p><ol><li>Write a small function <code>op</code> that expresses the set of operations performed by the kernel of the algorithm.</li><li>Compute the element type <code>R</code> of the result matrix as <code>promote_op(op, argument_types...)</code>, where <code>argument_types</code> is computed from <code>eltype</code> applied to each input array.</li><li>Build the output matrix as <code>similar(R, dims)</code>, where <code>dims</code> are the desired dimensions of the output array.</li></ol><p>For a more specific example, a generic square-matrix multiply pseudo-code might look like:</p><pre><code class="language-julia">function matmul(a::AbstractMatrix, b::AbstractMatrix)
+    op = (ai, bi) -&gt; ai * bi + ai * bi
+
+    ## this is insufficient because it assumes `one(eltype(a))` is constructable:
+    # R = typeof(op(one(eltype(a)), one(eltype(b))))
+
+    ## this fails because it assumes `a[1]` exists and is representative of all elements of the array
+    # R = typeof(op(a[1], b[1]))
+
+    ## this is incorrect because it assumes that `+` calls `promote_type`
+    ## but this is not true for some types, such as Bool:
+    # R = promote_type(ai, bi)
+
+    # this is wrong, since depending on the return value
+    # of type-inference is very brittle (as well as not being optimizable):
+    # R = Base.return_types(op, (eltype(a), eltype(b)))
+
+    ## but, finally, this works:
+    R = promote_op(op, eltype(a), eltype(b))
+    ## although sometimes it may give a larger type than desired
+    ## it will always give a correct type
+
+    output = similar(b, R, (size(a, 1), size(b, 2)))
+    if size(a, 2) &gt; 0
+        for j in 1:size(b, 2)
+            for i in 1:size(b, 1)
+                ## here we don&#39;t use `ab = zero(R)`,
+                ## since `R` might be `Any` and `zero(Any)` is not defined
+                ## we also must declare `ab::R` to make the type of `ab` constant in the loop,
+                ## since it is possible that typeof(a * b) != typeof(a * b + a * b) == R
+                ab::R = a[i, 1] * b[1, j]
+                for k in 2:size(a, 2)
+                    ab += a[i, k] * b[k, j]
+                end
+                output[i, j] = ab
+            end
+        end
+    end
+    return output
+end</code></pre><h3><a class="nav-anchor" id="Separate-convert-and-kernel-logic-1" href="#Separate-convert-and-kernel-logic-1">Separate convert and kernel logic</a></h3><p>One way to significantly cut down on compile-times and testing complexity is to isolate the logic for converting to the desired type and the computation. This lets the compiler specialize and inline the conversion logic independent from the rest of the body of the larger kernel.</p><p>This is a common pattern seen when converting from a larger class of types to the one specific argument type that is actually supported by the algorithm:</p><pre><code class="language-julia">complexfunction(arg::Int) = ...
+complexfunction(arg::Any) = complexfunction(convert(Int, arg))
+
+matmul(a::T, b::T) = ...
+matmul(a, b) = matmul(promote(a, b)...)</code></pre><h2><a class="nav-anchor" id="Parametrically-constrained-Varargs-methods-1" href="#Parametrically-constrained-Varargs-methods-1">Parametrically-constrained Varargs methods</a></h2><p>Function parameters can also be used to constrain the number of arguments that may be supplied to a &quot;varargs&quot; function (<a href="../functions/#Varargs-Functions-1">Varargs Functions</a>).  The notation <code>Vararg{T,N}</code> is used to indicate such a constraint.  For example:</p><pre><code class="language-julia-repl">julia&gt; bar(a,b,x::Vararg{Any,2}) = (a,b,x)
+bar (generic function with 1 method)
+
+julia&gt; bar(1,2,3)
+ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64)
+Closest candidates are:
+  bar(::Any, ::Any, ::Any, !Matched::Any) at none:1
+
+julia&gt; bar(1,2,3,4)
+(1, 2, (3, 4))
+
+julia&gt; bar(1,2,3,4,5)
+ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
+Closest candidates are:
+  bar(::Any, ::Any, ::Any, ::Any) at none:1</code></pre><p>More usefully, it is possible to constrain varargs methods by a parameter. For example:</p><pre><code class="language-julia">function getindex(A::AbstractArray{T,N}, indices::Vararg{Number,N}) where {T,N}</code></pre><p>would be called only when the number of <code>indices</code> matches the dimensionality of the array.</p><p>When only the type of supplied arguments needs to be constrained <code>Vararg{T}</code> can be equivalently written as <code>T...</code>. For instance <code>f(x::Int...) = x</code> is a shorthand for <code>f(x::Vararg{Int}) = x</code>.</p><h2><a class="nav-anchor" id="Note-on-Optional-and-keyword-Arguments-1" href="#Note-on-Optional-and-keyword-Arguments-1">Note on Optional and keyword Arguments</a></h2><p>As mentioned briefly in <a href="../functions/#man-functions-1">Functions</a>, optional arguments are implemented as syntax for multiple method definitions. For example, this definition:</p><pre><code class="language-julia">f(a=1,b=2) = a+2b</code></pre><p>translates to the following three methods:</p><pre><code class="language-julia">f(a,b) = a+2b
+f(a) = f(a,2)
+f() = f(1,2)</code></pre><p>This means that calling <code>f()</code> is equivalent to calling <code>f(1,2)</code>. In this case the result is <code>5</code>, because <code>f(1,2)</code> invokes the first method of <code>f</code> above. However, this need not always be the case. If you define a fourth method that is more specialized for integers:</p><pre><code class="language-julia">f(a::Int,b::Int) = a-2b</code></pre><p>then the result of both <code>f()</code> and <code>f(1,2)</code> is <code>-3</code>. In other words, optional arguments are tied to a function, not to any specific method of that function. It depends on the types of the optional arguments which method is invoked. When optional arguments are defined in terms of a global variable, the type of the optional argument may even change at run-time.</p><p>Keyword arguments behave quite differently from ordinary positional arguments. In particular, they do not participate in method dispatch. Methods are dispatched based only on positional arguments, with keyword arguments processed after the matching method is identified.</p><h2><a class="nav-anchor" id="Function-like-objects-1" href="#Function-like-objects-1">Function-like objects</a></h2><p>Methods are associated with types, so it is possible to make any arbitrary Julia object &quot;callable&quot; by adding methods to its type. (Such &quot;callable&quot; objects are sometimes called &quot;functors.&quot;)</p><p>For example, you can define a type that stores the coefficients of a polynomial, but behaves like a function evaluating the polynomial:</p><pre><code class="language-julia-repl">julia&gt; struct Polynomial{R}
+           coeffs::Vector{R}
+       end
+
+julia&gt; function (p::Polynomial)(x)
+           v = p.coeffs[end]
+           for i = (length(p.coeffs)-1):-1:1
+               v = v*x + p.coeffs[i]
+           end
+           return v
+       end</code></pre><p>Notice that the function is specified by type instead of by name. In the function body, <code>p</code> will refer to the object that was called. A <code>Polynomial</code> can be used as follows:</p><pre><code class="language-julia-repl">julia&gt; p = Polynomial([1,10,100])
+Polynomial{Int64}([1, 10, 100])
+
+julia&gt; p(3)
+931</code></pre><p>This mechanism is also the key to how type constructors and closures (inner functions that refer to their surrounding environment) work in Julia.</p><h2><a class="nav-anchor" id="Empty-generic-functions-1" href="#Empty-generic-functions-1">Empty generic functions</a></h2><p>Occasionally it is useful to introduce a generic function without yet adding methods. This can be used to separate interface definitions from implementations. It might also be done for the purpose of documentation or code readability. The syntax for this is an empty <code>function</code> block without a tuple of arguments:</p><pre><code class="language-julia">function emptyfunc
+end</code></pre><h2><a class="nav-anchor" id="man-method-design-ambiguities-1" href="#man-method-design-ambiguities-1">Method design and the avoidance of ambiguities</a></h2><p>Julia&#39;s method polymorphism is one of its most powerful features, yet exploiting this power can pose design challenges.  In particular, in more complex method hierarchies it is not uncommon for <a href="#man-ambiguities-1">ambiguities</a> to arise.</p><p>Above, it was pointed out that one can resolve ambiguities like</p><pre><code class="language-julia">f(x, y::Int) = 1
+f(x::Int, y) = 2</code></pre><p>by defining a method</p><pre><code class="language-julia">f(x::Int, y::Int) = 3</code></pre><p>This is often the right strategy; however, there are circumstances where following this advice blindly can be counterproductive. In particular, the more methods a generic function has, the more possibilities there are for ambiguities. When your method hierarchies get more complicated than this simple example, it can be worth your while to think carefully about alternative strategies.</p><p>Below we discuss particular challenges and some alternative ways to resolve such issues.</p><h3><a class="nav-anchor" id="Tuple-and-NTuple-arguments-1" href="#Tuple-and-NTuple-arguments-1">Tuple and NTuple arguments</a></h3><p><code>Tuple</code> (and <code>NTuple</code>) arguments present special challenges. For example,</p><pre><code class="language-julia">f(x::NTuple{N,Int}) where {N} = 1
+f(x::NTuple{N,Float64}) where {N} = 2</code></pre><p>are ambiguous because of the possibility that <code>N == 0</code>: there are no elements to determine whether the <code>Int</code> or <code>Float64</code> variant should be called. To resolve the ambiguity, one approach is define a method for the empty tuple:</p><pre><code class="language-julia">f(x::Tuple{}) = 3</code></pre><p>Alternatively, for all methods but one you can insist that there is at least one element in the tuple:</p><pre><code class="language-julia">f(x::NTuple{N,Int}) where {N} = 1           # this is the fallback
+f(x::Tuple{Float64, Vararg{Float64}}) = 2   # this requires at least one Float64</code></pre><h3><a class="nav-anchor" id="man-methods-orthogonalize-1" href="#man-methods-orthogonalize-1">Orthogonalize your design</a></h3><p>When you might be tempted to dispatch on two or more arguments, consider whether a &quot;wrapper&quot; function might make for a simpler design. For example, instead of writing multiple variants:</p><pre><code class="language-julia">f(x::A, y::A) = ...
+f(x::A, y::B) = ...
+f(x::B, y::A) = ...
+f(x::B, y::B) = ...</code></pre><p>you might consider defining</p><pre><code class="language-julia">f(x::A, y::A) = ...
+f(x, y) = f(g(x), g(y))</code></pre><p>where <code>g</code> converts the argument to type <code>A</code>. This is a very specific example of the more general principle of <a href="https://en.wikipedia.org/wiki/Orthogonality_(programming)">orthogonal design</a>, in which separate concepts are assigned to separate methods. Here, <code>g</code> will most likely need a fallback definition</p><pre><code class="language-julia">g(x::A) = x</code></pre><p>A related strategy exploits <code>promote</code> to bring <code>x</code> and <code>y</code> to a common type:</p><pre><code class="language-julia">f(x::T, y::T) where {T} = ...
+f(x, y) = f(promote(x, y)...)</code></pre><p>One risk with this design is the possibility that if there is no suitable promotion method converting <code>x</code> and <code>y</code> to the same type, the second method will recurse on itself infinitely and trigger a stack overflow. The non-exported function <code>Base.promote_noncircular</code> can be used as an alternative; when promotion fails it will still throw an error, but one that fails faster with a more specific error message.</p><h3><a class="nav-anchor" id="Dispatch-on-one-argument-at-a-time-1" href="#Dispatch-on-one-argument-at-a-time-1">Dispatch on one argument at a time</a></h3><p>If you need to dispatch on multiple arguments, and there are many fallbacks with too many combinations to make it practical to define all possible variants, then consider introducing a &quot;name cascade&quot; where (for example) you dispatch on the first argument and then call an internal method:</p><pre><code class="language-julia">f(x::A, y) = _fA(x, y)
+f(x::B, y) = _fB(x, y)</code></pre><p>Then the internal methods <code>_fA</code> and <code>_fB</code> can dispatch on <code>y</code> without concern about ambiguities with each other with respect to <code>x</code>.</p><p>Be aware that this strategy has at least one major disadvantage: in many cases, it is not possible for users to further customize the behavior of <code>f</code> by defining further specializations of your exported function <code>f</code>. Instead, they have to define specializations for your internal methods <code>_fA</code> and <code>_fB</code>, and this blurs the lines between exported and internal methods.</p><h3><a class="nav-anchor" id="Abstract-containers-and-element-types-1" href="#Abstract-containers-and-element-types-1">Abstract containers and element types</a></h3><p>Where possible, try to avoid defining methods that dispatch on specific element types of abstract containers. For example,</p><pre><code class="language-julia">-(A::AbstractArray{T}, b::Date) where {T&lt;:Date}</code></pre><p>generates ambiguities for anyone who defines a method</p><pre><code class="language-julia">-(A::MyArrayType{T}, b::T) where {T}</code></pre><p>The best approach is to avoid defining <em>either</em> of these methods: instead, rely on a generic method <code>-(A::AbstractArray, b)</code> and make sure this method is implemented with generic calls (like <code>similar</code> and <code>-</code>) that do the right thing for each container type and element type <em>separately</em>. This is just a more complex variant of the advice to <a href="#man-methods-orthogonalize-1">orthogonalize</a> your methods.</p><p>When this approach is not possible, it may be worth starting a discussion with other developers about resolving the ambiguity; just because one method was defined first does not necessarily mean that it can&#39;t be modified or eliminated.  As a last resort, one developer can define the &quot;band-aid&quot; method</p><pre><code class="language-julia">-(A::MyArrayType{T}, b::Date) where {T&lt;:Date} = ...</code></pre><p>that resolves the ambiguity by brute force.</p><h3><a class="nav-anchor" id="Complex-method-&quot;cascades&quot;-with-default-arguments-1" href="#Complex-method-&quot;cascades&quot;-with-default-arguments-1">Complex method &quot;cascades&quot; with default arguments</a></h3><p>If you are defining a method &quot;cascade&quot; that supplies defaults, be careful about dropping any arguments that correspond to potential defaults. For example, suppose you&#39;re writing a digital filtering algorithm and you have a method that handles the edges of the signal by applying padding:</p><pre><code class="language-julia">function myfilter(A, kernel, ::Replicate)
+    Apadded = replicate_edges(A, size(kernel))
+    myfilter(Apadded, kernel)  # now perform the &quot;real&quot; computation
+end</code></pre><p>This will run afoul of a method that supplies default padding:</p><pre><code class="language-julia">myfilter(A, kernel) = myfilter(A, kernel, Replicate()) # replicate the edge by default</code></pre><p>Together, these two methods generate an infinite recursion with <code>A</code> constantly growing bigger.</p><p>The better design would be to define your call hierarchy like this:</p><pre><code class="language-julia">struct NoPad end  # indicate that no padding is desired, or that it&#39;s already applied
+
+myfilter(A, kernel) = myfilter(A, kernel, Replicate())  # default boundary conditions
+
+function myfilter(A, kernel, ::Replicate)
+    Apadded = replicate_edges(A, size(kernel))
+    myfilter(Apadded, kernel, NoPad())  # indicate the new boundary conditions
+end
+
+# other padding methods go here
+
+function myfilter(A, kernel, ::NoPad)
+    # Here&#39;s the &quot;real&quot; implementation of the core computation
+end</code></pre><p><code>NoPad</code> is supplied in the same argument position as any other kind of padding, so it keeps the dispatch hierarchy well organized and with reduced likelihood of ambiguities. Moreover, it extends the &quot;public&quot; <code>myfilter</code> interface: a user who wants to control the padding explicitly can call the <code>NoPad</code> variant directly.</p><div class="footnote" id="footnote-Clarke61"><a href="#footnote-Clarke61"><strong>[Clarke61]</strong></a><p>Arthur C. Clarke, <em>Profiles of the Future</em> (1961): Clarke&#39;s Third Law.</p></div><footer><hr/><a class="previous" href="../types/"><span class="direction">Previous</span><span class="title">Types</span></a><a class="next" href="../constructors/"><span class="direction">Next</span><span class="title">Constructors</span></a></footer></article></body></html>
