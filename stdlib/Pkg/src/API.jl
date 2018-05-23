@@ -462,7 +462,7 @@ function precompile(ctx::Context)
             append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
             import $pkg
         """
-        printpkgstyle(ctx, :Precompiling, pkg, " [$i of $(length(needs_to_be_precompiled))]")
+        printpkgstyle(ctx, :Precompiling, pkg * " [$i of $(length(needs_to_be_precompiled))]")
         run(pipeline(ignorestatus(```
         $(Base.julia_cmd()) -O$(Base.JLOptions().opt_level) --color=no --history-file=no
         --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")

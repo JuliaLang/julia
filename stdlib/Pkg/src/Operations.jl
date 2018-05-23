@@ -1100,7 +1100,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
         run_test = () -> begin
             try
                 run(cmd)
-                printpkgstyle(ctx, :Testing, pkg.name, " tests passed ")
+                printpkgstyle(ctx, :Testing, pkg.name * " tests passed ")
             catch err
                 push!(pkgs_errored, pkg.name)
             end
