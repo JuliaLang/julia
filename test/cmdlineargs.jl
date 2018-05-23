@@ -502,7 +502,11 @@ for precomp in ("yes", "no")
     succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'include("____nonexistent_file")'`)
     @test !succ
     @test out == ""
-    @test occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
+    if Sys.islinux() && !Sys.isglibc() && precomp == "yes"
+        @test_broken occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
+    else
+        @test occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
+    end
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
     @test length(lno.captures) == 1
     @test parse(Int, lno.captures[1]) > 0

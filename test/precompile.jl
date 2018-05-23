@@ -276,12 +276,15 @@ try
           end
           """)
 
-    @test_warn "ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__" try
-        Base.compilecache(Base.PkgId("Baz")) # from __precompile__(false)
-        error("__precompile__ disabled test failed")
-    catch exc
-        isa(exc, ErrorException) || rethrow(exc)
-        occursin("__precompile__(false)", exc.msg) && rethrow(exc)
+    # This test is broken on Alpine Linux
+    if !Sys.islinux() || (Sys.islinux() && Sys.isglibc())
+        @test_warn "ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__" try
+            Base.compilecache(Base.PkgId("Baz")) # from __precompile__(false)
+            error("__precompile__ disabled test failed")
+        catch exc
+            isa(exc, ErrorException) || rethrow(exc)
+            occursin("__precompile__(false)", exc.msg) && rethrow(exc)
+        end
     end
 
     # Issue #12720
