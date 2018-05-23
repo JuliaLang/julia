@@ -148,7 +148,7 @@ function lstrip(f, s::AbstractString)
     SubString(s, e+1, e)
 end
 lstrip(s::AbstractString) = lstrip(isspace, f)
-lstrip(s::AbstractString, chars::Chars) = lstrip(c -> c in chars, s)
+lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 
 
 """
@@ -183,7 +183,7 @@ function rstrip(f, s::AbstractString)
     SubString(s, 1, 0)
 end
 rstrip(s::AbstractString) = rstrip(isspace, f)
-rstrip(s::AbstractString, chars::Chars) = rstrip(c -> c in chars, s)
+rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
     strip(s::AbstractString)
@@ -213,7 +213,7 @@ julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 """
 strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 strip(s::AbstractString) = strip(isspace, f)
-strip(s::AbstractString, chars::Chars) = strip(c -> c in chars, s)
+strip(s::AbstractString, chars::Chars) = strip(in(chars), s)
 
 ## string padding functions ##
 
