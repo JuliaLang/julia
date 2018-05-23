@@ -11,7 +11,8 @@ B = Complex{Int64}[5+6im, 7+8im, 9+10im]
 @test reinterpret(NTuple{3, Int64}, B) == [(5,6,7),(8,9,10)]
 
 # setindex
-let Ac = copy(A), Bc = copy(B)
+for (Ac, Bc) in zip((copy(A), GenericArray(copy(A))),
+                    (copy(B), GenericArray(copy(B))))
     reinterpret(Complex{Int64}, Ac)[2] = -1 - 2im
     @test Ac == [1, 2, -1, -2]
     reinterpret(NTuple{3, Int64}, Bc)[2] = (4,5,6)
@@ -26,7 +27,8 @@ let Ac = copy(A), Bc = copy(B)
 end
 
 # same-size reinterpret where one of the types is non-primitive
-let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
+for a = (NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)],
+         GenericArray(NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]))
     @test reinterpret(Float32, a)[1] == reinterpret(Float32, 0x04030201)
     reinterpret(Float32, a)[1] = 2.0
     @test reinterpret(Float32, a)[1] == 2.0

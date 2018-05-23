@@ -812,6 +812,8 @@ end
 function is_pure_intrinsic_infer(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
+             f === Intrinsics.tbaa_pointerref || # same as pointerref
+             f === Intrinsics.tbaa_pointerset || # same as pointerset
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
              f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
@@ -822,6 +824,8 @@ end
 function is_pure_intrinsic_optim(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
+             f === Intrinsics.tbaa_pointerref || # same as pointerref
+             f === Intrinsics.tbaa_pointerset || # same as pointerset
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
              f === Intrinsics.checked_sdiv_int ||  # these may throw errors

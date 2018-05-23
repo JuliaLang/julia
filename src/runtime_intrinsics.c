@@ -75,6 +75,33 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     return p;
 }
 
+static void check_tbaa_type(jl_value_t *t)
+{
+    // For now, we only allow array types with concrete element types
+    if (!jl_is_array_type(t))
+        jl_error("tbaa_pointer(set/ref): Type argument must be an array type");
+
+    jl_value_t *array_eltype = jl_tparam0(t);
+    if ((!jl_isbits(array_eltype) && !jl_is_structtype(array_eltype)) ||
+         jl_is_array_type(array_eltype) || !jl_is_concrete_type(array_eltype))
+        jl_error("tbaa_pointer(set/ref): TBAA array element type must be isbits or a structtype"
+                 ", not an array and concrete");
+}
+
+JL_DLLEXPORT jl_value_t *jl_tbaa_pointerref(jl_value_t *t, jl_value_t *p, jl_value_t *i, jl_value_t *align)
+{
+    JL_TYPECHK(tbaa_pointerref, type, t);
+    check_tbaa_type(t);
+    return jl_pointerref(p, i, align);
+}
+
+JL_DLLEXPORT jl_value_t *jl_tbaa_pointerset(jl_value_t *t, jl_value_t *p, jl_value_t *x, jl_value_t *i, jl_value_t *align)
+{
+    JL_TYPECHK(tbaa_pointerset, type, t);
+    check_tbaa_type(t);
+    return jl_pointerset(x, p, i, align);
+}
+
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 {
     JL_TYPECHK(cglobal, type, ty);

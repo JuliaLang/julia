@@ -24,7 +24,13 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     args4.push_back(T_prjlvalue); \
     args4.push_back(T_prjlvalue); \
     args4.push_back(T_prjlvalue); \
-    args4.push_back(T_prjlvalue);
+    args4.push_back(T_prjlvalue); \
+    std::vector<Type *> args5(0); \
+    args5.push_back(T_prjlvalue); \
+    args5.push_back(T_prjlvalue); \
+    args5.push_back(T_prjlvalue); \
+    args5.push_back(T_prjlvalue); \
+    args5.push_back(T_prjlvalue);
 
 #define ADD_I(name, nargs) do { \
         Function *func = Function::Create(FunctionType::get(T_prjlvalue, args##nargs, false), \
@@ -598,7 +604,12 @@ static jl_cgval_t emit_runtime_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     return emit_runtime_call(ctx, pointerref, argv, 3);
 }
 
-static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
+static jl_cgval_t emit_runtime_tbaa_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
+{
+    return emit_runtime_call(ctx, tbaa_pointerref, argv, 4);
+}
+
+static jl_cgval_t emit_pointerref_internal(jl_codectx_t &ctx, jl_cgval_t *argv, MDNode *src_tbaa)
 {
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &i = argv[1];
@@ -643,7 +654,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
         thePtr = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, thePtr, T_pint8), im1);
-        emit_memcpy(ctx, strct, thePtr, size, 1);
+        emit_memcpy(ctx, strct, thePtr, size, align_nb, /* volatile= */ 0, /* dst_tbaa */ NULL, src_tbaa);
         return mark_julia_type(ctx, strct, true, ety);
     }
     else {
@@ -651,8 +662,34 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         Type *ptrty = julia_type_to_llvm(ety, &isboxed);
         assert(!isboxed);
         Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-        return typed_load(ctx, thePtr, im1, ety, tbaa_data, true, align_nb);
+        return typed_load(ctx, thePtr, im1, ety, src_tbaa, true, align_nb);
     }
+}
+
+static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
+{
+    return emit_pointerref_internal(ctx, argv, tbaa_data);
+}
+
+static jl_cgval_t emit_tbaa_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
+{
+    const jl_cgval_t &t = argv[0];
+
+    if ((t.constant == NULL || !jl_is_type(t.constant)))
+        return emit_runtime_tbaa_pointerref(ctx, argv);
+
+    jl_value_t *tbaa_type = t.constant;
+    // For now, we only allow array types with concrete element types
+    if (!jl_is_array_type(tbaa_type))
+        return emit_runtime_tbaa_pointerref(ctx, argv);
+
+    jl_value_t *array_eltype = jl_tparam0(tbaa_type);
+    if ((!jl_isbits(array_eltype) && !jl_is_structtype(array_eltype)) ||
+        jl_is_array_type(array_eltype) || !jl_is_concrete_type(array_eltype))
+        return emit_runtime_tbaa_pointerref(ctx, argv);
+
+    // TODO: Once we have stronger tbaa, pick the correct type based on tbaa_type here.
+    return emit_pointerref_internal(ctx, argv+1, tbaa_arraybuf);
 }
 
 static jl_cgval_t emit_runtime_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
@@ -660,8 +697,13 @@ static jl_cgval_t emit_runtime_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
     return emit_runtime_call(ctx, pointerset, argv, 4);
 }
 
+static jl_cgval_t emit_runtime_tbaa_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
+{
+    return emit_runtime_call(ctx, pointerset, argv, 4);
+}
+
 // e[i] = x
-static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
+static jl_cgval_t emit_pointerset_internal(jl_codectx_t &ctx, jl_cgval_t *argv, MDNode *dest_tbaa)
 {
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &x = argv[1];
@@ -696,7 +738,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         Instruction *store = ctx.builder.CreateAlignedStore(
           emit_pointer_from_objref(ctx, boxed(ctx, x)),
             ctx.builder.CreateGEP(T_size, thePtr, im1), align_nb);
-        tbaa_decorate(tbaa_data, store);
+        tbaa_decorate(dest_tbaa, store);
     }
     else if (!jl_isbits(ety)) {
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_concrete_type(ety)) {
@@ -707,16 +749,43 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
-        emit_memcpy(ctx, ctx.builder.CreateGEP(T_int8, thePtr, im1), x, size, align_nb);
+        emit_memcpy(ctx, ctx.builder.CreateGEP(T_int8, thePtr, im1), x, size, align_nb,
+            /* volatile= */0, dest_tbaa);
     }
     else {
         bool isboxed;
         Type *ptrty = julia_type_to_llvm(ety, &isboxed);
         assert(!isboxed);
         thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-        typed_store(ctx, thePtr, im1, x, ety, tbaa_data, NULL, align_nb);
+        typed_store(ctx, thePtr, im1, x, ety, dest_tbaa, NULL, align_nb);
     }
     return mark_julia_type(ctx, thePtr, false, aty);
+}
+
+static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
+{
+    return emit_pointerset_internal(ctx, argv, tbaa_data);
+}
+
+static jl_cgval_t emit_tbaa_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
+{
+    const jl_cgval_t &t = argv[0];
+
+    if ((t.constant == NULL || !jl_is_type(t.constant)))
+        return emit_runtime_tbaa_pointerset(ctx, argv);
+
+    jl_value_t *tbaa_type = t.constant;
+    // For now, we only allow array types with concrete element types
+    if (!jl_is_array_type(tbaa_type))
+        return emit_runtime_tbaa_pointerset(ctx, argv);
+
+    jl_value_t *array_eltype = jl_tparam0(tbaa_type);
+    if ((!jl_isbits(array_eltype) && !jl_is_structtype(array_eltype)) ||
+         jl_is_array_type(array_eltype) || !jl_is_concrete_type(array_eltype))
+        return emit_runtime_tbaa_pointerset(ctx, argv);
+
+    // TODO: Once we have stronger tbaa, pick the correct type based on tbaa_type here.
+    return emit_pointerset_internal(ctx, argv+1, tbaa_arraybuf);
 }
 
 static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
@@ -939,6 +1008,10 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return emit_pointerref(ctx, argv);
     case pointerset:
         return emit_pointerset(ctx, argv);
+    case tbaa_pointerref:
+        return emit_tbaa_pointerref(ctx, argv);
+    case tbaa_pointerset:
+        return emit_tbaa_pointerset(ctx, argv);
     case bitcast:
         return generic_bitcast(ctx, argv);
     case trunc_int:

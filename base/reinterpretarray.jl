@@ -163,6 +163,38 @@ end
     return a
 end
 
+# Special case for StridedArray
+reinterpret_alignment(::Type{ReinterpretArray{T,N,S,A}} where {N, S, A<:Array}) where {T} = datatype_alignment(T)
+
+@inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S,A}, inds::Vararg{Int, N}) where {T,N,S,A<:Array}
+    if isbits(T) || (isstructtype(T) && !isa(T, Array) && isconcretetype(T))
+        check_readable(a)
+        pa = parent(a)
+        @GC.preserve pa begin
+            ptr = pointer(pa, LinearIndices(pa)[1, tail(inds)...])
+            return Intrinsics.tbaa_pointerref(A, Ptr{T}(ptr), inds[1], reinterpret_alignment(typeof(a)))
+        end
+    end
+    # Fall back to generic method
+    invoke(getindex, Tuple{ReinterpretArray{T,N,S}, Vararg{Int, N}}, a, inds...)
+end
+
+@inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S,A}, v, inds::Vararg{Int, N}) where {T,N,S,A<:Array}
+    if isbits(T) || (isstructtype(T) && !isa(T, Array) && isconcretetype(T))
+        check_writable(a)
+        v = convert(T, v)::T
+        pa = parent(a)
+        @GC.preserve pa begin
+            ptr = pointer(pa, LinearIndices(pa)[1, tail(inds)...])
+            Intrinsics.tbaa_pointerset(A, Ptr{T}(ptr), v, inds[1], reinterpret_alignment(typeof(a)))
+            return a
+        end
+    end
+    # Fall back to generic method
+    invoke(setindex!, Tuple{ReinterpretArray{T,N,S}, Any, Vararg{Int, N}}, a, v, inds...)
+end
+
+
 # Padding
 struct Padding
     offset::Int

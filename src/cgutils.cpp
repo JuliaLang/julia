@@ -1329,7 +1329,8 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
 }
 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, Value *src,
-                             uint64_t sz, unsigned align, bool is_volatile, MDNode *tbaa)
+                             uint64_t sz, unsigned align, bool is_volatile,
+                             MDNode *dst_tbaa, MDNode *src_tbaa)
 {
     if (sz == 0)
         return;
@@ -1361,21 +1362,26 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, Value *src,
             src = emit_bitcast(ctx, src, dstty);
         }
         if (direct) {
-            auto val = tbaa_decorate(tbaa, ctx.builder.CreateAlignedLoad(src, align, is_volatile));
-            tbaa_decorate(tbaa, ctx.builder.CreateAlignedStore(val, dst, align, is_volatile));
+            auto val = tbaa_decorate(src_tbaa, ctx.builder.CreateAlignedLoad(src, align, is_volatile));
+            tbaa_decorate(dst_tbaa, ctx.builder.CreateAlignedStore(val, dst, align, is_volatile));
             return;
         }
     }
+    // At the moment LLVM's memcpy only allows a single TBAA annotation
+    MDNode *tbaa = dst_tbaa == src_tbaa ? src_tbaa : NULL;
     ctx.builder.CreateMemCpy(dst, src, sz, align, is_volatile, tbaa);
 }
 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, Value *src,
-                             Value *sz, unsigned align, bool is_volatile, MDNode *tbaa)
+                             Value *sz, unsigned align, bool is_volatile,
+                             MDNode *dst_tbaa, MDNode *src_tbaa)
 {
     if (auto const_sz = dyn_cast<ConstantInt>(sz)) {
-        emit_memcpy_llvm(ctx, dst, src, const_sz->getZExtValue(), align, is_volatile, tbaa);
+        emit_memcpy_llvm(ctx, dst, src, const_sz->getZExtValue(), align, is_volatile, dst_tbaa, src_tbaa);
         return;
     }
+    // At the moment LLVM's memcpy only allows a single TBAA annotation
+    MDNode *tbaa = dst_tbaa == src_tbaa ? src_tbaa : NULL;
     ctx.builder.CreateMemCpy(dst, src, sz, align, is_volatile, tbaa);
 }
 
@@ -1391,10 +1397,10 @@ static Value *get_value_ptr(jl_codectx_t &ctx, const jl_cgval_t &v)
 
 template<typename T1, typename T2, typename T3>
 static void emit_memcpy(jl_codectx_t &ctx, T1 &&dst, T2 &&src, T3 &&sz, unsigned align,
-                        bool is_volatile=false, MDNode *tbaa=nullptr)
+                        bool is_volatile=false, MDNode *dst_tbaa=nullptr, MDNode *src_tbaa=nullptr)
 {
     emit_memcpy_llvm(ctx, get_value_ptr(ctx, dst), get_value_ptr(ctx, src), sz, align,
-                     is_volatile, tbaa);
+                     is_volatile, dst_tbaa, src_tbaa);
 }
 
 static bool emit_getfield_unknownidx(jl_codectx_t &ctx,

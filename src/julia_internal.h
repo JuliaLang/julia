@@ -700,6 +700,8 @@ unsigned jl_intrinsic_nargs(int f);
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);
 JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *align, jl_value_t *i);
+JL_DLLEXPORT jl_value_t *jl_tbaa_pointerref(jl_value_t *t, jl_value_t *p, jl_value_t *i, jl_value_t *align);
+JL_DLLEXPORT jl_value_t *jl_tbaa_pointerset(jl_value_t *t, jl_value_t *p, jl_value_t *x, jl_value_t *align, jl_value_t *i);
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty);
 JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v);
 
