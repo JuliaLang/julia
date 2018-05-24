@@ -247,12 +247,20 @@ end
             @test isnan_type(T, log1p(convert(T,NaN)))
             @test_throws DomainError log1p(convert(T,-2.0))
             @test hypot(T(0), T(0)) === T(0)
+            @test hypot(eps(T), T(0)) == eps(T)
+            @test hypot(eps(T), T(0), T(0)) == eps(T)
+            @test hypot(prevfloat(typemax(T)), T(0)) == prevfloat(typemax(T))
+            @test hypot(prevfloat(typemax(T)), T(0), T(0)) == prevfloat(typemax(T))
             @test hypot(T(Inf), T(Inf)) === T(Inf)
             @test hypot(T(Inf), T(x)) === T(Inf)
             @test hypot(T(Inf), T(NaN)) === T(Inf)
             @test isnan_type(T, hypot(T(x), T(NaN)))
         end
     end
+end
+
+@testset "hypot function under/overflow" begin
+
 end
 
 @testset "exp function" for T in (Float64, Float32)
