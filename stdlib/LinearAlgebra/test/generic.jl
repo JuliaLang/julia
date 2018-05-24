@@ -240,7 +240,7 @@ end
 
 @test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
-@test qr(big.([0 1; 0 0]))[2] == [0 1; 0 0]
+@test qr(big.([0 1; 0 0])).R == [0 1; 0 0]
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
@@ -348,13 +348,13 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
-    @test A*(lufact(A, Val(false))\b) == b
+    @test A*(lu(A, Val(false))\b) == b
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-    @test A*(lufact(A, Val(true))\b) == b
+    @test A*(lu(A, Val(true))\b) == b
 end
 
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin

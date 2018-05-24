@@ -47,7 +47,7 @@ bimg  = randn(n,2)/2
     @testset "Positive definiteness" begin
         @test !isposdef(ainit)
         @test isposdef(apd)
-        if eltya != Int # cannot perform cholfact! for Matrix{Int}
+        if eltya != Int # cannot perform cholesky! for Matrix{Int}
             @test !isposdef!(copy(ainit))
             @test isposdef!(copy(apd))
         end
@@ -382,7 +382,7 @@ end
         @test exp(A5) ≈ eA5
 
         # Hessenberg
-        @test hessfact(A1).H ≈ convert(Matrix{elty},
+        @test hessenberg(A1).H ≈ convert(Matrix{elty},
                                                  [4.000000000000000  -1.414213562373094  -1.414213562373095
                                                   -1.414213562373095   4.999999999999996  -0.000000000000000
                                                   0  -0.000000000000002   3.000000000000000])
@@ -581,19 +581,19 @@ end
             @test all(z -> (0 < real(z) < π ||
                             abs(real(z)) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π) < abstol && imag(z) <= 0),
-                      eigfact(acos(A)).values)
+                      eigen(acos(A)).values)
             @test all(z -> (-π/2 < real(z) < π/2 ||
                             abs(real(z) + π/2) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π/2) < abstol && imag(z) <= 0),
-                      eigfact(asin(A)).values)
+                      eigen(asin(A)).values)
             @test all(z -> (-π < imag(z) < π && real(z) > 0 ||
                             0 <= imag(z) < π && abs(real(z)) < abstol ||
                             abs(imag(z) - π) < abstol && real(z) >= 0),
-                      eigfact(acosh(A)).values)
+                      eigen(acosh(A)).values)
             @test all(z -> (-π/2 < imag(z) < π/2 ||
                             abs(imag(z) + π/2) < abstol && real(z) <= 0 ||
                             abs(imag(z) - π/2) < abstol && real(z) <= 0),
-                      eigfact(asinh(A)).values)
+                      eigen(asinh(A)).values)
         end
     end
 end

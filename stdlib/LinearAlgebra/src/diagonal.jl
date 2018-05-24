@@ -445,7 +445,7 @@ end
 eigvals(D::Diagonal{<:Number}) = D.diag
 eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
-function eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true)
+function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
@@ -462,11 +462,7 @@ function svd(D::Diagonal{<:Number})
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
     V   = Diagonal(fill!(similar(D.diag), one(eltype(D.diag))))
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
-    return (Up, S[piv], Vp)
-end
-function svdfact(D::Diagonal)
-    U, s, V = svd(D)
-    SVD(U, s, copy(V'))
+    return SVD(Up, S[piv], copy(Vp'))
 end
 
 # dismabiguation methods: * of Diagonal and Adj/Trans AbsVec

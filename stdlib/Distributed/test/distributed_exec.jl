@@ -576,8 +576,8 @@ end
 n = 10
 as = [rand(4,4) for i in 1:n]
 bs = deepcopy(as)
-cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
-svdas = map(svdfact, as)
+cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svd(x)), bs))
+svdas = map(svd, as)
 for i in 1:n
     @test cs[i].U ≈ svdas[i].U
     @test cs[i].S ≈ svdas[i].S

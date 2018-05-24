@@ -231,7 +231,7 @@ end
     @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
-        fA = eigfact(A)
+        fA = eigen(A)
         @test fA.values  ≈ Aw
         @test fA.vectors ≈ Avr
     end
@@ -266,7 +266,7 @@ end
         @test_throws DimensionMismatch LAPACK.gttrs!('N', x11, d, du, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, x11, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, du, x9, y10, x11)
-        A = lufact(Tridiagonal(dl,d,du))
+        A = lu(Tridiagonal(dl,d,du))
         b  = rand(elty,10,5)
         c = copy(b)
         dl,d,du,du2,ipiv = LAPACK.gttrf!(dl,d,du)
@@ -660,7 +660,7 @@ end
 
 # Issue 14065 (and 14220)
 let A = [NaN NaN; NaN NaN]
-    @test_throws ArgumentError eigfact(A)
+    @test_throws ArgumentError eigen(A)
 end
 
 end # module TestLAPACK
