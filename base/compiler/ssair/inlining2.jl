@@ -361,7 +361,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, topmod::Module, idx:
         @assert !isa(metharg, UnionAll)
         cond = true
         @assert length(atype.parameters) == length(metharg.parameters)
-        for i in 2:length(atype.parameters)
+        for i in 1:length(atype.parameters)
             a, m = atype.parameters[i], metharg.parameters[i]
             # If this is always true, we don't need to check for it
             a <: m && continue
@@ -382,7 +382,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, topmod::Module, idx:
         argexprs′ = argexprs
         if !isa(case, ConstantCase)
             argexprs′ = copy(argexprs)
-            for i = 2:length(metharg.parameters)
+            for i = 1:length(metharg.parameters)
                 a, m = atype.parameters[i], metharg.parameters[i]
                 isa(argexprs[i], SSAValue) || continue
                 if !(a <: m)

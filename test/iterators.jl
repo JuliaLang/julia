@@ -70,6 +70,8 @@ let s = "hello"
     @test c == ['e','l','l','o']
     @test c isa Vector{Char}
 end
+# rest with state from old iteration protocol
+@test collect(rest(1:6, start(1:6))) == collect(1:6)
 
 @test_throws MethodError collect(rest(countfrom(1), 5))
 

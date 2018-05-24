@@ -89,7 +89,7 @@ julia> A
  2.0  6.78233
 ```
 """
-isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact!(Hermitian(A)))
+isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky!(Hermitian(A)))
 
 """
     isposdef(A) -> Bool
@@ -109,7 +109,7 @@ julia> isposdef(A)
 true
 ```
 """
-isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
+isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 # the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
@@ -478,7 +478,7 @@ Compute the matrix exponential of `A`, defined by
 e^A = \\sum_{n=0}^{\\infty} \\frac{A^n}{n!}.
 ```
 
-For symmetric or Hermitian `A`, an eigendecomposition ([`eigfact`](@ref)) is
+For symmetric or Hermitian `A`, an eigendecomposition ([`eigen`](@ref)) is
 used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 [^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](https://doi.org/10.1137/090768539)
@@ -602,7 +602,7 @@ the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`
 the eigenvalues ``\\lambda`` of ``X``. If `A` has nonpositive eigenvalues, a nonprincipal
 matrix function is returned whenever possible.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used, if `A` is triangular an improved version of the inverse scaling and squaring method is
 employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur form
 ([`schur`](@ref)) is computed and the triangular algorithm is used on the
@@ -638,12 +638,12 @@ function log(A::StridedMatrix)
         return triu!(parent(log(UpperTriangular(complex(A)))))
     else
         if isreal(A)
-            SchurF = schurfact(real(A))
+            SchurF = schur(real(A))
         else
-            SchurF = schurfact(A)
+            SchurF = schur(A)
         end
         if !istriu(SchurF.T)
-            SchurS = schurfact(complex(SchurF.T))
+            SchurS = schur(complex(SchurF.T))
             logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
             return SchurF.Z * logT * SchurF.Z'
         else
@@ -660,7 +660,7 @@ If `A` has no negative real eigenvalues, compute the principal matrix square roo
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
 ``X^2 = A``. Otherwise, a nonprincipal square root is returned.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used to compute the square root. Otherwise, the square root is determined by means of the
 Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schur`](@ref))
 and then the complex square root of the triangular factor.
@@ -692,7 +692,7 @@ function sqrt(A::StridedMatrix{<:Real})
     if istriu(A)
         return triu!(parent(sqrt(UpperTriangular(A))))
     else
-        SchurF = schurfact(complex(A))
+        SchurF = schur(complex(A))
         R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
         return SchurF.vectors * R * SchurF.vectors'
     end
@@ -706,7 +706,7 @@ function sqrt(A::StridedMatrix{<:Complex})
     if istriu(A)
         return triu!(parent(sqrt(UpperTriangular(A))))
     else
-        SchurF = schurfact(A)
+        SchurF = schur(A)
         R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
         return SchurF.vectors * R * SchurF.vectors'
     end
@@ -721,7 +721,7 @@ function inv(A::StridedMatrix{T}) where T
     elseif istril(AA)
         Ai = tril!(parent(inv(LowerTriangular(AA))))
     else
-        Ai = inv!(lufact(AA))
+        Ai = inv!(lu(AA))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
@@ -732,7 +732,7 @@ end
 
 Compute the matrix cosine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the cosine. Otherwise, the cosine is determined by calling [`exp`](@ref).
 
 # Examples
@@ -765,7 +765,7 @@ end
 
 Compute the matrix sine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the sine. Otherwise, the sine is determined by calling [`exp`](@ref).
 
 # Examples
@@ -851,7 +851,7 @@ end
 
 Compute the matrix tangent of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the tangent. Otherwise, the tangent is determined by calling [`exp`](@ref).
 
 # Examples
@@ -924,7 +924,7 @@ end
 
 Compute the inverse matrix cosine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the inverse cosine. Otherwise, the inverse cosine is determined by using
 [`log`](@ref) and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute
 this function, see [^AH16_1].
@@ -944,7 +944,7 @@ function acos(A::AbstractMatrix)
         acosHermA = acos(Hermitian(A))
         return isa(acosHermA, Hermitian) ? copytri!(parent(acosHermA), 'U', true) : parent(acosHermA)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(-im * log(U + im * sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -955,7 +955,7 @@ end
 
 Compute the inverse matrix sine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the inverse sine. Otherwise, the inverse sine is determined by using [`log`](@ref)
 and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute this function,
 see [^AH16_2].
@@ -975,7 +975,7 @@ function asin(A::AbstractMatrix)
         asinHermA = asin(Hermitian(A))
         return isa(asinHermA, Hermitian) ? copytri!(parent(asinHermA), 'U', true) : parent(asinHermA)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(-im * log(im * U + sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -986,7 +986,7 @@ end
 
 Compute the inverse matrix tangent of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is used to
 compute the inverse tangent. Otherwise, the inverse tangent is determined by using
 [`log`](@ref).  For the theory and logarithmic formulas used to compute this function, see
 [^AH16_3].
@@ -1005,7 +1005,7 @@ function atan(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(atan(Hermitian(A))), 'U', true)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = im * UpperTriangular(SchurF.T)
     R = triu!(parent(log((I + U) / (I - U)) / 2im))
     return SchurF.Z * R * SchurF.Z'
@@ -1024,7 +1024,7 @@ function acosh(A::AbstractMatrix)
         acoshHermA = acosh(Hermitian(A))
         return isa(acoshHermA, Hermitian) ? copytri!(parent(acoshHermA), 'U', true) : parent(acoshHermA)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log(U + sqrt(U - I) * sqrt(U + I))))
     return SchurF.Z * R * SchurF.Z'
@@ -1042,7 +1042,7 @@ function asinh(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(asinh(Hermitian(A))), 'U', true)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log(U + sqrt(I + U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -1060,7 +1060,7 @@ function atanh(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(atanh(Hermitian(A))), 'U', true)
     end
-    SchurF = schurfact(complex(A))
+    SchurF = schur(complex(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log((I + U) / (I - U)) / 2))
     return SchurF.Z * R * SchurF.Z'
@@ -1112,16 +1112,16 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 
 | Properties of `A`          | type of factorization                          |
 |:---------------------------|:-----------------------------------------------|
-| Positive-definite          | Cholesky (see [`cholfact`](@ref))  |
-| Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bkfact`](@ref)) |
-| Sparse Symmetric/Hermitian | LDLt (see [`ldltfact`](@ref))      |
+| Positive-definite          | Cholesky (see [`cholesky`](@ref))  |
+| Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bunchkaufman`](@ref)) |
+| Sparse Symmetric/Hermitian | LDLt (see [`ldlt`](@ref))      |
 | Triangular                 | Triangular                                     |
 | Diagonal                   | Diagonal                                       |
 | Bidiagonal                 | Bidiagonal                                     |
-| Tridiagonal                | LU (see [`lufact`](@ref))            |
-| Symmetric real tridiagonal | LDLt (see [`ldltfact`](@ref))      |
-| General square             | LU (see [`lufact`](@ref))            |
-| General non-square         | QR (see [`qrfact`](@ref))            |
+| Tridiagonal                | LU (see [`lu`](@ref))            |
+| Symmetric real tridiagonal | LDLt (see [`ldlt`](@ref))      |
+| General square             | LU (see [`lu`](@ref))            |
+| General non-square         | QR (see [`qr`](@ref))            |
 
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
 will return a Cholesky factorization.
@@ -1198,17 +1198,17 @@ function factorize(A::StridedMatrix{T}) where T
             if utri1
                 if (herm & (T <: Complex)) | sym
                     try
-                        return ldltfact!(SymTridiagonal(diag(A), diag(A, -1)))
+                        return ldlt!(SymTridiagonal(diag(A), diag(A, -1)))
                     end
                 end
-                return lufact(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
+                return lu(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
             end
         end
         if utri
             return UpperTriangular(A)
         end
         if herm
-            cf = cholfact(A)
+            cf = cholesky(A)
             if cf.info == 0
                 return cf
             else
@@ -1218,9 +1218,9 @@ function factorize(A::StridedMatrix{T}) where T
         if sym
             return factorize(Symmetric(A))
         end
-        return lufact(A)
+        return lu(A)
     end
-    qrfact(A, Val(true))
+    qr(A, Val(true))
 end
 factorize(A::Adjoint)   =   adjoint(factorize(parent(A)))
 factorize(A::Transpose) = transpose(factorize(parent(A)))
@@ -1292,7 +1292,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
             return B
         end
     end
-    SVD         = svdfact(A, full = false)
+    SVD         = svd(A, full = false)
     Stype       = eltype(SVD.S)
     Sinv        = zeros(Stype, length(SVD.S))
     index       = SVD.S .> tol*maximum(SVD.S)
@@ -1344,7 +1344,7 @@ julia> nullspace(M, 2)
 function nullspace(A::StridedMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     m, n = size(A)
     (m == 0 || n == 0) && return Matrix{T}(I, n, n)
-    SVD = svdfact(A, full=true)
+    SVD = svd(A, full=true)
     indstart = sum(SVD.S .> SVD.S[1]*tol) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
@@ -1367,7 +1367,7 @@ function cond(A::AbstractMatrix, p::Real=2)
     end
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
-_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lufact(A), p, norm(A, p))
+_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lu(A), p, norm(A, p))
 _cond1Inf(A::AbstractMatrix, p::Real)             = norm(A, p)*norm(inv(A), p)
 
 ## Lyapunov and Sylvester equation

@@ -937,9 +937,9 @@ function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
         if ishermitian(A)
             return \(Hermitian(A), B)
         end
-        return \(lufact(A), B)
+        return \(lu(A), B)
     else
-        return \(qrfact(A), B)
+        return \(qr(A), B)
     end
 end
 for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
@@ -960,9 +960,9 @@ for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
                 if ishermitian(A)
                     return \($xformop(Hermitian(A)), B)
                 end
-                return \($xformop(lufact(A)), B)
+                return \($xformop(lu(A)), B)
             else
-                return \($xformop(qrfact(A)), B)
+                return \($xformop(qr(A)), B)
             end
         end
     end
@@ -983,34 +983,33 @@ function factorize(A::SparseMatrixCSC)
         if ishermitian(A)
             return factorize(Hermitian(A))
         end
-        return lufact(A)
+        return lu(A)
     else
-        return qrfact(A)
+        return qr(A)
     end
 end
 
 # function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
-#     F = cholfact(A)
+#     F = cholesky(A)
 #     if LinearAlgebra.issuccess(F)
 #         return F
 #     else
-#         ldltfact!(F, A)
+#         ldlt!(F, A)
 #         return F
 #     end
 # end
 function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
-    F = cholfact(A)
+    F = cholesky(A)
     if LinearAlgebra.issuccess(F)
         return F
     else
-        ldltfact!(F, A)
+        ldlt!(F, A)
         return F
     end
 end
 
-chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
-lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
-eig(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eig() for sparse matrices.")
+chol(A::SparseMatrixCSC) = error("Use cholesky() instead of chol() for sparse matrices.")
+eigen(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eigen() for sparse matrices.")
 
 function Base.cov(X::SparseMatrixCSC; dims::Int=1, corrected::Bool=true)
     vardim = dims

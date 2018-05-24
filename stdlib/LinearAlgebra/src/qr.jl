@@ -5,7 +5,7 @@
     QR <: Factorization
 
 A QR matrix factorization stored in a packed format, typically obtained from
-[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+[`qr`](@ref). If ``A`` is an `m`×`n` matrix, then
 
 ```math
 A = Q R
@@ -18,6 +18,8 @@ and coefficients ``\\tau_i`` where:
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
 ```
+
+Iterating the decomposition produces the components `Q` and `R`.
 
 The object has two fields:
 
@@ -39,12 +41,17 @@ struct QR{T,S<:AbstractMatrix} <: Factorization{T}
 end
 QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(factors, τ)
 
+# iteration for destructuring into components
+Base.iterate(S::QR) = (S.Q, Val(:R))
+Base.iterate(S::QR, ::Val{:R}) = (S.R, Val(:done))
+Base.iterate(S::QR, ::Val{:done}) = nothing
+
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
 """
     QRCompactWY <: Factorization
 
 A QR matrix factorization stored in a compact blocked format, typically obtained from
-[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+[`qr`](@ref). If ``A`` is an `m`×`n` matrix, then
 
 ```math
 A = Q R
@@ -61,6 +68,8 @@ Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
 
 such that ``v_i`` is the ``i``th column of ``V``, and ``\tau_i`` is the ``i``th diagonal
 element of ``T``.
+
+Iterating the decomposition produces the components `Q` and `R`.
 
 The object has two fields:
 
@@ -92,11 +101,16 @@ struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
 end
 QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
 
+# iteration for destructuring into components
+Base.iterate(S::QRCompactWY) = (S.Q, Val(:R))
+Base.iterate(S::QRCompactWY, ::Val{:R}) = (S.R, Val(:done))
+Base.iterate(S::QRCompactWY, ::Val{:done}) = nothing
+
 """
     QRPivoted <: Factorization
 
 A QR matrix factorization with column pivoting in a packed format, typically obtained from
-[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+[`qr`](@ref). If ``A`` is an `m`×`n` matrix, then
 
 ```math
 A P = Q R
@@ -108,6 +122,8 @@ upper triangular. The matrix ``Q`` is stored as a sequence of Householder reflec
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
 ```
+
+Iterating the decomposition produces the components `Q`, `R`, and `p`.
 
 The object has three fields:
 
@@ -132,6 +148,12 @@ struct QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
 end
 QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T} =
     QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
+
+# iteration for destructuring into components
+Base.iterate(S::QRPivoted) = (S.Q, Val(:R))
+Base.iterate(S::QRPivoted, ::Val{:R}) = (S.R, Val(:p))
+Base.iterate(S::QRPivoted, ::Val{:p}) = (S.p, Val(:done))
+Base.iterate(S::QRPivoted, ::Val{:done}) = nothing
 
 function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
     m, n = size(A)
@@ -194,16 +216,16 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 end
 
 # LAPACK version
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
-qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val(false))
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
+qr!(A::StridedMatrix{<:BlasFloat}) = qr!(A, Val(false))
 
 # Generic fallbacks
 
 """
-    qrfact!(A, pivot=Val(false))
+    qr!(A, pivot=Val(false))
 
-`qrfact!` is the same as [`qrfact`](@ref) when `A` is a subtype of
+`qr!` is the same as [`qr`](@ref) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
@@ -215,7 +237,7 @@ julia> a = [1. 2.; 3. 4.]
  1.0  2.0
  3.0  4.0
 
-julia> qrfact!(a)
+julia> qr!(a)
 LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
 Q factor:
 2×2 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
@@ -231,20 +253,20 @@ julia> a = [1 2; 3 4]
  1  2
  3  4
 
-julia> qrfact!(a)
+julia> qr!(a)
 ERROR: InexactError: Int64(Int64, -3.1622776601683795)
 Stacktrace:
 [...]
 ```
 """
-qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
-qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
-qrfact!(A::StridedMatrix) = qrfact!(A, Val(false))
+qr!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
+qr!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
+qr!(A::StridedMatrix) = qr!(A, Val(false))
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
 """
-    qrfact(A, pivot=Val(false)) -> F
+    qr(A, pivot=Val(false)) -> F
 
 Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
@@ -262,12 +284,14 @@ The returned object `F` stores the factorization in a packed format:
 
  - otherwise `F` is a [`QR`](@ref) object.
 
-The individual components of the factorization `F` can be accessed by indexing with a symbol:
+The individual components of the decomposition `F` can be retrieved via property accessors:
 
  - `F.Q`: the orthogonal/unitary matrix `Q`
  - `F.R`: the upper triangular matrix `R`
  - `F.p`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
  - `F.P`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
+
+Iterating the decomposition produces the components `Q`, `R`, and if extant `p`.
 
 The following functions are available for the `QR` objects: [`inv`](@ref), [`size`](@ref),
 and [`\\`](@ref). When `A` is rectangular, `\\` will return a least squares
@@ -285,7 +309,7 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
  4.0  -8.0
  0.0   1.0
 
-julia> F = qrfact(A)
+julia> F = qr(A)
 LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
 Q factor:
 3×3 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
@@ -302,119 +326,23 @@ true
 ```
 
 !!! note
-    `qrfact` returns multiple types because LAPACK uses several representations
+    `qr` returns multiple types because LAPACK uses several representations
     that minimize the memory storage requirements of products of Householder
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
 """
-function qrfact(A::AbstractMatrix{T}, arg) where T
+function qr(A::AbstractMatrix{T}, arg) where T
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
-    return qrfact!(AA, arg)
+    return qr!(AA, arg)
 end
-function qrfact(A::AbstractMatrix{T}) where T
+function qr(A::AbstractMatrix{T}) where T
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
-    return qrfact!(AA)
+    return qr!(AA)
 end
-qrfact(x::Number) = qrfact(fill(x,1,1))
-
-"""
-    qr(A, pivot=Val(false); full::Bool = false) -> Q, R, [p]
-
-Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
-Also see [`qrfact`](@ref).
-The default is to compute a "thin" factorization. Note that `R` is not
-extended with zeros when a full/square orthogonal factor `Q` is requested (via `full = true`).
-"""
-function qr(A::Union{Number,AbstractMatrix}, pivot::Union{Val{false},Val{true}} = Val(false);
-            full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `qr(A, pivot; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `qr(A, pivot; full = $(!thin))`."), :qr)
-        full::Bool = !thin
-    end
-    return _qr(A, pivot, full = full)
-end
-function _qr(A::Union{Number,AbstractMatrix}, ::Val{false}; full::Bool = false)
-    F = qrfact(A, Val(false))
-    Q, R = F.Q, F.R
-    sQf1 = size(Q.factors, 1)
-    return (!full ? Array(Q) : lmul!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R
-end
-function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; full::Bool = false)
-    F = qrfact(A, Val(true))
-    Q, R, p = F.Q, F.R, F.p
-    sQf1 = size(Q.factors, 1)
-    return (!full ? Array(Q) : lmul!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R, p
-end
-
-"""
-    qr(v::AbstractVector) -> w, r
-
-Computes the polar decomposition of a vector.
-Returns `w`, a unit vector in the direction of `v`, and
-`r`, the norm of `v`.
-
-See also [`normalize`](@ref), [`normalize!`](@ref),
-and [`LinearAlgebra.qr!`](@ref).
-
-# Examples
-```jldoctest
-julia> v = [1; 2]
-2-element Array{Int64,1}:
- 1
- 2
-
-julia> w, r = qr(v)
-([0.447214, 0.894427], 2.23606797749979)
-
-julia> w*r == v
-true
-```
-"""
-function qr(v::AbstractVector)
-    nrm = norm(v)
-    if !isempty(v)
-        vv = copy_oftype(v, typeof(v[1]/nrm))
-        return __normalize!(vv, nrm), nrm
-    else
-        T = typeof(zero(eltype(v))/nrm)
-        return T[], oneunit(T)
-    end
-end
-
-"""
-    LinearAlgebra.qr!(v::AbstractVector) -> w, r
-
-Computes the polar decomposition of a vector. Instead of returning a new vector
-as `qr(v::AbstractVector)`, this function mutates the input vector `v` in place.
-Returns `w`, a unit vector in the direction of `v` (this is a mutation of `v`),
-and `r`, the norm of `v`.
-
-See also [`normalize`](@ref), [`normalize!`](@ref),
-and [`qr`](@ref).
-
-# Examples
-```jldoctest
-julia> v = [1.; 2.]
-2-element Array{Float64,1}:
- 1.0
- 2.0
-
-julia> w, r = LinearAlgebra.qr!(v)
-([0.447214, 0.894427], 2.23606797749979)
-
-julia> w === v
-true
-```
-"""
-function qr!(v::AbstractVector)
-    nrm = norm(v)
-    __normalize!(v, nrm), nrm
-end
+qr(x::Number) = qr(fill(x,1,1))
+qr(v::AbstractVector) = qr(reshape(v, (length(v), 1)))
 
 # Conversions
 QR{T}(A::QR) where {T} = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))

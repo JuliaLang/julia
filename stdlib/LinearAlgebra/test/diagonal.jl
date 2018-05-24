@@ -207,7 +207,7 @@ srand(1)
     @test factorize(D) == D
 
     @testset "Eigensystem" begin
-        eigD = eigfact(D)
+        eigD = eigen(D)
         @test Diagonal(eigD.values) ≈ D
         @test eigD.vectors == Matrix(I, size(D))
     end
@@ -265,7 +265,7 @@ srand(1)
         U, s, V = svd(D)
         @test (U*Diagonal(s))*V' ≈ D
         @test svdvals(D) == s
-        @test svdfact(D).V == V
+        @test svd(D).V == V
     end
 end
 
@@ -360,9 +360,9 @@ end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
     D = Diagonal(randn(5))
-    Q = qrfact(randn(5, 5)).Q
+    Q = qr(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
-    Q = qrfact(randn(5, 5), Val(true)).Q
+    Q = qr(randn(5, 5), Val(true)).Q
     @test_throws ArgumentError lmul!(Q, D)
 end
 

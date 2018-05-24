@@ -243,7 +243,7 @@ end
                         w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, b, a)
                         evecs = LAPACK.stein!(b, a, w)
 
-                        (e, v) = eig(SymTridiagonal(b, a))
+                        (e, v) = eigen(SymTridiagonal(b, a))
                         @test e ≈ w
                         test_approx_eq_vecs(v, evecs)
                     end
@@ -253,23 +253,23 @@ end
                         test_approx_eq_vecs(v, evecs)
                     end
                     @testset "stegr! call with index range" begin
-                        F = eigfact(SymTridiagonal(b, a),1:2)
-                        fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),1:2)
+                        F = eigen(SymTridiagonal(b, a),1:2)
+                        fF = eigen(Symmetric(Array(SymTridiagonal(b, a))),1:2)
                         test_approx_eq_modphase(F.vectors, fF.vectors)
                         @test F.values ≈ fF.values
                     end
                     @testset "stegr! call with value range" begin
-                        F = eigfact(SymTridiagonal(b, a),0.0,1.0)
-                        fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),0.0,1.0)
+                        F = eigen(SymTridiagonal(b, a),0.0,1.0)
+                        fF = eigen(Symmetric(Array(SymTridiagonal(b, a))),0.0,1.0)
                         test_approx_eq_modphase(F.vectors, fF.vectors)
                         @test F.values ≈ fF.values
                     end
                     @testset "eigenvalues/eigenvectors of symmetric tridiagonal" begin
                         if elty === Float32 || elty === Float64
-                            DT, VT = @inferred eig(A)
-                            @inferred eig(A, 2:4)
-                            @inferred eig(A, 1.0, 2.0)
-                            D, Vecs = eig(fA)
+                            DT, VT = @inferred eigen(A)
+                            @inferred eigen(A, 2:4)
+                            @inferred eigen(A, 1.0, 2.0)
+                            D, Vecs = eigen(fA)
                             @test DT ≈ D
                             @test abs.(VT'Vecs) ≈ Matrix(elty(1)I, n, n)
                             test_approx_eq_modphase(eigvecs(A), eigvecs(fA))

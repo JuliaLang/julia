@@ -934,7 +934,7 @@ function qsort(a::Vector{T}, cmp) where T
     # Here, `callback` isa Base.CFunction, which will be converted to Ptr{Cvoid}
     # (and protected against finalization) by the ccall
     ccall(:qsort, Cvoid, (Ptr{T}, Csize_t, Csize_t, Ptr{Cvoid}),
-        a, length(A), Base.elsize(A), callback)
+        a, length(a), Base.elsize(a), callback)
     # We could instead use:
     #    GC.@preserve callback begin
     #        use(Base.unsafe_convert(Ptr{Cvoid}, callback))
