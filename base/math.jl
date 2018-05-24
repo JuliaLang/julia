@@ -503,7 +503,43 @@ end
 
 Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
-hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
+function hypot(x::Number...)
+    # compute infnorm x (modeled on generic_vecnormMinusInf(x) in LinearAlgebra/generic.gl)
+    (v, s) = iterate(x)::Tuple
+    maxabs = abs(v)
+    while true
+        y = iterate(x, s)
+        y === nothing && break
+        (v, s) = y
+        vnorm = abs(v)
+        maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
+    end
+    maxabs = float(maxabs)
+
+    # compute vecnorm2(x) (modeled on generic_vecnorm2(x) in LinearAlgebra/generic.gl)
+    (maxabs == 0 || isinf(maxabs)) && return maxabs
+    (v, s) = iterate(x)::Tuple
+    T = typeof(maxabs)
+    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
+        sum::promote_type(Float64, T) = abs2(v)
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
+            sum += abs2(v)
+        end
+        return convert(T, sqrt(sum))
+    else
+        sum = (abs(v)/maxabs)^2
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
+            sum += (abs(v)/maxabs)^2
+        end
+        return convert(T, maxabs*sqrt(sum))
+    end
+end
 
 """
     atan2(y, x)
