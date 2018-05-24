@@ -233,7 +233,7 @@ findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 """
     SubstitutionString(substr)
 
-Stores the given string `substr` as a SubstitutionString, for use in regular expression
+Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
 ```jldoctest
