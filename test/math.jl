@@ -259,10 +259,6 @@ end
     end
 end
 
-@testset "hypot function under/overflow" begin
-
-end
-
 @testset "exp function" for T in (Float64, Float32)
     @testset "$T accuracy" begin
         X = map(T, vcat(-10:0.0002:10, -80:0.001:80, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
