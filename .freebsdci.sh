@@ -31,6 +31,7 @@ compile(){
     export LLVM_ASSERTIONS=1
     export USECCACHE=1
 
+    gmake check-whitespace
     gmake all -j $MAKE_JOBS_NUMBER
 }
 
@@ -42,8 +43,9 @@ runtests(){
     export JULIA_TEST_MAXRSS_MB=600
     export JULIA_CPU_CORES=$MAKE_JOBS_NUMBER
 
-    ./usr/bin/julia test/runtests.jl all
-    ./usr/bin/julia test/runtests.jl LibGit2/online OldPkg/pkg Pkg/pkg download
+    ./usr/bin/julia --check-bounds=yes test/runtests.jl all
+    ./usr/bin/julia --check-bounds=yes test/runtests.jl \
+        LibGit2/online OldPkg/pkg Pkg/pkg download
 }
 
 test-embedding(){
