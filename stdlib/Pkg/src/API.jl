@@ -454,6 +454,7 @@ function precompile(ctx::Context)
     code = join(["import " * pkg for pkg in needs_to_be_precompiled], '\n') * "\nexit(0)"
     for (i, pkg) in enumerate(needs_to_be_precompiled)
         code = """
+            import OldPkg
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
             empty!(Base.DL_LOAD_PATH)
