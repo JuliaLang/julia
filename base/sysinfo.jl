@@ -13,6 +13,7 @@ export BINDIR,
        ARCH,
        MACHINE,
        KERNEL,
+       LIBC,
        JIT,
        cpu_info,
        cpu_summary,
@@ -73,6 +74,13 @@ const ARCH = ccall(:jl_get_ARCH, Any, ())
 A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
 """
 const KERNEL = ccall(:jl_get_UNAME, Any, ())
+
+"""
+    Sys.LIBC
+
+A symbol representing the name of the system's C runtime library that's linked to Julia.
+"""
+const LIBC = Base.LIBC
 
 """
     Sys.MACHINE

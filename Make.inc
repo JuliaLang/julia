@@ -597,6 +597,26 @@ JCXXFLAGS += -DGC_DEBUG_ENV
 JCFLAGS += -DGC_DEBUG_ENV
 endif
 
+# Determine the libc in use by the current system
+ifeq ($(OS), Linux)
+ifneq (,$(shell ldd --version 2>&1 | grep -i musl))
+LIBC := musl
+else ifneq (,$(shell ldd --version 2>&1 | grep -i 'gnu\|glibc'))
+LIBC := glibc
+else
+LIBC := unknown
+endif
+else ifeq ($(OS), Darwin)
+LIBC := libSystem
+else ifeq ($(OS), WINNT)
+LIBC := msvcrt
+else ifneq (,$(shell echo $(OS) | grep -i bsd))
+# On FreeBSD, OpenBSD, etc. the libc is just the name of the OS
+LIBC := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
+else
+LIBC := unknown
+endif
+
 # ===========================================================================
 
 # Select the cpu architecture to target, or automatically detects the user's compiler

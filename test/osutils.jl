@@ -18,11 +18,14 @@
     else
         @test Sys.windows_version() >= v"1.0.0-"
     end
-    if !Sys.islinux()
-        @test Sys.glibc_version() == v"0.0.0"
-        @test !Sys.isglibc()
-    else
-        @test Sys.glibc_version() >= v"0.0.0"
+    if Sys.iswindows()
+        @test Sys.LIBC === :msvcrt
+    elseif Sys.isapple()
+        @test Sys.LIBC === :libSystem
+    elseif Sys.KERNEL === :FreeBSD
+        @test Sys.LIBC === :freebsd
+    elseif Sys.islinux()
+        @test Sys.LIBC in (:musl, :glibc)
     end
 end
 
