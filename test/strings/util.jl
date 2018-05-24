@@ -51,8 +51,8 @@ end
     @test strip("   ") == ""
     @test strip("\t  hi   \n") == "hi"
     @test strip(" \u2009 hi \u2009 ") == "hi"
-    @test strip("foobarfoo", ['f','o']) == "bar"
-    @test strip("foobarfoo", ('f','o')) == "bar"
+    @test strip(in(['f','o']), "foobarfoo") == "bar"
+    @test strip(in(('f','o')), "foobarfoo") == "bar"
 
     for s in ("", " ", " abc", "abc ", "  abc  "),
         f in (lstrip, rstrip, strip)
