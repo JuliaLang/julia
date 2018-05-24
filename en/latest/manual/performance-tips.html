@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Performance Tips · The Julia Language</title><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-28835595-6', 'auto');
+ga('send', 'pageview');
+</script><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link href="../assets/documenter.css" rel="stylesheet" type="text/css"/><link href="../assets/julia-manual.css" rel="stylesheet" type="text/css"/></head><body><nav class="toc"><a href="../index.html"><img class="logo" src="../assets/logo.png" alt="The Julia Language logo"/></a><h1>The Julia Language</h1><select id="version-selector" onChange="window.location.href=this.value" style="visibility: hidden"></select><form class="search" id="search-form" action="../search.html"><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../index.html">Home</a></li><li><span class="toctext">Manual</span><ul><li><a class="toctext" href="getting-started.html">Getting Started</a></li><li><a class="toctext" href="variables.html">Variables</a></li><li><a class="toctext" href="integers-and-floating-point-numbers.html">Integers and Floating-Point Numbers</a></li><li><a class="toctext" href="mathematical-operations.html">Mathematical Operations and Elementary Functions</a></li><li><a class="toctext" href="complex-and-rational-numbers.html">Complex and Rational Numbers</a></li><li><a class="toctext" href="strings.html">Strings</a></li><li><a class="toctext" href="functions.html">Functions</a></li><li><a class="toctext" href="control-flow.html">Control Flow</a></li><li><a class="toctext" href="variables-and-scoping.html">Scope of Variables</a></li><li><a class="toctext" href="types.html">Types</a></li><li><a class="toctext" href="methods.html">Methods</a></li><li><a class="toctext" href="constructors.html">Constructors</a></li><li><a class="toctext" href="conversion-and-promotion.html">Conversion and Promotion</a></li><li><a class="toctext" href="interfaces.html">Interfaces</a></li><li><a class="toctext" href="modules.html">Modules</a></li><li><a class="toctext" href="documentation.html">Documentation</a></li><li><a class="toctext" href="metaprogramming.html">Metaprogramming</a></li><li><a class="toctext" href="arrays.html">Multi-dimensional Arrays</a></li><li><a class="toctext" href="missing.html">Missing Values</a></li><li><a class="toctext" href="networking-and-streams.html">Networking and Streams</a></li><li><a class="toctext" href="parallel-computing.html">Parallel Computing</a></li><li><a class="toctext" href="running-external-programs.html">Running External Programs</a></li><li><a class="toctext" href="calling-c-and-fortran-code.html">Calling C and Fortran Code</a></li><li><a class="toctext" href="handling-operating-system-variation.html">Handling Operating System Variation</a></li><li><a class="toctext" href="environment-variables.html">Environment Variables</a></li><li><a class="toctext" href="embedding.html">Embedding Julia</a></li><li><a class="toctext" href="code-loading.html">Code Loading</a></li><li><a class="toctext" href="profile.html">Profiling</a></li><li><a class="toctext" href="stacktraces.html">Stack Traces</a></li><li class="current"><a class="toctext" href="performance-tips.html">Performance Tips</a><ul class="internal"><li><a class="toctext" href="#Avoid-global-variables-1">Avoid global variables</a></li><li><a class="toctext" href="#Measure-performance-with-[@time](@ref)-and-pay-attention-to-memory-allocation-1">Measure performance with <code>@time</code> and pay attention to memory allocation</a></li><li><a class="toctext" href="#tools-1">Tools</a></li><li><a class="toctext" href="#Avoid-containers-with-abstract-type-parameters-1">Avoid containers with abstract type parameters</a></li><li><a class="toctext" href="#Type-declarations-1">Type declarations</a></li><li><a class="toctext" href="#Break-functions-into-multiple-definitions-1">Break functions into multiple definitions</a></li><li><a class="toctext" href="#Write-&quot;type-stable&quot;-functions-1">Write &quot;type-stable&quot; functions</a></li><li><a class="toctext" href="#Avoid-changing-the-type-of-a-variable-1">Avoid changing the type of a variable</a></li><li><a class="toctext" href="#kernal-functions-1">Separate kernel functions (aka, function barriers)</a></li><li><a class="toctext" href="#Types-with-values-as-parameters-1">Types with values-as-parameters</a></li><li><a class="toctext" href="#The-dangers-of-abusing-multiple-dispatch-(aka,-more-on-types-with-values-as-parameters)-1">The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)</a></li><li><a class="toctext" href="#Access-arrays-in-memory-order,-along-columns-1">Access arrays in memory order, along columns</a></li><li><a class="toctext" href="#Pre-allocating-outputs-1">Pre-allocating outputs</a></li><li><a class="toctext" href="#More-dots:-Fuse-vectorized-operations-1">More dots: Fuse vectorized operations</a></li><li><a class="toctext" href="#Consider-using-views-for-slices-1">Consider using views for slices</a></li><li><a class="toctext" href="#Copying-data-is-not-always-bad-1">Copying data is not always bad</a></li><li><a class="toctext" href="#Avoid-string-interpolation-for-I/O-1">Avoid string interpolation for I/O</a></li><li><a class="toctext" href="#Optimize-network-I/O-during-parallel-execution-1">Optimize network I/O during parallel execution</a></li><li><a class="toctext" href="#Fix-deprecation-warnings-1">Fix deprecation warnings</a></li><li><a class="toctext" href="#Tweaks-1">Tweaks</a></li><li><a class="toctext" href="#man-performance-annotations-1">Performance Annotations</a></li><li><a class="toctext" href="#Treat-Subnormal-Numbers-as-Zeros-1">Treat Subnormal Numbers as Zeros</a></li><li><a class="toctext" href="#man-code-warntype-1"><code>@code_warntype</code></a></li></ul></li><li><a class="toctext" href="workflow-tips.html">Workflow Tips</a></li><li><a class="toctext" href="style-guide.html">Style Guide</a></li><li><a class="toctext" href="faq.html">Frequently Asked Questions</a></li><li><a class="toctext" href="noteworthy-differences.html">Noteworthy Differences from other Languages</a></li><li><a class="toctext" href="unicode-input.html">Unicode Input</a></li></ul></li><li><span class="toctext">Base</span><ul><li><a class="toctext" href="../base/base.html">Essentials</a></li><li><a class="toctext" href="../base/collections.html">Collections and Data Structures</a></li><li><a class="toctext" href="../base/math.html">Mathematics</a></li><li><a class="toctext" href="../base/numbers.html">Numbers</a></li><li><a class="toctext" href="../base/strings.html">Strings</a></li><li><a class="toctext" href="../base/arrays.html">Arrays</a></li><li><a class="toctext" href="../base/parallel.html">Tasks</a></li><li><a class="toctext" href="../base/multi-threading.html">Multi-Threading</a></li><li><a class="toctext" href="../base/constants.html">Constants</a></li><li><a class="toctext" href="../base/file.html">Filesystem</a></li><li><a class="toctext" href="../base/io-network.html">I/O and Network</a></li><li><a class="toctext" href="../base/punctuation.html">Punctuation</a></li><li><a class="toctext" href="../base/sort.html">Sorting and Related Functions</a></li><li><a class="toctext" href="../base/iterators.html">Iteration utilities</a></li><li><a class="toctext" href="../base/c.html">C Interface</a></li><li><a class="toctext" href="../base/libc.html">C Standard Library</a></li><li><a class="toctext" href="../base/stacktraces.html">StackTraces</a></li><li><a class="toctext" href="../base/simd-types.html">SIMD Support</a></li></ul></li><li><span class="toctext">Standard Library</span><ul><li><a class="toctext" href="../stdlib/Base64.html">Base64</a></li><li><a class="toctext" href="../stdlib/CRC32c.html">CRC32c</a></li><li><a class="toctext" href="../stdlib/Dates.html">Dates</a></li><li><a class="toctext" href="../stdlib/DelimitedFiles.html">Delimited Files</a></li><li><a class="toctext" href="../stdlib/Distributed.html">Distributed Computing</a></li><li><a class="toctext" href="../stdlib/FileWatching.html">File Events</a></li><li><a class="toctext" href="../stdlib/InteractiveUtils.html">Interactive Utilities</a></li><li><a class="toctext" href="../stdlib/IterativeEigensolvers.html">Iterative Eigensolvers</a></li><li><a class="toctext" href="../stdlib/LibGit2.html">LibGit2</a></li><li><a class="toctext" href="../stdlib/Libdl.html">Dynamic Linker</a></li><li><a class="toctext" href="../stdlib/LinearAlgebra.html">Linear Algebra</a></li><li><a class="toctext" href="../stdlib/Logging.html">Logging</a></li><li><a class="toctext" href="../stdlib/Markdown.html">Markdown</a></li><li><a class="toctext" href="../stdlib/Mmap.html">Memory-mapped I/O</a></li><li><a class="toctext" href="../stdlib/Pkg.html">Pkg</a></li><li><a class="toctext" href="../stdlib/Printf.html">Printf</a></li><li><a class="toctext" href="../stdlib/Profile.html">Profiling</a></li><li><a class="toctext" href="../stdlib/REPL.html">The Julia REPL</a></li><li><a class="toctext" href="../stdlib/Random.html">Random Numbers</a></li><li><a class="toctext" href="../stdlib/SHA.html">SHA</a></li><li><a class="toctext" href="../stdlib/Serialization.html">Serialization</a></li><li><a class="toctext" href="../stdlib/SharedArrays.html">Shared Arrays</a></li><li><a class="toctext" href="../stdlib/Sockets.html">Sockets</a></li><li><a class="toctext" href="../stdlib/SparseArrays.html">Sparse Arrays</a></li><li><a class="toctext" href="../stdlib/Test.html">Unit Testing</a></li><li><a class="toctext" href="../stdlib/UUIDs.html">UUIDs</a></li><li><a class="toctext" href="../stdlib/Unicode.html">Unicode</a></li></ul></li><li><span class="toctext">Developer Documentation</span><ul><li><a class="toctext" href="../devdocs/reflection.html">Reflection and introspection</a></li><li><span class="toctext">Documentation of Julia&#39;s Internals</span><ul><li><a class="toctext" href="../devdocs/init.html">Initialization of the Julia runtime</a></li><li><a class="toctext" href="../devdocs/ast.html">Julia ASTs</a></li><li><a class="toctext" href="../devdocs/types.html">More about types</a></li><li><a class="toctext" href="../devdocs/object.html">Memory layout of Julia Objects</a></li><li><a class="toctext" href="../devdocs/eval.html">Eval of Julia code</a></li><li><a class="toctext" href="../devdocs/callconv.html">Calling Conventions</a></li><li><a class="toctext" href="../devdocs/compiler.html">High-level Overview of the Native-Code Generation Process</a></li><li><a class="toctext" href="../devdocs/functions.html">Julia Functions</a></li><li><a class="toctext" href="../devdocs/cartesian.html">Base.Cartesian</a></li><li><a class="toctext" href="../devdocs/meta.html">Talking to the compiler (the <code>:meta</code> mechanism)</a></li><li><a class="toctext" href="../devdocs/subarrays.html">SubArrays</a></li><li><a class="toctext" href="../devdocs/sysimg.html">System Image Building</a></li><li><a class="toctext" href="../devdocs/llvm.html">Working with LLVM</a></li><li><a class="toctext" href="../devdocs/stdio.html">printf() and stdio in the Julia runtime</a></li><li><a class="toctext" href="../devdocs/boundscheck.html">Bounds checking</a></li><li><a class="toctext" href="../devdocs/locks.html">Proper maintenance and care of multi-threading locks</a></li><li><a class="toctext" href="../devdocs/offset-arrays.html">Arrays with custom indices</a></li><li><a class="toctext" href="../devdocs/require.html">Module loading</a></li><li><a class="toctext" href="../devdocs/inference.html">Inference</a></li></ul></li><li><span class="toctext">Developing/debugging Julia&#39;s C code</span><ul><li><a class="toctext" href="../devdocs/backtraces.html">Reporting and analyzing crashes (segfaults)</a></li><li><a class="toctext" href="../devdocs/debuggingtips.html">gdb debugging tips</a></li><li><a class="toctext" href="../devdocs/valgrind.html">Using Valgrind with Julia</a></li><li><a class="toctext" href="../devdocs/sanitizers.html">Sanitizer support</a></li></ul></li></ul></li></ul></nav><article id="docs"><header><nav><ul><li>Manual</li><li><a href="performance-tips.html">Performance Tips</a></li></ul><a class="edit-page" href="https://github.com/JuliaLang/julia/blob/master/doc/src/manual/performance-tips.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/><div id="topbar"><span>Performance Tips</span><a class="fa fa-bars" href="#"></a></div></header><h1><a class="nav-anchor" id="man-performance-tips-1" href="#man-performance-tips-1">Performance Tips</a></h1><p>In the following sections, we briefly go through a few techniques that can help make your Julia code run as fast as possible.</p><h2><a class="nav-anchor" id="Avoid-global-variables-1" href="#Avoid-global-variables-1">Avoid global variables</a></h2><p>A global variable might have its value, and therefore its type, change at any point. This makes it difficult for the compiler to optimize code using global variables. Variables should be local, or passed as arguments to functions, whenever possible.</p><p>Any code that is performance critical or being benchmarked should be inside a function.</p><p>We find that global names are frequently constants, and declaring them as such greatly improves performance:</p><pre><code class="language-julia">const DEFAULT_VAL = 0</code></pre><p>Uses of non-constant globals can be optimized by annotating their types at the point of use:</p><pre><code class="language-julia">global x
+y = f(x::Int + 1)</code></pre><p>Writing functions is better style. It leads to more reusable code and clarifies what steps are being done, and what their inputs and outputs are.</p><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>All code in the REPL is evaluated in global scope, so a variable defined and assigned at toplevel will be a <strong>global</strong> variable.</p></div></div><p>In the following REPL session:</p><pre><code class="language-julia-repl">julia&gt; x = 1.0</code></pre><p>is equivalent to:</p><pre><code class="language-julia-repl">julia&gt; global x = 1.0</code></pre><p>so all the performance issues discussed previously apply.</p><h2><a class="nav-anchor" id="Measure-performance-with-[@time](@ref)-and-pay-attention-to-memory-allocation-1" href="#Measure-performance-with-[@time](@ref)-and-pay-attention-to-memory-allocation-1">Measure performance with <a href="../base/base.html#Base.@time"><code>@time</code></a> and pay attention to memory allocation</a></h2><p>A useful tool for measuring performance is the <a href="../base/base.html#Base.@time"><code>@time</code></a> macro. The following example illustrates good working style:</p><pre><code class="language-julia-repl">julia&gt; function f(n)
+           s = 0
+           for i = 1:n
+               s += i/2
+           end
+           s
+       end
+f (generic function with 1 method)
+
+julia&gt; @time f(1)
+  0.012686 seconds (2.09 k allocations: 103.421 KiB)
+0.5
+
+julia&gt; @time f(10^6)
+  0.021061 seconds (3.00 M allocations: 45.777 MiB, 11.69% gc time)
+2.5000025e11</code></pre><p>On the first call (<code>@time f(1)</code>), <code>f</code> gets compiled.  (If you&#39;ve not yet used <a href="../base/base.html#Base.@time"><code>@time</code></a> in this session, it will also compile functions needed for timing.)  You should not take the results of this run seriously. For the second run, note that in addition to reporting the time, it also indicated that a large amount of memory was allocated.</p><p>Unexpected memory allocation is almost always a sign of some problem with your code, usually a problem with type-stability. Consequently, in addition to the allocation itself, it&#39;s very likely that the code generated for your function is far from optimal. Take such indications seriously and follow the advice below.</p><p>For more serious benchmarking, consider the <a href="https://github.com/JuliaCI/BenchmarkTools.jl">BenchmarkTools.jl</a> package which evaluates the function multiple times in order to reduce noise.</p><p>As a teaser, an improved version of this function allocates no memory (the allocation reported below is due to running the <code>@time</code> macro in global scope) and has an order of magnitude faster execution after the first call:</p><pre><code class="language-julia-repl">julia&gt; @time f_improved(1)
+  0.007008 seconds (1.32 k allocations: 63.640 KiB)
+0.5
+
+julia&gt; @time f_improved(10^6)
+  0.002997 seconds (6 allocations: 192 bytes)
+2.5000025e11</code></pre><p>Below you&#39;ll learn how to spot the problem with <code>f</code> and how to fix it.</p><p>In some situations, your function may need to allocate memory as part of its operation, and this can complicate the simple picture above. In such cases, consider using one of the <a href="performance-tips.html#tools-1">tools</a> below to diagnose problems, or write a version of your function that separates allocation from its algorithmic aspects (see <a href="performance-tips.html#Pre-allocating-outputs-1">Pre-allocating outputs</a>).</p><h2><a class="nav-anchor" id="tools-1" href="#tools-1">Tools</a></h2><p>Julia and its package ecosystem includes tools that may help you diagnose problems and improve the performance of your code:</p><ul><li><a href="profile.html#Profiling-1">Profiling</a> allows you to measure the performance of your running code and identify lines that serve as bottlenecks.  For complex projects, the <a href="https://github.com/timholy/ProfileView.jl">ProfileView</a> package can help you visualize your profiling results.</li><li>Unexpectedly-large memory allocations–as reported by <a href="../base/base.html#Base.@time"><code>@time</code></a>, <a href="../base/base.html#Base.@allocated"><code>@allocated</code></a>, or the profiler (through calls to the garbage-collection routines)–hint that there might be issues with your code.  If you don&#39;t see another reason for the allocations, suspect a type problem.  You can also start Julia with the <code>--track-allocation=user</code> option and examine the resulting <code>*.mem</code> files to see information about where those allocations occur.  See <a href="profile.html#Memory-allocation-analysis-1">Memory allocation analysis</a>.</li><li><code>@code_warntype</code> generates a representation of your code that can be helpful in finding expressions that result in type uncertainty. See <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.@code_warntype"><code>@code_warntype</code></a> below.</li><li>The <a href="https://github.com/tonyhffong/Lint.jl">Lint</a> package can also warn you of certain types of programming errors.</li></ul><h2><a class="nav-anchor" id="Avoid-containers-with-abstract-type-parameters-1" href="#Avoid-containers-with-abstract-type-parameters-1">Avoid containers with abstract type parameters</a></h2><p>When working with parameterized types, including arrays, it is best to avoid parameterizing with abstract types where possible.</p><p>Consider the following:</p><pre><code class="language-julia">a = Real[]    # typeof(a) = Array{Real,1}
+if (f = rand()) &lt; .8
+    push!(a, f)
+end</code></pre><p>Because <code>a</code> is a an array of abstract type <a href="../base/numbers.html#Core.Real"><code>Real</code></a>, it must be able to hold any <code>Real</code> value.  Since <code>Real</code> objects can be of arbitrary size and structure, <code>a</code> must be represented as an array of pointers to individually allocated <code>Real</code> objects. Because <code>f</code> will always be a <a href="../base/numbers.html#Core.Float64"><code>Float64</code></a>, we should instead, use:</p><pre><code class="language-julia">a = Float64[] # typeof(a) = Array{Float64,1}</code></pre><p>which will create a contiguous block of 64-bit floating-point values that can be manipulated efficiently.</p><p>See also the discussion under <a href="types.html#Parametric-Types-1">Parametric Types</a>.</p><h2><a class="nav-anchor" id="Type-declarations-1" href="#Type-declarations-1">Type declarations</a></h2><p>In many languages with optional type declarations, adding declarations is the principal way to make code run faster. This is <em>not</em> the case in Julia. In Julia, the compiler generally knows the types of all function arguments, local variables, and expressions. However, there are a few specific instances where declarations are helpful.</p><h3><a class="nav-anchor" id="Avoid-fields-with-abstract-type-1" href="#Avoid-fields-with-abstract-type-1">Avoid fields with abstract type</a></h3><p>Types can be declared without specifying the types of their fields:</p><pre><code class="language-julia-repl">julia&gt; struct MyAmbiguousType
+           a
+       end</code></pre><p>This allows <code>a</code> to be of any type. This can often be useful, but it does have a downside: for objects of type <code>MyAmbiguousType</code>, the compiler will not be able to generate high-performance code.  The reason is that the compiler uses the types of objects, not their values, to determine how to build code. Unfortunately, very little can be inferred about an object of type <code>MyAmbiguousType</code>:</p><pre><code class="language-julia-repl">julia&gt; b = MyAmbiguousType(&quot;Hello&quot;)
+MyAmbiguousType(&quot;Hello&quot;)
+
+julia&gt; c = MyAmbiguousType(17)
+MyAmbiguousType(17)
+
+julia&gt; typeof(b)
+MyAmbiguousType
+
+julia&gt; typeof(c)
+MyAmbiguousType</code></pre><p><code>b</code> and <code>c</code> have the same type, yet their underlying representation of data in memory is very different. Even if you stored just numeric values in field <code>a</code>, the fact that the memory representation of a <a href="../base/numbers.html#Core.UInt8"><code>UInt8</code></a> differs from a <a href="../base/numbers.html#Core.Float64"><code>Float64</code></a> also means that the CPU needs to handle them using two different kinds of instructions. Since the required information is not available in the type, such decisions have to be made at run-time. This slows performance.</p><p>You can do better by declaring the type of <code>a</code>. Here, we are focused on the case where <code>a</code> might be any one of several types, in which case the natural solution is to use parameters. For example:</p><pre><code class="language-julia-repl">julia&gt; mutable struct MyType{T&lt;:AbstractFloat}
+           a::T
+       end</code></pre><p>This is a better choice than</p><pre><code class="language-julia-repl">julia&gt; mutable struct MyStillAmbiguousType
+           a::AbstractFloat
+       end</code></pre><p>because the first version specifies the type of <code>a</code> from the type of the wrapper object.  For example:</p><pre><code class="language-julia-repl">julia&gt; m = MyType(3.2)
+MyType{Float64}(3.2)
+
+julia&gt; t = MyStillAmbiguousType(3.2)
+MyStillAmbiguousType(3.2)
+
+julia&gt; typeof(m)
+MyType{Float64}
+
+julia&gt; typeof(t)
+MyStillAmbiguousType</code></pre><p>The type of field <code>a</code> can be readily determined from the type of <code>m</code>, but not from the type of <code>t</code>.  Indeed, in <code>t</code> it&#39;s possible to change the type of field <code>a</code>:</p><pre><code class="language-julia-repl">julia&gt; typeof(t.a)
+Float64
+
+julia&gt; t.a = 4.5f0
+4.5f0
+
+julia&gt; typeof(t.a)
+Float32</code></pre><p>In contrast, once <code>m</code> is constructed, the type of <code>m.a</code> cannot change:</p><pre><code class="language-julia-repl">julia&gt; m.a = 4.5f0
+4.5f0
+
+julia&gt; typeof(m.a)
+Float64</code></pre><p>The fact that the type of <code>m.a</code> is known from <code>m</code>&#39;s type–coupled with the fact that its type cannot change mid-function–allows the compiler to generate highly-optimized code for objects like <code>m</code> but not for objects like <code>t</code>.</p><p>Of course, all of this is true only if we construct <code>m</code> with a concrete type.  We can break this by explicitly constructing it with an abstract type:</p><pre><code class="language-julia-repl">julia&gt; m = MyType{AbstractFloat}(3.2)
+MyType{AbstractFloat}(3.2)
+
+julia&gt; typeof(m.a)
+Float64
+
+julia&gt; m.a = 4.5f0
+4.5f0
+
+julia&gt; typeof(m.a)
+Float32</code></pre><p>For all practical purposes, such objects behave identically to those of <code>MyStillAmbiguousType</code>.</p><p>It&#39;s quite instructive to compare the sheer amount code generated for a simple function</p><pre><code class="language-julia">func(m::MyType) = m.a+1</code></pre><p>using</p><pre><code class="language-julia">code_llvm(func,Tuple{MyType{Float64}})
+code_llvm(func,Tuple{MyType{AbstractFloat}})
+code_llvm(func,Tuple{MyType})</code></pre><p>For reasons of length the results are not shown here, but you may wish to try this yourself. Because the type is fully-specified in the first case, the compiler doesn&#39;t need to generate any code to resolve the type at run-time. This results in shorter and faster code.</p><h3><a class="nav-anchor" id="Avoid-fields-with-abstract-containers-1" href="#Avoid-fields-with-abstract-containers-1">Avoid fields with abstract containers</a></h3><p>The same best practices also work for container types:</p><pre><code class="language-julia-repl">julia&gt; mutable struct MySimpleContainer{A&lt;:AbstractVector}
+           a::A
+       end
+
+julia&gt; mutable struct MyAmbiguousContainer{T}
+           a::AbstractVector{T}
+       end</code></pre><p>For example:</p><pre><code class="language-julia-repl">julia&gt; c = MySimpleContainer(1:3);
+
+julia&gt; typeof(c)
+MySimpleContainer{UnitRange{Int64}}
+
+julia&gt; c = MySimpleContainer([1:3;]);
+
+julia&gt; typeof(c)
+MySimpleContainer{Array{Int64,1}}
+
+julia&gt; b = MyAmbiguousContainer(1:3);
+
+julia&gt; typeof(b)
+MyAmbiguousContainer{Int64}
+
+julia&gt; b = MyAmbiguousContainer([1:3;]);
+
+julia&gt; typeof(b)
+MyAmbiguousContainer{Int64}</code></pre><p>For <code>MySimpleContainer</code>, the object is fully-specified by its type and parameters, so the compiler can generate optimized functions. In most instances, this will probably suffice.</p><p>While the compiler can now do its job perfectly well, there are cases where <em>you</em> might wish that your code could do different things depending on the <em>element type</em> of <code>a</code>.  Usually the best way to achieve this is to wrap your specific operation (here, <code>foo</code>) in a separate function:</p><pre><code class="language-julia">julia&gt; function sumfoo(c::MySimpleContainer)
+           s = 0
+           for x in c.a
+               s += foo(x)
+           end
+           s
+       end
+sumfoo (generic function with 1 method)
+
+julia&gt; foo(x::Integer) = x
+foo (generic function with 1 method)
+
+julia&gt; foo(x::AbstractFloat) = round(x)
+foo (generic function with 2 methods)</code></pre><p>This keeps things simple, while allowing the compiler to generate optimized code in all cases.</p><p>However, there are cases where you may need to declare different versions of the outer function for different element types of <code>a</code>. You could do it like this:</p><pre><code class="language-none">function myfun(c::MySimpleContainer{Vector{T}}) where T&lt;:AbstractFloat
+    ...
+end
+function myfun(c::MySimpleContainer{Vector{T}}) where T&lt;:Integer
+    ...
+end</code></pre><p>This works fine for <code>Vector{T}</code>, but we&#39;d also have to write explicit versions for <code>UnitRange{T}</code> or other abstract types. To prevent such tedium, you can use two parameters in the declaration of <code>MyContainer</code>:</p><pre><code class="language-julia-repl">julia&gt; mutable struct MyContainer{T, A&lt;:AbstractVector}
+           a::A
+       end
+
+julia&gt; MyContainer(v::AbstractVector) = MyContainer{eltype(v), typeof(v)}(v)
+MyContainer
+
+julia&gt; b = MyContainer(1:5);
+
+julia&gt; typeof(b)
+MyContainer{Int64,UnitRange{Int64}}</code></pre><p>Note the somewhat surprising fact that <code>T</code> doesn&#39;t appear in the declaration of field <code>a</code>, a point that we&#39;ll return to in a moment. With this approach, one can write functions such as:</p><pre><code class="language-julia-repl">julia&gt; function myfunc(c::MyContainer{&lt;:Integer, &lt;:AbstractArray})
+           return c.a[1]+1
+       end
+myfunc (generic function with 1 method)
+
+julia&gt; function myfunc(c::MyContainer{&lt;:AbstractFloat})
+           return c.a[1]+2
+       end
+myfunc (generic function with 2 methods)
+
+julia&gt; function myfunc(c::MyContainer{T,Vector{T}}) where T&lt;:Integer
+           return c.a[1]+3
+       end
+myfunc (generic function with 3 methods)</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>Because we can only define <code>MyContainer</code> for <code>A&lt;:AbstractArray</code>, and any unspecified parameters are arbitrary, the first function above could have been written more succinctly as <code>function myfunc(c::MyContainer{&lt;:Integer})</code></p></div></div><pre><code class="language-julia-repl">julia&gt; myfunc(MyContainer(1:3))
+2
+
+julia&gt; myfunc(MyContainer(1.0:3))
+3.0
+
+julia&gt; myfunc(MyContainer([1:3;]))
+4</code></pre><p>As you can see, with this approach it&#39;s possible to specialize on both the element type <code>T</code> and the array type <code>A</code>.</p><p>However, there&#39;s one remaining hole: we haven&#39;t enforced that <code>A</code> has element type <code>T</code>, so it&#39;s perfectly possible to construct an object like this:</p><pre><code class="language-julia-repl">julia&gt; b = MyContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
+
+julia&gt; typeof(b)
+MyContainer{Int64,UnitRange{Float64}}</code></pre><p>To prevent this, we can add an inner constructor:</p><pre><code class="language-julia-repl">julia&gt; mutable struct MyBetterContainer{T&lt;:Real, A&lt;:AbstractVector}
+           a::A
+           MyBetterContainer{T,A}(v::AbstractVector{T}) where {T,A} = new(v)
+       end
+
+julia&gt; MyBetterContainer(v::AbstractVector) = MyBetterContainer{eltype(v),typeof(v)}(v)
+MyBetterContainer
+
+julia&gt; b = MyBetterContainer(UnitRange(1.3, 5.0));
+
+julia&gt; typeof(b)
+MyBetterContainer{Float64,UnitRange{Float64}}
+
+julia&gt; b = MyBetterContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
+ERROR: MethodError: Cannot `convert` an object of type UnitRange{Float64} to an object of type MyBetterContainer{Int64,UnitRange{Float64}}
+[...]</code></pre><p>The inner constructor requires that the element type of <code>A</code> be <code>T</code>.</p><h3><a class="nav-anchor" id="Annotate-values-taken-from-untyped-locations-1" href="#Annotate-values-taken-from-untyped-locations-1">Annotate values taken from untyped locations</a></h3><p>It is often convenient to work with data structures that may contain values of any type (arrays of type <code>Array{Any}</code>). But, if you&#39;re using one of these structures and happen to know the type of an element, it helps to share this knowledge with the compiler:</p><pre><code class="language-julia">function foo(a::Array{Any,1})
+    x = a[1]::Int32
+    b = x+1
+    ...
+end</code></pre><p>Here, we happened to know that the first element of <code>a</code> would be an <a href="../base/numbers.html#Core.Int32"><code>Int32</code></a>. Making an annotation like this has the added benefit that it will raise a run-time error if the value is not of the expected type, potentially catching certain bugs earlier.</p><p>In the case that the type of <code>a[1]</code> is not known precisely, <code>x</code> can be declared via <code>x = convert(Int32,a[1])::Int32</code>. The use of the <a href="../base/base.html#Base.convert"><code>convert</code></a> function allows <code>a[1]</code> to be any object convertible to an <code>Int32</code> (such as <code>UInt8</code>), thus increasing the genericity of the code by loosening the type requirement. Notice that <code>convert</code> itself needs a type annotation in this context in order to achieve type stability. This is because the compiler cannot deduce the type of the return value of a function, even <code>convert</code>, unless the types of all the function&#39;s arguments are known.</p><p>Type annotation will not enhance (and can actually hinder) performance if the type is constructed at run-time. This is because the compiler cannot use the annotation to specialize the subsequent code, and the type-check itself takes time. For example, in the code:</p><pre><code class="language-julia">function nr(a, prec)
+    ctype = prec == 32 ? Float32 : Float64
+    b = Complex{ctype}(a)
+    c = (b + 1.0f0)::Complex{ctype}
+    abs(c)
+end</code></pre><p>the annotation of <code>c</code> harms performance. To write performant code involving types constructed at run-time, use the <a href="performance-tips.html#kernal-functions-1">function-barrier technique</a> discussed below, and ensure that the constructed type appears among the argument types of the kernel function so that the kernel operations are properly specialized by the compiler. For example, in the above snippet, as soon as <code>b</code> is constructed, it can be passed to another function <code>k</code>, the kernel. If, for example, function <code>k</code> declares <code>b</code> as an argument of type <code>Complex{T}</code>, where <code>T</code> is a type parameter, then a type annotation appearing in an assignment statement within <code>k</code> of the form:</p><pre><code class="language-julia">c = (b + 1.0f0)::Complex{T}</code></pre><p>does not hinder performance (but does not help either) since the compiler can determine the type of <code>c</code> at the time <code>k</code> is compiled.</p><h3><a class="nav-anchor" id="Declare-types-of-keyword-arguments-1" href="#Declare-types-of-keyword-arguments-1">Declare types of keyword arguments</a></h3><p>Keyword arguments can have declared types:</p><pre><code class="language-julia">function with_keyword(x; name::Int = 1)
+    ...
+end</code></pre><p>Functions are specialized on the types of keyword arguments, so these declarations will not affect performance of code inside the function. However, they will reduce the overhead of calls to the function that include keyword arguments.</p><p>Functions with keyword arguments have near-zero overhead for call sites that pass only positional arguments.</p><p>Passing dynamic lists of keyword arguments, as in <code>f(x; keywords...)</code>, can be slow and should be avoided in performance-sensitive code.</p><h2><a class="nav-anchor" id="Break-functions-into-multiple-definitions-1" href="#Break-functions-into-multiple-definitions-1">Break functions into multiple definitions</a></h2><p>Writing a function as many small definitions allows the compiler to directly call the most applicable code, or even inline it.</p><p>Here is an example of a &quot;compound function&quot; that should really be written as multiple definitions:</p><pre><code class="language-julia">function norm(A)
+    if isa(A, Vector)
+        return sqrt(real(dot(A,A)))
+    elseif isa(A, Matrix)
+        return maximum(svdvals(A))
+    else
+        error(&quot;norm: invalid argument&quot;)
+    end
+end</code></pre><p>This can be written more concisely and efficiently as:</p><pre><code class="language-julia">norm(x::Vector) = sqrt(real(dot(x,x)))
+norm(A::Matrix) = maximum(svdvals(A))</code></pre><h2><a class="nav-anchor" id="Write-&quot;type-stable&quot;-functions-1" href="#Write-&quot;type-stable&quot;-functions-1">Write &quot;type-stable&quot; functions</a></h2><p>When possible, it helps to ensure that a function always returns a value of the same type. Consider the following definition:</p><pre><code class="language-julia">pos(x) = x &lt; 0 ? 0 : x</code></pre><p>Although this seems innocent enough, the problem is that <code>0</code> is an integer (of type <code>Int</code>) and <code>x</code> might be of any type. Thus, depending on the value of <code>x</code>, this function might return a value of either of two types. This behavior is allowed, and may be desirable in some cases. But it can easily be fixed as follows:</p><pre><code class="language-julia">pos(x) = x &lt; 0 ? zero(x) : x</code></pre><p>There is also a <a href="../base/numbers.html#Base.one"><code>one</code></a> function, and a more general <a href="../base/base.html#Base.oftype"><code>oftype(x, y)</code></a> function, which returns <code>y</code> converted to the type of <code>x</code>.</p><h2><a class="nav-anchor" id="Avoid-changing-the-type-of-a-variable-1" href="#Avoid-changing-the-type-of-a-variable-1">Avoid changing the type of a variable</a></h2><p>An analogous &quot;type-stability&quot; problem exists for variables used repeatedly within a function:</p><pre><code class="language-julia">function foo()
+    x = 1
+    for i = 1:10
+        x = x/bar()
+    end
+    return x
+end</code></pre><p>Local variable <code>x</code> starts as an integer, and after one loop iteration becomes a floating-point number (the result of <a href="../base/math.html#Base.:/"><code>/</code></a> operator). This makes it more difficult for the compiler to optimize the body of the loop. There are several possible fixes:</p><ul><li>Initialize <code>x</code> with <code>x = 1.0</code></li><li>Declare the type of <code>x</code>: <code>x::Float64 = 1</code></li><li>Use an explicit conversion: <code>x = oneunit(T)</code></li><li>Initialize with the first loop iteration, to <code>x = 1/bar()</code>, then loop <code>for i = 2:10</code></li></ul><h2><a class="nav-anchor" id="kernal-functions-1" href="#kernal-functions-1">Separate kernel functions (aka, function barriers)</a></h2><p>Many functions follow a pattern of performing some set-up work, and then running many iterations to perform a core computation. Where possible, it is a good idea to put these core computations in separate functions. For example, the following contrived function returns an array of a randomly-chosen type:</p><pre><code class="language-julia-repl">julia&gt; function strange_twos(n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
+           for i = 1:n
+               a[i] = 2
+           end
+           return a
+       end
+strange_twos (generic function with 1 method)
+
+julia&gt; strange_twos(3)
+3-element Array{Float64,1}:
+ 2.0
+ 2.0
+ 2.0</code></pre><p>This should be written as:</p><pre><code class="language-julia-repl">julia&gt; function fill_twos!(a)
+           for i = eachindex(a)
+               a[i] = 2
+           end
+       end
+fill_twos! (generic function with 1 method)
+
+julia&gt; function strange_twos(n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
+           fill_twos!(a)
+           return a
+       end
+strange_twos (generic function with 1 method)
+
+julia&gt; strange_twos(3)
+3-element Array{Float64,1}:
+ 2.0
+ 2.0
+ 2.0</code></pre><p>Julia&#39;s compiler specializes code for argument types at function boundaries, so in the original implementation it does not know the type of <code>a</code> during the loop (since it is chosen randomly). Therefore the second version is generally faster since the inner loop can be recompiled as part of <code>fill_twos!</code> for different types of <code>a</code>.</p><p>The second form is also often better style and can lead to more code reuse.</p><p>This pattern is used in several places in Julia Base. For example, see <code>hvcat_fill</code> in <a href="https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl"><code>abstractarray.jl</code></a>, or the <a href="../base/arrays.html#Base.fill!"><code>fill!</code></a> function, which we could have used instead of writing our own <code>fill_twos!</code>.</p><p>Functions like <code>strange_twos</code> occur when dealing with data of uncertain type, for example data loaded from an input file that might contain either integers, floats, strings, or something else.</p><h2><a class="nav-anchor" id="Types-with-values-as-parameters-1" href="#Types-with-values-as-parameters-1">Types with values-as-parameters</a></h2><p>Let&#39;s say you want to create an <code>N</code>-dimensional array that has size 3 along each axis. Such arrays can be created like this:</p><pre><code class="language-julia-repl">julia&gt; A = fill(5.0, (3, 3))
+3×3 Array{Float64,2}:
+ 5.0  5.0  5.0
+ 5.0  5.0  5.0
+ 5.0  5.0  5.0</code></pre><p>This approach works very well: the compiler can figure out that <code>A</code> is an <code>Array{Float64,2}</code> because it knows the type of the fill value (<code>5.0::Float64</code>) and the dimensionality (<code>(3, 3)::NTuple{2,Int}</code>). This implies that the compiler can generate very efficient code for any future usage of <code>A</code> in the same function.</p><p>But now let&#39;s say you want to write a function that creates a 3×3×... array in arbitrary dimensions; you might be tempted to write a function</p><pre><code class="language-julia-repl">julia&gt; function array3(fillval, N)
+           fill(fillval, ntuple(d-&gt;3, N))
+       end
+array3 (generic function with 1 method)
+
+julia&gt; array3(5.0, 2)
+3×3 Array{Float64,2}:
+ 5.0  5.0  5.0
+ 5.0  5.0  5.0
+ 5.0  5.0  5.0</code></pre><p>This works, but (as you can verify for yourself using <code>@code_warntype array3(5.0, 2)</code>) the problem is that the output type cannot be inferred: the argument <code>N</code> is a <em>value</em> of type <code>Int</code>, and type-inference does not (and cannot) predict its value in advance. This means that code using the output of this function has to be conservative, checking the type on each access of <code>A</code>; such code will be very slow.</p><p>Now, one very good way to solve such problems is by using the <a href="performance-tips.html#kernal-functions-1">function-barrier technique</a>. However, in some cases you might want to eliminate the type-instability altogether.  In such cases, one approach is to pass the dimensionality as a parameter, for example through <code>Val{T}()</code> (see <a href="types.html#&quot;Value-types&quot;-1">&quot;Value types&quot;</a>):</p><pre><code class="language-julia-repl">julia&gt; function array3(fillval, ::Val{N}) where N
+           fill(fillval, ntuple(d-&gt;3, Val(N)))
+       end
+array3 (generic function with 1 method)
+
+julia&gt; array3(5.0, Val(2))
+3×3 Array{Float64,2}:
+ 5.0  5.0  5.0
+ 5.0  5.0  5.0
+ 5.0  5.0  5.0</code></pre><p>Julia has a specialized version of <code>ntuple</code> that accepts a <code>Val{::Int}</code> instance as the second parameter; by passing <code>N</code> as a type-parameter, you make its &quot;value&quot; known to the compiler. Consequently, this version of <code>array3</code> allows the compiler to predict the return type.</p><p>However, making use of such techniques can be surprisingly subtle. For example, it would be of no help if you called <code>array3</code> from a function like this:</p><pre><code class="language-julia">function call_array3(fillval, n)
+    A = array3(fillval, Val(n))
+end</code></pre><p>Here, you&#39;ve created the same problem all over again: the compiler can&#39;t guess what <code>n</code> is, so it doesn&#39;t know the <em>type</em> of <code>Val(n)</code>.  Attempting to use <code>Val</code>, but doing so incorrectly, can easily make performance <em>worse</em> in many situations.  (Only in situations where you&#39;re effectively combining <code>Val</code> with the function-barrier trick, to make the kernel function more efficient, should code like the above be used.)</p><p>An example of correct usage of <code>Val</code> would be:</p><pre><code class="language-julia">function filter3(A::AbstractArray{T,N}) where {T,N}
+    kernel = array3(1, Val(N))
+    filter(A, kernel)
+end</code></pre><p>In this example, <code>N</code> is passed as a parameter, so its &quot;value&quot; is known to the compiler.  Essentially, <code>Val(T)</code> works only when <code>T</code> is either hard-coded/literal (<code>Val(3)</code>) or already specified in the type-domain.</p><h2><a class="nav-anchor" id="The-dangers-of-abusing-multiple-dispatch-(aka,-more-on-types-with-values-as-parameters)-1" href="#The-dangers-of-abusing-multiple-dispatch-(aka,-more-on-types-with-values-as-parameters)-1">The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)</a></h2><p>Once one learns to appreciate multiple dispatch, there&#39;s an understandable tendency to go crazy and try to use it for everything. For example, you might imagine using it to store information, e.g.</p><pre><code class="language-none">struct Car{Make,Model}
+    year::Int
+    ...more fields...
+end</code></pre><p>and then dispatch on objects like <code>Car{:Honda,:Accord}(year, args...)</code>.</p><p>This might be worthwhile when the following are true:</p><ul><li>You require CPU-intensive processing on each <code>Car</code>, and it becomes vastly more efficient if you know the <code>Make</code> and <code>Model</code> at compile time.</li><li>You have homogenous lists of the same type of <code>Car</code> to process, so that you can store them all in an <code>Array{Car{:Honda,:Accord},N}</code>.</li></ul><p>When the latter holds, a function processing such a homogenous array can be productively specialized: Julia knows the type of each element in advance (all objects in the container have the same concrete type), so Julia can &quot;look up&quot; the correct method calls when the function is being compiled (obviating the need to check at run-time) and thereby emit efficient code for processing the whole list.</p><p>When these do not hold, then it&#39;s likely that you&#39;ll get no benefit; worse, the resulting &quot;combinatorial explosion of types&quot; will be counterproductive.  If <code>items[i+1]</code> has a different type than <code>item[i]</code>, Julia has to look up the type at run-time, search for the appropriate method in method tables, decide (via type intersection) which one matches, determine whether it has been JIT-compiled yet (and do so if not), and then make the call. In essence, you&#39;re asking the full type- system and JIT-compilation machinery to basically execute the equivalent of a switch statement or dictionary lookup in your own code.</p><p>Some run-time benchmarks comparing (1) type dispatch, (2) dictionary lookup, and (3) a &quot;switch&quot; statement can be found <a href="https://groups.google.com/forum/#!msg/julia-users/jUMu9A3QKQQ/qjgVWr7vAwAJ">on the mailing list</a>.</p><p>Perhaps even worse than the run-time impact is the compile-time impact: Julia will compile specialized functions for each different <code>Car{Make, Model}</code>; if you have hundreds or thousands of such types, then every function that accepts such an object as a parameter (from a custom <code>get_year</code> function you might write yourself, to the generic <code>push!</code> function in Julia Base) will have hundreds or thousands of variants compiled for it.  Each of these increases the size of the cache of compiled code, the length of internal lists of methods, etc.  Excess enthusiasm for values-as-parameters can easily waste enormous resources.</p><h2><a class="nav-anchor" id="Access-arrays-in-memory-order,-along-columns-1" href="#Access-arrays-in-memory-order,-along-columns-1">Access arrays in memory order, along columns</a></h2><p>Multidimensional arrays in Julia are stored in column-major order. This means that arrays are stacked one column at a time. This can be verified using the <code>vec</code> function or the syntax <code>[:]</code> as shown below (notice that the array is ordered <code>[1 3 2 4]</code>, not <code>[1 2 3 4]</code>):</p><pre><code class="language-julia-repl">julia&gt; x = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia&gt; x[:]
+4-element Array{Int64,1}:
+ 1
+ 3
+ 2
+ 4</code></pre><p>This convention for ordering arrays is common in many languages like Fortran, Matlab, and R (to name a few). The alternative to column-major ordering is row-major ordering, which is the convention adopted by C and Python (<code>numpy</code>) among other languages. Remembering the ordering of arrays can have significant performance effects when looping over arrays. A rule of thumb to keep in mind is that with column-major arrays, the first index changes most rapidly. Essentially this means that looping will be faster if the inner-most loop index is the first to appear in a slice expression.</p><p>Consider the following contrived example. Imagine we wanted to write a function that accepts a <a href="../base/arrays.html#Base.Vector"><code>Vector</code></a> and returns a square <a href="../base/arrays.html#Base.Matrix"><code>Matrix</code></a> with either the rows or the columns filled with copies of the input vector. Assume that it is not important whether rows or columns are filled with these copies (perhaps the rest of the code can be easily adapted accordingly). We could conceivably do this in at least four ways (in addition to the recommended call to the built-in <a href="../base/arrays.html#Base.repeat"><code>repeat</code></a>):</p><pre><code class="language-julia">function copy_cols(x::Vector{T}) where T
+    inds = axes(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for i = inds
+        out[:, i] = x
+    end
+    out
+end
+
+function copy_rows(x::Vector{T}) where T
+    inds = axes(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for i = inds
+        out[i, :] = x
+    end
+    out
+end
+
+function copy_col_row(x::Vector{T}) where T
+    inds = axes(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for col = inds, row = inds
+        out[row, col] = x[row]
+    end
+    out
+end
+
+function copy_row_col(x::Vector{T}) where T
+    inds = axes(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for row = inds, col = inds
+        out[row, col] = x[col]
+    end
+    out
+end</code></pre><p>Now we will time each of these functions using the same random <code>10000</code> by <code>1</code> input vector:</p><pre><code class="language-julia-repl">julia&gt; x = randn(10000);
+
+julia&gt; fmt(f) = println(rpad(string(f)*&quot;: &quot;, 14, &#39; &#39;), @elapsed f(x))
+
+julia&gt; map(fmt, Any[copy_cols, copy_rows, copy_col_row, copy_row_col]);
+copy_cols:    0.331706323
+copy_rows:    1.799009911
+copy_col_row: 0.415630047
+copy_row_col: 1.721531501</code></pre><p>Notice that <code>copy_cols</code> is much faster than <code>copy_rows</code>. This is expected because <code>copy_cols</code> respects the column-based memory layout of the <code>Matrix</code> and fills it one column at a time. Additionally, <code>copy_col_row</code> is much faster than <code>copy_row_col</code> because it follows our rule of thumb that the first element to appear in a slice expression should be coupled with the inner-most loop.</p><h2><a class="nav-anchor" id="Pre-allocating-outputs-1" href="#Pre-allocating-outputs-1">Pre-allocating outputs</a></h2><p>If your function returns an <code>Array</code> or some other complex type, it may have to allocate memory.  Unfortunately, oftentimes allocation and its converse, garbage collection, are substantial bottlenecks.</p><p>Sometimes you can circumvent the need to allocate memory on each function call by preallocating the output.  As a trivial example, compare</p><pre><code class="language-julia">function xinc(x)
+    return [x, x+1, x+2]
+end
+
+function loopinc()
+    y = 0
+    for i = 1:10^7
+        ret = xinc(i)
+        y += ret[2]
+    end
+    y
+end</code></pre><p>with</p><pre><code class="language-julia">function xinc!(ret::AbstractVector{T}, x::T) where T
+    ret[1] = x
+    ret[2] = x+1
+    ret[3] = x+2
+    nothing
+end
+
+function loopinc_prealloc()
+    ret = Vector{Int}(undef, 3)
+    y = 0
+    for i = 1:10^7
+        xinc!(ret, i)
+        y += ret[2]
+    end
+    y
+end</code></pre><p>Timing results:</p><pre><code class="language-julia-repl">julia&gt; @time loopinc()
+  0.529894 seconds (40.00 M allocations: 1.490 GiB, 12.14% gc time)
+50000015000000
+
+julia&gt; @time loopinc_prealloc()
+  0.030850 seconds (6 allocations: 288 bytes)
+50000015000000</code></pre><p>Preallocation has other advantages, for example by allowing the caller to control the &quot;output&quot; type from an algorithm.  In the example above, we could have passed a <code>SubArray</code> rather than an <a href="../base/arrays.html#Core.Array"><code>Array</code></a>, had we so desired.</p><p>Taken to its extreme, pre-allocation can make your code uglier, so performance measurements and some judgment may be required. However, for &quot;vectorized&quot; (element-wise) functions, the convenient syntax <code>x .= f.(y)</code> can be used for in-place operations with fused loops and no temporary arrays (see the <a href="functions.html#man-vectorized-1">dot syntax for vectorizing functions</a>).</p><h2><a class="nav-anchor" id="More-dots:-Fuse-vectorized-operations-1" href="#More-dots:-Fuse-vectorized-operations-1">More dots: Fuse vectorized operations</a></h2><p>Julia has a special <a href="functions.html#man-vectorized-1">dot syntax</a> that converts any scalar function into a &quot;vectorized&quot; function call, and any operator into a &quot;vectorized&quot; operator, with the special property that nested &quot;dot calls&quot; are <em>fusing</em>: they are combined at the syntax level into a single loop, without allocating temporary arrays. If you use <code>.=</code> and similar assignment operators, the result can also be stored in-place in a pre-allocated array (see above).</p><p>In a linear-algebra context, this means that even though operations like <code>vector + vector</code> and <code>vector * scalar</code> are defined, it can be advantageous to instead use <code>vector .+ vector</code> and <code>vector .* scalar</code> because the resulting loops can be fused with surrounding computations. For example, consider the two functions:</p><pre><code class="language-julia">f(x) = 3x.^2 + 4x + 7x.^3
+
+fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3</code></pre><p>Both <code>f</code> and <code>fdot</code> compute the same thing.  However, <code>fdot</code> (defined with the help of the <a href="../base/arrays.html#Base.Broadcast.@__dot__"><code>@.</code></a> macro) is significantly faster when applied to an array:</p><pre><code class="language-julia-repl">julia&gt; x = rand(10^6);
+
+julia&gt; @time f(x);
+  0.010986 seconds (18 allocations: 53.406 MiB, 11.45% gc time)
+
+julia&gt; @time fdot(x);
+  0.003470 seconds (6 allocations: 7.630 MiB)
+
+julia&gt; @time f.(x);
+  0.003297 seconds (30 allocations: 7.631 MiB)</code></pre><p>That is, <code>fdot(x)</code> is three times faster and allocates 1/7 the memory of <code>f(x)</code>, because each <code>*</code> and <code>+</code> operation in <code>f(x)</code> allocates a new temporary array and executes in a separate loop. (Of course, if you just do <code>f.(x)</code> then it is as fast as <code>fdot(x)</code> in this example, but in many contexts it is more convenient to just sprinkle some dots in your expressions rather than defining a separate function for each vectorized operation.)</p><h2><a class="nav-anchor" id="Consider-using-views-for-slices-1" href="#Consider-using-views-for-slices-1">Consider using views for slices</a></h2><p>In Julia, an array &quot;slice&quot; expression like <code>array[1:5, :]</code> creates a copy of that data (except on the left-hand side of an assignment, where <code>array[1:5, :] = ...</code> assigns in-place to that portion of <code>array</code>). If you are doing many operations on the slice, this can be good for performance because it is more efficient to work with a smaller contiguous copy than it would be to index into the original array. On the other hand, if you are just doing a few simple operations on the slice, the cost of the allocation and copy operations can be substantial.</p><p>An alternative is to create a &quot;view&quot; of the array, which is an array object (a <code>SubArray</code>) that actually references the data of the original array in-place, without making a copy.  (If you write to a view, it modifies the original array&#39;s data as well.) This can be done for individual slices by calling <a href="../base/arrays.html#Base.view"><code>view</code></a>, or more simply for a whole expression or block of code by putting <a href="../base/arrays.html#Base.@views"><code>@views</code></a> in front of that expression.  For example:</p><pre><code class="language-julia-repl">julia&gt; fcopy(x) = sum(x[2:end-1])
+
+julia&gt; @views fview(x) = sum(x[2:end-1])
+
+julia&gt; x = rand(10^6);
+
+julia&gt; @time fcopy(x);
+  0.003051 seconds (7 allocations: 7.630 MB)
+
+julia&gt; @time fview(x);
+  0.001020 seconds (6 allocations: 224 bytes)</code></pre><p>Notice both the 3× speedup and the decreased memory allocation of the <code>fview</code> version of the function.</p><h2><a class="nav-anchor" id="Copying-data-is-not-always-bad-1" href="#Copying-data-is-not-always-bad-1">Copying data is not always bad</a></h2><p>Arrays are stored contiguously in memory, lending themselves to CPU vectorization and fewer memory accesses due to caching. These are the same reasons that it is recommended to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views can drastically slow down computations on arrays because of non-sequential memory access.</p><p>Copying irregularly-accessed data into a contiguous array before operating on it can result in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at 800,000 of their randomly-shuffled indices before being multiplied. Copying the views into plain arrays speeds the multiplication by more than a factor of 2 even with the cost of the copying operation.</p><pre><code class="language-julia-repl">julia&gt; x = randn(1_000_000);
+
+julia&gt; inds = shuffle(1:1_000_000)[1:800000];
+
+julia&gt; A = randn(50, 1_000_000);
+
+julia&gt; xtmp = zeros(800_000);
+
+julia&gt; Atmp = zeros(50, 800_000);
+
+julia&gt; @time sum(view(A, :, inds) * view(x, inds))
+  0.640320 seconds (41 allocations: 1.391 KiB)
+7253.242699002263
+
+julia&gt; @time begin
+           copyto!(xtmp, view(x, inds))
+           copyto!(Atmp, view(A, :, inds))
+           sum(Atmp * xtmp)
+       end
+  0.261294 seconds (41 allocations: 1.391 KiB)
+7253.242699002323</code></pre><p>Provided there is enough memory for the copies, the cost of copying the view to an array is far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.</p><h2><a class="nav-anchor" id="Avoid-string-interpolation-for-I/O-1" href="#Avoid-string-interpolation-for-I/O-1">Avoid string interpolation for I/O</a></h2><p>When writing data to a file (or other I/O device), forming extra intermediate strings is a source of overhead. Instead of:</p><pre><code class="language-julia">println(file, &quot;$a $b&quot;)</code></pre><p>use:</p><pre><code class="language-julia">println(file, a, &quot; &quot;, b)</code></pre><p>The first version of the code forms a string, then writes it to the file, while the second version writes values directly to the file. Also notice that in some cases string interpolation can be harder to read. Consider:</p><pre><code class="language-julia">println(file, &quot;$(f(a))$(f(b))&quot;)</code></pre><p>versus:</p><pre><code class="language-julia">println(file, f(a), f(b))</code></pre><h2><a class="nav-anchor" id="Optimize-network-I/O-during-parallel-execution-1" href="#Optimize-network-I/O-during-parallel-execution-1">Optimize network I/O during parallel execution</a></h2><p>When executing a remote function in parallel:</p><pre><code class="language-julia">responses = Vector{Any}(nworkers())
+@sync begin
+    for (idx, pid) in enumerate(workers())
+        @async responses[idx] = remotecall_fetch(pid, foo, args...)
+    end
+end</code></pre><p>is faster than:</p><pre><code class="language-julia">refs = Vector{Any}(nworkers())
+for (idx, pid) in enumerate(workers())
+    refs[idx] = @spawnat pid foo(args...)
+end
+responses = [fetch(r) for r in refs]</code></pre><p>The former results in a single network round-trip to every worker, while the latter results in two network calls - first by the <a href="../stdlib/Distributed.html#Distributed.@spawnat"><code>@spawnat</code></a> and the second due to the <a href="../base/parallel.html#Base.fetch-Tuple{Channel}"><code>fetch</code></a> (or even a <a href="../stdlib/Distributed.html#Base.wait"><code>wait</code></a>). The <a href="../base/parallel.html#Base.fetch-Tuple{Channel}"><code>fetch</code></a>/<a href="../stdlib/Distributed.html#Base.wait"><code>wait</code></a> is also being executed serially resulting in an overall poorer performance.</p><h2><a class="nav-anchor" id="Fix-deprecation-warnings-1" href="#Fix-deprecation-warnings-1">Fix deprecation warnings</a></h2><p>A deprecated function internally performs a lookup in order to print a relevant warning only once. This extra lookup can cause a significant slowdown, so all uses of deprecated functions should be modified as suggested by the warnings.</p><h2><a class="nav-anchor" id="Tweaks-1" href="#Tweaks-1">Tweaks</a></h2><p>These are some minor points that might help in tight inner loops.</p><ul><li>Avoid unnecessary arrays. For example, instead of <a href="../base/collections.html#Base.sum"><code>sum([x,y,z])</code></a> use <code>x+y+z</code>.</li><li>Use <a href="../base/math.html#Base.abs2"><code>abs2(z)</code></a> instead of <a href="../base/math.html#Base.:^-Tuple{Number,Number}"><code>abs(z)^2</code></a> for complex <code>z</code>. In general, try to rewrite code to use <a href="../base/math.html#Base.abs2"><code>abs2</code></a> instead of <a href="../base/math.html#Base.abs"><code>abs</code></a> for complex arguments.</li><li>Use <a href="../base/math.html#Base.div"><code>div(x,y)</code></a> for truncating division of integers instead of <a href="../base/math.html#Base.trunc"><code>trunc(x/y)</code></a>, <a href="../base/math.html#Base.fld"><code>fld(x,y)</code></a> instead of <a href="../base/math.html#Base.floor"><code>floor(x/y)</code></a>, and <a href="../base/math.html#Base.cld"><code>cld(x,y)</code></a> instead of <a href="../base/math.html#Base.ceil"><code>ceil(x/y)</code></a>.</li></ul><h2><a class="nav-anchor" id="man-performance-annotations-1" href="#man-performance-annotations-1">Performance Annotations</a></h2><p>Sometimes you can enable better optimization by promising certain program properties.</p><ul><li>Use <code>@inbounds</code> to eliminate array bounds checking within expressions. Be certain before doing this. If the subscripts are ever out of bounds, you may suffer crashes or silent corruption.</li><li>Use <code>@fastmath</code> to allow floating point optimizations that are correct for real numbers, but lead to differences for IEEE numbers. Be careful when doing this, as this may change numerical results. This corresponds to the <code>-ffast-math</code> option of clang.</li><li>Write <code>@simd</code> in front of <code>for</code> loops that are amenable to vectorization. <strong>This feature is experimental</strong> and could change or disappear in future versions of Julia.</li></ul><p>The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing, and may cause a segmentation fault if bounds checking is turned off. Use <code>LinearIndices(x)</code> or <code>eachindex(x)</code> instead (see also <a href="https://docs.julialang.org/en/latest/devdocs/offset-arrays">offset-arrays</a>).</p><p>Note: While <code>@simd</code> needs to be placed directly in front of a loop, both <code>@inbounds</code> and <code>@fastmath</code> can be applied to several statements at once, e.g. using <code>begin</code> ... <code>end</code>, or even to a whole function.</p><p>Here is an example with both <code>@inbounds</code> and <code>@simd</code> markup:</p><pre><code class="language-julia">function inner(x, y)
+    s = zero(eltype(x))
+    for i=eachindex(x)
+        @inbounds s += x[i]*y[i]
+    end
+    s
+end
+
+function innersimd(x, y)
+    s = zero(eltype(x))
+    @simd for i=eachindex(x)
+        @inbounds s += x[i]*y[i]
+    end
+    s
+end
+
+function timeit(n, reps)
+    x = rand(Float32,n)
+    y = rand(Float32,n)
+    s = zero(Float64)
+    time = @elapsed for j in 1:reps
+        s+=inner(x,y)
+    end
+    println(&quot;GFlop/sec        = &quot;,2.0*n*reps/time*1E-9)
+    time = @elapsed for j in 1:reps
+        s+=innersimd(x,y)
+    end
+    println(&quot;GFlop/sec (SIMD) = &quot;,2.0*n*reps/time*1E-9)
+end
+
+timeit(1000,1000)</code></pre><p>On a computer with a 2.4GHz Intel Core i5 processor, this produces:</p><pre><code class="language-none">GFlop/sec        = 1.9467069505224963
+GFlop/sec (SIMD) = 17.578554163920018</code></pre><p>(<code>GFlop/sec</code> measures the performance, and larger numbers are better.) The range for a <code>@simd for</code> loop should be a one-dimensional range. A variable used for accumulating, such as <code>s</code> in the example, is called a <em>reduction variable</em>. By using <code>@simd</code>, you are asserting several properties of the loop:</p><ul><li>It is safe to execute iterations in arbitrary or overlapping order, with special consideration for reduction variables.</li><li>Floating-point operations on reduction variables can be reordered, possibly causing different results than without <code>@simd</code>.</li><li>No iteration ever waits on another iteration to make forward progress.</li></ul><p>A loop containing <code>break</code>, <code>continue</code>, or <code>@goto</code> will cause a compile-time error.</p><p>Using <code>@simd</code> merely gives the compiler license to vectorize. Whether it actually does so depends on the compiler. To actually benefit from the current implementation, your loop should have the following additional properties:</p><ul><li>The loop must be an innermost loop.</li><li>The loop body must be straight-line code. This is why <code>@inbounds</code> is currently needed for all array accesses. The compiler can sometimes turn short <code>&amp;&amp;</code>, <code>||</code>, and <code>?:</code> expressions into straight-line code, if it is safe to evaluate all operands unconditionally. Consider using the <a href="../base/base.html#Core.ifelse"><code>ifelse</code></a> function instead of <code>?:</code> in the loop if it is safe to do so.</li><li>Accesses must have a stride pattern and cannot be &quot;gathers&quot; (random-index reads) or &quot;scatters&quot; (random-index writes).</li><li>The stride should be unit stride.</li><li>In some simple cases, for example with 2-3 arrays accessed in a loop, the LLVM auto-vectorization may kick in automatically, leading to no further speedup with <code>@simd</code>.</li></ul><p>Here is an example with all three kinds of markup. This program first calculates the finite difference of a one-dimensional array, and then evaluates the L2-norm of the result:</p><pre><code class="language-julia">function init!(u::Vector)
+    n = length(u)
+    dx = 1.0 / (n-1)
+    @fastmath @inbounds @simd for i in 1:n #by asserting that `u` is a `Vector` we can assume it has 1-based indexing
+        u[i] = sin(2pi*dx*i)
+    end
+end
+
+function deriv!(u::Vector, du)
+    n = length(u)
+    dx = 1.0 / (n-1)
+    @fastmath @inbounds du[1] = (u[2] - u[1]) / dx
+    @fastmath @inbounds @simd for i in 2:n-1
+        du[i] = (u[i+1] - u[i-1]) / (2*dx)
+    end
+    @fastmath @inbounds du[n] = (u[n] - u[n-1]) / dx
+end
+
+function norm(u::Vector)
+    n = length(u)
+    T = eltype(u)
+    s = zero(T)
+    @fastmath @inbounds @simd for i in 1:n
+        s += u[i]^2
+    end
+    @fastmath @inbounds return sqrt(s/n)
+end
+
+function main()
+    n = 2000
+    u = Vector{Float64}(undef, n)
+    init!(u)
+    du = similar(u)
+
+    deriv!(u, du)
+    nu = norm(du)
+
+    @time for i in 1:10^6
+        deriv!(u, du)
+        nu = norm(du)
+    end
+
+    println(nu)
+end
+
+main()</code></pre><p>On a computer with a 2.7 GHz Intel Core i7 processor, this produces:</p><pre><code class="language-none">$ julia wave.jl;
+elapsed time: 1.207814709 seconds (0 bytes allocated)
+
+$ julia --math-mode=ieee wave.jl;
+elapsed time: 4.487083643 seconds (0 bytes allocated)</code></pre><p>Here, the option <code>--math-mode=ieee</code> disables the <code>@fastmath</code> macro, so that we can compare results.</p><p>In this case, the speedup due to <code>@fastmath</code> is a factor of about 3.7. This is unusually large – in general, the speedup will be smaller. (In this particular example, the working set of the benchmark is small enough to fit into the L1 cache of the processor, so that memory access latency does not play a role, and computing time is dominated by CPU usage. In many real world programs this is not the case.) Also, in this case this optimization does not change the result – in general, the result will be slightly different. In some cases, especially for numerically unstable algorithms, the result can be very different.</p><p>The annotation <code>@fastmath</code> re-arranges floating point expressions, e.g. changing the order of evaluation, or assuming that certain special cases (inf, nan) cannot occur. In this case (and on this particular computer), the main difference is that the expression <code>1 / (2*dx)</code> in the function <code>deriv</code> is hoisted out of the loop (i.e. calculated outside the loop), as if one had written <code>idx = 1 / (2*dx)</code>. In the loop, the expression <code>... / (2*dx)</code> then becomes <code>... * idx</code>, which is much faster to evaluate. Of course, both the actual optimization that is applied by the compiler as well as the resulting speedup depend very much on the hardware. You can examine the change in generated code by using Julia&#39;s <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.code_native"><code>code_native</code></a> function.</p><h2><a class="nav-anchor" id="Treat-Subnormal-Numbers-as-Zeros-1" href="#Treat-Subnormal-Numbers-as-Zeros-1">Treat Subnormal Numbers as Zeros</a></h2><p>Subnormal numbers, formerly called <a href="https://en.wikipedia.org/wiki/Denormal_number">denormal numbers</a>, are useful in many contexts, but incur a performance penalty on some hardware. A call <a href="../base/numbers.html#Base.Rounding.set_zero_subnormals"><code>set_zero_subnormals(true)</code></a> grants permission for floating-point operations to treat subnormal inputs or outputs as zeros, which may improve performance on some hardware. A call <a href="../base/numbers.html#Base.Rounding.set_zero_subnormals"><code>set_zero_subnormals(false)</code></a> enforces strict IEEE behavior for subnormal numbers.</p><p>Below is an example where subnormals noticeably impact performance on some hardware:</p><pre><code class="language-julia">function timestep(b::Vector{T}, a::Vector{T}, Δt::T) where T
+    @assert length(a)==length(b)
+    n = length(b)
+    b[1] = 1                            # Boundary condition
+    for i=2:n-1
+        b[i] = a[i] + (a[i-1] - T(2)*a[i] + a[i+1]) * Δt
+    end
+    b[n] = 0                            # Boundary condition
+end
+
+function heatflow(a::Vector{T}, nstep::Integer) where T
+    b = similar(a)
+    for t=1:div(nstep,2)                # Assume nstep is even
+        timestep(b,a,T(0.1))
+        timestep(a,b,T(0.1))
+    end
+end
+
+heatflow(zeros(Float32,10),2)           # Force compilation
+for trial=1:6
+    a = zeros(Float32,1000)
+    set_zero_subnormals(iseven(trial))  # Odd trials use strict IEEE arithmetic
+    @time heatflow(a,1000)
+end</code></pre><p>This example generates many subnormal numbers because the values in <code>a</code> become an exponentially decreasing curve, which slowly flattens out over time.</p><p>Treating subnormals as zeros should be used with caution, because doing so breaks some identities, such as <code>x-y == 0</code> implies <code>x == y</code>:</p><pre><code class="language-julia-repl">julia&gt; x = 3f-38; y = 2f-38;
+
+julia&gt; set_zero_subnormals(true); (x - y, x == y)
+(0.0f0, false)
+
+julia&gt; set_zero_subnormals(false); (x - y, x == y)
+(1.0000001f-38, false)</code></pre><p>In some applications, an alternative to zeroing subnormal numbers is to inject a tiny bit of noise.  For example, instead of initializing <code>a</code> with zeros, initialize it with:</p><pre><code class="language-julia">a = rand(Float32,1000) * 1.f-9</code></pre><h2><a class="nav-anchor" id="man-code-warntype-1" href="#man-code-warntype-1"><a href="../stdlib/InteractiveUtils.html#InteractiveUtils.@code_warntype"><code>@code_warntype</code></a></a></h2><p>The macro <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.@code_warntype"><code>@code_warntype</code></a> (or its function variant <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.code_warntype"><code>code_warntype</code></a>) can sometimes be helpful in diagnosing type-related problems. Here&#39;s an example:</p><pre><code class="language-julia">pos(x) = x &lt; 0 ? 0 : x
+
+function f(x)
+    y = pos(x)
+    sin(y*x+1)
+end
+
+julia&gt; @code_warntype f(3.2)
+Variables:
+  #self#::#f
+  x::Float64
+  y::UNION{FLOAT64,INT64}
+  fy::Float64
+  #temp#@_5::UNION{FLOAT64,INT64}
+  #temp#@_6::Core.MethodInstance
+  #temp#@_7::Float64
+
+Body:
+  begin
+      $(Expr(:inbounds, false))
+      # meta: location REPL[1] pos 1
+      # meta: location float.jl &lt; 487
+      fy::Float64 = (Core.typeassert)((Base.sitofp)(Float64,0)::Float64,Float64)::Float64
+      # meta: pop location
+      unless (Base.or_int)((Base.lt_float)(x::Float64,fy::Float64)::Bool,(Base.and_int)((Base.and_int)((Base.eq_float)(x::Float64,fy::Float64)::Bool,(Base.lt_float)(fy::Float64,9.223372036854776e18)::Bool)::Bool,(Base.slt_int)((Base.fptosi)(Int64,fy::Float64)::Int64,0)::Bool)::Bool)::Bool goto 9
+      #temp#@_5::UNION{FLOAT64,INT64} = 0
+      goto 11
+      9:
+      #temp#@_5::UNION{FLOAT64,INT64} = x::Float64
+      11:
+      # meta: pop location
+      $(Expr(:inbounds, :pop))
+      y::UNION{FLOAT64,INT64} = #temp#@_5::UNION{FLOAT64,INT64} # line 3:
+      unless (y::UNION{FLOAT64,INT64} isa Int64)::ANY goto 19
+      #temp#@_6::Core.MethodInstance = MethodInstance for *(::Int64, ::Float64)
+      goto 28
+      19:
+      unless (y::UNION{FLOAT64,INT64} isa Float64)::ANY goto 23
+      #temp#@_6::Core.MethodInstance = MethodInstance for *(::Float64, ::Float64)
+      goto 28
+      23:
+      goto 25
+      25:
+      #temp#@_7::Float64 = (y::UNION{FLOAT64,INT64} * x::Float64)::Float64
+      goto 30
+      28:
+      #temp#@_7::Float64 = $(Expr(:invoke, :(#temp#@_6), :(Main.*), :(y), :(x)))
+      30:
+      return $(Expr(:invoke, MethodInstance for sin(::Float64), :(Main.sin), :((Base.add_float)(#temp#@_7,(Base.sitofp)(Float64,1)::Float64)::Float64)))
+  end::Float64</code></pre><p>Interpreting the output of <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.@code_warntype"><code>@code_warntype</code></a>, like that of its cousins <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.@code_lowered"><code>@code_lowered</code></a>, <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.@code_typed"><code>@code_typed</code></a>, <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.@code_llvm"><code>@code_llvm</code></a>, and <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.@code_native"><code>@code_native</code></a>, takes a little practice. Your code is being presented in form that has been partially digested on its way to generating compiled machine code.  Most of the expressions are annotated by a type, indicated by the <code>::T</code> (where <code>T</code> might be <a href="../base/numbers.html#Core.Float64"><code>Float64</code></a>, for example). The most important characteristic of <a href="../stdlib/InteractiveUtils.html#InteractiveUtils.@code_warntype"><code>@code_warntype</code></a> is that non-concrete types are displayed in red; in the above example, such output is shown in all-caps.</p><p>The top part of the output summarizes the type information for the different variables internal to the function. You can see that <code>y</code>, one of the variables you created, is a <code>Union{Int64,Float64}</code>, due to the type-instability of <code>pos</code>.  There is another variable, <code>_var4</code>, which you can see also has the same type.</p><p>The next lines represent the body of <code>f</code>. The lines starting with a number followed by a colon (<code>1:</code>, <code>2:</code>) are labels, and represent targets for jumps (via <code>goto</code>) in your code.  Looking at the body, you can see that <code>pos</code> has been <em>inlined</em> into <code>f</code>–everything before <code>2:</code> comes from code defined in <code>pos</code>.</p><p>Starting at <code>2:</code>, the variable <code>y</code> is defined, and again annotated as a <code>Union</code> type.  Next, we see that the compiler created the temporary variable <code>_var1</code> to hold the result of <code>y*x</code>. Because a <a href="../base/numbers.html#Core.Float64"><code>Float64</code></a> times <em>either</em> an <a href="../base/numbers.html#Core.Int64"><code>Int64</code></a> or <code>Float64</code> yields a <code>Float64</code>, all type-instability ends here. The net result is that <code>f(x::Float64)</code> will not be type-unstable in its output, even if some of the intermediate computations are type-unstable.</p><p>How you use this information is up to you. Obviously, it would be far and away best to fix <code>pos</code> to be type-stable: if you did so, all of the variables in <code>f</code> would be concrete, and its performance would be optimal.  However, there are circumstances where this kind of <em>ephemeral</em> type instability might not matter too much: for example, if <code>pos</code> is never used in isolation, the fact that <code>f</code>&#39;s output is type-stable (for <a href="../base/numbers.html#Core.Float64"><code>Float64</code></a> inputs) will shield later code from the propagating effects of type instability.  This is particularly relevant in cases where fixing the type instability is difficult or impossible: for example, currently it&#39;s not possible to infer the return type of an anonymous function.  In such cases, the tips above (e.g., adding type annotations and/or breaking up functions) are your best tools to contain the &quot;damage&quot; from type instability. Also, note that even Julia Base has functions that are type unstable. For example, the function <a href="../base/strings.html#Base.findfirst-Tuple{AbstractString,AbstractString}"><code>findfirst</code></a> returns the index into an array where a key is found, or <code>nothing</code> if it is not found, a clear type instability. In order to make it easier to find the type instabilities that are likely to be important, <code>Union</code>s containing either <code>missing</code> or <code>nothing</code> are color highlighted in yellow, instead of red.</p><p>The following examples may help you interpret expressions marked as containing non-leaf types:</p><ul><li><p>Function body ending in <code>end::Union{T1,T2})</code></p><ul><li>Interpretation: function with unstable return type</li><li>Suggestion: make the return value type-stable, even if you have to annotate it</li></ul></li><li><p><code>f(x::T)::Union{T1,T2}</code></p><ul><li>Interpretation: call to a type-unstable function</li><li>Suggestion: fix the function, or if necessary annotate the return value</li></ul></li><li><p><code>(top(arrayref))(A::Array{Any,1},1)::Any</code></p><ul><li>Interpretation: accessing elements of poorly-typed arrays</li><li>Suggestion: use arrays with better-defined types, or if necessary annotate the type of individual element accesses</li></ul></li><li><p><code>(top(getfield))(A::ArrayContainer{Float64},:data)::Array{Float64,N}</code></p><ul><li>Interpretation: getting a field that is of non-leaf type. In this case, <code>ArrayContainer</code> had a field <code>data::Array{T}</code>. But <code>Array</code> needs the dimension <code>N</code>, too, to be a concrete type.</li><li>Suggestion: use concrete types like <code>Array{T,3}</code> or <code>Array{T,N}</code>, where <code>N</code> is now a parameter of <code>ArrayContainer</code></li></ul></li></ul><footer><hr/><a class="previous" href="stacktraces.html"><span class="direction">Previous</span><span class="title">Stack Traces</span></a><a class="next" href="workflow-tips.html"><span class="direction">Next</span><span class="title">Workflow Tips</span></a></footer></article></body></html>
