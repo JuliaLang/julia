@@ -1256,6 +1256,8 @@ Deprecated or removed
 
   * `setrounding` has been deprecated for `Float32` and `Float64`, as the behaviour was too unreliable ([#26935]).
 
+  * `atan2` is now a 2-argument `atan` function ([#27248]).
+
 Command-line option changes
 ---------------------------
 
@@ -1591,3 +1593,4 @@ Command-line option changes
 [#27164]: https://github.com/JuliaLang/julia/issues/27164
 [#27189]: https://github.com/JuliaLang/julia/issues/27189
 [#27212]: https://github.com/JuliaLang/julia/issues/27212
+[#27248]: https://github.com/JuliaLang/julia/issues/27248

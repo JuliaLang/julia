@@ -7,7 +7,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        sech, csch, coth, asech, acsch, acoth,
        sinpi, cospi, sinc, cosc,
        cosd, cotd, cscd, secd, sind, tand,
-       acosd, acotd, acscd, asecd, asind, atand, atan2,
+       acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, significand,
@@ -250,9 +250,17 @@ Compute hyperbolic tangent of `x`.
 tanh(x::Number)
 
 """
-    atan(x)
+    atan(y)
+    atan(y, x)
 
-Compute the inverse tangent of `x`, where the output is in radians.
+Compute the inverse tangent of `y` or `y/x`, respectively.
+
+For one argument, this is the angle in radians between the positive *x*-axis and the point
+(1, *y*), returning a value in the interval ``[-\\pi/2, \\pi/2]``.
+
+For two arguments, this is the angle in radians between the positive *x*-axis and the
+point (*x*, *y*), returning a value in the interval ``[-\\pi, \\pi]``. This corresponds to a
+standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
 """
 atan(x::Number)
 
@@ -565,14 +573,8 @@ Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
 hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
-"""
-    atan2(y, x)
-
-Compute the inverse tangent of `y/x`, using the signs of both `x` and `y` to determine the
-quadrant of the return value.
-"""
-atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
-atan2(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan2", T)
+atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
+atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
 
 max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
@@ -1021,7 +1023,7 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
     end
 end
 
-for func in (:atan2,:hypot)
+for func in (:atan,:hypot)
     @eval begin
         $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(b)))
     end

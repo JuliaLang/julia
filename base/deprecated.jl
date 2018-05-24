@@ -1702,6 +1702,9 @@ end
 
 @eval @deprecate $(Symbol("@schedule")) $(Symbol("@async"))
 
+@deprecate atan2(y, x) atan(y, x)
+
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

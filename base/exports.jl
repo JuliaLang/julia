@@ -212,7 +212,6 @@ export
     asind,
     asinh,
     atan,
-    atan2,
     atand,
     atanh,
     big,

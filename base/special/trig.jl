@@ -564,7 +564,7 @@ ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
 ATAN2_RATIO_BIT_SHIFT(::Type{Float64}) = 20
 ATAN2_RATIO_THRESHOLD(::Type{Float64}) = 60
 
-function atan2(y::T, x::T) where T<:Union{Float32, Float64}
+function atan(y::T, x::T) where T<:Union{Float32, Float64}
     # Method :
     #    M1) Reduce y to positive by atan2(y,x)=-atan2(-y,x).
     #    M2) Reduce x to positive by (if x and y are unexceptional):

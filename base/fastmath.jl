@@ -57,7 +57,6 @@ const fast_op =
          :asin => :asin_fast,
          :asinh => :asinh_fast,
          :atan => :atan_fast,
-         :atan2 => :atan2_fast,
          :atanh => :atanh_fast,
          :cbrt => :cbrt_fast,
          :cis => :cis_fast,
@@ -293,9 +292,9 @@ pow_fast(x::Float32, y::Float32) =
 pow_fast(x::Float64, y::Float64) =
     ccall(("pow",libm), Float64, (Float64,Float64), x, y)
 
-atan2_fast(x::Float32, y::Float32) =
+atan_fast(x::Float32, y::Float32) =
     ccall(("atan2f",libm), Float32, (Float32,Float32), x, y)
-atan2_fast(x::Float64, y::Float64) =
+atan_fast(x::Float64, y::Float64) =
     ccall(("atan2",libm), Float64, (Float64,Float64), x, y)
 
 asin_fast(x::FloatTypes) = asin(x)
@@ -349,7 +348,7 @@ sincos_fast(v) = (sin_fast(v), cos_fast(v))
     acos_fast(x::T) where {T<:ComplexTypes} =
         convert(T,π)/2 + im*log(im*x + sqrt(1-x*x))
     acosh_fast(x::ComplexTypes) = log(x + sqrt(x+1) * sqrt(x-1))
-    angle_fast(x::ComplexTypes) = atan2(imag(x), real(x))
+    angle_fast(x::ComplexTypes) = atan(imag(x), real(x))
     asin_fast(x::ComplexTypes) = -im*asinh(im*x)
     asinh_fast(x::ComplexTypes) = log(x + sqrt(1+x*x))
     atan_fast(x::ComplexTypes) = -im*atanh(im*x)
@@ -387,7 +386,7 @@ for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     end
 end
 
-for f in (:^, :atan2, :hypot, :max, :min, :minmax, :log)
+for f in (:^, :atan, :hypot, :max, :min, :minmax, :log)
     f_fast = fast_op[f]
     @eval begin
         # fall-back implementation for non-numeric types
