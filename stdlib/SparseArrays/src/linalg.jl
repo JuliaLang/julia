@@ -1010,27 +1010,3 @@ end
 
 chol(A::SparseMatrixCSC) = error("Use cholesky() instead of chol() for sparse matrices.")
 eigen(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eigen() for sparse matrices.")
-
-function Base.cov(X::SparseMatrixCSC; dims::Int=1, corrected::Bool=true)
-    vardim = dims
-    a, b = size(X)
-    n, p = vardim == 1 ? (a, b) : (b, a)
-
-    # The covariance can be decomposed into two terms
-    # 1/(n - 1) ∑ (x_i - x̄)*(x_i - x̄)' = 1/(n - 1) (∑ x_i*x_i' - n*x̄*x̄')
-    # which can be evaluated via a sparse matrix-matrix product
-
-    # Compute ∑ x_i*x_i' = X'X using sparse matrix-matrix product
-    out = Matrix(Base.unscaled_covzm(X, vardim))
-
-    # Compute x̄
-    x̄ᵀ = mean(X, dims=vardim)
-
-    # Subtract n*x̄*x̄' from X'X
-    @inbounds for j in 1:p, i in 1:p
-        out[i,j] -= x̄ᵀ[i] * x̄ᵀ[j]' * n
-    end
-
-    # scale with the sample size n or the corrected sample size n - 1
-    return rmul!(out, inv(n - corrected))
-end
