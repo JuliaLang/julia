@@ -274,8 +274,4 @@ event listener for just-in-time (JIT) profiling.
 
 Arguments to be passed to the LLVM backend.
 
-### `JULIA_DEBUG_LOADING`
-
-If set, then Julia prints detailed information about the cache in the loading
-process of [`Base.require`](@ref).
 
