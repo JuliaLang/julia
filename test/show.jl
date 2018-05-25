@@ -1236,8 +1236,7 @@ function f_line()
    nothing
 end
 h_line() = f_line()
-@test compute_annotations(h_line, Tuple{}) == """
+@test startswith(compute_annotations(h_line, Tuple{}), """
     │╻╷ f_line
     ││╻  g_line
-    ││╻  g_line
-    │"""
+    ││╻  g_line""")

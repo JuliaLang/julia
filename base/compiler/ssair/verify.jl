@@ -94,6 +94,9 @@ function verify_ir(ir::IRCode)
                         #"""
                         #error()
                     end
+                elseif isa(val, GlobalRef) || isa(val, Expr)
+                    @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
+                    error()
                 end
                 check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1)
             end

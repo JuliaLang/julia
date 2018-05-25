@@ -291,8 +291,13 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             stmt′ = ssa_substitute!(idx′, stmt′, argexprs, item.method.sig, item.sparams, linetable_offset, boundscheck_idx, compact)
             if isa(stmt′, ReturnNode)
                 isa(stmt′.val, SSAValue) && (compact.used_ssas[stmt′.val.id] += 1)
-                return_value = stmt′.val
-                stmt′ = nothing
+                return_value = SSAValue(idx′)
+                inline_compact[idx′] = stmt′.val
+                val = stmt′.val
+                inline_compact.result_types[idx′] = (isa(val, Argument) || isa(val, Expr)) ?
+                    compact_exprtype(compact, stmt′.val) :
+                    compact_exprtype(inline_compact, stmt′.val)
+                break
             end
             inline_compact[idx′] = stmt′
         end
@@ -313,9 +318,24 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             stmt′ = ssa_substitute!(idx′, stmt′, argexprs, item.method.sig, item.sparams, linetable_offset, boundscheck_idx, compact)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
+                    val = stmt′.val
+                    # GlobalRefs can have side effects, but are currently
+                    # allowed in arguments of ReturnNodes
                     push!(pn.edges, inline_compact.active_result_bb-1)
-                    push!(pn.values, stmt′.val)
-                    stmt′ = GotoNode(post_bb_id)
+                    if isa(val, GlobalRef) || isa(val, Expr)
+                        stmt′ = val
+                        inline_compact.result_types[idx′] = (isa(val, Argument) || isa(val, Expr)) ?
+                            compact_exprtype(compact, val) :
+                            compact_exprtype(inline_compact, val)
+                        insert_node_here!(inline_compact, GotoNode(post_bb_id),
+                                          Any, compact.result_lines[idx′],
+                                          true)
+                        push!(pn.values, SSAValue(idx′))
+                    else
+                        push!(pn.values, val)
+                        stmt′ = GotoNode(post_bb_id)
+                    end
+
                 end
             elseif isa(stmt′, GotoNode)
                 stmt′ = GotoNode(stmt′.label + bb_offset)
