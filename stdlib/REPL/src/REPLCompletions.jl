@@ -326,7 +326,7 @@ function get_type_call(expr::Expr)
     return (return_type, true)
 end
 
-# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
+# Returns the return type. example: get_type(:(Base.strip(isequal(' '), "")), Main) returns (String, true)
 function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
     found && return Base.typesof(val).parameters[1], found

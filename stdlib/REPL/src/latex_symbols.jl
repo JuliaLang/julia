@@ -53,7 +53,7 @@ isfile(fname) || download("http://mirror.math.ku.edu/tex-archive/macros/latex/co
 const latex_strings = Set(values(REPL.REPLCompletions.latex_symbols))
 open(fname) do f
     for L in eachline(f)
-        x = map(s -> rstrip(s, [' ','\t','\n']),
+        x = map(s -> rstrip(in([' ','\t','\n']), s),
                 split(replace(L, r"[{}\"]+" => "\t"), "\t"))
         c = Char(parse(Int, x[2], base = 16))
         if (Base.is_id_char(c) || Base.isoperator(Symbol(c))) &&
