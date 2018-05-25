@@ -504,40 +504,43 @@ end
 Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
 function hypot(x::Number...)
-    # compute infnorm x (modeled on generic_vecnormMinusInf(x) in LinearAlgebra/generic.gl)
-    (v, s) = iterate(x)::Tuple
+
+    xp = promote(x...)
+
+    # compute infnorm xp (modeled on generic_vecnormMinusInf(x) in LinearAlgebra/generic.gl)
+    (v, s) = iterate(xp)::Tuple
     maxabs = abs(v)
     while true
-        y = iterate(x, s)
+        y = iterate(xp, s)
         y === nothing && break
         (v, s) = y
         vnorm = abs(v)
         maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
     end
-    maxabs = float(maxabs)
+    maxabsf = float(maxabs)
 
-    # compute vecnorm2(x) (modeled on generic_vecnorm2(x) in LinearAlgebra/generic.gl)
-    (maxabs == 0 || isinf(maxabs)) && return maxabs
-    (v, s) = iterate(x)::Tuple
-    T = typeof(maxabs)
-    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
+    # compute vecnorm2(xp) (modeled on generic_vecnorm2(x) in LinearAlgebra/generic.gl)
+    (maxabsf == 0 || isinf(maxabsf)) && return maxabsf
+    (v, s) = iterate(xp)::Tuple
+    T = typeof(maxabsf)
+    if isfinite(length(xp)*maxabsf*maxabsf) && maxabsf*maxabsf != 0 # Scaling not necessary
         sum::promote_type(Float64, T) = abs2(v)
         while true
-            y = iterate(x, s)
+            y = iterate(xp, s)
             y === nothing && break
             (v, s) = y
             sum += abs2(v)
         end
         return convert(T, sqrt(sum))
     else
-        sum = (abs(v)/maxabs)^2
+        sum = (abs(v)/maxabsf)^2
         while true
-            y = iterate(x, s)
+            y = iterate(xp, s)
             y === nothing && break
             (v, s) = y
-            sum += (abs(v)/maxabs)^2
+            sum += (abs(v)/maxabsf)^2
         end
-        return convert(T, maxabs*sqrt(sum))
+        return convert(T, maxabsf*sqrt(sum))
     end
 end
 
