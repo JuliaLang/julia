@@ -297,7 +297,7 @@ end
 function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     i = 1 # firstindex(str)
     n = lastindex(str)
-    r = coalesce(findfirst(splitter,str), 0)
+    r = something(findfirst(splitter,str), 0)
     if r != 0:-1
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
@@ -308,7 +308,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
                 i = k
             end
             (k <= j) && (k = nextind(str,j))
-            r = coalesce(findnext(splitter,str,k), 0)
+            r = something(findnext(splitter,str,k), 0)
             r == 0:-1 && break
             j, k = first(r), nextind(str,last(r))
         end
@@ -382,12 +382,12 @@ end
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     n = lastindex(str)
-    r = coalesce(findlast(splitter, str), 0)
+    r = something(findlast(splitter, str), 0)
     j, k = first(r), last(r)
     while j > 0 && k > 0 && length(strs) != limit-1
         (keepempty || k < n) && pushfirst!(strs, SubString(str,nextind(str,k),n))
         n = prevind(str, j)
-        r = coalesce(findprev(splitter,str,n), 0)
+        r = something(findprev(splitter,str,n), 0)
         j, k = first(r), last(r)
     end
     (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))
@@ -418,7 +418,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     n = 1
     e = lastindex(str)
     i = a = firstindex(str)
-    r = coalesce(findnext(pattern,str,i), 0)
+    r = something(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
@@ -433,7 +433,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         else
             i = k = nextind(str, k)
         end
-        r = coalesce(findnext(pattern,str,k), 0)
+        r = something(findnext(pattern,str,k), 0)
         r == 0:-1 || n == count && break
         j, k = first(r), last(r)
         n += 1

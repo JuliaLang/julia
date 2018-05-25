@@ -228,6 +228,7 @@ Base.missing
 Base.coalesce
 Base.ismissing
 Base.skipmissing
+Base.something
 ```
 
 ## System

@@ -8,7 +8,7 @@ module StackTraces
 
 import Base: hash, ==, show
 using Base.Printf: @printf
-using Base: coalesce
+using Base: something
 
 export StackTrace, StackFrame, stacktrace
 
@@ -247,12 +247,12 @@ all frames above the specified function). Primarily used to remove `StackTraces`
 from the `StackTrace` prior to returning it.
 """
 function remove_frames!(stack::StackTrace, name::Symbol)
-    splice!(stack, 1:coalesce(findlast(frame -> frame.func == name, stack), 0))
+    splice!(stack, 1:something(findlast(frame -> frame.func == name, stack), 0))
     return stack
 end
 
 function remove_frames!(stack::StackTrace, names::Vector{Symbol})
-    splice!(stack, 1:coalesce(findlast(frame -> frame.func in names, stack), 0))
+    splice!(stack, 1:something(findlast(frame -> frame.func in names, stack), 0))
     return stack
 end
 

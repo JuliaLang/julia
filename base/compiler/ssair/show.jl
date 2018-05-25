@@ -232,7 +232,7 @@ function compute_ir_line_annotations(code::IRCode)
                         first_mismatch = nothing
                     end
                 end
-                last_depth = coalesce(first_mismatch, x+1)-1
+                last_depth = something(first_mismatch, x+1)-1
                 if min(depth, last_depth) > last_printed_depth
                     printing_depth = min(depth, last_printed_depth + 1)
                     last_printed_depth = printing_depth

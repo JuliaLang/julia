@@ -395,16 +395,16 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     # master connecting to workers
     if config.io !== nothing
         (bind_addr, port) = read_worker_host_port(config.io)
-        pubhost = coalesce(config.host, bind_addr)
+        pubhost = something(config.host, bind_addr)
         config.host = pubhost
         config.port = port
     else
         pubhost = notnothing(config.host)
         port = notnothing(config.port)
-        bind_addr = coalesce(config.bind_addr, pubhost)
+        bind_addr = something(config.bind_addr, pubhost)
     end
 
-    tunnel = coalesce(config.tunnel, false)
+    tunnel = something(config.tunnel, false)
 
     s = split(pubhost,'@')
     user = ""
@@ -422,7 +422,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     if tunnel
         if !haskey(tunnel_hosts_map, pubhost)
-            tunnel_hosts_map[pubhost] = Semaphore(coalesce(config.max_parallel, typemax(Int)))
+            tunnel_hosts_map[pubhost] = Semaphore(something(config.max_parallel, typemax(Int)))
         end
         sem = tunnel_hosts_map[pubhost]
 

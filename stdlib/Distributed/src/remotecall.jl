@@ -493,7 +493,7 @@ Wait for a value to become available on the specified remote channel.
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
 function fetch(r::Future)
-    r.v !== nothing && return coalesce(r.v)
+    r.v !== nothing && return something(r.v)
     v = call_on_owner(fetch_ref, r)
     r.v = Some(v)
     send_del_client(r)

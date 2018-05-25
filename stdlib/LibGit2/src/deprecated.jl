@@ -21,7 +21,7 @@ function prompt(msg::AbstractString; default::AbstractString="", password::Bool=
     Base.depwarn(string(
         "`LibGit2.prompt(msg::AbstractString; default::AbstractString=\"\", password::Bool=false)` is deprecated, use ",
         "`result = Base.prompt(msg, default=default, password=password); result === nothing ? \"\" : result` instead."), :prompt)
-    coalesce(Base.prompt(msg, default=default, password=password), "")
+    something(Base.prompt(msg, default=default, password=password), "")
 end
 
 # PR #26437
