@@ -12,14 +12,14 @@ All Julia streams expose at least a [`read`](@ref) and a [`write`](@ref) method,
 stream as their first argument, e.g.:
 
 ```julia-repl
-julia> write(STDOUT, "Hello World");  # suppress return value 11 with ;
+julia> write(stdout, "Hello World");  # suppress return value 11 with ;
 Hello World
-julia> read(STDIN, Char)
+julia> read(stdin, Char)
 
 '\n': ASCII/Unicode U+000a (category Cc: Other, control)
 ```
 
-Note that [`write`](@ref) returns 11, the number of bytes (in `"Hello World"`) written to [`STDOUT`](@ref),
+Note that [`write`](@ref) returns 11, the number of bytes (in `"Hello World"`) written to [`stdout`](@ref),
 but this return value is suppressed with the `;`.
 
 Here Enter was pressed again so that Julia would read the newline. Now, as you can see from this
@@ -36,7 +36,7 @@ julia> x = zeros(UInt8, 4)
  0x00
  0x00
 
-julia> read!(STDIN, x)
+julia> read!(stdin, x)
 abcd
 4-element Array{UInt8,1}:
  0x61
@@ -49,7 +49,7 @@ However, since this is slightly cumbersome, there are several convenience method
 example, we could have written the above as:
 
 ```julia-repl
-julia> read(STDIN, 4)
+julia> read(stdin, 4)
 abcd
 4-element Array{UInt8,1}:
  0x61
@@ -61,7 +61,7 @@ abcd
 or if we had wanted to read the entire line instead:
 
 ```julia-repl
-julia> readline(STDIN)
+julia> readline(stdin)
 abcd
 "abcd"
 ```
@@ -69,10 +69,10 @@ abcd
 Note that depending on your terminal settings, your TTY may be line buffered and might thus require
 an additional enter before the data is sent to Julia.
 
-To read every line from [`STDIN`](@ref) you can use [`eachline`](@ref):
+To read every line from [`stdin`](@ref) you can use [`eachline`](@ref):
 
 ```julia
-for line in eachline(STDIN)
+for line in eachline(stdin)
     print("Found $line")
 end
 ```
@@ -80,8 +80,8 @@ end
 or [`read`](@ref) if you wanted to read by character instead:
 
 ```julia
-while !eof(STDIN)
-    x = read(STDIN, Char)
+while !eof(stdin)
+    x = read(stdin, Char)
     println("Found: $x")
 end
 ```
@@ -92,27 +92,31 @@ Note that the [`write`](@ref) method mentioned above operates on binary streams.
 values do not get converted to any canonical text representation but are written out as is:
 
 ```jldoctest
-julia> write(STDOUT, 0x61);  # suppress return value 1 with ;
+julia> write(stdout, 0x61);  # suppress return value 1 with ;
 a
 ```
 
-Note that `a` is written to [`STDOUT`](@ref) by the [`write`](@ref) function and that the returned
+Note that `a` is written to [`stdout`](@ref) by the [`write`](@ref) function and that the returned
 value is `1` (since `0x61` is one byte).
 
 For text I/O, use the [`print`](@ref) or [`show`](@ref) methods, depending on your needs (see
-the Julia Base reference for a detailed discussion of the difference between the two):
+the documentation for these two methods for a detailed discussion of the difference between them):
 
 ```jldoctest
-julia> print(STDOUT, 0x61)
+julia> print(stdout, 0x61)
 97
 ```
+
+See [Custom pretty-printing](@ref man-custom-pretty-printing) for more information on how to
+implement display methods for custom types.
 
 ## IO Output Contextual Properties
 
 Sometimes IO output can benefit from the ability to pass contextual information into show methods.
 The [`IOContext`](@ref) object provides this framework for associating arbitrary metadata with an IO object.
-For example, [`showcompact`](@ref) adds a hinting parameter to the IO object that the invoked show method
-should print a shorter output (if applicable).
+For example, `:compact => true` adds a hinting parameter to the IO object that the invoked show method
+should print a shorter output (if applicable). See the [`IOContext`](@ref) documentation for a list
+of common properties.
 
 ## Working with Files
 
@@ -182,9 +186,13 @@ julia> open("hello.txt") do f
 
 ## A simple TCP example
 
-Let's jump right in with a simple example involving TCP sockets. Let's first create a simple server:
+Let's jump right in with a simple example involving TCP sockets.
+This functionality is in a standard library package called `Sockets`.
+Let's first create a simple server:
 
 ```julia-repl
+julia> using Sockets
+
 julia> @async begin
            server = listen(2000)
            while true
@@ -262,7 +270,7 @@ julia> @async begin
            while true
                sock = accept(server)
                @async while isopen(sock)
-                   write(sock,readline(sock))
+                   write(sock, readline(sock, keep=true))
                end
            end
        end
@@ -271,8 +279,8 @@ Task (runnable) @0x00007fd31dc12e60
 julia> clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
-julia> @async while true
-           write(STDOUT,readline(clientside))
+julia> @async while isopen(clientside)
+           write(stdout, readline(clientside, keep=true))
        end
 Task (runnable) @0x00007fd31dc11870
 

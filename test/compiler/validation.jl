@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Core.IR
 
 function f22938(a, b, x...)
     d = 1
@@ -82,7 +82,7 @@ end
 end
 
 @testset "SLOTTYPES_MISMATCH" begin
-    c = @code_typed(f22938(1,2,3,4))[1]
+    c = code_typed(f22938, (Int,Int,Int,Int))[1][1]
     pop!(c.slottypes)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
@@ -98,7 +98,7 @@ end
 end
 
 @testset "SSAVALUETYPES_MISMATCH" begin
-    c = @code_typed(f22938(1,2,3,4))[1]
+    c = code_typed(f22938, (Int,Int,Int,Int))[1][1]
     empty!(c.ssavaluetypes)
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1

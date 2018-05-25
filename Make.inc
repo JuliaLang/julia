@@ -23,7 +23,9 @@ OPENBLAS_DYNAMIC_ARCH:=1
 endif
 OPENBLAS_USE_THREAD:=1
 
-# Use libraries available on the system instead of building them
+# Flags for using libraries available on the system instead of building them.
+# Please read the notes around usage of SYSTEM flags in README.md
+# Issues resulting from use of SYSTEM versions will generally not be accepted.
 USE_SYSTEM_LLVM:=0
 USE_SYSTEM_LIBUNWIND:=0
 DISABLE_LIBUNWIND:=0
@@ -189,7 +191,6 @@ build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
 build_libexecdir := $(build_prefix)/libexec
 build_datarootdir := $(build_prefix)/share
-build_docdir := $(build_datarootdir)/doc/julia
 build_mandir := $(build_datarootdir)/man
 build_man1dir := $(build_mandir)/man1
 build_includedir := $(build_prefix)/include
@@ -218,6 +219,11 @@ includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(incl
 
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
+
+# BinaryBuilder options
+# TODO: Autodiscover triplet
+USE_BINARYBUILDER_LLVM := 0
+BINARYBUILDER_TRIPLET :=
 
 # LLVM Options
 LLVMROOT := $(build_prefix)
@@ -257,7 +263,7 @@ CROSS_COMPILE:=
 # delayed expansion of $(CC), since it won't be computed until later
 HOSTCC = $(CC)
 else
-HOSTCC := gcc
+HOSTCC ?= gcc
 OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
@@ -940,12 +946,12 @@ else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/' -Wl,-rpath,'@loader_path/julia/'
+  RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN' -Wl,-rpath,'$$ORIGIN/julia' -Wl,-z,origin
+  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 endif
 
 # --whole-archive

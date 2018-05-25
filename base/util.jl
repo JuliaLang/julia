@@ -1,17 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# timing
-
-# time() in libc.jl
-
-# high-resolution relative time, in nanoseconds
-
-"""
-    time_ns()
-
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
-"""
-time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # This type must be kept in sync with the C struct in src/gc.h
 struct GC_Num
@@ -105,7 +93,7 @@ function format_bytes(bytes)
     end
 end
 
-function time_print(elapsedtime, bytes, gctime, allocs)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
     Printf.@printf("%10.6f seconds", elapsedtime/1e9)
     if bytes != 0 || allocs != 0
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -122,13 +110,12 @@ function time_print(elapsedtime, bytes, gctime, allocs)
     elseif gctime > 0
         Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
     end
-    println()
 end
 
 function timev_print(elapsedtime, diff::GC_Diff)
     allocs = gc_alloc_count(diff)
     time_print(elapsedtime, diff.allocd, diff.total_time, allocs)
-    print("elapsed time (ns): $elapsedtime\n")
+    print("\nelapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
@@ -171,6 +158,7 @@ macro time(ex)
         local diff = GC_Diff(gc_num(), stats)
         time_print(elapsedtime, diff.allocd, diff.total_time,
                    gc_alloc_count(diff))
+        println()
         val
     end
 end
@@ -288,16 +276,7 @@ julia> gctime
 0.0055765
 
 julia> fieldnames(typeof(memallocs))
-9-element Array{Symbol,1}:
- :allocd
- :malloc
- :realloc
- :poolalloc
- :bigalloc
- :freecall
- :total_time
- :pause
- :full_sweep
+(:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
 
 julia> memallocs.total_time
 5576500
@@ -316,6 +295,70 @@ end
 
 
 ## printing with color ##
+
+const text_colors = AnyDict(
+    :black         => "\033[30m",
+    :red           => "\033[31m",
+    :green         => "\033[32m",
+    :yellow        => "\033[33m",
+    :blue          => "\033[34m",
+    :magenta       => "\033[35m",
+    :cyan          => "\033[36m",
+    :white         => "\033[37m",
+    :light_black   => "\033[90m", # gray
+    :light_red     => "\033[91m",
+    :light_green   => "\033[92m",
+    :light_yellow  => "\033[93m",
+    :light_blue    => "\033[94m",
+    :light_magenta => "\033[95m",
+    :light_cyan    => "\033[96m",
+    :normal        => "\033[0m",
+    :default       => "\033[39m",
+    :bold          => "\033[1m",
+    :underline     => "\033[4m",
+    :blink         => "\033[5m",
+    :reverse       => "\033[7m",
+    :hidden        => "\033[8m",
+    :nothing       => "",
+)
+
+for i in 0:255
+    text_colors[i] = "\033[38;5;$(i)m"
+end
+
+const disable_text_style = AnyDict(
+    :bold      => "\033[22m",
+    :underline => "\033[24m",
+    :blink     => "\033[25m",
+    :reverse   => "\033[27m",
+    :hidden    => "\033[28m",
+    :normal    => "",
+    :default   => "",
+    :nothing   => "",
+)
+
+# Create a docstring with an automatically generated list
+# of colors.
+available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
+const possible_formatting_symbols = [:normal, :bold, :default]
+available_text_colors = cat(
+    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
+    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
+    dims=1)
+
+const available_text_colors_docstring =
+    string(join([string("`:", key,"`")
+                 for key in available_text_colors], ",\n", ", or \n"))
+
+"""Dictionary of color codes for the terminal.
+
+Available colors are: $available_text_colors_docstring as well as the integers 0 to 255 inclusive.
+
+The color `:default` will print text in the default color while the color `:normal`
+will print text with all text properties (like boldness) reset.
+Printing with the color `:nothing` will print the string without modifications.
+"""
+text_colors
 
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
@@ -344,24 +387,20 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
 end
 
 """
-    print_with_color(color::Union{Symbol, Int}, [io], xs...; bold::Bool = false)
+    printstyled([io], xs...; bold::Bool=false, color::Union{Symbol,Int}=:normal)
 
-Print `xs` in a color specified as a symbol.
+Print `xs` in a color specified as a symbol or integer, optionally in bold.
 
 `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
 If the keyword `bold` is given as `true`, the result will be printed in bold.
 """
-print_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false) =
-    with_output_color(print, color, io, msg...; bold = bold)
-print_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
-    print_with_color(color, STDOUT, msg...; bold = bold)
-println_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false) =
-    with_output_color(println, color, io, msg...; bold = bold)
-println_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
-    println_with_color(color, STDOUT, msg...; bold = bold)
+printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
+    with_output_color(print, color, io, msg...; bold=bold)
+printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
+    printstyled(stdout, msg...; bold=bold, color=color)
 
-function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
@@ -410,8 +449,8 @@ unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero
 if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
-    flush(STDOUT)
-    p = Vector{UInt8}(uninitialized, 128) # mimic Unix getpass in ignoring more than 128-char passwords
+    flush(stdout)
+    p = Vector{UInt8}(undef, 128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try
         plen = 0
@@ -458,7 +497,7 @@ function prompt(message::AbstractString; default::AbstractString="", password::B
         uinput = getpass(msg)
     else
         print(msg)
-        uinput = readline(chomp=false)
+        uinput = readline(keep=true)
         isempty(uinput) && return nothing  # Encountered an EOF
         uinput = chomp(uinput)
     end
@@ -487,7 +526,7 @@ if Sys.iswindows()
     function winprompt(message, caption, default_username; prompt_username = true)
         # Step 1: Create an encrypted username/password bundle that will be used to set
         #         the default username (in theory could also provide a default password)
-        credbuf = Vector{UInt8}(uninitialized, 1024)
+        credbuf = Vector{UInt8}(undef, 1024)
         credbufsize = Ref{UInt32}(sizeof(credbuf))
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
@@ -523,12 +562,12 @@ if Sys.iswindows()
         end
 
         # Step 3: Convert encrypted credentials back to plain text
-        passbuf = Vector{UInt16}(uninitialized, 1024)
+        passbuf = Vector{UInt16}(undef, 1024)
         passlen = Ref{UInt32}(length(passbuf))
-        usernamebuf = Vector{UInt16}(uninitialized, 1024)
+        usernamebuf = Vector{UInt16}(undef, 1024)
         usernamelen = Ref{UInt32}(length(usernamebuf))
         # Need valid buffers for domain, even though we don't care
-        dummybuf = Vector{UInt16}(uninitialized, 1024)
+        dummybuf = Vector{UInt16}(undef, 1024)
         succeeded = ccall((:CredUnPackAuthenticationBufferW, "credui.dll"), Bool,
             (UInt32, Ptr{Cvoid}, UInt32, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
             0, outbuf_data[], outbuf_size[], usernamebuf, usernamelen, dummybuf, Ref{UInt32}(1024), passbuf, passlen)
@@ -564,7 +603,7 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     # use block size 24576=8192*3, since that is the threshold for
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
-    buf = Vector{UInt8}(uninitialized, min(nb, 24576))
+    buf = Vector{UInt8}(undef, min(nb, 24576))
     while !eof(io) && nb > 24576
         n = readbytes!(io, buf)
         crc = unsafe_crc32c(buf, n, crc)
@@ -574,7 +613,8 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-
+_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
 
 """
     @kwdef typedef
@@ -679,18 +719,36 @@ kwdef_val(::Type{T}) where {T<:Integer} = zero(T)
 
 kwdef_val(::Type{T}) where {T} = T()
 
+# testing
 
-function _check_bitarray_consistency(B::BitArray{N}) where N
-    n = length(B)
-    if N ≠ 1
-        all(d ≥ 0 for d in B.dims) || (@warn("Negative d in dims: $(B.dims)"); return false)
-        prod(B.dims) ≠ n && (@warn("Inconsistent dims/len: prod(dims)=$(prod(B.dims)) len=$n"); return false)
+"""
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_CORES / 2),
+                  exit_on_error=false, [seed])
+
+Run the Julia unit tests listed in `tests`, which can be either a string or an array of
+strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
+fails, all remaining tests in other files will still be run; they are otherwise discarded,
+when `exit_on_error == true`.
+If a seed is provided via the keyword argument, it is used to seed the
+global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
+"""
+function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
+                  exit_on_error=false,
+                  seed::Union{BitInteger,Nothing}=nothing)
+    if isa(tests,AbstractString)
+        tests = split(tests)
     end
-    Bc = B.chunks
-    nc = length(Bc)
-    nc == num_bit_chunks(n) || (@warn("Incorrect chunks length for length $n: expected=$(num_bit_chunks(n)) actual=$nc"); return false)
-    n == 0 && return true
-    Bc[end] & _msk_end(n) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
-    return true
+    exit_on_error && push!(tests, "--exit-on-error")
+    seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
+    ENV2 = copy(ENV)
+    ENV2["JULIA_CPU_CORES"] = "$ncores"
+    try
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
+            Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
+    catch
+        buf = PipeBuffer()
+        Base.require(Base, :InteractiveUtils).versioninfo(buf)
+        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
+              "including error messages above and the output of versioninfo():\n$(read(buf, String))")
+    end
 end
-

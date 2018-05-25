@@ -5,7 +5,7 @@
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call],
+let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, optimize, run_passes],
     world = ccall(:jl_get_world_counter, UInt, ())
     for x in T_FFUNC_VAL
         push!(fs, x[3])
@@ -15,7 +15,7 @@ let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call],
             x = T_IFUNC[i]
             push!(fs, x[3])
         else
-            println(STDERR, "WARNING: tfunc missing for ", reinterpret(IntrinsicFunction, Int32(i)))
+            println(stderr, "WARNING: tfunc missing for ", reinterpret(IntrinsicFunction, Int32(i)))
         end
     end
     for f in fs
@@ -31,5 +31,3 @@ let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call],
         end
     end
 end
-
-ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext)

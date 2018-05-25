@@ -30,13 +30,13 @@ end
 
 # check direct EachLine constructor
 let b = IOBuffer("foo\n")
-    @test collect(EachLine(b)) == ["foo"]
+    @test collect(Base.EachLine(b)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, chomp=false)) == ["foo\n"]
+    @test collect(Base.EachLine(b, keep=true)) == ["foo\n"]
     seek(b, 0)
-    @test collect(EachLine(b, ondone=()->0)) == ["foo"]
+    @test collect(Base.EachLine(b, ondone=()->0)) == ["foo"]
     seek(b, 0)
-    @test collect(EachLine(b, chomp=false, ondone=()->0)) == ["foo\n"]
+    @test collect(Base.EachLine(b, keep=true, ondone=()->0)) == ["foo\n"]
 end
 
 # enumerate (issue #6284)
@@ -65,9 +65,13 @@ end
 # rest
 # ----
 let s = "hello"
-    _, st = next(s, start(s))
-    @test collect(rest(s, st)) == ['e','l','l','o']
+    _, st = iterate(s)
+    c = collect(rest(s, st))
+    @test c == ['e','l','l','o']
+    @test c isa Vector{Char}
 end
+# rest with state from old iteration protocol
+@test collect(rest(1:6, start(1:6))) == collect(1:6)
 
 @test_throws MethodError collect(rest(countfrom(1), 5))
 
@@ -84,7 +88,7 @@ end
 # take
 # ----
 let t = take(0:2:8, 10), i = 0
-    @test length(collect(t)) == 5
+    @test length(collect(t)) == 5 == length(t)
 
     for j = t
         @test j == i*2
@@ -101,6 +105,8 @@ let i = 0
     @test i == 10
 end
 
+@test isempty(take(0:2:8, 0))
+@test_throws ArgumentError take(0:2:8, -1)
 @test length(take(1:3,typemax(Int))) == 3
 @test length(take(countfrom(1),3)) == 3
 @test length(take(1:6,3)) == 3
@@ -115,6 +121,9 @@ let i = 0
     @test i == 4
 end
 
+@test isempty(drop(0:2:10, 100))
+@test isempty(collect(drop(0:2:10, 100)))
+@test_throws ArgumentError drop(0:2:8, -1)
 @test length(drop(1:3,typemax(Int))) == 0
 @test Base.IteratorSize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))
@@ -267,7 +276,7 @@ let iters = (1:2,
              )
     for method in [size, length, ndims, eltype]
         for i = 1:length(iters)
-            args = iters[i]
+            args = (iters[i],)
             @test method(product(args...)) == method(collect(product(args...)))
             for j = 1:length(iters)
                 args = iters[i], iters[j]
@@ -318,11 +327,11 @@ end
 @test Base.IteratorSize(product(1:2, countfrom(1)))          == Base.IsInfinite()
 @test Base.IteratorSize(product(countfrom(2), countfrom(1))) == Base.IsInfinite()
 @test Base.IteratorSize(product(countfrom(1), 1:2))          == Base.IsInfinite()
-@test Base.IteratorSize(product(1:2))                        == Base.HasShape()
-@test Base.IteratorSize(product(1:2, 1:2))                   == Base.HasShape()
-@test Base.IteratorSize(product(take(1:2, 1), take(1:2, 1))) == Base.HasShape()
-@test Base.IteratorSize(product(take(1:2, 2)))               == Base.HasShape()
-@test Base.IteratorSize(product([1 2; 3 4]))                 == Base.HasShape()
+@test Base.IteratorSize(product(1:2))                        == Base.HasShape{1}()
+@test Base.IteratorSize(product(1:2, 1:2))                   == Base.HasShape{2}()
+@test Base.IteratorSize(product(take(1:2, 1), take(1:2, 1))) == Base.HasShape{2}()
+@test Base.IteratorSize(product(take(1:2, 2)))               == Base.HasShape{1}()
+@test Base.IteratorSize(product([1 2; 3 4]))                 == Base.HasShape{2}()
 
 # IteratorEltype trait business
 let f1 = Iterators.filter(i->i>0, 1:10)
@@ -356,7 +365,7 @@ end
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
 @test length(flatten(zip(1:3, 4:6))) == 6
 @test length(flatten(1:6)) == 6
-@test_throws ArgumentError collect(flatten(Any[]))
+@test collect(flatten(Any[])) == Any[]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
@@ -409,6 +418,9 @@ let s = "Monkey 🙈🙊🙊"
     @test tf(1) == "M|o|n|k|e|y| |🙈|🙊|🙊"
 end
 
+@test Base.IteratorEltype(partition([1,2,3,4], 2)) == Base.HasEltype()
+@test Base.IteratorEltype(partition((2x for x in 1:3), 2)) == Base.EltypeUnknown()
+
 # take and friends with arbitrary integers (#19214)
 for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
     @test length(take(1:6, T(3))) == 3
@@ -431,7 +443,7 @@ end
     @test eltype(arr) == Int
 end
 
-@testset "IndexValue type" begin
+@testset "Pairs type" begin
     for A in ([4.0 5.0 6.0],
               [],
               (4.0, 5.0, 6.0),
@@ -445,10 +457,11 @@ end
         @test length(d) == length(A)
         @test keys(d) == keys(A)
         @test values(d) == A
-        @test Base.IteratorSize(d) == Base.HasLength()
+        @test Base.IteratorSize(d) == Base.IteratorSize(A)
         @test Base.IteratorEltype(d) == Base.HasEltype()
+        @test Base.IteratorSize(pairs([1 2;3 4])) isa Base.HasShape{2}
         @test isempty(d) || haskey(d, first(keys(d)))
-        @test collect(v for (k, v) in d) == vec(collect(A))
+        @test collect(v for (k, v) in d) == collect(A)
         if A isa NamedTuple
             K = isempty(d) ? Union{} : Symbol
             V = isempty(d) ? Union{} : Float64
@@ -473,12 +486,23 @@ end
         @test valtype(d) == V
         @test eltype(d) == Pair{K, V}
     end
+
+    let io = IOBuffer()
+        Base.showarg(io, pairs([1,2,3]), true)
+        @test String(take!(io)) == "pairs(::Array{$Int,1})"
+        Base.showarg(io, pairs((a=1, b=2)), true)
+        @test String(take!(io)) == "pairs(::NamedTuple)"
+        Base.showarg(io, pairs(IndexLinear(), zeros(3,3)), true)
+        @test String(take!(io)) == "pairs(IndexLinear(), ::Array{Float64,2})"
+        Base.showarg(io, pairs(IndexCartesian(), zeros(3)), true)
+        @test String(take!(io)) == "pairs(IndexCartesian(), ::Array{Float64,1})"
+    end
 end
 
 @testset "reverse iterators" begin
     squash(x::Number) = x
     squash(A) = reshape(A, length(A))
-    Z = Array{Int,0}(uninitialized); Z[] = 17 # zero-dimensional test case
+    Z = Array{Int,0}(undef); Z[] = 17 # zero-dimensional test case
     for itr in (2:10, "∀ϵ>0", 1:0, "", (2,3,5,7,11), [2,3,5,7,11], rand(5,6), Z, 3, true, 'x', 4=>5,
                 eachindex("∀ϵ>0"), view(Z), view(rand(5,6),2:4,2:6), (x^2 for x in 1:10),
                 Iterators.Filter(isodd, 1:10), flatten((1:10, 50:60)), enumerate("foo"),
@@ -491,5 +515,26 @@ end
     end
     let t = (2,3,5,7,11)
         @test Iterators.reverse(Iterators.reverse(t)) === t
+    end
+end
+
+@testset "Iterators.Stateful" begin
+    let a = @inferred(Iterators.Stateful("abcdef"))
+        @test !isempty(a)
+        @test popfirst!(a) == 'a'
+        @test collect(Iterators.take(a, 3)) == ['b','c','d']
+        @test collect(a) == ['e', 'f']
+    end
+    let a = @inferred(Iterators.Stateful([1, 1, 1, 2, 3, 4]))
+        for x in a; x == 1 || break; end
+        @test Base.peek(a) == 3
+        @test sum(a) == 7
+    end
+    # Interaction of zip/Stateful
+    let a = Iterators.Stateful("a"), b = ""
+	@test isempty(collect(zip(a,b)))
+	@test !isempty(a)
+	@test isempty(collect(zip(b,a)))
+	@test !isempty(a)
     end
 end

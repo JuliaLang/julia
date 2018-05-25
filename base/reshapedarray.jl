@@ -28,22 +28,21 @@ struct ReshapedIndex{T}
 end
 
 # eachindex(A::ReshapedArray) = ReshapedArrayIterator(A)  # TODO: uncomment this line
-start(R::ReshapedArrayIterator) = start(R.iter)
-@inline done(R::ReshapedArrayIterator, i) = done(R.iter, i)
-@inline function next(R::ReshapedArrayIterator, i)
-    item, inext = next(R.iter, i)
+@inline function iterate(R::ReshapedArrayIterator, i...)
+    item, inext = iterate(R.iter, i...)
     ReshapedIndex(item), inext
 end
 length(R::ReshapedArrayIterator) = length(R.iter)
+eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
 """
-    reshape(A, dims...) -> R
-    reshape(A, dims) -> R
+    reshape(A, dims...) -> AbstractArray
+    reshape(A, dims) -> AbstractArray
 
-Return an array `R` with the same data as `A`, but with different
+Return an array with the same data as `A`, but with different
 dimension sizes or number of dimensions. The two arrays share the same
-underlying data, so that setting elements of `R` alters the values of
-`A` and vice versa.
+underlying data, so that the result is mutable if and only if `A` is
+mutable, and setting elements of one alters the values of the other.
 
 The new dimensions may be specified either as a list of arguments or
 as a shape tuple. At most one dimension may be specified with a `:`,
@@ -82,8 +81,12 @@ julia> reshape(A, 2, :)
 2×8 Array{Int64,2}:
  1  3  5  7   9  11  13  15
  2  4  6  8  10  12  14  16
-```
 
+julia> reshape(1:6, 2, 3)
+2×3 reshape(::UnitRange{Int64}, 2, 3) with eltype Int64:
+ 1  3  5
+ 2  4  6
+```
 """
 reshape
 
@@ -124,8 +127,8 @@ rdims_trailing(l, inds...) = length(l) * rdims_trailing(inds...)
 rdims_trailing(l) = length(l)
 rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val(N)), inds)
 rdims(out::Tuple{}, inds::Tuple{}) = () # N == 0, M == 0
-@noinline rdims(out::Tuple{}, inds::Tuple{Any}) = throw(ArgumentError("new dimensions cannot be empty")) # N == 0
-@noinline rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = throw(ArgumentError("new dimensions cannot be empty")) # N == 0
+rdims(out::Tuple{}, inds::Tuple{Any}) = ()
+rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = ()
 rdims(out::Tuple{Any}, inds::Tuple{}) = out # N == 1, M == 0
 rdims(out::NTuple{N,Any}, inds::Tuple{}) where {N} = out # N > 1, M == 0
 rdims(out::Tuple{Any}, inds::Tuple{Any}) = inds # N == 1, M == 1
@@ -168,6 +171,11 @@ function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
     ReshapedArray(parent, dims, reverse(mi))
 end
 
+function __reshape(p::Tuple{AbstractArray{<:Any,0},IndexCartesian}, dims::Dims)
+    parent = p[1]
+    ReshapedArray(parent, dims, ())
+end
+
 function __reshape(p::Tuple{AbstractArray,IndexLinear}, dims::Dims)
     parent = p[1]
     ReshapedArray(parent, dims, ())
@@ -179,6 +187,10 @@ IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
+elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
+
+unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
+dataids(A::ReshapedArray) = dataids(A.parent)
 
 @inline ind2sub_rs(::Tuple{}, i::Int) = i
 @inline ind2sub_rs(strds, i) = _ind2sub_rs(strds, i - 1)

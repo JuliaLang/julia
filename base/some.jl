@@ -12,7 +12,7 @@ struct Some{T}
     value::T
 end
 
-promote_rule(::Type{Some{S}}, ::Type{Some{T}}) where {S,T} = Some{promote_type(S, T)}
+promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
 promote_rule(::Type{Some{T}}, ::Type{Nothing}) where {T} = Union{Some{T}, Nothing}
 
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
@@ -51,8 +51,7 @@ julia> coalesce(missing, 1)
 julia> coalesce(1, nothing)
 1
 
-julia> coalesce(nothing, nothing)
-nothing
+julia> coalesce(nothing, nothing) # returns nothing, but not printed in the REPL
 
 julia> coalesce(Some(1))
 1
@@ -74,7 +73,7 @@ coalesce(x::Union{Nothing, Missing}, y...) = coalesce(y...)
 """
     notnothing(x)
 
-Throw an error if `x == nothing`, and return `x` if not.
+Throw an error if `x === nothing`, and return `x` if not.
 """
 notnothing(x::Any) = x
 notnothing(::Nothing) = throw(ArgumentError("nothing passed to notnothing"))

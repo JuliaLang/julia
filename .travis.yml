@@ -85,11 +85,12 @@ before_install:
         brew tap staticfloat/julia;
         brew rm --force $(brew deps --HEAD julia);
         brew install -v --only-dependencies --HEAD julia;
-        brew install -v staticfloat/juliadeps/libgfortran llvm39-julia;
-        BUILDOPTS="-j3 USECLANG=1 USECCACHE=1 LLVM_CONFIG=$(brew --prefix llvm39-julia)/bin/llvm-config LLVM_SIZE=$(brew --prefix llvm39-julia)/bin/llvm-size";
+        brew install -v staticfloat/juliadeps/libgfortran;
+        BUILDOPTS="-j3 USECLANG=1 USECCACHE=1 BINARYBUILDER_TRIPLET=x86_64-apple-darwin14";
+        BUILDOPTS="$BUILDOPTS USE_BINARYBUILDER_LLVM=1 LLVM_CONFIG=$TRAVIS_BUILD_DIR/usr/tools/llvm-config LLVM_SIZE=$TRAVIS_BUILD_DIR/usr/tools/llvm-size";
         BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in LLVM SUITESPARSE ARPACK BLAS LAPACK GMP MPFR PCRE LIBUNWIND; do
+        for lib in SUITESPARSE ARPACK BLAS LAPACK GMP MPFR PCRE LIBUNWIND; do
             BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
@@ -104,7 +105,8 @@ before_install:
         export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - echo "override JULIA_CPU_TARGET=generic;native" >> Make.user
-    - git clone -q git://git.kitenet.net/moreutils
+    - wget http://http.debian.net/debian/pool/main/m/moreutils/moreutils_0.62.orig.tar.xz
+    - tar -xJvf moreutils_0.62.orig.tar.xz && mv moreutils-0.62 moreutils
 script:
     - echo BUILDOPTS=$BUILDOPTS
     - export BUILDOPTS
@@ -128,11 +130,6 @@ script:
           false; }
     # compile / install Julia
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
-    - if [ `uname` = "Darwin" ]; then
-        for name in suitesparseconfig spqr umfpack colamd cholmod amd suitesparse_wrapper; do
-            install -pm755 usr/lib/lib${name}*.dylib* /tmp/julia/lib/julia/;
-        done;
-      fi
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
     - ls -l /tmp/julia/lib
@@ -144,11 +141,11 @@ script:
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - pushd /tmp/julia/share/julia/test
     - /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-      /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online download pkg
+      /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online OldPkg/pkg Pkg/pkg download
     - popd
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&
-        make check -C /tmp/julia/share/doc/julia/examples/embedding \
+        make check -C /tmp/julia/share/julia/test/embedding \
              JULIA="/tmp/julia/bin/julia" \
              BIN=/tmp/embedding-test \
              "$(cd julia2 && make print-CC)"
@@ -157,5 +154,5 @@ script:
         rm -f julia/deps/scratch/libgit2-*/CMakeFiles/CMakeOutput.log
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
-after_success:
+    # build the docs and run the doctests
     - cd julia && make -C doc deploy

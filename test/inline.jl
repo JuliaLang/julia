@@ -25,10 +25,10 @@ function test_inlined_symbols(func, argtypes)
     ast.args = src.code
     ast.typ = rettype
     walk(ast) do e
-        if isa(e, Slot)
+        if isa(e, Core.Slot)
             @test 1 <= e.id <= nl
         end
-        if isa(e, NewvarNode)
+        if isa(e, Core.NewvarNode)
             @test 1 <= e.slot.id <= nl
         end
     end
@@ -67,7 +67,7 @@ function bar12620()
         foo_inl(i==1)
     end
 end
-@test_throws UndefVarError bar12620()
+@test_throws UndefVarError(:y) bar12620()
 
 # issue #16165
 @inline f16165(x) = (x = UInt(x) + 1)

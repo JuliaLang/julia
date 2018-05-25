@@ -72,7 +72,7 @@ end
 @test map(+, (x=1, y=2), (x=10, y=20)) == (x=11, y=22)
 @test_throws ArgumentError map(+, (x=1, y=2), (y=10, x=20))
 @test map(string, (x=1, y=2)) == (x="1", y="2")
-@test map(round, (x=1//3, y=Int), (x=3, y=2//3)) == (x=0.333, y=1)
+@test map(round, (x=UInt, y=Int), (x=3.1, y=2//3)) == (x=UInt(3), y=1)
 
 @test merge((a=1, b=2), (a=10,)) == (a=10, b=2)
 @test merge((a=1, b=2), (a=10, z=20)) == (a=10, b=2, z=20)
@@ -209,15 +209,30 @@ abstr_nt_22194_3()
 @test typeof(Base.structdiff(NamedTuple{(:a, :b), Tuple{Int32, Union{Int32, Nothing}}}((1, Int32(2))),
                              (a=0,))) === NamedTuple{(:b,), Tuple{Union{Int32, Nothing}}}
 
-@test findall(equalto(1), (a=1, b=2)) == [:a]
-@test findall(equalto(1), (a=1, b=1)) == [:a, :b]
-@test isempty(findall(equalto(1), NamedTuple()))
-@test isempty(findall(equalto(1), (a=2, b=3)))
-@test findfirst(equalto(1), (a=1, b=2)) == :a
-@test findlast(equalto(1), (a=1, b=2)) == :a
-@test findfirst(equalto(1), (a=1, b=1)) == :a
-@test findlast(equalto(1), (a=1, b=1)) == :b
-@test findfirst(equalto(1), ()) === nothing
-@test findlast(equalto(1), ()) === nothing
-@test findfirst(equalto(1), (a=2, b=3)) === nothing
-@test findlast(equalto(1), (a=2, b=3)) === nothing
+@test findall(isequal(1), (a=1, b=2)) == [:a]
+@test findall(isequal(1), (a=1, b=1)) == [:a, :b]
+@test isempty(findall(isequal(1), NamedTuple()))
+@test isempty(findall(isequal(1), (a=2, b=3)))
+@test findfirst(isequal(1), (a=1, b=2)) == :a
+@test findlast(isequal(1), (a=1, b=2)) == :a
+@test findfirst(isequal(1), (a=1, b=1)) == :a
+@test findlast(isequal(1), (a=1, b=1)) == :b
+@test findfirst(isequal(1), ()) === nothing
+@test findlast(isequal(1), ()) === nothing
+@test findfirst(isequal(1), (a=2, b=3)) === nothing
+@test findlast(isequal(1), (a=2, b=3)) === nothing
+
+# Test map with Nothing and Missing
+for T in (Nothing, Missing)
+    x = [(a=1, b=T()), (a=1, b=2)]
+    y = map(v -> (a=v.a, b=v.b), [(a=1, b=T()), (a=1, b=2)])
+    @test y isa Vector{NamedTuple{(:a,:b), T} where T<:Tuple}
+    @test isequal(x, y)
+end
+y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
+@test y isa Vector{NamedTuple{(:a,:b), T} where T<:Tuple}
+@test isequal(y, [(a=1, b=missing), (a=1, b=3)])
+
+# issue #27187
+@test reduce(merge,[(a = 1, b = 2), (c = 3, d = 4)]) == (a = 1, b = 2, c = 3, d = 4)
+@test typeintersect(NamedTuple{()}, NamedTuple{names, Tuple{Int,Int}} where names) == Union{}

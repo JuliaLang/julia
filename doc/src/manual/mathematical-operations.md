@@ -17,6 +17,7 @@ are supported on all primitive numeric types:
 | `x - y`    | binary minus   | performs subtraction                   |
 | `x * y`    | times          | performs multiplication                |
 | `x / y`    | divide         | performs division                      |
+| `x ÷ y`    | integer divide | x / y, truncated to an integer         |
 | `x \ y`    | inverse divide | equivalent to `y / x`                  |
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
@@ -357,7 +358,7 @@ Julia applies the following order and associativity of operations, from highest 
 | Exponentiation | `^`                                                                                               | Right                      |
 | Unary          | `+ - √`                                                                                           | Right[^1]                   |
 | Fractions      | `//`                                                                                              | Left                       |
-| Multiplication | `* / % & \`                                                                                       | Left[^2]                    |
+| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                    |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
 | Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
 | Syntax         | `: ..`                                                                                            | Left                       |
@@ -380,7 +381,7 @@ You can also find the numerical precedence for any given operator via the built-
 
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(9, 11, 15)
+(11, 13, 17)
 
 julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
 (0, 1, 1)
@@ -424,25 +425,20 @@ julia> Int8(127)
 julia> Int8(128)
 ERROR: InexactError: trunc(Int8, 128)
 Stacktrace:
- [1] throw_inexacterror(::Symbol, ::Type{Int8}, ::Int64) at ./int.jl:34
- [2] checked_trunc_sint at ./int.jl:438 [inlined]
- [3] convert at ./int.jl:458 [inlined]
- [4] Int8(::Int64) at ./sysimg.jl:114
+[...]
 
 julia> Int8(127.0)
 127
 
 julia> Int8(3.14)
-ERROR: InexactError: convert(Int8, 3.14)
+ERROR: InexactError: Int8(Int8, 3.14)
 Stacktrace:
- [1] convert at ./float.jl:682 [inlined]
- [2] Int8(::Float64) at ./sysimg.jl:114
+[...]
 
 julia> Int8(128.0)
-ERROR: InexactError: convert(Int8, 128.0)
+ERROR: InexactError: Int8(Int8, 128.0)
 Stacktrace:
- [1] convert at ./float.jl:682 [inlined]
- [2] Int8(::Float64) at ./sysimg.jl:114
+[...]
 
 julia> 127 % Int8
 127
@@ -456,8 +452,7 @@ julia> round(Int8,127.4)
 julia> round(Int8,127.6)
 ERROR: InexactError: trunc(Int8, 128.0)
 Stacktrace:
- [1] trunc at ./float.jl:675 [inlined]
- [2] round(::Type{Int8}, ::Float64) at ./float.jl:353
+[...]
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.
@@ -477,19 +472,19 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 
 ### Division functions
 
-| Function              | Description                                                                                               |
-|:--------------------- |:--------------------------------------------------------------------------------------------------------- |
-| [`div(x,y)`](@ref)    | truncated division; quotient rounded towards zero                                                         |
-| [`fld(x,y)`](@ref)    | floored division; quotient rounded towards `-Inf`                                                         |
-| [`cld(x,y)`](@ref)    | ceiling division; quotient rounded towards `+Inf`                                                         |
-| [`rem(x,y)`](@ref)    | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
-| [`mod(x,y)`](@ref)    | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
-| [`mod1(x,y)`](@ref)   | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
-| [`mod2pi(x)`](@ref)   | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
-| [`divrem(x,y)`](@ref) | returns `(div(x,y),rem(x,y))`                                                                             |
-| [`fldmod(x,y)`](@ref) | returns `(fld(x,y),mod(x,y))`                                                                             |
-| [`gcd(x,y...)`](@ref) | greatest positive common divisor of `x`, `y`,...                                                          |
-| [`lcm(x,y...)`](@ref) | least positive common multiple of `x`, `y`,...                                                            |
+| Function                  | Description                                                                                               |
+|:------------------------- |:--------------------------------------------------------------------------------------------------------- |
+| [`div(x,y)`](@ref), `x÷y` | truncated division; quotient rounded towards zero                                                         |
+| [`fld(x,y)`](@ref)        | floored division; quotient rounded towards `-Inf`                                                         |
+| [`cld(x,y)`](@ref)        | ceiling division; quotient rounded towards `+Inf`                                                         |
+| [`rem(x,y)`](@ref)        | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
+| [`mod(x,y)`](@ref)        | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
+| [`mod1(x,y)`](@ref)       | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)`   |
+| [`mod2pi(x)`](@ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
+| [`divrem(x,y)`](@ref)     | returns `(div(x,y),rem(x,y))`                                                                             |
+| [`fldmod(x,y)`](@ref)     | returns `(fld(x,y),mod(x,y))`                                                                             |
+| [`gcd(x,y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
+| [`lcm(x,y...)`](@ref)     | least positive common multiple of `x`, `y`,...                                                            |
 
 ### Sign and absolute value functions
 

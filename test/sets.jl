@@ -2,19 +2,21 @@
 
 # Set tests
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers.OAs
+using .Main.TestHelpers.OAs
 
 @testset "Construction, collect" begin
-    @test ===(typeof(Set([1,2,3])), Set{Int})
-    @test ===(typeof(Set{Int}([3])), Set{Int})
+    @test Set([1,2,3]) isa Set{Int}
+    @test Set{Int}([3]) isa Set{Int}
     data_in = (1,"banana", ())
     s = Set(data_in)
     data_out = collect(s)
-    @test ===(typeof(data_out), Array{Any,1})
-    @test all(map(occursin(data_out), data_in))
+    @test s isa Set{Any}
+    @test data_out isa Array{Any,1}
+    @test all(map(in(data_out), data_in))
     @test length(data_out) == length(data_in)
     let f17741 = x -> x < 0 ? false : 1
         @test isa(Set(x for x = 1:3), Set{Int})
+        @test isa(Set(x for x = 1:3 for j = 1:1), Set{Int})
         @test isa(Set(sin(x) for x = 1:3), Set{Float64})
         @test isa(Set(f17741(x) for x = 1:3), Set{Int})
         @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
@@ -44,22 +46,32 @@ end
     d2 = Dict(Set([2]) => 33, Set([3]) => 22)
     @test hash(d1) != hash(d2)
 end
-@testset "isequal" begin
-    @test  isequal(Set(), Set())
-    @test !isequal(Set(), Set([1]))
-    @test  isequal(Set{Any}(Any[1,2]), Set{Int}([1,2]))
-    @test !isequal(Set{Any}(Any[1,2]), Set{Int}([1,2,3]))
-    # Comparison of unrelated types seems rather inconsistent
-    @test  isequal(Set{Int}(), Set{AbstractString}())
-    @test !isequal(Set{Int}(), Set{AbstractString}([""]))
-    @test !isequal(Set{AbstractString}(), Set{Int}([0]))
-    @test !isequal(Set{Int}([1]), Set{AbstractString}())
-    @test  isequal(Set{Any}([1,2,3]), Set{Int}([1,2,3]))
-    @test  isequal(Set{Int}([1,2,3]), Set{Any}([1,2,3]))
-    @test !isequal(Set{Any}([1,2,3]), Set{Int}([1,2,3,4]))
-    @test !isequal(Set{Int}([1,2,3]), Set{Any}([1,2,3,4]))
-    @test !isequal(Set{Any}([1,2,3,4]), Set{Int}([1,2,3]))
-    @test !isequal(Set{Int}([1,2,3,4]), Set{Any}([1,2,3]))
+
+@testset "equality" for eq in (isequal, ==)
+    @test  eq(Set(), Set())
+    @test !eq(Set(), Set([1]))
+    @test  eq(Set{Any}(Any[1,2]), Set{Int}([1,2]))
+    @test !eq(Set{Any}(Any[1,2]), Set{Int}([1,2,3]))
+
+    # Comparison of unrelated types
+    @test  eq(Set{Int}(), Set{AbstractString}())
+    @test !eq(Set{Int}(), Set{AbstractString}([""]))
+    @test !eq(Set{AbstractString}(), Set{Int}([0]))
+    @test !eq(Set{Int}([1]), Set{AbstractString}())
+    @test  eq(Set{Any}([1,2,3]), Set{Int}([1,2,3]))
+    @test  eq(Set{Int}([1,2,3]), Set{Any}([1,2,3]))
+    @test !eq(Set{Any}([1,2,3]), Set{Int}([1,2,3,4]))
+    @test !eq(Set{Int}([1,2,3]), Set{Any}([1,2,3,4]))
+    @test !eq(Set{Any}([1,2,3,4]), Set{Int}([1,2,3]))
+    @test !eq(Set{Int}([1,2,3,4]), Set{Any}([1,2,3]))
+
+    # Special cases
+    @test  eq(Set([-0.0]), Set([-0.0]))
+    @test !eq(Set([0.0]), Set([-0.0]))
+    @test  eq(Set([NaN]), Set([NaN]))
+    @test !eq(Set([NaN]), Set([1.0]))
+    @test  eq(Set([missing]), Set([missing]))
+    @test !eq(Set([missing]), Set([1]))
 end
 
 @testset "hash and == for Set/BitSet" begin
@@ -211,6 +223,13 @@ end
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
     @test intersect([1, 2, 1], [2, 2]) == intersect!([1, 2, 1], [2, 2]) == [2]
+
+    # issue #25801
+    x = () ∩ (:something,)
+    y = () ∩ (42,)
+    @test isempty(x)
+    @test isempty(y)
+    @test eltype(x) == eltype(y) == Union{}
 end
 
 @testset "setdiff" begin
@@ -482,74 +501,80 @@ end
 end
 
 @testset "replace! & replace" begin
-    maybe1(v, p) = if p Some(v) end
-    maybe2(v, p) = if p v end
-
-    for maybe = (maybe1, maybe2)
-        a = [1, 2, 3, 1]
-        @test replace(x->maybe(2x, iseven(x)), a) == [1, 4, 3, 1]
-        @test replace!(x->maybe(2x, iseven(x)), a) === a
-        @test a == [1, 4, 3, 1]
-        @test replace(a, 1=>0) == [0, 4, 3, 0]
-        for count = (1, 0x1, big(1))
-            @test replace(a, 1=>0, count=count) == [0, 4, 3, 1]
-        end
-        @test replace!(a, 1=>2) === a
-        @test a == [2, 4, 3, 2]
-        @test replace!(x->2x, a, count=0x2) == [4, 8, 3, 2]
-
-        d = Dict(1=>2, 3=>4)
-        @test replace(x->x.first > 2, d, 0=>0) == Dict(1=>2, 0=>0)
-        @test replace!(x->maybe(x.first=>2*x.second, x.first > 2), d) === d
-        @test d == Dict(1=>2, 3=>8)
-        @test replace(d, (3=>8)=>(0=>0)) == Dict(1=>2, 0=>0)
-        @test replace!(d, (3=>8)=>(2=>2)) === d
-        @test d == Dict(1=>2, 2=>2)
-        for count = (1, 0x1, big(1))
-            @test replace(x->x.second == 2, d, 0=>0, count=count) in [Dict(1=>2, 0=>0),
-                                                                      Dict(2=>2, 0=>0)]
-        end
-        s = Set([1, 2, 3])
-        @test replace(x->maybe(2x, x>1), s) == Set([1, 4, 6])
-        for count = (1, 0x1, big(1))
-            @test replace(x->maybe(2x, x>1), s, count=count) in [Set([1, 4, 3]), Set([1, 2, 6])]
-        end
-        @test replace(s, 1=>4) == Set([2, 3, 4])
-        @test replace!(s, 1=>2) === s
-        @test s == Set([2, 3])
-        @test replace!(x->2x, s, count=0x1) in [Set([4, 3]), Set([2, 6])]
-
-        for count = (0, 0x0, big(0))
-            @test replace([1, 2], 1=>0, 2=>0, count=count) == [1, 2] # count=0 --> no replacements
-        end
+    a = [1, 2, 3, 1]
+    @test replace(x -> iseven(x) ? 2x : x, a) == [1, 4, 3, 1]
+    @test replace!(x -> iseven(x) ? 2x : x, a) === a
+    @test a == [1, 4, 3, 1]
+    @test replace(a, 1=>0) == [0, 4, 3, 0]
+    for count = (1, 0x1, big(1))
+        @test replace(a, 1=>0, count=count) == [0, 4, 3, 1]
     end
+    @test replace!(a, 1=>2) === a
+    @test a == [2, 4, 3, 2]
+    @test replace!(x->2x, a, count=0x2) == [4, 8, 3, 2]
+
+    d = Dict(1=>2, 3=>4)
+    @test replace(x->x.first > 2, d, 0=>0) == Dict(1=>2, 0=>0)
+    @test replace!(x -> x.first > 2 ? x.first=>2*x.second : x, d) === d
+    @test d == Dict(1=>2, 3=>8)
+    @test replace(d, (3=>8)=>(0=>0)) == Dict(1=>2, 0=>0)
+    @test replace!(d, (3=>8)=>(2=>2)) === d
+    @test d == Dict(1=>2, 2=>2)
+    for count = (1, 0x1, big(1))
+        @test replace(x->x.second == 2, d, 0=>0, count=count) in [Dict(1=>2, 0=>0),
+                                                                  Dict(2=>2, 0=>0)]
+    end
+    s = Set([1, 2, 3])
+    @test replace(x -> x > 1 ? 2x : x, s) == Set([1, 4, 6])
+    for count = (1, 0x1, big(1))
+        @test replace(x -> x > 1 ? 2x : x, s, count=count) in [Set([1, 4, 3]), Set([1, 2, 6])]
+    end
+    @test replace(s, 1=>4) == Set([2, 3, 4])
+    @test replace!(s, 1=>2) === s
+    @test s == Set([2, 3])
+    @test replace!(x->2x, s, count=0x1) in [Set([4, 3]), Set([2, 6])]
+
+    for count = (0, 0x0, big(0))
+        @test replace([1, 2], 1=>0, 2=>0, count=count) == [1, 2] # count=0 --> no replacements
+    end
+
     # test collisions with AbstractSet/AbstractDict
     @test replace!(x->2x, Set([3, 6])) == Set([6, 12])
     @test replace!(x->2x, Set([1:20;])) == Set([2:2:40;])
     @test replace!(kv -> (2kv[1] => kv[2]), Dict(1=>2, 2=>4, 4=>8, 8=>16)) == Dict(2=>2, 4=>4, 8=>8, 16=>16)
 
-    # test Some(nothing)
-    a = [1, 2, nothing, 4]
-    @test replace(x -> x === nothing ? 0 : Some(nothing), a) == [nothing, nothing, 0, nothing]
-    @test replace(x -> x === nothing ? 0 : nothing, a) == [1, 2, 0, 4]
-    @test replace!(x -> x !== nothing ? Some(nothing) : nothing, a) == [nothing, nothing, nothing, nothing]
-    @test replace(iseven, Any[1, 2, 3, 4], nothing) == [1, nothing, 3, nothing]
-    @test replace(Any[1, 2, 3, 4], 1=>nothing, 3=>nothing) == [nothing, 2, nothing, 4]
-    s = Set([1, 2, nothing, 4])
-    @test replace(x -> x === nothing ? 0 : Some(nothing), s) == Set([0, nothing])
-    @test replace(x -> x === nothing ? 0 : nothing, s) == Set([1, 2, 0, 4])
-    @test replace(x -> x !== nothing ? Some(nothing) : nothing, s) == Set([nothing])
-    @test replace(iseven, Set(Any[1, 2, 3, 4]), nothing) == Set([1, nothing, 3, nothing])
-    @test replace(Set(Any[1, 2, 3, 4]), 1=>nothing, 3=>nothing) == Set([nothing, 2, nothing, 4])
-
     # avoid recursive call issue #25384
     @test_throws MethodError replace!("")
+
+    # test eltype promotion
+    x = @inferred replace([1, 2], 2=>2.5)
+    @test x == [1, 2.5] && x isa Vector{Float64}
+    x = @inferred replace(x -> x > 1, [1, 2], 2.5)
+    @test x == [1, 2.5] && x isa Vector{Float64}
+
+    x = @inferred replace([1, 2], 2=>missing)
+    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
+    x = @inferred replace(x -> x > 1, [1, 2], missing)
+    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
+
+    x = @inferred replace([1, missing], missing=>2)
+    @test x == [1, 2] && x isa Vector{Int}
+    x = @inferred replace([1, missing], missing=>2, count=1)
+    @test x == [1, 2] && x isa Vector{Union{Int, Missing}}
+    x = @inferred replace([1, missing], missing=>missing)
+    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
+    x = @inferred replace([1, missing], missing=>2, 1=>missing)
+    @test isequal(x, [missing, 2]) && x isa Vector{Union{Int, Missing}}
+
+    # test that isequal is used
+    @test replace([NaN, 1.0], NaN=>0.0) == [0.0, 1.0]
+    @test replace([1, missing], missing=>0) == [1, 0]
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
     a = [1, 2]
     b = [2, 1, 3]
-    for C = (Tuple, identity, Set, BitSet)
+    for C = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
         A = C(a)
         B = C(b)
         @test A ⊆ B

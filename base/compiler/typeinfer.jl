@@ -5,7 +5,7 @@ const COMPILER_TEMP_SYM = Symbol("#temp#")
 # add the real backedges
 function finalize_backedges(frame::InferenceState)
     toplevel = !isa(frame.linfo.def, Method)
-    if !toplevel && frame.cached && frame.max_valid == typemax(UInt)
+    if !toplevel && (frame.cached || frame.parent !== nothing) && frame.max_valid == typemax(UInt)
         caller = frame.linfo
         for edges in frame.stmt_edges
             i = 1
@@ -15,7 +15,7 @@ function finalize_backedges(frame::InferenceState)
                     ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
                     i += 1
                 else
-                    typeassert(to, MethodTable)
+                    typeassert(to, Core.MethodTable)
                     typ = edges[i + 1]
                     ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
                     i += 2
@@ -164,16 +164,17 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
             # so need to check whether the code itself is also inferred
             if min_world(linfo) <= params.world <= max_world(linfo)
                 inf = linfo.inferred
-                if linfo.jlcall_api == 2
+                if invoke_api(linfo) == 2
                     method = linfo.def::Method
                     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                     tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
-                    tree.signature_for_inference_heuristics = nothing
+                    tree.method_for_inference_limit_heuristics = nothing
                     tree.slotnames = Any[ COMPILER_TEMP_SYM for i = 1:method.nargs ]
-                    tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
+                    tree.slotflags = fill(0x00, Int(method.nargs))
                     tree.slottypes = nothing
                     tree.ssavaluetypes = 0
                     tree.inferred = true
+                    tree.ssaflags = UInt8[]
                     tree.pure = true
                     tree.inlineable = true
                     i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
@@ -226,7 +227,7 @@ function typeinf_type(method::Method, @nospecialize(atypes), sparams::SimpleVect
     return widenconst(frame.bestguess)
 end
 
-function typeinf_ext(linfo::MethodInstance, world::UInt)
+@timeit function typeinf_ext(linfo::MethodInstance, world::UInt)
     if isa(linfo.def, Method)
         # method lambda - infer this specialization via the method cache
         return typeinf_code(linfo, true, true, Params(world))
@@ -261,12 +262,8 @@ function typeinf_work(frame::InferenceState)
             local pc´::Int = pc + 1 # next program-counter (after executing instruction)
             if pc == frame.pc´´
                 # need to update pc´´ to point at the new lowest instruction in W
-                min_pc = next(W, pc)[2]
-                if done(W, min_pc)
-                    frame.pc´´ = max(min_pc, n + 1)
-                else
-                    frame.pc´´ = min_pc
-                end
+                min_pc = _bits_findnext(W.bits, pc + 1)
+                frame.pc´´ = min_pc == -1 ? n + 1 : min_pc
             end
             delete!(W, pc)
             frame.currpc = pc
@@ -317,11 +314,14 @@ function typeinf_work(frame::InferenceState)
                     else
                         # general case
                         frame.handler_at[l] = frame.cur_hand
+                        changes_else = changes
                         if isa(condt, Conditional)
-                            changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes)
-                            changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
-                        else
-                            changes_else = changes
+                            if condt.elsetype !== Any && condt.elsetype !== changes[slot_id(condt.var)]
+                                changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes_else)
+                            end
+                            if condt.vtype !== Any && condt.vtype !== changes[slot_id(condt.var)]
+                                changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
+                            end
                         end
                         newstate_else = stupdate!(s[l], changes_else)
                         if newstate_else !== false

@@ -34,20 +34,18 @@ mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
 
 ## foldl && mapfoldl
 
-@noinline function mapfoldl_impl(f, op, v0, itr, i)
+@noinline function mapfoldl_impl(f, op, v0, itr, i...)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
-    if done(itr, i)
-        return v0
-    else
-        (x, i) = next(itr, i)
-        v = op(v0, f(x))
-        while !done(itr, i)
-            @inbounds (x, i) = next(itr, i)
-            v = op(v, f(x))
-        end
-        return v
+    y = iterate(itr, i...)
+    y === nothing && return v0
+    v = op(v0, f(y[1]))
+    while true
+        y = iterate(itr, y[2])
+        y === nothing && break
+        v = op(v, f(y[1]))
     end
+    return v
 end
 
 """
@@ -56,7 +54,7 @@ end
 Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`](@ref).
 `v0` will be used exactly once.
 """
-mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
+mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr)
 
 """
     mapfoldl(f, op, itr)
@@ -67,11 +65,11 @@ Specifically, `mapfoldl(f, op, itr)` produces the same result as
 In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
 function mapfoldl(f, op, itr)
-    i = start(itr)
-    if done(itr, i)
+    y = iterate(itr)
+    if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    (x, i) = next(itr, i)
+    (x, i) = y
     v0 = mapreduce_first(f, op, x)
     mapfoldl_impl(f, op, v0, itr, i)
 end
@@ -126,7 +124,7 @@ end
 Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref).
 `v0` will be used exactly once.
 """
-mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
+mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, lastindex(itr))
 
 """
     mapfoldr(f, op, itr)
@@ -137,7 +135,7 @@ Specifically, `mapfoldr(f, op, itr)` produces the same result as
 In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
 function mapfoldr(f, op, itr)
-    i = endof(itr)
+    i = lastindex(itr)
     if isempty(itr)
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
@@ -259,7 +257,7 @@ reduce_empty(op, T) = _empty_reduce_error()
 reduce_empty(::typeof(+), T) = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
 reduce_empty(::typeof(*), T) = one(T)
-reduce_empty(::typeof(*), ::Type{Char}) = ""
+reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
@@ -307,7 +305,7 @@ different types than its inputs.
 """
 reduce_first(op, x) = x
 reduce_first(::typeof(+), x::Bool) = Int(x)
-reduce_first(::typeof(*), x::Char) = string(x)
+reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
 reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
@@ -331,7 +329,7 @@ mapreduce_first(f, op, x) = reduce_first(op, f(x))
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
-    inds = linearindices(A)
+    inds = LinearIndices(A)
     n = length(inds)
     if n == 0
         return mapreduce_empty(f, op, T)
@@ -353,10 +351,9 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
     end
 end
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
-
-mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
+
+_mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
 """
     reduce(op, v0, itr)
@@ -554,12 +551,14 @@ julia> extrema([9,pi,4.5])
 ```
 """
 function extrema(itr)
-    s = start(itr)
-    done(itr, s) && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = next(itr, s)
+    y = iterate(itr)
+    y === nothing && throw(ArgumentError("collection must be non-empty"))
+    (v, s) = y
     vmin = vmax = v
-    while !done(itr, s)
-        (x, s) = next(itr, s)
+    while true
+        y = iterate(itr, s)
+        y === nothing && break
+        (x, s) = y
         vmax = max(x, vmax)
         vmin = min(x, vmin)
     end
@@ -573,6 +572,10 @@ end
 
 Test whether any elements of a boolean collection are `true`, returning `true` as
 soon as the first `true` value in `itr` is encountered (short-circuiting).
+
+If the input contains [`missing`](@ref) values, return `missing` if all non-missing
+values are `false` (or equivalently, if the input contains no `true` value), following
+[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
 ```jldoctest
 julia> a = [true,false,false,true]
@@ -588,6 +591,12 @@ true
 julia> any((println(i); v) for (i, v) in enumerate(a))
 1
 true
+
+julia> any([missing, true])
+true
+
+julia> any([false, missing])
+missing
 ```
 """
 any(itr) = any(identity, itr)
@@ -597,6 +606,10 @@ any(itr) = any(identity, itr)
 
 Test whether all elements of a boolean collection are `true`, returning `false` as
 soon as the first `false` value in `itr` is encountered (short-circuiting).
+
+If the input contains [`missing`](@ref) values, return `missing` if all non-missing
+values are `true` (or equivalently, if the input contains no `false` value), following
+[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
 ```jldoctest
 julia> a = [true,false,false,true]
@@ -613,6 +626,12 @@ julia> all((println(i); v) for (i, v) in enumerate(a))
 1
 2
 false
+
+julia> all([missing, false])
+false
+
+julia> all([true, missing])
+missing
 ```
 """
 all(itr) = all(identity, itr)
@@ -625,7 +644,8 @@ Determine whether predicate `p` returns `true` for any elements of `itr`, return
 (short-circuiting).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `false` (or equivalently, if the input contains no `true` value).
+values are `false` (or equivalently, if the input contains no `true` value), following
+[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
@@ -637,9 +657,20 @@ julia> any(i -> (println(i); i > 3), 1:10)
 3
 4
 true
+
+julia> any(i -> i > 0, [1, missing])
+true
+
+julia> any(i -> i > 0, [-1, missing])
+missing
+
+julia> any(i -> i > 0, [-1, 0])
+false
 ```
 """
-function any(f, itr)
+any(f, itr) = _any(f, itr, :)
+
+function _any(f, itr, ::Colon)
     anymissing = false
     for x in itr
         v = f(x)
@@ -660,7 +691,8 @@ Determine whether predicate `p` returns `true` for all elements of `itr`, return
 (short-circuiting).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `true` (or equivalently, if the input contains no `false` value).
+values are `true` (or equivalently, if the input contains no `false` value), following
+[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
@@ -671,9 +703,20 @@ julia> all(i -> (println(i); i < 3), 1:10)
 2
 3
 false
+
+julia> all(i -> i > 0, [1, missing])
+missing
+
+julia> all(i -> i > 0, [-1, missing])
+false
+
+julia> all(i -> i > 0, [1, 2])
+true
 ```
 """
-function all(f, itr)
+all(f, itr) = _all(f, itr, :)
+
+function _all(f, itr, ::Colon)
     anymissing = false
     for x in itr
         v = f(x)
@@ -691,20 +734,30 @@ end
 
 
 ## in & contains
+in(x, itr) = any(y -> y == x, itr)
+const ∈ = in
+∋(itr, x) = ∈(x, itr)
+∉(x, itr) = !∈(x, itr)
+∌(itr, x) = !∋(itr, x)
 
 """
     in(item, collection) -> Bool
-    ∈(item,collection) -> Bool
-    ∋(collection,item) -> Bool
-    ∉(item,collection) -> Bool
-    ∌(collection,item) -> Bool
+    ∈(item, collection) -> Bool
+    ∋(collection, item) -> Bool
 
-Determine whether an item is in the given collection, in the sense that it is `==` to one of
-the values generated by iterating over the collection. Some collections need a slightly
-different definition; for example, [`Set`](@ref)s check whether the item
-[`isequal`](@ref) to one of the elements. [`Dict`](@ref)s look for
-`(key,value)` pairs, and the key is compared using [`isequal`](@ref). To test for
-the presence of a key in a dictionary, use [`haskey`](@ref) or `k in keys(dict)`.
+Determine whether an item is in the given collection, in the sense that it is
+[`==`](@ref) to one of the values generated by iterating over the collection.
+Returns a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
+contains `missing` but not `item`, in which case `missing` is returned
+([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+matching the behavior of [`any`](@ref) and [`==`](@ref)).
+
+Some collections follow a slightly different definition. For example,
+[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
+[`Dict`](@ref)s look for `key=>value` pairs, and the key is compared using
+[`isequal`](@ref). To test for the presence of a key in a dictionary,
+use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
+is always a `Bool` and never `missing`.
 
 ```jldoctest
 julia> a = 1:3:20
@@ -715,18 +768,40 @@ true
 
 julia> 5 in a
 false
+
+julia> missing in [1, 2]
+missing
+
+julia> 1 in [2, missing]
+missing
+
+julia> 1 in [1, missing]
+true
+
+julia> missing in Set([1, 2])
+false
 ```
 """
-in(x, itr) = any(y -> y == x, itr)
+in, ∋
 
-const ∈ = in
-∉(x, itr)=!∈(x, itr)
-∋(itr, x)= ∈(x, itr)
-∌(itr, x)=!∋(itr, x)
+"""
+    ∉(item, collection) -> Bool
+    ∌(collection, item) -> Bool
 
+Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
+
+# Examples
+```jldoctest
+julia> 1 ∉ 2:4
+true
+
+julia> 1 ∉ 1:3
+false
+```
+"""
+∉, ∌
 
 ## count
-
 """
     count(p, itr) -> Integer
     count(itr) -> Integer

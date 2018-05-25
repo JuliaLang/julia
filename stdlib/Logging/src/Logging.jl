@@ -52,4 +52,14 @@ include("ConsoleLogger.jl")
 # 2. AbstractLogger message related functions:
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
 
+function __init__()
+    global_logger(ConsoleLogger(stderr))
+    atexit() do
+        logger = global_logger()
+        if isa(logger, ConsoleLogger)
+            global_logger(ConsoleLogger(Core.stderr, min_enabled_level(logger)))
+        end
+    end
+end
+
 end

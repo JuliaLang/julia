@@ -52,8 +52,9 @@ eltype(::Type{T}) where {T<:Number} = T
 ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
-endof(x::Number) = 1
-IteratorSize(::Type{<:Number}) = HasShape()
+firstindex(x::Number) = 1
+lastindex(x::Number) = 1
+IteratorSize(::Type{<:Number}) = HasShape{0}()
 keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
@@ -171,28 +172,6 @@ copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 
 conj(x::Real) = x
 transpose(x::Number) = x
-"""
-    adjoint(A)
-
-Lazy adjoint (conjugate transposition) (also postfix `'`). Note that `adjoint` is applied recursively to
-elements.
-
-This operation is intended for linear algebra usage - for general data manipulation see
-[`permutedims`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
- 3+2im  9+2im
- 8+7im  4+6im
-
-julia> adjoint(A)
-2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
- 3-2im  8-7im
- 9-2im  4-6im
-```
-"""
 adjoint(x::Number) = conj(x)
 angle(z::Real) = atan2(zero(z), z)
 
@@ -235,9 +214,7 @@ julia> widemul(Float32(3.), 4.)
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
 
-start(x::Number) = false
-next(x::Number, state) = (x, true)
-done(x::Number, state) = state
+iterate(x::Number, done = false) = done ? nothing : (x, true)
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
 

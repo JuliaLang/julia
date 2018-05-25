@@ -7,6 +7,7 @@ using Base: @deprecate, depwarn
 @deprecate cond(F::LinearAlgebra.LU, p::Integer) cond(convert(AbstractArray, F), p)
 
 # PR #22188
+export cholfact, cholfact!
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val(false))
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
 @deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val(false))
@@ -19,7 +20,7 @@ using Base: @deprecate, depwarn
 @deprecate isposdef!(A::StridedMatrix, UL::Symbol) isposdef!(Hermitian(A, UL))
 
 # bkfact
-import .LinearAlgebra: bkfact, bkfact!
+export bkfact, bkfact!
 function bkfact(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A), rook::Bool = false)
     depwarn(string("`bkfact` with uplo and symmetric arguments is deprecated, ",
         "use `bkfact($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
@@ -33,6 +34,7 @@ function bkfact!(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A
     return bkfact!(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
 end
 
+export lufact!
 @deprecate sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatrix} sqrtm(A, Val(realmatrix))
 @deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lufact(A, Val(false))
 @deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lufact(A, Val(true))
@@ -49,7 +51,7 @@ end
 
 # PR #22703
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
-@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
+@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::AbstractChar) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
 @deprecate Bidiagonal(A::AbstractMatrix, isupper::Bool) Bidiagonal(A, ifelse(isupper, :U, :L))
 
 # PR #22925
@@ -333,8 +335,6 @@ end
 
 @deprecate chol!(x::Number, uplo) chol(x) false
 
-@deprecate diff(A::AbstractMatrix) diff(A, 1)
-
 ### deprecations for lazier, less jazzy linalg transition in the next several blocks ###
 
 # deprecate ConjArray
@@ -420,22 +420,22 @@ function RowVector{T}(vec::AbstractVector{T}) where {T}
 end
 
 # Constructors that take a size and default to Array
-function RowVector{T}(::Uninitialized, n::Int) where {T}
+function RowVector{T}(::UndefInitializer, n::Int) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
-    return RowVector{T}(Vector{transpose_type(T)}(uninitialized, n))
+    return RowVector{T}(Vector{transpose_type(T)}(undef, n))
 end
-function RowVector{T}(::Uninitialized, n1::Int, n2::Int) where {T}
+function RowVector{T}(::UndefInitializer, n1::Int, n2::Int) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
-    return n1 == 1 ? RowVector{T}(Vector{transpose_type(T)}(uninitialized, n2)) :
+    return n1 == 1 ? RowVector{T}(Vector{transpose_type(T)}(undef, n2)) :
         error("RowVector expects 1×N size, got ($n1,$n2)")
 end
-function RowVector{T}(::Uninitialized, n::Tuple{Int}) where {T}
+function RowVector{T}(::UndefInitializer, n::Tuple{Int}) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
-    return RowVector{T}(Vector{transpose_type(T)}(uninitialized, n[1]))
+    return RowVector{T}(Vector{transpose_type(T)}(undef, n[1]))
 end
-function RowVector{T}(::Uninitialized, n::Tuple{Int,Int}) where {T}
+function RowVector{T}(::UndefInitializer, n::Tuple{Int,Int}) where {T}
     Base.depwarn(_RowVector_depstring(), :RowVector)
-    return n[1] == 1 ? RowVector{T}(Vector{transpose_type(T)}(uninitialized, n[2])) :
+    return n[1] == 1 ? RowVector{T}(Vector{transpose_type(T)}(undef, n[2])) :
         error("RowVector expects 1×N size, got $n")
 end
 
@@ -492,22 +492,6 @@ rvtranspose(x) = transpose(x)
 parent(rowvec::RowVector) = rowvec.vec
 vec(rowvec::RowVector) = rowvec.vec
 
-"""
-    conj(v::RowVector)
-
-Return a [`ConjArray`](@ref) lazy view of the input, where each element is conjugated.
-
-# Examples
-```jldoctest
-julia> v = RowVector([1+im, 1-im])
-1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:
- 1+1im  1-1im
-
-julia> conj(v)
-1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:
- 1-1im  1+1im
-```
-"""
 @inline conj(rowvec::RowVector) = RowVector(_conj(rowvec.vec))
 @inline conj(rowvec::RowVector{<:Real}) = rowvec
 
@@ -563,7 +547,7 @@ IndexStyle(::Type{<:RowVector}) = IndexLinear()
     if length(rowvec) != length(vec)
         throw(DimensionMismatch("A has dimensions $(size(rowvec)) but B has dimensions $(size(vec))"))
     end
-    sum(@inbounds(return rowvec[i]*vec[i]) for i = 1:length(vec))
+    sum(@inbounds(rowvec[i]*vec[i]) for i = 1:length(vec))
 end
 @inline *(rowvec::RowVector, mat::AbstractMatrix) = rvtranspose(transpose(mat) * rvtranspose(rowvec))
 *(::RowVector, ::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
@@ -654,11 +638,11 @@ pinv(v::RowVector, tol::Real=0) = rvadjoint(pinv(rvadjoint(v), tol))
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RowVector}) = transpose(A.parent) * B
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:RowVector}) = A * rvadjoint(B.parent)
 
-# deprecate RowVector{T}(shape...) constructors to RowVector{T}(uninitialized, shape...) equivalents
-@deprecate RowVector{T}(n::Int) where {T}               RowVector{T}(uninitialized, n)
-@deprecate RowVector{T}(n1::Int, n2::Int) where {T}     RowVector{T}(uninitialized, n1, n2)
-@deprecate RowVector{T}(n::Tuple{Int}) where {T}        RowVector{T}(uninitialized, n)
-@deprecate RowVector{T}(n::Tuple{Int,Int}) where {T}    RowVector{T}(uninitialized, n)
+# deprecate RowVector{T}(shape...) constructors to RowVector{T}(undef, shape...) equivalents
+@deprecate RowVector{T}(n::Int) where {T}               RowVector{T}(undef, n)
+@deprecate RowVector{T}(n1::Int, n2::Int) where {T}     RowVector{T}(undef, n1, n2)
+@deprecate RowVector{T}(n::Tuple{Int}) where {T}        RowVector{T}(undef, n)
+@deprecate RowVector{T}(n::Tuple{Int,Int}) where {T}    RowVector{T}(undef, n)
 
 # operations formerly exported from and imported/extended by LinearAlgebra
 import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
@@ -727,11 +711,11 @@ export A_ldiv_B!,
 @deprecate A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)  mul!(C, S, B)
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/diagonal.jl, to deprecate
-@deprecate A_mul_B!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) mul!(A, D)
-@deprecate A_mul_B!(A::UnitLowerTriangular, D::Diagonal)    mul!(A, D)
-@deprecate A_mul_B!(A::UnitUpperTriangular, D::Diagonal)    mul!(A, D)
-@deprecate A_mul_B!(D::Diagonal, B::UnitLowerTriangular)    mul!(D, B)
-@deprecate A_mul_B!(D::Diagonal, B::UnitUpperTriangular)    mul!(D, B)
+@deprecate A_mul_B!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) rmul!(A, D)
+@deprecate A_mul_B!(A::UnitLowerTriangular, D::Diagonal)    rmul!(A, D)
+@deprecate A_mul_B!(A::UnitUpperTriangular, D::Diagonal)    rmul!(A, D)
+@deprecate A_mul_B!(D::Diagonal, B::UnitLowerTriangular)    lmul!(D, B)
+@deprecate A_mul_B!(D::Diagonal, B::UnitUpperTriangular)    lmul!(D, B)
 @deprecate Ac_mul_B(D::Diagonal, B::Diagonal)           (*)(adjoint(D), B)
 @deprecate Ac_mul_B(A::AbstractTriangular, D::Diagonal) (*)(adjoint(A), D)
 @deprecate Ac_mul_B(A::AbstractMatrix, D::Diagonal)     (*)(adjoint(A), D)
@@ -747,16 +731,19 @@ export A_ldiv_B!,
 @deprecate A_mul_Bt(D::Diagonal, A::AbstractMatrix) (*)(D, transpose(A))
 @deprecate Ac_mul_Bc(D::Diagonal, B::Diagonal)      (*)(adjoint(D), adjoint(B))
 @deprecate At_mul_Bt(D::Diagonal, B::Diagonal)      (*)(transpose(D), transpose(B))
-@deprecate A_mul_B!(A::Diagonal,B::Diagonal)        mul!(A, B)
-@deprecate At_mul_B!(A::Diagonal,B::Diagonal)       mul!(transpose(A), B)
-@deprecate Ac_mul_B!(A::Diagonal,B::Diagonal)       mul!(adjoint(A), B)
-@deprecate A_mul_B!(A::QRPackedQ, D::Diagonal)      mul!(A, D)
-@deprecate A_mul_B!(A::Diagonal,B::AbstractMatrix)      mul!(A, B)
-@deprecate At_mul_B!(A::Diagonal,B::AbstractMatrix)     mul!(transpose(A), B)
-@deprecate Ac_mul_B!(A::Diagonal,B::AbstractMatrix)     mul!(adjoint(A), B)
-@deprecate A_mul_B!(A::AbstractMatrix,B::Diagonal)      mul!(A, B)
-@deprecate A_mul_Bt!(A::AbstractMatrix,B::Diagonal)     mul!(A, transpose(B))
-@deprecate A_mul_Bc!(A::AbstractMatrix,B::Diagonal)     mul!(A, adjoint(B))
+function A_mul_B!(A::Diagonal,B::Diagonal)
+    depwarn("`A_mul_B!(A::Diagonal,B::Diagonal)` should be replaced with `rmul!(A, B)` or `lmul!(A, B)`.", :A_mul_B!)
+    throw(MethodError(A_mul_B!, (A, B)))
+end
+@deprecate At_mul_B!(A::Diagonal,B::Diagonal)       lmul!(transpose(A), B)
+@deprecate Ac_mul_B!(A::Diagonal,B::Diagonal)       lmul!(adjoint(A), B)
+@deprecate A_mul_B!(A::QRPackedQ, D::Diagonal)      rmul!(A, D)
+@deprecate A_mul_B!(A::Diagonal,B::AbstractMatrix)      lmul!(A, B)
+@deprecate At_mul_B!(A::Diagonal,B::AbstractMatrix)     lmul!(transpose(A), B)
+@deprecate Ac_mul_B!(A::Diagonal,B::AbstractMatrix)     lmul!(adjoint(A), B)
+@deprecate A_mul_B!(A::AbstractMatrix,B::Diagonal)      rmul!(A, B)
+@deprecate A_mul_Bt!(A::AbstractMatrix,B::Diagonal)     rmul!(A, transpose(B))
+@deprecate A_mul_Bc!(A::AbstractMatrix,B::Diagonal)     rmul!(A, adjoint(B))
 @deprecate A_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector)       mul!(out, A, in)
 @deprecate Ac_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector)      mul!(out, adjoint(A), in)
 @deprecate At_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector)      mul!(out, transpose(A), in)
@@ -780,7 +767,7 @@ export A_ldiv_B!,
 @deprecate A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)   ldiv!(D, B)
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/special.jl, to deprecate
-@deprecate A_mul_Bc!(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ})   mul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ})   rmul!(A, adjoint(B))
 @deprecate A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ})    (*)(A, adjoint(B))
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/bunchkaufman.jl, to deprecate
@@ -805,10 +792,10 @@ export A_ldiv_B!,
 @deprecate At_ldiv_B(F::Factorization, B)   (\)(transpose(F), B)
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/hessenberg.jl, to deprecate
-@deprecate A_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat}  mul!(Q, X)
-@deprecate A_mul_B!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat}    mul!(X, Q)
-@deprecate Ac_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} mul!(adjoint(Q), X)
-@deprecate A_mul_Bc!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat}   mul!(X, adjoint(Q))
+@deprecate A_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat}  lmul!(Q, X)
+@deprecate A_mul_B!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat}    rmul!(X, Q)
+@deprecate Ac_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} lmul!(adjoint(Q), X)
+@deprecate A_mul_Bc!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat}   rmul!(X, adjoint(Q))
 @deprecate Ac_mul_B(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}   (*)(adjoint(Q), X)
 @deprecate A_mul_Bc(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}   (*)(X, adjoint(Q))
 
@@ -858,43 +845,43 @@ export A_ldiv_B!,
 @deprecate Ac_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}   ldiv!(adjoint(A), B)
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/lq.jl, to deprecate
-@deprecate A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat}   mul!(A, B)
-@deprecate A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat}    mul!(A, B)
-@deprecate A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat}    mul!(A, B)
-@deprecate A_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat}    mul!(A, B)
-@deprecate Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasReal}    mul!(adjoint(A), B)
-@deprecate Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} mul!(adjoint(A), B)
+@deprecate A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat}   lmul!(A, B)
+@deprecate A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat}    A*B
+@deprecate A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat}    A*B
+@deprecate A_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat}    lmul!(A, B)
+@deprecate Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasReal}    lmul!(adjoint(A), B)
+@deprecate Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} lmul!(adjoint(A), B)
 @deprecate Ac_mul_B(A::LQPackedQ, B::StridedVecOrMat)   (*)(adjoint(A), B)
 @deprecate A_mul_Bc(A::LQPackedQ, B::StridedVecOrMat)   (*)(A, adjoint(B))
 @deprecate Ac_mul_Bc(A::LQPackedQ, B::StridedVecOrMat)  (*)(adjoint(A), adjoint(B))
-@deprecate A_mul_B!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat}      mul!(A, B)
-@deprecate A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal}      mul!(A, adjoint(B))
-@deprecate A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex}   mul!(A, adjoint(B))
+@deprecate A_mul_B!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat}      rmul!(A, B)
+@deprecate A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal}      rmul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex}   rmul!(A, adjoint(B))
 @deprecate A_mul_Bc(A::StridedVecOrMat, Q::LQPackedQ)   (*)(A, adjoint(Q))
 @deprecate Ac_mul_Bc(A::StridedMatrix, Q::LQPackedQ)    (*)(adjoint(A), adjoint(Q))
 @deprecate Ac_mul_B(A::StridedMatrix, Q::LQPackedQ)     (*)(adjoint(A), Q)
 @deprecate A_ldiv_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T} ldiv!(A, B)
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/qr.jl, to deprecate
-@deprecate A_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} mul!(A, B)
-@deprecate A_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix}    mul!(A, B)
-@deprecate A_mul_B!(A::QRPackedQ, B::AbstractVecOrMat)  mul!(A, B)
-@deprecate Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix}      mul!(adjoint(A), B)
-@deprecate Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix}   mul!(adjoint(A), B)
-@deprecate Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix}     mul!(adjoint(A), B)
-@deprecate Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix}  mul!(adjoint(A), B)
-@deprecate Ac_mul_B!(A::QRPackedQ, B::AbstractVecOrMat) mul!(adjoint(A), B)
+@deprecate A_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} lmul!(A, B)
+@deprecate A_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix}    lmul!(A, B)
+@deprecate A_mul_B!(A::QRPackedQ, B::AbstractVecOrMat)  lmul!(A, B)
+@deprecate Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix}      lmul!(adjoint(A), B)
+@deprecate Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix}   lmul!(adjoint(A), B)
+@deprecate Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix}     lmul!(adjoint(A), B)
+@deprecate Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix}  lmul!(adjoint(A), B)
+@deprecate Ac_mul_B!(A::QRPackedQ, B::AbstractVecOrMat) lmul!(adjoint(A), B)
 @deprecate Ac_mul_B(Q::AbstractQ, B::StridedVecOrMat)   (*)(adjoint(Q), B)
 @deprecate A_mul_Bc(Q::AbstractQ, B::StridedVecOrMat)   (*)(Q, adjoint(B))
 @deprecate Ac_mul_Bc(Q::AbstractQ, B::StridedVecOrMat)  (*)(adjoint(Q), adjoint(B))
-@deprecate A_mul_B!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix}  mul!(A, B)
-@deprecate A_mul_B!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix}     mul!(A, B)
-@deprecate A_mul_B!(A::StridedMatrix,Q::QRPackedQ)  mul!(A, Q)
-@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasReal}     mul!(A, adjoint(B))
-@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasComplex}  mul!(A, adjoint(B))
-@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasReal}    mul!(A, adjoint(B))
-@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasComplex} mul!(A, adjoint(B))
-@deprecate A_mul_Bc!(A::StridedMatrix,Q::QRPackedQ)     mul!(A, adjoint(Q))
+@deprecate A_mul_B!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix}  rmul!(A, B)
+@deprecate A_mul_B!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix}     rmul!(A, B)
+@deprecate A_mul_B!(A::StridedMatrix,Q::QRPackedQ)  rmul!(A, Q)
+@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasReal}     rmul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasComplex}  rmul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasReal}    rmul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasComplex} rmul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::StridedMatrix,Q::QRPackedQ)     rmul!(A, adjoint(Q))
 @deprecate A_mul_Bc(A::StridedMatrix, B::AbstractQ)     (*)(A, adjoint(B))
 @deprecate A_mul_Bc(rowvec::RowVector, B::AbstractQ)    (*)(rowvec, adjoint(B))
 @deprecate Ac_mul_B(A::StridedVecOrMat, Q::AbstractQ)   (*)(adjoint(A), Q)
@@ -987,20 +974,20 @@ export A_ldiv_B!,
 @deprecate At_mul_Bt(A::AbstractTriangular, B::AbstractTriangular)  (*)(transpose(A), transpose(B))
 @deprecate At_mul_Bt(A::AbstractTriangular, B::AbstractMatrix)      (*)(transpose(A), transpose(B))
 @deprecate At_mul_Bt(A::AbstractMatrix, B::AbstractTriangular)      (*)(transpose(A), transpose(B))
-@deprecate A_mul_Bc!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular})     mul!(A, adjoint(B))
-@deprecate A_mul_Bc!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular})     mul!(A, adjoint(B))
-@deprecate A_mul_Bt!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular})     mul!(A, transpose(B))
-@deprecate A_mul_Bt!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular})     mul!(A, transpose(B))
+@deprecate A_mul_Bc!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular})     rmul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular})     rmul!(A, adjoint(B))
+@deprecate A_mul_Bt!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular})     rmul!(A, transpose(B))
+@deprecate A_mul_Bt!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular})     rmul!(A, transpose(B))
 @deprecate A_rdiv_Bc!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular})    rdiv!(A, adjoint(B))
 @deprecate A_rdiv_Bc!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular})    rdiv!(A, adjoint(B))
 @deprecate A_rdiv_Bt!(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular})    rdiv!(A, transpose(B))
 @deprecate A_rdiv_Bt!(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular})    rdiv!(A, transpose(B))
 @deprecate A_rdiv_B!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular})     rdiv!(A, B)
 @deprecate A_rdiv_B!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular})     rdiv!(A, B)
-@deprecate Ac_mul_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)     mul!(adjoint(A), B)
-@deprecate Ac_mul_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)     mul!(adjoint(A), B)
-@deprecate At_mul_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)     mul!(transpose(A), B)
-@deprecate At_mul_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)     mul!(transpose(A), B)
+@deprecate Ac_mul_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)     lmul!(adjoint(A), B)
+@deprecate Ac_mul_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)     lmul!(adjoint(A), B)
+@deprecate At_mul_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)     lmul!(transpose(A), B)
+@deprecate At_mul_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)     lmul!(transpose(A), B)
 @deprecate Ac_ldiv_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)    ldiv!(adjoint(A), B)
 @deprecate Ac_ldiv_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)    ldiv!(adjoint(A), B)
 @deprecate At_ldiv_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)    ldiv!(transpose(A), B)
@@ -1025,30 +1012,30 @@ export A_ldiv_B!,
 @deprecate At_ldiv_B!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)     ldiv!(transpose(A), b, x)
 @deprecate At_ldiv_B!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b) ldiv!(transpose(A), b, x)
 @deprecate At_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)     ldiv!(transpose(A), b, x)
-@deprecate A_mul_Bt!(A::StridedMatrix, B::UnitLowerTriangular)  mul!(A, transpose(B))
-@deprecate A_mul_Bt!(A::StridedMatrix, B::LowerTriangular)      mul!(A, transpose(B))
-@deprecate A_mul_Bt!(A::StridedMatrix, B::UnitUpperTriangular)  mul!(A, transpose(B))
-@deprecate A_mul_Bt!(A::StridedMatrix, B::UpperTriangular)      mul!(A, transpose(B))
-@deprecate A_mul_Bc!(A::StridedMatrix, B::UnitLowerTriangular)  mul!(A, adjoint(B))
-@deprecate A_mul_Bc!(A::StridedMatrix, B::LowerTriangular)      mul!(A, adjoint(B))
-@deprecate A_mul_Bc!(A::StridedMatrix, B::UnitUpperTriangular)  mul!(A, adjoint(B))
-@deprecate A_mul_Bc!(A::StridedMatrix, B::UpperTriangular)      mul!(A, adjoint(B))
-@deprecate A_mul_B!(A::StridedMatrix, B::UnitLowerTriangular)   mul!(A, B)
-@deprecate A_mul_B!(A::StridedMatrix, B::LowerTriangular)       mul!(A, B)
-@deprecate A_mul_B!(A::StridedMatrix, B::UnitUpperTriangular)   mul!(A, B)
-@deprecate A_mul_B!(A::StridedMatrix, B::UpperTriangular)       mul!(A, B)
-@deprecate At_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)    mul!(transpose(A), B)
-@deprecate At_mul_B!(A::LowerTriangular, B::StridedVecOrMat)        mul!(transpose(A), B)
-@deprecate At_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)    mul!(transpose(A), B)
-@deprecate At_mul_B!(A::UpperTriangular, B::StridedVecOrMat)        mul!(transpose(A), B)
-@deprecate Ac_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)    mul!(adjoint(A), B)
-@deprecate Ac_mul_B!(A::LowerTriangular, B::StridedVecOrMat)        mul!(adjoint(A), B)
-@deprecate Ac_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)    mul!(adjoint(A), B)
-@deprecate Ac_mul_B!(A::UpperTriangular, B::StridedVecOrMat)    mul!(adjoint(A), B)
-@deprecate A_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat) mul!(A, B)
-@deprecate A_mul_B!(A::LowerTriangular, B::StridedVecOrMat)     mul!(A, B)
-@deprecate A_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat) mul!(A, B)
-@deprecate A_mul_B!(A::UpperTriangular, B::StridedVecOrMat)     mul!(A, B)
+@deprecate A_mul_Bt!(A::StridedMatrix, B::UnitLowerTriangular)  rmul!(A, transpose(B))
+@deprecate A_mul_Bt!(A::StridedMatrix, B::LowerTriangular)      rmul!(A, transpose(B))
+@deprecate A_mul_Bt!(A::StridedMatrix, B::UnitUpperTriangular)  rmul!(A, transpose(B))
+@deprecate A_mul_Bt!(A::StridedMatrix, B::UpperTriangular)      rmul!(A, transpose(B))
+@deprecate A_mul_Bc!(A::StridedMatrix, B::UnitLowerTriangular)  rmul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::StridedMatrix, B::LowerTriangular)      rmul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::StridedMatrix, B::UnitUpperTriangular)  rmul!(A, adjoint(B))
+@deprecate A_mul_Bc!(A::StridedMatrix, B::UpperTriangular)      rmul!(A, adjoint(B))
+@deprecate A_mul_B!(A::StridedMatrix, B::UnitLowerTriangular)   rmul!(A, B)
+@deprecate A_mul_B!(A::StridedMatrix, B::LowerTriangular)       rmul!(A, B)
+@deprecate A_mul_B!(A::StridedMatrix, B::UnitUpperTriangular)   rmul!(A, B)
+@deprecate A_mul_B!(A::StridedMatrix, B::UpperTriangular)       rmul!(A, B)
+@deprecate At_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)    lmul!(transpose(A), B)
+@deprecate At_mul_B!(A::LowerTriangular, B::StridedVecOrMat)        lmul!(transpose(A), B)
+@deprecate At_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)    lmul!(transpose(A), B)
+@deprecate At_mul_B!(A::UpperTriangular, B::StridedVecOrMat)        lmul!(transpose(A), B)
+@deprecate Ac_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)    lmul!(adjoint(A), B)
+@deprecate Ac_mul_B!(A::LowerTriangular, B::StridedVecOrMat)        lmul!(adjoint(A), B)
+@deprecate Ac_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)    lmul!(adjoint(A), B)
+@deprecate Ac_mul_B!(A::UpperTriangular, B::StridedVecOrMat)    lmul!(adjoint(A), B)
+@deprecate A_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat) lmul!(A, B)
+@deprecate A_mul_B!(A::LowerTriangular, B::StridedVecOrMat)     lmul!(A, B)
+@deprecate A_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat) lmul!(A, B)
+@deprecate A_mul_B!(A::UpperTriangular, B::StridedVecOrMat)     lmul!(A, B)
 @deprecate A_mul_B!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)      mul!(C, A, B)
 @deprecate A_mul_B!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat)    mul!(C, A, B)
 @deprecate A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat)    mul!(C, A, B)
@@ -1058,7 +1045,7 @@ export A_ldiv_B!,
 @deprecate At_mul_B!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)     mul!(C, transpose(A), B)
 @deprecate At_mul_B!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat)   mul!(C, transpose(A), B)
 @deprecate At_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat)   mul!(C, transpose(A), B)
-@deprecate A_mul_B!(A::Tridiagonal, B::AbstractTriangular)  mul!(A, B)
+@deprecate A_mul_B!(A::Tridiagonal, B::AbstractTriangular)  lmul!(A, B)
 @deprecate A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal)   mul!(C, A, B)
 @deprecate A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular)   mul!(C, A, B)
 @deprecate A_mul_Bt!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat)   mul!(C, A, transpose(B))
@@ -1110,22 +1097,22 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitUpperTriangular, 'U', 'U'))
     @eval begin
         # Vector multiplication
-        @deprecate A_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat}     mul!(A, b)
-        @deprecate At_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat}    mul!(transpose(A), b)
-        @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasReal}     mul!(adjoint(A), b)
-        @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasComplex}  mul!(adjoint(A), b)
+        @deprecate A_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat}     lmul!(A, b)
+        @deprecate At_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat}    lmul!(transpose(A), b)
+        @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasReal}     lmul!(adjoint(A), b)
+        @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasComplex}  lmul!(adjoint(A), b)
 
         # Matrix multiplication
-        @deprecate A_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat}     mul!(A, B)
-        @deprecate A_mul_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat}     mul!(A, B)
+        @deprecate A_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat}     lmul!(A, B)
+        @deprecate A_mul_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat}     lmul!(A, B)
 
-        @deprecate At_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat}       mul!(transpose(A), B)
-        @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex}     mul!(adjoint(A), B)
-        @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasReal}        mul!(adjoint(A), B)
+        @deprecate At_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat}       lmul!(transpose(A), B)
+        @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex}     lmul!(adjoint(A), B)
+        @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasReal}        lmul!(adjoint(A), B)
 
-        @deprecate A_mul_Bt!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat}    mul!(A, transpose(B))
-        @deprecate A_mul_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasComplex}  mul!(A, adjoint(B))
-        @deprecate A_mul_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasReal}     mul!(A, adjoint(B))
+        @deprecate A_mul_Bt!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat}    rmul!(A, transpose(B))
+        @deprecate A_mul_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasComplex}  rmul!(A, adjoint(B))
+        @deprecate A_mul_Bc!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasReal}     rmul!(A, adjoint(B))
 
         # Left division
         @deprecate A_ldiv_B!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat}  ldiv!(A, B)
@@ -1183,12 +1170,12 @@ end
 @deprecate A_mul_Bt(mat::AbstractMatrix, rowvec::RowVector)     (*)(mat, transpose(rowvec))
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/linalg/givens.jl, to deprecate
-@deprecate A_mul_Bc!(A::AbstractMatrix, R::Rotation)    mul!(A, adjoint(R))
-@deprecate A_mul_B!(R::Rotation, A::AbstractMatrix)     mul!(R, A)
-@deprecate A_mul_B!(G::Givens, R::Rotation)             mul!(G, R)
-@deprecate A_mul_Bc!(A::AbstractMatrix, G::Givens)      mul!(A, adjoint(G))
-@deprecate A_mul_B!(G::Givens, A::AbstractVecOrMat)     mul!(G, A)
-@deprecate A_mul_B!(G1::Givens, G2::Givens)             mul!(G1, G2)
+@deprecate A_mul_Bc!(A::AbstractMatrix, R::Rotation)    rmul!(A, adjoint(R))
+@deprecate A_mul_B!(R::Rotation, A::AbstractMatrix)     lmul!(R, A)
+@deprecate A_mul_B!(G::Givens, R::Rotation)             lmul!(G, R)
+@deprecate A_mul_Bc!(A::AbstractMatrix, G::Givens)      rmul!(A, adjoint(G))
+@deprecate A_mul_B!(G::Givens, A::AbstractVecOrMat)     lmul!(G, A)
+@deprecate A_mul_B!(G1::Givens, G2::Givens)             G1 * G2
 @deprecate A_mul_Bc(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S}     (*)(A, adjoint(R))
 
 
@@ -1254,7 +1241,10 @@ norm(tv::RowVector) = norm(rvtranspose(tv))
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:RowVector}) = A * rvtranspose(B.parent)
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:RowVector}) = A * rvadjoint(B.parent)
 
-
+@deprecate *(A::LQ,B::QR) A*Matrix(B)
+@deprecate *(A::QR,B::LQ) A*Matrix(B)
+@deprecate *(A::Adjoint{<:Any,<:LQ}, B::LQ) A*Matrix(B)
+@deprecate *(A::LQ, B::Adjoint{<:Any,<:LQ}) A*Matrix(B)
 
 # PR #25184. Use getproperty instead of getindex for Factorizations
 function getindex(F::Factorization, s::Symbol)
@@ -1262,3 +1252,325 @@ function getindex(F::Factorization, s::Symbol)
     return getproperty(F, s)
 end
 @deprecate getq(F::Factorization) F.Q
+
+# Deprecate scaling
+@deprecate scale!(A::AbstractArray, b::Number)                             rmul!(A, b)
+@deprecate scale!(a::Number, B::AbstractArray)                             lmul!(a, B)
+@deprecate scale!(A::AbstractMatrix, b::AbstractVector)                    rmul!(A, Diagonal(b))
+@deprecate scale!(a::AbstractVector, B::AbstractMatrix)                    lmul!(Diagonal(a), B)
+@deprecate scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector) mul!(C, A, Diagonal(b))
+@deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(C, Diagonal(a), B)
+
+Base.@deprecate_binding trace tr
+
+# deprecate lufact to lu
+export lufact
+@deprecate(lufact(S::LU), lu(S))
+@deprecate(lufact(x::Number), lu(x))
+@deprecate(lufact(A::AbstractMatrix{T}) where T, lu(A))
+@deprecate(lufact(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T, lu(A, pivot))
+@deprecate(lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T<:AbstractFloat}, lu(A, pivot))
+
+# deprecate schurfact to schur
+export schurfact
+@deprecate(schurfact(A::StridedMatrix{<:BlasFloat}), schur(A))
+@deprecate(schurfact(A::StridedMatrix{T}) where T, schur(A))
+@deprecate(schurfact(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat}, schur(A))
+@deprecate(schurfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}, schur(A))
+
+# deprecate lqfact to lq
+export lqfact
+@deprecate lqfact(A::StridedMatrix{<:BlasFloat}) lq(A)
+@deprecate lqfact(x::Number) lq(x)
+
+# deprecate qrfact to qr
+export qrfact
+@deprecate(qrfact(x::Number), qr(x))
+@deprecate(qrfact(v::AbstractVector), qr(v))
+@deprecate(qrfact(A::AbstractMatrix{T}) where T, qr(A))
+@deprecate(qrfact(A::AbstractMatrix{T}, arg) where T, qr(A, arg))
+
+# deprecate ldltfact to ldlt
+export ldltfact
+@deprecate(ldltfact(M::SymTridiagonal{T}) where T, ldlt(M))
+
+# deprecate lufact! to lu!
+# lufact! exported in a deprecation above
+@deprecate(lufact!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T<:BlasFloat, lufact!(A, pivot))
+@deprecate(lufact!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
+@deprecate(lufact!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
+@deprecate(lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}, lu!(A, pivot))
+
+# deprecate schurfact! to schur!
+export schurfact!
+@deprecate(schurfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}, schur!(A, B))
+@deprecate(schurfact!(A::StridedMatrix{<:BlasFloat}), schur!(A))
+
+# deprecate lqfact! to lq!
+export lqfact!
+@deprecate(lqfact!(A::StridedMatrix{<:BlasFloat}), lq!(A))
+
+# deprecate qrfact! to qr!
+export qrfact!
+@deprecate(qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}), qr!(A, Val(false)))
+@deprecate(qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{true}), qr!(A, Val(true)))
+@deprecate(qrfact!(A::StridedMatrix{<:BlasFloat}), qr!(A))
+@deprecate(qrfact!(A::StridedMatrix, ::Val{false}), qr!(A, Val(false)))
+@deprecate(qrfact!(A::StridedMatrix, ::Val{true}), qr!(A, Val(true)))
+@deprecate(qrfact!(A::StridedMatrix), qr!(A))
+
+# deprecate ldltfact! to ldlt!
+export ldltfact!
+@deprecate(ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}, ldlt!(S))
+
+# deprecate svdfact! to svd!
+export svdfact!
+@deprecate(svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd!(M; full=full, thin=thin))
+@deprecate(svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T<:BlasFloat, svd!(A; full=full, thin=thin))
+@deprecate(svdfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat, svd!(A, B))
+@deprecate(svdfact!(A::AbstractTriangular), svd!(A))
+
+# deprecate svdfact to svd
+export svdfact
+@deprecate(svdfact(D::Diagonal), svd(D))
+@deprecate(svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T, svd(A; full=full, thin=thin))
+@deprecate(svdfact(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd(x; full=full, thin=thin))
+@deprecate(svdfact(x::Integer; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd(x; full=full, thin=thin))
+@deprecate(svdfact(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}, svd(A, B))
+@deprecate(svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}, svd(A, B))
+@deprecate(svdfact(x::Number, y::Number), svd(x, y))
+@deprecate(svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd(M; full=full, thin=thin))
+@deprecate(svdfact(A::AbstractTriangular), svd(A))
+
+# deprecate bkfact to bunchkaufman
+# bkfact exported in a deprecation above
+@deprecate(bkfact(A::AbstractMatrix{T}, rook::Bool=false) where {T}, bunchkaufman(A, rook))
+
+# deprecate bkfact! to bunchkaufman!
+export bkfact!
+@deprecate(bkfact!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false), bunchkaufman!(A, rook))
+@deprecate(bkfact!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false), bunchkaufman!(A, rook))
+@deprecate(bkfact!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false), bunchkaufman!(A, rook))
+
+# deprecate hessfact to hessenberg
+export hessfact
+@deprecate(hessfact(A::StridedMatrix{<:BlasFloat}), hessenberg(A))
+@deprecate(hessfact(A::StridedMatrix{T}) where T, hessenberg(A))
+
+# deprecate hessfact! to hessenberg!
+export hessenberg!
+@deprecate(hessfact!(A::StridedMatrix{<:BlasFloat}), hessenberg!(A))
+
+# deprecate eigfact to eigen
+export eigfact
+@deprecate(eigfact(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T, eigen(A; permute=permute, scale=scale))
+@deprecate(eigfact(x::Number), eigen(x))
+@deprecate(eigfact(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}, eigen(A, B))
+@deprecate(eigfact(A::Number, B::Number), eigen(A, B))
+
+@deprecate(eigfact(A::SymTridiagonal{T}) where T, eigen(A))
+@deprecate(eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T, eigen(A))
+@deprecate(eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T, eigen(A))
+
+@deprecate(eigfact(M::Bidiagonal), eigen(M))
+
+@deprecate(eigfact(A::RealHermSymComplexHerm), eigen(A))
+@deprecate(eigfact(A::RealHermSymComplexHerm, irange::UnitRange), eigen(A, irange))
+@deprecate(eigfact(A::RealHermSymComplexHerm, vl::Real, vh::Real), eigen(A, vl, vh))
+@deprecate(eigfact(A::AbstractTriangular), eigen(A))
+@deprecate(eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true), eigen(D; permute=permute, scale=scale))
+
+# deprecate eigfact! to eigen!
+export eigfact!
+@deprecate(eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasReal, eigen!(A; permute=permute, scale=scale))
+@deprecate(eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasComplex, eigen!(A; permute=permute, scale=scale))
+@deprecate(eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal, eigen!(A, B))
+@deprecate(eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasComplex, eigen!(A, B))
+
+@deprecate(eigfact!(A::SymTridiagonal{<:BlasReal}), eigen!(A))
+@deprecate(eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange), eigen!(A, irange))
+@deprecate(eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real), eigen!(A, vl, vu))
+
+@deprecate(eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}), eigen!(A))
+@deprecate(eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange), eigen!(A, irange))
+@deprecate(eigfact!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal}, eigen!(A, vl, vh))
+@deprecate(eigfact!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix}, eigen!(A, B))
+@deprecate(eigfact!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix}, eigen!(A, B))
+
+# deprecate cholfact to cholesky
+# cholfact exported from deprecation above
+@deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{false}=Val(false)), cholesky(A, Val(false)))
+@deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0), cholesky(A, Val(true); tol=tol))
+@deprecate(cholfact(x::Number, uplo::Symbol=:U), cholesky(x, uplo))
+
+# deprecate cholfact! to cholesky!
+# cholfact! exported from deprecation above
+@deprecate(cholfact!(A::RealHermSymComplexHerm, ::Val{false}=Val(false)), cholesky!(A, Val(false)))
+@deprecate(cholfact!(A::StridedMatrix, ::Val{false}=Val(false)), cholesky!(A, Val(false)))
+@deprecate(cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+@deprecate(cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+@deprecate(cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+
+# deprecate eig in favor of eigen and destructuring via iteration
+# deprecate eig(...) in favor of eigfact and factorization destructuring
+export eig
+function eig(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+    depwarn(string("`eig(A[, permute, scale])` has been deprecated in favor of ",
+        "`eigen(A[, permute, scale])`. Whereas `eig(A[, permute, scale])` ",
+        "returns a tuple of arrays, `eigen(A[, permute, scale])` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigen(A[, permute, scale])...,)`. But going forward, consider ",
+        "using the direct result of `eigen(A[, permute, scale])` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigen(A[, permute, scale])`) ",
+        "or as an `Eigen` object (`X = eigen(A[, permute, scale])`)."), :eig)
+    return (eigen(A; permute=permute, scale=scale)...,)
+end
+function eig(A::AbstractMatrix, args...)
+    depwarn(string("`eig(A, args...)` has been deprecated in favor of ",
+        "`eigen(A, args...)`. Whereas `eig(A, args....)` ",
+        "returns a tuple of arrays, `eigen(A, args...)` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigen(A, args...)...,)`. But going forward, consider ",
+        "using the direct result of `eigen(A, args...)` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigen(A, args...)`) ",
+        "or as an `Eigen` object (`X = eigen(A, args...)`)."), :eig)
+    return (eigen(A, args...)...,)
+end
+eig(A::AbstractMatrix, B::AbstractMatrix) = _geneig(A, B)
+eig(A::Number, B::Number) = _geneig(A, B)
+function _geneig(A, B)
+    depwarn(string("`eig(A::AbstractMatrix, B::AbstractMatrix)` and ",
+    "`eig(A::Number, B::Number)` have been deprecated in favor of ",
+    "`eigen(A, B)`. Whereas the former each return a tuple of arrays, ",
+    "the latter returns a `GeneralizedEigen` object. So for a direct ",
+    "replacement, use `(eigen(A, B)...,)`. But going forward, consider ",
+    "using the direct result of `eigen(A, B)` instead, either ",
+    "destructured into its components (`vals, vecs = eigen(A, B)`), ",
+    "or as a `GeneralizedEigen` object (`X = eigen(A, B)`)."), :eig)
+    return (eigen(A, B)...,)
+end
+
+# deprecate transitional decomposition getindex methods out of the blocks
+function Base.getindex(S::LU, i::Integer)
+    depwarn(string("decomposition functions (e.g. `lu`) now return decomposition ",
+        "objects (e.g. `LU`), and indexing such objects is deprecated. Instead ",
+        "extract components via their accessors (e.g. `X.L`, `X.S`, and `X.p` for ",
+        "`X::LU`), or destructure the decomposition via iteration ",
+        "(e.g. `l, u, p = X` for `X::LU`)."), :getindex)
+    i == 1 ? (return S.L) :
+    i == 2 ? (return S.U) :
+    i == 3 ? (return S.p) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::Union{Eigen,GeneralizedEigen}, i::Integer)
+    depwarn(string("decomposition functions (e.g. `eig`) now return decomposition ",
+        "objects (e.g. `Eigen` and `GeneralizedEigen`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.values` and `X.vectors` for `X::Union{Eigen,GeneralizedEigen}`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `vals, vecs = X` for `X::Union{Eigen,GeneralizedEigen}`)."), :getindex)
+    i == 1 ? (return S.values) :
+    i == 2 ? (return S.vectors) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::Schur, i::Integer)
+    depwarn(string("decomposition functions (e.g. `schur`) now return decomposition ",
+        "objects (e.g. `Schur`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.T`, `X.Z`, and `X.values` for `X::Schur`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `t, z, vals = X` for `X::Schur`)."), :getindex)
+    i == 1 ? (return S.T) :
+    i == 2 ? (return S.Z) :
+    i == 3 ? (return S.values) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::GeneralizedSchur, i::Integer)
+    depwarn(string("decomposition functions (e.g. `schur`) now return decomposition ",
+        "objects (e.g. `GeneralizedSchur`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.S`, `X.T`, `X.Q`, `X.Z`, `X.α`, and `X.β` for `X::GeneralizedSchur`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `s, t, q, z, α, β = X` for `X::GeneralizedSchur`)."), :getindex)
+    i == 1 ? (return S.S) :
+    i == 2 ? (return S.T) :
+    i == 3 ? (return S.Q) :
+    i == 4 ? (return S.Z) :
+    i == 5 ? (return S.α) :
+    i == 6 ? (return S.β) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::LQ, i::Integer)
+    depwarn(string("decomposition functions (e.g. `lq`) now return decomposition ",
+        "objects (e.g. `LQ`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.L` and `X.Q` for `X::LQ`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `l, q = X` for `X::LQ`)."), :getindex)
+    i == 1 ? (return S.L) :
+    i == 2 ? (return S.Q) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::QR, i::Integer)
+    depwarn(string("decomposition functions (e.g. `qr`) now return decomposition ",
+        "objects (e.g. `QR`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.Q` and `X.R` for `X::QR`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `q, r = X` for `X::QR`)."), :getindex)
+    i == 1 ? (return S.Q) :
+    i == 2 ? (return S.R) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::QRCompactWY, i::Integer)
+    depwarn(string("decomposition functions (e.g. `qr`) now return decomposition ",
+        "objects (e.g. `QRCompactWY`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.Q` and `X.R` for `X::QR`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `q, r = X` for `X::QR`)."), :getindex)
+    i == 1 ? (return S.Q) :
+    i == 2 ? (return S.R) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::QRPivoted, i::Integer)
+    depwarn(string("decomposition functions (e.g. `qr`) now return decomposition ",
+        "objects (e.g. `QRPivoted`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.Q`, `X.R`, and `X.p` for `X::QRPivoted`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `q, r, p = X` for `X::QRPivoted`)."), :getindex)
+    i == 1 ? (return S.Q) :
+    i == 2 ? (return S.R) :
+    i == 3 ? (return S.p) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::SVD, i::Integer)
+    depwarn(string("decomposition functions (e.g. `svd`) now return decomposition ",
+        "objects (e.g. `SVD`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.U`, `X.S`, and `X.V` for `X::SVD`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `u, s, v = X` for `X::SVD`)."), :getindex)
+    i == 1 ? (return S.U) :
+    i == 2 ? (return S.S) :
+    i == 3 ? (return S.V) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::GeneralizedSVD, i::Integer)
+    depwarn(string("decomposition functions (e.g. `svd`) now return decomposition ",
+        "objects (e.g. `GeneralizedSVD`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.U`, `X.V`, `X.Q`, `X.D1`, `X.D2`, and `X.R0` for `X::GeneralizedSVD`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `u, v, q, d1, d2, r0 = X` for `X::GeneralizedSVD`)."), :getindex)
+    i == 1 ? (return S.U) :
+    i == 2 ? (return S.V) :
+    i == 3 ? (return S.Q) :
+    i == 4 ? (return S.D1) :
+    i == 5 ? (return S.D2) :
+    i == 6 ? (return S.R0) :
+        throw(BoundsError(S, i))
+end

@@ -5,13 +5,13 @@ Julia provides a variety of runtime reflection capabilities.
 ## Module bindings
 
 The exported names for a `Module` are available using [`names(m::Module)`](@ref), which will return
-an array of [`Symbol`](@ref) elements representing the exported bindings. `names(m::Module, true)`
+an array of [`Symbol`](@ref) elements representing the exported bindings. `names(m::Module, all = true)`
 returns symbols for all bindings in `m`, regardless of export status.
 
 ## DataType fields
 
 The names of `DataType` fields may be interrogated using [`fieldnames`](@ref). For example,
-given the following type, `fieldnames(Point)` returns an arrays of [`Symbol`](@ref) elements representing
+given the following type, `fieldnames(Point)` returns a tuple of [`Symbol`](@ref)s representing
 the field names:
 
 ```jldoctest struct_point
@@ -21,9 +21,7 @@ julia> struct Point
        end
 
 julia> fieldnames(Point)
-2-element Array{Symbol,1}:
- :x
- :y
+(:x, :y)
 ```
 
 The type of each field in a `Point` object is stored in the `types` field of the `Point` variable
@@ -52,9 +50,9 @@ of these fields is the `types` field observed in the example above.
 The *direct* subtypes of any `DataType` may be listed using [`subtypes`](@ref). For example,
 the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
-```jldoctest
+```jldoctest; setup = :(using InteractiveUtils)
 julia> subtypes(AbstractFloat)
-4-element Array{Union{DataType, UnionAll},1}:
+4-element Array{Any,1}:
  BigFloat
  Float16
  Float32
@@ -83,9 +81,9 @@ the unquoted and interpolated expression (`Expr`) form for a given macro. To use
 `quote` the expression block itself (otherwise, the macro will be evaluated and the result will
 be passed instead!). For example:
 
-```jldoctest
+```jldoctest; setup = :(using InteractiveUtils)
 julia> macroexpand(@__MODULE__, :(@edit println("")) )
-:((Base.edit)(println, (Base.typesof)("")))
+:((InteractiveUtils.edit)(println, (Base.typesof)("")))
 ```
 
 The functions `Base.Meta.show_sexpr` and [`dump`](@ref) are used to display S-expr style views
@@ -97,28 +95,31 @@ and variable assignments:
 
 ```jldoctest
 julia> Meta.lower(@__MODULE__, :(f() = 1) )
-:(begin
-        $(Expr(:method, :f))
-        $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)), (Core.svec)())), CodeInfo(:(begin
-        #= none:1 =#
-        return 1
-    end)), false))
-        return f
-    end)
+:($(Expr(:thunk, CodeInfo(:(begin
+      $(Expr(:method, :f))
+      Core.SSAValue(0) = (Core.Typeof)(f)
+      Core.SSAValue(1) = (Core.svec)(Core.SSAValue(0))
+      Core.SSAValue(2) = (Core.svec)()
+      Core.SSAValue(3) = (Core.svec)(Core.SSAValue(1), Core.SSAValue(2))
+      $(Expr(:method, :f, Core.SSAValue(3), CodeInfo(:(begin
+      #= none:1 =#
+      return 1
+  end))))
+      return f
+  end)))))
 ```
 
 ## Intermediate and compiled representations
 
 Inspecting the lowered form for functions requires selection of the specific method to display,
 because generic functions may have many methods with different type signatures. For this purpose,
-method-specific code-lowering is available using [`code_lowered(f::Function, (Argtypes...))`](@ref),
-and the type-inferred form is available using [`code_typed(f::Function, (Argtypes...))`](@ref).
-[`code_warntype(f::Function, (Argtypes...))`](@ref) adds highlighting to the output of [`code_typed`](@ref)
-(see [`@code_warntype`](@ref)).
+method-specific code-lowering is available using [`code_lowered`](@ref),
+and the type-inferred form is available using [`code_typed`](@ref).
+[`code_warntype`](@ref) adds highlighting to the output of [`code_typed`](@ref).
 
 Closer to the machine, the LLVM intermediate representation of a function may be printed using
-by [`code_llvm(f::Function, (Argtypes...))`](@ref), and finally the compiled machine code is available
-using [`code_native(f::Function, (Argtypes...))`](@ref) (this will trigger JIT compilation/code
+by [`code_llvm`](@ref), and finally the compiled machine code is available
+using [`code_native`](@ref) (this will trigger JIT compilation/code
 generation for any function which has not previously been called).
 
 For convenience, there are macro versions of the above functions which take standard function
@@ -135,4 +136,5 @@ top:
 }
 ```
 
-(likewise `@code_typed`, `@code_warntype`, `@code_lowered`, and `@code_native`)
+See [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code_warntype`](@ref),
+[`@code_llvm`](@ref), and [`@code_native`](@ref).

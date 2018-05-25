@@ -30,7 +30,7 @@ $(BUILDDIR)/errno_h.jl:
 $(BUILDDIR)/file_constants.jl: $(SRCDIR)/../src/file_constants.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) -DJULIA $< | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@)
 
-$(BUILDDIR)/uv_constants.jl: $(SRCDIR)/../src/uv_constants.h $(build_includedir)/uv-errno.h
+$(BUILDDIR)/uv_constants.jl: $(SRCDIR)/../src/uv_constants.h $(build_includedir)/uv/errno.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) "-I$(LIBUV_INC)" -DJULIA $< | tail -n 16 > $@)
 
 $(BUILDDIR)/build_h.jl.phony:
@@ -163,7 +163,7 @@ endif
 endif
 endef
 
-# the following excludes: libuv.a, libutf8proc.a, suitesparse*
+# the following excludes: libuv.a, libutf8proc.a
 
 $(eval $(call symlink_system_library,$(LIBMNAME)))
 ifneq ($(USE_SYSTEM_LIBM),0)
@@ -185,6 +185,14 @@ $(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
 $(eval $(call symlink_system_library,libssh2,LIBSSH2))
 $(eval $(call symlink_system_library,libcurl,CURL))
 $(eval $(call symlink_system_library,libgit2,LIBGIT2))
+$(eval $(call symlink_system_library,libamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libcamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libccolamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libcholmod,SUITESPARSE))
+$(eval $(call symlink_system_library,libcolamd,SUITESPARSE))
+$(eval $(call symlink_system_library,libumfpack,SUITESPARSE))
+$(eval $(call symlink_system_library,libspqr,SUITESPARSE))
+$(eval $(call symlink_system_library,libsuitesparseconfig,SUITESPARSE))
 ifneq ($(DISABLE_LIBUNWIND),0)
 $(eval $(call symlink_system_library,libunwind,LIBUNWIND))
 endif

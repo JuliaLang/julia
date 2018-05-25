@@ -941,7 +941,9 @@ atanh(z::Complex) = atanh(float(z))
 #Rounding complex numbers
 #Requires two different RoundingModes for the real and imaginary components
 """
-    round(z, RoundingModeReal, RoundingModeImaginary)
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]])
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; digits=, base=10)
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; sigdigits=, base=10)
 
 Return the nearest integral value of the same type as the complex-valued `z` to `z`,
 breaking ties using the specified [`RoundingMode`](@ref)s. The first
@@ -954,16 +956,11 @@ julia> round(3.14 + 4.5im)
 3.0 + 4.0im
 ```
 """
-function round(z::Complex{<:AbstractFloat}, ::RoundingMode{MR}, ::RoundingMode{MI}) where {MR,MI}
-    Complex(round(real(z), RoundingMode{MR}()),
-            round(imag(z), RoundingMode{MI}()))
+function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; kwargs...)
+    Complex(round(real(z), rr; kwargs...),
+            round(imag(z), ri; kwargs...))
 end
-round(z::Complex) = Complex(round(real(z)), round(imag(z)))
 
-function round(z::Complex, digits::Integer, base::Integer=10)
-    Complex(round(real(z), digits, base),
-            round(imag(z), digits, base))
-end
 
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
@@ -976,7 +973,7 @@ big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 complex(A::AbstractArray{<:Complex}) = A
 
 function complex(A::AbstractArray{T}) where T
-    if !isconcrete(T)
+    if !isconcretetype(T)
         error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)

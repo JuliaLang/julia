@@ -53,34 +53,51 @@ end
 """
     ==(x, y)
 
-Generic equality operator, giving a single [`Bool`](@ref) result. Falls back to `===`.
+Generic equality operator. Falls back to [`===`](@ref).
 Should be implemented for all types with a notion of equality, based on the abstract value
 that an instance represents. For example, all numeric types are compared by numeric value,
 ignoring type. Strings are compared as sequences of characters, ignoring encoding.
+For collections, `==` is generally called recursively on all contents,
+though other properties (like the shape for arrays) may also be taken into account.
 
-Follows IEEE semantics for floating-point numbers.
+This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` and
+`NaN != NaN`.
 
-Collections should generally implement `==` by calling `==` recursively on all contents.
+The result is of type `Bool`, except when one of the operands is [`missing`](@ref),
+in which case `missing` is returned
+([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic)).
+For collections, `missing` is returned if at least one of the operands contains
+a `missing` value and all non-missing values are equal.
+Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 
+# Implementation
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
+
+[`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
+[`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
+should therefore also implement [`hash`](@ref).
 """
 ==(x, y) = x === y
 
 """
     isequal(x, y)
 
-Similar to `==`, except treats all floating-point `NaN` values as equal to each other, and
-treats `-0.0` as unequal to `0.0`. The default implementation of `isequal` calls `==`, so if
-you have a type that doesn't have these floating-point subtleties then you probably only
-need to define `==`.
+Similar to [`==`](@ref), except for the treatment of floating point numbers
+and of missing values. `isequal` treats all floating-point `NaN` values as equal
+to each other, treats `-0.0` as unequal to `0.0`, and [`missing`](@ref) as equal
+to `missing`. Always returns a `Bool` value.
+
+# Implementation
+The default implementation of `isequal` calls `==`, so a type that does not involve
+floating-point values generally only needs to define `==`.
 
 `isequal` is the comparison function used by hash tables (`Dict`). `isequal(x,y)` must imply
 that `hash(x) == hash(y)`.
 
-This typically means that if you define your own `==` function then you must define a
-corresponding `hash` (and vice versa). Collections typically implement `isequal` by calling
-`isequal` recursively on all contents.
+This typically means that types for which a custom `==` or `isequal` method exists must
+implement a corresponding `hash` method (and vice versa). Collections typically implement
+`isequal` by calling `isequal` recursively on all contents.
 
 Scalar types generally do not need to implement `isequal` separate from `==`, unless they
 represent floating-point numbers amenable to a more efficient implementation than that
@@ -114,10 +131,15 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
     isless(x, y)
 
 Test whether `x` is less than `y`, according to a canonical total order. Values that are
-normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion. This
-is the default comparison used by [`sort`](@ref). Non-numeric types with a canonical total order
-should implement this function. Numeric types only need to implement it if they have special
-values such as `NaN`.
+normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion.
+[`missing`](@ref) values are ordered last.
+
+This is the default comparison used by [`sort`](@ref).
+
+# Implementation
+Non-numeric types with a canonical total order should implement this function.
+Numeric types only need to implement it if they have special values such as `NaN`.
+Types with a canonical partial order should implement [`<`](@ref).
 """
 function isless end
 
@@ -128,7 +150,7 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    typeseq(T, S)
+    T<:S && S<:T
 end
 function !=(T::Type, S::Type)
     @_pure_meta
@@ -143,8 +165,11 @@ end
     !=(x, y)
     ≠(x,y)
 
-Not-equals comparison operator. Always gives the opposite answer as `==`. New types should
-generally not implement this, and rely on the fallback definition `!=(x,y) = !(x==y)` instead.
+Not-equals comparison operator. Always gives the opposite answer as [`==`](@ref).
+
+# Implementation
+New types should generally not implement this, and rely on the fallback definition
+`!=(x,y) = !(x==y)` instead.
 
 # Examples
 ```jldoctest
@@ -163,9 +188,10 @@ const ≠ = !=
     ≡(x,y) -> Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
-them. First it compares the types of `x` and `y`. If those are identical, it compares mutable
-objects by address in memory and immutable objects (such as numbers) by contents at the bit
-level. This function is sometimes called "egal".
+them. First the types of `x` and `y` are compared. If those are identical, mutable objects
+are compared by address in memory and immutable objects (such as numbers) are compared by
+contents at the bit level. This function is sometimes called "egal".
+It always returns a `Bool` value.
 
 # Examples
 ```jldoctest
@@ -188,7 +214,7 @@ const ≡ = ===
     !==(x, y)
     ≢(x,y)
 
-Equivalent to `!(x === y)`.
+Always gives the opposite answer as [`===`](@ref).
 
 # Examples
 ```jldoctest
@@ -207,11 +233,15 @@ const ≢ = !==
 """
     <(x, y)
 
-Less-than comparison operator. New numeric types should implement this function for two
-arguments of the new type. Because of the behavior of floating-point NaN values, `<`
-implements a partial order. Types with a canonical partial order should implement `<`, and
-types with a canonical total order should implement `isless`.
+Less-than comparison operator. Falls back to [`isless`](@ref).
+Because of the behavior of floating-point NaN values, this operator implements
+a partial order.
 
+# Implementation
+New numeric types with a canonical partial order should implement this function for
+two arguments of the new type.
+Types with a canonical total order should implement [`isless`](@ref) instead.
+(x < y) | (x == y)
 # Examples
 ```jldoctest
 julia> 'a' < 'b'
@@ -229,8 +259,11 @@ false
 """
     >(x, y)
 
-Greater-than comparison operator. Generally, new types should implement `<` instead of this
-function, and rely on the fallback definition `>(x, y) = y < x`.
+Greater-than comparison operator. Falls back to `y < x`.
+
+# Implementation
+Generally, new types should implement [`<`](@ref) instead of this function,
+and rely on the fallback definition `>(x, y) = y < x`.
 
 # Examples
 ```jldoctest
@@ -253,7 +286,7 @@ true
     <=(x, y)
     ≤(x,y)
 
-Less-than-or-equals comparison operator.
+Less-than-or-equals comparison operator. Falls back to `(x < y) | (x == y)`.
 
 # Examples
 ```jldoctest
@@ -277,7 +310,7 @@ const ≤ = <=
     >=(x, y)
     ≥(x,y)
 
-Greater-than-or-equals comparison operator.
+Greater-than-or-equals comparison operator. Falls back to `y <= x`.
 
 # Examples
 ```jldoctest
@@ -315,7 +348,7 @@ julia> ifelse(1 > 2, 1, 2)
 2
 ```
 """
-ifelse(c::Bool, x, y) = select_value(c, x, y)
+ifelse
 
 """
     cmp(x,y)
@@ -333,7 +366,6 @@ julia> cmp(2, 1)
 
 julia> cmp(2+im, 3-im)
 ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
-Stacktrace:
 [...]
 ```
 """
@@ -654,6 +686,8 @@ const ÷ = div
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
 in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
+See also: [`fld1`](@ref), [`fldmod1`](@ref).
+
 # Examples
 ```jldoctest
 julia> mod1(4, 2)
@@ -664,8 +698,6 @@ julia> mod1(4, 3)
 ```
 """
 mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
-# efficient version for integers
-mod1(x::T, y::T) where {T<:Integer} = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """
@@ -673,7 +705,7 @@ mod1(x::T, y::T) where {T<:Integer} = (@_inline_meta; mod(x + y - T(1), y) + T(1
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-See also: [`mod1`](@ref).
+See also: [`mod1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -689,9 +721,11 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m=mod(x,y); fld(x-m,y))
-# efficient version for integers
-fld1(x::T, y::T) where {T<:Integer} = fld(x+y-T(1),y)
+fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld(x + y - m, y))
+function fld1(x::T, y::T) where T<:Integer
+    d = div(x, y)
+    return d + (!signbit(x ⊻ y) & (d * y != x))
+end
 
 """
     fldmod1(x, y)
@@ -700,11 +734,7 @@ Return `(fld1(x,y), mod1(x,y))`.
 
 See also: [`fld1`](@ref), [`mod1`](@ref).
 """
-fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
-# efficient version for integers
-fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
-
-conj(x) = x
+fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
 
 """
@@ -753,14 +783,11 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 
 # Examples
 ```jldoctest
-julia> map(uppercase∘hex, 250:255)
-6-element Array{String,1}:
- "FA"
- "FB"
- "FC"
- "FD"
- "FE"
- "FF"
+julia> map(uppercase∘first, ["apple", "banana", "carrot"])
+3-element Array{Char,1}:
+ 'A'
+ 'B'
+ 'C'
 ```
 """
 ∘(f, g) = (x...)->f(g(x...))
@@ -777,49 +804,101 @@ function which computes the boolean negation of `f`.
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
-julia> filter(isalpha, str)
+julia> filter(isletter, str)
 "εδxyδfxfyε"
 
-julia> filter(!isalpha, str)
+julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
 """
 !(f::Function) = (x...)->!f(x...)
 
-struct EqualTo{T} <: Function
+"""
+    Fix1(f, x)
+
+A type representing a partially-applied version of the two-argument function
+`f`, with the first argument fixed to the value "x". In other words,
+`Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+"""
+struct Fix1{F,T} <: Function
+    f::F
     x::T
 
-    EqualTo(x::T) where {T} = new{T}(x)
+    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
 end
 
-(f::EqualTo)(y) = isequal(f.x, y)
+(f::Fix1)(y) = f.f(f.x, y)
 
 """
-    equalto(x)
+    Fix2(f, x)
 
-Create a function that compares its argument to `x` using [`isequal`](@ref); i.e. returns
-`y->isequal(x,y)`.
-
-The returned function is of type `Base.EqualTo`. This allows dispatching to
-specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
+A type representing a partially-applied version of the two-argument function
+`f`, with the second argument fixed to the value "x". In other words,
+`Fix2(f, x)` behaves similarly to `y->f(y, x)`.
 """
-const equalto = EqualTo
-
-struct OccursIn{T} <: Function
+struct Fix2{F,T} <: Function
+    f::F
     x::T
 
-    OccursIn(x::T) where {T} = new{T}(x)
+    Fix2(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix2(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
 end
 
-(f::OccursIn)(y) = y in f.x
+(f::Fix2)(y) = f.f(y, f.x)
 
 """
-    occursin(x)
+    isequal(x)
 
-Create a function that checks whether its argument is [`in`](@ref) `x`; i.e. returns
-`y -> y in x`.
+Create a function that compares its argument to `x` using [`isequal`](@ref), i.e.
+a function equivalent to `y -> isequal(y, x)`.
 
-The returned function is of type `Base.OccursIn`. This allows dispatching to
-specialized methods by using e.g. `f::Base.OccursIn` in a method signature.
+The returned function is of type `Base.Fix2{typeof(isequal)}`, which can be
+used to implement specialized methods.
 """
-const occursin = OccursIn
+isequal(x) = Fix2(isequal, x)
+
+"""
+    ==(x)
+
+Create a function that compares its argument to `x` using [`==`](@ref), i.e.
+a function equivalent to `y -> y == x`.
+
+The returned function is of type `Base.Fix2{typeof(==)}`, which can be
+used to implement specialized methods.
+"""
+==(x) = Fix2(==, x)
+
+"""
+    in(x)
+
+Create a function that checks whether its argument is [`in`](@ref) `x`, i.e.
+a function equivalent to `y -> y in x`.
+
+The returned function is of type `Base.Fix2{typeof(in)}`, which can be
+used to implement specialized methods.
+"""
+in(x) = Fix2(in, x)
+
+"""
+    splat(f)
+
+Defined as
+```julia
+    splat(f) = args->f(args...)
+```
+i.e. given a function returns a new function that takes one argument and splats
+its argument into the original function. This is useful as an adaptor to pass
+a multi-argument function in a context that expects a single argument, but
+passes a tuple as that single argument.
+
+# Example usage:
+```jldoctest
+julia> map(splat(+), zip(1:3,4:6))
+3-element Array{Int64,1}:
+ 5
+ 7
+ 9
+```
+"""
+splat(f) = args->f(args...)

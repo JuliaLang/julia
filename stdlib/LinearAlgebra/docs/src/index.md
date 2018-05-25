@@ -1,7 +1,11 @@
 # Linear Algebra
 
+```@meta
+DocTestSetup = :(using LinearAlgebra)
+```
+
 In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations
-of many common and useful linear algebra operations. Basic operations, such as [`trace`](@ref), [`det`](@ref),
+of many common and useful linear algebra operations. Basic operations, such as [`tr`](@ref), [`det`](@ref),
 and [`inv`](@ref) are all supported:
 
 ```jldoctest
@@ -11,7 +15,7 @@ julia> A = [1 2 3; 4 1 6; 7 8 1]
  4  1  6
  7  8  1
 
-julia> trace(A)
+julia> tr(A)
 3
 
 julia> det(A)
@@ -56,9 +60,17 @@ julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
  -10.0   2.3   4.0
 
 julia> factorize(A)
-LinearAlgebra.LU{Float64,Array{Float64,2}} with factors L and U:
-[1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]
-[-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]
+LU{Float64,Array{Float64,2}}
+L factor:
+3×3 Array{Float64,2}:
+  1.0    0.0       0.0
+ -0.15   1.0       0.0
+ -0.3   -0.132196  1.0
+U factor:
+3×3 Array{Float64,2}:
+ -10.0  2.3     4.0
+   0.0  2.345  -3.4
+   0.0  0.0    -5.24947
 ```
 
 Since `A` is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the
@@ -72,17 +84,17 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-LinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64,Array{Float64,2}}
 D factor:
 3×3 Tridiagonal{Float64,Array{Float64,1}}:
  -1.64286   0.0   ⋅
   0.0      -2.8  0.0
    ⋅        0.0  5.0
 U factor:
-3×3 LinearAlgebra.UnitUpperTriangular{Float64,Array{Float64,2}}:
+3×3 UnitUpperTriangular{Float64,Array{Float64,2}}:
  1.0  0.142857  -0.8
- 0.0  1.0       -0.6
- 0.0  0.0        1.0
+  ⋅   1.0       -0.6
+  ⋅    ⋅         1.0
 permutation:
 3-element Array{Int64,1}:
  1
@@ -186,7 +198,7 @@ Legend:
 
 ### Matrix factorizations
 
-| Matrix type               | LAPACK | [`eig`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
+| Matrix type               | LAPACK | [`eigen`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
 |:------------------------- |:------ |:------------- |:----------------- |:----------------- |:------------- |:----------------- |
 | [`Symmetric`](@ref)       | SY     |               | ARI               |                   |               |                   |
 | [`Hermitian`](@ref)       | HE     |               | ARI               |                   |               |                   |
@@ -248,9 +260,7 @@ julia> b = [1 2 3; 4 5 6]
 julia> b - U
 ERROR: DimensionMismatch("matrix is not square: dimensions are (2, 3)")
 Stacktrace:
- [1] checksquare at ./linalg/linalg.jl:220 [inlined]
- [2] -(::Array{Int64,2}, ::UniformScaling{Int64}) at ./linalg/uniformscaling.jl:156
- [3] top-level scope
+[...]
 ```
 
 ## [Matrix factorizations](@id man-linalg-factorizations)
@@ -302,47 +312,40 @@ LinearAlgebra.LowerTriangular
 LinearAlgebra.UpperTriangular
 LinearAlgebra.UniformScaling
 LinearAlgebra.lu
-LinearAlgebra.lufact
-LinearAlgebra.lufact!
+LinearAlgebra.lu!
 LinearAlgebra.chol
-LinearAlgebra.cholfact
-LinearAlgebra.cholfact!
+LinearAlgebra.cholesky
+LinearAlgebra.cholesky!
 LinearAlgebra.lowrankupdate
 LinearAlgebra.lowrankdowndate
 LinearAlgebra.lowrankupdate!
 LinearAlgebra.lowrankdowndate!
-LinearAlgebra.ldltfact
-LinearAlgebra.ldltfact!
+LinearAlgebra.ldlt
+LinearAlgebra.ldlt!
 LinearAlgebra.qr
 LinearAlgebra.qr!
-LinearAlgebra.qrfact
-LinearAlgebra.qrfact!
 LinearAlgebra.QR
 LinearAlgebra.QRCompactWY
 LinearAlgebra.QRPivoted
-LinearAlgebra.lqfact!
-LinearAlgebra.lqfact
+LinearAlgebra.lq!
 LinearAlgebra.lq
-LinearAlgebra.bkfact
-LinearAlgebra.bkfact!
-LinearAlgebra.eig
+LinearAlgebra.bunchkaufman
+LinearAlgebra.bunchkaufman!
 LinearAlgebra.eigvals
 LinearAlgebra.eigvals!
 LinearAlgebra.eigmax
 LinearAlgebra.eigmin
 LinearAlgebra.eigvecs
-LinearAlgebra.eigfact
-LinearAlgebra.eigfact!
-LinearAlgebra.hessfact
-LinearAlgebra.hessfact!
-LinearAlgebra.schurfact
-LinearAlgebra.schurfact!
+LinearAlgebra.eigen
+LinearAlgebra.eigen!
+LinearAlgebra.hessenberg
+LinearAlgebra.hessenberg!
+LinearAlgebra.schur!
 LinearAlgebra.schur
 LinearAlgebra.ordschur
 LinearAlgebra.ordschur!
-LinearAlgebra.svdfact
-LinearAlgebra.svdfact!
 LinearAlgebra.svd
+LinearAlgebra.svd!
 LinearAlgebra.svdvals
 LinearAlgebra.svdvals!
 LinearAlgebra.Givens
@@ -354,7 +357,6 @@ LinearAlgebra.tril!
 LinearAlgebra.diagind
 LinearAlgebra.diag
 LinearAlgebra.diagm
-LinearAlgebra.scale!
 LinearAlgebra.rank
 LinearAlgebra.norm
 LinearAlgebra.vecnorm
@@ -362,14 +364,13 @@ LinearAlgebra.normalize!
 LinearAlgebra.normalize
 LinearAlgebra.cond
 LinearAlgebra.condskeel
-LinearAlgebra.trace
+LinearAlgebra.tr
 LinearAlgebra.det
 LinearAlgebra.logdet
 LinearAlgebra.logabsdet
 Base.inv(::AbstractMatrix)
 LinearAlgebra.pinv
 LinearAlgebra.nullspace
-Base.repmat
 Base.kron
 LinearAlgebra.linreg
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
@@ -410,13 +411,11 @@ LinearAlgebra.istril
 LinearAlgebra.istriu
 LinearAlgebra.isdiag
 LinearAlgebra.ishermitian
-LinearAlgebra.RowVector
-LinearAlgebra.ConjArray
 Base.transpose
 LinearAlgebra.transpose!
 Base.adjoint
 LinearAlgebra.adjoint!
-LinearAlgebra.peakflops
+Base.copy(::Union{Transpose,Adjoint})
 LinearAlgebra.stride1
 LinearAlgebra.checksquare
 ```
@@ -430,6 +429,8 @@ below (e.g. `mul!`) according to the usual Julia convention.
 
 ```@docs
 LinearAlgebra.mul!
+LinearAlgebra.lmul!
+LinearAlgebra.rmul!
 LinearAlgebra.ldiv!
 LinearAlgebra.rdiv!
 ```
@@ -620,4 +621,8 @@ LinearAlgebra.LAPACK.trexc!
 LinearAlgebra.LAPACK.trsen!
 LinearAlgebra.LAPACK.tgsen!
 LinearAlgebra.LAPACK.trsyl!
+```
+
+```@meta
+DocTestSetup = nothing
 ```

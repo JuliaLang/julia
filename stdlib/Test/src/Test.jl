@@ -29,6 +29,7 @@ export guardsrand, TestSetException
 import Distributed: myid
 
 using Random: srand, AbstractRNG, GLOBAL_RNG
+using InteractiveUtils: gen_call_with_extracted_types
 
 #-----------------------------------------------------------------------
 
@@ -70,7 +71,7 @@ struct Pass <: Result
     value
 end
 function Base.show(io::IO, t::Pass)
-    print_with_color(:green, io, "Test Passed"; bold = true)
+    printstyled(io, "Test Passed"; bold = true, color=:green)
     if !(t.orig_expr === nothing)
         print(io, "\n  Expression: ", t.orig_expr)
     end
@@ -98,9 +99,9 @@ mutable struct Fail <: Result
     source::LineNumberNode
 end
 function Base.show(io::IO, t::Fail)
-    print_with_color(Base.error_color(), io, "Test Failed"; bold = true)
+    printstyled(io, "Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
-    print_with_color(:default, io, t.source.file, ":", t.source.line, "\n"; bold = true)
+    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -131,26 +132,37 @@ mutable struct Error <: Result
     value
     backtrace
     source::LineNumberNode
+
+    function Error(test_type, orig_expr, value, bt, source)
+        if test_type === :test_error
+            bt = scrub_backtrace(bt)
+        end
+        if test_type === :test_error || test_type === :nontest_error
+            bt_str = sprint(showerror, value, bt)
+        else
+            bt_str = ""
+        end
+        new(test_type, orig_expr, repr(value), bt_str, source)
+    end
 end
 function Base.show(io::IO, t::Error)
     if t.test_type == :test_interrupted
-        print_with_color(Base.error_color(), io, "Interrupted")
+        printstyled(io, "Interrupted", color=Base.error_color())
         return
     end
-    print_with_color(Base.error_color(), io, "Error During Test"; bold = true)
+    printstyled(io, "Error During Test"; bold=true, color=Base.error_color())
     print(io, " at ")
-    print_with_color(:default, io, t.source.file, ":", t.source.line, "\n"; bold = true)
+    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
         print(  io, "       Value: ", t.value)
     elseif t.test_type == :test_error
-        println(io, "  Test threw an exception of type ", typeof(t.value))
+        println(io, "  Test threw exception ", t.value)
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, scrub_backtrace(t.backtrace))
         print(io, join(map(line->string("  ",line),
-                            split(errmsg, "\n")), "\n"))
+                           split(t.backtrace, "\n")), "\n"))
     elseif t.test_type == :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
@@ -158,11 +170,10 @@ function Base.show(io::IO, t::Error)
         println(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type == :nontest_error
         # we had an error outside of a @test
-        println(io, "  Got an exception of type $(typeof(t.value)) outside of a @test")
+        println(io, "  Got exception $(t.value) outside of a @test")
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, t.backtrace)
         print(io, join(map(line->string("  ",line),
-                            split(errmsg, "\n")), "\n"))
+                           split(t.backtrace, "\n")), "\n"))
     end
 end
 
@@ -177,11 +188,11 @@ mutable struct Broken <: Result
     orig_expr
 end
 function Base.show(io::IO, t::Broken)
-    print_with_color(Base.warn_color(), io, "Test Broken\n"; bold = true)
+    printstyled(io, "Test Broken\n"; bold=true, color=Base.warn_color())
     if t.test_type == :skipped && !(t.orig_expr === nothing)
-        println(io, "  Skipped: ", t.orig_expr)
+        print(io, "  Skipped: ", t.orig_expr)
     elseif !(t.orig_expr === nothing)
-        println(io, "Expression: ", t.orig_expr)
+        print(io, "  Expression: ", t.orig_expr)
     end
 end
 
@@ -286,13 +297,25 @@ Tests that the expression `ex` evaluates to `true`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 `false`, and an `Error` `Result` if it could not be evaluated.
 
+# Examples
+```jldoctest
+julia> @test true
+Test Passed
+
+julia> @test [1, 2] + [2, 1] == [3, 3]
+Test Passed
+```
+
 The `@test f(args...) key=val...` form is equivalent to writing
 `@test f(args..., key=val...)` which can be useful when the expression
 is a call using infix syntax such as approximate comparisons:
 
-    @test a ≈ b atol=ε
+```jldoctest
+julia> @test π ≈ 3.14 atol=0.01
+Test Passed
+```
 
-This is equivalent to the uglier test `@test ≈(a, b, atol=ε)`.
+This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
 It is an error to supply more than one expression unless the first
 is a call expression and the rest are assignments (`k=v`).
 """
@@ -313,6 +336,17 @@ exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
 if the expression evaluates to `true`.
 
 The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
+
+# Examples
+```jldoctest
+julia> @test_broken 1 == 2
+Test Broken
+  Expression: 1 == 2
+
+julia> @test_broken 1 == 2 atol=0.1
+Test Broken
+  Expression: ==(1, 2, atol=0.1)
+```
 """
 macro test_broken(ex, kws...)
     test_expr!("@test_broken", ex, kws...)
@@ -331,6 +365,17 @@ summary reporting as `Broken`. This can be useful for tests that intermittently
 fail, or tests of not-yet-implemented functionality.
 
 The `@test_skip f(args...) key=val...` form works as for the `@test` macro.
+
+# Examples
+```jldoctest
+julia> @test_skip 1 == 2
+Test Broken
+  Skipped: 1 == 2
+
+julia> @test_skip 1 == 2 atol=0.1
+Test Broken
+  Skipped: ==(1, 2, atol=0.1)
+```
 """
 macro test_skip(ex, kws...)
     test_expr!("@test_skip", ex, kws...)
@@ -393,7 +438,7 @@ function get_test_result(ex, source)
             isa(a, Expr) && a.head in (:kw, :parameters) && continue
 
             if isa(a, Expr) && a.head == :...
-                push!(escaped_args, Expr(:..., esc(a)))
+                push!(escaped_args, Expr(:..., esc(a.args[1])))
             else
                 push!(escaped_args, esc(a))
             end
@@ -411,6 +456,7 @@ function get_test_result(ex, source)
         try
             $testret
         catch _e
+            _e isa InterruptException && rethrow(_e)
             Threw(_e, catch_backtrace(), $(QuoteNode(source)))
         end
     end
@@ -468,6 +514,16 @@ Tests that the expression `expr` throws `exception`.
 The exception may specify either a type,
 or a value (which will be tested for equality by comparing fields).
 Note that `@test_throws` does not support a trailing keyword form.
+
+# Examples
+```jldoctest
+julia> @test_throws BoundsError [1, 2, 3][4]
+Test Passed
+      Thrown: BoundsError
+
+julia> @test_throws DimensionMismatch [1, 2, 3] + [1, 2]
+Test Passed
+      Thrown: DimensionMismatch
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
@@ -475,6 +531,9 @@ macro test_throws(extype, ex)
         try
             Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
         catch _e
+            if $(esc(extype)) != InterruptException && _e isa InterruptException
+                rethrow(_e)
+            end
             Threw(_e, nothing, $(QuoteNode(__source__)))
         end
     end
@@ -518,15 +577,15 @@ end
 
 # Test for warning messages (deprecated)
 
-contains_warn(output, s::AbstractString) = contains(output, s)
-contains_warn(output, s::Regex) = contains(output, s)
+contains_warn(output, s::AbstractString) = occursin(s, output)
+contains_warn(output, s::Regex) = occursin(s, output)
 contains_warn(output, s::Function) = s(output)
 contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(output, s), S)
 
 """
     @test_warn msg expr
 
-Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
+Test whether evaluating `expr` results in [`stderr`](@ref) output that contains
 the `msg` string or matches the `msg` regular expression.  If `msg` is
 a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
 tuple or array, checks that the error output contains/matches each item in `msg`.
@@ -555,7 +614,7 @@ end
 """
     @test_nowarn expr
 
-Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
+Test whether evaluating `expr` results in empty [`stderr`](@ref) output
 (no warnings or other messages).  Returns the result of evaluating `expr`.
 """
 macro test_nowarn(expr)
@@ -615,7 +674,7 @@ function Base.show(io::IO, ex::TestSetException)
 end
 
 function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, string(ex))
+    printstyled(io, string(ex), color=Base.error_color())
 end
 
 #-----------------------------------------------------------------------
@@ -633,7 +692,7 @@ struct FallbackTestSetException <: Exception
 end
 
 function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, ex.msg)
+    printstyled(io, ex.msg, color=Base.error_color())
 end
 
 # Records nothing, and throws an error immediately whenever a Fail or
@@ -672,14 +731,14 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if myid() == 1
-        print_with_color(:white, ts.description, ": ")
+        printstyled(ts.description, ": ", color=:white)
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type != :test_interrupted
             print(t)
             # don't print the backtrace for Errors because it gets printed in the show
             # method
             if !isa(t, Error)
-                Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
             end
             println()
         end
@@ -697,7 +756,7 @@ function print_test_errors(ts::DefaultTestSet)
     for t in ts.results
         if (isa(t, Error) || isa(t, Fail)) && myid() == 1
             println("Error in testset $(ts.description):")
-            Base.show(STDOUT,t)
+            Base.show(stdout,t)
             println()
         elseif isa(t, DefaultTestSet)
             print_test_errors(t)
@@ -731,21 +790,21 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
     pad = total == 0 ? "" : " "
-    print_with_color(:white, rpad("Test Summary:",align," "), " |", pad; bold = true)
+    printstyled(rpad("Test Summary:", align, " "), " |", pad; bold=true, color=:white)
     if pass_width > 0
-        print_with_color(:green, lpad("Pass",pass_width," "), "  "; bold = true)
+        printstyled(lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
     end
     if fail_width > 0
-        print_with_color(Base.error_color(), lpad("Fail",fail_width," "), "  "; bold = true)
+        printstyled(lpad("Fail", fail_width, " "), "  "; bold=true, color=Base.error_color())
     end
     if error_width > 0
-        print_with_color(Base.error_color(), lpad("Error",error_width," "), "  "; bold = true)
+        printstyled(lpad("Error", error_width, " "), "  "; bold=true, color=Base.error_color())
     end
     if broken_width > 0
-        print_with_color(Base.warn_color(), lpad("Broken",broken_width," "), "  "; bold = true)
+        printstyled(lpad("Broken", broken_width, " "), "  "; bold=true, color=Base.warn_color())
     end
     if total_width > 0
-        print_with_color(Base.info_color(), lpad("Total",total_width, " "); bold = true)
+        printstyled(lpad("Total", total_width, " "); bold=true, color=Base.info_color())
     end
     println()
     # Recursively print a summary at every level
@@ -855,7 +914,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     np = passes + c_passes
     if np > 0
-        print_with_color(:green, lpad(string(np), pass_width, " "), "  ")
+        printstyled(lpad(string(np), pass_width, " "), "  ", color=:green)
     elseif pass_width > 0
         # No passes at this level, but some at another level
         print(lpad(" ", pass_width), "  ")
@@ -863,7 +922,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nf = fails + c_fails
     if nf > 0
-        print_with_color(Base.error_color(), lpad(string(nf), fail_width, " "), "  ")
+        printstyled(lpad(string(nf), fail_width, " "), "  ", color=Base.error_color())
     elseif fail_width > 0
         # No fails at this level, but some at another level
         print(lpad(" ", fail_width), "  ")
@@ -871,7 +930,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     ne = errors + c_errors
     if ne > 0
-        print_with_color(Base.error_color(), lpad(string(ne), error_width, " "), "  ")
+        printstyled(lpad(string(ne), error_width, " "), "  ", color=Base.error_color())
     elseif error_width > 0
         # No errors at this level, but some at another level
         print(lpad(" ", error_width), "  ")
@@ -879,16 +938,16 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nb = broken + c_broken
     if nb > 0
-        print_with_color(Base.warn_color(), lpad(string(nb), broken_width, " "), "  ")
+        printstyled(lpad(string(nb), broken_width, " "), "  ", color=Base.warn_color())
     elseif broken_width > 0
         # None broken at this level, but some at another level
         print(lpad(" ", broken_width), "  ")
     end
 
     if np == 0 && nf == 0 && ne == 0 && nb == 0
-        print_with_color(Base.info_color(), "No tests")
+        printstyled("No tests", color=Base.info_color())
     else
-        print_with_color(Base.info_color(), lpad(string(subtotal), total_width, " "))
+        printstyled(lpad(string(subtotal), total_width, " "), color=Base.info_color())
     end
     println()
 
@@ -954,6 +1013,19 @@ restored to what it was before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
 re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
+
+# Examples
+```jldoctest
+julia> @testset "trigonometric identities" begin
+           θ = 2/3*π
+           @test sin(-θ) ≈ -sin(θ)
+           @test cos(-θ) ≈ cos(θ)
+           @test sin(2θ) ≈ 2*sin(θ)*cos(θ)
+           @test cos(2θ) ≈ cos(θ)^2 - sin(θ)^2
+       end;
+Test Summary:            | Pass  Total
+trigonometric identities |    4      4
+```
 """
 macro testset(args...)
     isempty(args) && error("No arguments to @testset")
@@ -1006,6 +1078,7 @@ function testset_beginend(args, tests, source)
             srand(GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
+            err isa InterruptException && rethrow(err)
             # something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
@@ -1078,6 +1151,7 @@ function testset_forloop(args, testloop, source)
         try
             $(esc(tests))
         catch err
+            err isa InterruptException && rethrow(err)
             # Something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
@@ -1192,9 +1266,7 @@ inferred by the compiler. It is useful to check for type stability.
 Returns the result of `f(x)` if the types match,
 and an `Error` `Result` if it finds different types.
 
-```jldoctest
-julia> using Test
-
+```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
 julia> f(a,b,c) = b > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
@@ -1202,21 +1274,15 @@ julia> typeof(f(1,2,3))
 Int64
 
 julia> @code_warntype f(1,2,3)
-Variables:
-  a<optimized out>
-  b::Int64
-  c<optimized out>
-
-Body:
-  begin
-      unless (Base.slt_int)(1, b::Int64)::Bool goto 3
-      return 1
-      3:
-      return 1.0
-  end::UNION{FLOAT64, INT64}
+Body::UNION{FLOAT64, INT64}
+1 1 ─ %1 = Base.slt_int(1, %%b)::Bool
+  └──      goto 3 if not %1
+  2 ─      return 1
+  3 ─      return 1.0
 
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
+Stacktrace:
 [...]
 
 julia> @inferred max(1,2)
@@ -1237,7 +1303,7 @@ macro inferred(ex)
                 kwargs = gensym()
                 quote
                     $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                    inftypes = $(Base.gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                    inftypes = $(gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
                 end
             else
                 # No keywords
@@ -1281,14 +1347,14 @@ function detect_ambiguities(mods...;
     end
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
-        for n in names(mod, true, imported)
+        for n in names(mod, all = true, imported = imported)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
                 println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && module_name(f) === n
+            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 subambs = detect_ambiguities(f,
                     imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
                 union!(ambs, subambs)
@@ -1322,14 +1388,14 @@ function detect_unbound_args(mods...;
                              recursive::Bool = false)
     ambs = Set{Method}()
     for mod in mods
-        for n in names(mod, true, imported)
+        for n in names(mod, all = true, imported = imported)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
                 println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && parentmodule(f) === mod && module_name(f) === n
+            if recursive && isa(f, Module) && parentmodule(f) === mod && nameof(f) === n
                 subambs = detect_unbound_args(f, imported=imported, recursive=recursive)
                 union!(ambs, subambs)
             elseif isa(f, DataType) && isdefined(f.name, :mt)
@@ -1341,7 +1407,7 @@ function detect_unbound_args(mods...;
                             params = tuple_sig.parameters[1:(end - 1)]
                             tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
                             mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
-                            if mf != nothing && mf.func !== m && mf.func.sig <: tuple_sig
+                            if mf !== nothing && mf.func !== m && mf.func.sig <: tuple_sig
                                 continue
                             end
                         end
@@ -1422,7 +1488,7 @@ Base.ncodeunits(s::GenericString) = ncodeunits(s.string)
 Base.codeunit(s::GenericString) = codeunit(s.string)
 Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)
 Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)
-Base.next(s::GenericString, i::Integer) = next(s.string, i)
+Base.iterate(s::GenericString, i::Integer=1) = iterate(s.string, i)
 Base.reverse(s::GenericString) = GenericString(reverse(s.string))
 Base.reverse(s::SubString{GenericString}) =
     GenericString(typeof(s.string)(reverse(String(s))))
@@ -1448,10 +1514,9 @@ end
 for (G, A) in ((GenericSet, AbstractSet),
                (GenericDict, AbstractDict))
     @eval begin
-        Base.done(s::$G, state) = done(s.s, state)
-        Base.next(s::$G, state) = next(s.s, state)
+        Base.iterate(s::$G, state...) = iterate(s.s, state...)
     end
-    for f in (:eltype, :isempty, :length, :start)
+    for f in (:isempty, :length)
         @eval begin
             Base.$f(s::$G) = $f(s.s)
         end
@@ -1499,6 +1564,20 @@ guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
     f()
 end
 
+function _check_bitarray_consistency(B::BitArray{N}) where N
+    n = length(B)
+    if N ≠ 1
+        all(d ≥ 0 for d in B.dims) || (@warn("Negative d in dims: $(B.dims)"); return false)
+        prod(B.dims) ≠ n && (@warn("Inconsistent dims/len: prod(dims)=$(prod(B.dims)) len=$n"); return false)
+    end
+    Bc = B.chunks
+    nc = length(Bc)
+    nc == Base.num_bit_chunks(n) || (@warn("Incorrect chunks length for length $n: expected=$(Base.num_bit_chunks(n)) actual=$nc"); return false)
+    n == 0 && return true
+    Bc[end] & Base._msk_end(n) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
+    return true
+end
+
 # 0.7 deprecations
 
 begin
@@ -1509,7 +1588,7 @@ begin
     function test_approx_eq(va, vb, Eps, astr, bstr)
         va = approx_full(va)
         vb = approx_full(vb)
-        la, lb = length(linearindices(va)), length(linearindices(vb))
+        la, lb = length(LinearIndices(va)), length(LinearIndices(vb))
         if la != lb
             error("lengths of ", astr, " and ", bstr, " do not match: ",
                 "\n  ", astr, " (length $la) = ", va,
@@ -1539,7 +1618,7 @@ begin
     array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
 
     test_approx_eq(va, vb, astr, bstr) =
-        test_approx_eq(va, vb, 1E4*length(linearindices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
+        test_approx_eq(va, vb, 1E4*length(LinearIndices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
 
     """
         @test_approx_eq_eps(a, b, tol)

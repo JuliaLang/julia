@@ -75,81 +75,98 @@ end
 end
 
 @testset "rsplit/split" begin
-    @test isequal(split("foo,bar,baz", 'x'), ["foo,bar,baz"])
-    @test isequal(split("foo,bar,baz", ','), ["foo","bar","baz"])
-    @test isequal(split("foo,bar,baz", ","), ["foo","bar","baz"])
-    @test isequal(split("foo,bar,baz", r","), ["foo","bar","baz"])
-    @test isequal(split("foo,bar,baz", ','; limit=0), ["foo","bar","baz"])
-    @test isequal(split("foo,bar,baz", ','; limit=1), ["foo,bar,baz"])
-    @test isequal(split("foo,bar,baz", ','; limit=2), ["foo","bar,baz"])
-    @test isequal(split("foo,bar,baz", ','; limit=3), ["foo","bar","baz"])
-    @test isequal(split("foo,bar", "o,b"), ["fo","ar"])
+    @test split("foo,bar,baz", 'x') == ["foo,bar,baz"]
+    @test split("foo,bar,baz", ',') == ["foo","bar","baz"]
+    @test split("foo,bar,baz", ",") == ["foo","bar","baz"]
+    @test split("foo,bar,baz", r",") == ["foo","bar","baz"]
+    @test split("foo,bar,baz", ','; limit=0) == ["foo","bar","baz"]
+    @test split("foo,bar,baz", ','; limit=1) == ["foo,bar,baz"]
+    @test split("foo,bar,baz", ','; limit=2) == ["foo","bar,baz"]
+    @test split("foo,bar,baz", ','; limit=3) == ["foo","bar","baz"]
+    @test split("foo,bar", "o,b") == ["fo","ar"]
 
-    @test isequal(split("", ','), [""])
-    @test isequal(split(",", ','), ["",""])
-    @test isequal(split(",,", ','), ["","",""])
-    @test isequal(split("", ','  ; keep=false), [])
-    @test isequal(split(",", ',' ; keep=false), [])
-    @test isequal(split(",,", ','; keep=false), [])
+    @test split("", ',') == [""]
+    @test split(",", ',') == ["",""]
+    @test split(",,", ',') == ["","",""]
+    @test split("", ','  ; keepempty=false) == []
+    @test split(",", ',' ; keepempty=false) == []
+    @test split(",,", ','; keepempty=false) == []
 
-    @test isequal(split("a b c"), ["a","b","c"])
-    @test isequal(split("a  b \t c\n"), ["a","b","c"])
+    @test split("a b c") == ["a","b","c"]
+    @test split("a  b \t c\n") == ["a","b","c"]
 
-    @test isequal(rsplit("foo,bar,baz", 'x'), ["foo,bar,baz"])
-    @test isequal(rsplit("foo,bar,baz", ','), ["foo","bar","baz"])
-    @test isequal(rsplit("foo,bar,baz", ","), ["foo","bar","baz"])
-    @test isequal(rsplit("foo,bar,baz", ','; limit=0), ["foo","bar","baz"])
-    @test isequal(rsplit("foo,bar,baz", ','; limit=1), ["foo,bar,baz"])
-    @test isequal(rsplit("foo,bar,baz", ','; limit=2), ["foo,bar","baz"])
-    @test isequal(rsplit("foo,bar,baz", ','; limit=3), ["foo","bar","baz"])
-    @test isequal(rsplit("foo,bar", "o,b"), ["fo","ar"])
+    @test split("a b c"; limit=2) == ["a","b c"]
+    @test split("a  b \t c\n"; limit=3) == ["a","b","\t c\n"]
+    @test split("a b c"; keepempty=true) == ["a","b","c"]
+    @test split("a  b \t c\n"; keepempty=true) == ["a","","b","","","c",""]
 
-    @test isequal(rsplit("", ','), [""])
-    @test isequal(rsplit(",", ','), ["",""])
-    @test isequal(rsplit(",,", ','), ["","",""])
-    @test isequal(rsplit(",,", ','; limit=2), [",",""])
-    @test isequal(rsplit("", ','  ; keep=false), [])
-    @test isequal(rsplit(",", ',' ; keep=false), [])
-    @test isequal(rsplit(",,", ','; keep=false), [])
+    @test rsplit("foo,bar,baz", 'x') == ["foo,bar,baz"]
+    @test rsplit("foo,bar,baz", ',') == ["foo","bar","baz"]
+    @test rsplit("foo,bar,baz", ",") == ["foo","bar","baz"]
+    @test rsplit("foo,bar,baz", ','; limit=0) == ["foo","bar","baz"]
+    @test rsplit("foo,bar,baz", ','; limit=1) == ["foo,bar,baz"]
+    @test rsplit("foo,bar,baz", ','; limit=2) == ["foo,bar","baz"]
+    @test rsplit("foo,bar,baz", ','; limit=3) == ["foo","bar","baz"]
+    @test rsplit("foo,bar", "o,b") == ["fo","ar"]
 
-    #@test isequal(rsplit("a b c"), ["a","b","c"])
-    #@test isequal(rsplit("a  b \t c\n"), ["a","b","c"])
+    @test rsplit("", ',') == [""]
+    @test rsplit(",", ',') == ["",""]
+    @test rsplit(",,", ',') == ["","",""]
+    @test rsplit(",,", ','; limit=2) == [",",""]
+    @test rsplit("", ','  ; keepempty=false) == []
+    @test rsplit(",", ',' ; keepempty=false) == []
+    @test rsplit(",,", ','; keepempty=false) == []
+
+    @test rsplit("a b c") == ["a","b","c"]
+    @test rsplit("a  b \t c\n") == ["a","b","c"]
+
+    @test rsplit("a b c"; limit=2) == ["a b", "c"]
+    @test rsplit("a  b \t c\n"; limit=3) == ["a ","b","c"]
+    @test rsplit("a b c"; keepempty=true) == ["a","b","c"]
+    @test rsplit("a  b \t c\n"; keepempty=true) == ["a","","b","","","c",""]
 
     let str = "a.:.ba..:..cba.:.:.dcba.:."
-    @test isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
-    @test isequal(split(str, ".:."; keep=false), ["a","ba.",".cba",":.dcba"])
-    @test isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
-    @test isequal(split(str, r"\.(:\.)+"), ["a","ba.",".cba","dcba",""])
-    @test isequal(split(str, r"\.(:\.)+"; keep=false), ["a","ba.",".cba","dcba"])
-    @test isequal(split(str, r"\.+:\.+"), ["a","ba","cba",":.dcba",""])
-    @test isequal(split(str, r"\.+:\.+"; keep=false), ["a","ba","cba",":.dcba"])
+    @test split(str, ".:.") == ["a","ba.",".cba",":.dcba",""]
+    @test split(str, ".:."; keepempty=false) == ["a","ba.",".cba",":.dcba"]
+    @test split(str, ".:.") == ["a","ba.",".cba",":.dcba",""]
+    @test split(str, r"\.(:\.)+") == ["a","ba.",".cba","dcba",""]
+    @test split(str, r"\.(:\.)+"; keepempty=false) == ["a","ba.",".cba","dcba"]
+    @test split(str, r"\.+:\.+") == ["a","ba","cba",":.dcba",""]
+    @test split(str, r"\.+:\.+"; keepempty=false) == ["a","ba","cba",":.dcba"]
 
-    @test isequal(rsplit(str, ".:."), ["a","ba.",".cba.:","dcba",""])
-    @test isequal(rsplit(str, ".:."; keep=false), ["a","ba.",".cba.:","dcba"])
-    @test isequal(rsplit(str, ".:."; limit=2), ["a.:.ba..:..cba.:.:.dcba", ""])
-    @test isequal(rsplit(str, ".:."; limit=3), ["a.:.ba..:..cba.:", "dcba", ""])
-    @test isequal(rsplit(str, ".:."; limit=4), ["a.:.ba.", ".cba.:", "dcba", ""])
-    @test isequal(rsplit(str, ".:."; limit=5), ["a", "ba.", ".cba.:", "dcba", ""])
-    @test isequal(rsplit(str, ".:."; limit=6), ["a", "ba.", ".cba.:", "dcba", ""])
+    @test rsplit(str, ".:.") == ["a","ba.",".cba.:","dcba",""]
+    @test rsplit(str, ".:."; keepempty=false) == ["a","ba.",".cba.:","dcba"]
+    @test rsplit(str, ".:."; limit=2) == ["a.:.ba..:..cba.:.:.dcba", ""]
+    @test rsplit(str, ".:."; limit=3) == ["a.:.ba..:..cba.:", "dcba", ""]
+    @test rsplit(str, ".:."; limit=4) == ["a.:.ba.", ".cba.:", "dcba", ""]
+    @test rsplit(str, ".:."; limit=5) == ["a", "ba.", ".cba.:", "dcba", ""]
+    @test rsplit(str, ".:."; limit=6) == ["a", "ba.", ".cba.:", "dcba", ""]
     end
 
     # zero-width splits
-    @test isequal(rsplit("", ""), [""])
+    @test split("", "") == rsplit("", "") == [""]
+    @test split("abc", "") == rsplit("abc", "") == ["a","b","c"]
+    @test rsplit("abc", "", limit=2) == ["ab","c"]
+    @test split("abc", "", limit=2) == ["a","bc"]
 
-    @test isequal(split("", ""), [""])
-    @test isequal(split("", r""), [""])
-    @test isequal(split("abc", ""), ["a","b","c"])
-    @test isequal(split("abc", r""), ["a","b","c"])
-    @test isequal(split("abcd", r"b?"), ["a","c","d"])
-    @test isequal(split("abcd", r"b*"), ["a","c","d"])
-    @test isequal(split("abcd", r"b+"), ["a","cd"])
-    @test isequal(split("abcd", r"b?c?"), ["a","d"])
-    @test isequal(split("abcd", r"[bc]?"), ["a","","d"])
-    @test isequal(split("abcd", r"a*"), ["","b","c","d"])
-    @test isequal(split("abcd", r"a+"), ["","bcd"])
-    @test isequal(split("abcd", r"d*"), ["a","b","c",""])
-    @test isequal(split("abcd", r"d+"), ["abc",""])
-    @test isequal(split("abcd", r"[ad]?"), ["","b","c",""])
+    @test split("", r"") == [""]
+    @test split("abc", r"") == ["a","b","c"]
+    @test split("abcd", r"b?") == ["a","c","d"]
+    @test split("abcd", r"b*") == ["a","c","d"]
+    @test split("abcd", r"b+") == ["a","cd"]
+    @test split("abcd", r"b?c?") == ["a","d"]
+    @test split("abcd", r"[bc]?") == ["a","","d"]
+    @test split("abcd", r"a*") == ["","b","c","d"]
+    @test split("abcd", r"a+") == ["","bcd"]
+    @test split("abcd", r"d*") == ["a","b","c",""]
+    @test split("abcd", r"d+") == ["abc",""]
+    @test split("abcd", r"[ad]?") == ["","b","c",""]
+
+    # multi-byte unicode characters (issue #26225)
+    @test split("α β γ", " ") == rsplit("α β γ", " ") ==
+          split("α β γ", isspace) == rsplit("α β γ", isspace) == ["α","β","γ"]
+    @test split("ö.", ".") == rsplit("ö.", ".") == ["ö",""]
+    @test split("α β γ", "β") == rsplit("α β γ", "β") == ["α "," γ"]
 end
 
 @testset "replace" begin
@@ -258,6 +275,17 @@ end
         @test replace(s, 'a' => 'z', count=typemax(Int)) == "zzz"
         @test replace(s, 'a' => 'z')    == "zzz"
     end
+
+    # Issue 25741
+    @test replace("abc", ['a', 'd'] => 'A') == "Abc"
+
+    # for Char pattern call Char replacement function
+    @test replace("a", "a" => typeof) == "SubString{String}"
+    @test replace("a", r"a" => typeof) == "SubString{String}"
+    @test replace("a", 'a' => typeof) == "Char"
+    @test replace("a", in("a") => typeof) == "Char"
+    @test replace("a", ['a'] => typeof) == "Char"
+
 end
 
 @testset "chomp/chop" begin
@@ -269,23 +297,23 @@ end
     @test chop("fooε") == "foo"
     @test chop("foεo") == "foε"
     @test chop("∃∃∃∃") == "∃∃∃"
-    @test chop("∀ϵ∃Δ", 0, 0) == "∀ϵ∃Δ"
-    @test chop("∀ϵ∃Δ", 0, 1) == "∀ϵ∃"
-    @test chop("∀ϵ∃Δ", 0, 2) == "∀ϵ"
-    @test chop("∀ϵ∃Δ", 0, 3) == "∀"
-    @test chop("∀ϵ∃Δ", 0, 4) == ""
-    @test chop("∀ϵ∃Δ", 0, 5) == ""
-    @test chop("∀ϵ∃Δ", 1, 0) == "ϵ∃Δ"
-    @test chop("∀ϵ∃Δ", 2, 0) == "∃Δ"
-    @test chop("∀ϵ∃Δ", 3, 0) == "Δ"
-    @test chop("∀ϵ∃Δ", 4, 0) == ""
-    @test chop("∀ϵ∃Δ", 5, 0) == ""
-    @test chop("∀ϵ∃Δ", 1, 1) == "ϵ∃"
-    @test chop("∀ϵ∃Δ", 2, 2) == ""
-    @test chop("∀ϵ∃Δ", 3, 3) == ""
-    @test_throws ArgumentError chop("∀ϵ∃Δ", -3, 3)
-    @test_throws ArgumentError chop("∀ϵ∃Δ", 3, -3)
-    @test_throws ArgumentError chop("∀ϵ∃Δ", -3, -3)
+    @test chop("∀ϵ∃Δ", head=0, tail=0) == "∀ϵ∃Δ"
+    @test chop("∀ϵ∃Δ", head=0, tail=1) == "∀ϵ∃"
+    @test chop("∀ϵ∃Δ", head=0, tail=2) == "∀ϵ"
+    @test chop("∀ϵ∃Δ", head=0, tail=3) == "∀"
+    @test chop("∀ϵ∃Δ", head=0, tail=4) == ""
+    @test chop("∀ϵ∃Δ", head=0, tail=5) == ""
+    @test chop("∀ϵ∃Δ", head=1, tail=0) == "ϵ∃Δ"
+    @test chop("∀ϵ∃Δ", head=2, tail=0) == "∃Δ"
+    @test chop("∀ϵ∃Δ", head=3, tail=0) == "Δ"
+    @test chop("∀ϵ∃Δ", head=4, tail=0) == ""
+    @test chop("∀ϵ∃Δ", head=5, tail=0) == ""
+    @test chop("∀ϵ∃Δ", head=1, tail=1) == "ϵ∃"
+    @test chop("∀ϵ∃Δ", head=2, tail=2) == ""
+    @test chop("∀ϵ∃Δ", head=3, tail=3) == ""
+    @test_throws ArgumentError chop("∀ϵ∃Δ", head=-3, tail=3)
+    @test_throws ArgumentError chop("∀ϵ∃Δ", head=3, tail=-3)
+    @test_throws ArgumentError chop("∀ϵ∃Δ", head=-3, tail=-3)
 
     @test isa(chomp("foo"), SubString)
     @test isa(chop("foo"), SubString)
@@ -296,7 +324,7 @@ end
     bin_val = hex2bytes(hex_str)
 
     @test div(length(hex_str), 2) == length(bin_val)
-    @test hex_str == bytes2hex(bin_val)
+    @test hex_str == bytes2hex(bin_val) == sprint(bytes2hex, bin_val)
 
     bin_val = hex2bytes("07bf")
     @test bin_val[1] == 7
@@ -315,7 +343,7 @@ end
 
     @testset "Issue 23161" begin
         arr = b"0123456789abcdefABCDEF"
-        arr1 = Vector{UInt8}(uninitialized, length(arr) >> 1)
+        arr1 = Vector{UInt8}(undef, length(arr) >> 1)
         @test hex2bytes!(arr1, arr) === arr1 # check in-place
         @test "0123456789abcdefabcdef" == bytes2hex(arr1)
         @test hex2bytes("0123456789abcdefABCDEF") == hex2bytes(arr)

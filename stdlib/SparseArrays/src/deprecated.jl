@@ -4,11 +4,6 @@ using Base: @deprecate, depwarn
 
 # BEGIN 0.7 deprecations
 
-# PR #22475
-import Base: cat
-@deprecate cat(::Type{Val{N}}, A::_SparseConcatGroup...) where {N} cat(Val(N), A...)
-@deprecate cat(::Type{Val{N}}, A::_DenseConcatGroup...) where {N} cat(Val(N), A...)
-
 # deprecate remaining vectorized methods over SparseVectors (zero-preserving)
 for op in (:floor, :ceil, :trunc, :round,
         :log1p, :expm1,  :sinpi,
@@ -159,13 +154,13 @@ using LinearAlgebra: Adjoint, Transpose
 @deprecate A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat)     mul!(C, A, B)
 @deprecate Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat)    mul!(C, adjoint(A), B)
 @deprecate At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat)    mul!(C, transpose(A), B)
-@deprecate A_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)   mul!(α, A, B, β, C)
+@deprecate A_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)   mul!(C, A, B, α, β)
 @deprecate A_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx}  (*)(A, x)
 @deprecate A_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx}  (*)(A, B)
-@deprecate Ac_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)  mul!(α, adjoint(A), B, β, C)
+@deprecate Ac_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)  mul!(C, adjoint(A), B, α, β)
 @deprecate Ac_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx}     (*)(adjoint(A), x)
 @deprecate Ac_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx}     (*)(adjoint(A), B)
-@deprecate At_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)  mul!(α, transpose(A), B, β, C)
+@deprecate At_mul_B!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)  mul!(C, transpose(A), B, α, β)
 @deprecate At_mul_B(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx}     (*)(transpose(A), x)
 @deprecate At_mul_B(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx}     (*)(transpose(A), B)
 @deprecate A_mul_Bt(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}   (*)(A, transpose(B))
@@ -197,16 +192,16 @@ end
 using LinearAlgebra: Adjoint, Transpose
 @deprecate Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector)    (*)(adjoint(A), x)
 @deprecate At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector)    (*)(transpose(A), x)
-@deprecate Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)   mul!(α, adjoint(A), x, β, y)
+@deprecate Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)   mul!(y, adjoint(A), x, α, β)
 @deprecate Ac_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty}   mul!(y, adjoint(A), x)
-@deprecate At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)   mul!(α, transpose(A), x, β, y)
+@deprecate At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)   mul!(y, transpose(A), x, α, β)
 @deprecate At_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty}   mul!(y, transpose(A), x)
-@deprecate A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)    mul!(α, A, x, β, y)
+@deprecate A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)    mul!(y, A, x, α, β)
 @deprecate A_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty}    mul!(y, A, x)
-@deprecate At_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)     mul!(α, transpose(A), x, β, y)
+@deprecate At_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)     mul!(y, transpose(A), x, α, β)
 @deprecate At_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty}     mul!(y, transpose(A), x)
 @deprecate At_mul_B(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}    (*)(transpose(A), x)
-@deprecate A_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)  mul!(α, A, x, β, y)
+@deprecate A_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)  mul!(y, A, x, α, β)
 @deprecate A_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty}  mul!(y, A, x)
 
 # methods involving RowVector from base/sparse/linalg.jl, to deprecate
@@ -222,6 +217,21 @@ end
 import Base: asyncmap
 @deprecate asyncmap(f, s::AbstractSparseArray...; kwargs...) sparse(asyncmap(f, map(Array, s)...; kwargs...))
 
+# PR 26347: implicit scalar broadcasting within setindex!
+@deprecate setindex!(A::SparseMatrixCSC{<:Any,<:Any}, x, i::Union{Integer, AbstractVector{<:Integer}, Colon}, j::Union{Integer, AbstractVector{<:Integer}, Colon}) (A[i, j] .= x; A)
+
+#25395 keywords unlocked
+@deprecate dropzeros(x, trim)     dropzeros(x, trim = trim)
+@deprecate dropzeros!(x, trim)    dropzeros!(x, trim = trim)
+@deprecate droptol!(A, tol, trim) droptol!(A, tol, trim = trim)
+
+Base.@deprecate_binding blkdiag blockdiag
+
+@deprecate complex(x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) complex.(x, y)
+@deprecate complex(x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) complex.(x, y)
+@deprecate complex(x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) complex.(x, y)
+
+@deprecate diff(a::SparseMatrixCSC, dim::Integer) diff(a, dims=dim)
 
 # END 0.7 deprecations
 

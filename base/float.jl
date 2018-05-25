@@ -31,18 +31,21 @@ const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)
 const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 
+const Inf = Inf64
 """
-    Inf
+    Inf, Inf64
 
 Positive infinity of type [`Float64`](@ref).
 """
-const Inf = Inf64
+Inf, Inf64
+
+const NaN = NaN64
 """
-    NaN
+    NaN, NaN64
 
 A not-a-number value of type [`Float64`](@ref).
 """
-const NaN = NaN64
+NaN, NaN64
 
 ## conversions to floating-point ##
 Float16(x::Integer) = convert(Float16, convert(Float32, x))
@@ -203,8 +206,8 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 
-const basetable = Vector{UInt16}(uninitialized, 512)
-const shifttable = Vector{UInt8}(uninitialized, 512)
+const basetable = Vector{UInt16}(undef, 512)
+const shifttable = Vector{UInt8}(undef, 512)
 
 for i = 0:255
     e = i - 127
@@ -348,28 +351,26 @@ trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
 trunc(::Type{T}, x::Float16) where {T<:Integer} = trunc(T, Float32(x))
 
 # fallbacks
-floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,floor(x))
+floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
 floor(::Type{T}, x::Float16) where {T<:Integer} = floor(T, Float32(x))
-ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,ceil(x))
+ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
 ceil(::Type{T}, x::Float16) where {T<:Integer} = ceil(T, Float32(x))
-round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x))
+round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
 round(::Type{T}, x::Float16) where {T<:Integer} = round(T, Float32(x))
 
-trunc(x::Float64) = trunc_llvm(x)
-trunc(x::Float32) = trunc_llvm(x)
-trunc(x::Float16) = Float16(trunc(Float32(x)))
+round(x::Float64, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+round(x::Float32, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+round(x::Float64, r::RoundingMode{:Down})    = floor_llvm(x)
+round(x::Float32, r::RoundingMode{:Down})    = floor_llvm(x)
+round(x::Float64, r::RoundingMode{:Up})      = ceil_llvm(x)
+round(x::Float32, r::RoundingMode{:Up})      = ceil_llvm(x)
+round(x::Float64, r::RoundingMode{:Nearest}) = rint_llvm(x)
+round(x::Float32, r::RoundingMode{:Nearest}) = rint_llvm(x)
 
-floor(x::Float64) = floor_llvm(x)
-floor(x::Float32) = floor_llvm(x)
-floor(x::Float16) = Float16(floor(Float32(x)))
-
-ceil(x::Float64) = ceil_llvm(x)
-ceil(x::Float32) = ceil_llvm(x)
-ceil(x::Float16) = Float16( ceil(Float32(x)))
-
-round(x::Float64) = rint_llvm(x)
-round(x::Float32) = rint_llvm(x)
-round(x::Float16) = Float16(round(Float32(x)))
+round(x::Float16, r::RoundingMode{:ToZero}) = Float16(round(Float32(x), r))
+round(x::Float16, r::RoundingMode{:Down}) = Float16(round(Float32(x), r))
+round(x::Float16, r::RoundingMode{:Up}) = Float16(round(Float32(x), r))
+round(x::Float16, r::RoundingMode{:Nearest}) = Float16(round(Float32(x), r))
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
@@ -662,7 +663,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -683,7 +684,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -761,7 +762,8 @@ realmax() = realmax(Float64)
 
 Return the *machine epsilon* of the floating point type `T` (`T = Float64` by
 default). This is defined as the gap between 1 and the next largest value representable by
-`T`, and is equivalent to `eps(one(T))`.
+`typeof(one(T))`, and is equivalent to `eps(one(T))`.  (Since `eps(T)` is a
+bound on the *relative error* of `T`, it is a "dimensionless" quantity like [`one`](@ref).)
 
 ```jldoctest
 julia> eps()
@@ -863,7 +865,7 @@ Base.iszero(x::Float16) = reinterpret(UInt16, x) & ~sign_mask(Float16) == 0x0000
 float(A::AbstractArray{<:AbstractFloat}) = A
 
 function float(A::AbstractArray{T}) where T
-    if !isconcrete(T)
+    if !isconcretetype(T)
         error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(float(zero(T)))}, A)
@@ -873,16 +875,6 @@ float(r::StepRange) = float(r.start):float(r.step):float(last(r))
 float(r::UnitRange) = float(r.start):float(last(r))
 float(r::StepRangeLen{T}) where {T} =
     StepRangeLen{typeof(float(T(r.ref)))}(float(r.ref), float(r.step), length(r), r.offset)
-function float(r::LinSpace)
-    LinSpace(float(r.start), float(r.stop), length(r))
-end
-
-# big, broadcast over arrays
-# TODO: do the definitions below primarily pertaining to integers belong in float.jl?
-function big end # no prior definitions of big in sysimg.jl, necessitating this
-broadcast(::typeof(big), r::UnitRange) = big(r.start):big(last(r))
-broadcast(::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
-broadcast(::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
-function broadcast(::typeof(big), r::LinSpace)
-    LinSpace(big(r.start), big(r.stop), length(r))
+function float(r::LinRange)
+    LinRange(float(r.start), float(r.stop), length(r))
 end

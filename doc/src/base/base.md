@@ -19,34 +19,21 @@ Some general notes:
 
 ```@docs
 Base.exit
-Base.quit
 Base.atexit
-Base.atreplinit
 Base.isinteractive
-Base.varinfo
 Base.summarysize
-Base.edit(::AbstractString, ::Integer)
-Base.edit(::Any)
-Base.@edit
-Base.less(::AbstractString)
-Base.less(::Any)
-Base.@less
 Base.clipboard(::Any)
 Base.clipboard()
 Base.require
 Base.compilecache
 Base.__precompile__
 Base.include
+Base.MainInclude.include
 Base.include_string
 Base.include_dependency
-Base.Docs.apropos
 Base.which(::Any, ::Any)
-Base.which(::Symbol)
-Base.@which
 Base.methods
-Base.methodswith
 Base.@show
-Base.versioninfo
 ans
 ```
 
@@ -86,17 +73,16 @@ primitive type
 
 ## Base Modules
 ```@docs
+Base.Base
+Base.Broadcast
 Base.Docs
 Base.Iterators
-Base.LibGit2
 Base.Libc
-Base.Markdown
 Base.Meta
-Base.Pkg
-Base.Serializer
 Base.StackTraces
 Base.Sys
 Base.Threads
+Base.GC
 ```
 
 ## All Objects
@@ -119,6 +105,7 @@ Base.copy
 Base.deepcopy
 Base.getproperty
 Base.setproperty!
+Base.propertynames
 Core.getfield
 Core.setfield!
 Core.isdefined
@@ -132,28 +119,56 @@ Base.identity
 
 ## Properties of Types
 
+### Type relations
+
 ```@docs
 Base.supertype
 Core.:(<:)
 Base.:(>:)
-Base.subtypes
+Base.typejoin
+Base.typeintersect
+Base.promote_type
+Base.promote_rule
+Base.isdispatchtuple
+```
+
+### Declared structure
+
+```@docs
+Base.isimmutable
+Base.isabstracttype
+Base.isprimitivetype
+Base.isstructtype
+Base.nameof(::DataType)
+Base.fieldnames
+Base.fieldname
+```
+
+### Memory layout
+
+```@docs
+Base.sizeof(::Type)
+Base.isconcretetype
+Base.isbits
+Base.isbitstype
+Core.fieldtype
+Base.fieldcount
+Base.fieldoffset
+Base.datatype_alignment
+Base.datatype_haspadding
+Base.datatype_pointerfree
+```
+
+### Special values
+
+```@docs
 Base.typemin
 Base.typemax
 Base.realmin
 Base.realmax
 Base.maxintfloat
-Base.sizeof(::Type)
 Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
-Base.promote_type
-Base.promote_rule
-Base.fieldoffset
-Core.fieldtype
-Base.isimmutable
-Base.isbits
-Base.isconcrete
-Base.typejoin
-Base.typeintersect
 Base.instances
 ```
 
@@ -165,6 +180,7 @@ Core.Union
 Union{}
 Core.UnionAll
 Core.Tuple
+Core.NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -183,13 +199,13 @@ Base.invokelatest
 new
 Base.:(|>)
 Base.:(∘)
-Base.equalto
 ```
 
 ## Syntax
 
 ```@docs
 Core.eval
+Base.MainInclude.eval
 Base.@eval
 Base.evalfile
 Base.esc
@@ -218,8 +234,7 @@ Base.skipmissing
 
 ```@docs
 Base.run
-Base.spawn
-Base.DevNull
+Base.devnull
 Base.success
 Base.process_running
 Base.process_exited
@@ -235,7 +250,6 @@ Base.withenv
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
 Base.Libc.gethostname
-Base.getipaddr
 Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
@@ -255,6 +269,13 @@ Base.Sys.windows_version
 Base.@static
 ```
 
+## Versioning
+
+```@docs
+Base.VersionNumber
+Base.@v_str
+```
+
 ## Errors
 
 ```@docs
@@ -263,7 +284,6 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
-Base.assert
 Base.@assert
 Base.ArgumentError
 Base.AssertionError
@@ -282,12 +302,13 @@ Base.MissingException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
-Base.ParseError
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
+Core.UndefKeywordError
 Core.UndefRefError
 Core.UndefVarError
+Base.StringIndexError
 Base.InitError
 Base.retry
 Base.ExponentialBackOff
@@ -296,7 +317,7 @@ Base.ExponentialBackOff
 ## Events
 
 ```@docs
-Base.Timer(::Function, ::Real, ::Real)
+Base.Timer(::Function, ::Real)
 Base.Timer
 Base.AsyncCondition
 Base.AsyncCondition(::Function)
@@ -305,45 +326,34 @@ Base.AsyncCondition(::Function)
 ## Reflection
 
 ```@docs
-Base.module_name
+Base.nameof(::Module)
 Base.parentmodule
+Base.moduleroot
 Base.@__MODULE__
 Base.fullname
 Base.names
 Core.nfields
-Base.fieldnames
-Base.fieldname
-Base.fieldcount
-Base.propertynames
-Base.datatype_name
 Base.isconst
-Base.function_name
+Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
-Base.@functionloc
 ```
 
 ## Internals
 
 ```@docs
-Base.gc
-Base.gc_enable
+Base.GC.gc
+Base.GC.enable
+Base.GC.@preserve
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)
 Meta.parse(::AbstractString)
+Meta.ParseError
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered
-Base.@code_lowered
 Base.code_typed
-Base.@code_typed
-Base.code_warntype
-Base.@code_warntype
-Base.code_llvm
-Base.@code_llvm
-Base.code_native
-Base.@code_native
 Base.precompile
 ```

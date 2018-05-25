@@ -4,21 +4,21 @@
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
-function generic_scale!(X::AbstractArray, s::Number)
+function generic_rmul!(X::AbstractArray, s::Number)
     @simd for I in eachindex(X)
         @inbounds X[I] *= s
     end
     X
 end
 
-function generic_scale!(s::Number, X::AbstractArray)
+function generic_lmul!(s::Number, X::AbstractArray)
     @simd for I in eachindex(X)
         @inbounds X[I] = s*X[I]
     end
     X
 end
 
-function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
+function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
     if _length(C) != _length(X)
         throw(DimensionMismatch("first array has length $(_length(C)) which does not match the length of the second, $(_length(X))."))
     end
@@ -28,7 +28,7 @@ function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
     C
 end
 
-function generic_scale!(C::AbstractArray, s::Number, X::AbstractArray)
+function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray)
     if _length(C) != _length(X)
         throw(DimensionMismatch("first array has length $(_length(C)) which does not
 match the length of the second, $(_length(X))."))
@@ -39,50 +39,48 @@ match the length of the second, $(_length(X))."))
     C
 end
 
-scale!(C::AbstractArray, s::Number, X::AbstractArray) = generic_scale!(C, X, s)
-scale!(C::AbstractArray, X::AbstractArray, s::Number) = generic_scale!(C, s, X)
+mul!(C::AbstractArray, s::Number, X::AbstractArray) = generic_mul!(C, X, s)
+mul!(C::AbstractArray, X::AbstractArray, s::Number) = generic_mul!(C, s, X)
 
 """
-    scale!(A, b)
-    scale!(b, A)
+    rmul!(A::AbstractArray, b::Number)
 
 Scale an array `A` by a scalar `b` overwriting `A` in-place.
 
-If `A` is a matrix and `b` is a vector, then `scale!(A,b)` scales each column `i` of `A` by
-`b[i]` (similar to `A*Diagonal(b)`), while `scale!(b,A)` scales each row `i` of `A` by `b[i]`
-(similar to `Diagonal(b)*A`), again operating in-place on `A`. An `InexactError` exception is
-thrown if the scaling produces a number not representable by the element type of `A`,
-e.g. for integer types.
-
 # Examples
 ```jldoctest
-julia> a = [1 2; 3 4]
+julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
  3  4
 
-julia> b = [1; 2]
-2-element Array{Int64,1}:
- 1
- 2
-
-julia> scale!(a,b)
+julia> rmul!(A, 2)
 2×2 Array{Int64,2}:
- 1  4
- 3  8
-
-julia> a = [1 2; 3 4];
-
-julia> b = [1; 2];
-
-julia> scale!(b,a)
-2×2 Array{Int64,2}:
- 1  2
+ 2  4
  6  8
 ```
 """
-scale!(X::AbstractArray, s::Number) = generic_scale!(X, s)
-scale!(s::Number, X::AbstractArray) = generic_scale!(s, X)
+rmul!(A::AbstractArray, b::Number) = generic_rmul!(A, b)
+
+"""
+    lmul!(a::Number, B::AbstractArray)
+
+Scale an array `B` by a scalar `a` overwriting `B` in-place.
+
+# Examples
+```jldoctest
+julia> B = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> lmul!(2, B)
+2×2 Array{Int64,2}:
+ 2  4
+ 6  8
+```
+"""
+lmul!(a::Number, B::AbstractArray) = generic_lmul!(a, B)
 
 """
     cross(x, y)
@@ -111,8 +109,14 @@ julia> cross(a,b)
  0
 ```
 """
-cross(a::AbstractVector, b::AbstractVector) =
-    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
+function cross(a::AbstractVector, b::AbstractVector)
+    if !(length(a) == length(b) == 3)
+        throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
+    end
+    a1, a2, a3 = a
+    b1, b2, b3 = b
+    [a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1]
+end
 
 """
     triu(M)
@@ -240,44 +244,6 @@ See also [`tril`](@ref).
 """
 tril!(M::AbstractMatrix) = tril!(M,0)
 
-diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
-
-"""
-    diff(A::AbstractVector)
-    diff(A::AbstractMatrix, dim::Integer)
-
-Finite difference operator of matrix or vector `A`. If `A` is a matrix,
-specify the dimension over which to operate with the `dim` argument.
-
-# Examples
-```jldoctest
-julia> a = [2 4; 6 16]
-2×2 Array{Int64,2}:
- 2   4
- 6  16
-
-julia> diff(a,2)
-2×1 Array{Int64,2}:
-  2
- 10
-
-julia> diff(vec(a))
-3-element Array{Int64,1}:
-  4
- -2
- 12
-```
-"""
-function diff(A::AbstractMatrix, dim::Integer)
-    if dim == 1
-        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
-    elseif dim == 2
-        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
-    else
-        throw(ArgumentError("dimension dim must be 1 or 2, got $dim"))
-    end
-end
-
 diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
 
 ###########################################################################################
@@ -285,11 +251,12 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 
 # special cases of vecnorm; note that they don't need to handle isempty(x)
 function generic_vecnormMinusInf(x)
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     minabs = norm(v)
-    while !done(x, s)
-        (v, s) = next(x, s)
+    while true
+        y = iterate(x, s)
+        y === nothing && break
+        (v, s) = y
         vnorm = norm(v)
         minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
     end
@@ -297,11 +264,12 @@ function generic_vecnormMinusInf(x)
 end
 
 function generic_vecnormInf(x)
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     maxabs = norm(v)
-    while !done(x, s)
-        (v, s) = next(x, s)
+    while true
+        y = iterate(x, s)
+        y === nothing && break
+        (v, s) = y
         vnorm = norm(v)
         maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
     end
@@ -309,13 +277,14 @@ function generic_vecnormInf(x)
 end
 
 function generic_vecnorm1(x)
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     av = float(norm(v))
     T = typeof(av)
     sum::promote_type(Float64, T) = av
-    while !done(x, s)
-        (v, s) = next(x, s)
+    while true
+        y = iterate(x, s)
+        y === nothing && break
+        (v, s) = y
         sum += norm(v)
     end
     return convert(T, sum)
@@ -329,20 +298,23 @@ norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
     (maxabs == 0 || isinf(maxabs)) && return maxabs
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
     if isfinite(_length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
         sum::promote_type(Float64, T) = norm_sqr(v)
-        while !done(x, s)
-            (v, s) = next(x, s)
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
             sum += norm_sqr(v)
         end
         return convert(T, sqrt(sum))
     else
         sum = abs2(norm(v)/maxabs)
-        while !done(x, s)
-            (v, s) = next(x, s)
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
             sum += (norm(v)/maxabs)^2
         end
         return convert(T, maxabs*sqrt(sum))
@@ -352,8 +324,7 @@ end
 # Compute L_p norm ‖x‖ₚ = sum(abs(x).^p)^(1/p)
 # (Not technically a "norm" for p < 1.)
 function generic_vecnormp(x, p)
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? vecnormInf(x) : vecnormMinusInf(x)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
@@ -364,15 +335,19 @@ function generic_vecnormp(x, p)
     spp::promote_type(Float64, T) = p
     if -1 <= p <= 1 || (isfinite(_length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
         sum::promote_type(Float64, T) = norm(v)^spp
-        while !done(x, s)
-            (v, s) = next(x, s)
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
             sum += norm(v)^spp
         end
         return convert(T, sum^inv(spp))
     else # rescaling
         sum = (norm(v)/maxabs)^spp
-        while !done(x, s)
-            (v, s) = next(x, s)
+        while true
+            y = iterate(x, s)
+            y == nothing && break
+            (v, s) = y
             sum += (norm(v)/maxabs)^spp
         end
         return convert(T, maxabs*sum^inv(spp))
@@ -660,29 +635,30 @@ julia> vecdot(x, y)
 ```
 """
 function vecdot(x, y) # arbitrary iterables
-    ix = start(x)
-    if done(x, ix)
-        if !isempty(y)
+    ix = iterate(x)
+    iy = iterate(y)
+    if ix === nothing
+        if iy !== nothing
             throw(DimensionMismatch("x and y are of different lengths!"))
         end
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
-    iy = start(y)
-    if done(y, iy)
+    if iy === nothing
         throw(DimensionMismatch("x and y are of different lengths!"))
     end
-    (vx, ix) = next(x, ix)
-    (vy, iy) = next(y, iy)
+    (vx, xs) = ix
+    (vy, ys) = iy
     s = dot(vx, vy)
-    while !done(x, ix)
-        if done(y, iy)
-            throw(DimensionMismatch("x and y are of different lengths!"))
+    while true
+        ix = iterate(x, xs)
+        iy = iterate(y, ys)
+        if (ix == nothing) || (iy == nothing)
+            break
         end
-        (vx, ix) = next(x, ix)
-        (vy, iy) = next(y, iy)
+        (vx, xs), (vy, ys) = ix, iy
         s += dot(vx, vy)
     end
-    if !done(y, iy)
+    if !(iy == nothing && ix == nothing)
             throw(DimensionMismatch("x and y are of different lengths!"))
     end
     return s
@@ -712,18 +688,18 @@ function dot(x::AbstractVector, y::AbstractVector)
     if length(x) != length(y)
         throw(DimensionMismatch("dot product arguments have lengths $(length(x)) and $(length(y))"))
     end
-    ix = start(x)
-    if done(x, ix)
+    ix = iterate(x)
+    if ix === nothing
         # we only need to check the first vector, since equal lengths have been asserted
         return zero(eltype(x))'zero(eltype(y))
     end
-    @inbounds (vx, ix) = next(x, ix)
-    @inbounds (vy, iy) = next(y, start(y))
-    s = vx'vy
-    while !done(x, ix)
-        @inbounds (vx, ix) = next(x, ix)
-        @inbounds (vy, iy) = next(y, iy)
-        s += vx'vy
+    iy = iterate(y)
+    s = ix[1]'iy[1]
+    ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
+    while ix != nothing
+        s += ix[1]'iy[1]
+        ix = iterate(x, ix[2])
+        iy = iterate(y, iy[2])
     end
     return s
 end
@@ -760,12 +736,12 @@ julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
 """
 function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
     s = svdvals(A)
-    sum(x -> x > tol*s[1], s)
+    count(x -> x > tol*s[1], s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
 """
-    trace(M)
+    tr(M)
 
 Matrix trace. Sums the diagonal elements of `M`.
 
@@ -776,15 +752,15 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> trace(A)
+julia> tr(A)
 5
 ```
 """
-function trace(A::AbstractMatrix)
+function tr(A::AbstractMatrix)
     checksquare(A)
     sum(diag(A))
 end
-trace(x::Number) = x
+tr(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
 #kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
@@ -886,9 +862,9 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         if istriu(A)
             return UpperTriangular(A) \ B
         end
-        return lufact(A) \ B
+        return lu(A) \ B
     end
-    return qrfact(A,Val(true)) \ B
+    return qr(A,Val(true)) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
@@ -1185,45 +1161,6 @@ function linreg(x::AbstractVector, y::AbstractVector)
     return (a, b)
 end
 
-# multiply by diagonal matrix as vector
-#diagmm!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
-
-#diagmm!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
-
-scale!(A::AbstractMatrix, b::AbstractVector) = scale!(A,A,b)
-scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
-
-#diagmm(A::AbstractMatrix, b::AbstractVector)
-#diagmm(b::AbstractVector, A::AbstractMatrix)
-
-#^(A::AbstractMatrix, p::Number)
-
-#findmax(a::AbstractArray)
-#findmin(a::AbstractArray)
-
-"""
-    peakflops(n::Integer=2000; parallel::Bool=false)
-
-`peakflops` computes the peak flop rate of the computer by using double precision
-[`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
-multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
-multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
-[`BLAS.set_num_threads(n)`](@ref).
-
-If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
-the worker processors. The flop rate of the entire parallel computer is returned. When
-running in parallel, only 1 BLAS thread is used. The argument `n` still refers to the size
-of the problem that is solved on each processor.
-"""
-function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = fill(1.,100,100)
-    t = @elapsed a2 = a*a
-    a = fill(1.,n,n)
-    t = @elapsed a2 = a*a
-    @assert a2[1,1] == n
-    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*Float64(n)^3/t)
-end
-
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
@@ -1240,9 +1177,9 @@ end
 function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
     if _length(rx) != _length(ry)
         throw(DimensionMismatch("rx has length $(_length(rx)), but ry has length $(_length(ry))"))
-    elseif !checkindex(Bool, linearindices(x), rx)
+    elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
         throw(BoundsError(x, rx))
-    elseif !checkindex(Bool, linearindices(y), ry)
+    elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
         throw(BoundsError(y, ry))
     end
     for (IY, IX) in zip(eachindex(ry), eachindex(rx))
@@ -1333,7 +1270,7 @@ function det(A::AbstractMatrix{T}) where T
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
     end
-    return det(lufact(A))
+    return det(lu(A))
 end
 det(x::Number) = x
 
@@ -1368,7 +1305,7 @@ julia> logabsdet(B)
 (0.6931471805599453, 1.0)
 ```
 """
-logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
+logabsdet(A::AbstractMatrix) = logabsdet(lu(A))
 
 """
     logdet(M)
@@ -1457,12 +1394,12 @@ end
 
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
-        scale!(v, invnrm)
+        rmul!(v, invnrm)
 
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
-        scale!(v, εδ)
-        scale!(v, inv(nrm*εδ))
+        rmul!(v, εδ)
+        rmul!(v, inv(nrm*εδ))
     end
 
     v

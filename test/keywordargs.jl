@@ -308,3 +308,26 @@ end
                 ((1, 3, 5, 6, 7),
                  (a = 2, b = 4, c = 8, d = 9, f = 10))
 end
+
+@testset "required keyword arguments" begin
+    f(x; y, z=3) = x + 2y + 3z
+    @test f(1, y=2) === 14 === f(10, y=2, z=0)
+    @test_throws UndefKeywordError f(1)
+    @test_throws UndefKeywordError f(1, z=2)
+    g(x; y::Int, z=3) = x + 2y + 3z
+    @test g(1, y=2) === 14 === g(10, y=2, z=0)
+    @test_throws TypeError g(1, y=2.3)
+    @test_throws UndefKeywordError g(1)
+    @test_throws UndefKeywordError g(1, z=2)
+end
+
+@testset "issue #26916 - anonymous function with 1 keyword arg and 1 optional arg" begin
+    f = (x=1;y=2)->(x,y)
+    @test f() == (1,2)
+    @test f(10) == (10,2)
+    @test f(y=20) == (1,20)
+    @test f(20, y=30) == (20,30)
+    g = (x=1;)->(x,x)
+    @test g() == (1,1)
+    @test g(2) == (2,2)
+end

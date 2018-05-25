@@ -273,7 +273,8 @@ false
 """
     &(x, y)
 
-Bitwise and.
+Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
 
 # Examples
 ```jldoctest
@@ -282,6 +283,12 @@ julia> 4 & 10
 
 julia> 4 & 12
 4
+
+julia> true & missing
+missing
+
+julia> false & missing
+false
 ```
 """
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
@@ -289,7 +296,8 @@ julia> 4 & 12
 """
     |(x, y)
 
-Bitwise or.
+Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
 
 # Examples
 ```jldoctest
@@ -298,6 +306,12 @@ julia> 4 | 10
 
 julia> 4 | 1
 5
+
+julia> true | missing
+true
+
+julia> false | missing
+missing
 ```
 """
 (|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
@@ -306,20 +320,20 @@ xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 """
     bswap(n)
 
-Byte-swap an integer. Flip the bits of its binary representation.
+Reverse the byte order of `n`.
 
 # Examples
 ```jldoctest
-julia> a = bswap(4)
-288230376151711744
+julia> a = bswap(0x10203040)
+0x40302010
 
 julia> bswap(a)
-4
+0x10203040
 
-julia> bin(1)
+julia> string(1, base = 2)
 "1"
 
-julia> bin(bswap(1))
+julia> string(bswap(1), base = 2)
 "100000000000000000000000000000000000000000000000000000000"
 ```
 """
@@ -423,11 +437,11 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 # note: this early during bootstrap, `>=` is not yet available
 # note: we only define Int shift counts here; the generic case is handled later
 >>(x::BitInteger, y::Int) =
-    select_value(0 <= y, x >> unsigned(y), x << unsigned(-y))
+    ifelse(0 <= y, x >> unsigned(y), x << unsigned(-y))
 <<(x::BitInteger, y::Int) =
-    select_value(0 <= y, x << unsigned(y), x >> unsigned(-y))
+    ifelse(0 <= y, x << unsigned(y), x >> unsigned(-y))
 >>>(x::BitInteger, y::Int) =
-    select_value(0 <= y, x >>> unsigned(y), x << unsigned(-y))
+    ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
@@ -450,9 +464,9 @@ end
 # @doc isn't available when running in Core at this point.
 # Tuple syntax for documention two function signatures at the same time
 # doesn't work either at this point.
-if module_name(@__MODULE__) === :Base
+if nameof(@__MODULE__) === :Base
     for fname in (:mod, :rem)
-        @eval @doc ("""
+        @eval @doc """
             rem(x::Integer, T::Type{<:Integer}) -> T
             mod(x::Integer, T::Type{<:Integer}) -> T
             %(x::Integer, T::Type{<:Integer}) -> T
@@ -466,7 +480,7 @@ if module_name(@__MODULE__) === :Base
         julia> 129 % Int8
         -127
         ```
-        """ -> $fname(x::Integer, T::Type{<:Integer}))
+        """ $fname(x::Integer, T::Type{<:Integer})
     end
 end
 
@@ -478,7 +492,9 @@ mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 
 """
-    trunc([T,] x, [digits, [base]])
+    trunc([T,] x)
+    trunc(x; digits::Integer= [, base = 10])
+    trunc(x; sigdigits::Integer= [, base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
 is less than or equal to `x`.
@@ -486,12 +502,14 @@ is less than or equal to `x`.
 `trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits` and `base` work as for [`round`](@ref).
+`digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function trunc end
 
 """
-    floor([T,] x, [digits, [base]])
+    floor([T,] x)
+    floor(x; digits::Integer= [, base = 10])
+    floor(x; sigdigits::Integer= [, base = 10])
 
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
 equal to `x`.
@@ -499,12 +517,14 @@ equal to `x`.
 `floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits` and `base` work as for [`round`](@ref).
+`digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function floor end
 
 """
-    ceil([T,] x, [digits, [base]])
+    ceil([T,] x)
+    ceil(x; digits::Integer= [, base = 10])
+    ceil(x; sigdigits::Integer= [, base = 10])
 
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
 equal to `x`.
@@ -512,14 +532,9 @@ equal to `x`.
 `ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
 representable.
 
-`digits` and `base` work as for [`round`](@ref).
+`digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function ceil end
-
-round(x::Integer) = x
-trunc(x::Integer) = x
-floor(x::Integer) = x
- ceil(x::Integer) = x
 
 round(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 trunc(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
@@ -539,9 +554,9 @@ end
 macro big_str(s)
     if '_' in s
         # remove _ in s[2:end-1]
-        bf = IOBuffer(endof(s))
+        bf = IOBuffer(maxsize=lastindex(s))
         print(bf, s[1])
-        for c in SubString(s, 2, endof(s)-1)
+        for c in SubString(s, 2, lastindex(s)-1)
             c != '_' && print(bf, c)
         end
         print(bf, s[end])
@@ -625,10 +640,10 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
 
-widen(::Type{<:Union{Int8, Int16}}) = Int32
+widen(::Type{<:Union{Int8, Int16}}) = Int
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen(::Type{<:Union{UInt8, UInt16}}) = UInt32
+widen(::Type{<:Union{UInt8, UInt16}}) = UInt
 widen(::Type{UInt32}) = UInt64
 widen(::Type{UInt64}) = UInt128
 
@@ -703,7 +718,7 @@ if Core.sizeof(Int) == 4
         return Int128(div(BigInt(x), BigInt(y)))
     end
     function div(x::UInt128, y::UInt128)
-        return UInt128(div(BigInt(x), BigInt(y)))
+        return UInt128(div(BigInt(x), BigInt(y)))::UInt128
     end
 
     function rem(x::Int128, y::Int128)
@@ -730,6 +745,8 @@ end
 for op in (:+, :-, :*, :&, :|, :xor)
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
-        return $op(a % T, b % T)
+        aT, bT = a % T, b % T
+        not_sametype((a, b), (aT, bT))
+        return $op(aT, bT)
     end
 end

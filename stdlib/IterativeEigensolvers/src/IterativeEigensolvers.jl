@@ -7,9 +7,9 @@ Arnoldi and Lanczos iteration for computing eigenvalues
 """
 module IterativeEigensolvers
 
-using LinearAlgebra: BlasFloat, BlasInt, SVD, checksquare, mul!,
-              UniformScaling, issymmetric, ishermitian,
-              factorize, I, scale!, qr
+using LinearAlgebra: BlasFloat, BlasInt, Diagonal, I, SVD, UniformScaling,
+                     checksquare, factorize,ishermitian, issymmetric, mul!,
+                     rmul!, qr
 import LinearAlgebra
 
 export eigs, svds
@@ -78,7 +78,7 @@ function _eigs(A, B;
     sym = !iscmplx && issymmetric(A) && issymmetric(B)
     nevmax = sym ? n-1 : n-2
     if nevmax <= 0
-        throw(ArgumentError("input matrix A is too small. Use eigfact instead."))
+        throw(ArgumentError("input matrix A is too small. Use eigen instead."))
     end
     if nev > nevmax
         @warn "Adjusting nev from $nev to $nevmax"
@@ -225,7 +225,7 @@ end
 function AtA_or_AAt(A::AbstractMatrix{T}) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     Anew = convert(AbstractMatrix{Tnew}, A)
-    AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(uninitialized, max(size(A)...)))
+    AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(undef, max(size(A)...)))
 end
 
 function LinearAlgebra.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
@@ -278,7 +278,7 @@ iterations derived from [`eigs`](@ref).
 * `resid`: Final residual vector.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"2-element Array{Float64,1}:\\n.*\\n.*"
 julia> A = Diagonal(1:4);
 
 julia> s = svds(A, nsv = 2)[1];
@@ -317,10 +317,10 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
         # left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign.(ex[1][ind]')
         if size(X, 1) >= size(X, 2)
             V = ex[2]
-            U = qr(scale!(X*V, inv.(svals)))[1]
+            U = Array(qr(rmul!(X*V, Diagonal(inv.(svals)))).Q)
         else
             U = ex[2]
-            V = qr(scale!(X'U, inv.(svals)))[1]
+            V = Array(qr(rmul!(X'U, Diagonal(inv.(svals)))).Q)
         end
 
         # right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]

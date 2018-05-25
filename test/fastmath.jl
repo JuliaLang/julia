@@ -122,7 +122,7 @@ end
             end
         end
         for f in (:+, :-, :*, :/, :%, :(==), :!=, :<, :<=, :>, :>=, :^,
-                  :atan2, :hypot, :max, :min)
+                  :atan2, :hypot, :max, :min, :log)
             @eval begin
                 @test @fastmath($f($half, $third)) ≈ $f($half, $third)
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half)
@@ -156,7 +156,7 @@ end
                 @test @fastmath($f($third)) ≈ $f($third) rtol=$rtol
             end
         end
-        for f in (:+, :-, :*, :/, :(==), :!=, :^)
+        for f in (:+, :-, :*, :/, :(==), :!=, :^, :log)
             @eval begin
                 @test @fastmath($f($half, $third)) ≈ $f($half, $third) rtol=$rtol
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half) rtol=$rtol
@@ -172,7 +172,7 @@ end
         chalf = (1+1im)/CT(2)
         cthird = (1-1im)/CT(3)
 
-        for f in (:+, :-, :*, :/, :(==), :!=, :^)
+        for f in (:+, :-, :*, :/, :(==), :!=, :^, :log)
             @eval begin
                 @test @fastmath($f($chalf, $third)) ≈ $f($chalf, $third)
                 @test @fastmath($f($half, $cthird)) ≈ $f($half, $cthird)

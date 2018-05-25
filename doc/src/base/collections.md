@@ -2,11 +2,11 @@
 
 ## [Iteration](@id lib-collections-iteration)
 
-Sequential iteration is implemented by the methods [`start`](@ref), [`done`](@ref), and [`next`](@ref).
+Sequential iteration is implemented by the [`iterate`](@ref) function.
 The general `for` loop:
 
 ```julia
-for i = I   # or  "for i in I"
+for i in iter   # or  "for i = iter"
     # body
 end
 ```
@@ -14,10 +14,11 @@ end
 is translated into:
 
 ```julia
-state = start(I)
-while !done(I, state)
-    (i, state) = next(I, state)
+next = iterate(iter)
+while next !== nothing
+    (i, state) = next
     # body
+    next = iterate(iter, state)
 end
 ```
 
@@ -26,9 +27,7 @@ See the [manual section on the iteration interface](@ref man-interface-iteration
 iterable type.
 
 ```@docs
-Base.start
-Base.done
-Base.next
+Base.iterate
 Base.IteratorSize
 Base.IteratorEltype
 ```
@@ -48,6 +47,7 @@ Fully implemented by:
   * `AbstractString`
   * [`Set`](@ref)
   * [`Pair`](@ref)
+  * [`NamedTuple`](@ref)
 
 ## General Collections
 
@@ -70,11 +70,13 @@ Fully implemented by:
   * [`WeakKeyDict`](@ref)
   * `AbstractString`
   * [`Set`](@ref)
+  * [`NamedTuple`](@ref)
 
 ## Iterable Collections
 
 ```@docs
 Base.in
+Base.:∉
 Base.eltype
 Base.indexin
 Base.unique
@@ -86,20 +88,16 @@ Base.foldl(::Any, ::Any, ::Any)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any, ::Any)
 Base.foldr(::Any, ::Any)
-Base.maximum(::Any)
-Base.maximum(::Any, ::Any)
+Base.maximum
 Base.maximum!
-Base.minimum(::Any)
-Base.minimum(::Any, ::Any)
+Base.minimum
 Base.minimum!
 Base.extrema(::Any)
 Base.extrema(::AbstractArray, ::Any)
-Base.indmax
-Base.indmin
-Base.findmax(::Any)
-Base.findmax(::AbstractArray, ::Any)
-Base.findmin(::Any)
-Base.findmin(::AbstractArray, ::Any)
+Base.argmax
+Base.argmin
+Base.findmax
+Base.findmin
 Base.findmax!
 Base.findmin!
 Base.sum
@@ -129,7 +127,6 @@ Base.last
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)
-Base.issubset(::Any, ::Any)
 Base.filter
 Base.filter!
 Base.replace(::Any, ::Pair...)
@@ -143,7 +140,8 @@ Base.replace!
 ```@docs
 Base.getindex
 Base.setindex!
-Base.endof
+Base.firstindex
+Base.lastindex
 ```
 
 Fully implemented by:
@@ -162,6 +160,7 @@ Partially implemented by:
   * [`Dict`](@ref)
   * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
+  * [`NamedTuple`](@ref)
 
 ## Dictionaries
 
@@ -203,8 +202,8 @@ Base.keys
 Base.values
 Base.pairs
 Base.merge
-Base.merge!(::Associative, ::Associative...)
-Base.merge!(::Function, ::Associative, ::Associative...)
+Base.merge!(::AbstractDict, ::AbstractDict...)
+Base.merge!(::Function, ::AbstractDict, ::AbstractDict...)
 Base.sizehint!
 Base.keytype
 Base.valtype
@@ -224,7 +223,7 @@ Partially implemented by:
   * [`Array`](@ref)
   * [`BitArray`](@ref)
   * [`ImmutableDict`](@ref Base.ImmutableDict)
-  * [`Iterators.IndexValue`](@ref)
+  * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
 
@@ -240,6 +239,9 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.:⊈
+Base.:⊊
+Base.issetequal
 ```
 
 Fully implemented by:
@@ -275,5 +277,5 @@ Fully implemented by:
 
 ```@docs
 Base.Pair
-Iterators.IndexValue
+Iterators.Pairs
 ```

@@ -339,9 +339,11 @@ public:
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
+        std::vector<std::pair<jl_method_instance_t*, uintptr_t>> def_spec;
+        std::vector<std::pair<jl_method_instance_t*, uintptr_t>> def_invoke;
         auto symbols = object::computeSymbolSizes(debugObj);
         bool first = true;
-        for(const auto &sym_size : symbols) {
+        for (const auto &sym_size : symbols) {
             const object::SymbolRef &sym_iter = sym_size.first;
             auto SymbolTypeOrError = sym_iter.getType();
             assert(SymbolTypeOrError);
@@ -382,14 +384,17 @@ public:
                     triggered_linfos.push_back(linfo);
                 linfo_in_flight.erase(linfo_it);
                 const char *F = linfo->functionObjectsDecls.functionObject;
-                if (!linfo->fptr && F && sName.equals(F)) {
-                    int jlcall_api = jl_jlcall_api(F);
-                    if (linfo->inferred || jlcall_api != JL_API_GENERIC) {
-                        linfo->jlcall_api = jlcall_api;
-                        linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
+                const char *specF = linfo->functionObjectsDecls.specFunctionObject;
+                if (linfo->invoke == jl_fptr_trampoline) {
+                    if (specF && sName.equals(specF)) {
+                        def_spec.push_back({linfo, Addr});
+                        if (!strcmp(F, "jl_fptr_args"))
+                            def_invoke.push_back({linfo, (uintptr_t)&jl_fptr_args});
+                        else if (!strcmp(F, "jl_fptr_sparam"))
+                            def_invoke.push_back({linfo, (uintptr_t)&jl_fptr_sparam});
                     }
-                    else {
-                        linfo->unspecialized_ducttape = (jl_fptr_t)(uintptr_t)Addr;
+                    else if (sName.equals(F)) {
+                        def_invoke.push_back({linfo, Addr});
                     }
                 }
             }
@@ -408,6 +413,11 @@ public:
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
            }
+           // now process these in order, so we ensure the closure values are updated before removing the trampoline
+           for (auto &def : def_spec)
+               def.first->specptr.fptr = (void*)def.second;
+           for (auto &def : def_invoke)
+               def.first->invoke = (jl_callptr_t)def.second;
         }
         uv_rwlock_wrunlock(&threadsafe);
         jl_gc_safe_leave(ptls, gc_state);

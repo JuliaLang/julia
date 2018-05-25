@@ -47,7 +47,7 @@ struct SamplerBigFloat{I<:FloatInterval{BigFloat}} <: Sampler{BigFloat}
 
     function SamplerBigFloat{I}(prec::Int) where I<:FloatInterval{BigFloat}
         nlimbs = (prec-1) ÷ bits_in_Limb + 1
-        limbs = Vector{Limb}(uninitialized, nlimbs)
+        limbs = Vector{Limb}(undef, nlimbs)
         shift = nlimbs * bits_in_Limb - prec
         new(prec, nlimbs, limbs, shift)
     end
@@ -66,7 +66,7 @@ function _rand(rng::AbstractRNG, sp::SamplerBigFloat)
         limbs[end] |= Limb_high_bit
     end
     z.sign = 1
-    Base.@gc_preserve limbs unsafe_copyto!(z.d, pointer(limbs), sp.nlimbs)
+    GC.@preserve limbs unsafe_copyto!(z.d, pointer(limbs), sp.nlimbs)
     (z, randbool)
 end
 
@@ -156,9 +156,9 @@ rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
 ### random characters
 
 # returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
-function rand(r::AbstractRNG, ::SamplerType{Char})
+function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:AbstractChar}
     c = rand(r, 0x00000000:0x0010f7ff)
-    (c < 0xd800) ? Char(c) : Char(c+0x800)
+    (c < 0xd800) ? T(c) : T(c+0x800)
 end
 
 
@@ -319,7 +319,7 @@ end
 
 function rand(rng::AbstractRNG, sp::SamplerBigInt)
     x = MPZ.realloc2(sp.nlimbsmax*8*sizeof(Limb))
-    @gc_preserve x begin
+    GC.@preserve x begin
         limbs = UnsafeView(x.d, sp.nlimbs)
         while true
             rand!(rng, limbs)
@@ -340,7 +340,7 @@ end
 ## random values from AbstractArray
 
 Sampler(rng::AbstractRNG, r::AbstractArray, n::Repetition) =
-    SamplerSimple(r, Sampler(rng, linearindices(r), n))
+    SamplerSimple(r, Sampler(rng, firstindex(r):lastindex(r), n))
 
 rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
     @inbounds return sp[][rand(rng, sp.data)]
@@ -352,7 +352,7 @@ function Sampler(rng::AbstractRNG, t::Dict, ::Repetition)
     isempty(t) && throw(ArgumentError("collection must be non-empty"))
     # we use Val(Inf) below as rand is called repeatedly internally
     # even for generating only one random value from t
-    SamplerSimple(t, Sampler(rng, linearindices(t.slots), Val(Inf)))
+    SamplerSimple(t, Sampler(rng, LinearIndices(t.slots), Val(Inf)))
 end
 
 function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})
@@ -416,12 +416,12 @@ Sampler(rng::AbstractRNG, str::AbstractString, n::Val{Inf}) = Sampler(rng, colle
 # when generating only one char from a string, the specialized method below
 # is usually more efficient
 Sampler(rng::AbstractRNG, str::AbstractString, ::Val{1}) =
-    SamplerSimple(str, Sampler(rng, 1:_endof(str), Val(Inf)))
+    SamplerSimple(str, Sampler(rng, 1:_lastindex(str), Val(Inf)))
 
-isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(Base.@gc_preserve s unsafe_load(pointer(s), i))
+isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(GC.@preserve s unsafe_load(pointer(s), i))
 isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
-_endof(s::String) = sizeof(s)
-_endof(s::AbstractString) = endof(s)
+_lastindex(s::String) = sizeof(s)
+_lastindex(s::AbstractString) = lastindex(s)
 
 function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::Char
     str = sp[]

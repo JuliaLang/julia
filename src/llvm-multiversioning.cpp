@@ -1025,6 +1025,9 @@ bool MultiVersioning::runOnModule(Module &M)
     //     * Cloned function -> Original function (add as we clone functions)
     //     * Original function -> Base function (target specific and updated by LLVM)
     //     * ID -> relocation slots (const).
+    if (M.getName() == "sysimage")
+        return false;
+
     CloneCtx clone(this, M);
 
     // Collect a list of original functions and clone base functions

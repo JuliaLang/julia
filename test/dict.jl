@@ -6,15 +6,12 @@ using Random
     p = Pair(10,20)
     @test p == (10=>20)
     @test isequal(p,10=>20)
-    @test start(p) == 1
-    @test next(p, 1) == (10,2)
-    @test !done(p, 1)
-    @test !done(p,2)
-    @test done(p,3)
-    @test !done(p,0)
-    @test endof(p) == length(p) == 2
-    @test Base.indexed_next(p, 1, (1,2)) == (10,2)
-    @test Base.indexed_next(p, 2, (1,2)) == (20,3)
+    @test iterate(p)[1] == 10
+    @test iterate(p, iterate(p)[2])[1] == 20
+    @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
+    @test lastindex(p) == length(p) == 2
+    @test Base.indexed_iterate(p, 1, nothing) == (10,2)
+    @test Base.indexed_iterate(p, 2, nothing) == (20,3)
     @test (1=>2) < (2=>3)
     @test (2=>2) < (2=>3)
     @test !((2=>3) < (2=>3))
@@ -91,6 +88,8 @@ end
         @test keytype(Dict{AbstractString,Float64}) === AbstractString
         @test valtype(Dict{AbstractString,Float64}) === Float64
     end
+    # test rethrow of error in ctor
+    @test_throws DomainError Dict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
 end
 
 let x = Dict(3=>3, 5=>5, 8=>8, 6=>6)
@@ -160,6 +159,19 @@ end
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
 end
 
+@testset "type of Dict constructed from varargs of Pairs" begin
+    @test Dict(1=>1, 2=>2.0) isa Dict{Int,Real}
+    @test Dict(1=>1, 2.0=>2) isa Dict{Real,Int}
+    @test Dict(1=>1.0, 2.0=>2) isa Dict{Real,Real}
+
+    for T in (Nothing, Missing)
+        @test Dict(1=>1, 2=>T()) isa Dict{Int,Union{Int,T}}
+        @test Dict(1=>T(), 2=>2) isa Dict{Int,Union{Int,T}}
+        @test Dict(1=>1, T()=>2) isa Dict{Union{Int,T},Int}
+        @test Dict(T()=>1, 2=>2) isa Dict{Union{Int,T},Int}
+    end
+end
+
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
 
 @testset "issue #1821" begin
@@ -200,12 +212,12 @@ hash(x::I1438T, h::UInt) = hash(x.id, h)
     end
 end
 
-@testset "isequal" begin
-    @test  isequal(Dict(), Dict())
-    @test  isequal(Dict(1 => 1), Dict(1 => 1))
-    @test !isequal(Dict(1 => 1), Dict())
-    @test !isequal(Dict(1 => 1), Dict(1 => 2))
-    @test !isequal(Dict(1 => 1), Dict(2 => 1))
+@testset "equality" for eq in (isequal, ==)
+    @test  eq(Dict(), Dict())
+    @test  eq(Dict(1 => 1), Dict(1 => 1))
+    @test !eq(Dict(1 => 1), Dict())
+    @test !eq(Dict(1 => 1), Dict(1 => 2))
+    @test !eq(Dict(1 => 1), Dict(2 => 1))
 
     # Generate some data to populate dicts to be compared
     data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
@@ -228,26 +240,44 @@ end
         d2[k] = v
     end
 
-    @test  isequal(d1, d2)
+    @test eq(d1, d2)
     d3 = copy(d2)
     d4 = copy(d2)
     # Removing an item gives different dict
     delete!(d1, data_in[rand(1:length(data_in))][1])
-    @test !isequal(d1, d2)
+    @test !eq(d1, d2)
     # Changing a value gives different dict
     d3[data_in[rand(1:length(data_in))][1]] = randstring(3)
-    !isequal(d1, d3)
+    !eq(d1, d3)
     # Adding a pair gives different dict
     d4[1001] = randstring(3)
-    @test !isequal(d1, d4)
+    @test !eq(d1, d4)
 
-    @test isequal(Dict(), sizehint!(Dict(),96))
+    @test eq(Dict(), sizehint!(Dict(),96))
 
-    # Here is what currently happens when dictionaries of different types
-    # are compared. This is not necessarily desirable. These tests are
-    # descriptive rather than proscriptive.
-    @test !isequal(Dict(1 => 2), Dict("dog" => "bone"))
-    @test isequal(Dict{Int,Int}(), Dict{AbstractString,AbstractString}())
+    # Dictionaries of different types
+    @test !eq(Dict(1 => 2), Dict("dog" => "bone"))
+    @test eq(Dict{Int,Int}(), Dict{AbstractString,AbstractString}())
+end
+
+@testset "equality special cases" begin
+    @test Dict(1=>0.0) == Dict(1=>-0.0)
+    @test !isequal(Dict(1=>0.0), Dict(1=>-0.0))
+
+    @test Dict(0.0=>1) != Dict(-0.0=>1)
+    @test !isequal(Dict(0.0=>1), Dict(-0.0=>1))
+
+    @test Dict(1=>NaN) != Dict(1=>NaN)
+    @test isequal(Dict(1=>NaN), Dict(1=>NaN))
+
+    @test Dict(NaN=>1) == Dict(NaN=>1)
+    @test isequal(Dict(NaN=>1), Dict(NaN=>1))
+
+    @test ismissing(Dict(1=>missing) == Dict(1=>missing))
+    @test isequal(Dict(1=>missing), Dict(1=>missing))
+
+    @test Dict(missing=>1) == Dict(missing=>1)
+    @test isequal(Dict(missing=>1), Dict(missing=>1))
 end
 
 @testset "get!" begin # (get with default values assigned to the given location)
@@ -305,19 +335,26 @@ end
         @test !isempty(summary(keys(d)))
         @test !isempty(summary(values(d)))
     end
+    # show on empty Dict
+    io = IOBuffer()
+    d = Dict{Int, String}()
+    show(io, d)
+    str = String(take!(io))
+    @test str == "Dict{$(Int),String}()"
+    close(io)
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
     d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
     buf = IOBuffer()
-    showcompact(buf, d)
+    show(IOContext(buf, :compact => true), d)
 
     # Check explicitly for the expected strings, since the CPU bitness effects
     # dictionary ordering.
     result = String(take!(buf))
-    @test contains(result, "Dict")
-    @test contains(result, "(1=>2)=>(3=>45)")
-    @test contains(result, "(3=>10)=>(10=>11)")
+    @test occursin("Dict", result)
+    @test occursin("(1=>2)=>(3=>45)", result)
+    @test occursin("(3=>10)=>(10=>11)", result)
 end
 
 mutable struct Alpha end
@@ -328,7 +365,7 @@ Base.show(io::IO, ::Alpha) = print(io,"α")
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
     local str = String(take!(sbuff))
-    @test !contains(str, "…")
+    @test !occursin("…", str)
     @test endswith(str, "α => 1")
 end
 
@@ -412,6 +449,7 @@ end
 
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test a != d
+    @test !isequal(a, d)
 
     @test length(IdDict{Any,Any}(1=>2, 1.0=>3)) == 2
     @test length(Dict(1=>2, 1.0=>3)) == 1
@@ -452,6 +490,7 @@ end
 
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test a != d
+    @test !isequal(a, d)
 
     @test length(IdDict(1=>2, 1.0=>3)) == 2
     @test length(Dict(1=>2, 1.0=>3)) == 1
@@ -489,9 +528,6 @@ end
     @test 1 == @inferred get(d, 1, 1)
     @test pop!(d, -111, nothing) == nothing
     @test 1 == @inferred pop!(d, 1)
-    i = @inferred start(d)
-    @inferred next(d, i)
-    @inferred done(d, i)
 
     # get! and delete!
     d = @inferred IdDict(Pair(:a,1), Pair(:b,2), Pair(3,3))
@@ -517,6 +553,35 @@ end
     end
     @test length(d.ht) >= 10^4
     @test d === Base.rehash!(d, 123452) # number needs to be even
+
+    # not an iterator of tuples or pairs
+    @test_throws ArgumentError IdDict([1, 2, 3, 4])
+    # test rethrow of error in ctor
+    @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
+end
+
+@testset "issue #26833, deletion from IdDict" begin
+    d = IdDict()
+    i = 1
+    # generate many hash collisions
+    while length(d) < 32 # expected to occur at i <≈ 2^16 * 2^5
+        if objectid(i) % UInt16 == 0x1111
+            push!(d, i => true)
+        end
+        i += 1
+    end
+    k = collect(keys(d))
+    @test haskey(d, k[1])
+    delete!(d, k[1])
+    @test length(d) == 31
+    @test !haskey(d, k[1])
+    @test haskey(d, k[end])
+    push!(d, k[end] => false)
+    @test length(d) == 31
+    @test haskey(d, k[end])
+    @test !pop!(d, k[end])
+    @test !haskey(d, k[end])
+    @test length(d) == 30
 end
 
 
@@ -624,6 +689,10 @@ end
     @test filter(f, d) == filter!(f, copy(d)) ==
           invoke(filter!, Tuple{Function,AbstractDict}, f, copy(d)) ==
           Dict(zip(2:2:1000, 2:2:1000))
+    d = Dict(zip(-1:3,-1:3))
+    f = p -> sqrt(p.second) > 2
+    # test rethrowing error from f
+    @test_throws DomainError filter(f, d)
 end
 
 struct MyString <: AbstractString
@@ -637,14 +706,14 @@ import Base.==
 const global hashoffset = [UInt(190)]
 
 Base.hash(s::MyString) = hash(s.str) + hashoffset[]
-Base.endof(s::MyString) = endof(s.str)
-Base.next(s::MyString, v::Int) = next(s.str, v)
+Base.lastindex(s::MyString) = lastindex(s.str)
+Base.iterate(s::MyString, v::Int=1) = iterate(s.str, v)
 Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
 ==(a::MyString, b::MyString) = (a.str == b.str)
 
 Base.hash(v::MyInt) = v.val + hashoffset[]
-Base.endof(v::MyInt) = endof(v.val)
-Base.next(v::MyInt, i::Int) = next(v.val, i)
+Base.lastindex(v::MyInt) = lastindex(v.val)
+Base.iterate(v::MyInt, i...) = iterate(v.val, i...)
 Base.isequal(a::MyInt, b::MyInt) = isequal(a.val, b.val)
 ==(a::MyInt, b::MyInt) = (a.val == b.val)
 @testset "issue #15077" begin
@@ -851,17 +920,57 @@ end
         @test i isa AbstractSet
         @test i == Set([1])
     end
-    @test map(string, keys(d)) == Set(["1","3"])
+    @test Set(string(k) for k in keys(d)) == Set(["1","3"])
 end
 
 @testset "find" begin
-    @test findall(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
-    @test sort(findall(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
-    @test isempty(findall(equalto(1), Dict()))
-    @test isempty(findall(equalto(1), Dict(:a=>2, :b=>3)))
+    @test findall(isequal(1), Dict(:a=>1, :b=>2)) == [:a]
+    @test sort(findall(isequal(1), Dict(:a=>1, :b=>1))) == [:a, :b]
+    @test isempty(findall(isequal(1), Dict()))
+    @test isempty(findall(isequal(1), Dict(:a=>2, :b=>3)))
 
-    @test findfirst(equalto(1), Dict(:a=>1, :b=>2)) == :a
-    @test findfirst(equalto(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
-    @test findfirst(equalto(1), Dict()) === nothing
-    @test findfirst(equalto(1), Dict(:a=>2, :b=>3)) === nothing
+    @test findfirst(isequal(1), Dict(:a=>1, :b=>2)) == :a
+    @test findfirst(isequal(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
+    @test findfirst(isequal(1), Dict()) === nothing
+    @test findfirst(isequal(1), Dict(:a=>2, :b=>3)) === nothing
+end
+
+@testset "Dict printing with limited rows" begin
+    local buf
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize => (4, 80), :limit => true)
+    d = Base.ImmutableDict(1=>2)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+
+    io = IOContext(io, :displaysize => (5, 80))
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+    d = Base.ImmutableDict(d, 3=>4)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+
+    io = IOContext(io, :displaysize => (6, 80))
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) ==
+        "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+    d = Base.ImmutableDict(d, 5=>6)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) ==
+        "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end

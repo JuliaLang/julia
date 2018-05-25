@@ -3,13 +3,28 @@
 using Random
 
 @testset "constructors" begin
-    @test String([0x61,0x62,0x63,0x21]) == "abc!"
+    v = [0x61,0x62,0x63,0x21]
+    @test String(v) == "abc!" && isempty(v)
     @test String("abc!") == "abc!"
+    @test String(0x61:0x63) == "abc"
+
+    # Check that resizing empty source vector does not corrupt string
+    b = IOBuffer()
+    write(b, "ab")
+    x = take!(b)
+    s = String(x)
+    resize!(x, 0)
+    empty!(x) # Another method which must be tested
+    @test s == "ab"
+    resize!(x, 1)
+    @test s == "ab"
 
     @test isempty(string())
     @test eltype(GenericString) == Char
-    @test start("abc") == 1
+    @test firstindex("abc") == 1
     @test cmp("ab","abc") == -1
+    @test typemin(String) === ""
+    @test typemin("abc") === ""
     @test "abc" === "abc"
     @test "ab"  !== "abc"
     @test string("ab", 'c') === "abc"
@@ -64,7 +79,7 @@ end
             b = 2:62,
             _ = 1:10
         n = (T != BigInt) ? rand(T) : BigInt(rand(Int128))
-        @test parse(T, base(b, n), b) == n
+        @test parse(T, string(n, base = b),  base = b) == n
     end
     end
 end
@@ -166,14 +181,14 @@ end
 let
     srep = repeat("Σβ",2)
     s="Σβ"
-    ss=SubString(s,1,endof(s))
+    ss=SubString(s,1,lastindex(s))
 
     @test repeat(ss,2) == "ΣβΣβ"
 
-    @test endof(srep) == 7
+    @test lastindex(srep) == 7
 
-    @test next(srep, 3) == ('β',5)
-    @test next(srep, 7) == ('β',9)
+    @test iterate(srep, 3) == ('β',5)
+    @test iterate(srep, 7) == ('β',9)
 
     @test srep[7] == 'β'
     @test_throws BoundsError srep[8]
@@ -215,9 +230,9 @@ end
     @test_throws MethodError codeunit(tstr, true)
     @test_throws MethodError isvalid(tstr, 1)
     @test_throws MethodError isvalid(tstr, true)
-    @test_throws MethodError next(tstr, 1)
-    @test_throws MethodError next(tstr, true)
-    @test_throws MethodError endof(tstr)
+    @test_throws MethodError iterate(tstr, 1)
+    @test_throws MethodError iterate(tstr, true)
+    @test_throws MethodError lastindex(tstr)
 
     gstr = GenericString("12")
     @test string(gstr) isa GenericString
@@ -235,9 +250,12 @@ end
 
     @test first(eachindex("foobar")) === 1
     @test first(eachindex("")) === 1
-    @test last(eachindex("foobar")) === endof("foobar")
-    @test done(eachindex("foobar"),7)
-    @test eltype(Base.EachStringIndex) == Int
+    @test last(eachindex("foobar")) === lastindex("foobar")
+    @test iterate(eachindex("foobar"),7) === nothing
+    @test Int == eltype(Base.EachStringIndex) ==
+                 eltype(Base.EachStringIndex{String}) ==
+                 eltype(Base.EachStringIndex{GenericString}) ==
+                 eltype(eachindex("foobar")) == eltype(eachindex(gstr))
     @test map(uppercase, "foó") == "FOÓ"
     @test nextind("fóobar", 0, 3) == 4
 
@@ -253,14 +271,15 @@ end
 
     @test length(gstr, 1, 2) == 2
 
-    # tests promote_rule
+    # no string promotion
     let svec = [s"12", GenericString("12"), SubString("123", 1, 2)]
-        @test all(x -> x === "12", svec)
+        @test all(x -> x == "12", svec)
+        @test svec isa Vector{AbstractString}
     end
 end
 
 @testset "issue #10307" begin
-    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Union{Int16, Nothing}}
+    @test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Int16}
 
     for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
         for i in [typemax(T), typemin(T)]
@@ -362,6 +381,7 @@ end
             ("\udc00\ud800", false),
         )
         @test isvalid(String, val) == pass == isvalid(String(val))
+        @test isvalid(val[1]) == pass
     end
 
     # Issue #11203
@@ -435,6 +455,17 @@ end
     end
     # Check seven-byte sequences, should be invalid
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
+
+    # invalid Chars
+    @test  isvalid('a')
+    @test  isvalid('柒')
+    @test !isvalid("\xff"[1])
+    @test !isvalid("\xc0\x80"[1])
+    @test !isvalid("\xf0\x80\x80\x80"[1])
+    @test !isvalid('\ud800')
+    @test  isvalid('\ud7ff')
+    @test !isvalid('\udfff')
+    @test  isvalid('\ue000')
 end
 
 @testset "NULL pointers are handled consistently by String" begin
@@ -449,9 +480,9 @@ end
     @test_throws ArgumentError ascii("Hello, ∀")
     @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
 end
-@testset "issue #17271: endof() doesn't throw an error even with invalid strings" begin
-    @test endof("\x90") == 1
-    @test endof("\xce") == 1
+@testset "issue #17271: lastindex() doesn't throw an error even with invalid strings" begin
+    @test lastindex("\x90") == 1
+    @test lastindex("\xce") == 1
 end
 # issue #17624, missing getindex method for String
 @test "abc"[:] == "abc"
@@ -459,8 +490,8 @@ end
 @testset "issue #18280: next/nextind must return past String's underlying data" begin
     for s in ("Hello", "Σ", "こんにちは", "😊😁")
         local s
-        @test next(s, endof(s))[2] > sizeof(s)
-        @test nextind(s, endof(s)) > sizeof(s)
+        @test iterate(s, lastindex(s))[2] > sizeof(s)
+        @test nextind(s, lastindex(s)) > sizeof(s)
     end
 end
 # Test cmp with AbstractStrings that don't index the same as UTF-8, which would include
@@ -470,10 +501,8 @@ mutable struct CharStr <: AbstractString
     chars::Vector{Char}
     CharStr(x) = new(collect(x))
 end
-Base.start(x::CharStr) = start(x.chars)
-Base.next(x::CharStr, i::Int) = next(x.chars, i)
-Base.done(x::CharStr, i::Int) = done(x.chars, i)
-Base.endof(x::CharStr) = endof(x.chars)
+Base.iterate(x::CharStr, i::Integer=1) = iterate(x.chars, i)
+Base.lastindex(x::CharStr) = lastindex(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
     @test "áB" != CharStr("áá") # returns false with bug
@@ -706,100 +735,100 @@ end
 
 @test unsafe_wrap(Vector{UInt8},"\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
 
-@test next("a", 1)[2] == 2
+@test iterate("a", 1)[2] == 2
 @test nextind("a", 1) == 2
-@test next("az", 1)[2] == 2
+@test iterate("az", 1)[2] == 2
 @test nextind("az", 1) == 2
-@test next("a\xb1", 1)[2] == 2
+@test iterate("a\xb1", 1)[2] == 2
 @test nextind("a\xb1", 1) == 2
-@test next("a\xb1z", 1)[2] == 2
+@test iterate("a\xb1z", 1)[2] == 2
 @test nextind("a\xb1z", 1) == 2
-@test next("a\xb1\x83", 1)[2] == 2
+@test iterate("a\xb1\x83", 1)[2] == 2
 @test nextind("a\xb1\x83", 1) == 2
-@test next("a\xb1\x83\x84", 1)[2] == 2
+@test iterate("a\xb1\x83\x84", 1)[2] == 2
 @test nextind("a\xb1\x83\x84", 1) == 2
-@test next("a\xb1\x83\x84z", 1)[2] == 2
+@test iterate("a\xb1\x83\x84z", 1)[2] == 2
 @test nextind("a\xb1\x83\x84z", 1) == 2
 
-@test next("\x81", 1)[2] == 2
+@test iterate("\x81", 1)[2] == 2
 @test nextind("\x81", 1) == 2
-@test next("\x81z", 1)[2] == 2
+@test iterate("\x81z", 1)[2] == 2
 @test nextind("\x81z", 1) == 2
-@test next("\x81\xb1", 1)[2] == 2
+@test iterate("\x81\xb1", 1)[2] == 2
 @test nextind("\x81\xb1", 1) == 2
-@test next("\x81\xb1z", 1)[2] == 2
+@test iterate("\x81\xb1z", 1)[2] == 2
 @test nextind("\x81\xb1z", 1) == 2
-@test next("\x81\xb1\x83", 1)[2] == 2
+@test iterate("\x81\xb1\x83", 1)[2] == 2
 @test nextind("\x81\xb1\x83", 1) == 2
-@test next("\x81\xb1\x83\x84", 1)[2] == 2
+@test iterate("\x81\xb1\x83\x84", 1)[2] == 2
 @test nextind("\x81\xb1\x83\x84", 1) == 2
-@test next("\x81\xb1\x83\x84z", 1)[2] == 2
+@test iterate("\x81\xb1\x83\x84z", 1)[2] == 2
 @test nextind("\x81\xb1\x83\x84z", 1) == 2
 
-@test next("\xce", 1)[2] == 2
+@test iterate("\xce", 1)[2] == 2
 @test nextind("\xce", 1) == 2
-@test next("\xcez", 1)[2] == 2
+@test iterate("\xcez", 1)[2] == 2
 @test nextind("\xcez", 1) == 2
-@test next("\xce\xb1", 1)[2] == 3
+@test iterate("\xce\xb1", 1)[2] == 3
 @test nextind("\xce\xb1", 1) == 3
-@test next("\xce\xb1z", 1)[2] == 3
+@test iterate("\xce\xb1z", 1)[2] == 3
 @test nextind("\xce\xb1z", 1) == 3
-@test next("\xce\xb1\x83", 1)[2] == 3
+@test iterate("\xce\xb1\x83", 1)[2] == 3
 @test nextind("\xce\xb1\x83", 1) == 3
-@test next("\xce\xb1\x83\x84", 1)[2] == 3
+@test iterate("\xce\xb1\x83\x84", 1)[2] == 3
 @test nextind("\xce\xb1\x83\x84", 1) == 3
-@test next("\xce\xb1\x83\x84z", 1)[2] == 3
+@test iterate("\xce\xb1\x83\x84z", 1)[2] == 3
 @test nextind("\xce\xb1\x83\x84z", 1) == 3
 
-@test next("\xe2", 1)[2] == 2
+@test iterate("\xe2", 1)[2] == 2
 @test nextind("\xe2", 1) == 2
-@test next("\xe2z", 1)[2] == 2
+@test iterate("\xe2z", 1)[2] == 2
 @test nextind("\xe2z", 1) == 2
-@test next("\xe2\x88", 1)[2] == 3
+@test iterate("\xe2\x88", 1)[2] == 3
 @test nextind("\xe2\x88", 1) == 3
-@test next("\xe2\x88z", 1)[2] == 3
+@test iterate("\xe2\x88z", 1)[2] == 3
 @test nextind("\xe2\x88z", 1) == 3
-@test next("\xe2\x88\x83", 1)[2] == 4
+@test iterate("\xe2\x88\x83", 1)[2] == 4
 @test nextind("\xe2\x88\x83", 1) == 4
-@test next("\xe2\x88\x83z", 1)[2] == 4
+@test iterate("\xe2\x88\x83z", 1)[2] == 4
 @test nextind("\xe2\x88\x83z", 1) == 4
-@test next("\xe2\x88\x83\x84", 1)[2] == 4
+@test iterate("\xe2\x88\x83\x84", 1)[2] == 4
 @test nextind("\xe2\x88\x83\x84", 1) == 4
-@test next("\xe2\x88\x83\x84z", 1)[2] == 4
+@test iterate("\xe2\x88\x83\x84z", 1)[2] == 4
 @test nextind("\xe2\x88\x83\x84z", 1) == 4
 
-@test next("\xf0", 1)[2] == 2
+@test iterate("\xf0", 1)[2] == 2
 @test nextind("\xf0", 1) == 2
-@test next("\xf0z", 1)[2] == 2
+@test iterate("\xf0z", 1)[2] == 2
 @test nextind("\xf0z", 1) == 2
-@test next("\xf0\x9f", 1)[2] == 3
+@test iterate("\xf0\x9f", 1)[2] == 3
 @test nextind("\xf0\x9f", 1) == 3
-@test next("\xf0\x9fz", 1)[2] == 3
+@test iterate("\xf0\x9fz", 1)[2] == 3
 @test nextind("\xf0\x9fz", 1) == 3
-@test next("\xf0\x9f\x98", 1)[2] == 4
+@test iterate("\xf0\x9f\x98", 1)[2] == 4
 @test nextind("\xf0\x9f\x98", 1) == 4
-@test next("\xf0\x9f\x98z", 1)[2] == 4
+@test iterate("\xf0\x9f\x98z", 1)[2] == 4
 @test nextind("\xf0\x9f\x98z", 1) == 4
-@test next("\xf0\x9f\x98\x84", 1)[2] == 5
+@test iterate("\xf0\x9f\x98\x84", 1)[2] == 5
 @test nextind("\xf0\x9f\x98\x84", 1) == 5
-@test next("\xf0\x9f\x98\x84z", 1)[2] == 5
+@test iterate("\xf0\x9f\x98\x84z", 1)[2] == 5
 @test nextind("\xf0\x9f\x98\x84z", 1) == 5
 
-@test next("\xf8", 1)[2] == 2
+@test iterate("\xf8", 1)[2] == 2
 @test nextind("\xf8", 1) == 2
-@test next("\xf8z", 1)[2] == 2
+@test iterate("\xf8z", 1)[2] == 2
 @test nextind("\xf8z", 1) == 2
-@test next("\xf8\x9f", 1)[2] == 2
+@test iterate("\xf8\x9f", 1)[2] == 2
 @test nextind("\xf8\x9f", 1) == 2
-@test next("\xf8\x9fz", 1)[2] == 2
+@test iterate("\xf8\x9fz", 1)[2] == 2
 @test nextind("\xf8\x9fz", 1) == 2
-@test next("\xf8\x9f\x98", 1)[2] == 2
+@test iterate("\xf8\x9f\x98", 1)[2] == 2
 @test nextind("\xf8\x9f\x98", 1) == 2
-@test next("\xf8\x9f\x98z", 1)[2] == 2
+@test iterate("\xf8\x9f\x98z", 1)[2] == 2
 @test nextind("\xf8\x9f\x98z", 1) == 2
-@test next("\xf8\x9f\x98\x84", 1)[2] == 2
+@test iterate("\xf8\x9f\x98\x84", 1)[2] == 2
 @test nextind("\xf8\x9f\x98\x84", 1) == 2
-@test next("\xf8\x9f\x98\x84z", 1)[2] == 2
+@test iterate("\xf8\x9f\x98\x84z", 1)[2] == 2
 @test nextind("\xf8\x9f\x98\x84z", 1) == 2
 
 # codeunit vectors
@@ -829,4 +858,23 @@ end
 # PR #25535
 let v = [0x40,0x41,0x42]
     @test String(view(v, 2:3)) == "AB"
+end
+
+# make sure length for identical String and AbstractString return the same value, PR #25533
+let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100))*"∀εa∀aε",
+                                   String(rand(rng, UInt8, 200))]
+    for s in strs, i in 1:ncodeunits(s)+1, j in 0:ncodeunits(s)
+            @test length(s,i,j) == length(GenericString(s),i,j)
+    end
+    for i in 0:10, j in 1:100,
+        s in [randstring(rng, i), randstring(rng, "∀∃α1", i), String(rand(rng, UInt8, i))]
+        @test length(s) == length(GenericString(s))
+    end
+end
+
+# conversion of SubString to the same type, issue #25525
+let x = SubString("ab", 1, 1)
+    y = convert(SubString{String}, x)
+    @test y === x
+    chop("ab") === chop.(["ab"])[1]
 end

@@ -221,7 +221,7 @@ end
                 @test A*LowerTriangular(Matrix(1.0I, n, n)) ≈ fA
             end
             @testset "mul! errors" begin
-                Cnn, Cnm, Cmn = Matrix{elty}.(uninitialized, ((n,n), (n,n+1), (n+1,n)))
+                Cnn, Cnm, Cmn = Matrix{elty}.(undef, ((n,n), (n,n+1), (n+1,n)))
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnn,A,Cnm)
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnn,A,Cmn)
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnn,B,Cmn)
@@ -243,7 +243,7 @@ end
                         w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, b, a)
                         evecs = LAPACK.stein!(b, a, w)
 
-                        (e, v) = eig(SymTridiagonal(b, a))
+                        (e, v) = eigen(SymTridiagonal(b, a))
                         @test e ≈ w
                         test_approx_eq_vecs(v, evecs)
                     end
@@ -253,23 +253,23 @@ end
                         test_approx_eq_vecs(v, evecs)
                     end
                     @testset "stegr! call with index range" begin
-                        F = eigfact(SymTridiagonal(b, a),1:2)
-                        fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),1:2)
+                        F = eigen(SymTridiagonal(b, a),1:2)
+                        fF = eigen(Symmetric(Array(SymTridiagonal(b, a))),1:2)
                         test_approx_eq_modphase(F.vectors, fF.vectors)
                         @test F.values ≈ fF.values
                     end
                     @testset "stegr! call with value range" begin
-                        F = eigfact(SymTridiagonal(b, a),0.0,1.0)
-                        fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),0.0,1.0)
+                        F = eigen(SymTridiagonal(b, a),0.0,1.0)
+                        fF = eigen(Symmetric(Array(SymTridiagonal(b, a))),0.0,1.0)
                         test_approx_eq_modphase(F.vectors, fF.vectors)
                         @test F.values ≈ fF.values
                     end
                     @testset "eigenvalues/eigenvectors of symmetric tridiagonal" begin
                         if elty === Float32 || elty === Float64
-                            DT, VT = @inferred eig(A)
-                            @inferred eig(A, 2:4)
-                            @inferred eig(A, 1.0, 2.0)
-                            D, Vecs = eig(fA)
+                            DT, VT = @inferred eigen(A)
+                            @inferred eigen(A, 2:4)
+                            @inferred eigen(A, 1.0, 2.0)
+                            D, Vecs = eigen(fA)
                             @test DT ≈ D
                             @test abs.(VT'Vecs) ≈ Matrix(elty(1)I, n, n)
                             test_approx_eq_modphase(eigvecs(A), eigvecs(fA))
@@ -351,6 +351,13 @@ end
 @testset "constructors with range and other abstract vectors" begin
     @test SymTridiagonal(1:3, 1:2) == [1 1 0; 1 2 2; 0 2 3]
     @test Tridiagonal(4:5, 1:3, 1:2) == [1 1 0; 4 2 2; 0 5 3]
+end
+
+@testset "Issue #26994 (and the empty case)" begin
+    T = SymTridiagonal([1.0],[3.0])
+    x = ones(1)
+    @test T*x == ones(1)
+    @test SymTridiagonal(ones(0), ones(0)) * ones(0, 2) == ones(0, 2)
 end
 
 end # module TestTridiagonal

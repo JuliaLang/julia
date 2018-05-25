@@ -41,15 +41,10 @@ Base.Irrational
 ## Data Formats
 
 ```@docs
-Base.bin
-Base.hex
-Base.dec
-Base.oct
-Base.base
 Base.digits
 Base.digits!
 Base.bitstring
-Base.parse(::Type, ::Any, ::Any)
+Base.parse
 Base.tryparse
 Base.big
 Base.signed

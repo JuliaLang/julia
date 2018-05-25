@@ -191,15 +191,6 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
             goto done;
     }
 
-#if defined(__linux__) || defined(__FreeBSD__)
-    // check map of versioned libs from "libX" to full soname "libX.so.ver"
-    if (!abspath && n_extensions > 1) { // soname map only works for libX
-        handle = jl_dlopen_soname(modname, strlen(modname), flags);
-        if (handle)
-            goto done;
-    }
-#endif
-
 notfound:
     if (throw_err)
         jl_dlerror("could not load library \"%s\"\n%s", modname);

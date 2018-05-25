@@ -27,7 +27,7 @@ function test_threaded_loop_and_atomic_add()
     # and were unique (via pigeon-hole principle).
     @test !(false in found)
     if was_inorder
-        println(STDERR, "Warning: threaded loop executed in order")
+        println(stderr, "Warning: threaded loop executed in order")
     end
 end
 
@@ -47,8 +47,8 @@ function test_threaded_atomic_minmax(m::T,n::T) where T
     mid = m + (n-m)>>1
     x = Atomic{T}(mid)
     y = Atomic{T}(mid)
-    oldx = Vector{T}(uninitialized, n-m+1)
-    oldy = Vector{T}(uninitialized, n-m+1)
+    oldx = Vector{T}(undef, n-m+1)
+    oldy = Vector{T}(undef, n-m+1)
     @threads for i = m:n
         oldx[i-m+1] = atomic_min!(x, T(i))
         oldy[i-m+1] = atomic_max!(y, T(i))
@@ -124,7 +124,7 @@ function threaded_gc_locked(::Type{LockT}) where LockT
     @threads for i = 1:20
         @test lock(critical) === nothing
         @test islocked(critical)
-        gc(false)
+        GC.gc(false)
         @test unlock(critical) === nothing
     end
     @test !islocked(critical)
@@ -171,9 +171,26 @@ end
 end
 
 # Ensure only LLVM-supported types can be atomic
-@test_throws TypeError Atomic{Bool}
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{ComplexF64}
+
+function test_atomic_bools()
+    x = Atomic{Bool}(false)
+    # Arithmetic functions are not defined.
+    @test_throws MethodError atomic_add!(x, true)
+    @test_throws MethodError atomic_sub!(x, true)
+    # All the rest are:
+    for v in [true, false]
+        @test x[] == atomic_xchg!(x, v)
+        @test v == atomic_cas!(x, v, !v)
+    end
+    x = Atomic{Bool}(false)
+    @test false == atomic_max!(x, true); @test x[] == true
+    x = Atomic{Bool}(true)
+    @test true == atomic_and!(x, false); @test x[] == false
+end
+
+test_atomic_bools()
 
 # Test atomic memory ordering with load/store
 mutable struct CommBuf
@@ -383,20 +400,38 @@ for period in (0.06, Dates.Millisecond(60))
     end
 end
 
-complex_cfunction = function(a)
-    s = zero(eltype(a))
-    @inbounds @simd for i in a
-        s += muladd(a[i], a[i], -2)
-    end
-    return s
-end
 function test_thread_cfunction()
-    @threads for i in 1:1000
-        # Make sure this is not inferrable
-        # and a runtime call to `jl_function_ptr` will be created
-        ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any),
-              complex_cfunction, Float64, Tuple{Ref{Vector{Float64}}})
+    # ensure a runtime call to `get_trampoline` will be created
+    # TODO: get_trampoline is not thread-safe (as this test shows)
+    function complex_cfunction(a)
+        s = zero(eltype(a))
+        @inbounds @simd for i in a
+            s += muladd(a[i], a[i], -2)
+        end
+        return s
     end
+    fs = [ let a = zeros(10)
+            () -> complex_cfunction(a)
+        end for i in 1:1000 ]
+    @noinline cf(f) = @cfunction $f Float64 ()
+    cfs = Vector{Base.CFunction}(undef, length(fs))
+    cf1 = cf(fs[1])
+    @threads for i in 1:1000
+        cfs[i] = cf(fs[i])
+    end
+    @test cfs[1] == cf1
+    @test cfs[2] == cf(fs[2])
+    @test length(unique(cfs)) == 1000
+    ok = zeros(Int, nthreads())
+    @threads for i in 1:10000
+        i = mod1(i, 1000)
+        fi = fs[i]
+        cfi = cf(fi)
+        GC.@preserve cfi begin
+            ok[threadid()] += (cfi === cfs[i])
+        end
+    end
+    @test sum(ok) == 10000
 end
 test_thread_cfunction()
 
@@ -452,29 +487,18 @@ function test_nested_loops()
 end
 test_nested_loops()
 
-@testset "libatomic" begin
-    prog = """
-    using Base.Threads
-    function unaligned_setindex!(x::Atomic{UInt128}, v::UInt128)
-        Base.llvmcall(\"\"\"
-            %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i128*
-            store atomic i128 %1, i128* %ptr release, align 8
-            ret void
-        \"\"\", Cvoid, Tuple{Ptr{UInt128}, UInt128}, unsafe_convert(Ptr{UInt128}, x), v)
+function test_thread_too_few_iters()
+    x = Atomic()
+    a = zeros(Int, nthreads()+2)
+    threaded_loop(a, 1:nthreads()-1, x)
+    found = zeros(Bool, nthreads()+2)
+    for i=1:nthreads()-1
+        found[a[i]] = true
     end
-    code_native(STDOUT, unaligned_setindex!, Tuple{Atomic{UInt128}, UInt128})
-    """
-
-    mktempdir() do dir
-        file = joinpath(dir, "test23901.jl")
-        write(file, prog)
-        run(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no $file`),
-                     stdout=joinpath(dir, "out.txt"),
-                     stderr=joinpath(dir, "err.txt"),
-                     append=false))
-        out = readchomp(joinpath(dir, "out.txt"))
-        err = readchomp(joinpath(dir, "err.txt"))
-        @test contains(out, "libat_store") || contains(out, "atomic_store")
-        @test !contains(err, "__atomic_store")
-    end
+    @test x[] == nthreads()-1
+    # Next test checks that all loop iterations ran,
+    # and were unique (via pigeon-hole principle).
+    @test !(false in found[1:nthreads()-1])
+    @test !(true in found[nthreads():end])
 end
+test_thread_too_few_iters()

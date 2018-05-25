@@ -5,7 +5,7 @@ import Base.Checked: add_with_overflow, mul_with_overflow
 ## string to integer functions ##
 
 """
-    parse(type, str, [base])
+    parse(type, str; base)
 
 Parse a string as a number. For `Integer` types, a base can be specified
 (the default is 10). For floating-point types, the string is parsed as a decimal
@@ -18,10 +18,10 @@ If the string does not contain a valid number, an error is raised.
 julia> parse(Int, "1234")
 1234
 
-julia> parse(Int, "1234", 5)
+julia> parse(Int, "1234", base = 5)
 194
 
-julia> parse(Int, "afc", 16)
+julia> parse(Int, "afc", base = 16)
 2812
 
 julia> parse(Float64, "1.2e-3")
@@ -31,9 +31,9 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 0.32 + 4.5im
 ```
 """
-parse(T::Type, str, base=Int)
+parse(T::Type, str; base = Int)
 
-function parse(::Type{T}, c::Char, base::Integer=36) where T<:Integer
+function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
@@ -43,18 +43,18 @@ function parse(::Type{T}, c::Char, base::Integer=36) where T<:Integer
     convert(T, d)
 end
 
-function parseint_next(s::AbstractString, startpos::Int, endpos::Int)
+function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
     (0 < startpos <= endpos) || (return Char(0), 0, 0)
     j = startpos
-    c, startpos = next(s,startpos)
+    c, startpos = iterate(s,startpos)::Tuple{Char, Int}
     c, startpos, j
 end
 
 function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos::Int, endpos::Int)
-    c, i, j = parseint_next(s, startpos, endpos)
+    c, i, j = parseint_iterate(s, startpos, endpos)
 
     while isspace(c)
-        c, i, j = parseint_next(s,i,endpos)
+        c, i, j = parseint_iterate(s,i,endpos)
     end
     (j == 0) && (return 0, 0, 0)
 
@@ -62,21 +62,21 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     if signed
         if c == '-' || c == '+'
             (c == '-') && (sgn = -1)
-            c, i, j = parseint_next(s,i,endpos)
+            c, i, j = parseint_iterate(s,i,endpos)
         end
     end
 
     while isspace(c)
-        c, i, j = parseint_next(s,i,endpos)
+        c, i, j = parseint_iterate(s,i,endpos)
     end
     (j == 0) && (return 0, 0, 0)
 
     if base == 0
-        if c == '0' && !done(s,i)
-            c, i = next(s,i)
+        if c == '0' && i <= ncodeunits(s)
+            c, i = iterate(s,i)::Tuple{Char, Int}
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
-                c, i, j = parseint_next(s,i,endpos)
+                c, i, j = parseint_iterate(s,i,endpos)
             end
         else
             base = 10
@@ -99,7 +99,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
         return nothing
     end
-    c, i = parseint_next(s,i,endpos)
+    c, i = parseint_iterate(s,i,endpos)
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
         return nothing
@@ -123,7 +123,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             n *= sgn
             return n
         end
-        c, i = next(s,i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
         isspace(c) && break
     end
     (T <: Signed) && (n *= sgn)
@@ -144,10 +144,10 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
             return nothing
         end
         (i > endpos) && return n
-        c, i = next(s,i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
     end
     while i <= endpos
-        c, i = next(s,i)
+        c, i = iterate(s,i)::Tuple{Char, Int}
         if !isspace(c)
             raise && throw(ArgumentError("extra characters after whitespace in $(repr(SubString(s,startpos,endpos)))"))
             return nothing
@@ -176,7 +176,7 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
 
     len = endpos - startpos + 1
     p   = pointer(sbuff) + startpos - 1
-    @gc_preserve sbuff begin
+    GC.@preserve sbuff begin
         (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
                                   p, "true", 4)) && (return true)
         (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
@@ -202,22 +202,19 @@ end
 end
 
 """
-    tryparse(type, str, [base])
+    tryparse(type, str; base)
 
 Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
 """
-tryparse(::Type{T}, s::AbstractString, base::Integer) where {T<:Integer} =
-    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
-tryparse(::Type{T}, s::AbstractString) where {T<:Integer} =
-    tryparse_internal(T, s, start(s), endof(s), 0, false)
-
-function parse(::Type{T}, s::AbstractString, base::Integer) where T<:Integer
-    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true)
+function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
+    # Zero base means, "figure it out"
+    tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
 end
 
-function parse(::Type{T}, s::AbstractString) where T<:Integer
-    tryparse_internal(T, s, start(s), endof(s), 0, true) # Zero means, "figure it out"
+function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
+                                 base===nothing ? 0 : check_valid_base(base), true))
 end
 
 ## string to float functions ##
@@ -281,16 +278,16 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     # find index of ± separating real/imaginary parts (if any)
-    i₊ = coalesce(findnext(occursin(('+','-')), s, i), 0)
+    i₊ = coalesce(findnext(in(('+','-')), s, i), 0)
     if i₊ == i # leading ± sign
-        i₊ = coalesce(findnext(occursin(('+','-')), s, i₊+1), 0)
+        i₊ = coalesce(findnext(in(('+','-')), s, i₊+1), 0)
     end
     if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
-        i₊ = coalesce(findnext(occursin(('+','-')), s, i₊+1), 0)
+        i₊ = coalesce(findnext(in(('+','-')), s, i₊+1), 0)
     end
 
     # find trailing im/i/j
-    iᵢ = coalesce(findprev(occursin(('m','i','j')), s, e), 0)
+    iᵢ = coalesce(findprev(in(('m','i','j')), s, e), 0)
     if iᵢ > 0 && s[iᵢ] == 'm' # im
         iᵢ -= 1
         if s[iᵢ] != 'i'
@@ -305,7 +302,9 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
             x === nothing && return nothing
             return Complex{T}(zero(x),x)
         else # purely real
-            return Complex{T}(tryparse_internal(T, s, i, e, raise))
+            x = tryparse_internal(T, s, i, e, raise)
+            x === nothing && return nothing
+            return Complex{T}(x)
         end
     end
 
@@ -326,12 +325,12 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
 end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
-tryparse_internal(T::Type{<:Complex}, s::AbstractString, i::Int, e::Int, raise::Bool) =
+tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Bool) where S<:Real =
     tryparse_internal(T, String(s), i, e, raise)
 
 # fallback methods for tryparse_internal
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
-    startpos == start(s) && endpos == endof(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
+    startpos == firstindex(s) && endpos == lastindex(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
     result = tryparse_internal(T, s, startpos, endpos)
     if raise && result === nothing
@@ -343,4 +342,7 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, rais
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
-    tryparse_internal(T, s, start(s), endof(s), true)
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
+
+tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =
+    tryparse_internal(T, s, firstindex(s), lastindex(s), false)

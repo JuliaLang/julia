@@ -2,16 +2,25 @@
 
 module Sort
 
-using Base.Order, Base.Checked
-using Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
+import ..@__MODULE__, ..parentmodule
+const Base = parentmodule(@__MODULE__)
+using .Base.Order
+using .Base: copymutable, LinearIndices, IndexStyle, viewindexing, IndexLinear, _length, (:),
+    eachindex, axes, first, last, similar, start, next, done, zip, @views, OrdinalRange,
+    AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
+    AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
+    extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
+    length, resize!, fill
 
-import
-    Base.sort,
-    Base.sort!,
-    Base.issorted,
-    Base.sortperm,
-    Base.Slice,
-    Base.to_indices
+using .Base: >>>, !==
+
+import .Base:
+    sort,
+    sort!,
+    issorted,
+    sortperm,
+    Slice,
+    to_indices
 
 export # also exported by Base
     # order-only:
@@ -47,13 +56,15 @@ export # not exported by Base
 ## functions requiring only ordering ##
 
 function issorted(itr, order::Ordering)
-    state = start(itr)
-    done(itr,state) && return true
-    prev, state = next(itr, state)
-    while !done(itr, state)
-        this, state = next(itr, state)
+    y = iterate(itr)
+    y === nothing && return true
+    prev, state = y
+    y = iterate(itr, state)
+    while y !== nothing
+        this, state = y
         lt(order, this, prev) && return false
         prev = this
+        y = iterate(itr, state)
     end
     return true
 end
@@ -86,11 +97,14 @@ issorted(itr;
 function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     inds = axes(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
-    @views v[k]
+    maybeview(v, k)
 end
 
+maybeview(v, k) = view(v, k)
+maybeview(v, k::Integer) = v[k]
+
 """
-    partialsort!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    partialsort!(v, k; by=<transform>, lt=<comparison>, rev=false)
 
 Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
 `rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
@@ -145,7 +159,7 @@ partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange};
     partialsort!(v, k, ord(lt,by,rev,order))
 
 """
-    partialsort(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    partialsort(v, k, by=<transform>, lt=<comparison>, rev=false)
 
 Variant of [`partialsort!`](@ref) which copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
@@ -279,7 +293,7 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
 end
 
 """
-    searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    searchsorted(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the range of indices of `a` which compare as equal to `x` (using binary search)
 according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
@@ -304,7 +318,7 @@ julia> searchsorted(a, 4, rev=true)
 """ searchsorted
 
 """
-    searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
@@ -324,7 +338,7 @@ julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
 """ searchsortedfirst
 
 """
-    searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+    searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Return the index of the last value in `a` less than or equal to `x`, according to the
 specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
@@ -671,7 +685,7 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+    partialsortperm(v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false)
 
 Return a partial permutation of the vector `v`, according to the order specified by
 `by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
@@ -686,7 +700,7 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
 
 """
-    partialsortperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+    partialsortperm!(ix, v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `1:length(ix)`.
@@ -707,7 +721,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     # do partial quicksort
     sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
 
-    @views ix[k]
+    maybeview(ix, k)
 end
 
 ## sortperm: the permutation to sort an array ##
@@ -819,9 +833,13 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     @inbounds for i = 1:n
         where[x[i] + offs + 1] += 1
     end
-    cumsum!(where, where)
 
-    P = Vector{Int}(uninitialized, n)
+    #cumsum!(where, where)
+    @inbounds for i = 2:length(where)
+        where[i] += where[i-1]
+    end
+
+    P = Vector{Int}(undef, n)
     @inbounds for i = 1:n
         label = x[i] + offs
         P[where[label]] = i
@@ -834,7 +852,7 @@ end
 ## sorting multi-dimensional arrays ##
 
 """
-    sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort(A; dims::Integer, alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
@@ -847,24 +865,26 @@ julia> A = [4 3; 1 2]
  4  3
  1  2
 
-julia> sort(A, 1)
+julia> sort(A, dims = 1)
 2×2 Array{Int64,2}:
  1  2
  4  3
 
-julia> sort(A, 2)
+julia> sort(A, dims = 2)
 2×2 Array{Int64,2}:
  3  4
  1  2
 ```
 """
-function sort(A::AbstractArray, dim::Integer;
+function sort(A::AbstractArray;
+              dims::Integer,
               alg::Algorithm=DEFAULT_UNSTABLE,
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
               initialized::Union{Bool,Nothing}=nothing)
+    dim = dims
     if initialized !== nothing
         Base.depwarn("`initialized` keyword argument is deprecated", :sort)
     end
@@ -884,7 +904,7 @@ function sort(A::AbstractArray, dim::Integer;
 end
 
 @noinline function sort_chunks!(Av, n, alg, order)
-    inds = linearindices(Av)
+    inds = LinearIndices(Av)
     for s = first(inds):n:last(inds)
         sort!(Av, s, s+n-1, alg, order)
     end
@@ -983,6 +1003,7 @@ slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
 module Float
 using ..Sort
 using ...Order
+using ..Base: @inbounds, AbstractVector, Vector, last, axes
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!

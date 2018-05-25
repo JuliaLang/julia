@@ -4,12 +4,12 @@
 #  "Table-driven Implementation of the Logarithm Function in IEEE Floating-point Arithmetic"
 #  Tang, Ping-Tak Peter
 #  ACM Trans. Math. Softw. (1990), 16(4):378--400
-#  http://dx.doi.org/10.1145/98267.98294
+#  https://doi.org/10.1145/98267.98294
 
 # Does not currently handle floating point flags (inexact, div-by-zero, etc).
 
-import Base.unsafe_trunc
-import Base.Math.@horner
+import .Base.unsafe_trunc
+import .Base.Math.@horner
 
 # Float64 lookup table.
 # to generate values:

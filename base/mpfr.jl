@@ -7,8 +7,8 @@ export
     setprecision
 
 import
-    Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
-        exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
+    .Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
+        inv, exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
@@ -17,15 +17,15 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big
+        isone, big, beta, RefValue
 
-import Base.Rounding: rounding_raw, setrounding_raw
+import .Base.Rounding: rounding_raw, setrounding_raw
 
-import Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
+import .Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
 
-import Base.Math.lgamma_r
+import .Base.Math.lgamma_r
 
-import Base.FastMath.sincos_fast
+import .Base.FastMath.sincos_fast
 
 version() = VersionNumber(unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ())))
 patches() = split(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())),' ')
@@ -40,8 +40,8 @@ function __init__()
     end
 end
 
-const ROUNDING_MODE = Ref{Cint}(0)
-const DEFAULT_PRECISION = Ref(256)
+const ROUNDING_MODE = RefValue{Cint}(0)
+const DEFAULT_PRECISION = RefValue(256)
 
 # Basic type and initialization definitions
 
@@ -131,8 +131,8 @@ BigFloat(x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culong, x))
 BigFloat(x::Union{Float16,Float32}) = BigFloat(Float64(x))
 BigFloat(x::Rational) = BigFloat(numerator(x)) / BigFloat(denominator(x))
 
-function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
-    !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base)
+function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer = 0)
+    !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, Int32), z, s, base, ROUNDING_MODE[])
     err == 0 ? z : nothing
@@ -392,6 +392,8 @@ function -(c::BigInt, x::BigFloat)
     ccall((:mpfr_z_sub, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigInt}, Ref{BigFloat}, Int32), z, c, x, ROUNDING_MODE[])
     return z
 end
+
+inv(x::BigFloat) = one(Clong) / x # faster than fallback one(x)/x
 
 function fma(x::BigFloat, y::BigFloat, z::BigFloat)
     r = BigFloat()
@@ -680,6 +682,13 @@ function atan2(y::BigFloat, x::BigFloat)
     ccall((:mpfr_atan2, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Int32), z, y, x, ROUNDING_MODE[])
     return z
 end
+if version() >= v"4.0.0"
+    function beta(y::BigFloat, x::BigFloat)
+        z = BigFloat()
+        ccall((:mpfr_beta, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Int32), z, y, x, ROUNDING_MODE[])
+        return z
+    end
+end
 
 # Utility functions
 ==(x::BigFloat, y::BigFloat) = ccall((:mpfr_equal_p, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
@@ -818,25 +827,18 @@ function isinteger(x::BigFloat)
     return ccall((:mpfr_integer_p, :libmpfr), Int32, (Ref{BigFloat},), x) != 0
 end
 
-for f in (:ceil, :floor, :trunc)
+for (f,R) in ((:roundeven, :Nearest),
+              (:ceil, :Up),
+              (:floor, :Down),
+              (:trunc, :ToZero),
+              (:round, :NearestTiesAway))
     @eval begin
-        function ($f)(x::BigFloat)
+        function round(x::BigFloat, ::RoundingMode{$(QuoteNode(R))})
             z = BigFloat()
             ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), z, x)
             return z
         end
     end
-end
-
-function round(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_rint, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Cint), z, x, ROUNDING_MODE[])
-    return z
-end
-function round(x::BigFloat,::RoundingMode{:NearestTiesAway})
-    z = BigFloat()
-    ccall((:mpfr_round, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), z, x)
-    return z
 end
 
 function isinf(x::BigFloat)
@@ -927,7 +929,7 @@ end
 
 function _prettify_bigfloat(s::String)::String
     mantissa, exponent = split(s, 'e')
-    if !contains(mantissa, '.')
+    if !occursin('.', mantissa)
         mantissa = string(mantissa, '.')
     end
     mantissa = rstrip(mantissa, '0')

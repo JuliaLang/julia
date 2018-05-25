@@ -6,34 +6,33 @@
 Core.AbstractArray
 Base.AbstractVector
 Base.AbstractMatrix
+Base.AbstractVecOrMat
 Core.Array
-Core.Array(::Uninitialized, ::Any)
+Core.Array(::UndefInitializer, ::Any)
 Core.Array(::Nothing, ::Any)
 Core.Array(::Missing, ::Any)
-Core.Uninitialized
-Core.uninitialized
+Core.UndefInitializer
+Core.undef
 Base.Vector
-Base.Vector(::Uninitialized, ::Any)
+Base.Vector(::UndefInitializer, ::Any)
 Base.Vector(::Nothing, ::Any)
 Base.Vector(::Missing, ::Any)
 Base.Matrix
-Base.Matrix(::Uninitialized, ::Any, ::Any)
+Base.Matrix(::UndefInitializer, ::Any, ::Any)
 Base.Matrix(::Nothing, ::Any, ::Any)
 Base.Matrix(::Missing, ::Any, ::Any)
+Base.VecOrMat
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
 Base.BitArray
-Base.BitArray(::Uninitialized, ::Integer...)
+Base.BitArray(::UndefInitializer, ::Integer...)
 Base.BitArray(::Any)
 Base.trues
 Base.falses
 Base.fill
 Base.fill!
-Base.similar(::AbstractArray)
-Base.similar(::Any, ::Tuple)
-Base.linspace
-Base.logspace
+Base.similar
 ```
 
 ## Basic functions
@@ -45,7 +44,6 @@ Base.axes(::Any)
 Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
-Base.linearindices
 Base.IndexStyle
 Base.conj!
 Base.stride
@@ -63,19 +61,16 @@ to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 Base.broadcast
 Base.Broadcast.broadcast!
 Base.@__dot__
-Base.Broadcast.broadcast_getindex
-Base.Broadcast.broadcast_setindex!
 ```
 
 For specializing broadcast on custom types, see
 ```@docs
 Base.BroadcastStyle
-Base.broadcast_similar
-Base.broadcast_indices
-Base.Broadcast.Scalar
+Base.broadcast_axes
 Base.Broadcast.AbstractArrayStyle
 Base.Broadcast.ArrayStyle
 Base.Broadcast.DefaultArrayStyle
+Base.Broadcast.broadcastable
 ```
 
 ## Indexing and assignment
@@ -102,7 +97,7 @@ Base.@view
 Base.@views
 Base.parent
 Base.parentindices
-Base.slicedim
+Base.selectdim
 Base.reinterpret
 Base.reshape
 Base.squeeze
@@ -117,13 +112,11 @@ Base.vcat
 Base.hcat
 Base.hvcat
 Base.vect
-Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
 Base.findall(::Any)
 Base.findall(::Function, ::Any)
-Base.findnz
 Base.findfirst(::Any)
 Base.findfirst(::Function, ::Any)
 Base.findlast(::Any)
@@ -141,19 +134,17 @@ Base.promote_shape
 ## Array functions
 
 ```@docs
-Base.accumulate(::Any, ::Any, ::Integer)
+Base.accumulate
 Base.accumulate!
 Base.cumprod
 Base.cumprod!
 Base.cumsum
 Base.cumsum!
-LinearAlgebra.diff
-Base.repeat(::AbstractArray)
+Base.diff
+Base.repeat
 Base.rot180
 Base.rotl90
 Base.rotr90
-Base.reducedim
-Base.mapreducedim
 Base.mapslices
 ```
 
@@ -164,17 +155,7 @@ Base.invperm
 Base.isperm
 Base.permute!(::Any, ::AbstractVector)
 Base.invpermute!
-Base.reverse
+Base.reverse(::AbstractVector; kwargs...)
 Base.reverseind
 Base.reverse!
-```
-
-## BitArrays
-
-[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
-They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
-and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
-
-```@docs
-Base.flipbits!
 ```

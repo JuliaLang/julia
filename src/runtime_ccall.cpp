@@ -10,129 +10,16 @@
 #include "processor.h"
 #include "julia_assert.h"
 
+#ifndef _OS_WINDOWS_
+#include <sys/mman.h>
+#if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+#endif
+
 using namespace llvm;
 
 // --- library symbol lookup ---
-
-// map from "libX" to full soname "libX.so.ver"
-#if defined(__linux__) || defined(__FreeBSD__)
-static uv_rwlock_t soname_lock;
-static std::map<std::string, std::string> sonameMap;
-static bool got_sonames = false;
-
-extern "C" void jl_init_runtime_ccall(void)
-{
-    uv_rwlock_init(&soname_lock);
-}
-
-// This reloads the sonames, necessary after system upgrade.
-// Keep this DLLEXPORTed, this is used by `BinDeps.jl` to make sure
-// newly installed libraries can be found.
-extern "C" JL_DLLEXPORT void jl_read_sonames(void)
-{
-    char *line=NULL;
-    size_t sz=0;
-#if defined(__linux__)
-    FILE *ldc = popen("/sbin/ldconfig -p", "r");
-#else
-    FILE *ldc = popen("/sbin/ldconfig -r", "r");
-#endif
-    if (ldc == NULL) return; // ignore errors in running ldconfig (other than whatever might have been printed to stderr)
-
-    // This loop is not allowed to call julia GC while holding the lock
-    uv_rwlock_wrlock(&soname_lock);
-    sonameMap.clear();
-    while (!feof(ldc)) {
-        ssize_t n = getline(&line, &sz, ldc);
-        if (n == -1)
-            break;
-        if (n > 2 && isspace((unsigned char)line[0])) {
-#ifdef __linux__
-            int i = 0;
-            while (isspace((unsigned char)line[++i])) ;
-            char *name = &line[i];
-            char *dot = strstr(name, ".so");
-            i = 0;
-#else
-            char *name = strstr(line, ":-l");
-            if (name == NULL) continue;
-            strncpy(name, "lib", 3);
-            char *dot = strchr(name, '.');
-#endif
-
-            if (NULL == dot)
-                continue;
-
-#ifdef __linux__
-            // Detect if this entry is for the current architecture
-            while (!isspace((unsigned char)dot[++i])) ;
-            while (isspace((unsigned char)dot[++i])) ;
-            int j = i;
-            while (!isspace((unsigned char)dot[++j])) ;
-            char *arch = strstr(dot+i,"x86-64");
-            if (arch != NULL && arch < dot + j) {
-#ifdef _P32
-                continue;
-#endif
-            }
-            else {
-#ifdef _P64
-                continue;
-#endif
-            }
-#endif // __linux__
-
-            char *abslibpath = strrchr(line, ' ');
-            if (dot != NULL && abslibpath != NULL) {
-                std::string pfx(name, dot - name);
-                // Do not include ' ' in front and '\n' at the end
-                std::string soname(abslibpath+1, line+n-(abslibpath+1)-1);
-                sonameMap[pfx] = soname;
-            }
-        }
-    }
-
-    free(line);
-    pclose(ldc);
-    uv_rwlock_wrunlock(&soname_lock);
-}
-
-// This API is not thread safe. The return value can be free'd if
-// `jl_read_sonames()` is called on another thread.
-extern "C" JL_DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n)
-{
-    if (!got_sonames) {
-        jl_read_sonames();
-        got_sonames = true;
-    }
-    const char *res = nullptr;
-    uv_rwlock_rdlock(&soname_lock);
-    auto search = sonameMap.find(std::string(pfx, n));
-    if (search != sonameMap.end())
-        res = search->second.c_str();
-    uv_rwlock_rdunlock(&soname_lock);
-    return res;
-}
-
-extern "C" void *jl_dlopen_soname(const char *pfx, size_t n, unsigned flags)
-{
-    if (!got_sonames) {
-        jl_read_sonames();
-        got_sonames = true;
-    }
-    void *res = nullptr;
-    uv_rwlock_rdlock(&soname_lock);
-    auto search = sonameMap.find(std::string(pfx, n));
-    if (search != sonameMap.end())
-        res = jl_dlopen(search->second.c_str(), flags);
-    uv_rwlock_rdunlock(&soname_lock);
-    return res;
-}
-#else
-extern "C" void jl_init_runtime_ccall(void)
-{
-}
-#endif
 
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
@@ -216,4 +103,138 @@ jl_value_t *jl_get_JIT(void)
 {
     const std::string& HostJITName = "ORCJIT";
     return jl_pchar_to_string(HostJITName.data(), HostJITName.size());
+}
+
+
+static void *trampoline_freelist;
+
+static void *trampoline_alloc()
+{
+    const int sz = 64; // oversized for most platforms. todo: use precise value?
+    if (!trampoline_freelist) {
+#ifdef _OS_WINDOWS_
+        void *mem = VirtualAlloc(NULL, jl_page_size,
+                MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+#else
+        void *mem = mmap(0, jl_page_size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
+        void *next = NULL;
+        for (size_t i = 0; i + sz <= jl_page_size; i += sz) {
+            void **curr = (void**)((char*)mem + i);
+            *curr = next;
+            next = (void*)curr;
+        }
+        trampoline_freelist = next;
+    }
+    void *tramp = trampoline_freelist;
+    trampoline_freelist = *(void**)tramp;
+    return tramp;
+}
+
+static void trampoline_free(void *tramp)
+{
+    *(void**)tramp = trampoline_freelist;
+    trampoline_freelist = tramp;
+}
+
+static void trampoline_deleter(void **f)
+{
+    void *tramp = f[0];
+    void *fobj = f[1];
+    void *cache = f[2];
+    void *nval = f[3];
+    f[0] = NULL;
+    f[2] = NULL;
+    f[3] = NULL;
+    if (tramp)
+        trampoline_free(tramp);
+    if (fobj && cache)
+        ptrhash_remove((htable_t*)cache, fobj);
+    if (nval)
+        free(nval);
+}
+
+// TODO: need a thread lock around the cache access parts of this function
+extern "C" JL_DLLEXPORT
+jl_value_t *jl_get_cfunction_trampoline(
+    // dynamic inputs:
+    jl_value_t *fobj,
+    jl_datatype_t *result_type,
+    // call-site constants:
+    htable_t *cache, // weakref htable indexed by (fobj, vals)
+    jl_svec_t *fill,
+    void *(*init_trampoline)(void *tramp, void **nval),
+    jl_unionall_t *env,
+    jl_value_t **vals)
+{
+    // lookup (fobj, vals) in cache
+    if (!cache->table)
+        htable_new(cache, 1);
+    if (fill != jl_emptysvec) {
+        htable_t **cache2 = (htable_t**)ptrhash_bp(cache, (void*)vals);
+        cache = *cache2;
+        if (cache == HT_NOTFOUND) {
+            cache = htable_new((htable_t*)malloc(sizeof(htable_t)), 1);
+            *cache2 = cache;
+        }
+    }
+    void *tramp = ptrhash_get(cache, (void*)fobj);
+    if (tramp != HT_NOTFOUND) {
+        assert((jl_datatype_t*)jl_typeof(tramp) == result_type);
+        return (jl_value_t*)tramp;
+    }
+
+    // not found, allocate a new one
+    size_t n = jl_svec_len(fill);
+    void **nval = (void**)malloc(sizeof(void**) * (n + 1));
+    nval[0] = (void*)fobj;
+    jl_value_t *result;
+    JL_TRY {
+        for (size_t i = 0; i < n; i++) {
+            jl_value_t *sparam_val = jl_instantiate_type_in_env(jl_svecref(fill, i), env, vals);
+            if (sparam_val != (jl_value_t*)jl_any_type)
+                if (!jl_is_concrete_type(sparam_val) || !jl_is_immutable(sparam_val))
+                    sparam_val = NULL;
+            nval[i + 1] = (void*)sparam_val;
+        }
+        int permanent =
+            (result_type == jl_voidpointer_type) ||
+            jl_is_concrete_type(fobj) ||
+            (((jl_datatype_t*)jl_typeof(fobj))->instance == fobj);
+        if (jl_is_unionall(fobj)) {
+            jl_value_t *uw = jl_unwrap_unionall(fobj);
+            if (jl_is_datatype(uw) && ((jl_datatype_t*)uw)->name->wrapper == fobj)
+                permanent = true;
+        }
+        if (permanent) {
+            result = jl_gc_permobj(sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type), result_type);
+            memset(result, 0, jl_datatype_size(result_type));
+        }
+        else {
+            result = jl_new_struct_uninit(result_type);
+        }
+        if (result_type != jl_voidpointer_type) {
+            assert(jl_datatype_size(result_type) == sizeof(void*) * 4);
+            ((void**)result)[1] = (void*)fobj;
+        }
+        if (!permanent) {
+            void *ptr_finalizer[2] = {
+                    (void*)jl_voidpointer_type,
+                    (void*)&trampoline_deleter
+                };
+            jl_gc_add_finalizer(result, (jl_value_t*)&ptr_finalizer[1]);
+            ((void**)result)[2] = (void*)cache;
+            ((void**)result)[3] = (void*)nval;
+        }
+    }
+    JL_CATCH {
+        free(nval);
+        jl_rethrow();
+    }
+    tramp = trampoline_alloc();
+    ((void**)result)[0] = tramp;
+    tramp = init_trampoline(tramp, nval);
+    ptrhash_put(cache, (void*)fobj, result);
+    return result;
 }

@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module SparseVectorTests
+
+using Test
+using SparseArrays
 using LinearAlgebra
 using Random
 
@@ -37,9 +41,9 @@ end
     end
 end
 @testset "show" begin
-    @test contains(string(spv_x1), "1.25")
-    @test contains(string(spv_x1), "-0.75")
-    @test contains(string(spv_x1), "3.5")
+    @test occursin("1.25", string(spv_x1))
+    @test occursin("-0.75", string(spv_x1))
+    @test occursin("3.5", string(spv_x1))
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -204,7 +208,7 @@ end
         let x = sprand(10, 10, 0.5)
             I = rand(1:size(x, 2), 10)
             bI = falses(size(x, 2))
-            bI[I] = true
+            bI[I] .= true
             r = x[1,bI]
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
@@ -214,7 +218,7 @@ end
         let x = sprand(10, 0.5)
             I = rand(1:length(x), 5)
             bI = falses(length(x))
-            bI[I] = true
+            bI[I] .= true
             r = x[bI]
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
@@ -277,7 +281,7 @@ end
     @test findnz(spv_x1) == (findall(!iszero, x1_full), filter(x->x!=0, x1_full))
     let xc = SparseVector(8, [2, 3, 5], [1.25, 0, -0.75]), fc = Array(xc)
         @test findall(!iszero, xc) == findall(!iszero, fc)
-        @test findnz(xc) == ([2, 5], [1.25, -0.75])
+        @test findnz(xc) == ([2, 3, 5], [1.25, 0, -0.75])
     end
 end
 ### Array manipulation
@@ -428,7 +432,7 @@ end
 
 @testset "Concatenation" begin
     let m = 80, n = 100
-        A = Vector{SparseVector{Float64,Int}}(uninitialized, n)
+        A = Vector{SparseVector{Float64,Int}}(undef, n)
         tnnz = 0
         for i = 1:length(A)
             A[i] = sprand(m, 0.3)
@@ -472,8 +476,8 @@ end
                 @test issparse(hcat(othervecormat, spvec))
                 @test issparse(hvcat((2,), spvec, othervecormat))
                 @test issparse(hvcat((2,), othervecormat, spvec))
-                @test issparse(cat((1,2), spvec, othervecormat))
-                @test issparse(cat((1,2), othervecormat, spvec))
+                @test issparse(cat(spvec, othervecormat; dims=(1,2)))
+                @test issparse(cat(othervecormat, spvec; dims=(1,2)))
             end
             # The preceding tests should cover multi-way combinations of those types, but for good
             # measure test a few multi-way combinations involving those types
@@ -483,8 +487,8 @@ end
             @test issparse(hcat(densemat, spmat, spvec, densevec, diagmat))
             @test issparse(hvcat((5,), diagmat, densevec, spvec, densemat, spmat))
             @test issparse(hvcat((5,), spvec, densemat, diagmat, densevec, spmat))
-            @test issparse(cat((1,2), densemat, diagmat, spmat, densevec, spvec))
-            @test issparse(cat((1,2), spvec, diagmat, densevec, spmat, densemat))
+            @test issparse(cat(densemat, diagmat, spmat, densevec, spvec; dims=(1,2)))
+            @test issparse(cat(spvec, diagmat, densevec, spmat, densemat; dims=(1,2)))
         end
         @testset "vertical concatenation of SparseVectors with different el- and ind-type (#22225)" begin
             spv6464 = SparseVector(0, Int64[], Int64[])
@@ -778,16 +782,16 @@ end
             @test exact_equal(x / α, SparseVector(x.n, x.nzind, x.nzval / α))
 
             xc = copy(x)
-            @test scale!(xc, α) === xc
+            @test rmul!(xc, α) === xc
             @test exact_equal(xc, sx)
             xc = copy(x)
-            @test scale!(α, xc) === xc
+            @test lmul!(α, xc) === xc
             @test exact_equal(xc, sx)
             xc = copy(x)
-            @test scale!(xc, complex(α, 0.0)) === xc
+            @test rmul!(xc, complex(α, 0.0)) === xc
             @test exact_equal(xc, sx)
             xc = copy(x)
-            @test scale!(complex(α, 0.0), xc) === xc
+            @test lmul!(complex(α, 0.0), xc) === xc
             @test exact_equal(xc, sx)
         end
 
@@ -818,7 +822,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A*xf + β*y
-                @test mul!(α, A, x, β, y) === y
+                @test mul!(y, A, x, α, β) === y
                 @test y ≈ rr
             end
             y = A*x
@@ -831,7 +835,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*A'xf + β*y
-                @test mul!(α, transpose(A), x, β, y) === y
+                @test mul!(y, transpose(A), x, α, β) === y
                 @test y ≈ rr
             end
             y = *(transpose(A), x)
@@ -846,7 +850,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af*xf + β*y
-                @test mul!(α, A, x, β, y) === y
+                @test mul!(y, A, x, α, β) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x)
@@ -860,7 +864,7 @@ end
             for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
                 y = rand(9)
                 rr = α*Af'xf + β*y
-                @test mul!(α, transpose(A), x, β, y) === y
+                @test mul!(y, transpose(A), x, α, β) === y
                 @test y ≈ rr
             end
             y = SparseArrays.densemv(A, x; trans='T')
@@ -1034,39 +1038,43 @@ end
     SparseArrays.fkeep!(xdrop, f_drop)
     @test exact_equal(xdrop, SparseVector(7, [1, 3, 4, 7], [3., -1., 1., 3.]))
 end
-@testset "dropzeros[!]" begin
-    let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegzeros = 5
-        for m in testdims
-            v = sprand(m, nzprob)
-            struczerosv = findall(x -> x == 0, v)
-            poszerosinds = unique(rand(struczerosv, targetnumposzeros))
-            negzerosinds = unique(rand(struczerosv, targetnumnegzeros))
-            vposzeros = setindex!(copy(v), 2, poszerosinds)
-            vnegzeros = setindex!(copy(v), -2, negzerosinds)
-            vbothsigns = setindex!(copy(vposzeros), -2, negzerosinds)
-            map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval, vposzeros.nzval)
-            map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval, vnegzeros.nzval)
-            map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval, vbothsigns.nzval)
-            for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
-                # Basic functionality / dropzeros!
-                @test dropzeros!(copy(vwithzeros)) == v
-                @test dropzeros!(copy(vwithzeros), false) == v
-                # Basic functionality / dropzeros
-                @test dropzeros(vwithzeros) == v
-                @test dropzeros(vwithzeros, false) == v
-                # Check trimming works as expected
-                @test length(dropzeros!(copy(vwithzeros)).nzval) == length(v.nzval)
-                @test length(dropzeros!(copy(vwithzeros)).nzind) == length(v.nzind)
-                @test length(dropzeros!(copy(vwithzeros), false).nzval) == length(vwithzeros.nzval)
-                @test length(dropzeros!(copy(vwithzeros), false).nzind) == length(vwithzeros.nzind)
-            end
-        end
-        # original dropzeros! test
-        xdrop = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
-        xdrop.nzval[[2, 4, 6]] = 0.0
-        SparseArrays.dropzeros!(xdrop)
-        @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
+
+@testset "dropzeros[!] with length=$m" for m in (10, 20, 30)
+    srand(123)
+    nzprob, targetnumposzeros, targetnumnegzeros = 0.4, 5, 5
+    v = sprand(m, nzprob)
+    struczerosv = findall(x -> x == 0, v)
+    poszerosinds = unique(rand(struczerosv, targetnumposzeros))
+    negzerosinds = unique(rand(struczerosv, targetnumnegzeros))
+    vposzeros = copy(v)
+    vposzeros[poszerosinds] .= 2
+    vnegzeros = copy(v)
+    vnegzeros[negzerosinds] .= -2
+    vbothsigns = copy(vposzeros)
+    vbothsigns[negzerosinds] .= -2
+    map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval, vposzeros.nzval)
+    map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval, vnegzeros.nzval)
+    map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval, vbothsigns.nzval)
+    for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
+        # Basic functionality / dropzeros!
+        @test dropzeros!(copy(vwithzeros)) == v
+        @test dropzeros!(copy(vwithzeros), trim = false) == v
+        # Basic functionality / dropzeros
+        @test dropzeros(vwithzeros) == v
+        @test dropzeros(vwithzeros, trim = false) == v
+        # Check trimming works as expected
+        @test length(dropzeros!(copy(vwithzeros)).nzval) == length(v.nzval)
+        @test length(dropzeros!(copy(vwithzeros)).nzind) == length(v.nzind)
+        @test length(dropzeros!(copy(vwithzeros), trim = false).nzval) == length(vwithzeros.nzval)
+        @test length(dropzeros!(copy(vwithzeros), trim = false).nzind) == length(vwithzeros.nzind)
     end
+end
+
+@testset "original dropzeros! test" begin
+    xdrop = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
+    xdrop.nzval[[2, 4, 6]] .= 0.0
+    SparseArrays.dropzeros!(xdrop)
+    @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
 end
 
 # It's tempting to share data between a SparseVector and a SparseMatrix,
@@ -1254,7 +1262,7 @@ end
         Aj, Ajview = A[:, j], view(A, :, j)
         @test norm(Aj)          == norm(Ajview)
         @test dot(Aj, copy(Aj)) == dot(Ajview, Aj) # don't alias since it takes a different code path
-        @test scale!(Aj, 0.1)   == scale!(Ajview, 0.1)
+        @test rmul!(Aj, 0.1)    == rmul!(Ajview, 0.1)
         @test Aj*0.1            == Ajview*0.1
         @test 0.1*Aj            == 0.1*Ajview
         @test Aj/0.1            == Ajview/0.1
@@ -1264,3 +1272,5 @@ end
               LinearAlgebra.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Ajview)
     end
 end
+
+end # module

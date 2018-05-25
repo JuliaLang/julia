@@ -5,13 +5,13 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V      # diagonal
     ev::V      # sub/super diagonal
     uplo::Char # upper bidiagonal ('U') or lower ('L')
-    function Bidiagonal{T}(dv::V, ev::V, uplo::Char) where {T,V<:AbstractVector{T}}
+    function Bidiagonal{T}(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
         new{T,V}(dv, ev, uplo)
     end
-    function Bidiagonal(dv::V, ev::V, uplo::Char) where {T,V<:AbstractVector{T}}
+    function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         Bidiagonal{T}(dv, ev, uplo)
     end
 end
@@ -172,7 +172,7 @@ Bidiagonal{T}(A::Bidiagonal) where {T} =
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
-broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.uplo)
+convert(T::Type{<:Bidiagonal}, m::AbstractMatrix) = m isa T ? m : T(m)
 
 # For B<:Bidiagonal, similar(B[, neweltype]) should yield a Bidiagonal matrix.
 # On the other hand, similar(B, [neweltype,] shape...) should yield a sparse matrix.
@@ -188,26 +188,26 @@ similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), simil
 
 #Singular values
 svdvals!(M::Bidiagonal{<:BlasReal}) = LAPACK.bdsdc!(M.uplo, 'N', M.dv, M.ev)[1]
-function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+function svd!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
+        Base.depwarn(string("the `thin` keyword argument in `svd!(A; thin = $(thin))` has ",
             "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svdfact!(A; full = $(!thin))`."), :svdfact!)
+            "e.g. `svd!(A; full = $(!thin))`."), :svd!)
         full::Bool = !thin
     end
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.uplo, 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
-function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+function svd(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
+        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
             "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
+            "e.g. `svd(A; full = $(!thin))`."), :svd)
         full::Bool = !thin
     end
-    return svdfact!(copy(M), full = full)
+    return svd!(copy(M), full = full)
 end
 
 ####################
@@ -235,18 +235,9 @@ function size(M::Bidiagonal, d::Integer)
 end
 
 #Elementary operations
-broadcast(::typeof(abs), M::Bidiagonal) = Bidiagonal(abs.(M.dv), abs.(M.ev), M.uplo)
-broadcast(::typeof(round), M::Bidiagonal) = Bidiagonal(round.(M.dv), round.(M.ev), M.uplo)
-broadcast(::typeof(trunc), M::Bidiagonal) = Bidiagonal(trunc.(M.dv), trunc.(M.ev), M.uplo)
-broadcast(::typeof(floor), M::Bidiagonal) = Bidiagonal(floor.(M.dv), floor.(M.ev), M.uplo)
-broadcast(::typeof(ceil), M::Bidiagonal) = Bidiagonal(ceil.(M.dv), ceil.(M.ev), M.uplo)
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.uplo)
 end
-broadcast(::typeof(round), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(round.(T, M.dv), round.(T, M.ev), M.uplo)
-broadcast(::typeof(trunc), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(trunc.(T, M.dv), trunc.(T, M.ev), M.uplo)
-broadcast(::typeof(floor), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(floor.(T, M.dv), floor.(T, M.ev), M.uplo)
-broadcast(::typeof(ceil), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(ceil.(T, M.dv), ceil.(T, M.ev), M.uplo)
 
 adjoint(B::Bidiagonal) = Adjoint(B)
 transpose(B::Bidiagonal) = Transpose(B)
@@ -560,20 +551,39 @@ function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) w
     if N != length(b) || N != length(x)
         throw(DimensionMismatch("second dimension of A, $N, does not match one of the lengths of x, $(length(x)), or b, $(length(b))"))
     end
-    if A.uplo == 'L' #do forward substitution
-        for j = 1:N
-            x[j] = b[j]
-            j > 1 && (x[j] -= A.ev[j-1] * x[j-1])
-            x[j] /= A.dv[j] == zero(T) ? throw(SingularException(j)) : A.dv[j]
-        end
-    else #do backward substitution
-        for j = N:-1:1
-            x[j] = b[j]
-            j < N && (x[j] -= A.ev[j] * x[j+1])
-            x[j] /= A.dv[j] == zero(T) ? throw(SingularException(j)) : A.dv[j]
+
+    if N == 0
+        return x
+    end
+
+    @inbounds begin
+        if A.uplo == 'L' #do forward substitution
+            x[1] = xj1 = A.dv[1]\b[1]
+            for j = 2:N
+                xj  = b[j]
+                xj -= A.ev[j - 1] * xj1
+                dvj = A.dv[j]
+                if iszero(dvj)
+                    throw(SingularException(j))
+                end
+                xj   = dvj\xj
+                x[j] = xj1 = xj
+            end
+        else #do backward substitution
+            x[N] = xj1 = A.dv[N]\b[N]
+            for j = (N - 1):-1:1
+                xj  = b[j]
+                xj -= A.ev[j] * xj1
+                dvj = A.dv[j]
+                if iszero(dvj)
+                    throw(SingularException(j))
+                end
+                xj   = dvj\xj
+                x[j] = xj1 = xj
+            end
         end
     end
-    x
+    return x
 end
 
 ### Generic promotion methods and fallbacks
@@ -604,7 +614,7 @@ factorize(A::Bidiagonal) = A
 eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
-    Q = Matrix{T}(uninitialized, n,n)
+    Q = Matrix{T}(undef, n,n)
     blks = [0; findall(x -> x == 0, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'
@@ -634,4 +644,4 @@ function eigvecs(M::Bidiagonal{T}) where T
     end
     Q #Actually Triangular
 end
-eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
+eigen(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))

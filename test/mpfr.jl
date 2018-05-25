@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Serialization
+
 import Base.MPFR
 @testset "constructors" begin
     setprecision(53) do
@@ -289,6 +291,8 @@ end
         end
         # BigInt division
         @test a / BigInt(2) == c
+        # inv
+        @test inv(x) == one(x)/x == 1/x == x^-1 == Clong(1)/x
     end
     #^
     x = BigFloat(12)
@@ -891,7 +895,7 @@ end
         ends::String="",
         starts::String="")
         sx = sprint(show, x)
-        scx = sprint(showcompact, x)
+        scx = sprint(show, x, context=:compact => true)
         strx = string(x)
         @test sx == strx
         @test length(scx) < 20
@@ -899,7 +903,7 @@ end
         @test x == parse(BigFloat, sx)
         @test ≈(x, parse(BigFloat, scx), rtol=1e-4)
         for s in (sx, scx)
-            @test contains(s, 'e') == contains_e
+            @test occursin('e', s) == contains_e
             @test startswith(s, starts)
             @test endswith(s, ends)
         end
@@ -911,11 +915,13 @@ end
     test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
 
     for to_string in [string,
-        x->sprint(show, x),
-        x->sprint(showcompact,x)]
+                      x->sprint(show, x),
+                      x->sprint(show, x, context=:compact => true)]
         @test to_string(big"0.0") == "0.0"
         @test to_string(big"-0.0") == "-0.0"
         @test to_string(big"1.0") == "1.0"
         @test to_string(big"-1.0") == "-1.0"
     end
 end
+
+@test beta(big(1.0),big(1.2)) ≈ beta(1.0,1.2) rtol=4*eps()

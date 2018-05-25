@@ -127,7 +127,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
-    isnan(x) && return zero(T)//zero(T)
+    isnan(x) && return T(x)//one(T)
     isinf(x) && return (x < 0 ? -one(T) : one(T))//zero(T)
 
     p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)

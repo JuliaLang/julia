@@ -34,9 +34,8 @@ end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
 isempty(c::CompositeException) = isempty(c.exceptions)
-start(c::CompositeException) = start(c.exceptions)
-next(c::CompositeException, state) = next(c.exceptions, state)
-done(c::CompositeException, state) = done(c.exceptions, state)
+iterate(c::CompositeException, state...) = iterate(c.exceptions, state...)
+eltype(::Type{CompositeException}) = Any
 
 function showerror(io::IO, ex::CompositeException)
     if !isempty(ex)
@@ -51,7 +50,7 @@ function showerror(io::IO, ex::CompositeException)
 end
 
 function show(io::IO, t::Task)
-    print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), Sys.WORD_SIZE>>2))")
+    print(io, "Task ($(t.state)) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
 end
 
 """
@@ -61,7 +60,7 @@ Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Ta
 creates a task, and does not run it.
 
 ```jldoctest
-julia> a1() = det(rand(1000, 1000));
+julia> a1() = sum(i for i in 1:1000);
 
 julia> b = @task a1();
 
@@ -93,7 +92,7 @@ current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 Determine whether a task has exited.
 
 ```jldoctest
-julia> a2() = det(rand(1000, 1000));
+julia> a2() = sum(i for i in 1:1000);
 
 julia> b = Task(a2);
 
@@ -116,7 +115,7 @@ istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
 Determine whether a task has started executing.
 
 ```jldoctest
-julia> a3() = det(rand(1000, 1000));
+julia> a3() = sum(i for i in 1:1000);
 
 julia> b = Task(a3);
 
@@ -135,7 +134,7 @@ function get_task_tls(t::Task)
     if t.storage === nothing
         t.storage = IdDict()
     end
-    (t.storage)::IdDict
+    (t.storage)::IdDict{Any,Any}
 end
 
 """
@@ -171,7 +170,8 @@ function task_local_storage(body::Function, key, val)
 end
 
 # NOTE: you can only wait for scheduled tasks
-function wait(t::Task)
+# TODO: rename to wait for 1.0
+function _wait(t::Task)
     if !istaskdone(t)
         if t.donenotify === nothing
             t.donenotify = Condition()
@@ -183,8 +183,86 @@ function wait(t::Task)
     if istaskfailed(t)
         throw(t.exception)
     end
-    return task_result(t)
 end
+
+_wait(not_a_task) = wait(not_a_task)
+
+"""
+    fetch(t::Task)
+
+Wait for a Task to finish, then return its result value. If the task fails with an
+exception, the exception is propagated (re-thrown in the task that called fetch).
+"""
+function fetch(t::Task)
+    _wait(t)
+    task_result(t)
+end
+
+
+## lexically-scoped waiting for multiple items
+
+function sync_end(refs)
+    c_ex = CompositeException()
+    for r in refs
+        try
+            _wait(r)
+        catch ex
+            if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
+                rethrow(ex)
+            end
+        finally
+            if isa(r, Task) && istaskfailed(r)
+                push!(c_ex, CapturedException(task_result(r), r.backtrace))
+            end
+        end
+    end
+
+    if !isempty(c_ex)
+        throw(c_ex)
+    end
+    nothing
+end
+
+const sync_varname = gensym(:sync)
+
+"""
+    @sync
+
+Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+are complete. All exceptions thrown by enclosed async operations are collected and thrown as
+a `CompositeException`.
+"""
+macro sync(block)
+    var = esc(sync_varname)
+    quote
+        let $var = Any[]
+            v = $(esc(block))
+            sync_end($var)
+            v
+        end
+    end
+end
+
+# schedule an expression to run asynchronously
+
+"""
+    @async
+
+Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+"""
+macro async(expr)
+    thunk = esc(:(()->($expr)))
+    var = esc(sync_varname)
+    quote
+        local task = Task($thunk)
+        if $(Expr(:isdefined, var))
+            push!($var, task)
+            get_task_tls(task)[:SUPPRESS_EXCEPTION_PRINTING] = true
+        end
+        schedule(task)
+    end
+end
+
 
 suppress_excp_printing(t::Task) = isa(t.storage, IdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
 
@@ -225,7 +303,7 @@ function task_done_hook(t::Task)
         if !suppress_excp_printing(t)
             let bt = t.backtrace
                 # run a new task to print the error for us
-                @schedule with_output_color(Base.error_color(), STDERR) do io
+                @async with_output_color(Base.error_color(), stderr) do io
                     print(io, "ERROR (unhandled task failure): ")
                     showerror(io, result, bt)
                     println(io)
@@ -250,87 +328,6 @@ function task_done_hook(t::Task)
         end
     end
 end
-
-
-## dynamically-scoped waiting for multiple items
-sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWNS, ())))
-
-function sync_end()
-    spawns = get(task_local_storage(), :SPAWNS, ())
-    if spawns === ()
-        error("sync_end() without sync_begin()")
-    end
-    refs = spawns[1]
-    task_local_storage(:SPAWNS, spawns[2])
-
-    c_ex = CompositeException()
-    for r in refs
-        try
-            wait(r)
-        catch ex
-            if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
-                rethrow(ex)
-            end
-        finally
-            if isa(r, Task) && istaskfailed(r)
-                push!(c_ex, CapturedException(task_result(r), r.backtrace))
-            end
-        end
-    end
-
-    if !isempty(c_ex)
-        throw(c_ex)
-    end
-    nothing
-end
-
-"""
-    @sync
-
-Wait until all dynamically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@parallel`
-are complete. All exceptions thrown by enclosed async operations are collected and thrown as
-a `CompositeException`.
-"""
-macro sync(block)
-    quote
-        sync_begin()
-        v = $(esc(block))
-        sync_end()
-        v
-    end
-end
-
-function sync_add(r)
-    spawns = get(task_local_storage(), :SPAWNS, ())
-    if spawns !== ()
-        push!(spawns[1], r)
-        if isa(r, Task)
-            tls_r = get_task_tls(r)
-            tls_r[:SUPPRESS_EXCEPTION_PRINTING] = true
-        end
-    end
-    r
-end
-
-function async_run_thunk(thunk)
-    t = Task(thunk)
-    sync_add(t)
-    enq_work(t)
-    t
-end
-
-"""
-    @async
-
-Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local
-machine's scheduler queue. Additionally it adds the task to the set of items that the
-nearest enclosing `@sync` waits for.
-"""
-macro async(expr)
-    thunk = esc(:(()->($expr)))
-    :(async_run_thunk($thunk))
-end
-
 
 """
     timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
@@ -357,7 +354,7 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     end
 
     if !testcb()
-        t = Timer(timercb, pollint, pollint)
+        t = Timer(timercb, pollint, interval = pollint)
         ret = fetch(done)
         close(t)
     else

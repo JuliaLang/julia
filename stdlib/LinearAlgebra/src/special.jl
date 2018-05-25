@@ -58,6 +58,15 @@ Tridiagonal(A::AbstractTriangular) =
         throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
 
 
+const ConvertibleSpecialMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,AbstractTriangular}
+
+convert(T::Type{<:Diagonal},       m::ConvertibleSpecialMatrix) = m isa T ? m : T(m)
+convert(T::Type{<:SymTridiagonal}, m::ConvertibleSpecialMatrix) = m isa T ? m : T(m)
+convert(T::Type{<:Tridiagonal},    m::ConvertibleSpecialMatrix) = m isa T ? m : T(m)
+
+convert(T::Type{<:LowerTriangular}, m::Union{LowerTriangular,UnitLowerTriangular}) = m isa T ? m : T(m)
+convert(T::Type{<:UpperTriangular}, m::Union{UpperTriangular,UnitUpperTriangular}) = m isa T ? m : T(m)
+
 # Constructs two method definitions taking into account (assumed) commutativity
 # e.g. @commutative f(x::S, y::T) where {S,T} = x+y is the same is defining
 #     f(x::S, y::T) where {S,T} = x+y
@@ -118,8 +127,8 @@ for op in (:+, :-)
     end
 end
 
-mul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    (B = adjB.parent; mul!(full!(A), adjoint(B)))
+rmul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
+    (B = adjB.parent; rmul!(full!(A), adjoint(B)))
 *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
     (B = adjB.parent; *(copyto!(similar(parent(A)), A), adjoint(B)))
 

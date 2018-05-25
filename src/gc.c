@@ -1386,12 +1386,12 @@ void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 // Double the mark stack (both pc and data) with the lock held.
 static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
 {
-    char *old_data = gc_cache->data_stack;
+    jl_gc_mark_data_t *old_data = gc_cache->data_stack;
     void **pc_stack = sp->pc_start;
     size_t stack_size = (char*)sp->pc_end - (char*)pc_stack;
     JL_LOCK_NOGC(&gc_cache->stack_lock);
-    gc_cache->data_stack = (char*)realloc(old_data, stack_size * 2 * sizeof(gc_mark_data_t));
-    sp->data += gc_cache->data_stack - old_data;
+    gc_cache->data_stack = (jl_gc_mark_data_t *)realloc(old_data, stack_size * 2 * sizeof(jl_gc_mark_data_t));
+    sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + (((char*)gc_cache->data_stack) - ((char*)old_data)));
 
     sp->pc_start = gc_cache->pc_stack = (void**)realloc(pc_stack, stack_size * 2 * sizeof(void*));
     gc_cache->pc_stack_end = sp->pc_end = sp->pc_start + stack_size * 2;
@@ -1408,13 +1408,13 @@ static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, gc_mark_
 STATIC_INLINE void gc_mark_stack_push(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp,
                                       void *pc, void *data, size_t data_size, int inc)
 {
-    assert(data_size <= sizeof(gc_mark_data_t));
+    assert(data_size <= sizeof(jl_gc_mark_data_t));
     if (__unlikely(sp->pc == sp->pc_end))
         gc_mark_stack_resize(gc_cache, sp);
     *sp->pc = pc;
     memcpy(sp->data, data, data_size);
     if (inc) {
-        sp->data += data_size;
+        sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + data_size);
         sp->pc++;
     }
 }
@@ -1969,7 +1969,7 @@ module_binding: {
                 objary = (gc_mark_objarray_t*)sp.data;
                 goto objarray_loaded;
             }
-            sp.data += sizeof(data);
+            sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(data));
             sp.pc++;
         }
         else {
@@ -2111,7 +2111,7 @@ mark: {
             gc_mark_binding_t markdata = {m, table + 1, table + bsize, nptr, bits};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(module_binding),
                                &markdata, sizeof(markdata), 0);
-            sp.data += sizeof(markdata);
+            sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(markdata));
             goto module_binding;
         }
         else if (vt == jl_task_type) {
@@ -2231,7 +2231,7 @@ mark: {
                 gc_mark_obj32_t markdata = {new_obj, desc + first, desc + nfields, nptr};
                 gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(obj32),
                                    &markdata, sizeof(markdata), 0);
-                sp.data += sizeof(markdata);
+                sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(markdata));
                 goto obj32;
             }
         }
@@ -2266,7 +2266,8 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
         gc_mark_queue_obj(gc_cache, sp, jl_an_empty_vec_any);
     if (jl_module_init_order != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_module_init_order);
-    gc_mark_queue_obj(gc_cache, sp, jl_cfunction_list.unknown);
+    if (jl_cfunction_list != NULL)
+        gc_mark_queue_obj(gc_cache, sp, jl_cfunction_list);
     gc_mark_queue_obj(gc_cache, sp, jl_anytuple_type_type);
     gc_mark_queue_obj(gc_cache, sp, jl_ANY_flag);
     for (size_t i = 0; i < N_CALL_CACHE; i++)
@@ -2712,7 +2713,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     size_t init_size = 1024;
     gc_cache->pc_stack = (void**)malloc(init_size * sizeof(void*));
     gc_cache->pc_stack_end = gc_cache->pc_stack + init_size;
-    gc_cache->data_stack = (char*)malloc(init_size * sizeof(gc_mark_data_t));
+    gc_cache->data_stack = (jl_gc_mark_data_t *)malloc(init_size * sizeof(jl_gc_mark_data_t));
 }
 
 // System-wide initializations

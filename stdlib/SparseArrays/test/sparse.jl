@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LinearAlgebra: mul!, ldiv!, rdiv!
+module SparseTests
+
+using Test
+using SparseArrays
+using LinearAlgebra
 using Base.Printf: @printf
 using Random
 
@@ -12,7 +16,12 @@ end
 @testset "iszero specialization for SparseMatrixCSC" begin
     @test !iszero(sparse(I, 3, 3))                  # test failure
     @test iszero(spzeros(3, 3))                     # test success with no stored entries
-    @test iszero(setindex!(sparse(I, 3, 3), 0, :))  # test success with stored zeros
+    S = sparse(I, 3, 3)
+    S[:] .= 0
+    @test iszero(S)  # test success with stored zeros via broadcasting
+    S = sparse(I, 3, 3)
+    fill!(S, 0)
+    @test iszero(S)  # test success with stored zeros via fill!
     @test iszero(SparseMatrixCSC(2, 2, [1,2,3], [1,2], [0,0,1])) # test success with nonzeros beyond data range
 end
 @testset "isone specialization for SparseMatrixCSC" begin
@@ -106,8 +115,8 @@ end
         @test length(([sp33 0I; 1I 0I]).nzval) == 6
     end
 
-    @testset "blkdiag concatenation" begin
-        @test blkdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
+    @testset "blockdiag concatenation" begin
+        @test blockdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
     end
 
     @testset "concatenation promotion" begin
@@ -144,8 +153,8 @@ let
 
     @testset "sparse assignment" begin
         p = [4, 1, 3]
-        a116[p, p] = -1
-        s116[p, p] = -1
+        a116[p, p] .= -1
+        s116[p, p] .= -1
         @test a116 == s116
 
         p = [2, 1, 4]
@@ -158,11 +167,11 @@ end
 @testset "squeeze" begin
     for i = 1:5
         am = sprand(20, 1, 0.2)
-        av = squeeze(am, 2)
+        av = squeeze(am, dims=2)
         @test ndims(av) == 1
         @test all(av.==am)
         am = sprand(1, 20, 0.2)
-        av = squeeze(am, 1)
+        av = squeeze(am, dims=1)
         @test ndims(av) == 1
         @test all(av' .== am)
     end
@@ -322,31 +331,31 @@ sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
 dA = Array(sA)
 
-@testset "scale and scale!" begin
+@testset "scaling with * and mul!, rmul!, and lmul!" begin
     b = randn(7)
     @test dA * Diagonal(b) == sA * Diagonal(b)
-    @test dA * Diagonal(b) == scale!(sC, sA, b)
-    @test dA * Diagonal(b) == scale!(copy(sA), b)
+    @test dA * Diagonal(b) == mul!(sC, sA, Diagonal(b))
+    @test dA * Diagonal(b) == rmul!(copy(sA), Diagonal(b))
     b = randn(3)
     @test Diagonal(b) * dA == Diagonal(b) * sA
-    @test Diagonal(b) * dA == scale!(sC, b, sA)
-    @test Diagonal(b) * dA == scale!(b, copy(sA))
+    @test Diagonal(b) * dA == mul!(sC, Diagonal(b), sA)
+    @test Diagonal(b) * dA == lmul!(Diagonal(b), copy(sA))
 
     @test dA * 0.5            == sA * 0.5
-    @test dA * 0.5            == scale!(sC, sA, 0.5)
-    @test dA * 0.5            == scale!(copy(sA), 0.5)
+    @test dA * 0.5            == mul!(sC, sA, 0.5)
+    @test dA * 0.5            == rmul!(copy(sA), 0.5)
     @test 0.5 * dA            == 0.5 * sA
-    @test 0.5 * dA            == scale!(sC, sA, 0.5)
-    @test 0.5 * dA            == scale!(0.5, copy(sA))
-    @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
+    @test 0.5 * dA            == mul!(sC, sA, 0.5)
+    @test 0.5 * dA            == lmul!(0.5, copy(sA))
+    @test mul!(sC, 0.5, sA)   == mul!(sC, sA, 0.5)
 
-    @testset "inverse scale!" begin
+    @testset "inverse scaling with mul!" begin
         bi = inv.(b)
         dAt = copy(transpose(dA))
         sAt = copy(transpose(sA))
-        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), Diagonal(b))
-        @test scale!(copy(dAt), bi) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
-        @test scale!(copy(dAt), conj(bi)) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
+        @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
+        @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
+        @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
         @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
         @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
     end
@@ -430,7 +439,7 @@ end
         @test_throws ArgumentError permute!(X, A, p, q, (D = copy(C); resize!(D.nzval, nnz(A) - 1); D))
     end
     @testset "common error checking of permute[!] methods / source-workcolptr compat" begin
-        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(uninitialized, length(A.colptr) - 1))
+        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(undef, length(A.colptr) - 1))
     end
     @testset "common error checking of permute[!] methods / permutation validity" begin
         @test_throws ArgumentError permute!(A, (r = copy(p); r[2] = r[1]; r), q)
@@ -483,10 +492,10 @@ end
         for f in (sum, prod, minimum, maximum, var)
             farr = Array(arr)
             @test f(arr) ≈ f(farr)
-            @test f(arr, 1) ≈ f(farr, 1)
-            @test f(arr, 2) ≈ f(farr, 2)
-            @test f(arr, (1, 2)) ≈ [f(farr)]
-            @test isequal(f(arr, 3), f(farr, 3))
+            @test f(arr, dims=1) ≈ f(farr, dims=1)
+            @test f(arr, dims=2) ≈ f(farr, dims=2)
+            @test f(arr, dims=(1, 2)) ≈ [f(farr)]
+            @test isequal(f(arr, dims=3), f(farr, dims=3))
         end
     end
 
@@ -499,9 +508,9 @@ end
         # case where f(0) would throw
         @test f(x->sqrt(x-1), pA .+ 1) ≈ f(sqrt.(pA))
         # these actually throw due to #10533
-        # @test f(x->sqrt(x-1), pA .+ 1, 1) ≈ f(sqrt(pA), 1)
-        # @test f(x->sqrt(x-1), pA .+ 1, 2) ≈ f(sqrt(pA), 2)
-        # @test f(x->sqrt(x-1), pA .+ 1, 3) ≈ f(pA)
+        # @test f(x->sqrt(x-1), pA .+ 1, dims=1) ≈ f(sqrt(pA), dims=1)
+        # @test f(x->sqrt(x-1), pA .+ 1, dims=2) ≈ f(sqrt(pA), dims=2)
+        # @test f(x->sqrt(x-1), pA .+ 1, dims=3) ≈ f(pA)
     end
 
     @testset "empty cases" begin
@@ -512,16 +521,16 @@ end
         @test var(sparse(Int[])) === NaN
 
         for f in (sum, prod, var)
-            @test isequal(f(spzeros(0, 1), 1), f(Matrix{Int}(I, 0, 1), 1))
-            @test isequal(f(spzeros(0, 1), 2), f(Matrix{Int}(I, 0, 1), 2))
-            @test isequal(f(spzeros(0, 1), (1, 2)), f(Matrix{Int}(I, 0, 1), (1, 2)))
-            @test isequal(f(spzeros(0, 1), 3), f(Matrix{Int}(I, 0, 1), 3))
+            @test isequal(f(spzeros(0, 1), dims=1), f(Matrix{Int}(I, 0, 1), dims=1))
+            @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
+            @test isequal(f(spzeros(0, 1), dims=(1, 2)), f(Matrix{Int}(I, 0, 1), dims=(1, 2)))
+            @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
         for f in (minimum, maximum, findmin, findmax)
-            @test_throws ArgumentError f(spzeros(0, 1), 1)
-            @test isequal(f(spzeros(0, 1), 2), f(Matrix{Int}(I, 0, 1), 2))
-            @test_throws ArgumentError f(spzeros(0, 1), (1, 2))
-            @test isequal(f(spzeros(0, 1), 3), f(Matrix{Int}(I, 0, 1), 3))
+            @test_throws ArgumentError f(spzeros(0, 1), dims=1)
+            @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
+            @test_throws ArgumentError f(spzeros(0, 1), dims=(1, 2))
+            @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
     end
 end
@@ -535,9 +544,16 @@ end
     @test length(K) == length(J) == length(V) == 2
 end
 
-@testset "issue described in https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ" begin
+@testset "findall" begin
+    # issue described in https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ
     A = sparse(I, 5, 5)
     @test findall(A) == findall(x -> x == true, A) == findall(Array(A))
+    # Non-stored entries are true
+    @test findall(x -> x == false, A) == findall(x -> x == false, Array(A))
+
+    # Not all stored entries are true
+    @test findall(sparse([true false])) == [CartesianIndex(1, 1)]
+    @test findall(x -> x > 1, sparse([1 2])) == [CartesianIndex(1, 2)]
 end
 
 @testset "issue #5824" begin
@@ -558,13 +574,13 @@ end
 
 @testset "issue #5853, sparse diff" begin
     for i=1:2, a=Any[[1 2 3], reshape([1, 2, 3],(3,1)), Matrix(1.0I, 3, 3)]
-        @test all(diff(sparse(a),i) == diff(a,i))
+        @test all(diff(sparse(a),dims=i) == diff(a,dims=i))
     end
 end
 
 @testset "access to undefined error types that initially allocate elements as #undef" begin
     @test all(sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4]))
-    sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), 1)
+    sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), dims=1)
 end
 
 @testset "issue #6036" begin
@@ -578,9 +594,9 @@ end
     @test minimum(-P) === -3.0
     @test maximum(-P) === 0.0
 
-    @test maximum(P, (1,)) == [1.0 2.0 3.0]
-    @test maximum(P, (2,)) == reshape([1.0,2.0,3.0],3,1)
-    @test maximum(P, (1,2)) == reshape([3.0],1,1)
+    @test maximum(P, dims=(1,)) == [1.0 2.0 3.0]
+    @test maximum(P, dims=(2,)) == reshape([1.0,2.0,3.0],3,1)
+    @test maximum(P, dims=(1,2)) == reshape([3.0],1,1)
 
     @test maximum(sparse(fill(-1,3,3))) == -1
     @test minimum(sparse(fill(1,3,3))) == 1
@@ -736,10 +752,10 @@ end
 @testset "setindex" begin
     a = spzeros(Int, 10, 10)
     @test count(!iszero, a) == 0
-    a[1,:] = 1
+    a[1,:] .= 1
     @test count(!iszero, a) == 10
     @test a[1,:] == sparse(fill(1,10))
-    a[:,2] = 2
+    a[:,2] .= 2
     @test count(!iszero, a) == 19
     @test a[:,2] == sparse(fill(2,10))
     b = copy(a)
@@ -753,20 +769,20 @@ end
     @test count(!iszero, a) == 18
 
     # Zero-assignment behavior of setindex!(A, v, I, J)
-    a[1,:] = 0
+    a[1,:] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 9
-    a[2,:] = 0
+    a[2,:] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 8
-    a[:,1] = 0
+    a[:,1] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 8
-    a[:,2] = 0
+    a[:,2] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 0
     a = copy(b)
-    a[:,:] = 0
+    a[:,:] .= 0
     @test nnz(a) == 19
     @test count(!iszero, a) == 0
 
@@ -795,13 +811,13 @@ end
     @test a[1,:] == sparse([1; 1; 3:10])
     a[1:0,2] = []
     @test a[:,2] == sparse([1:10;])
-    a[1,1:0] = 0
+    a[1,1:0] .= 0
     @test a[1,:] == sparse([1; 1; 3:10])
-    a[1:0,2] = 0
+    a[1:0,2] .= 0
     @test a[:,2] == sparse([1:10;])
-    a[1,1:0] = 1
+    a[1,1:0] .= 1
     @test a[1,:] == sparse([1; 1; 3:10])
-    a[1:0,2] = 1
+    a[1:0,2] .= 1
     @test a[:,2] == sparse([1:10;])
 
     @test_throws BoundsError a[:,11] = spzeros(10,1)
@@ -809,16 +825,16 @@ end
     @test_throws BoundsError a[:,-1] = spzeros(10,1)
     @test_throws BoundsError a[-1,:] = spzeros(1,10)
     @test_throws BoundsError a[0:9] = spzeros(1,10)
-    @test_throws BoundsError a[:,11] = 0
-    @test_throws BoundsError a[11,:] = 0
-    @test_throws BoundsError a[:,-1] = 0
-    @test_throws BoundsError a[-1,:] = 0
-    @test_throws BoundsError a[0:9] = 0
-    @test_throws BoundsError a[:,11] = 1
-    @test_throws BoundsError a[11,:] = 1
-    @test_throws BoundsError a[:,-1] = 1
-    @test_throws BoundsError a[-1,:] = 1
-    @test_throws BoundsError a[0:9] = 1
+    @test_throws BoundsError (a[:,11] .= 0; a)
+    @test_throws BoundsError (a[11,:] .= 0; a)
+    @test_throws BoundsError (a[:,-1] .= 0; a)
+    @test_throws BoundsError (a[-1,:] .= 0; a)
+    @test_throws BoundsError (a[0:9] .= 0; a)
+    @test_throws BoundsError (a[:,11] .= 1; a)
+    @test_throws BoundsError (a[11,:] .= 1; a)
+    @test_throws BoundsError (a[:,-1] .= 1; a)
+    @test_throws BoundsError (a[-1,:] .= 1; a)
+    @test_throws BoundsError (a[0:9] .= 1; a)
 
     @test_throws DimensionMismatch a[1:2,1:2] = 1:3
     @test_throws DimensionMismatch a[1:2,1] = 1:3
@@ -826,16 +842,16 @@ end
     @test_throws DimensionMismatch a[1:2] = 1:3
 
     A = spzeros(Int, 10, 20)
-    A[1:5,1:10] = 10
-    A[1:5,1:10] = 10
+    A[1:5,1:10] .= 10
+    A[1:5,1:10] .= 10
     @test count(!iszero, A) == 50
     @test A[1:5,1:10] == fill(10, 5, 10)
-    A[6:10,11:20] = 0
+    A[6:10,11:20] .= 0
     @test count(!iszero, A) == 50
-    A[6:10,11:20] = 20
+    A[6:10,11:20] .= 20
     @test count(!iszero, A) == 100
     @test A[6:10,11:20] == fill(20, 5, 10)
-    A[4:8,8:16] = 15
+    A[4:8,8:16] .= 15
     @test count(!iszero, A) == 121
     @test A[4:8,8:16] == fill(15, 5, 9)
 
@@ -846,13 +862,13 @@ end
     nA = count(!iszero, A)
     x = A[1:TSZ, 1:(2*TSZ)]
     nx = count(!iszero, x)
-    A[1:TSZ, 1:(2*TSZ)] = 0
+    A[1:TSZ, 1:(2*TSZ)] .= 0
     nB = count(!iszero, A)
     @test nB == (nA - nx)
     A[1:TSZ, 1:(2*TSZ)] = x
     @test count(!iszero, A) == nA
     @test A == B
-    A[1:TSZ, 1:(2*TSZ)] = 10
+    A[1:TSZ, 1:(2*TSZ)] .= 10
     @test count(!iszero, A) == nB + 2*TSZ*TSZ
     A[1:TSZ, 1:(2*TSZ)] = x
     @test count(!iszero, A) == nA
@@ -891,22 +907,22 @@ end
         sumS1 = sum(S)
         sumFI = sum(S[FI])
         nnzS1 = nnz(S)
-        S[FI] = 0
+        S[FI] .= 0
         sumS2 = sum(S)
         cnzS2 = count(!iszero, S)
         @test sum(S[FI]) == 0
         @test nnz(S) == nnzS1
         @test (sum(S) + sumFI) == sumS1
 
-        S[FI] = 10
+        S[FI] .= 10
         nnzS3 = nnz(S)
         @test sum(S) == sumS2 + 10*sum(FI)
-        S[FI] = 0
+        S[FI] .= 0
         @test sum(S) == sumS2
         @test nnz(S) == nnzS3
         @test count(!iszero, S) == cnzS2
 
-        S[FI] = [1:sum(FI);]
+        S[FI] .= [1:sum(FI);]
         @test sum(S) == sumS2 + sum(1:sum(FI))
 
         S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
@@ -915,9 +931,9 @@ end
         J = randperm(N)
         sumS1 = sum(S)
         sumS2 = sum(S[I])
-        S[I] = 0
+        S[I] .= 0
         @test sum(S) == (sumS1 - sumS2)
-        S[I] = J
+        S[I] .= J
         @test sum(S) == (sumS1 - sumS2 + sum(J))
     end
 end
@@ -925,8 +941,8 @@ end
 @testset "dropstored!" begin
     A = spzeros(Int, 10, 10)
     # Introduce nonzeros in row and column two
-    A[1,:] = 1
-    A[:,2] = 2
+    A[1,:] .= 1
+    A[:,2] .= 2
     @test nnz(A) == 19
 
     # Test argument bounds checking for dropstored!(A, i, j)
@@ -957,8 +973,8 @@ end
     SparseArrays.dropstored!(A, :, 2)
     @test nnz(A) == 0
     # --> Introduce nonzeros in rows one and two and columns two and three
-    A[1:2,:] = 1
-    A[:,2:3] = 2
+    A[1:2,:] .= 1
+    A[:,2:3] .= 2
     @test nnz(A) == 36
     # --> Test dropping multiple rows containing stored and nonstored entries
     SparseArrays.dropstored!(A, 1:3, :)
@@ -967,7 +983,7 @@ end
     SparseArrays.dropstored!(A, :, 2:4)
     @test nnz(A) == 0
     # --> Introduce nonzeros in every other row
-    A[1:2:9, :] = 1
+    A[1:2:9, :] .= 1
     @test nnz(A) == 50
     # --> Test dropping a block of the matrix towards the upper left
     SparseArrays.dropstored!(A, 2:5, 2:5)
@@ -1023,29 +1039,29 @@ end
     @test_throws ArgumentError sparse([3], [5], 1.0, 3, 3)
 end
 
-@testset "indmax, indmin, findmax, findmin" begin
+@testset "argmax, argmin, findmax, findmin" begin
     S = sprand(100,80, 0.5)
     A = Array(S)
-    @test indmax(S) == indmax(A)
-    @test indmin(S) == indmin(A)
+    @test argmax(S) == argmax(A)
+    @test argmin(S) == argmin(A)
     @test findmin(S) == findmin(A)
     @test findmax(S) == findmax(A)
     for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
-        @test m(S, region) == m(A, region)
+        @test m(S, dims=region) == m(A, dims=region)
     end
 
     S = spzeros(10,8)
     A = Array(S)
-    @test indmax(S) == indmax(A) == CartesianIndex(1,1)
-    @test indmin(S) == indmin(A) == CartesianIndex(1,1)
+    @test argmax(S) == argmax(A) == CartesianIndex(1,1)
+    @test argmin(S) == argmin(A) == CartesianIndex(1,1)
 
     A = Matrix{Int}(I, 0, 0)
     S = sparse(A)
-    iA = try indmax(A) end
-    iS = try indmax(S) end
+    iA = try argmax(A) end
+    iS = try argmax(S) end
     @test iA === iS === nothing
-    iA = try indmin(A) end
-    iS = try indmin(S) end
+    iA = try argmin(A) end
+    iS = try argmin(S) end
     @test iA === iS === nothing
 end
 
@@ -1110,33 +1126,33 @@ end
 
     A = sparse([BigInt(10)])
     for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
-        @test isequal(findmin(A, tup), (rval, rind))
+        @test isequal(findmin(A, dims=tup), (rval, rind))
     end
 
     for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
-        @test isequal(findmax(A, tup), (rval, rind))
+        @test isequal(findmax(A, dims=tup), (rval, rind))
     end
 
     A = sparse([BigInt(-10)])
     for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
-        @test isequal(findmin(A, tup), (rval, rind))
+        @test isequal(findmin(A, dims=tup), (rval, rind))
     end
 
     for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
-        @test isequal(findmax(A, tup), (rval, rind))
+        @test isequal(findmax(A, dims=tup), (rval, rind))
     end
 
     A = sparse([BigInt(10) BigInt(-10)])
     for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([CartesianIndex(1,2)], 1, 1))]
-        @test isequal(findmin(A, tup), (rval, rind))
+        @test isequal(findmin(A, dims=tup), (rval, rind))
     end
 
     for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
-        @test isequal(findmax(A, tup), (rval, rind))
+        @test isequal(findmax(A, dims=tup), (rval, rind))
     end
 
     A = sparse(["a", "b"])
-    @test_throws MethodError findmin(A, 1)
+    @test_throws MethodError findmin(A, dims=1)
 end
 
 # Support the case when user defined `zero` and `isless` for non-numerical type
@@ -1149,11 +1165,11 @@ Base.isless(x::CustomType, y::CustomType) = isless(x.x, y.x)
     A = sparse([CustomType("a"), CustomType("b")])
 
     for (tup, rval, rind) in [((1,), [CustomType("a")], [1])]
-        @test isequal(findmin(A, tup), (rval, rind))
+        @test isequal(findmin(A, dims=tup), (rval, rind))
     end
 
     for (tup, rval, rind) in [((1,), [CustomType("b")], [2])]
-        @test isequal(findmax(A, tup), (rval, rind))
+        @test isequal(findmax(A, dims=tup), (rval, rind))
     end
 end
 
@@ -1214,7 +1230,7 @@ end
             times = Float64[0,0,0]
             best = [typemax(Float64), 0]
             for searchtype in [0, 1, 2]
-                gc()
+                GC.gc()
                 tres = @timed test_getindex_algs(S, I, J, searchtype)
                 res[searchtype+1] = tres[1]
                 times[searchtype+1] = tres[2]
@@ -1270,9 +1286,9 @@ end
     for I in IA
         Isorted = sort(I)
         for S in SA
-            gc()
+            GC.gc()
             ru = @timed S[I, J]
-            gc()
+            GC.gc()
             rs = @timed S[Isorted, Jsorted]
             if debug
                 @printf(" %7d | %7d | %7d | %4.2e | %4.2e | %4.2e | %4.2e |\n", round(Int,nnz(S)/S.n), length(I), length(J), rs[2], ru[2], rs[3], ru[3])
@@ -1304,8 +1320,8 @@ end
 @testset "explicit zeros" begin
     if Base.USE_GPL_LIBS
         a = SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 2], [1.0, 0.0, 0.0, 1.0])
-        @test lufact(a)\[2.0, 3.0] ≈ [2.0, 3.0]
-        @test cholfact(a)\[2.0, 3.0] ≈ [2.0, 3.0]
+        @test lu(a)\[2.0, 3.0] ≈ [2.0, 3.0]
+        @test cholesky(a)\[2.0, 3.0] ≈ [2.0, 3.0]
     end
 end
 
@@ -1352,7 +1368,7 @@ end
 @testset "error conditions for reshape, and squeeze" begin
     local A = sprand(Bool, 5, 5, 0.2)
     @test_throws DimensionMismatch reshape(A,(20, 2))
-    @test_throws ArgumentError squeeze(A,(1, 1))
+    @test_throws ArgumentError squeeze(A,dims=(1, 1))
 end
 
 @testset "float" begin
@@ -1408,24 +1424,27 @@ end
         struczerosA = findall(x -> x == 0, A)
         poszerosinds = unique(rand(struczerosA, targetnumposzeros))
         negzerosinds = unique(rand(struczerosA, targetnumnegzeros))
-        Aposzeros = setindex!(copy(A), 2, poszerosinds)
-        Anegzeros = setindex!(copy(A), -2, negzerosinds)
-        Abothsigns = setindex!(copy(Aposzeros), -2, negzerosinds)
+        Aposzeros = copy(A)
+        Aposzeros[poszerosinds] .= 2
+        Anegzeros = copy(A)
+        Anegzeros[negzerosinds] .= -2
+        Abothsigns = copy(Aposzeros)
+        Abothsigns[negzerosinds] .= -2
         map!(x -> x == 2 ? 0.0 : x, Aposzeros.nzval, Aposzeros.nzval)
         map!(x -> x == -2 ? -0.0 : x, Anegzeros.nzval, Anegzeros.nzval)
         map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, Abothsigns.nzval, Abothsigns.nzval)
         for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(Awithzeros)) == A
-            @test dropzeros!(copy(Awithzeros), false) == A
+            @test dropzeros!(copy(Awithzeros), trim = false) == A
             # Basic functionality / dropzeros
             @test dropzeros(Awithzeros) == A
-            @test dropzeros(Awithzeros, false) == A
+            @test dropzeros(Awithzeros, trim = false) == A
             # Check trimming works as expected
             @test length(dropzeros!(copy(Awithzeros)).nzval) == length(A.nzval)
             @test length(dropzeros!(copy(Awithzeros)).rowval) == length(A.rowval)
-            @test length(dropzeros!(copy(Awithzeros), false).nzval) == length(Awithzeros.nzval)
-            @test length(dropzeros!(copy(Awithzeros), false).rowval) == length(Awithzeros.rowval)
+            @test length(dropzeros!(copy(Awithzeros), trim = false).nzval) == length(Awithzeros.nzval)
+            @test length(dropzeros!(copy(Awithzeros), trim = false).rowval) == length(Awithzeros.rowval)
         end
     end
     # original lone dropzeros test
@@ -1441,8 +1460,8 @@ end
 end
 
 @testset "trace" begin
-    @test_throws DimensionMismatch trace(spzeros(5,6))
-    @test trace(sparse(1.0I, 5, 5)) == 5
+    @test_throws DimensionMismatch tr(spzeros(5,6))
+    @test tr(sparse(1.0I, 5, 5)) == 5
 end
 
 @testset "spdiagm" begin
@@ -1587,21 +1606,21 @@ end
     @test A1!=A2
     nonzeros(A1)[end]=1
     @test A1==A2
-    A1[1:4,end] = 1
+    A1[1:4,end] .= 1
     @test A1!=A2
-    nonzeros(A1)[end-4:end-1]=0
+    nonzeros(A1)[end-4:end-1].=0
     @test A1==A2
-    A2[1:4,end-1] = 1
+    A2[1:4,end-1] .= 1
     @test A1!=A2
-    nonzeros(A2)[end-5:end-2]=0
+    nonzeros(A2)[end-5:end-2].=0
     @test A1==A2
-    A2[2:3,1] = 1
+    A2[2:3,1] .= 1
     @test A1!=A2
-    nonzeros(A2)[2:3]=0
+    nonzeros(A2)[2:3].=0
     @test A1==A2
-    A1[2:5,1] = 1
+    A1[2:5,1] .= 1
     @test A1!=A2
-    nonzeros(A1)[2:5]=0
+    nonzeros(A1)[2:5].=0
     @test A1==A2
     @test sparse([1,1,0])!=sparse([0,1,1])
 end
@@ -1761,8 +1780,7 @@ end
     C, b = A[:, 1:4], fill(1., size(A, 1))
     @test !Base.USE_GPL_LIBS || factorize(C)\b ≈ Array(C)\b
     @test_throws ErrorException chol(A)
-    @test_throws ErrorException lu(A)
-    @test_throws ErrorException eig(A)
+    @test_throws ErrorException eigen(A)
     @test_throws ErrorException inv(A)
 end
 
@@ -1825,7 +1843,7 @@ end
     @test issparse(vcat(spmat, spmat))
     @test issparse(hcat(spmat, spmat))
     @test issparse(hvcat((2,), spmat, spmat))
-    @test issparse(cat((1,2), spmat, spmat))
+    @test issparse(cat(spmat, spmat; dims=(1,2)))
     # Test that concatenations of a sparse matrice with a dense matrix/vector yield sparse arrays
     @test issparse(vcat(spmat, densemat))
     @test issparse(vcat(densemat, spmat))
@@ -1834,8 +1852,8 @@ end
         @test issparse(hcat(densearg, spmat))
         @test issparse(hvcat((2,), spmat, densearg))
         @test issparse(hvcat((2,), densearg, spmat))
-        @test issparse(cat((1,2), spmat, densearg))
-        @test issparse(cat((1,2), densearg, spmat))
+        @test issparse(cat(spmat, densearg; dims=(1,2)))
+        @test issparse(cat(densearg, spmat; dims=(1,2)))
     end
 end
 
@@ -1935,11 +1953,11 @@ end
 @testset "setindex issue #20657" begin
     local A = spzeros(3, 3)
     I = [1, 1, 1]; J = [1, 1, 1]
-    A[I, 1] = 1
+    A[I, 1] .= 1
     @test nnz(A) == 1
-    A[1, J] = 1
+    A[1, J] .= 1
     @test nnz(A) == 1
-    A[I, J] = 1
+    A[I, J] .= 1
     @test nnz(A) == 1
 end
 
@@ -2039,8 +2057,8 @@ end
     x_dense  = convert(Matrix{elty}, x_sparse)
     @testset "Test with no Infs and NaNs, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
                                                                                  corrected in (true, false)
-        @test cov(x_sparse, vardim, corrected=corrected) ≈
-              cov(x_dense , vardim, corrected=corrected)
+        @test cov(x_sparse, dims=vardim, corrected=corrected) ≈
+              cov(x_dense , dims=vardim, corrected=corrected)
     end
 
     @testset "Test with $x11, vardim=$vardim, corrected=$corrected" for x11 in (NaN, Inf),
@@ -2049,8 +2067,8 @@ end
         x_sparse[1,1] = x11
         x_dense[1 ,1] = x11
 
-        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
-        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
         @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
@@ -2063,8 +2081,8 @@ end
         x_sparse[2,1] = NaN
         x_dense[2 ,1] = NaN
 
-        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
-        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
         @test cov_sparse[(1 + vardim):end, (1 + vardim):end] ≈
               cov_dense[ (1 + vardim):end, (1 + vardim):end]
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
@@ -2204,3 +2222,54 @@ end
     v[1] = 2
     @test A[1,1] == 2
 end
+
+@testset "findnz on non-sparse arrays" begin
+    @test findnz([0 1; 0 2]) == ([1, 2], [2, 2], [1, 2])
+    @test findnz(BitArray([false true; false true])) == ([1, 2], [2, 2], trues(2))
+end
+
+# #25943
+@testset "operations on Integer subtypes" begin
+    s = sparse(UInt8[1, 2, 3], UInt8[1, 2, 3], UInt8[1, 2, 3])
+    @test sum(s, dims=2) == reshape([1, 2, 3], 3, 1)
+end
+
+@testset "mapreduce of sparse matrices with trailing elements in nzval #26534" begin
+    B = SparseMatrixCSC{Int,Int}(2, 3,
+        [1, 3, 4, 5],
+        [1, 2, 1, 2, 999, 999, 999, 999],
+        [1, 2, 3, 6, 999, 999, 999, 999]
+    )
+    @test maximum(B) == 6
+end
+
+_length_or_count_or_five(::Colon) = 5
+_length_or_count_or_five(x::AbstractVector{Bool}) = count(x)
+_length_or_count_or_five(x) = length(x)
+@testset "nonscalar setindex!" begin
+    for I in (1:4, :, 5:-1:2, [], trues(5), setindex!(falses(5), true, 2), 3),
+        J in (2:4, :, 4:-1:1, [], setindex!(trues(5), false, 3), falses(5), 4)
+        V = sparse(1 .+ zeros(_length_or_count_or_five(I)*_length_or_count_or_five(J)))
+        M = sparse(1 .+ zeros(_length_or_count_or_five(I), _length_or_count_or_five(J)))
+        if I isa Integer && J isa Integer
+            @test_throws MethodError spzeros(5,5)[I, J] = V
+            @test_throws MethodError spzeros(5,5)[I, J] = M
+            continue
+        end
+        @test setindex!(spzeros(5, 5), V, I, J) == setindex!(zeros(5,5), V, I, J)
+        @test setindex!(spzeros(5, 5), M, I, J) == setindex!(zeros(5,5), M, I, J)
+        @test setindex!(spzeros(5, 5), Array(M), I, J) == setindex!(zeros(5,5), M, I, J)
+        @test setindex!(spzeros(5, 5), Array(V), I, J) == setindex!(zeros(5,5), V, I, J)
+    end
+    @test setindex!(spzeros(5, 5), 1:25, :) == setindex!(zeros(5,5), 1:25, :) == reshape(1:25, 5, 5)
+    @test setindex!(spzeros(5, 5), (25:-1:1).+spzeros(25), :) == setindex!(zeros(5,5), (25:-1:1).+spzeros(25), :) == reshape(25:-1:1, 5, 5)
+    for X in (1:20, sparse(1:20), reshape(sparse(1:20), 20, 1), (1:20) .+ spzeros(20, 1), collect(1:20), collect(reshape(1:20, 20, 1)))
+        @test setindex!(spzeros(5, 5), X, 6:25) == setindex!(zeros(5,5), 1:20, 6:25)
+        @test setindex!(spzeros(5, 5), X, 21:-1:2) == setindex!(zeros(5,5), 1:20, 21:-1:2)
+        b = trues(25)
+        b[[6, 8, 13, 15, 23]] .= false
+        @test setindex!(spzeros(5, 5), X, b) == setindex!(zeros(5, 5), X, b)
+    end
+end
+
+end # module

@@ -12,44 +12,63 @@ struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     rook::Bool
     info::BlasInt
 end
-BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool,
+BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::AbstractChar, symmetric::Bool,
              rook::Bool, info::BlasInt) where {T} =
         BunchKaufman{T,typeof(A)}(A, ipiv, uplo, symmetric, rook, info)
 
-"""
-    bkfact!(A, rook::Bool=false) -> BunchKaufman
+# iteration for destructuring into components
+Base.iterate(S::BunchKaufman) = (S.D, Val(:UL))
+Base.iterate(S::BunchKaufman, ::Val{:UL}) = (S.uplo == 'L' ? S.L : S.U, Val(:p))
+Base.iterate(S::BunchKaufman, ::Val{:p}) = (S.p, Val(:done))
+Base.iterate(S::BunchKaufman, ::Val{:done}) = nothing
 
-`bkfact!` is the same as [`bkfact`](@ref), but saves space by overwriting the
+
+"""
+    bunchkaufman!(A, rook::Bool=false) -> BunchKaufman
+
+`bunchkaufman!` is the same as [`bunchkaufman`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy.
 """
-function bkfact!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false)
+function bunchkaufman!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false)
     LD, ipiv, info = rook ? LAPACK.sytrf_rook!(A.uplo, A.data) : LAPACK.sytrf!(A.uplo, A.data)
     BunchKaufman(LD, ipiv, A.uplo, true, rook, info)
 end
-function bkfact!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false)
+function bunchkaufman!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false)
     LD, ipiv, info = rook ? LAPACK.hetrf_rook!(A.uplo, A.data) : LAPACK.hetrf!(A.uplo, A.data)
     BunchKaufman(LD, ipiv, A.uplo, false, rook, info)
 end
-function bkfact!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false)
+function bunchkaufman!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false)
     if ishermitian(A)
-        return bkfact!(Hermitian(A), rook)
+        return bunchkaufman!(Hermitian(A), rook)
     elseif issymmetric(A)
-        return bkfact!(Symmetric(A), rook)
+        return bunchkaufman!(Symmetric(A), rook)
     else
         throw(ArgumentError("Bunch-Kaufman decomposition is only valid for symmetric or Hermitian matrices"))
     end
 end
 
 """
-    bkfact(A, rook::Bool=false) -> BunchKaufman
+    bunchkaufman(A, rook::Bool=false) -> S::BunchKaufman
 
-Compute the Bunch-Kaufman [^Bunch1977] factorization of a symmetric or Hermitian matrix `A` as ``P'*U*D*U'*P`` or ``P'*L*D*L'*P``, depending on which triangle is stored in `A`, and return a `BunchKaufman` object. Note that if `A` is complex symmetric then `U'` and `L'` denote the unconjugated transposes, i.e. `transpose(U)` and `transpose(L)`.
+Compute the Bunch-Kaufman [^Bunch1977] factorization of a `Symmetric` or
+`Hermitian` matrix `A` as ``P'*U*D*U'*P`` or ``P'*L*D*L'*P``, depending on
+which triangle is stored in `A`, and return a `BunchKaufman` object.
+Note that if `A` is complex symmetric then `U'` and `L'` denote
+the unconjugated transposes, i.e. `transpose(U)` and `transpose(L)`.
 
-If `rook` is `true`, rook pivoting is used. If `rook` is false, rook pivoting is not used.
+Iterating the decomposition produces the components `S.D`, `S.U` or `S.L`
+as appropriate given `S.uplo`, and `S.p`.
 
-The following functions are available for `BunchKaufman` objects: [`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref), [`ishermitian`](@ref), [`getindex`](@ref).
+If `rook` is `true`, rook pivoting is used. If `rook` is false,
+rook pivoting is not used.
 
-[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
+The following functions are available for `BunchKaufman` objects:
+[`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref),
+[`ishermitian`](@ref), [`getindex`](@ref).
+
+[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia
+and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179.
+[url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
 
 # Examples
 ```jldoctest
@@ -58,24 +77,29 @@ julia> A = [1 2; 2 3]
  1  2
  2  3
 
-julia> bkfact(A)
-LinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}
+julia> S = bunchkaufman(A)
+BunchKaufman{Float64,Array{Float64,2}}
 D factor:
 2×2 Tridiagonal{Float64,Array{Float64,1}}:
  -0.333333  0.0
   0.0       3.0
 U factor:
-2×2 LinearAlgebra.UnitUpperTriangular{Float64,Array{Float64,2}}:
+2×2 UnitUpperTriangular{Float64,Array{Float64,2}}:
  1.0  0.666667
- 0.0  1.0
+  ⋅   1.0
 permutation:
 2-element Array{Int64,1}:
  1
  2
+
+julia> d, u, p = S; # destructuring via iteration
+
+julia> d == S.D && u == S.U && p == S.p
+true
 ```
 """
-bkfact(A::AbstractMatrix{T}, rook::Bool=false) where {T} =
-    bkfact!(copy_oftype(A, typeof(sqrt(one(T)))), rook)
+bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false) where {T} =
+    bunchkaufman!(copy_oftype(A, typeof(sqrt(one(T)))), rook)
 
 convert(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) where {T} = B
 convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =
@@ -88,7 +112,7 @@ size(B::BunchKaufman, d::Integer) = size(getfield(B, :LD), d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::Char) where T
+function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar) where T
     p = T[1:maxi;]
     uploL = uplo == 'L'
     i = uploL ? 1 : maxi
@@ -134,17 +158,17 @@ julia> A = [1 2 3; 2 1 2; 3 2 1]
  2  1  2
  3  2  1
 
-julia> F = bkfact(Symmetric(A, :L))
-LinearAlgebra.BunchKaufman{Float64,Array{Float64,2}}
+julia> F = bunchkaufman(Symmetric(A, :L))
+BunchKaufman{Float64,Array{Float64,2}}
 D factor:
 3×3 Tridiagonal{Float64,Array{Float64,1}}:
  1.0  3.0    ⋅
  3.0  1.0   0.0
   ⋅   0.0  -1.0
 L factor:
-3×3 LinearAlgebra.UnitLowerTriangular{Float64,Array{Float64,2}}:
- 1.0  0.0  0.0
- 0.0  1.0  0.0
+3×3 UnitLowerTriangular{Float64,Array{Float64,2}}:
+ 1.0   ⋅    ⋅
+ 0.0  1.0   ⋅
  0.5  0.5  1.0
 permutation:
 3-element Array{Int64,1}:
@@ -158,7 +182,7 @@ julia> F.L*F.D*F.L' - A[F.p, F.p]
  0.0  0.0  0.0
  0.0  0.0  0.0
 
-julia> F = bkfact(Symmetric(A));
+julia> F = bunchkaufman(Symmetric(A));
 
 julia> F.U*F.D*F.U' - F.P*A*F.P'
 3×3 Array{Float64,2}:
@@ -205,7 +229,8 @@ function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     end
 end
 
-Base.propertynames(B::BunchKaufman, private::Bool=false) = append!([:p,:P,:L,:U,:D], private ? fieldnames(typeof(B)) : Symbol[])
+Base.propertynames(B::BunchKaufman, private::Bool=false) =
+    (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
 
 issuccess(B::BunchKaufman) = B.info == 0
 

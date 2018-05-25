@@ -59,7 +59,7 @@ splat2(3, 3:5)
 @test String(take!(stagediobuf)) == "($intstr, UnitRange{$intstr})"
 
 # varargs specialization with parametric @generated functions (issue #8944)
-@generated function splat3(A::AbstractArray{T,N}, indx::RangeIndex...) where {T,N}
+@generated function splat3(A::AbstractArray{T,N}, indx::Base.RangeIndex...) where {T,N}
     print(stagediobuf, indx)
     :(nothing)
 end
@@ -77,7 +77,7 @@ B = view(A, 1:3, 2, 1:3)
     end
     Ip = I.parameters
     NP = length(Ip)
-    indexexprs = Vector{Expr}(uninitialized, NP)
+    indexexprs = Vector{Expr}(undef, NP)
     j = 1
     for i = 1:NP
         if Ip[i] == Int
@@ -148,11 +148,14 @@ module TestGeneratedThrow
     end
 
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
+    inited = false
     function __init__()
-        code_typed(foo,(); optimize = false)
-        cfunction(foo,Cvoid,Tuple{})
+        code_typed(foo, (); optimize = false)
+        @cfunction(foo, Cvoid, ())
+        global inited = true
     end
 end
+@test TestGeneratedThrow.inited
 
 # @generated functions including inner functions
 @generated function _g_f_with_inner(x)
@@ -191,9 +194,7 @@ let gf_err2
         return nothing
     end
     @test_throws ErrorException gf_err2(code_typed)
-    @test_throws ErrorException gf_err2(code_llvm)
-    @test_throws ErrorException gf_err2(code_native)
-    @test gf_err_ref[] == 12
+    @test gf_err_ref[] == 4
     @test gf_err2(code_lowered) === nothing
 end
 
@@ -276,10 +277,10 @@ end
 let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int))), "x + x")
-    @test contains(string(Base.uncompressed_ast(first(methods(f23168)))), "2 * x")
-    @test contains(string(code_lowered(f23168, (Vector{Any},Int), false)), "2 * x")
-    @test contains(string(code_typed(f23168, (Vector{Any},Int))), "(Base.add_int)(x, x)")
+    @test occursin("x + x", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("2 * x", string(Base.uncompressed_ast(first(methods(f23168)))))
+    @test occursin("2 * x", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
 end
 
 # issue #18747

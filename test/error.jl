@@ -66,6 +66,11 @@ end
     @test ex.msg == "foo"
     @test c[1] == 1
 
+    # Test example in docstring where the check function doesn't return the state.
+    c = [0]
+    @test retry(foo_error, check=(s,e)->e.msg == "foo")(c,1) == 7
+    @test c[1] == 2
+
     # Functions with keyword arguments
     foo_kwargs(x; y=5) = x + y
     @test retry(foo_kwargs)(3) == 8

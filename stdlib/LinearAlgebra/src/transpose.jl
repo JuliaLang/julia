@@ -146,29 +146,35 @@ function ccopy!(B, A)
 end
 
 """
-    transpose(A::AbstractMatrix)
+    copy(A::Transpose)
+    copy(A::Adjoint)
 
-Eager matrix transpose. Note that the transposition is applied recursively to
-elements.
+Eagerly evaluate the lazy matrix transpose/adjoint.
+Note that the transposition is applied recursively to elements.
 
 This operation is intended for linear algebra usage - for general data manipulation see
-[`permutedims`](@ref), which is non-recursive.
+[`permutedims`](@ref Base.permutedims), which is non-recursive.
 
 # Examples
 ```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
- 7  8  9
+julia> A = [1 2im; -3im 4]
+2×2 Array{Complex{Int64},2}:
+ 1+0im  0+2im
+ 0-3im  4+0im
 
-julia> transpose(A)
-3×3 Array{Int64,2}:
- 1  4  7
- 2  5  8
- 3  6  9
+julia> T = transpose(A)
+2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+ 1+0im  0-3im
+ 0+2im  4+0im
+
+julia> copy(T)
+2×2 Array{Complex{Int64},2}:
+ 1+0im  0-3im
+ 0+2im  4+0im
 ```
 """
+copy(::Union{Transpose,Adjoint})
+
 Base.copy(A::Transpose{<:Any,<:AbstractMatrix}) = transpose!(similar(A.parent, reverse(axes(A.parent))), A.parent)
 Base.copy(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint!(similar(A.parent, reverse(axes(A.parent))), A.parent)
 

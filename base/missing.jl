@@ -18,17 +18,27 @@ end
 showerror(io::IO, ex::MissingException) =
     print(io, "MissingException: ", ex.msg)
 
+
+
 nonmissingtype(::Type{Union{T, Missing}}) where {T} = T
 nonmissingtype(::Type{Missing}) = Union{}
 nonmissingtype(::Type{T}) where {T} = T
 nonmissingtype(::Type{Any}) = Any
 
-promote_rule(::Type{Missing}, ::Type{T}) where {T} = Union{T, Missing}
-promote_rule(::Type{Union{S,Missing}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), Missing}
-promote_rule(::Type{Any}, ::Type{T}) where {T} = Any
-promote_rule(::Type{Any}, ::Type{Missing}) = Any
-promote_rule(::Type{Missing}, ::Type{Any}) = Any
-promote_rule(::Type{Missing}, ::Type{Missing}) = Missing
+for U in (:Nothing, :Missing)
+    @eval begin
+        promote_rule(::Type{$U}, ::Type{T}) where {T} = Union{T, $U}
+        promote_rule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), $U}
+        promote_rule(::Type{Any}, ::Type{$U}) = Any
+        promote_rule(::Type{$U}, ::Type{Any}) = Any
+        promote_rule(::Type{$U}, ::Type{$U}) = U
+    end
+end
+promote_rule(::Type{Union{Nothing, Missing}}, ::Type{Any}) = Any
+promote_rule(::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
+    Union{Nothing, Missing, T}
+promote_rule(::Type{Union{Nothing, Missing, S}}, ::Type{T}) where {T,S} =
+    Union{Nothing, Missing, promote_type(T, S)}
 
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities
@@ -57,18 +67,14 @@ isless(::Missing, ::Any) = false
 isless(::Any, ::Missing) = true
 
 # Unary operators/functions
-for f in (:(!), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
-          :(abs), :(abs2), :(sign),
-          :(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
-          :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
-          :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
-          :(log2), :(exponent), :(sqrt), :(gamma), :(lgamma),
-          :(iseven), :(ispow2), :(isfinite), :(isinf), :(isodd),
-          :(isinteger), :(isreal), :(isnan), :(isempty),
-          :(iszero), :(transpose), :(float))
-    @eval Math.$(f)(::Missing) = missing
+for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
+          :(isfinite), :(isinf), :(isodd),
+          :(isinteger), :(isreal), :(isnan),
+          :(iszero), :(transpose), :(adjoint), :(float), :(conj),
+	  :(abs), :(abs2), :(iseven), :(ispow2),
+	  :(real), :(imag), :(sign))
+    @eval ($f)(::Missing) = missing
 end
-
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
     @eval function $(f)(::Type{Union{T, Missing}}) where T
         T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
@@ -99,7 +105,11 @@ for f in (:(ceil), :(floor), :(round), :(trunc))
         ($f)(::Missing, digits::Integer=0, base::Integer=0) = missing
         ($f)(::Type{>:Missing}, ::Missing) = missing
         ($f)(::Type{T}, ::Missing) where {T} =
-            throw(MissingException("cannot convert a missing value to type $T"))
+            throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
+        ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype(T), x)
+        # to fix ambiguities
+        ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype(T), x)
+        ($f)(::Type{T}, x::Rational{Bool}) where {T>:Missing} = $f(nonmissingtype(T), x)
     end
 end
 
@@ -149,14 +159,13 @@ julia> sum(skipmissing([1, missing, 2]))
 
 julia> collect(skipmissing([1, missing, 2]))
 2-element Array{Int64,1}:
-1
-2
+ 1
+ 2
 
 julia> collect(skipmissing([1 missing; 2 missing]))
 2-element Array{Int64,1}:
-1
-2
-
+ 1
+ 2
 ```
 """
 skipmissing(itr) = SkipMissing(itr)
@@ -166,46 +175,16 @@ struct SkipMissing{T}
 end
 IteratorSize(::Type{<:SkipMissing}) = SizeUnknown()
 IteratorEltype(::Type{SkipMissing{T}}) where {T} = IteratorEltype(T)
-eltype(itr::SkipMissing) = nonmissingtype(eltype(itr.x))
-# Fallback implementation for general iterables: we cannot access a value twice,
-# so after finding the next non-missing element in start() or next(), we have to
-# pass it in the iterator state, which introduces a type instability since the value
-# is missing if the input does not contain any non-missing element.
-@inline function Base.start(itr::SkipMissing)
-    s = start(itr.x)
-    v = missing
-    @inbounds while !done(itr.x, s) && v isa Missing
-        v, s = next(itr.x, s)
+eltype(::Type{SkipMissing{T}}) where {T} = nonmissingtype(eltype(T))
+
+function Base.iterate(itr::SkipMissing, state...)
+    y = iterate(itr.x, state...)
+    y === nothing && return nothing
+    item, state = y
+    while item === missing
+        y = iterate(itr.x, state)
+        y === nothing && return nothing
+        item, state = y
     end
-    (v, s)
-end
-@inline Base.done(itr::SkipMissing, state) = ismissing(state[1]) && done(itr.x, state[2])
-@inline function Base.next(itr::SkipMissing, state)
-    v1, s = state
-    v2 = missing
-    @inbounds while !done(itr.x, s) && v2 isa Missing
-        v2, s = next(itr.x, s)
-    end
-    (v1, (v2, s))
-end
-# Optimized implementation for AbstractArray, relying on the ability to access x[i] twice:
-# once in done() to find the next non-missing entry, and once in next() to return it.
-# This works around the type instability problem of the generic fallback.
-@inline function _next_nonmissing_ind(x::AbstractArray, s)
-    idx = eachindex(x)
-    @inbounds while !done(idx, s)
-        i, new_s = next(idx, s)
-        x[i] isa Missing || break
-        s = new_s
-    end
-    s
-end
-@inline Base.start(itr::SkipMissing{<:AbstractArray}) =
-    _next_nonmissing_ind(itr.x, start(eachindex(itr.x)))
-@inline Base.done(itr::SkipMissing{<:AbstractArray}, state) =
-    done(eachindex(itr.x), state)
-@inline function Base.next(itr::SkipMissing{<:AbstractArray}, state)
-    i, state = next(eachindex(itr.x), state)
-    @inbounds v = itr.x[i]::eltype(itr)
-    (v, _next_nonmissing_ind(itr.x, state))
+    item, state
 end

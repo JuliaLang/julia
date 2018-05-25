@@ -5,7 +5,7 @@
     QR <: Factorization
 
 A QR matrix factorization stored in a packed format, typically obtained from
-[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+[`qr`](@ref). If ``A`` is an `m`×`n` matrix, then
 
 ```math
 A = Q R
@@ -18,6 +18,8 @@ and coefficients ``\\tau_i`` where:
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
 ```
+
+Iterating the decomposition produces the components `Q` and `R`.
 
 The object has two fields:
 
@@ -39,12 +41,17 @@ struct QR{T,S<:AbstractMatrix} <: Factorization{T}
 end
 QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(factors, τ)
 
+# iteration for destructuring into components
+Base.iterate(S::QR) = (S.Q, Val(:R))
+Base.iterate(S::QR, ::Val{:R}) = (S.R, Val(:done))
+Base.iterate(S::QR, ::Val{:done}) = nothing
+
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
 """
     QRCompactWY <: Factorization
 
 A QR matrix factorization stored in a compact blocked format, typically obtained from
-[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+[`qr`](@ref). If ``A`` is an `m`×`n` matrix, then
 
 ```math
 A = Q R
@@ -61,6 +68,8 @@ Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
 
 such that ``v_i`` is the ``i``th column of ``V``, and ``\tau_i`` is the ``i``th diagonal
 element of ``T``.
+
+Iterating the decomposition produces the components `Q` and `R`.
 
 The object has two fields:
 
@@ -81,9 +90,9 @@ The object has two fields:
     [^Bischof1987].
 
 
-[^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](http://dx.doi.org/10.1137/0908009)
+[^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](https://doi.org/10.1137/0908009)
 
-[^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](http://dx.doi.org/10.1137/0910005)
+[^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](https://doi.org/10.1137/0910005)
 """
 struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
     factors::M
@@ -92,11 +101,16 @@ struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
 end
 QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
 
+# iteration for destructuring into components
+Base.iterate(S::QRCompactWY) = (S.Q, Val(:R))
+Base.iterate(S::QRCompactWY, ::Val{:R}) = (S.R, Val(:done))
+Base.iterate(S::QRCompactWY, ::Val{:done}) = nothing
+
 """
     QRPivoted <: Factorization
 
 A QR matrix factorization with column pivoting in a packed format, typically obtained from
-[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+[`qr`](@ref). If ``A`` is an `m`×`n` matrix, then
 
 ```math
 A P = Q R
@@ -108,6 +122,8 @@ upper triangular. The matrix ``Q`` is stored as a sequence of Householder reflec
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
 ```
+
+Iterating the decomposition produces the components `Q`, `R`, and `p`.
 
 The object has three fields:
 
@@ -132,6 +148,12 @@ struct QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
 end
 QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T} =
     QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
+
+# iteration for destructuring into components
+Base.iterate(S::QRPivoted) = (S.Q, Val(:R))
+Base.iterate(S::QRPivoted, ::Val{:R}) = (S.R, Val(:p))
+Base.iterate(S::QRPivoted, ::Val{:p}) = (S.p, Val(:done))
+Base.iterate(S::QRPivoted, ::Val{:done}) = nothing
 
 function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
     m, n = size(A)
@@ -162,7 +184,7 @@ end
 function qrfactPivotedUnblocked!(A::StridedMatrix)
     m, n = size(A)
     piv = Vector(UnitRange{BlasInt}(1,n))
-    τ = Vector{eltype(A)}(uninitialized, min(m,n))
+    τ = Vector{eltype(A)}(undef, min(m,n))
     for j = 1:min(m,n)
 
         # Find column with maximum norm in trailing submatrix
@@ -194,16 +216,16 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 end
 
 # LAPACK version
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
-qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val(false))
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
+qr!(A::StridedMatrix{<:BlasFloat}) = qr!(A, Val(false))
 
 # Generic fallbacks
 
 """
-    qrfact!(A, pivot=Val(false))
+    qr!(A, pivot=Val(false))
 
-`qrfact!` is the same as [`qrfact`](@ref) when `A` is a subtype of
+`qr!` is the same as [`qr`](@ref) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
@@ -215,30 +237,36 @@ julia> a = [1. 2.; 3. 4.]
  1.0  2.0
  3.0  4.0
 
-julia> qrfact!(a)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
-[-0.316228 -0.948683; -0.948683 0.316228]
-[-3.16228 -4.42719; 0.0 -0.632456]
+julia> qr!(a)
+LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+Q factor:
+2×2 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+ -0.316228  -0.948683
+ -0.948683   0.316228
+R factor:
+2×2 Array{Float64,2}:
+ -3.16228  -4.42719
+  0.0      -0.632456
 
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
  3  4
 
-julia> qrfact!(a)
-ERROR: InexactError: convert(Int64, -3.1622776601683795)
+julia> qr!(a)
+ERROR: InexactError: Int64(Int64, -3.1622776601683795)
 Stacktrace:
 [...]
 ```
 """
-qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
-qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
-qrfact!(A::StridedMatrix) = qrfact!(A, Val(false))
+qr!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
+qr!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
+qr!(A::StridedMatrix) = qr!(A, Val(false))
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
 """
-    qrfact(A, pivot=Val(false)) -> F
+    qr(A, pivot=Val(false)) -> F
 
 Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
@@ -256,12 +284,14 @@ The returned object `F` stores the factorization in a packed format:
 
  - otherwise `F` is a [`QR`](@ref) object.
 
-The individual components of the factorization `F` can be accessed by indexing with a symbol:
+The individual components of the decomposition `F` can be retrieved via property accessors:
 
  - `F.Q`: the orthogonal/unitary matrix `Q`
  - `F.R`: the upper triangular matrix `R`
  - `F.p`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
  - `F.P`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
+
+Iterating the decomposition produces the components `Q`, `R`, and if extant `p`.
 
 The following functions are available for the `QR` objects: [`inv`](@ref), [`size`](@ref),
 and [`\\`](@ref). When `A` is rectangular, `\\` will return a least squares
@@ -279,129 +309,40 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
  4.0  -8.0
  0.0   1.0
 
-julia> F = qrfact(A)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
-[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]
-[-5.0 10.0; 0.0 -1.0]
+julia> F = qr(A)
+LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+Q factor:
+3×3 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+ -0.6   0.0   0.8
+ -0.8   0.0  -0.6
+  0.0  -1.0   0.0
+R factor:
+2×2 Array{Float64,2}:
+ -5.0  10.0
+  0.0  -1.0
 
 julia> F.Q * F.R == A
 true
 ```
 
 !!! note
-    `qrfact` returns multiple types because LAPACK uses several representations
+    `qr` returns multiple types because LAPACK uses several representations
     that minimize the memory storage requirements of products of Householder
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
 """
-function qrfact(A::AbstractMatrix{T}, arg) where T
+function qr(A::AbstractMatrix{T}, arg) where T
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
-    return qrfact!(AA, arg)
+    return qr!(AA, arg)
 end
-function qrfact(A::AbstractMatrix{T}) where T
+function qr(A::AbstractMatrix{T}) where T
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
-    return qrfact!(AA)
+    return qr!(AA)
 end
-qrfact(x::Number) = qrfact(fill(x,1,1))
-
-"""
-    qr(A, pivot=Val(false); full::Bool = false) -> Q, R, [p]
-
-Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
-Also see [`qrfact`](@ref).
-The default is to compute a "thin" factorization. Note that `R` is not
-extended with zeros when a full/square orthogonal factor `Q` is requested (via `full = true`).
-"""
-function qr(A::Union{Number,AbstractMatrix}, pivot::Union{Val{false},Val{true}} = Val(false);
-            full::Bool = false, thin::Union{Bool,Nothing} = nothing)
-    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
-    if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `qr(A, pivot; thin = $(thin))` has ",
-            "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `qr(A, pivot; full = $(!thin))`."), :qr)
-        full::Bool = !thin
-    end
-    return _qr(A, pivot, full = full)
-end
-function _qr(A::Union{Number,AbstractMatrix}, ::Val{false}; full::Bool = false)
-    F = qrfact(A, Val(false))
-    Q, R = F.Q, F.R
-    sQf1 = size(Q.factors, 1)
-    return (!full ? Array(Q) : mul!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R
-end
-function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; full::Bool = false)
-    F = qrfact(A, Val(true))
-    Q, R, p = F.Q, F.R, F.p
-    sQf1 = size(Q.factors, 1)
-    return (!full ? Array(Q) : mul!(Q, Matrix{eltype(Q)}(I, sQf1, sQf1))), R, p
-end
-
-"""
-    qr(v::AbstractVector) -> w, r
-
-Computes the polar decomposition of a vector.
-Returns `w`, a unit vector in the direction of `v`, and
-`r`, the norm of `v`.
-
-See also [`normalize`](@ref), [`normalize!`](@ref),
-and [`LinearAlgebra.qr!`](@ref).
-
-# Examples
-```jldoctest
-julia> v = [1; 2]
-2-element Array{Int64,1}:
- 1
- 2
-
-julia> w, r = qr(v)
-([0.447214, 0.894427], 2.23606797749979)
-
-julia> w*r == v
-true
-```
-"""
-function qr(v::AbstractVector)
-    nrm = norm(v)
-    if !isempty(v)
-        vv = copy_oftype(v, typeof(v[1]/nrm))
-        return __normalize!(vv, nrm), nrm
-    else
-        T = typeof(zero(eltype(v))/nrm)
-        return T[], oneunit(T)
-    end
-end
-
-"""
-    LinearAlgebra.qr!(v::AbstractVector) -> w, r
-
-Computes the polar decomposition of a vector. Instead of returning a new vector
-as `qr(v::AbstractVector)`, this function mutates the input vector `v` in place.
-Returns `w`, a unit vector in the direction of `v` (this is a mutation of `v`),
-and `r`, the norm of `v`.
-
-See also [`normalize`](@ref), [`normalize!`](@ref),
-and [`qr`](@ref).
-
-# Examples
-```jldoctest
-julia> v = [1.; 2.]
-2-element Array{Float64,1}:
- 1.0
- 2.0
-
-julia> w, r = LinearAlgebra.qr!(v)
-([0.447214, 0.894427], 2.23606797749979)
-
-julia> w === v
-true
-```
-"""
-function qr!(v::AbstractVector)
-    nrm = norm(v)
-    __normalize!(v, nrm), nrm
-end
+qr(x::Number) = qr(fill(x,1,1))
+qr(v::AbstractVector) = qr(reshape(v, (length(v), 1)))
 
 # Conversions
 QR{T}(A::QR) where {T} = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
@@ -422,11 +363,16 @@ AbstractArray(F::QRPivoted) = AbstractMatrix(F)
 Matrix(F::QRPivoted) = Array(AbstractArray(F))
 Array(F::QRPivoted) = Matrix(F)
 
-function show(io::IO, F::Union{QR, QRCompactWY, QRPivoted})
-    println(io, "$(typeof(F)) with factors Q and R:")
-    show(io, F.Q)
-    println(io)
-    show(io, F.R)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{QR, QRCompactWY, QRPivoted})
+    println(io, summary(F))
+    println(io, "Q factor:")
+    show(io, mime, F.Q)
+    println(io, "\nR factor:")
+    show(io, mime, F.R)
+    if F isa QRPivoted
+        println(io, "\npermutation:")
+        show(io, mime, F.p)
+    end
 end
 
 function getproperty(F::QR, d::Symbol)
@@ -449,7 +395,9 @@ function getproperty(F::QRCompactWY, d::Symbol)
         getfield(F, d)
     end
 end
-Base.propertynames(F::Union{QR,QRCompactWY}, private::Bool=false) = append!([:R,:Q], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::Union{QR,QRCompactWY}, private::Bool=false) =
+    (:R, :Q, (private ? fieldnames(typeof(F)) : ())...)
+
 function getproperty(F::QRPivoted{T}, d::Symbol) where T
     m, n = size(F)
     if d == :R
@@ -470,7 +418,8 @@ function getproperty(F::QRPivoted{T}, d::Symbol) where T
         getfield(F, d)
     end
 end
-Base.propertynames(F::QRPivoted, private::Bool=false) = append!([:R,:Q,:p,:P], private ? fieldnames(typeof(F)) : Symbol[])
+Base.propertynames(F::QRPivoted, private::Bool=false) =
+    (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 
@@ -506,7 +455,7 @@ AbstractMatrix{T}(Q::QRPackedQ) where {T} = QRPackedQ{T}(Q)
 QRCompactWYQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 AbstractMatrix{S}(Q::QRCompactWYQ{S}) where {S} = Q
 AbstractMatrix{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ{S}(Q)
-Matrix(A::AbstractQ{T}) where {T} = mul!(A, Matrix{T}(I, size(A.factors, 1), min(size(A.factors)...)))
+Matrix(A::AbstractQ{T}) where {T} = lmul!(A, Matrix{T}(I, size(A.factors, 1), min(size(A.factors)...)))
 Array(A::AbstractQ) = Matrix(A)
 
 size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(A, :factors), dim)
@@ -520,16 +469,16 @@ function getindex(A::AbstractQ, i::Integer, j::Integer)
     x[i] = 1
     y = zeros(eltype(A), size(A, 2))
     y[j] = 1
-    return dot(x, mul!(A, y))
+    return dot(x, lmul!(A, y))
 end
 
 ## Multiplication by Q
 ### QB
-mul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
+lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
     LAPACK.gemqrt!('L','N',A.factors,A.T,B)
-mul!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
+lmul!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
     LAPACK.ormqr!('L','N',A.factors,A.τ,B)
-function mul!(A::QRPackedQ, B::AbstractVecOrMat)
+function lmul!(A::QRPackedQ, B::AbstractVecOrMat)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
     if mA != mB
@@ -564,7 +513,7 @@ function (*)(A::AbstractQ, b::StridedVector)
     else
         throw(DimensionMismatch("vector must have length either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
     end
-    mul!(Anew, bnew)
+    lmul!(Anew, bnew)
 end
 function (*)(A::AbstractQ, B::StridedMatrix)
     TAB = promote_type(eltype(A), eltype(B))
@@ -576,19 +525,19 @@ function (*)(A::AbstractQ, B::StridedMatrix)
     else
         throw(DimensionMismatch("first dimension of matrix must have size either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
     end
-    mul!(Anew, Bnew)
+    lmul!(Anew, Bnew)
 end
 
 ### QcB
-mul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
+lmul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
     (A = adjA.parent; LAPACK.gemqrt!('L','T',A.factors,A.T,B))
-mul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
+lmul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
     (A = adjA.parent; LAPACK.gemqrt!('L','C',A.factors,A.T,B))
-mul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
+lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
     (A = adjA.parent; LAPACK.ormqr!('L','T',A.factors,A.τ,B))
-mul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
+lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
     (A = adjA.parent; LAPACK.ormqr!('L','C',A.factors,A.τ,B))
-function mul!(adjA::Adjoint{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
+function lmul!(adjA::Adjoint{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
     A = adjA.parent
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
@@ -616,7 +565,7 @@ end
 function *(adjQ::Adjoint{<:Any,<:AbstractQ}, B::StridedVecOrMat)
     Q = adjQ.parent
     TQB = promote_type(eltype(Q), eltype(B))
-    return mul!(adjoint(convert(AbstractMatrix{TQB}, Q)), copy_oftype(B, TQB))
+    return lmul!(adjoint(convert(AbstractMatrix{TQB}, Q)), copy_oftype(B, TQB))
 end
 
 ### QBc/QcBc
@@ -625,22 +574,22 @@ function *(Q::AbstractQ, adjB::Adjoint{<:Any,<:StridedVecOrMat})
     TQB = promote_type(eltype(Q), eltype(B))
     Bc = similar(B, TQB, (size(B, 2), size(B, 1)))
     adjoint!(Bc, B)
-    return mul!(convert(AbstractMatrix{TQB}, Q), Bc)
+    return lmul!(convert(AbstractMatrix{TQB}, Q), Bc)
 end
 function *(adjQ::Adjoint{<:Any,<:AbstractQ}, adjB::Adjoint{<:Any,<:StridedVecOrMat})
     Q, B = adjQ.parent, adjB.parent
     TQB = promote_type(eltype(Q), eltype(B))
     Bc = similar(B, TQB, (size(B, 2), size(B, 1)))
     adjoint!(Bc, B)
-    return mul!(adjoint(convert(AbstractMatrix{TQB}, Q)), Bc)
+    return lmul!(adjoint(convert(AbstractMatrix{TQB}, Q)), Bc)
 end
 
 ### AQ
-mul!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
+rmul!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
     LAPACK.gemqrt!('R','N', B.factors, B.T, A)
-mul!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
+rmul!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
     LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
-function mul!(A::StridedMatrix,Q::QRPackedQ)
+function rmul!(A::StridedMatrix,Q::QRPackedQ)
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
     if nA != mQ
@@ -667,19 +616,20 @@ end
 
 function (*)(A::StridedMatrix, Q::AbstractQ)
     TAQ = promote_type(eltype(A), eltype(Q))
-    return mul!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
+
+    return rmul!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
 end
 
 ### AQc
-mul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasReal} =
+rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasReal} =
     (B = adjB.parent; LAPACK.gemqrt!('R','T',B.factors,B.T,A))
-mul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasComplex} =
+rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasComplex} =
     (B = adjB.parent; LAPACK.gemqrt!('R','C',B.factors,B.T,A))
-mul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasReal} =
+rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasReal} =
     (B = adjB.parent; LAPACK.ormqr!('R','T',B.factors,B.τ,A))
-mul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasComplex} =
+rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasComplex} =
     (B = adjB.parent; LAPACK.ormqr!('R','C',B.factors,B.τ,A))
-function mul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRPackedQ})
+function rmul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRPackedQ})
     Q = adjQ.parent
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
@@ -711,9 +661,9 @@ function *(A::StridedMatrix, adjB::Adjoint{<:Any,<:AbstractQ})
     if size(A,2) == size(B.factors, 1)
         AA = similar(A, TAB, size(A))
         copyto!(AA, A)
-        return mul!(AA, adjoint(BB))
+        return rmul!(AA, adjoint(BB))
     elseif size(A,2) == size(B.factors,2)
-        return mul!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], adjoint(BB))
+        return rmul!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], adjoint(BB))
     else
         throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
     end
@@ -727,20 +677,20 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, Q::AbstractQ)
     TAQ = promote_type(eltype(A), eltype(Q))
     Ac = similar(A, TAQ, (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    return mul!(Ac, convert(AbstractMatrix{TAQ}, Q))
+    return rmul!(Ac, convert(AbstractMatrix{TAQ}, Q))
 end
 function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:AbstractQ})
     A, Q = adjA.parent, adjQ.parent
     TAQ = promote_type(eltype(A), eltype(Q))
     Ac = similar(A, TAQ, (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    return mul!(Ac, adjoint(convert(AbstractMatrix{TAQ}, Q)))
+    return rmul!(Ac, adjoint(convert(AbstractMatrix{TAQ}, Q)))
 end
 
 ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(mul!(adjoint(A.Q), b), 1:size(A, 2))); b)
+    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), b), 1:size(A, 2))); b)
 ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(mul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
+    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
@@ -752,7 +702,7 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
     end
     ar = abs(A.factors[1])
     if ar == 0
-        B[1:nA, :] = 0
+        B[1:nA, :] .= 0
         return B, 0
     end
     rnk = 1
@@ -772,8 +722,8 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
         rnk += 1
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(mul!(adjoint(A.Q), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
-    B[rnk+1:end,:] = zero(T)
+    ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(lmul!(adjoint(A.Q), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
+    B[rnk+1:end,:] .= zero(T)
     LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B,1:nA,1:nrhs))
     B[1:nA,:] = view(B, 1:nA, :)[invperm(A.p),:]
     return B, rnk
@@ -786,7 +736,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
-    mul!(adjoint(A.Q), view(B, 1:m, :))
+    lmul!(adjoint(A.Q), view(B, 1:m, :))
     R = A.R
     @inbounds begin
         if n > m # minimum norm solution
@@ -810,7 +760,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
         end
         LinearAlgebra.ldiv!(UpperTriangular(view(R, :, 1:minmn)), view(B, 1:minmn, :))
         if n > m # Apply elementary transformation to solution
-            B[m + 1:mB,1:nB] = zero(T)
+            B[m + 1:mB,1:nB] .= zero(T)
             for j = 1:nB
                 for k = 1:m
                     vBj = B[k,j]
@@ -859,9 +809,7 @@ function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat
 
     X = _zeros(S, B, n)
     X[1:size(B, 1), :] = B
-
     ldiv!(AA, X)
-
     return _cut_B(X, 1:n)
 end
 

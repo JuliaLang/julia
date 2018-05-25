@@ -34,6 +34,7 @@ for T = types[2:end],
     x = vals,
     a = coerce(T, x)
     @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
+    @test hash(a,one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
 end
 
 for T = types,
@@ -88,7 +89,7 @@ vals = Any[
     sparse(fill(1., 2, 2)), fill(1., 2, 2), sparse([0 0; 1 0]), [0 0; 1 0],
     [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.]),
     # issue #16364
-    1:4, 1:1:4, 1:-1:0, 1.0:4.0, 1.0:1.0:4.0, linspace(1, 4, 4),
+    1:4, 1:1:4, 1:-1:0, 1.0:4.0, 1.0:1.0:4.0, range(1, stop=4, length=4),
     'a':'e', ['a', 'b', 'c', 'd', 'e'],
     # check that hash is still consistent with heterogeneous arrays for which - is defined
     # for some pairs and not others
@@ -97,6 +98,9 @@ vals = Any[
 
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))
+end
+
+for a in vals
     if a isa AbstractArray
         @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
     end
@@ -164,7 +168,7 @@ vals = Any[
     0.0:0.1:0.3, 0.3:-0.1:0.0,
     0:-1:1, 0.0:-1.0:1.0, 0.0:1.1:10.0, -4:10,
     'a':'e', 'b':'a',
-    linspace(1, 1, 1), linspace(0.3, 1.0, 3),  linspace(1, 1.1, 20)
+    range(1, stop=1, length=1), range(0.3, stop=1.0, length=3),  range(1, stop=1.1, length=20)
 ]
 
 for a in vals
@@ -181,9 +185,9 @@ let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)
 end
 
-let a = Expr(:block, TypedSlot(1, Any)),
-    b = Expr(:block, TypedSlot(1, Any)),
-    c = Expr(:block, TypedSlot(3, Any))
+let a = Expr(:block, Core.TypedSlot(1, Any)),
+    b = Expr(:block, Core.TypedSlot(1, Any)),
+    c = Expr(:block, Core.TypedSlot(3, Any))
     @test a == b && hash(a) == hash(b)
     @test a != c && hash(a) != hash(c)
     @test b != c && hash(b) != hash(c)
@@ -221,4 +225,19 @@ let vals_expr = :(Any[Vector, (Array{T,1} where T), 1, 2, Union{Int, String}, Un
         @test i != j || (a === b)
         @test (a === b) == (objectid(a) == objectid(b))
     end
+end
+
+# issue #26038
+let p1 = Ptr{Int8}(1), p2 = Ptr{Int32}(1), p3 = Ptr{Int8}(2)
+    @test p1 == p2
+    @test !isequal(p1, p2)
+    @test p1 != p3
+    @test hash(p1) != hash(p2)
+    @test hash(p1) != hash(p3)
+    @test hash(p1) == hash(Ptr{Int8}(1))
+
+    @test p1 < p3
+    @test !(p1 < p2)
+    @test isless(p1, p3)
+    @test_throws MethodError isless(p1, p2)
 end

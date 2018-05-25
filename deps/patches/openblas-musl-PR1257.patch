@@ -1,0 +1,65 @@
+From 63cfa32691680505e6b9daf0997755178ddd3144 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Mon, 31 Jul 2017 21:02:43 +0200
+Subject: [PATCH] Rework __GLIBC_PREREQ checks to avoid breaking non-glibc
+ builds
+
+---
+ driver/others/memory.c | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/driver/others/memory.c b/driver/others/memory.c
+index b5b58b6fd..661f7c4eb 100644
+--- a/driver/others/memory.c
++++ b/driver/others/memory.c
+@@ -155,7 +155,6 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ #ifdef DYNAMIC_ARCH
+ gotoblas_t *gotoblas = NULL;
+ #endif
+-
+ extern void openblas_warning(int verbose, const char * msg);
+ 
+ #ifndef SMP
+@@ -187,25 +186,24 @@ int i,n;
+      
+ #if !defined(__GLIBC_PREREQ)
+    return nums;
+-#endif   
+-#if !__GLIBC_PREREQ(2, 3)
++#else
++ #if !__GLIBC_PREREQ(2, 3)
+    return nums;
+-#endif   
++ #endif
+ 
+-#if !__GLIBC_PREREQ(2, 7)
++ #if !__GLIBC_PREREQ(2, 7)
+   ret = sched_getaffinity(0,sizeof(cpu_set_t), cpusetp);
+   if (ret!=0) return nums;
+   n=0;
+-#if !__GLIBC_PREREQ(2, 6)  
++  #if !__GLIBC_PREREQ(2, 6)
+   for (i=0;i<nums;i++)
+      if (CPU_ISSET(i,cpusetp)) n++;
+   nums=n;   
+-#else
++  #else
+   nums = CPU_COUNT(sizeof(cpu_set_t),cpusetp);
+-#endif
++  #endif
+   return nums;
+-#endif
+-
++ #else
+   cpusetp = CPU_ALLOC(nums);
+   if (cpusetp == NULL) return nums;
+   size = CPU_ALLOC_SIZE(nums);
+@@ -214,6 +212,8 @@ int i,n;
+   nums = CPU_COUNT_S(size,cpusetp);
+   CPU_FREE(cpusetp);
+   return nums;
++ #endif
++#endif
+ }
+ #endif
+ #endif

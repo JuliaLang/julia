@@ -1,15 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Serializer: serialize_cycle, deserialize_cycle, writetag,
-                      __deserialized_types__, serialize_typename, deserialize_typename,
-                      TYPENAME_TAG, reset_state, serialize_type
+using Serialization: serialize_cycle, deserialize_cycle, writetag,
+                     serialize_typename, deserialize_typename,
+                     TYPENAME_TAG, reset_state, serialize_type
+using Serialization.__deserialized_types__
 
-import Base.Serializer: object_number, lookup_object_number, remember_object
+import Serialization: object_number, lookup_object_number, remember_object
 
 mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
-    table::IdDict
+    table::IdDict{Any,Any}
     pending_refs::Vector{Int}
 
     pid::Int                                     # Worker we are connected to.
@@ -49,18 +50,18 @@ end
 
 function remember_object(s::ClusterSerializer, @nospecialize(o), n::UInt64)
     known_object_data[n] = o
-    if isa(o, TypeName) && !haskey(object_numbers, o)
+    if isa(o, Core.TypeName) && !haskey(object_numbers, o)
         # set up reverse mapping for serialize
         object_numbers[o] = n
     end
     return nothing
 end
 
-function deserialize(s::ClusterSerializer, ::Type{TypeName})
+function deserialize(s::ClusterSerializer, ::Type{Core.TypeName})
     full_body_sent = deserialize(s)
     number = read(s.io, UInt64)
     if !full_body_sent
-        tn = lookup_object_number(s, number)::TypeName
+        tn = lookup_object_number(s, number)::Core.TypeName
         remember_object(s, tn, number)
         deserialize_cycle(s, tn)
     else
@@ -72,7 +73,7 @@ function deserialize(s::ClusterSerializer, ::Type{TypeName})
     return tn
 end
 
-function serialize(s::ClusterSerializer, t::TypeName)
+function serialize(s::ClusterSerializer, t::Core.TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
 
@@ -125,7 +126,7 @@ function syms_2b_sent(s::ClusterSerializer, identifier)
     for sym in check_syms
         v = getfield(Main, sym)
 
-        if isbits(v)
+        if isbitstype(typeof(v))
             push!(lst, sym)
         else
             oid = objectid(v)
@@ -145,7 +146,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
 
     oid = objectid(v)
     record_v = true
-    if isbits(v)
+    if isbitstype(typeof(v))
         record_v = false
     elseif !haskey(s.glbs_sent, oid)
         # set up a finalizer the first time this object is sent

@@ -69,6 +69,7 @@ julia> exp(1.0)
 2.718281828459045
 ```
 """
+exp(x::Real) = exp(float(x))
 function exp(x::T) where T<:Union{Float32,Float64}
     xa = reinterpret(Unsigned, x) & ~sign_mask(T)
     xsb = signbit(x)

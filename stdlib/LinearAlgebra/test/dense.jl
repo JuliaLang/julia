@@ -47,7 +47,7 @@ bimg  = randn(n,2)/2
     @testset "Positive definiteness" begin
         @test !isposdef(ainit)
         @test isposdef(apd)
-        if eltya != Int # cannot perform cholfact! for Matrix{Int}
+        if eltya != Int # cannot perform cholesky! for Matrix{Int}
             @test !isposdef!(copy(ainit))
             @test isposdef!(copy(apd))
         end
@@ -72,7 +72,9 @@ bimg  = randn(n,2)/2
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
+                @test size(nullspace(b, 100*εb), 2) == 0
                 @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
+                @test nullspace(zeros(eltya,n), 0.1) == Matrix(I, 1, 1)
             end
         end
     end # for eltyb
@@ -83,7 +85,7 @@ bimg  = randn(n,2)/2
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
             @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
 
-            @test size(pinv(Matrix{eltya}(uninitialized,0,0))) == (0,0)
+            @test size(pinv(Matrix{eltya}(undef,0,0))) == (0,0)
         end
 
         @testset "Lyapunov/Sylvester" begin
@@ -338,7 +340,7 @@ end
     dim=2
     S=zeros(Complex,dim,dim)
     T=zeros(Complex,dim,dim)
-    T[:] = 1
+    fill!(T, 1)
     z = 2.5 + 1.5im
     S[1] = z
     @test S*T == [z z; 0 0]
@@ -380,7 +382,7 @@ end
         @test exp(A5) ≈ eA5
 
         # Hessenberg
-        @test hessfact(A1).H ≈ convert(Matrix{elty},
+        @test hessenberg(A1).H ≈ convert(Matrix{elty},
                                                  [4.000000000000000  -1.414213562373094  -1.414213562373095
                                                   -1.414213562373095   4.999999999999996  -0.000000000000000
                                                   0  -0.000000000000002   3.000000000000000])
@@ -579,19 +581,19 @@ end
             @test all(z -> (0 < real(z) < π ||
                             abs(real(z)) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π) < abstol && imag(z) <= 0),
-                      eigfact(acos(A)).values)
+                      eigen(acos(A)).values)
             @test all(z -> (-π/2 < real(z) < π/2 ||
                             abs(real(z) + π/2) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π/2) < abstol && imag(z) <= 0),
-                      eigfact(asin(A)).values)
+                      eigen(asin(A)).values)
             @test all(z -> (-π < imag(z) < π && real(z) > 0 ||
                             0 <= imag(z) < π && abs(real(z)) < abstol ||
                             abs(imag(z) - π) < abstol && real(z) >= 0),
-                      eigfact(acosh(A)).values)
+                      eigen(acosh(A)).values)
             @test all(z -> (-π/2 < imag(z) < π/2 ||
                             abs(imag(z) + π/2) < abstol && real(z) <= 0 ||
                             abs(imag(z) - π/2) < abstol && real(z) <= 0),
-                      eigfact(asinh(A)).values)
+                      eigen(asinh(A)).values)
         end
     end
 end
@@ -794,13 +796,13 @@ end
         r = (elty <: Complex ? adjoint : transpose)(rand(elty, 5))
         cm = rand(elty, 5, 1)
         rm = rand(elty, 1, 5)
-        @testset "inner prodcuts" begin
+        @testset "inner products" begin
             test_div_pinv_consistency(r, c)
             test_div_pinv_consistency(rm, c)
             test_div_pinv_consistency(r, cm)
             test_div_pinv_consistency(rm, cm)
         end
-        @testset "outer prodcuts" begin
+        @testset "outer products" begin
             test_div_pinv_consistency(c, r)
             test_div_pinv_consistency(cm, rm)
         end
@@ -843,6 +845,21 @@ end
             @test _stride == stride(M, i)
         end
     end
+end
+
+@testset "inverse of Adjoint" begin
+    A = randn(n, n)
+
+    @test inv(A')*A'                     ≈ I
+    @test inv(transpose(A))*transpose(A) ≈ I
+
+    B = complex.(A, randn(n, n))
+    B = B + transpose(B)
+
+    # The following two cases fail because ldiv!(F::Adjoint/Transpose{BunchKaufman},b)
+    # isn't implemented yet
+    @test_broken inv(B')*B'                     ≈ I
+    @test_broken inv(transpose(B))*transpose(B) ≈ I
 end
 
 end # module TestDense

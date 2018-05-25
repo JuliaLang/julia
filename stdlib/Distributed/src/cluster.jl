@@ -42,8 +42,7 @@ mutable struct WorkerConfig
 
     function WorkerConfig()
         wc = new()
-        for n in 1:length(WorkerConfig.types)
-            T = eltype(fieldtype(WorkerConfig, n))
+        for n in 1:fieldcount(WorkerConfig)
             setfield!(wc, n, nothing)
         end
         wc
@@ -116,10 +115,10 @@ function check_worker_state(w::Worker)
         else
             w.ct_time = time()
             if myid() > w.id
-                @schedule exec_conn_func(w)
+                @async exec_conn_func(w)
             else
                 # route request via node 1
-                @schedule remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
+                @async remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
             end
             wait_for_conn(w)
         end
@@ -145,7 +144,7 @@ function wait_for_conn(w)
         timeout =  worker_timeout() - (time() - w.ct_time)
         timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
 
-        @schedule (sleep(timeout); notify(w.c_state; all=true))
+        @async (sleep(timeout); notify(w.c_state; all=true))
         wait(w.c_state)
         w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
     end
@@ -173,24 +172,24 @@ worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
 
 ## worker creation and setup ##
 """
-    start_worker([out::IO=STDOUT], cookie::AbstractString=readline(STDIN))
+    start_worker([out::IO=stdout], cookie::AbstractString=readline(stdin))
 
 `start_worker` is an internal function which is the default entry point for
 worker processes connecting via TCP/IP. It sets up the process as a Julia cluster
 worker.
 
-host:port information is written to stream `out` (defaults to STDOUT).
+host:port information is written to stream `out` (defaults to stdout).
 
-The function closes STDIN (after reading the cookie if required), redirects STDERR to STDOUT,
+The function closes stdin (after reading the cookie if required), redirects stderr to stdout,
 listens on a free port (or if specified, the port in the `--bind-to` command
 line option) and schedules tasks to process incoming TCP connections and requests.
 
 It does not return.
 """
-start_worker(cookie::AbstractString=readline(STDIN)) = start_worker(STDOUT, cookie)
-function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
-    close(STDIN) # workers will not use it
-    redirect_stderr(STDOUT)
+start_worker(cookie::AbstractString=readline(stdin)) = start_worker(stdout, cookie)
+function start_worker(out::IO, cookie::AbstractString=readline(stdin))
+    close(stdin) # workers will not use it
+    redirect_stderr(stdout)
 
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
@@ -201,12 +200,12 @@ function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
     else
         sock = listen(interface, LPROC.bind_port)
     end
-    @schedule while isopen(sock)
+    @async while isopen(sock)
         client = accept(sock)
         process_messages(client, client, true)
     end
     print(out, "julia_worker:")  # print header
-    print(out, "$(dec(LPROC.bind_port))#") # print port
+    print(out, "$(string(LPROC.bind_port))#") # print port
     print(out, LPROC.bind_addr)
     print(out, '\n')
     flush(out)
@@ -223,7 +222,7 @@ function start_worker(out::IO, cookie::AbstractString=readline(STDIN))
         check_master_connect()
         while true; wait(); end
     catch err
-        print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
+        print(stderr, "unhandled exception on $(myid()): $(err)\nexiting.\n")
     end
 
     close(sock)
@@ -232,11 +231,11 @@ end
 
 
 function redirect_worker_output(ident, stream)
-    @schedule while !eof(stream)
+    @async while !eof(stream)
         line = readline(stream)
         if startswith(line, "      From worker ")
-            # STDOUT's of "additional" workers started from an initial worker on a host are not available
-            # on the master directly - they are routed via the initial worker's STDOUT.
+            # stdout's of "additional" workers started from an initial worker on a host are not available
+            # on the master directly - they are routed via the initial worker's stdout.
             println(line)
         else
             println("      From worker $(ident):\t$line")
@@ -266,14 +265,14 @@ function read_worker_host_port(io::IO)
     leader = String[]
     try
         while ntries > 0
-            readtask = @schedule readline(io)
+            readtask = @async readline(io)
             yield()
             while !istaskdone(readtask) && ((time() - t0) < timeout)
                 sleep(0.05)
             end
             !istaskdone(readtask) && break
 
-            conninfo = wait(readtask)
+            conninfo = fetch(readtask)
             if isempty(conninfo) && !isopen(io)
                 error("Unable to read host:port string from worker. Launch command exited with error?")
             end
@@ -324,9 +323,9 @@ function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClus
     cluster_manager = manager
 
     # Since our pid has yet to be set, ensure no RemoteChannel / Future  have been created or addprocs() called.
-    assert(nprocs() <= 1)
-    assert(isempty(PGRP.refs))
-    assert(isempty(client_refs))
+    @assert nprocs() <= 1
+    @assert isempty(PGRP.refs)
+    @assert isempty(client_refs)
 
     # System is started in head node mode, cleanup related entries
     empty!(PGRP.workers)
@@ -397,13 +396,13 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
     # call manager's `launch` is a separate task. This allows the master
     # process initiate the connection setup process as and when workers come
     # online
-    t_launch = @schedule launch(manager, params, launched, launch_ntfy)
+    t_launch = @async launch(manager, params, launched, launch_ntfy)
 
     @sync begin
         while true
             if isempty(launched)
                 istaskdone(t_launch) && break
-                @schedule (sleep(1); notify(launch_ntfy))
+                @async (sleep(1); notify(launch_ntfy))
                 wait(launch_ntfy)
             end
 
@@ -416,7 +415,7 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
         end
     end
 
-    wait(t_launch)      # catches any thrown errors from the launch task
+    Base._wait(t_launch)      # catches any thrown errors from the launch task
 
     # Since all worker-to-worker setups may not have completed by the time this
     # function returns to the caller, send the complete list to all workers.
@@ -493,7 +492,7 @@ end
 
 function create_worker(manager, wconfig)
     # only node 1 can add new nodes, since nobody else has the full list of address:port
-    assert(LPROC.id == 1)
+    @assert LPROC.id == 1
 
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
@@ -575,7 +574,7 @@ function create_worker(manager, wconfig)
     join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, enable_threaded_blas, isclusterlazy())
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
-    @schedule manage(w.manager, w.id, w.config, :register)
+    @async manage(w.manager, w.id, w.config, :register)
     wait(rr_ntfy_join)
     lock(client_refs) do
         delete!(PGRP.refs, ntfy_oid)
@@ -590,8 +589,8 @@ end
 
 additional_io_objs=Dict()
 function launch_additional(np::Integer, cmd::Cmd)
-    io_objs = Vector{Any}(uninitialized, np)
-    addresses = Vector{Any}(uninitialized, np)
+    io_objs = Vector{Any}(undef, np)
+    addresses = Vector{Any}(undef, np)
 
     for i in 1:np
         io = open(detach(cmd), "r+")
@@ -622,14 +621,14 @@ function check_master_connect()
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
         return
     end
-    @schedule begin
+    @async begin
         start = time()
         while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
             sleep(1.0)
         end
 
         if !haskey(map_pid_wrkr, 1)
-            print(STDERR, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            print(stderr, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
             exit(1)
         end
     end
@@ -650,8 +649,8 @@ Set the passed cookie as the cluster cookie, then returns it.
 """
 function cluster_cookie(cookie)
     # The cookie must be an ASCII string with length <=  HDR_COOKIE_LEN
-    assert(isascii(cookie))
-    assert(length(cookie) <= HDR_COOKIE_LEN)
+    @assert isascii(cookie)
+    @assert length(cookie) <= HDR_COOKIE_LEN
 
     cookie = rpad(cookie, HDR_COOKIE_LEN)
 
@@ -685,7 +684,7 @@ function topology(t)
         Base.depwarn("The topology :master_slave is deprecated, use :master_worker instead.", :topology)
         t = :master_worker
     end
-    assert(t in [:all_to_all, :master_worker, :custom])
+    @assert t in [:all_to_all, :master_worker, :custom]
     if (PGRP.topology==t) || ((myid()==1) && (nprocs()==1)) || (myid() > 1)
         PGRP.topology = t
     else
@@ -845,13 +844,13 @@ function rmprocs(pids...; waitfor=typemax(Int))
 
     pids = vcat(pids...)
     if waitfor == 0
-        t = @schedule _rmprocs(pids, typemax(Int))
+        t = @async _rmprocs(pids, typemax(Int))
         yield()
         return t
     else
         _rmprocs(pids, waitfor)
         # return a dummy task object that user code can wait on.
-        return @schedule nothing
+        return @async nothing
     end
 end
 
@@ -1004,7 +1003,7 @@ end
 
 
 function interrupt(pid::Integer)
-    assert(myid() == 1)
+    @assert myid() == 1
     w = map_pid_wrkr[pid]
     if isa(w, Worker)
         manage(w.manager, w.id, w.config, :interrupt)
@@ -1026,7 +1025,7 @@ Interrupt the current executing task on the specified workers. This is equivalen
 pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.
 """
 function interrupt(pids::AbstractVector=workers())
-    assert(myid() == 1)
+    @assert myid() == 1
     @sync begin
         for pid in pids
             @async interrupt(pid)
@@ -1046,6 +1045,9 @@ function disable_nagle(sock)
     end
 end
 
+wp_bind_addr(p::LocalProcess) = p.bind_addr
+wp_bind_addr(p) = p.config.bind_addr
+
 function check_same_host(pids)
     if myid() != 1
         return remotecall_fetch(check_same_host, 1, pids)
@@ -1056,8 +1058,8 @@ function check_same_host(pids)
         if all(p -> (p==1) || (isa(map_pid_wrkr[p].manager, LocalManager)), pids)
             return true
         else
-            first_bind_addr = notnothing(map_pid_wrkr[pids[1]].config.bind_addr)
-            return all(p -> (p != 1) && (notnothing(map_pid_wrkr[p].config.bind_addr) == first_bind_addr), pids[2:end])
+            first_bind_addr = notnothing(wp_bind_addr(map_pid_wrkr[pids[1]]))
+            return all(p -> notnothing(wp_bind_addr(map_pid_wrkr[p])) == first_bind_addr, pids[2:end])
         end
     end
 end
@@ -1120,11 +1122,11 @@ function init_parallel()
     global LPROC
     LPROC.id = 1
     cluster_cookie(randstring(HDR_COOKIE_LEN))
-    assert(isempty(PGRP.workers))
+    @assert isempty(PGRP.workers)
     register_worker(LPROC)
 end
 
-write_cookie(io::IO) = write(io.in, string(cluster_cookie(), "\n"))
+write_cookie(io::IO) = print(io.in, string(cluster_cookie(), "\n"))
 
 function process_opts(opts)
     # startup worker.
@@ -1144,8 +1146,8 @@ function process_opts(opts)
     end
 
     # load processes from machine file
-    if opts.machinefile != C_NULL
-        addprocs(load_machine_file(unsafe_string(opts.machinefile)))
+    if opts.machine_file != C_NULL
+        addprocs(load_machine_file(unsafe_string(opts.machine_file)))
     end
     return nothing
 end
@@ -1153,8 +1155,8 @@ end
 
 function load_machine_file(path::AbstractString)
     machines = []
-    for line in split(read(path, String),'\n'; keep=false)
-        s = split(line, '*'; keep = false)
+    for line in split(read(path, String),'\n'; keepempty=false)
+        s = split(line, '*'; keepempty=false)
         map!(strip, s, s)
         if length(s) > 1
             cnt = all(isdigit, s[1]) ? parse(Int,s[1]) : Symbol(s[1])

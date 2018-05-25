@@ -2,13 +2,13 @@
 
 using SuiteSparse.SPQR
 using SuiteSparse.CHOLMOD
-using LinearAlgebra: mul!, Adjoint, Transpose
+using LinearAlgebra: rmul!, lmul!, Adjoint, Transpose
 
 @testset "Sparse QR" begin
 m, n = 100, 10
 nn = 100
 
-@test size(qrfact(sprandn(m, n, 0.1)).Q) == (m, m)
+@test size(qr(sprandn(m, n, 0.1)).Q) == (m, m)
 
 @testset "element type of A: $eltyA" for eltyA in (Float64, Complex{Float64})
     if eltyA <: Real
@@ -17,7 +17,7 @@ nn = 100
         A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], complex.(randn(nn), randn(nn)), m, n)
     end
 
-    F = qrfact(A)
+    F = qr(A)
     @test size(F) == (m,n)
     @test size(F, 1) == m
     @test size(F, 2) == n
@@ -43,10 +43,10 @@ nn = 100
         @test norm(R0[n + 1:end, :], 1) < 1e-12
 
         offsizeA = Matrix{Float64}(I, m+1, m+1)
-        @test_throws DimensionMismatch mul!(Q, offsizeA)
-        @test_throws DimensionMismatch mul!(adjoint(Q), offsizeA)
-        @test_throws DimensionMismatch mul!(offsizeA, Q)
-        @test_throws DimensionMismatch mul!(offsizeA, adjoint(Q))
+        @test_throws DimensionMismatch lmul!(Q, offsizeA)
+        @test_throws DimensionMismatch lmul!(adjoint(Q), offsizeA)
+        @test_throws DimensionMismatch rmul!(offsizeA, Q)
+        @test_throws DimensionMismatch rmul!(offsizeA, adjoint(Q))
     end
 
     @testset "element type of B: $eltyB" for eltyB in (Int, Float64, Complex{Float64})
@@ -67,7 +67,7 @@ nn = 100
     end
 
     # Make sure that conversion to Sparse doesn't use SuiteSparse's symmetric flag
-    @test qrfact(SparseMatrixCSC{eltyA}(I, 5, 5)) \ fill(eltyA(1), 5) == fill(1, 5)
+    @test qr(SparseMatrixCSC{eltyA}(I, 5, 5)) \ fill(eltyA(1), 5) == fill(1, 5)
 end
 
 @testset "basic solution of rank deficient ls" begin
@@ -79,6 +79,12 @@ end
     # check that basic solution has more zeros
     @test count(!iszero, xs) < count(!iszero, xd)
     @test A*xs ≈ A*xd
+end
+
+@testset "Issue 26368" begin
+    A = sparse([0.0 1 0 0; 0 0 0 0])
+    F = qr(A)
+    @test F.Q*F.R == A[F.prow,F.pcol]
 end
 
 end

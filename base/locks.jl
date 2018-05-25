@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base: _uv_hook_close, unsafe_convert,
+import .Base: _uv_hook_close, unsafe_convert,
     lock, trylock, unlock, islocked
 
 export SpinLock, RecursiveSpinLock, Mutex

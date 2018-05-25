@@ -159,7 +159,7 @@ end
 @test _nospec_with_default(10) == 20
 
 
-let oldout = STDOUT
+let oldout = stdout
     local rdout, wrout, out
     try
         rdout, wrout = redirect_stdout()
@@ -170,7 +170,7 @@ let oldout = STDOUT
         redirect_stdout(oldout)
         close(wrout)
 
-        @test wait(out) == """
+        @test fetch(out) == """
             Expr
               head: Symbol call
               args: Array{Any}((3,))

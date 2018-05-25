@@ -19,8 +19,10 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     StridedReshapedArray, strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat
+using Base.Broadcast: Broadcasted
+
 # We use `_length` because of non-1 indices; releases after julia 0.5
-# can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
+# can go back to `length`. `_length(A)` is equivalent to `length(LinearIndices(A))`.
 
 export
 # Modules
@@ -53,17 +55,19 @@ export
     Symmetric,
     LowerTriangular,
     UpperTriangular,
+    UnitLowerTriangular,
+    UnitUpperTriangular,
     Diagonal,
     UniformScaling,
 
 # Functions
     axpy!,
     axpby!,
-    bkfact,
-    bkfact!,
+    bunchkaufman,
+    bunchkaufman!,
     chol,
-    cholfact,
-    cholfact!,
+    cholesky,
+    cholesky!,
     cond,
     condskeel,
     copyto!,
@@ -75,11 +79,9 @@ export
     diag,
     diagind,
     diagm,
-    diff,
     dot,
-    eig,
-    eigfact,
-    eigfact!,
+    eigen,
+    eigen!,
     eigmax,
     eigmin,
     eigvals,
@@ -87,8 +89,8 @@ export
     eigvecs,
     factorize,
     givens,
-    hessfact,
-    hessfact!,
+    hessenberg,
+    hessenberg!,
     isdiag,
     ishermitian,
     isposdef,
@@ -98,41 +100,43 @@ export
     istril,
     istriu,
     kron,
-    ldltfact!,
-    ldltfact,
+    ldiv!,
+    ldlt!,
+    ldlt,
     linreg,
     logabsdet,
     logdet,
+    lowrankdowndate,
+    lowrankdowndate!,
+    lowrankupdate,
+    lowrankupdate!,
     lu,
-    lufact,
-    lufact!,
+    lu!,
     lyap,
+    mul!,
+    lmul!,
+    rmul!,
     norm,
     normalize,
     normalize!,
     nullspace,
     ordschur!,
     ordschur,
-    peakflops,
     pinv,
     qr,
-    qrfact!,
-    qrfact,
+    qr!,
     lq,
-    lqfact!,
-    lqfact,
+    lq!,
     rank,
-    scale!,
+    rdiv!,
     schur,
-    schurfact!,
-    schurfact,
+    schur!,
     svd,
-    svdfact!,
-    svdfact,
+    svd!,
     svdvals!,
     svdvals,
     sylvester,
-    trace,
+    tr,
     transpose,
     transpose!,
     transpose_type,
@@ -240,36 +244,47 @@ function char_uplo(uplo::Symbol)
 end
 
 """
-    ldiv!([Y,] A, B) -> Y
+    ldiv!(Y, A, B) -> Y
 
 Compute `A \\ B` in-place and store the result in `Y`, returning the result.
-If only two arguments are passed, then `ldiv!(A, B)` overwrites `B` with
-the result.
 
 The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholesky`](@ref)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+(although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
 """
 ldiv!(Y, A, B)
 
 """
-    rdiv!([Y,] A, B) -> Y
+    ldiv!(A, B)
 
-Compute `A / B` in-place and store the result in `Y`, returning the result.
-If only two arguments are passed, then `rdiv!(A, B)` overwrites `A` with
-the result.
+Compute `A \\ B` in-place and overwriting `B` to store the result.
+
+The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholesky`](@ref)).
+The reason for this is that factorization itself is both expensive and typically allocates memory
+(although it can also be done in-place via, e.g., [`lu!`](@ref)),
+and performance-critical situations requiring `ldiv!` usually also require fine-grained
+control over the factorization of `A`.
+"""
+ldiv!(A, B)
+
+
+"""
+    rdiv!(A, B)
+
+Compute `A / B` in-place and overwriting `A` to store the result.
 
 The argument `B` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholesky`](@ref)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
+(although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `rdiv!` usually also require fine-grained
 control over the factorization of `B`.
 """
-rdiv!(Y, A, B)
+rdiv!(A, B)
 
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
@@ -308,6 +323,7 @@ include("special.jl")
 include("bitarray.jl")
 include("ldlt.jl")
 include("schur.jl")
+include("structuredbroadcast.jl")
 include("deprecated.jl")
 
 const ⋅ = dot
@@ -315,7 +331,7 @@ const × = cross
 export ⋅, ×
 
 
-function versioninfo(io::IO=STDOUT)
+function versioninfo(io::IO=stdout)
     if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
         openblas_config = BLAS.openblas_get_config()
         println(io, "BLAS: libopenblas (", openblas_config, ")")
@@ -331,6 +347,9 @@ function __init__()
         if BLAS.vendor() == :mkl
             ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
         end
+        Threads.resize_nthreads!(Abuf)
+        Threads.resize_nthreads!(Bbuf)
+        Threads.resize_nthreads!(Cbuf)
     catch ex
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module LinearAlgebra")

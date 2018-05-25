@@ -39,7 +39,7 @@ methods. By default returns a string of the same width as original with a
 centered cdot, used in printing of structural zeros of structured matrices.
 Accept keyword args `c` for alternate single character marker.
 """
-function replace_with_centered_mark(s::AbstractString;c::Char = '⋅')
+function replace_with_centered_mark(s::AbstractString;c::AbstractChar = '⋅')
     N = length(s)
     return join(setindex!([" " for i=1:N],string(c),ceil(Int,N/2)))
 end
@@ -298,7 +298,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
     end
 end
 
-# print_array: main helper functions for _display
+# print_array: main helper functions for show(io, text/plain, array)
 # typeinfo agnostic
 
 # 0-dimensional arrays
@@ -312,7 +312,7 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 
 # typeinfo aware
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
-function _display(io::IO, X::AbstractArray)
+function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     # 0) compute new IOContext
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
@@ -344,7 +344,6 @@ function _display(io::IO, X::AbstractArray)
     # 2) show actual content
     print_array(io, X)
 end
-
 
 ## printing with `show`
 
@@ -416,7 +415,7 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 
 # typeinfo aware (necessarily)
 function show(io::IO, X::AbstractArray)
-    @assert ndims(X) != 1
+    ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
     io = IOContext(io, :typeinfo => eltype(X), :compact => true)
     isempty(X) ?
@@ -443,8 +442,6 @@ function show_vector(io::IO, v, opn='[', cls=']')
         show_delim_array(io, v, opn, ",", cls, false)
     end
 end
-
-show(io::IO, X::AbstractVector) = show_vector(io, X)
 
 
 ## Logic for displaying type information
@@ -477,7 +474,10 @@ end
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
-    @assert X isa typeinfo "$(typeof(X)) is not a subtype of $typeinfo"
+    if !(X isa typeinfo)
+        @assert typeinfo.name.module ∉ (Base, Core) "$(typeof(X)) is not a subtype of $typeinfo"
+        typeinfo = Any # no error for user-defined types
+    end
     # what the context already knows about the eltype of X:
     eltype_ctx = typeinfo_eltype(typeinfo)
     eltype_X = eltype(X)

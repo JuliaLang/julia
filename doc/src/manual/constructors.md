@@ -97,14 +97,16 @@ julia> struct OrderedPair
 
 Now `OrderedPair` objects can only be constructed such that `x <= y`:
 
-```jldoctest pairtype
+```jldoctest pairtype; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> OrderedPair(1, 2)
 OrderedPair(1, 2)
 
 julia> OrderedPair(2,1)
 ERROR: out of order
 Stacktrace:
- [1] OrderedPair(::Int64, ::Int64) at ./none:4
+ [1] error at ./error.jl:33 [inlined]
+ [2] OrderedPair(::Int64, ::Int64) at ./none:4
+ [3] top-level scope
 ```
 
 If the type were declared `mutable`, you could reach in and directly change the field values to
@@ -277,7 +279,7 @@ that, by default, instances of parametric composite types can be constructed eit
 given type parameters or with type parameters implied by the types of the arguments given to the
 constructor. Here are some examples:
 
-```jldoctest parametric
+```jldoctest parametric; filter = r"Closest candidates.*\n  .*"
 julia> struct Point{T<:Real}
            x::T
            y::T
@@ -292,16 +294,15 @@ Point{Float64}(1.0, 2.5)
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point(::T<:Real, !Matched::T<:Real) where T<:Real at none:2
+  Point(::T<:Real, ::T<:Real) where T<:Real at none:2
 
 julia> Point{Int64}(1, 2) ## explicit T ##
 Point{Int64}(1, 2)
 
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
-ERROR: InexactError: convert(Int64, 2.5)
+ERROR: InexactError: Int64(Int64, 2.5)
 Stacktrace:
- [1] convert at ./float.jl:703 [inlined]
- [2] Point{Int64}(::Float64, ::Float64) at ./none:2
+[...]
 
 julia> Point{Float64}(1.0, 2.5) ## explicit T ##
 Point{Float64}(1.0, 2.5)
@@ -406,8 +407,10 @@ defining sophisticated behavior is typically quite simple.
 ## Case Study: Rational
 
 Perhaps the best way to tie all these pieces together is to present a real world example of a
-parametric composite type and its constructor methods. To that end, here is the (slightly modified) beginning of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
-which implements Julia's [Rational Numbers](@ref):
+parametric composite type and its constructor methods. To that end, we implement our own rational number type
+`OurRational`, similar to Julia's built-in [`Rational`](@ref) type, defined in
+[`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
+
 
 ```jldoctest rational
 julia> struct OurRational{T<:Integer} <: Real
@@ -433,27 +436,27 @@ OurRational
 julia> OurRational(n::Integer) = OurRational(n,one(n))
 OurRational
 
-julia> //(n::Integer, d::Integer) = OurRational(n,d)
-// (generic function with 1 method)
+julia> ⊘(n::Integer, d::Integer) = OurRational(n,d)
+⊘ (generic function with 1 method)
 
-julia> //(x::OurRational, y::Integer) = x.num // (x.den*y)
-// (generic function with 2 methods)
+julia> ⊘(x::OurRational, y::Integer) = x.num ⊘ (x.den*y)
+⊘ (generic function with 2 methods)
 
-julia> //(x::Integer, y::OurRational) = (x*y.den) // y.num
-// (generic function with 3 methods)
+julia> ⊘(x::Integer, y::OurRational) = (x*y.den) ⊘ y.num
+⊘ (generic function with 3 methods)
 
-julia> //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-// (generic function with 4 methods)
+julia> ⊘(x::Complex, y::Real) = complex(real(x) ⊘ y, imag(x) ⊘ y)
+⊘ (generic function with 4 methods)
 
-julia> //(x::Real, y::Complex) = x*y'//real(y*y')
-// (generic function with 5 methods)
+julia> ⊘(x::Real, y::Complex) = (x*y') ⊘ real(y*y')
+⊘ (generic function with 5 methods)
 
-julia> function //(x::Complex, y::Complex)
+julia> function ⊘(x::Complex, y::Complex)
            xy = x*y'
            yy = real(y*y')
-           complex(real(xy)//yy, imag(xy)//yy)
+           complex(real(xy) ⊘ yy, imag(xy) ⊘ yy)
        end
-// (generic function with 6 methods)
+⊘ (generic function with 6 methods)
 ```
 
 The first line -- `struct OurRational{T<:Integer} <: Real` -- declares that `OurRational` takes one
@@ -477,29 +480,30 @@ have different types: it promotes them to a common type and then delegates const
 outer constructor for arguments of matching type. The third outer constructor turns integer values
 into rationals by supplying a value of `1` as the denominator.
 
-Following the outer constructor definitions, we have a number of methods for the [`//`](@ref)
-operator, which provides a syntax for writing rationals. Before these definitions, [`//`](@ref)
+Following the outer constructor definitions, we defined a number of methods for the `⊘`
+operator, which provides a syntax for writing rationals (e.g. `1 ⊘ 2`). Julia's `Rational`
+type uses the [`//`](@ref) operator for this purpose. Before these definitions, `⊘`
 is a completely undefined operator with only syntax and no meaning. Afterwards, it behaves just
 as described in [Rational Numbers](@ref) -- its entire behavior is defined in these few lines.
-The first and most basic definition just makes `a//b` construct a `OurRational` by applying the
-`OurRational` constructor to `a` and `b` when they are integers. When one of the operands of [`//`](@ref)
+The first and most basic definition just makes `a ⊘ b` construct a `OurRational` by applying the
+`OurRational` constructor to `a` and `b` when they are integers. When one of the operands of `⊘`
 is already a rational number, we construct a new rational for the resulting ratio slightly differently;
 this behavior is actually identical to division of a rational with an integer.
 Finally, applying
-[`//`](@ref) to complex integral values creates an instance of `Complex{OurRational}` -- a complex
+`⊘` to complex integral values creates an instance of `Complex{OurRational}` -- a complex
 number whose real and imaginary parts are rationals:
 
 ```jldoctest rational
-julia> ans = (1 + 2im)//(1 - 2im);
+julia> z = (1 + 2im) ⊘ (1 - 2im);
 
-julia> typeof(ans)
+julia> typeof(z)
 Complex{OurRational{Int64}}
 
-julia> ans <: Complex{OurRational}
+julia> typeof(z) <: Complex{OurRational}
 false
 ```
 
-Thus, although the [`//`](@ref) operator usually returns an instance of `OurRational`, if either
+Thus, although the `⊘` operator usually returns an instance of `OurRational`, if either
 of its arguments are complex integers, it will return an instance of `Complex{OurRational}` instead.
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.

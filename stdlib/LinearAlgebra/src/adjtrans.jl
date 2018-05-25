@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @pure, @propagate_inbounds, _return_type, _default_type, _isleaftype, @_inline_meta
+using Base: @propagate_inbounds, _return_type, _default_type, @_inline_meta
 import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
@@ -24,19 +24,22 @@ struct Transpose{T,S} <: AbstractMatrix{T}
 end
 
 function checkeltype_adjoint(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype,ParentEltype}
-    ResultEltype === Base.promote_op(adjoint, ParentEltype) || error(string(
-        "Element type mismatch. Tried to create an `Adjoint{$ResultEltype}` ",
-        "from an object with eltype `$ParentEltype`, but the element type of ",
-        "the adjoint of an object with eltype `$ParentEltype` must be ",
-        "`$(Base.promote_op(adjoint, ParentEltype))`."))
+    Expected = Base.promote_op(adjoint, ParentEltype)
+    ResultEltype === Expected || error(string(
+        "Element type mismatch. Tried to create an `Adjoint{", ResultEltype, "}` ",
+        "from an object with eltype `", ParentEltype, "`, but the element type of ",
+        "the adjoint of an object with eltype `", ParentEltype, "` must be ",
+        "`", Expected, "`."))
     return nothing
 end
-function checkeltype_transpose(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype,ParentEltype}
-    ResultEltype === Base.promote_op(transpose, ParentEltype) || error(string(
-        "Element type mismatch. Tried to create a `Transpose{$ResultEltype}` ",
-        "from an object with eltype `$ParentEltype`, but the element type of ",
-        "the transpose of an object with eltype `$ParentEltype` must be ",
-        "`$(Base.promote_op(transpose, ParentEltype))`."))
+
+function checkeltype_transpose(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype, ParentEltype}
+    Expected = Base.promote_op(transpose, ParentEltype)
+    ResultEltype === Expected || error(string(
+        "Element type mismatch. Tried to create a `Transpose{", ResultEltype, "}` ",
+        "from an object with eltype `", ParentEltype, "`, but the element type of ",
+        "the transpose of an object with eltype `", ParentEltype, "` must be ",
+        "`", Expected, "`."))
     return nothing
 end
 
@@ -44,31 +47,55 @@ end
 Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
 Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 
-# wrapping lowercase quasi-constructors
-adjoint(A::AbstractVecOrMat) = Adjoint(A)
-"""
-    transpose(A::AbstractMatrix)
+Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
+Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
 
-Lazy matrix transpose. Mutating the returned object should appropriately mutate `A`. Often,
+# wrapping lowercase quasi-constructors
+"""
+    adjoint(A)
+
+Lazy adjoint (conjugate transposition) (also postfix `'`).
+Note that `adjoint` is applied recursively to elements.
+
+This operation is intended for linear algebra usage - for general data manipulation see
+[`permutedims`](@ref Base.permutedims).
+
+# Examples
+```jldoctest
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> adjoint(A)
+2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
+"""
+adjoint(A::AbstractVecOrMat) = Adjoint(A)
+
+"""
+    transpose(A)
+
+Lazy transpose. Mutating the returned object should appropriately mutate `A`. Often,
 but not always, yields `Transpose(A)`, where `Transpose` is a lazy transpose wrapper. Note
 that this operation is recursive.
 
 This operation is intended for linear algebra usage - for general data manipulation see
-[`permutedims`](@ref), which is non-recursive.
+[`permutedims`](@ref Base.permutedims), which is non-recursive.
 
 # Examples
 ```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
- 7  8  9
+julia> A = [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
 
 julia> transpose(A)
-3×3 Transpose{Int64,Array{Int64,2}}:
- 1  4  7
- 2  5  8
- 3  6  9
+2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+ 3+2im  8+7im
+ 9+2im  4+6im
 ```
 """
 transpose(A::AbstractVecOrMat) = Transpose(A)
@@ -168,7 +195,7 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
 function *(u::TransposeAbsVec, v::AbstractVector)
     @boundscheck length(u) == length(v) || throw(DimensionMismatch())
-    return sum(@inbounds(return u[k]*v[k]) for k in 1:length(u))
+    return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
 end
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
@@ -177,13 +204,16 @@ end
 *(u::AdjointAbsVec, v::AdjointAbsVec) = throw(MethodError(*, (u, v)))
 *(u::TransposeAbsVec, v::TransposeAbsVec) = throw(MethodError(*, (u, v)))
 
-# Adjoint/Transpose-vector * matrix
-*(u::AdjointAbsVec, A::AbstractMatrix) = adjoint(adjoint(A) * u.parent)
-*(u::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A) * u.parent)
-# Adjoint/Transpose-vector * Adjoint/Transpose-matrix
-*(u::AdjointAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(A.parent * u.parent)
-*(u::TransposeAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = transpose(A.parent * u.parent)
-
+# AdjOrTransAbsVec{<:Any,<:AdjOrTransAbsVec} is a lazy conj vectors
+# We need to expand the combinations to avoid ambiguities
+(*)(u::TransposeAbsVec, v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) =
+    sum(uu*vv for (uu, vv) in zip(u, v))
+(*)(u::AdjointAbsVec,   v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) =
+    sum(uu*vv for (uu, vv) in zip(u, v))
+(*)(u::TransposeAbsVec, v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) =
+    sum(uu*vv for (uu, vv) in zip(u, v))
+(*)(u::AdjointAbsVec,   v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) =
+    sum(uu*vv for (uu, vv) in zip(u, v))
 
 ## pseudoinversion
 pinv(v::AdjointAbsVec, tol::Real = 0) = pinv(v.parent, tol).parent
@@ -199,16 +229,3 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 /(u::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A) \ u.parent)
 /(u::AdjointAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)
 /(u::TransposeAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = transpose(conj(A.parent) \ u.parent) # technically should be transpose(copy(transpose(copy(A))) \ u.parent)
-
-# dismabiguation methods
-*(A::AdjointAbsVec, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
-*(A::TransposeAbsVec, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractMatrix}) = copy(A) * B
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
-# Adj/Trans-vector * Trans/Adj-vector, shouldn't exist, here for ambiguity resolution? TODO: test removal
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
-*(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
-# Adj/Trans-matrix * Trans/Adj-vector, shouldn't exist, here for ambiguity resolution? TODO: test removal
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractVector}) = throw(MethodError(*, (A, B)))

@@ -155,7 +155,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
         den >>= pow
         pow = -pow
         if den == 1 && abs(num) < 9007199254740992
-            return hash(ldexp(Float64(num),pow))
+            return hash(ldexp(Float64(num),pow),h)
         end
     end
     h = hash_integer(den, h)

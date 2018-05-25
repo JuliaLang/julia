@@ -3,7 +3,23 @@
 ## semantic version numbers (http://semver.org)
 
 const VInt = UInt32
+"""
+    VersionNumber
 
+Version number type which follow the specifications of
+[semantic versioning](http://semver.org), composed of major, minor
+and patch numeric values, followed by pre-release and build
+alpha-numeric annotations. See also [`@v_str`](@ref).
+
+# Examples
+```jldoctest
+julia> VersionNumber("1.2.3")
+v"1.2.3"
+
+julia> VersionNumber("2.0.1-rc1")
+v"2.0.1-rc1"
+```
+"""
 struct VersionNumber
     major::VInt
     minor::VInt
@@ -21,7 +37,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
-                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
+                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
                     throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
@@ -31,7 +47,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
-                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
+                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && length(bld)!=1
                     throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
@@ -67,6 +83,8 @@ function print(io::IO, v::VersionNumber)
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
+Broadcast.broadcastable(v::VersionNumber) = Ref(v)
+
 const VERSION_REGEX = r"^
     v?                                      # prefix        (optional)
     (\d+)                                   # major         (required)
@@ -83,7 +101,7 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        contains(ident, r"^\d+$") ? parse(UInt64, ident) : String(ident)
+        occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
     end
 end
 
@@ -103,6 +121,20 @@ function VersionNumber(v::AbstractString)
     return VersionNumber(major, minor, patch, prerl, build)
 end
 
+"""
+    @v_str
+
+String macro used to parse a string to a [`VersionNumber`](@ref).
+
+# Examples
+```jldoctest
+julia> v"1.2.3"
+v"1.2.3"
+
+julia> v"2.0.1-rc1"
+v"2.0.1-rc1"
+```
+"""
 macro v_str(v); VersionNumber(v); end
 
 typemin(::Type{VersionNumber}) = v"0-"
@@ -121,16 +153,12 @@ function ident_cmp(
     A::Tuple{Vararg{Union{Integer,String}}},
     B::Tuple{Vararg{Union{Integer,String}}},
 )
-    i = start(A)
-    j = start(B)
-    while !done(A,i) && !done(B,i)
-       a,i = next(A,i)
-       b,j = next(B,j)
+    for (a, b) in zip(A, B)
        c = ident_cmp(a,b)
        (c != 0) && return c
     end
-    done(A,i) && !done(B,j) ? -1 :
-    !done(A,i) && done(B,j) ? +1 : 0
+    length(A) < length(B) ? -1 :
+    length(B) < length(A) ? +1 : 0
 end
 
 function ==(a::VersionNumber, b::VersionNumber)
@@ -231,7 +259,7 @@ end
 
 const libllvm_version = VersionNumber(libllvm_version_string)
 
-function banner(io::IO = STDOUT)
+function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
     elseif isempty(GIT_VERSION_INFO.commit)
@@ -264,7 +292,7 @@ function banner(io::IO = STDOUT)
         print(io,"""               $(d3)_$(tx)
            $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: https://docs.julialang.org
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
+           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
           $(jl)| | | | | | |/ _` |$(tx)  |
           $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
@@ -276,7 +304,7 @@ function banner(io::IO = STDOUT)
                        _
            _       _ _(_)_     |  A fresh approach to technical computing
           (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
-           _ _   _| |_  __ _   |  Type \"?help\" for help.
+           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
           | | | | | | |/ _` |  |
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
          _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)

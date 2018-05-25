@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Profile
+using Test, Profile, Serialization
 
 function busywait(t, n_tries)
     iter = 0
@@ -19,7 +19,7 @@ let r = Profile.retrieve()
         serialize(io, r)
         close(io)
         open(path) do io
-            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{StackFrame}}})
+            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
         end
     end
 end

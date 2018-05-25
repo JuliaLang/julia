@@ -28,6 +28,9 @@ very large integers), use [`Set`](@ref) instead.
 """
 BitSet(itr) = union!(BitSet(), itr)
 
+# Special implementation for BitSet, which lacks a fast `length` method.
+union!(s::BitSet, itr) = foldl(push!, s, itr)
+
 @inline intoffset(s::BitSet) = s.offset << 6
 
 eltype(::Type{BitSet}) = Int
@@ -52,8 +55,6 @@ function copy!(dest::BitSet, src::BitSet)
     dest.offset = src.offset
     dest
 end
-
-eltype(s::BitSet) = Int
 
 sizehint!(s::BitSet, n::Integer) = (sizehint!(s.bits, (n+63) >> 6); s)
 
@@ -113,12 +114,16 @@ end
 @inline function _growend0!(b::Bits, nchunks::Int)
     len = length(b)
     _growend!(b, nchunks)
-    @inbounds b[len+1:end] = CHK0 # resize! gives dirty memory
+    for i in len+1:length(b)
+        @inbounds b[i] = CHK0 # resize! gives dirty memory
+    end
 end
 
 @inline function _growbeg0!(b::Bits, nchunks::Int)
     _growbeg!(b, nchunks)
-    @inbounds b[1:nchunks] = CHK0
+    for i in 1:nchunks
+        @inbounds b[i] = CHK0
+    end
 end
 
 function _matched_map!(f, s1::BitSet, s2::BitSet)
@@ -285,15 +290,11 @@ filter!(f, s::BitSet) = unsafe_filter!(f, s)
 @inline in(n::Int, s::BitSet) = _bits_getindex(s.bits, n, s.offset)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
 
-# Use the next-set index as the state to prevent looking it up again in done
-start(s::BitSet) = _bits_findnext(s.bits, 0)
-
-function next(s::BitSet, i::Int)
-    nextidx = _bits_findnext(s.bits, i+1)
-    (i+intoffset(s), nextidx)
+function iterate(s::BitSet, idx=0)
+   idx = _bits_findnext(s.bits, idx)
+   idx == -1 && return nothing
+   (idx + intoffset(s), idx+1)
 end
-
-done(s::BitSet, i) = i == -1
 
 @noinline _throw_bitset_notempty_error() =
     throw(ArgumentError("collection must be non-empty"))

@@ -41,13 +41,13 @@ chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
 
         @test_throws ArgumentError copyto!(dest, 1, src(), 1, -1)
 
-        @test_throws BoundsError copyto!(dest, bigsrc())
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, bigsrc())
 
-        @test_throws BoundsError copyto!(dest, 3, src())
-        @test_throws BoundsError copyto!(dest, 3, src(), 1)
-        @test_throws BoundsError copyto!(dest, 3, src(), 1, 2)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src())
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1, 2)
 
-        @test_throws BoundsError copyto!(dest, 1, src(), 2, 2)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 1, src(), 2, 2)
     end
 end
 
@@ -61,7 +61,7 @@ end
         RA = CartesianIndices(axes(A))
         copyto!(B, CartesianIndices((5:7,2:3)), A, RA)
         @test B[5:7,2:3] == A
-        B[5:7,2:3] = 0
+        B[5:7,2:3] .= 0
         @test all(x->x==0, B)
     end
 end
@@ -152,5 +152,15 @@ end
         bar2 = deepcopy(bar)
         @test bar2.foo ∈ keys(bar2.fooDict)
         @test bar2.fooDict[bar2.foo] != nothing
+    end
+
+    let d = IdDict(rand(2) => rand(2) for i = 1:100)
+        d2 = deepcopy(d)
+        for k in keys(d2)
+            @test haskey(d2, k)
+        end
+        for k in keys(d)
+            @test haskey(d, k)
+        end
     end
 end

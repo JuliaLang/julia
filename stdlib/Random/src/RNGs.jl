@@ -10,7 +10,7 @@ if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
-        RandomDevice() = new(Vector{UInt128}(uninitialized, 1))
+        RandomDevice() = new(Vector{UInt128}(undef, 1))
     end
 
     function rand(rd::RandomDevice, sp::SamplerBoolBitInteger)
@@ -22,19 +22,19 @@ else # !windows
         file::IOStream
         unlimited::Bool
 
-        RandomDevice(unlimited::Bool=true) =
+        RandomDevice(; unlimited::Bool=true) =
             new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
 
     rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read( rd.file, sp[])
 
     function serialize(s::AbstractSerializer, rd::RandomDevice)
-        Serializer.serialize_type(s, typeof(rd))
+        Serialization.serialize_type(s, typeof(rd))
         serialize(s, rd.unlimited)
     end
     function deserialize(s::AbstractSerializer, t::Type{RandomDevice})
         unlimited = deserialize(s)
-        return RandomDevice(unlimited)
+        return RandomDevice(unlimited=unlimited)
     end
 
 end # os-test
@@ -96,8 +96,8 @@ end
 
 MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
     MersenneTwister(seed, state,
-                    Vector{Float64}(uninitialized, MT_CACHE_F),
-                    Vector{UInt128}(uninitialized, MT_CACHE_I >> 4),
+                    Vector{Float64}(undef, MT_CACHE_F),
+                    Vector{UInt128}(undef, MT_CACHE_I >> 4),
                     MT_CACHE_F, 0)
 
 """
@@ -173,7 +173,7 @@ mt_setempty!(r::MersenneTwister) = r.idxF = MT_CACHE_F
 mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idxF+=1]
 
 function gen_rand(r::MersenneTwister)
-    @gc_preserve r dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
+    GC.@preserve r dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
     mt_setfull!(r)
 end
 
@@ -239,14 +239,14 @@ function make_seed()
     try
         return rand(RandomDevice(), UInt32, 4)
     catch
-        println(STDERR,
+        println(stderr,
                 "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(UInt64, time())
         seed = hash(seed, UInt64(getpid()))
         try
             seed = hash(seed, parse(UInt64,
                                     read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
-                                    16))
+                                    base = 16))
         end
         return make_seed(seed)
     end
@@ -335,7 +335,7 @@ rand(r::MersenneTwister, T::SamplerUnion(Union{Bool,Int8,UInt8,Int16,UInt16,Int3
 
 function rand!(r::MersenneTwister, A::AbstractArray{Float64},
                I::SamplerTrivial{<:FloatInterval_64})
-    region = linearindices(A)
+    region = LinearIndices(A)
     # what follows is equivalent to this simple loop but more efficient:
     # for i=region
     #     @inbounds A[i] = rand(r, I[])
@@ -371,6 +371,7 @@ Base.getindex(a::UnsafeView, i::Int) = unsafe_load(a.ptr, i)
 Base.setindex!(a::UnsafeView, x, i::Int) = unsafe_store!(a.ptr, x, i)
 Base.pointer(a::UnsafeView) = a.ptr
 Base.size(a::UnsafeView) = (a.len,)
+Base.elsize(::UnsafeView{T}) where {T} = sizeof(T)
 
 # this is essentially equivalent to rand!(r, ::AbstractArray{Float64}, I) above, but due to
 # optimizations which can't be done currently when working with pointers, we have to re-order
@@ -382,12 +383,12 @@ function _rand_max383!(r::MersenneTwister, A::UnsafeView{Float64}, I::FloatInter
     mt_avail(r) == 0 && gen_rand(r)
     # from now on, at most one call to gen_rand(r) will be necessary
     m = min(n, mt_avail(r))
-    @gc_preserve r unsafe_copyto!(A.ptr, pointer(r.vals, r.idxF+1), m)
+    GC.@preserve r unsafe_copyto!(A.ptr, pointer(r.vals, r.idxF+1), m)
     if m == n
         r.idxF += m
     else # m < n
         gen_rand(r)
-        @gc_preserve r unsafe_copyto!(A.ptr+m*sizeof(Float64), pointer(r.vals), n-m)
+        GC.@preserve r unsafe_copyto!(A.ptr+m*sizeof(Float64), pointer(r.vals), n-m)
         r.idxF = n-m
     end
     if I isa CloseOpen01
@@ -436,8 +437,8 @@ end
 # fills up A reinterpreted as an array of Float64 with n64 values
 function _rand!(r::MersenneTwister, A::Array{T}, n64::Int, I::FloatInterval_64) where T
     # n64 is the length in terms of `Float64` of the target
-    @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbits(T)
-    @gc_preserve A rand!(r, UnsafeView{Float64}(pointer(A), n64), SamplerTrivial(I))
+    @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbitstype(T)
+    GC.@preserve A rand!(r, UnsafeView{Float64}(pointer(A), n64), SamplerTrivial(I))
     A
 end
 
@@ -457,7 +458,7 @@ for T in (Float16, Float32)
         n = length(A)
         n128 = n * sizeof($T) ÷ 16
         _rand!(r, A, 2*n128, CloseOpen12())
-        @gc_preserve A begin
+        GC.@preserve A begin
             A128 = UnsafeView{UInt128}(pointer(A), n128)
             for i in 1:n128
                 u = A128[i]
@@ -520,7 +521,7 @@ end
 
 for T in BitInteger_types
     @eval rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T}) =
-        (@gc_preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp); A)
+        (GC.@preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp); A)
 
     T == UInt128 && continue
 

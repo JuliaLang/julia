@@ -17,11 +17,17 @@ be written in a vectorized style for performance. Julia's compiler uses type inf
 optimized code for scalar array indexing, allowing programs to be written in a style that is convenient
 and readable, without sacrificing performance, and using less memory at times.
 
-In Julia, all arguments to functions are passed by reference. Some technical computing languages
-pass arrays by value, and this is convenient in many cases. In Julia, modifications made to input
-arrays within a function will be visible in the parent function. The entire Julia array library
-ensures that inputs are not modified by library functions. User code, if it needs to exhibit similar
-behavior, should take care to create a copy of inputs that it may modify.
+In Julia, all arguments to functions are [passed by
+sharing](https://en.wikipedia.org/wiki/Evaluation_strategy#Call_by_sharing)
+(i.e. by pointers). Some technical computing languages pass arrays by value, and
+while this prevents accidental modification by callees of a value in the caller,
+it makes avoiding unwanted copying of arrays difficult. By convention, a
+function name ending with a `!` indicates that it will mutate or destroy the
+value of one or more of its arguments. Callees must make explicit copies to
+ensure that they don't modify inputs that they don't intend to change. Many non-
+mutating functions are implemented by calling a function of the same name with
+an added `!` at the end on an explicit copy of the input, and returning that
+copy.
 
 ## Arrays
 
@@ -50,7 +56,7 @@ omitted it will default to [`Float64`](@ref).
 
 | Function                           | Description                                                                                                                                                                                                                                  |
 |:---------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`Array{T}(uninitialized, dims...)`](@ref)     | an uninitialized dense [`Array`](@ref)                                                                                                                                                                                                       |
+| [`Array{T}(undef, dims...)`](@ref)             | an uninitialized dense [`Array`](@ref)                                                                                                                                                                                                              |
 | [`zeros(T, dims...)`](@ref)                    | an `Array` of all zeros                                                                                                                                                                                                                      |
 | [`ones(T, dims...)`](@ref)                     | an `Array` of all ones                                                                                                                                                                                                                       |
 | [`trues(dims...)`](@ref)                       | a [`BitArray`](@ref) with all values `true`                                                                                                                                                                                                  |
@@ -63,7 +69,7 @@ omitted it will default to [`Float64`](@ref).
 | [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
 | [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
 | [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix                                                                                                                                                                                                                   |
-| [`linspace(start, stop, n)`](@ref)             | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
+| [`range(start, stop=stop, length=n)`](@ref)    | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
 | [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x`                                                                                                                                                                                                        |
 | [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`                                                                                                                                                                                                         |
 
@@ -77,11 +83,11 @@ converted to that type using [`convert`](@ref).
 
 Arrays can be constructed and also concatenated using the following functions:
 
-| Function               | Description                                          |
-|:---------------------- |:---------------------------------------------------- |
-| [`cat(k, A...)`](@ref) | concatenate input n-d arrays along the dimension `k` |
-| [`vcat(A...)`](@ref)   | shorthand for `cat(1, A...)`                         |
-| [`hcat(A...)`](@ref)   | shorthand for `cat(2, A...)`                         |
+| Function                    | Description                                     |
+|:--------------------------- |:----------------------------------------------- |
+| [`cat(A...; dims=k)`](@ref) | concatenate input arrays along dimension(s) `k` |
+| [`vcat(A...)`](@ref)        | shorthand for `cat(A...; dims=1)`               |
+| [`hcat(A...)`](@ref)        | shorthand for `cat(A...; dims=2)`               |
 
 Scalar values passed to these functions are treated as 1-element arrays.
 
@@ -386,14 +392,15 @@ julia> x = collect(reshape(1:9, 3, 3))
  2  5  8
  3  6  9
 
-julia> x[1:2, 2:3] = -1
--1
+julia> x[3, 3] = -9;
+
+julia> x[1:2, 1:2] = [-1 -4; -2 -5];
 
 julia> x
 3×3 Array{Int64,2}:
- 1  -1  -1
- 2  -1  -1
- 3   6   9
+ -1  -4   7
+ -2  -5   8
+  3   6  -9
 ```
 
 ### [Supported index types](@id man-supported-index-types)
@@ -619,7 +626,7 @@ be to replicate the vector to the size of the matrix:
 ```julia-repl
 julia> a = rand(2,1); A = rand(2,3);
 
-julia> repmat(a,1,3)+A
+julia> repeat(a,1,3)+A
 2×3 Array{Float64,2}:
  1.20813  1.82068  1.25387
  1.56851  1.86401  1.67846
@@ -648,8 +655,7 @@ julia> broadcast(+, a, b)
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
 to `broadcast` calls (except that they fuse, as described below). There is also a
 [`broadcast!`](@ref) function to specify an explicit destination (which can also
-be accessed in a fusing fashion by `.=` assignment), and functions [`broadcast_getindex`](@ref)
-and [`broadcast_setindex!`](@ref) that broadcast the indices before indexing. Moreover, `f.(args...)`
+be accessed in a fusing fashion by `.=` assignment). Moreover, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
 ([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
@@ -661,8 +667,8 @@ it also handles tuples and treats any argument that is not an array, tuple or [`
 ```jldoctest
 julia> convert.(Float32, [1, 2])
 2-element Array{Float32,1}:
- 1.0f0
- 2.0f0
+ 1.0
+ 2.0
 
 julia> ceil.((UInt8,), [1.2 3.4; 5.6 6.7])
 2×2 Array{UInt8,2}:
@@ -697,71 +703,80 @@ object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) an
 the length of the tuple returned by [`size`](@ref). For more details on defining custom
 `AbstractArray` implementations, see the [array interface guide in the interfaces chapter](@ref man-interface-array).
 
-`DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays that are
-laid out at regular offsets in memory, and which can therefore be passed to external C and Fortran
-functions expecting this memory layout. Subtypes should provide a [`strides(A)`](@ref) method
-that returns a tuple of "strides" for each dimension; a provided [`stride(A,k)`](@ref) method accesses
-the `k`th element within this tuple. Increasing the index of dimension `k` by `1` should
-increase the index `i` of [`getindex(A,i)`](@ref) by [`stride(A,k)`](@ref). If a pointer conversion
-method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is provided, the memory layout should correspond
-in the same way to these strides. More concrete examples can be found within the [interface guide
-for strided arrays](@ref man-interface-strided-arrays).
+`DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays where
+elements are stored contiguously in column-major order (see additional notes in
+[Performance Tips](@ref man-performance-tips)). The [`Array`](@ref) type is a specific instance
+of `DenseArray`  [`Vector`](@ref) and [`Matrix`](@ref) are aliases for the 1-d and 2-d cases.
+Very few operations are implemented specifically for `Array` beyond those that are required
+for all `AbstractArrays`s; much of the array library is implemented in a generic
+manner that allows all custom arrays to behave similarly.
 
-The [`Array`](@ref) type is a specific instance of `DenseArray` where elements are stored in column-major
-order (see additional notes in [Performance Tips](@ref man-performance-tips)). [`Vector`](@ref) and [`Matrix`](@ref) are aliases for
-the 1-d and 2-d cases. Specific operations such as scalar indexing, assignment, and a few other
-basic storage-specific operations are all that have to be implemented for [`Array`](@ref), so
-that the rest of the array library can be implemented in a generic manner.
-
-`SubArray` is a specialization of `AbstractArray` that performs indexing by reference rather than
-by copying. A `SubArray` is created with the [`view`](@ref) function, which is called the same
-way as [`getindex`](@ref) (with an array and a series of index arguments). The result of [`view`](@ref)
-looks the same as the result of [`getindex`](@ref), except the data is left in place. [`view`](@ref)
-stores the input index vectors in a `SubArray` object, which can later be used to index the original
-array indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
+`SubArray` is a specialization of `AbstractArray` that performs indexing by
+sharing memory with the original array rather than by copying it. A `SubArray`
+is created with the [`view`](@ref) function, which is called the same way as
+[`getindex`](@ref) (with an array and a series of index arguments). The result
+of [`view`](@ref) looks the same as the result of [`getindex`](@ref), except the
+data is left in place. [`view`](@ref) stores the input index vectors in a
+`SubArray` object, which can later be used to index the original array
+indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
 block of code, any `array[...]` slice in that expression will be converted to
 create a `SubArray` view instead.
 
-`StridedVector` and `StridedMatrix` are convenient aliases defined to make it possible for Julia
-to call a wider range of BLAS and LAPACK functions by passing them either [`Array`](@ref) or
-`SubArray` objects, and thus saving inefficiencies from memory allocation and copying.
+[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
+and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
+
+A "strided" array is stored in memory with elements laid out in regular offsets such that
+an instance with a supported `isbits` element type can be passed to
+external C and Fortran functions that expect this memory layout. Strided arrays
+must define a [`strides(A)`](@ref) method that returns a tuple of "strides" for each dimension; a
+provided [`stride(A,k)`](@ref) method accesses the `k`th element within this tuple. Increasing the
+index of dimension `k` by `1` should increase the index `i` of [`getindex(A,i)`](@ref) by
+[`stride(A,k)`](@ref). If a pointer conversion method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is
+provided, the memory layout must correspond in the same way to these strides. `DenseArray` is a
+very specific example of a strided array where the elements are arranged contiguously, thus it
+provides its subtypes with the approporiate definition of `strides`. More concrete examples
+can be found within the [interface guide for strided arrays](@ref man-interface-strided-arrays).
+`StridedVector` and `StridedMatrix` are convenient aliases for many of the builtin array types that
+are considered strided arrays, allowing them to dispatch to select specialized implementations that
+call highly tuned and optimized BLAS and LAPACK functions using just the pointer and strides.
 
 The following example computes the QR decomposition of a small section of a larger array, without
 creating any temporaries, and by calling the appropriate LAPACK function with the right leading
 dimension size and stride parameters.
 
 ```julia-repl
-julia> a = rand(10,10)
+julia> a = rand(10, 10)
 10×10 Array{Float64,2}:
- 0.561255   0.226678   0.203391  0.308912   …  0.750307  0.235023   0.217964
- 0.718915   0.537192   0.556946  0.996234      0.666232  0.509423   0.660788
- 0.493501   0.0565622  0.118392  0.493498      0.262048  0.940693   0.252965
- 0.0470779  0.736979   0.264822  0.228787      0.161441  0.897023   0.567641
- 0.343935   0.32327    0.795673  0.452242      0.468819  0.628507   0.511528
- 0.935597   0.991511   0.571297  0.74485    …  0.84589   0.178834   0.284413
- 0.160706   0.672252   0.133158  0.65554       0.371826  0.770628   0.0531208
- 0.306617   0.836126   0.301198  0.0224702     0.39344   0.0370205  0.536062
- 0.890947   0.168877   0.32002   0.486136      0.096078  0.172048   0.77672
- 0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
+ 0.517515  0.0348206  0.749042   0.0979679  …  0.75984     0.950481   0.579513
+ 0.901092  0.873479   0.134533   0.0697848     0.0586695   0.193254   0.726898
+ 0.976808  0.0901881  0.208332   0.920358      0.288535    0.705941   0.337137
+ 0.657127  0.0317896  0.772837   0.534457      0.0966037   0.700694   0.675999
+ 0.471777  0.144969   0.0718405  0.0827916     0.527233    0.173132   0.694304
+ 0.160872  0.455168   0.489254   0.827851   …  0.62226     0.0995456  0.946522
+ 0.291857  0.769492   0.68043    0.629461      0.727558    0.910796   0.834837
+ 0.775774  0.700731   0.700177   0.0126213     0.00822304  0.327502   0.955181
+ 0.9715    0.64354    0.848441   0.241474      0.591611    0.792573   0.194357
+ 0.646596  0.575456   0.0995212  0.038517      0.709233    0.477657   0.0507231
 
 julia> b = view(a, 2:2:8,2:2:4)
-4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},false}:
- 0.537192  0.996234
- 0.736979  0.228787
- 0.991511  0.74485
- 0.836126  0.0224702
+4×2 view(::Array{Float64,2}, 2:2:8, 2:2:4) with eltype Float64:
+ 0.873479   0.0697848
+ 0.0317896  0.534457
+ 0.455168   0.827851
+ 0.700731   0.0126213
 
-julia> (q,r) = qr(b);
+julia> (q, r) = qr(b);
 
 julia> q
-4×2 Array{Float64,2}:
- -0.338809   0.78934
- -0.464815  -0.230274
- -0.625349   0.194538
- -0.527347  -0.534856
+4×4 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+ -0.722358    0.227524  -0.247784    -0.604181
+ -0.0262896  -0.575919  -0.804227     0.144377
+ -0.376419   -0.75072    0.540177    -0.0541979
+ -0.579497    0.230151  -0.00552346   0.781782
 
 julia> r
 2×2 Array{Float64,2}:
- -1.58553  -0.921517
-  0.0       0.866567
+ -1.20921  -0.383393
+  0.0      -0.910506
 ```

@@ -17,9 +17,9 @@ Base.Sys.MACHINE
 
 See also:
 
-  * [`STDIN`](@ref)
-  * [`STDOUT`](@ref)
-  * [`STDERR`](@ref)
+  * [`stdin`](@ref)
+  * [`stdout`](@ref)
+  * [`stderr`](@ref)
   * [`ENV`](@ref)
   * [`ENDIAN_BOM`](@ref)
   * `Libc.MS_ASYNC`

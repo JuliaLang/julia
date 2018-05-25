@@ -70,7 +70,6 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
              ((wc >= 0x2140 && wc <= 0x2144) || // ⅀, ⅁, ⅂, ⅃, ⅄
               wc == 0x223f || wc == 0x22be || wc == 0x22bf || // ∿, ⊾, ⊿
               wc == 0x22a4 || wc == 0x22a5 ||   // ⊤ ⊥
-              (wc >= 0x22ee && wc <= 0x22f1) || // ⋮, ⋯, ⋰, ⋱
 
               (wc >= 0x2202 && wc <= 0x2233 &&
                (wc == 0x2202 || wc == 0x2205 || wc == 0x2206 || // ∂, ∅, ∆

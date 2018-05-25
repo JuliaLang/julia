@@ -3,7 +3,7 @@
 module TestDiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: mul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
+using LinearAlgebra: mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
 
 n=12 #Size of matrix problem to test
 srand(1)
@@ -27,6 +27,8 @@ srand(1)
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
         end
+        # issue #26178
+        @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
     end
 
     @testset "Basic properties" begin
@@ -67,7 +69,7 @@ srand(1)
             @test op(D)==op(DM)
         end
 
-        for func in (det, trace)
+        for func in (det, tr)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
@@ -105,7 +107,7 @@ srand(1)
                 @test ldiv!(transpose(D), copy(U)) ≈ DM\U atol=atol_three
                 @test ldiv!(adjoint(conj(D)), copy(U)) ≈ DM\U atol=atol_three
                 Uc = copy(U')
-                target = scale!(Uc, inv.(D.diag))
+                target = rmul!(Uc, Diagonal(inv.(D.diag)))
                 @test rdiv!(Uc, D) ≈ target atol=atol_three
                 @test_throws DimensionMismatch rdiv!(Matrix{elty}(I, n-1, n-1), D)
                 @test_throws SingularException rdiv!(Uc, Diagonal(fill!(similar(D.diag), 0)))
@@ -147,9 +149,9 @@ srand(1)
             if relty <: BlasFloat
                 b = rand(elty,n,n)
                 b = sparse(b)
-                @test mul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test mul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                @test mul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
@@ -178,13 +180,13 @@ srand(1)
         VV = Array(D)
         DD = copy(D)
         r  = VV * Matrix(D)
-        @test Array(mul!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
+        @test Array(rmul!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
         DD = copy(D)
         r  = VV * transpose(Array(D))
-        @test Array(mul!(VV, transpose(DD))) ≈ r
+        @test Array(rmul!(VV, transpose(DD))) ≈ r
         DD = copy(D)
         r  = VV * Array(D)'
-        @test Array(mul!(VV, adjoint(DD))) ≈ r
+        @test Array(rmul!(VV, adjoint(DD))) ≈ r
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -205,7 +207,7 @@ srand(1)
     @test factorize(D) == D
 
     @testset "Eigensystem" begin
-        eigD = eigfact(D)
+        eigD = eigen(D)
         @test Diagonal(eigD.values) ≈ D
         @test eigD.vectors == Matrix(I, size(D))
     end
@@ -263,7 +265,7 @@ srand(1)
         U, s, V = svd(D)
         @test (U*Diagonal(s))*V' ≈ D
         @test svdvals(D) == s
-        @test svdfact(D).V == V
+        @test svd(D).V == V
     end
 end
 
@@ -325,7 +327,7 @@ end
 end
 
 # allow construct from range
-@test all(Diagonal(linspace(1,3,3)) .== Diagonal([1.0,2.0,3.0]))
+@test all(Diagonal(range(1, stop=3, length=3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
@@ -348,17 +350,20 @@ end
 end
 
 let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
-    @test_throws MethodError mul!(D1,D2)
-    @test_throws MethodError mul!(transpose(D1),D2)
-    @test_throws MethodError mul!(adjoint(D1),D2)
+    @test LinearAlgebra.rmul!(copy(D1),D2) == D1*D2
+    @test LinearAlgebra.lmul!(D1,copy(D2)) == D1*D2
+    @test LinearAlgebra.rmul!(copy(D1),transpose(D2)) == D1*transpose(D2)
+    @test LinearAlgebra.lmul!(transpose(D1),copy(D2)) == transpose(D1)*D2
+    @test LinearAlgebra.rmul!(copy(D1),adjoint(D2)) == D1*adjoint(D2)
+    @test LinearAlgebra.lmul!(adjoint(D1),copy(D2)) == adjoint(D1)*D2
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
     D = Diagonal(randn(5))
-    Q = qrfact(randn(5, 5)).Q
+    Q = qr(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
-    Q = qrfact(randn(5, 5), Val(true)).Q
-    @test_throws MethodError mul!(Q, D)
+    Q = qr(randn(5, 5), Val(true)).Q
+    @test_throws ArgumentError lmul!(Q, D)
 end
 
 @testset "block diagonal matrices" begin
@@ -412,8 +417,8 @@ end
         B = Diagonal(randn(T, 5, 5))
         DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
         BB = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
-        fullDD = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), DD)
-        fullBB = copyto!(Matrix{Matrix{T}}(uninitialized, 2, 2), BB)
+        fullDD = copyto!(Matrix{Matrix{T}}(undef, 2, 2), DD)
+        fullBB = copyto!(Matrix{Matrix{T}}(undef, 2, 2), BB)
         for (transform1, transform2) in ((identity,  identity),
                 (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
                 (identity,  transpose), (transpose, identity ), (transpose, transpose) )
@@ -426,6 +431,13 @@ end
 @testset "Diagonal of adjoint/transpose vectors (#23649)" begin
     @test Diagonal(adjoint([1, 2, 3])) == Diagonal([1 2 3])
     @test Diagonal(transpose([1, 2, 3])) == Diagonal([1 2 3])
+end
+
+@testset "Multiplication with Adjoint and Transpose vectors (#26863)" begin
+    x = rand(5)
+    D = Diagonal(rand(5))
+    @test x'*D*x == (x'*D)*x == (x'*Array(D))*x
+    @test Transpose(x)*D*x == (Transpose(x)*D)*x == (Transpose(x)*Array(D))*x
 end
 
 end # module TestDiagonal

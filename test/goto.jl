@@ -75,7 +75,7 @@ let e = Meta.lower(@__MODULE__, quote
         end
     end)
     @test (e::Expr).head === :error
-    @test contains(e.args[1], r"label \"#\d+#a\" referenced but not defined")
+    @test occursin(r"label \"#\d+#a\" referenced but not defined", e.args[1])
 end
 
 function goto_test5_3()

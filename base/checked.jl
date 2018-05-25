@@ -13,7 +13,7 @@ import Core.Intrinsics:
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import Base: no_op_err, @_inline_meta, @_noinline_meta
+import ..no_op_err, ..@_inline_meta, ..@_noinline_meta
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)

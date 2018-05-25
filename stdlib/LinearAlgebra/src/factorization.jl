@@ -4,9 +4,9 @@
 
 abstract type Factorization{T} end
 
-eltype(::Type{Factorization{T}}) where {T} = T
-transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
-adjoint(F::Factorization) = error("adjoint not implemented for $(typeof(F))")
+eltype(::Type{<:Factorization{T}}) where {T} = T
+size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
+size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 macro assertposdef(A, info)
    :($(esc(info)) == 0 ? $(esc(A)) : throw(PosDefException($(esc(info)))))
@@ -22,12 +22,12 @@ end
 Test that a factorization of a matrix succeeded.
 
 ```jldoctest
-julia> F = cholfact([1 0; 0 1]);
+julia> F = cholesky([1 0; 0 1]);
 
 julia> LinearAlgebra.issuccess(F)
 true
 
-julia> F = lufact([1 0; 0 0]);
+julia> F = lu([1 0; 0 0]);
 
 julia> LinearAlgebra.issuccess(F)
 false
@@ -56,7 +56,7 @@ inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n
 
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, 1:nfields(F))
 Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
-Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))
+Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))::Bool
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
@@ -81,11 +81,23 @@ function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
 end
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
-ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) = ldiv!(A, copyto!(Y, B))
-ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = adjA.parent; ldiv!(adjoint(A), copyto!(Y, B)))
-ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat) =
-    (A = transA.parent; ldiv!(transpose(A), copyto!(Y, B)))
+function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
+    m, n = size(A, 1), size(A, 2)
+    if m > n
+        ldiv!(A, B)
+        return copyto!(Y, view(B, 1:n, :))
+    else
+        return ldiv!(A, copyto!(Y, view(B, 1:m, :)))
+    end
+end
+function ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
+    checksquare(adjA)
+    return ldiv!(adjA, copyto!(Y, B))
+end
+function ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat)
+    checksquare(transA)
+    return ldiv!(transA, copyto!(Y, B))
+end
 
 # fallback methods for transposed solves
 \(F::Transpose{<:Any,<:Factorization{<:Real}}, B::AbstractVecOrMat) = adjoint(F.parent) \ B

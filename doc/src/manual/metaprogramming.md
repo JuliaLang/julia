@@ -216,7 +216,7 @@ Interpolating into an unquoted expression is not supported and will cause a comp
 
 ```jldoctest interp1
 julia> $a + b
-ERROR: unsupported or misplaced expression $
+ERROR: syntax: "$" expression outside quote
 ```
 
 In this example, the tuple `(1,2,3)` is interpolated as an expression into a conditional test:
@@ -407,10 +407,10 @@ julia> eval(ex)
 The value of `a` is used to construct the expression `ex` which applies the `+` function to the
 value 1 and the variable `b`. Note the important distinction between the way `a` and `b` are used:
 
-  * The value of the *variable*`a` at expression construction time is used as an immediate value in
+  * The value of the *variable* `a` at expression construction time is used as an immediate value in
     the expression. Thus, the value of `a` when the expression is evaluated no longer matters: the
     value in the expression is already `1`, independent of whatever the value of `a` might be.
-  * On the other hand, the *symbol*`:b` is used in the expression construction, so the value of the
+  * On the other hand, the *symbol* `:b` is used in the expression construction, so the value of the
     variable `b` at that time is irrelevant -- `:b` is just a symbol and the variable `b` need not
     even be defined. At expression evaluation time, however, the value of the symbol `:b` is resolved
     by looking up the value of the variable `b`.

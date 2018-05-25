@@ -23,7 +23,7 @@ y = inv(x)
 @test_throws DomainError inv(ModInts.ModInt{8}(4))
 
 include(joinpath(dir, "ndgrid.jl"))
-r = repmat(1:10,1,10)
+r = repeat(1:10,1,10)
 r1, r2 = ndgrid(1:10, 1:10)
 @test r1 == r
 @test r2 == r'
@@ -42,7 +42,7 @@ include(joinpath(dir, "queens.jl"))
 if Sys.isunix()
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
     cmd = `$(Base.julia_cmd()) --startup-file=no $script`
-    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR)) && ccall(:jl_running_on_valgrind,Cint,()) == 0
+    if !success(pipeline(cmd; stdout=stdout, stderr=stderr)) && ccall(:jl_running_on_valgrind,Cint,()) == 0
         error("UnixDomainCM failed test, cmd : $cmd")
     end
 end
@@ -59,7 +59,7 @@ main_ex = quote
     end
     RemoteChannel(()->DictChannel(), 1)
 end
-dc = eval(Main, main_ex)
+dc = Core.eval(Main, main_ex)
 @test typeof(dc) == RemoteChannel{Main.DictChannel}
 
 @test isready(dc) == false

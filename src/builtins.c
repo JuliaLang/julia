@@ -103,7 +103,7 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
                 ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
             }
             if (!ft->layout->haspadding) {
-                if (!bits_equal(ao, bo, jl_field_size(dt, f)))
+                if (!bits_equal(ao, bo, ft->size))
                     return 0;
             }
             else {
@@ -337,7 +337,7 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
             if (fieldtype->layout->haspadding)
                 u = jl_object_id_((jl_value_t*)fieldtype, (jl_value_t*)vo);
             else
-                u = bits_hash(vo, jl_field_size(dt, f));
+                u = bits_hash(vo, fieldtype->size);
         }
         h = bitmix(h, u);
     }
@@ -409,8 +409,6 @@ JL_CALLABLE(jl_f_issubtype)
 {
     JL_NARGS(<:, 2, 2);
     jl_value_t *a = args[0], *b = args[1];
-    if (jl_is_typevar(a)) a = ((jl_tvar_t*)a)->ub; // TODO should we still allow this?
-    if (jl_is_typevar(b)) b = ((jl_tvar_t*)b)->ub;
     JL_TYPECHK(<:, type, a);
     JL_TYPECHK(<:, type, b);
     return (jl_subtype(a,b) ? jl_true : jl_false);
@@ -437,6 +435,13 @@ JL_CALLABLE(jl_f_throw)
     JL_NARGS(throw, 1, 1);
     jl_throw(args[0]);
     return jl_nothing;
+}
+
+JL_CALLABLE(jl_f_ifelse)
+{
+    JL_NARGS(ifelse, 3, 3);
+    JL_TYPECHK(ifelse, bool, args[0]);
+    return (args[0] == jl_false ? args[2] : args[1]);
 }
 
 // apply ----------------------------------------------------------------------
@@ -793,9 +798,19 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
         JL_GC_POP();
         return u;
     }
+    if (jl_is_uniontype(t)) {
+        jl_value_t **u;
+        jl_value_t *r;
+        JL_GC_PUSHARGS(u, 2);
+        u[0] = get_fieldtype(((jl_uniontype_t*)t)->a, f);
+        u[1] = get_fieldtype(((jl_uniontype_t*)t)->b, f);
+        r = jl_type_union(u, 2);
+        JL_GC_POP();
+        return r;
+    }
+    if (!jl_is_datatype(t))
+        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, t);
     jl_datatype_t *st = (jl_datatype_t*)t;
-    if (!jl_is_datatype(st))
-        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, (jl_value_t*)st);
     int field_index;
     if (jl_is_long(f)) {
         field_index = jl_unbox_long(f) - 1;
@@ -1181,13 +1196,13 @@ static void add_builtin(const char *name, jl_value_t *v)
     jl_set_const(jl_core_module, jl_symbol(name), v);
 }
 
-jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
+jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return jl_gf_mtable(b)->cache.leaf->func.linfo->fptr;
+    return jl_gf_mtable(b)->cache.leaf->func.linfo->specptr.fptr1;
 }
 
-static void add_builtin_func(const char *name, jl_fptr_t fptr)
+static void add_builtin_func(const char *name, jl_fptr_args_t fptr)
 {
     jl_mk_builtin_func(NULL, name, fptr);
 }
@@ -1202,6 +1217,7 @@ void jl_init_primitives(void)
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
+    add_builtin_func("ifelse", jl_f_ifelse);
 
     // field access
     add_builtin_func("getfield",  jl_f_getfield);
@@ -1275,6 +1291,10 @@ void jl_init_primitives(void)
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
     add_builtin("LabelNode", (jl_value_t*)jl_labelnode_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
+    add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
+    add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);
+    add_builtin("PhiCNode", (jl_value_t*)jl_phicnode_type);
+    add_builtin("UpsilonNode", (jl_value_t*)jl_upsilonnode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);

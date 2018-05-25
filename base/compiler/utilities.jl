@@ -1,6 +1,16 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ###########
 # generic #
 ###########
+
+if !isdefined(@__MODULE__, Symbol("@timeit"))
+    # This is designed to allow inserting timers when loading a second copy
+    # of inference for performing performance experiments.
+    macro timeit(args...)
+        esc(args[end])
+    end
+end
 
 # avoid cycle due to over-specializing `any` when used by inference
 function _any(@nospecialize(f), a)
@@ -86,6 +96,10 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
+function invoke_api(li::MethodInstance)
+    return ccall(:jl_invoke_api, Cint, (Any,), li)
+end
+
 function get_staged(li::MethodInstance)
     try
         # user code might throw errors – ignore them
@@ -124,11 +138,10 @@ function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleV
     if world < min_world(method)
         return nothing
     end
-    if isdefined(method, :generator) && !isleaftype(atypes)
+    if isdefined(method, :generator) && !isdispatchtuple(atypes)
         # don't call staged functions on abstract types.
         # (see issues #8504, #10230)
         # we can't guarantee that their type behavior is monotonic.
-        # XXX: this test is wrong if Types (such as DataType or Bottom) are present
         return nothing
     end
     if preexisting
@@ -142,36 +155,24 @@ function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleV
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt), method, atypes, sparams, world)
 end
 
-# TODO: Use these functions instead of directly manipulating
-# the "actual" method for appropriate places in inference (see #24676)
-function method_for_inference_heuristics(cinfo, default)
-    if isa(cinfo, CodeInfo)
-        # appropriate format for `sig` is svec(ftype, argtypes, world)
-        sig = cinfo.signature_for_inference_heuristics
-        if isa(sig, SimpleVector) && length(sig) == 3
-            methods = _methods(sig[1], sig[2], -1, sig[3])
-            if length(methods) == 1
-                _, _, m = methods[]
-                if isa(m, Method)
-                    return m
+# This function is used for computing alternate limit heuristics
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector, world::UInt)
+    if isdefined(method, :generator) && method.generator.expand_early
+        method_instance = code_for_method(method, sig, sparams, world, false)
+        if isa(method_instance, MethodInstance)
+            cinfo = get_staged(method_instance)
+            if isa(cinfo, CodeInfo)
+                method2 = cinfo.method_for_inference_limit_heuristics
+                if method2 isa Method
+                    return method2
                 end
             end
         end
     end
-    return default
+    return nothing
 end
 
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)
-    if isdefined(method, :generator) && method.generator.expand_early
-        method_instance = code_for_method(method, sig, sparams, world, false)
-        if isa(method_instance, MethodInstance)
-            return method_for_inference_heuristics(get_staged(method_instance), method)
-        end
-    end
-    return method
-end
-
-function exprtype(@nospecialize(x), src::CodeInfo, mod::Module)
+function exprtype(@nospecialize(x), src, mod::Module)
     if isa(x, Expr)
         return (x::Expr).typ
     elseif isa(x, SlotNumber)
@@ -180,12 +181,18 @@ function exprtype(@nospecialize(x), src::CodeInfo, mod::Module)
         return (x::TypedSlot).typ
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, src)
+    elseif isa(x, Argument)
+        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] : src.argtypes[x.n]
     elseif isa(x, Symbol)
         return abstract_eval_global(mod, x::Symbol)
     elseif isa(x, QuoteNode)
         return AbstractEvalConstant((x::QuoteNode).value)
     elseif isa(x, GlobalRef)
         return abstract_eval_global(x.mod, (x::GlobalRef).name)
+    elseif isa(x, PhiNode)
+        return Any
+    elseif isa(x, PiNode)
+        return x.typ
     else
         return AbstractEvalConstant(x)
     end
@@ -241,18 +248,31 @@ end
 ##############
 
 # scan body for the value of the largest referenced label
-function label_counter(body::Vector{Any})
+# so that we won't accidentally re-use it
+function label_counter(body::Vector{Any}, comefrom=true)
     l = 0
     for b in body
         label = 0
-        if isa(b, GotoNode)
+        if isa(b, LabelNode) && comefrom
             label = b.label::Int
-        elseif isa(b, LabelNode)
-            label = b.label
-        elseif isa(b, Expr) && b.head == :gotoifnot
-            label = b.args[2]::Int
-        elseif isa(b, Expr) && b.head == :enter
-            label = b.args[1]::Int
+        elseif isa(b, GotoNode)
+            label = b.label::Int
+        elseif isa(b, Expr)
+            if b.head == :gotoifnot
+                label = b.args[2]::Int
+            elseif b.head == :enter
+                label = b.args[1]::Int
+            elseif b.head === :(=) && comefrom
+                rhs = b.args[2]
+                if isa(rhs, PhiNode)
+                    for edge in rhs.edges
+                        edge = edge::Int + 1
+                        if edge > l
+                            l = edge
+                        end
+                    end
+                end
+            end
         end
         if label > l
             l = label
@@ -267,8 +287,22 @@ function get_label_map(body::Vector{Any})
     for i = 1:length(body)
         el = body[i]
         if isa(el, LabelNode)
+            # @assert labelmap[el.label] == 0
             labelmap[el.label] = i
         end
     end
     return labelmap
+end
+
+###########
+# options #
+###########
+
+inlining_enabled() = (JLOptions().can_inline == 1)
+coverage_enabled() = (JLOptions().code_coverage != 0)
+function inbounds_option()
+    opt_check_bounds = JLOptions().check_bounds
+    opt_check_bounds == 0 && return :default
+    opt_check_bounds == 1 && return :on
+    return :off
 end

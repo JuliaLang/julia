@@ -30,7 +30,6 @@ mutable struct InferenceState
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
     ssavalue_defs::Vector{LineNum}
-    vararg_type_container #::Type
 
     backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
@@ -64,6 +63,32 @@ mutable struct InferenceState
             sp = svec(sp...)
         else
             sp = linfo.sparam_vals
+            if _any(t->isa(t,TypeVar), sp)
+                sp = collect(Any, sp)
+            end
+        end
+        if !isa(sp, SimpleVector)
+            for i = 1:length(sp)
+                v = sp[i]
+                if v isa TypeVar
+                    ub = v.ub
+                    while ub isa TypeVar
+                        ub = ub.ub
+                    end
+                    if has_free_typevars(ub)
+                        ub = Any
+                    end
+                    lb = v.lb
+                    while lb isa TypeVar
+                        lb = lb.lb
+                    end
+                    if has_free_typevars(lb)
+                        lb = Bottom
+                    end
+                    sp[i] = TypeVar(v.name, lb, ub)
+                end
+            end
+            sp = svec(sp...)
         end
 
         nssavalues = src.ssavaluetypes::Int
@@ -76,19 +101,11 @@ mutable struct InferenceState
         # initial types
         nslots = length(src.slotnames)
         argtypes = get_argtypes(result)
-        vararg_type_container = nothing
         nargs = length(argtypes)
-        s_argtypes = VarTable(uninitialized, nslots)
-        src.slottypes = Vector{Any}(uninitialized, nslots)
+        s_argtypes = VarTable(undef, nslots)
+        src.slottypes = Vector{Any}(undef, nslots)
         for i in 1:nslots
             at = (i > nargs) ? Bottom : argtypes[i]
-            if !toplevel && linfo.def.isva && i == nargs
-                if !(at == Tuple) # would just be a no-op
-                    vararg_type_container = limit_tuple_depth(params, unwrap_unionall(at)) # TODO: should be limiting tuple depth much earlier than here
-                    vararg_type = tuple_tfunc(vararg_type_container) # returns a Const object, if applicable
-                    at = rewrap(vararg_type, linfo.specTypes)
-                end
-            end
             s_argtypes[i] = VarState(at, i > nargs)
             src.slottypes[i] = at
         end
@@ -126,7 +143,7 @@ mutable struct InferenceState
             nargs, s_types, s_edges,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
-            ssavalue_uses, ssavalue_defs, vararg_type_container,
+            ssavalue_uses, ssavalue_defs,
             Vector{Tuple{InferenceState,LineNum}}(), # backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
@@ -202,7 +219,7 @@ function add_backedge!(li::MethodInstance, caller::InferenceState)
 end
 
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
-function add_mt_backedge!(mt::MethodTable, @nospecialize(typ), caller::InferenceState)
+function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
     if caller.stmt_edges[caller.currpc] === ()
         caller.stmt_edges[caller.currpc] = []
@@ -212,9 +229,8 @@ function add_mt_backedge!(mt::MethodTable, @nospecialize(typ), caller::Inference
     nothing
 end
 
-function is_specializable_vararg_slot(@nospecialize(arg), sv::InferenceState)
-    return (isa(arg, Slot) && slot_id(arg) == sv.nargs &&
-            isa(sv.vararg_type_container, DataType))
+function is_specializable_vararg_slot(@nospecialize(arg), nargs, vargs)
+    return (isa(arg, Slot) && slot_id(arg) == nargs && !isempty(vargs))
 end
 
 function print_callstack(sv::InferenceState)

@@ -3,9 +3,9 @@
 ## General I/O
 
 ```@docs
-Base.STDOUT
-Base.STDERR
-Base.STDIN
+Base.stdout
+Base.stderr
+Base.stdin
 Base.open
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)
@@ -32,9 +32,6 @@ Base.isreadonly
 Base.iswritable
 Base.isreadable
 Base.isopen
-Base.Serializer.serialize
-Base.Serializer.deserialize
-Base.Serializer.writeheader
 Base.Grisu.print_shortest
 Base.fd
 Base.redirect_stdout
@@ -58,11 +55,10 @@ Base.IOContext(::IO, ::IOContext)
 
 ```@docs
 Base.show(::Any)
-Base.showcompact
 Base.summary
 Base.print
 Base.println
-Base.print_with_color
+Base.printstyled
 Base.sprint
 Base.showerror
 Base.dump
@@ -96,9 +92,8 @@ Base.Multimedia.display
 Base.Multimedia.redisplay
 Base.Multimedia.displayable
 Base.show(::Any, ::Any, ::Any)
-Base.Multimedia.mimewritable
-Base.Multimedia.reprmime
-Base.Multimedia.stringmime
+Base.Multimedia.showable
+Base.repr(::MIME, ::Any)
 ```
 
 As mentioned above, one can also define new display backends. For example, a module that can display
@@ -108,9 +103,10 @@ types with PNG representations will automatically display the image using the mo
 In order to define a new display backend, one should first create a subtype `D` of the abstract
 class `AbstractDisplay`.  Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
 define a function `display(d::D, ::MIME"mime", x) = ...` that displays `x` as that MIME type,
-usually by calling [`reprmime(mime, x)`](@ref).  A `MethodError` should be thrown if `x` cannot be displayed
-as that MIME type; this is automatic if one calls [`reprmime`](@ref). Finally, one should define a function
-`display(d::D, x)` that queries [`mimewritable(mime, x)`](@ref) for the `mime` types supported by `D`
+usually by calling [`show(io, mime, x)`](@ref) or [`repr(io, mime, x)`](@ref).
+A `MethodError` should be thrown if `x` cannot be displayed
+as that MIME type; this is automatic if one calls `show` or `repr`. Finally, one should define a function
+`display(d::D, x)` that queries [`showable(mime, x)`](@ref) for the `mime` types supported by `D`
 and displays the "best" one; a `MethodError` should be thrown if no supported MIME types are found
 for `x`.  Similarly, some subtypes may wish to override [`redisplay(d::D, ...)`](@ref Base.Multimedia.redisplay). (Again, one should
 `import Base.display` to add new methods to `display`.) The return values of these functions are
@@ -129,25 +125,7 @@ Base.Multimedia.istextmime
 ## Network I/O
 
 ```@docs
-Base.connect(::TCPSocket, ::Integer)
-Base.connect(::AbstractString)
-Base.listen(::Any)
-Base.listen(::AbstractString)
-Base.getaddrinfo
-Base.getalladdrinfo
-Base.getnameinfo
-Base.getsockname
-Base.getpeername
-Base.IPv4
-Base.IPv6
-Base.nb_available
-Base.accept
-Base.listenany
-Base.bind
-Base.send
-Base.recv
-Base.recvfrom
-Base.setopt
+Base.bytesavailable
 Base.ntoh
 Base.hton
 Base.ltoh

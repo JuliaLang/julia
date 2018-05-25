@@ -31,9 +31,7 @@ function in(x::T, r::StepRange{T}) where T<:TimeType
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-Base.start(r::StepRange{<:TimeType}) = 0
-Base.next(r::StepRange{<:TimeType}, i::Int) = (r.start + r.step*i, i + 1)
-Base.done(r::StepRange{<:TimeType,<:Period}, i::Integer) = length(r) <= i
+Base.iterate(r::StepRange{<:TimeType}, i::Int=0) = length(r) <= i ? nothing : (r.start + r.step*i, i + 1)
 
 +(x::Period, r::AbstractRange{<:TimeType}) = (x + first(r)):step(r):(x + last(r))
 +(r::AbstractRange{<:TimeType}, x::Period) = x + r

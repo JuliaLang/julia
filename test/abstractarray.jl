@@ -116,13 +116,17 @@ end
 
 @testset "index conversion" begin
     @testset "0-dimensional" begin
-        @test LinearIndices()[1] == 1
-        @test_throws BoundsError LinearIndices()[2]
-        @test LinearIndices()[1,1] == 1
-        @test LinearIndices()[] == 1
-        @test size(LinearIndices()) == ()
-        @test CartesianIndices()[1] == CartesianIndex()
-        @test_throws BoundsError CartesianIndices()[2]
+        for i in ((), fill(0))
+            @test LinearIndices(i)[1] == 1
+            @test_throws BoundsError LinearIndices(i)[2]
+            @test_throws BoundsError LinearIndices(i)[1:2]
+            @test LinearIndices(i)[1,1] == 1
+            @test LinearIndices(i)[] == 1
+            @test size(LinearIndices(i)) == ()
+            @test CartesianIndices(i)[1] == CartesianIndex()
+            @test_throws BoundsError CartesianIndices(i)[2]
+            @test_throws BoundsError CartesianIndices(i)[1:2]
+        end
     end
 
     @testset "1-dimensional" begin
@@ -133,6 +137,9 @@ end
         @test LinearIndices((3,))[2,1] == 2
         @test LinearIndices((3,))[[1]] == [1]
         @test size(LinearIndices((3,))) == (3,)
+        @test LinearIndices((3,))[1:2] === 1:2
+        @test LinearIndices((3,))[1:2:3] === 1:2:3
+        @test_throws BoundsError LinearIndices((3,))[2:4]
         @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
@@ -149,8 +156,8 @@ end
             k += 1
             @test linear[i,j] == linear[k] == k
             @test cartesian[k] == CartesianIndex(i,j)
-            @test LinearIndices(0:3,3:5)[i-1,j+2] == k
-            @test CartesianIndices(0:3,3:5)[k] == CartesianIndex(i-1,j+2)
+            @test LinearIndices((0:3,3:5))[i-1,j+2] == k
+            @test CartesianIndices((0:3,3:5))[k] == CartesianIndex(i-1,j+2)
         end
         @test linear[linear] == linear
         @test linear[vec(linear)] == vec(linear)
@@ -160,6 +167,9 @@ end
         @test cartesian[vec(linear)] == vec(cartesian)
         @test cartesian[cartesian] == cartesian
         @test cartesian[vec(cartesian)] == vec(cartesian)
+        @test linear[2:3] === 2:3
+        @test linear[3:-1:1] === 3:-1:1
+        @test_throws BoundsError linear[4:13]
     end
 
     @testset "3-dimensional" begin
@@ -170,14 +180,19 @@ end
             @test LinearIndices((4,3,2))[l] == l
             @test CartesianIndices((4,3,2))[i,j,k] == CartesianIndex(i,j,k)
             @test CartesianIndices((4,3,2))[l] == CartesianIndex(i,j,k)
-            @test LinearIndices(1:4,1:3,1:2)[i,j,k] == l
-            @test LinearIndices(1:4,1:3,1:2)[l] == l
-            @test CartesianIndices(1:4,1:3,1:2)[i,j,k] == CartesianIndex(i,j,k)
-            @test CartesianIndices(1:4,1:3,1:2)[l] == CartesianIndex(i,j,k)
-            @test LinearIndices(0:3,3:5,-101:-100)[i-1,j+2,k-102] == l
-            @test LinearIndices(0:3,3:5,-101:-100)[l] == l
-            @test CartesianIndices(0:3,3:5,-101:-100)[i,j,k] == CartesianIndex(i-1, j+2, k-102)
-            @test CartesianIndices(0:3,3:5,-101:-100)[l] == CartesianIndex(i-1, j+2, k-102)
+            @test LinearIndices((1:4,1:3,1:2))[i,j,k] == l
+            @test LinearIndices((1:4,1:3,1:2))[l] == l
+            @test CartesianIndices((1:4,1:3,1:2))[i,j,k] == CartesianIndex(i,j,k)
+            @test CartesianIndices((1:4,1:3,1:2))[l] == CartesianIndex(i,j,k)
+        end
+
+        l = 0
+        for k = -101:-100, j = 3:5, i = 0:3
+            l += 1
+            @test LinearIndices((0:3,3:5,-101:-100))[i,j,k] == l
+            @test LinearIndices((0:3,3:5,-101:-100))[l] == l
+            @test CartesianIndices((0:3,3:5,-101:-100))[i,j,k] == CartesianIndex(i,j,k)
+            @test CartesianIndices((0:3,3:5,-101:-100))[l] == CartesianIndex(i,j,k)
         end
 
         local A = reshape(Vector(1:9), (3,3))
@@ -453,7 +468,16 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     B = T(A)
 
     # last(a)
-    @test last(B) == B[length(B)]
+    @test last(B) == B[lastindex(B)] == B[end] == A[end]
+    @test lastindex(B) == lastindex(A) == last(LinearIndices(B))
+    @test lastindex(B, 1) == lastindex(A, 1) == last(axes(B, 1))
+    @test lastindex(B, 2) == lastindex(A, 2) == last(axes(B, 2))
+
+    # first(a)
+    @test first(B) == B[firstindex(B)] == B[1] == A[1] # TODO: use B[begin] once parser transforms it
+    @test firstindex(B) == firstindex(A) == first(LinearIndices(B))
+    @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
+    @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
     # isassigned(a::AbstractArray, i::Int...)
     j = rand(1:length(B))
@@ -466,7 +490,7 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test_throws DimensionMismatch reshape(B, (0, 1))
 
     # copyto!(dest::AbstractArray, src::AbstractArray)
-    @test_throws BoundsError copyto!(Vector{Int}(uninitialized, 10), [1:11...])
+    @test_throws BoundsError copyto!(Vector{Int}(undef, 10), [1:11...])
 
     # convert{T, N}(::Type{Array}, A::AbstractArray{T, N})
     X = [1:10...]
@@ -561,14 +585,14 @@ function test_cat(::Type{TestAbstractArray})
     A = T24Linear([1:24...])
     b_int = reshape([1:27...], 3, 3, 3)
     b_float = reshape(Float64[1:27...], 3, 3, 3)
-    b2hcat = Array{Float64}(uninitialized, 3, 6, 3)
+    b2hcat = Array{Float64}(undef, 3, 6, 3)
     b1 = reshape([1:9...], 3, 3)
     b2 = reshape([10:18...], 3, 3)
     b3 = reshape([19:27...], 3, 3)
     b2hcat[:, :, 1] = hcat(b1, b1)
     b2hcat[:, :, 2] = hcat(b2, b2)
     b2hcat[:, :, 3] = hcat(b3, b3)
-    b3hcat = Array{Float64}(uninitialized, 3, 9, 3)
+    b3hcat = Array{Float64}(undef, 3, 9, 3)
     b3hcat[:, :, 1] = hcat(b1, b1, b1)
     b3hcat[:, :, 2] = hcat(b2, b2, b2)
     b3hcat[:, :, 3] = hcat(b3, b3, b3)
@@ -581,7 +605,7 @@ function test_cat(::Type{TestAbstractArray})
     D = [1:24...]
     i = rand(1:10)
 
-    @test cat(i) == Any[]
+    @test cat(;dims=i) == Any[]
     @test vcat() == Any[]
     @test hcat() == Any[]
     @test hcat(1, 1.0, 3, 3.0) == [1.0 1.0 3.0 3.0]
@@ -716,8 +740,8 @@ A = TSlowNIndexes(rand(2,2))
 @test first(A) == A.data[1]
 
 @testset "#16381" begin
-    @inferred size(rand(3,2,1), 2, 1)
-    @inferred size(rand(3,2,1), 2, 1, 3)
+    @inferred size(rand(3,2,1))
+    @inferred size(rand(3,2,1), 2)
 
     @test @inferred(axes(rand(3,2)))    == (1:3,1:2)
     @test @inferred(axes(rand(3,2,1)))  == (1:3,1:2,1:1)
@@ -756,14 +780,13 @@ end
     end
 end
 
-@testset "flipdim on empty" begin
-    @test flipdim(Diagonal([]),1) == Diagonal([])
+@testset "reverse dim on empty" begin
+    @test reverse(Diagonal([]),dims=1) == Diagonal([])
 end
 
 @testset "ndims and friends" begin
     @test ndims(Diagonal(rand(1:5,5))) == 2
     @test ndims(Diagonal{Float64}) == 2
-    @test Base.elsize(Diagonal(rand(1:5,5))) == sizeof(Int)
 end
 
 @testset "Issue #17811" begin
@@ -826,12 +849,12 @@ end
 @testset "ImageCore #40" begin
     Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a
     Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
-        copyto!(Array{T,n}(uninitialized, size(a)), a)
+        copyto!(Array{T,n}(undef, size(a)), a)
     @test isa(empty(Dict(:a=>1, :b=>2.0), Union{}, Union{}), Dict{Union{}, Union{}})
 end
 
 @testset "zero-dimensional copy" begin
-    Z = Array{Int,0}(uninitialized); Z[] = 17
+    Z = Array{Int,0}(undef); Z[] = 17
     @test Z == Array(Z) == copy(Z)
 end
 
@@ -852,13 +875,11 @@ end
     yrng = 1:5
     CR = CartesianIndices((xrng,yrng))
 
-    for (i,i_idx) in enumerate(xrng)
-        for (j,j_idx) in enumerate(yrng)
-            @test CR[i,j] == CartesianIndex(i_idx,j_idx)
-        end
+    for i in xrng, j in yrng
+        @test CR[i,j] == CartesianIndex(i,j)
     end
 
-    for i_lin in linearindices(CR)
+    for i_lin in LinearIndices(CR)
         i = (i_lin-1) % length(xrng) + 1
         j = (i_lin-i) ÷ length(xrng) + 1
         @test CR[i_lin] == CartesianIndex(xrng[i],yrng[j])
@@ -866,4 +887,10 @@ end
 
     @test CartesianIndices(fill(1., 2, 3)) == CartesianIndices((2,3))
     @test LinearIndices((2,3)) == [1 3 5; 2 4 6]
+end
+
+@testset "issue #25770" begin
+    @test vcat(1:3, fill(1, (2,1))) == vcat([1:3;], fill(1, (2,1))) == reshape([1,2,3,1,1], 5,1)
+    @test hcat(1:2, fill(1, (2,1))) == hcat([1:2;], fill(1, (2,1))) == reshape([1,2,1,1],2,2)
+    @test [(1:3) (4:6); fill(1, (3,2))] == reshape([1,2,3,1,1,1,4,5,6,1,1,1], 6,2)
 end

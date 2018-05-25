@@ -33,7 +33,7 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 """
     isopen(object) -> Bool
 
-Determine whether an object - such as a stream, timer, or [`mmap`](@ref Mmap.mmap)
+Determine whether an object - such as a stream or timer
 -- is not yet closed. Once an object is closed, it will never produce a new event.
 However, since a closed stream may still have data to read in its buffer,
 use [`eof`](@ref) to check for the ability to read data.
@@ -65,7 +65,7 @@ function wait_connected end
 function wait_readnb end
 function wait_readbyte end
 function wait_close end
-function nb_available end
+function bytesavailable end
 
 """
     readavailable(stream)
@@ -83,7 +83,7 @@ Return `true` if the specified IO object is readable (if that can be determined)
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
+           print(io, "Hello world!");
            isreadable(io)
        end
 false
@@ -106,7 +106,7 @@ Return `true` if the specified IO object is writable (if that can be determined)
 # Examples
 ```jldoctest
 julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!");
+           print(io, "Hello world!");
            iswritable(io)
        end
 true
@@ -152,7 +152,8 @@ read(stream, t)
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
-Return the number of bytes written into the stream.
+Return the number of bytes written into the stream.   See also [`print`](@ref) to
+write a text representation (with an encoding that may depend upon `io`).
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
@@ -228,9 +229,11 @@ flush(io::AbstractPipe) = flush(pipe_writer(io))
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
-readuntil(io::AbstractPipe, arg::UInt8) = readuntil(pipe_reader(io), arg)
-readuntil(io::AbstractPipe, arg::Char) = readuntil(pipe_reader(io), arg)
-readuntil_indexable(io::AbstractPipe, target#=::Indexable{T}=#, out) = readuntil_indexable(pipe_reader(io), target, out)
+readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
+readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
 
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
@@ -243,7 +246,7 @@ wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), by
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
 
 """
-    nb_available(io)
+    bytesavailable(io)
 
 Return the number of bytes available for reading before a read from this stream or buffer will block.
 
@@ -251,11 +254,11 @@ Return the number of bytes available for reading before a read from this stream 
 ```jldoctest
 julia> io = IOBuffer("JuliaLang is a GitHub organization");
 
-julia> nb_available(io)
+julia> bytesavailable(io)
 34
 ```
 """
-nb_available(io::AbstractPipe) = nb_available(pipe_reader(io))
+bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io))
 
 """
     eof(stream) -> Bool
@@ -297,10 +300,12 @@ function read! end
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
 
 """
-    readuntil(stream::IO, delim)
-    readuntil(filename::AbstractString, delim)
+    readuntil(stream::IO, delim; keep::Bool = false)
+    readuntil(filename::AbstractString, delim; keep::Bool = false)
 
-Read a string from an I/O stream or a file, up to and including the given delimiter byte.
+Read a string from an I/O stream or a file, up to the given delimiter.
+The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
+Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
 
 # Examples
@@ -311,25 +316,25 @@ julia> open("my_file.txt", "w") do io
 57
 
 julia> readuntil("my_file.txt", 'L')
-"JuliaL"
+"Julia"
 
-julia> readuntil("my_file.txt", '.')
+julia> readuntil("my_file.txt", '.', keep = true)
 "JuliaLang is a GitHub organization."
 
 julia> rm("my_file.txt")
 ```
 """
-readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
+readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), filename)
 
 """
-    readline(io::IO=STDIN; chomp::Bool=true)
-    readline(filename::AbstractString; chomp::Bool=true)
+    readline(io::IO=stdin; keep::Bool=false)
+    readline(filename::AbstractString; keep::Bool=false)
 
-Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
+Read a single line of text from the given I/O stream or file (defaults to `stdin`).
 When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the
-input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `chomp` is
-true (as it is by default), these trailing newline characters are removed from the
-line before it is returned. When `chomp` is false, they are returned as part of the
+input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `keep` is
+false (as it is by default), these trailing newline characters are removed from the
+line before it is returned. When `keep` is true, they are returned as part of the
 line.
 
 # Examples
@@ -342,22 +347,30 @@ julia> open("my_file.txt", "w") do io
 julia> readline("my_file.txt")
 "JuliaLang is a GitHub organization."
 
-julia> readline("my_file.txt", chomp=false)
+julia> readline("my_file.txt", keep=true)
 "JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
 ```
 """
-function readline(filename::AbstractString; chomp::Bool=true)
+function readline(filename::AbstractString; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
+    end
     open(filename) do f
-        readline(f, chomp=chomp)
+        readline(f, keep=keep)
     end
 end
 
-function readline(s::IO=STDIN; chomp::Bool=true)
-    line = readuntil(s, 0x0a)
+function readline(s::IO=stdin; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
+    end
+    line = readuntil(s, 0x0a, keep=true)
     i = length(line)
-    if !chomp || i == 0 || line[i] != 0x0a
+    if keep || i == 0 || line[i] != 0x0a
         return String(line)
     elseif i < 2 || line[i-1] != 0x0d
         return String(resize!(line,i-1))
@@ -367,8 +380,8 @@ function readline(s::IO=STDIN; chomp::Bool=true)
 end
 
 """
-    readlines(io::IO=STDIN; chomp::Bool=true)
-    readlines(filename::AbstractString; chomp::Bool=true)
+    readlines(io::IO=stdin; keep::Bool=false)
+    readlines(filename::AbstractString; keep::Bool=false)
 
 Read all lines of an I/O stream or a file as a vector of strings. Behavior is
 equivalent to saving the result of reading [`readline`](@ref) repeatedly with the same
@@ -386,7 +399,7 @@ julia> readlines("my_file.txt")
  "JuliaLang is a GitHub organization."
  "It has many members."
 
-julia> readlines("my_file.txt", chomp=false)
+julia> readlines("my_file.txt", keep=true)
 2-element Array{String,1}:
  "JuliaLang is a GitHub organization.\\n"
  "It has many members.\\n"
@@ -394,17 +407,17 @@ julia> readlines("my_file.txt", chomp=false)
 julia> rm("my_file.txt")
 ```
 """
-function readlines(filename::AbstractString; chomp::Bool=true)
+function readlines(filename::AbstractString; kw...)
     open(filename) do f
-        readlines(f, chomp=chomp)
+        readlines(f; kw...)
     end
 end
-readlines(s=STDIN; chomp::Bool=true) = collect(eachline(s, chomp=chomp))
+readlines(s=stdin; kw...) = collect(eachline(s; kw...))
 
 ## byte-order mark, ntoh & hton ##
 
 let a = UInt32[0x01020304]
-    endian_bom = @gc_preserve a unsafe_load(convert(Ptr{UInt8}, pointer(a)))
+    endian_bom = GC.@preserve a unsafe_load(convert(Ptr{UInt8}, pointer(a)))
     global ntoh, hton, ltoh, htol
     if endian_bom == 0x01
         ntoh(x) = x
@@ -435,28 +448,28 @@ ENDIAN_BOM
 """
     ntoh(x)
 
-Converts the endianness of a value from Network byte order (big-endian) to that used by the Host.
+Convert the endianness of a value from Network byte order (big-endian) to that used by the Host.
 """
 ntoh(x)
 
 """
     hton(x)
 
-Converts the endianness of a value from that used by the Host to Network byte order (big-endian).
+Convert the endianness of a value from that used by the Host to Network byte order (big-endian).
 """
 hton(x)
 
 """
     ltoh(x)
 
-Converts the endianness of a value from Little-endian to that used by the Host.
+Convert the endianness of a value from Little-endian to that used by the Host.
 """
 ltoh(x)
 
 """
     htol(x)
 
-Converts the endianness of a value from that used by the Host to Little-endian.
+Convert the endianness of a value from that used by the Host to Little-endian.
 """
 htol(x)
 
@@ -505,7 +518,7 @@ write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
-    if !isbits(eltype(A))
+    if !isbitstype(eltype(A))
         depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
     end
     nb = 0
@@ -516,8 +529,8 @@ function write(s::IO, A::AbstractArray)
 end
 
 function write(s::IO, a::Array)
-    if isbits(eltype(a))
-        return @gc_preserve a unsafe_write(s, pointer(a), sizeof(a))
+    if isbitstype(eltype(a))
+        return GC.@preserve a unsafe_write(s, pointer(a), sizeof(a))
     else
         depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
         nb = 0
@@ -529,12 +542,12 @@ function write(s::IO, a::Array)
 end
 
 function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
-    if !isbits(T)
+    if !isbitstype(T)
         return invoke(write, Tuple{IO, AbstractArray}, s, a)
     end
     elsz = sizeof(T)
     colsz = size(a,1) * elsz
-    @gc_preserve a if stride(a,1) != 1
+    GC.@preserve a if stride(a,1) != 1
         for idxs in CartesianIndices(size(a))
             unsafe_write(s, pointer(a, idxs.I), elsz)
         end
@@ -558,6 +571,8 @@ function write(io::IO, c::Char)
         n += 1
     end
 end
+# write(io, ::AbstractChar) is not defined: implementations
+# must provide their own encoding-specific method.
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
@@ -585,13 +600,13 @@ read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
 function read!(s::IO, a::Array{UInt8})
-    @gc_preserve a unsafe_read(s, pointer(a), sizeof(a))
+    GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     return a
 end
 
 function read!(s::IO, a::Array{T}) where T
-    if isbits(T)
-        @gc_preserve a unsafe_read(s, pointer(a), sizeof(a))
+    if isbitstype(T)
+        GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     else
         for i in eachindex(a)
             a[i] = read(s, T)
@@ -615,117 +630,147 @@ function read(io::IO, ::Type{Char})
     end
     return reinterpret(Char, c)
 end
+# read(io, T) is not defined for other AbstractChar: implementations
+# must provide their own encoding-specific method.
 
 # readuntil_string is useful below since it has
 # an optimized method for s::IOStream
-readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
+readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))
 
-function readuntil(s::IO, delim::Char)
+function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
     if delim ≤ '\x7f'
-        return readuntil_string(s, delim % UInt8)
+        return readuntil_string(s, delim % UInt8, keep)
     end
     out = IOBuffer()
     while !eof(s)
         c = read(s, Char)
-        write(out, c)
         if c == delim
+            keep && write(out, c)
             break
         end
+        write(out, c)
     end
     return String(take!(out))
 end
 
-function readuntil(s::IO, delim::T) where T
+function readuntil(s::IO, delim::T; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
     while !eof(s)
         c = read(s, T)
-        push!(out, c)
         if c == delim
+            keep && push!(out, c)
             break
         end
+        push!(out, c)
     end
     return out
 end
 
-# requires that indices for target are small ordered integers bounded by start and endof
-function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
-    T = eltype(target)
-    first = start(target)
-    if done(target, first)
-        return
+# requires that indices for target are the integer unit range from firstindex to lastindex
+# returns whether the delimiter was matched
+# uses the Knuth–Morris–Pratt_algorithm, with the first and second cache entries unrolled
+# For longer targets, the cache improves the big-O efficiency of scanning of sequences
+# with repeated patterns
+# Each cache entry tells us which index we should start the search at.
+# We assume this is unlikely, so we only lazy-initialize as much of the cache as we need to use
+# When we allocate the cache, we initialize it to 0 (and offset by the first index afterwards).
+# Suppose target is:
+#    Index:  1245689
+#    Value: "aδcaδcx"
+# We would set the cache to
+#    0 0 0 1 2 3 4 0
+# So after if we mismatch after the second aδc sequence,
+# we can immediately jump back to index 5 (4 + 1).
+function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) where {T}
+    first = firstindex(target)
+    last = lastindex(target)
+    len = last - first + 1
+    if len < 1
+        return true
     end
-    len = endof(target)
+    pos = 0 # array-offset
+    max_pos = 1 # array-offset in cache
     local cache # will be lazy initialized when needed
-    second = next(target, first)[2]
-    max_pos = second
-    pos = first
+    output! = (isa(out, IO) ? write : push!)
     while !eof(io)
         c = read(io, T)
         # Backtrack until the next target character matches what was found
-        if out isa IO
-            write(out, c)
-        else
-            push!(out, c)
-        end
         while true
-            c1, pos1 = next(target, pos)
+            c1 = target[pos + first]
             if c == c1
-                pos = pos1
+                pos += 1
                 break
-            elseif pos == first
+            elseif pos == 0
                 break
-            elseif pos == second
-                pos = first
+            elseif pos == 1
+                if !keep
+                    output!(out, target[first])
+                end
+                pos = 0
             else
                 # grow cache to contain up to `pos`
                 if !@isdefined(cache)
                     cache = zeros(Int, len)
                 end
                 while max_pos < pos
-                    b = cache[max_pos] + first
-                    cb, b1 = next(target, b)
-                    ci, max_pos1 = next(target, max_pos)
-                    if ci == cb
-                        cache[max_pos1] = b1 - first
+                    ci = target[max_pos + first]
+                    b = max_pos
+                    max_pos += 1
+                    while b != 0
+                        b = cache[b]
+                        cb = target[b + first]
+                        if ci == cb
+                            cache[max_pos] = b + 1
+                            break
+                        end
                     end
-                    max_pos = max_pos1
                 end
-                pos = cache[pos] + first
+                # read new position from cache
+                pos1 = cache[pos]
+                if !keep
+                    # and add the removed prefix from the target to the output
+                    # if not always keeping the match
+                    for b in 1:(pos - pos1)
+                        output!(out, target[b - 1 + first])
+                    end
+                end
+                pos = pos1
             end
         end
-        done(target, pos) && break
+        if keep || pos == 0
+            output!(out, c)
+        end
+        pos == len && return true
     end
+    if !keep
+        # failed early without finishing the match,
+        # add the partial match to the output
+        # if not always keeping the match
+        for b in 1:pos
+            output!(out, target[b - 1 + first])
+        end
+    end
+    return false
 end
 
-function readuntil(io::IO, target::AbstractString)
+function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
-    i = start(target)
-    done(target, i) && return ""
-    c, i = next(target, start(target))
-    if done(target, i) && c <= '\x7f'
-        return readuntil_string(io, c % UInt8)
+    isempty(target) && return ""
+    c, rest = Iterators.peel(target)
+    if isempty(rest) && c <= '\x7f'
+        return readuntil_string(io, c % UInt8, keep)
     end
-    # decide how we can index target
-    if target isa String
-        # convert String to a utf8-byte-iterator
-        target = codeunits(target)
-    #elseif applicable(codeunit, target)
-    #   TODO: a more general version of above optimization
-    #         would be to permit accessing any string via codeunit
-    #   target = CodeUnitVector(target)
-    elseif !(target isa SubString{String})
-        # type with unknown indexing behavior: convert to array
-        target = collect(target)
+    # convert String to a utf8-byte-iterator
+    if !(target isa String) && !(target isa SubString{String})
+        target = String(target)
     end
-    out = (eltype(target) === UInt8 ? StringVector(0) : IOBuffer())
-    readuntil_indexable(io, target, out)
-    out = isa(out, IO) ? take!(out) : out
-    return String(out)
+    target = codeunits(target)::AbstractVector
+    return String(readuntil(io, target, keep=keep))
 end
 
-function readuntil(io::IO, target::AbstractVector{T}) where T
+function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    readuntil_indexable(io, target, out)
+    readuntil_vector!(io, target, keep, out)
     return out
 end
 
@@ -784,7 +829,7 @@ Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 function read(s::IO, nb::Integer = typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
-    b = Vector{UInt8}(uninitialized, nb == typemax(Int) ? 1024 : nb)
+    b = Vector{UInt8}(undef, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     return resize!(b, nr)
 end
@@ -794,23 +839,23 @@ read(s::IO, T::Type) = error("The IO stream does not support reading objects of 
 
 ## high-level iterator interfaces ##
 
-mutable struct EachLine
+struct EachLine
     stream::IO
     ondone::Function
-    chomp::Bool
+    keep::Bool
 
-    EachLine(stream::IO=STDIN; ondone::Function=()->nothing, chomp::Bool=true) =
-        new(stream, ondone, chomp)
+    EachLine(stream::IO=stdin; ondone::Function=()->nothing, keep::Bool=false) =
+        new(stream, ondone, keep)
 end
 
 """
-    eachline(io::IO=STDIN; chomp::Bool=true)
-    eachline(filename::AbstractString; chomp::Bool=true)
+    eachline(io::IO=stdin; keep::Bool=false)
+    eachline(filename::AbstractString; keep::Bool=false)
 
 Create an iterable `EachLine` object that will yield each line from an I/O stream
 or a file. Iteration calls [`readline`](@ref) on the stream argument repeatedly with
-`chomp` passed through, determining whether trailing end-of-line characters are
-removed. When called with a file name, the file is opened once at the beginning of
+`keep` passed through, determining whether trailing end-of-line characters are
+retained. When called with a file name, the file is opened once at the beginning of
 iteration and closed at the end. If iteration is interrupted, the file will be
 closed when the `EachLine` object is garbage collected.
 
@@ -828,20 +873,27 @@ JuliaLang is a GitHub organization. It has many members.
 julia> rm("my_file.txt");
 ```
 """
-eachline(stream::IO=STDIN; chomp::Bool=true) = EachLine(stream, chomp=chomp)::EachLine
+function eachline(stream::IO=stdin; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
+    end
+    EachLine(stream, keep=keep)::EachLine
+end
 
-function eachline(filename::AbstractString; chomp::Bool=true)
+function eachline(filename::AbstractString; chomp=nothing, keep::Bool=false)
+    if chomp !== nothing
+        keep = !chomp
+        depwarn("The `chomp=$chomp` argument to `eachline` is deprecated in favor of `keep=$keep`.", :eachline)
+    end
     s = open(filename)
-    EachLine(s, ondone=()->close(s), chomp=chomp)::EachLine
+    EachLine(s, ondone=()->close(s), keep=keep)::EachLine
 end
 
-start(itr::EachLine) = nothing
-function done(itr::EachLine, ::Nothing)
-    eof(itr.stream) || return false
-    itr.ondone()
-    true
+function iterate(itr::EachLine, state=nothing)
+    eof(itr.stream) && return (itr.ondone(); nothing)
+    (readline(itr.stream, keep=itr.keep), nothing)
 end
-next(itr::EachLine, ::Nothing) = (readline(itr.stream, chomp=itr.chomp), nothing)
 
 eltype(::Type{EachLine}) = String
 
@@ -912,7 +964,7 @@ Commit all currently buffered writes to the given stream.
 flush(io::IO) = nothing
 
 """
-    skipchars(io::IO, predicate; linecomment=nothing)
+    skipchars(predicate, io::IO; linecomment=nothing)
 
 Advance the stream `io` such that the next-read character will be the first remaining for
 which `predicate` returns `false`. If the keyword argument `linecomment` is specified, all
@@ -923,19 +975,19 @@ characters from that character until the start of the next line are ignored.
 julia> buf = IOBuffer("    text")
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)
 
-julia> skipchars(buf, isspace)
+julia> skipchars(isspace, buf)
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)
 
 julia> String(readavailable(buf))
 "text"
 ```
 """
-function skipchars(io::IO, pred; linecomment=nothing)
+function skipchars(predicate, io::IO; linecomment=nothing)
     while !eof(io)
         c = read(io, Char)
         if c === linecomment
             readline(io)
-        elseif !pred(c)
+        elseif !predicate(c)
             skip(io, -codelen(c))
             break
         end
@@ -944,15 +996,16 @@ function skipchars(io::IO, pred; linecomment=nothing)
 end
 
 """
-    countlines(io::IO, eol::Char='\\n')
+    countlines(io::IO; eol::AbstractChar = '\\n')
 
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
-passing them as the second argument.
+passing them as the second argument.  The last non-empty line of `io` is counted even if it does not
+end with the EOL, matching the length returned by [`eachline`](@ref) and [`readlines`](@ref).
 
 # Examples
 ```jldoctest
-julia> io = IOBuffer("JuliaLang is a GitHub organization.\n");
+julia> io = IOBuffer("JuliaLang is a GitHub organization.\\n");
 
 julia> countlines(io)
 1
@@ -960,24 +1013,27 @@ julia> countlines(io)
 julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 
 julia> countlines(io)
-0
-
-julia> countlines(io, '.')
 1
+
+julia> countlines(io, eol = '.')
+0
 ```
 """
-function countlines(io::IO, eol::Char='\n')
+function countlines(io::IO; eol::AbstractChar='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
-    a = Vector{UInt8}(uninitialized, 8192)
-    nl = 0
+    a = Vector{UInt8}(undef, 8192)
+    nl = nb = 0
     while !eof(io)
         nb = readbytes!(io, a)
         @simd for i=1:nb
             @inbounds nl += a[i] == aeol
         end
     end
+    if nb > 0 && a[nb] != aeol
+        nl += 1 # final line is not terminated with eol
+    end
     nl
 end
 
-countlines(f::AbstractString, eol::Char='\n') = open(io->countlines(io,eol), f)::Int
+countlines(f::AbstractString; eol::AbstractChar = '\n') = open(io->countlines(io, eol = eol), f)::Int

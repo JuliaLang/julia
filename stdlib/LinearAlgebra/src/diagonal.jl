@@ -112,7 +112,6 @@ isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
 
 factorize(D::Diagonal) = D
 
-broadcast(::typeof(abs), D::Diagonal) = Diagonal(abs.(D.diag))
 real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
@@ -151,38 +150,49 @@ end
 (*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 (*)(D::Diagonal, V::AbstractVector) = D.diag .* V
 
-(*)(A::AbstractTriangular, D::Diagonal) = mul!(copy(A), D)
-(*)(D::Diagonal, B::AbstractTriangular) = mul!(D, copy(B))
+(*)(A::AbstractTriangular, D::Diagonal) = rmul!(copy(A), D)
+(*)(D::Diagonal, B::AbstractTriangular) = lmul!(D, copy(B))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
-    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D.diag)
+    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A), D)
 (*)(D::Diagonal, A::AbstractMatrix) =
-    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D.diag, A)
+    lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
 
-mul!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(mul!(A.data, D))
-function mul!(A::UnitLowerTriangular, D::Diagonal)
-    mul!(A.data, D)
+function rmul!(A::AbstractMatrix, D::Diagonal)
+    A .= A .* transpose(D.diag)
+    return A
+end
+
+function lmul!(D::Diagonal, B::AbstractMatrix)
+    B .= D.diag .* B
+    return B
+end
+
+rmul!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(rmul!(A.data, D))
+function rmul!(A::UnitLowerTriangular, D::Diagonal)
+    rmul!(A.data, D)
     for i = 1:size(A, 1)
         A.data[i,i] = D.diag[i]
     end
     LowerTriangular(A.data)
 end
-function mul!(A::UnitUpperTriangular, D::Diagonal)
-    mul!(A.data, D)
+function rmul!(A::UnitUpperTriangular, D::Diagonal)
+    rmul!(A.data, D)
     for i = 1:size(A, 1)
         A.data[i,i] = D.diag[i]
     end
     UpperTriangular(A.data)
 end
-function mul!(D::Diagonal, B::UnitLowerTriangular)
-    mul!(D, B.data)
+
+function lmul!(D::Diagonal, B::UnitLowerTriangular)
+    lmul!(D, B.data)
     for i = 1:size(B, 1)
         B.data[i,i] = D.diag[i]
     end
     LowerTriangular(B.data)
 end
-function mul!(D::Diagonal, B::UnitUpperTriangular)
-    mul!(D, B.data)
+function lmul!(D::Diagonal, B::UnitUpperTriangular)
+    lmul!(D, B.data)
     for i = 1:size(B, 1)
         B.data[i,i] = D.diag[i]
     end
@@ -190,40 +200,40 @@ function mul!(D::Diagonal, B::UnitUpperTriangular)
 end
 
 *(D::Adjoint{<:Any,<:Diagonal}, B::Diagonal) = Diagonal(adjoint.(D.parent.diag) .* B.diag)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, D::Diagonal) = mul!(copy(A), D)
+*(A::Adjoint{<:Any,<:AbstractTriangular}, D::Diagonal) = rmul!(copy(A), D)
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    mul!(Ac, D)
+    rmul!(Ac, D)
 end
 
 *(D::Transpose{<:Any,<:Diagonal}, B::Diagonal) = Diagonal(transpose.(D.parent.diag) .* B.diag)
-*(A::Transpose{<:Any,<:AbstractTriangular}, D::Diagonal) = mul!(copy(A), D)
+*(A::Transpose{<:Any,<:AbstractTriangular}, D::Diagonal) = rmul!(copy(A), D)
 function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     transpose!(At, A)
-    mul!(At, D)
+    rmul!(At, D)
 end
 
 *(D::Diagonal, B::Adjoint{<:Any,<:Diagonal}) = Diagonal(D.diag .* adjoint.(B.parent.diag))
-*(D::Diagonal, B::Adjoint{<:Any,<:AbstractTriangular}) = mul!(D, collect(B))
-*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; mul!(Array(D), adjoint(Q)))
+*(D::Diagonal, B::Adjoint{<:Any,<:AbstractTriangular}) = lmul!(D, collect(B))
+*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; rmul!(Array(D), adjoint(Q)))
 function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     adjoint!(Ac, A)
-    mul!(D, Ac)
+    lmul!(D, Ac)
 end
 
 *(D::Diagonal, B::Transpose{<:Any,<:Diagonal}) = Diagonal(D.diag .* transpose.(B.parent.diag))
-*(D::Diagonal, B::Transpose{<:Any,<:AbstractTriangular}) = mul!(D, copy(B))
+*(D::Diagonal, B::Transpose{<:Any,<:AbstractTriangular}) = lmul!(D, copy(B))
 function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
     transpose!(At, A)
-    mul!(D, At)
+    lmul!(D, At)
 end
 
 *(D::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:Diagonal}) =
@@ -231,27 +241,26 @@ end
 *(D::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Diagonal}) =
     Diagonal(transpose.(D.parent.diag) .* transpose.(B.parent.diag))
 
-mul!(A::Diagonal, B::Diagonal) = throw(MethodError(mul!, (A, B)))
-mul!(A::QRPackedQ, D::Diagonal) = throw(MethodError(mul!, (A, D)))
-mul!(A::QRPackedQ, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::QRPackedQ, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::Adjoint{<:Any,<:QRPackedQ}, B::Diagonal) = throw(MethodError(mul!, (A, B)))
-mul!(A::Adjoint{<:Any,<:QRPackedQ}, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::Adjoint{<:Any,<:QRPackedQ}, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::Diagonal, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::Diagonal, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::Adjoint{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::Transpose{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Diagonal}) = throw(MethodError(mul!, (A, B)))
-mul!(A::Transpose{<:Any,<:Diagonal}, B::Diagonal) = throw(MethodError(mul!, (A, B)))
-mul!(A::Adjoint{<:Any,<:Diagonal}, B::Diagonal) = throw(MethodError(mul!, (A, B)))
-mul!(A::Diagonal, B::AbstractMatrix)  = scale!(A.diag, B)
-mul!(adjA::Adjoint{<:Any,<:Diagonal}, B::AbstractMatrix) = (A = adjA.parent; scale!(conj(A.diag),B))
-mul!(transA::Transpose{<:Any,<:Diagonal}, B::AbstractMatrix) = (A = transA.parent; scale!(A.diag,B))
-mul!(A::AbstractMatrix, B::Diagonal)  = scale!(A,B.diag)
-mul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:Diagonal}) = (B = adjB.parent; scale!(A,conj(B.diag)))
-mul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal}) = (B = transB.parent; scale!(A,B.diag))
+rmul!(A::Diagonal, B::Diagonal) = Diagonal(A.diag .*= B.diag)
+lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
+
+function lmul!(adjA::Adjoint{<:Any,<:Diagonal}, B::AbstractMatrix)
+    A = adjA.parent
+    return lmul!(conj(A.diag), B)
+end
+function lmul!(transA::Transpose{<:Any,<:Diagonal}, B::AbstractMatrix)
+    A = transA.parent
+    return lmul!(A.diag, B)
+end
+
+function rmul!(A::AbstractMatrix, adjB::Adjoint{<:Any,<:Diagonal})
+    B = adjB.parent
+    return rmul!(A, conj(B.diag))
+end
+function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
+    B = transB.parent
+    return rmul!(A, B.diag)
+end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
 mul!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= A.diag .* in
@@ -261,14 +270,6 @@ mul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector) = 
 mul!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .* in
 mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= adjoint.(A.parent.diag) .* in
 mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= transpose.(A.parent.diag) .* in
-
-mul!(C::AbstractMatrix, A::Diagonal, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Diagonal, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:AbstractVecOrMat}) = mul!(C, A, copy(B))
-
 
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
@@ -287,6 +288,7 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
+
 function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     if length(v) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
@@ -316,6 +318,7 @@ function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
     V
 end
 
+
 ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
     (D = adjD.parent; ldiv!(conj(D), B))
 ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
@@ -338,6 +341,7 @@ function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     end
     A
 end
+
 
 rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
     (D = adjD.parent; rdiv!(A, conj(D)))
@@ -367,7 +371,7 @@ function diag(D::Diagonal, k::Integer=0)
             "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
     end
 end
-trace(D::Diagonal) = sum(D.diag)
+tr(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
 logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
 function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
@@ -441,7 +445,7 @@ end
 eigvals(D::Diagonal{<:Number}) = D.diag
 eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
-function eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true)
+function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
@@ -458,16 +462,14 @@ function svd(D::Diagonal{<:Number})
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
     V   = Diagonal(fill!(similar(D.diag), one(eltype(D.diag))))
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
-    return (Up, S[piv], Vp)
-end
-function svdfact(D::Diagonal)
-    U, s, V = svd(D)
-    SVD(U, s, copy(V'))
+    return SVD(Up, S[piv], copy(Vp'))
 end
 
 # dismabiguation methods: * of Diagonal and Adj/Trans AbsVec
-*(A::Diagonal, B::Adjoint{<:Any,<:AbstractVector}) = A * copy(B)
-*(A::Diagonal, B::Transpose{<:Any,<:AbstractVector}) = A * copy(B)
-*(A::Adjoint{<:Any,<:AbstractVector}, B::Diagonal) = copy(A) * B
-*(A::Transpose{<:Any,<:AbstractVector}, B::Diagonal) = copy(A) * B
+*(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
+*(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
+    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
+*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal) = Transpose(map(*, D.diag, parent(x)))
+*(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
+    mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
 # TODO: these methods will yield row matrices, rather than adjoint/transpose vectors

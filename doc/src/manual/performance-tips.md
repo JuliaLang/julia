@@ -453,10 +453,7 @@ MyBetterContainer{Float64,UnitRange{Float64}}
 
 julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
 ERROR: MethodError: Cannot `convert` an object of type UnitRange{Float64} to an object of type MyBetterContainer{Int64,UnitRange{Float64}}
-This may have arisen from a call to the constructor MyBetterContainer{Int64,UnitRange{Float64}}(...),
-since type constructors fall back to convert methods.
-Stacktrace:
- [1] MyBetterContainer{Int64,UnitRange{Float64}}(::UnitRange{Float64}) at ./sysimg.jl:114
+[...]
 ```
 
 The inner constructor requires that the element type of `A` be `T`.
@@ -547,7 +544,7 @@ function norm(A)
     if isa(A, Vector)
         return sqrt(real(dot(A,A)))
     elseif isa(A, Matrix)
-        return maximum(svd(A)[2])
+        return maximum(svdvals(A))
     else
         error("norm: invalid argument")
     end
@@ -558,7 +555,7 @@ This can be written more concisely and efficiently as:
 
 ```julia
 norm(x::Vector) = sqrt(real(dot(x,x)))
-norm(A::Matrix) = maximum(svd(A)[2])
+norm(A::Matrix) = maximum(svdvals(A))
 ```
 
 ## Write "type-stable" functions
@@ -614,13 +611,14 @@ type:
 
 ```@meta
 DocTestSetup = quote
-    srand(1234)
+    import Random
+    Random.srand(1234)
 end
 ```
 
 ```jldoctest
 julia> function strange_twos(n)
-           a = Vector{rand(Bool) ? Int64 : Float64}(n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
            for i = 1:n
                a[i] = 2
            end
@@ -639,14 +637,14 @@ This should be written as:
 
 ```jldoctest
 julia> function fill_twos!(a)
-           for i=eachindex(a)
+           for i = eachindex(a)
                a[i] = 2
            end
        end
 fill_twos! (generic function with 1 method)
 
 julia> function strange_twos(n)
-           a = Vector{rand(Bool) ? Int64 : Float64}(uninitialized, n)
+           a = Vector{rand(Bool) ? Int64 : Float64}(undef, n)
            fill_twos!(a)
            return a
        end
@@ -840,7 +838,7 @@ Consider the following contrived example. Imagine we wanted to write a function 
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
 of the input vector. Assume that it is not important whether rows or columns are filled with these
 copies (perhaps the rest of the code can be easily adapted accordingly). We could conceivably
-do this in at least four ways (in addition to the recommended call to the built-in [`repmat`](@ref)):
+do this in at least four ways (in addition to the recommended call to the built-in [`repeat`](@ref)):
 
 ```julia
 function copy_cols(x::Vector{T}) where T
@@ -933,7 +931,7 @@ function xinc!(ret::AbstractVector{T}, x::T) where T
 end
 
 function loopinc_prealloc()
-    ret = Vector{Int}(uninitialized, 3)
+    ret = Vector{Int}(undef, 3)
     y = 0
     for i = 1:10^7
         xinc!(ret, i)
@@ -1172,7 +1170,7 @@ Sometimes you can enable better optimization by promising certain program proper
     and could change or disappear in future versions of Julia.
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
-and may cause a segmentation fault if bounds checking is turned off. Use `linearindices(x)` or `eachindex(x)`
+and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
 instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
 
 Note: While `@simd` needs to be placed directly in front of a loop, both `@inbounds` and `@fastmath`
@@ -1284,7 +1282,7 @@ end
 
 function main()
     n = 2000
-    u = Vector{Float64}(uninitialized, n)
+    u = Vector{Float64}(undef, n)
     init!(u)
     du = similar(u)
 

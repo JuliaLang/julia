@@ -2,22 +2,10 @@
 
 module TestHelpers
 
+using Serialization
+
 include("dimensionful.jl")
 export Furlong
-
-mutable struct FakeTerminal <: Base.Terminals.UnixTerminal
-    in_stream::Base.IO
-    out_stream::Base.IO
-    err_stream::Base.IO
-    hascolor::Bool
-    raw::Bool
-    FakeTerminal(stdin,stdout,stderr,hascolor=true) =
-        new(stdin,stdout,stderr,hascolor,false)
-end
-
-Base.Terminals.hascolor(t::FakeTerminal) = t.hascolor
-Base.Terminals.raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
-Base.Terminals.size(t::FakeTerminal) = (24, 80)
 
 function open_fake_pty()
     @static if Sys.iswindows()
@@ -53,81 +41,6 @@ function with_fake_pty(f)
     end
 end
 
-function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
-    output_file = tempname()
-    wrapped_code = quote
-        result = let
-            $code
-        end
-        open($output_file, "w") do fp
-            serialize(fp, result)
-        end
-    end
-    cmd = `$(Base.julia_cmd()) --startup-file=no -e $wrapped_code`
-    try
-        challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
-        return open(output_file, "r") do fp
-            deserialize(fp)
-        end
-    finally
-        isfile(output_file) && rm(output_file)
-    end
-    return nothing
-end
-
-function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
-    function format_output(output)
-        !debug && return ""
-        str = read(seekstart(output), String)
-        isempty(str) && return ""
-        "Process output found:\n\"\"\"\n$str\n\"\"\""
-    end
-    out = IOBuffer()
-    with_fake_pty() do slave, master
-        p = spawn(detach(cmd), slave, slave, slave)
-
-        # Kill the process if it takes too long. Typically occurs when process is waiting
-        # for input.
-        done = Channel(1)
-        @async begin
-            sleep(timeout)
-            if process_running(p)
-                kill(p)
-                put!(done, :timed_out)
-            else
-                put!(done, :exited)
-            end
-            close(master)
-        end
-
-        try
-            for (challenge, response) in challenges
-                write(out, readuntil(master, challenge))
-                if !isopen(master)
-                    error("Could not locate challenge: \"$challenge\". ",
-                          format_output(out))
-                end
-                write(master, response)
-            end
-            wait(p)
-        finally
-            kill(p)
-        end
-
-        # Process timed out or aborted
-        if !success(p)
-            write(out, readavailable(master))
-            if isready(done) && fetch(done) == :timed_out
-                error("Process timed out possibly waiting for a response. ",
-                      format_output(out))
-            else
-                error("Failed process. ", format_output(out), "\n", p)
-            end
-        end
-    end
-    nothing
-end
-
 # OffsetArrays (arrays with indexing that doesn't start at 1)
 
 # This test file is designed to exercise support for generic indexing,
@@ -148,10 +61,10 @@ OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 OffsetArray(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) where {T,N} = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) where {T,N} = OffsetArray(A, offsets)
 
-OffsetArray{T,N}(::Uninitialized, inds::Indices{N}) where {T,N} =
-    OffsetArray{T,N,Array{T,N}}(Array{T,N}(uninitialized, map(length, inds)), map(indsoffset, inds))
-OffsetArray{T}(::Uninitialized, inds::Indices{N}) where {T,N} =
-    OffsetArray{T,N}(uninitialized, inds)
+OffsetArray{T,N}(::UndefInitializer, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N,Array{T,N}}(Array{T,N}(undef, map(length, inds)), map(indsoffset, inds))
+OffsetArray{T}(::UndefInitializer, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N}(undef, inds)
 
 Base.IndexStyle(::Type{T}) where {T<:OffsetArray} = Base.IndexStyle(parenttype(T))
 parenttype(::Type{OffsetArray{T,N,AA}}) where {T,N,AA} = AA
@@ -182,14 +95,23 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{Un
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) =
-    OffsetArray(f(map(length, shape)), map(indsoffset, shape))
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:Array} =
-    OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
+    OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
 Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:BitArray} =
-    OffsetArray(T(uninitialized, map(length, shape)), map(indsoffset, shape))
+    OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
 
-Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
+Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(indslength, inds)), map(indsoffset, inds))
+
+Base.fill(v, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(Array{typeof(v), N}(undef, map(indslength, inds)), map(indsoffset, inds)), v)
+Base.zeros(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
+    fill!(OffsetArray(Array{T, N}(undef, map(indslength, inds)), map(indsoffset, inds)), zero(T))
+Base.ones(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
+    fill!(OffsetArray(Array{T, N}(undef, map(indslength, inds)), map(indsoffset, inds)), one(T))
+Base.trues(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(BitArray{N}(undef, map(indslength, inds)), map(indsoffset, inds)), true)
+Base.falses(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(BitArray{N}(undef, map(indslength, inds)), map(indsoffset, inds)), false)
 
 @inline function Base.getindex(A::OffsetArray{T,N}, I::Vararg{Int,N}) where {T,N}
     checkbounds(A, I...)
@@ -249,6 +171,9 @@ _offset(out, ::Tuple{}, ::Tuple{}) = out
 
 indsoffset(r::AbstractRange) = first(r) - 1
 indsoffset(i::Integer) = 0
+indslength(r::AbstractRange) = length(r)
+indslength(i::Integer) = i
+
 
 Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
 

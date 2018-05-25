@@ -12,6 +12,7 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :const => 1:1,
     :new => 1:typemax(Int),
     :return => 1:1,
+    :unreachable => 0:0,
     :the_exception => 0:0,
     :enter => 1:1,
     :leave => 1:1,
@@ -21,11 +22,13 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :meta => 0:typemax(Int),
     :global => 1:1,
     :foreigncall => 3:typemax(Int),
+    :cfunction => 6:6,
     :isdefined => 1:1,
     :simdloop => 0:0,
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
-    :thunk => 1:1
+    :thunk => 1:1,
+    :throw_undef_if_not => 2:2
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
@@ -59,10 +62,10 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
         if !isempty(errors)
             for e in errors
                 if linfo.def isa Method
-                    println(STDERR, "WARNING: Encountered invalid ", kind, " code for method ",
+                    println(stderr, "WARNING: Encountered invalid ", kind, " code for method ",
                             linfo.def, ": ", e)
                 else
-                    println(STDERR, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
+                    println(stderr, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
                             linfo.def, ": ", e)
                 end
             end
@@ -101,7 +104,8 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     ssavals = BitSet()
     lhs_slotnums = BitSet()
     for x in c.code
-        if isa(x, Expr)
+        if c.codelocs !== nothing && is_valid_rvalue(x)
+        elseif isa(x, Expr)
             head = x.head
             if !is_top_level
                 head === :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
@@ -121,7 +125,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                     n = lhs.id
                     push!(lhs_slotnums, n)
                 end
-                if !is_valid_rvalue(lhs, rhs)
+                if !is_valid_rvalue(rhs)
                     push!(errors, InvalidCodeError(INVALID_RVALUE, rhs))
                 end
                 validate_val!(lhs)
@@ -137,9 +141,11 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 end
                 validate_val!(x.args[1])
             elseif head === :call || head === :invoke || head == :gc_preserve_end || head === :meta ||
-                head === :inbounds || head === :foreigncall || head === :const || head === :enter ||
-                head === :leave || head === :method || head === :global || head === :static_parameter ||
-                head === :new || head === :thunk || head === :simdloop
+                head === :inbounds || head === :foreigncall || head === :cfunction ||
+                head === :const || head === :enter || head === :leave ||
+                head === :method || head === :global || head === :static_parameter ||
+                head === :new || head === :thunk || head === :simdloop ||
+                head === :throw_undef_if_not || head === :unreachable
                 validate_val!(x)
             else
                 push!(errors, InvalidCodeError("invalid statement", x))
@@ -151,6 +157,10 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
         elseif isa(x, SlotNumber)
         elseif isa(x, GlobalRef)
         elseif isa(x, LineNumberNode)
+        elseif isa(x, PiNode)
+        elseif isa(x, PhiCNode)
+        elseif isa(x, PhiNode)
+        elseif isa(x, UpsilonNode)
         else
             push!(errors, InvalidCodeError("invalid statement", x))
         end
@@ -208,7 +218,7 @@ is_valid_lvalue(x) = isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef)
 function is_valid_argument(x)
     if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
         (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck, :copyast))) ||
-        isa(x, Number) || isa(x, AbstractString) || isa(x, Char) || isa(x, Tuple) ||
+        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
         isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true
     end
@@ -217,12 +227,10 @@ function is_valid_argument(x)
              isa(x,LineNumberNode) || isa(x,NewvarNode))
 end
 
-function is_valid_rvalue(lhs, x)
+function is_valid_rvalue(x)
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :gc_preserve_begin)
+    if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin)
         return true
-        # TODO: disallow `globalref = call` when .typ field is removed
-        #return isa(lhs, SSAValue) || isa(lhs, Slot)
     end
     return false
 end

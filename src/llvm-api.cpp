@@ -200,35 +200,6 @@ LLVMExtraCreateBasicBlockPass(const char *Name, jl_value_t *Callback)
 }
 
 
-// Bugfixes
-
-#if JL_LLVM_VERSION < 40000
-
-// D26392
-extern "C" JL_DLLEXPORT unsigned
-LLVMExtraGetAttributeCountAtIndex(LLVMValueRef F, LLVMAttributeIndex Idx)
-{
-    auto Fn = unwrap<Function>(F);
-    if (Fn->getAttributes().isEmpty())
-        return 0;
-    else
-        return LLVMGetAttributeCountAtIndex(F, Idx);
-}
-
-// D26392
-extern "C" JL_DLLEXPORT unsigned LLVMExtraGetCallSiteAttributeCount(
-        LLVMValueRef C, LLVMAttributeIndex Idx)
-{
-    CallSite CS(unwrap<Instruction>(C));
-    if (CS.getAttributes().isEmpty())
-        return 0;
-    else
-        return LLVMGetCallSiteAttributeCount(C, Idx);
-}
-
-#endif
-
-
 // Various missing functions
 
 extern "C" JL_DLLEXPORT unsigned int LLVMExtraGetDebugMDVersion()
