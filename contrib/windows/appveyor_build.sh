@@ -214,7 +214,7 @@ fi
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
-make -j3 VERBOSE=1 all
+make -j3 VERBOSE=1 release
 make -j3 VERBOSE=1 install
 make VERBOSE=1 JULIA=../../usr/bin/julia.exe BIN=. "$(make print-CC)" -C test/embedding release
 cp usr/bin/busybox.exe julia-*/bin
