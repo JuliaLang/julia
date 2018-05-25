@@ -31,7 +31,8 @@ for U in (:Nothing, :Missing)
         promote_rule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), $U}
         promote_rule(::Type{Any}, ::Type{$U}) = Any
         promote_rule(::Type{$U}, ::Type{Any}) = Any
-        promote_rule(::Type{$U}, ::Type{$U}) = U
+        # This definition is never actually used, but disambiguates the above definitions
+        promote_rule(::Type{$U}, ::Type{$U}) = $U
     end
 end
 promote_rule(::Type{Union{Nothing, Missing}}, ::Type{Any}) = Any
