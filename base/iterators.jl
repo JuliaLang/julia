@@ -978,12 +978,13 @@ end
     Stateful(itr)
 
 There are several different ways to think about this iterator wrapper:
-    1. It provides a mutable wrapper around an iterator and
-       its iteration state.
-    2. It turns an iterator-like abstraction into a Channel-like
-       abstraction.
-    3. It's an iterator that mutates to become its own rest iterator
-       whenever an item is produced.
+
+1. It provides a mutable wrapper around an iterator and
+   its iteration state.
+2. It turns an iterator-like abstraction into a Channel-like
+   abstraction.
+3. It's an iterator that mutates to become its own rest iterator
+   whenever an item is produced.
 
 `Stateful` provides the regular iterator interface. Like other mutable iterators
 (e.g. `Channel`), if iteration is stopped early (e.g. by a `break` in a `for` loop),
