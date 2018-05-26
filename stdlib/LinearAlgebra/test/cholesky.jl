@@ -64,7 +64,6 @@ end
 
         @testset "throw for non-square input" begin
             A = rand(eltya, 2, 3)
-            @test_throws DimensionMismatch LinearAlgebra.chol!(A)
             @test_throws DimensionMismatch cholesky(A)
             @test_throws DimensionMismatch cholesky!(A)
         end
@@ -87,7 +86,6 @@ end
 
         apos = apd[1,1]
         @test all(x -> x ≈ √apos, cholesky(apos).factors)
-        @test_throws PosDefException cholesky(-one(eltya))
 
         # Test cholesky with Symmetric/Hermitian upper/lower
         apds  = Symmetric(apd)
@@ -263,7 +261,6 @@ end
     for A in (R, C)
         @test !LinearAlgebra.issuccess(cholesky(A))
         @test !LinearAlgebra.issuccess(cholesky!(copy(A)))
-        @test_throws PosDefException LinearAlgebra.chol!(copy(A))
     end
 end
 
