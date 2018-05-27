@@ -35,6 +35,17 @@ import .Base.RefValue
     pwd() -> AbstractString
 
 Get the current working directory.
+
+# Examples
+```julia-repl
+julia> pwd()
+"/home/JuliaUser/.julia/v0.7"
+
+julia> cd("/home/JuliaUser/Projects/julia")
+
+julia> pwd()
+"/home/JuliaUser/Projects/julia"
+```
 """
 function pwd()
     b = Vector{UInt8}(undef, 1024)
@@ -47,6 +58,19 @@ end
     cd(dir::AbstractString=homedir())
 
 Set the current working directory.
+
+# Examples
+```julia-repl
+julia> cd("/home/JuliaUser/Projects/julia")
+
+julia> pwd()
+"/home/JuliaUser/Projects/julia"
+
+julia> cd()
+
+julia> pwd()
+"/home/JuliaUser"
+```
 """
 function cd(dir::AbstractString)
     uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
@@ -80,6 +104,18 @@ end
     cd(f::Function, dir::AbstractString=homedir())
 
 Temporarily changes the current working directory and applies function `f` before returning.
+
+# Examples
+```jldoctest
+julia> cd(readdir, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia"))
+6-element Array{String,1}:
+ "base"
+ "base.cache"
+ "cert.pem"
+ "julia-config.jl"
+ "stdlib"
+ "test"
+```
 """
 cd(f::Function) = cd(f, homedir())
 
@@ -99,6 +135,17 @@ directory. If the directory already exists, or some intermediate directories do 
 this function throws an error. See [`mkpath`](@ref) for a function which creates all
 required intermediate directories.
 Return `path`.
+
+# Examples
+```julia-repl
+julia> mkdir("faketestingdir")
+"faketestingdir"
+
+julia> cd("faketestingdir")
+
+julia> pwd()
+"/home/JuliaUser/faketestingdir"
+```
 """
 function mkdir(path::AbstractString; mode::Integer = 0o777)
     @static if Sys.iswindows()
@@ -116,6 +163,34 @@ end
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
 `0o777`, modified by the current file creation mask.
 Return `path`.
+
+# Examples
+```julia-repl
+julia> mkdir("faketestingdir")
+"faketestingdir"
+
+julia> cd("faketestingdir")
+
+julia> pwd()
+"/home/JuliaUser/faketestingdir"
+
+julia> mkpath("my/fake/dir")
+"my/fake/dir"
+
+julia> readdir()
+1-element Array{String,1}:
+ "my"
+
+julia> cd("my")
+
+julia> readdir()
+1-element Array{String,1}:
+ "fake"
+
+julia> readdir("fake")
+1-element Array{String,1}:
+ "dir"
+```
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
@@ -140,6 +215,23 @@ end
 Delete the file, link, or empty directory at the given path. If `force=true` is passed, a
 non-existing path is not treated as error. If `recursive=true` is passed and the path is a
 directory, then all contents are removed recursively.
+
+# Examples
+```jldoctest
+julia> mkpath("my/fake/dir")
+"my/fake/dir"
+
+julia> rm("my/fake/dir", recursive=true)
+
+julia> in("this_file_does_not_exist", readdir())
+false
+
+julia> rm("this_file_does_not_exist", force=true)
+
+julia> write("my_little_file", 2);
+
+julia> rm("my_little_file")
+```
 """
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
@@ -277,6 +369,22 @@ end
 
 Update the last-modified timestamp on a file to the current time.
 Return `path`.
+
+# Examples
+```julia-repl
+julia> write("my_little_file", 2);
+
+julia> mtime("my_little_file")
+1.5273815391135583e9
+
+julia> touch("my_little_file")
+"my_little_file"
+
+julia> mtime("my_little_file")
+1.527381559163435e9
+```
+
+We can see the [`mtime`](@ref) has been modified by `touch`.
 """
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
@@ -461,6 +569,29 @@ end
     readdir(dir::AbstractString=".") -> Vector{String}
 
 Return the files and directories in the directory `dir` (or the current working directory if not given).
+
+# Examples
+```jldoctest
+julia> readdir(joinpath(Sys.BINDIR, Base.DATAROOTDIR))
+6-element Array{String,1}:
+ "aclocal"
+ "doc"
+ "info"
+ "julia"
+ "man"
+ "opt-viewer"
+
+julia> cd(joinpath(Sys.BINDIR, Base.DATAROOTDIR))
+
+julia> readdir()
+6-element Array{String,1}:
+ "aclocal"
+ "doc"
+ "info"
+ "julia"
+ "man"
+ "opt-viewer"
+```
 """
 function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
@@ -678,7 +809,7 @@ end
 
 Change the owner and/or group of `path` to `owner` and/or `group`. If the value entered for `owner` or `group`
 is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
-Return `path`
+Return `path`.
 """
 function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
