@@ -259,6 +259,11 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
+                if isa(lifted, GlobalRef) || isa(lifted, Expr)
+                    lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
+                    def.args[1+field] = lifted
+                    (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
+                end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
             elseif isexpr(def, :new)
@@ -292,6 +297,11 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 lifted = def.args[1+field]
                 if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
+                end
+                if isa(lifted, GlobalRef) || isa(lifted, Expr)
+                    lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
+                    def.args[1+field] = lifted
+                    (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
                 end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue

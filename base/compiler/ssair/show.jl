@@ -372,7 +372,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             print_sep = true
         end
         floop = true
-        while !isempty(new_nodes_perm) && new_nodes[peek(new_nodes_perm)].pos == idx
+        while !isempty(new_nodes_perm) && new_nodes[Iterators.peek(new_nodes_perm)].pos == idx
             node_idx = popfirst!(new_nodes_perm)
             new_node = new_nodes[node_idx]
             node_idx += length(code.stmts)
