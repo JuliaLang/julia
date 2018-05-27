@@ -1507,3 +1507,90 @@ The following examples may help you interpret expressions marked as containing n
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
+
+## [Performance of captured variable](@id man-performance-captured)
+
+Consider the following example that defines two inner functions:
+```
+    function abmult(r::Int)
+        if r >= 0
+            f = x -> x * r
+        else
+            r = -r
+            f = x -> x * r
+        end
+        return f
+    end
+```
+
+Function `abmult` returns a function `f` that multiplies its argument by
+the absolute value of `r`. The two inner functions are called
+"closures". Besides closures, inner functions are also used by the
+language for `do`-blocks and for generator expressions.
+
+This style of code presents performance challenges for the language
+for the following reason. When the parser observes occurrences of
+inner functions, it emits lower-level code in which the inner
+function is pulled out as an object living at global scope. Captured
+variables from the enclosing scope such as `r` must therefore also be moved into
+objects with global scope in order to be accessible to the inner
+function.  This is because the language specifies that `r` in the
+inner scope must be identical to `r` in the outer scope even if the
+outer scope (or another inner function) modifies `r`.
+
+The discussion in the preceding paragraph referred to the "parser", that is, the phase
+of compilation that takes place when the module containing `abmult` is first loaded,
+as opposed to the later phase when it is first invoked. The parser does not "know" that
+`Int` is a fixed type, or that the statement `r = -r` tranforms an `Int` to another `Int`.
+The magic of type inference takes place in the later phase of compilation
+
+Thus, the parser does not know that `r` has a fixed type (`Int`)
+nor that `r` does not change value once the inner function is created.  Therefore,
+it must create a "box" (a heap allocation) for `r`, and furthermore, the
+box holds an object with an abstract type such as `Any`, which
+requires run-time type dispatch for each occurrence of `r`.  This can be 
+verified by applying `@code_warntype` to the above function.  Both the boxing 
+and the run-time type dispatch can cause loss of performance.
+
+If captured variables are used in a performance-critical section of the code,
+then the following tips help ensure that their use is performant. First, if
+it is known that a captured variable does not change its type, then this can
+be declared explicitly with a type annotation (on the variable, not the
+right-hand side):
+```
+    function abmult(r0::Int)
+        r::Int = r0
+        if r >= 0
+            f = x -> x * r
+        else
+            r = -r
+            f = x -> x * r
+        end
+        return f
+    end
+```
+The type annotation partially recovers lost performance due to capturing because
+the parser can associate a concrete type to the object in the box.
+Second, if the captured variable does not need to be boxed (because it
+will not be reassigned after the closure is created), this can be indicated
+with `let` blocks as follows.
+```
+    function abmult3(r::Int)
+        f =
+            if r >= 0
+                let r = r
+                    x -> x * r
+                end
+            else
+                let r = -r
+                    x -> x * r
+                end
+            end
+        return f
+    end
+```
+Each `let` block creates a new variable `r` whose scope is only the
+inner function. The second technique recovers full language performance
+in the presence of captured variables. Note that this is a rapidly
+evolving aspect of the compiler, and it is likely that future releases
+will not require this degree of programmer annotation to attain peformance.
