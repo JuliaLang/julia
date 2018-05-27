@@ -185,6 +185,7 @@ Base.Val
 Core.Vararg
 Core.Nothing
 Base.Some
+Base.something
 Base.Enums.@enum
 ```
 
@@ -228,7 +229,6 @@ Base.missing
 Base.coalesce
 Base.ismissing
 Base.skipmissing
-Base.something
 ```
 
 ## System
