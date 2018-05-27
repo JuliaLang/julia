@@ -1542,14 +1542,14 @@ The discussion in the preceding paragraph referred to the "parser", that is, the
 of compilation that takes place when the module containing `abmult` is first loaded,
 as opposed to the later phase when it is first invoked. The parser does not "know" that
 `Int` is a fixed type, or that the statement `r = -r` tranforms an `Int` to another `Int`.
-The magic of type inference takes place in the later phase of compilation
+The magic of type inference takes place in the later phase of compilation.
 
 Thus, the parser does not know that `r` has a fixed type (`Int`)
 nor that `r` does not change value once the inner function is created.  Therefore,
 it must create a "box" (a heap allocation) for `r`, and furthermore, the
 box holds an object with an abstract type such as `Any`, which
-requires run-time type dispatch for each occurrence of `r`.  This can be 
-verified by applying `@code_warntype` to the above function.  Both the boxing 
+requires run-time type dispatch for each occurrence of `r`.  This can be
+verified by applying `@code_warntype` to the above function.  Both the boxing
 and the run-time type dispatch can cause loss of performance.
 
 If captured variables are used in a performance-critical section of the code,
