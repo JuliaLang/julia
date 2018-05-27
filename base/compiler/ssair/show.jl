@@ -90,7 +90,7 @@ function print_node(io::IO, idx, stmt, used, argnames, maxsize; color = true, pr
         end
     elseif isexpr(stmt, :new)
         Base.print(io, "new(")
-        Base.print(io, join(String[arg->sprint(io->print_ssa(io, arg, argnames)) for arg in stmt.args]), ", ")
+        Base.print(io, join(String[sprint(io->print_ssa(io, arg, argnames)) for arg in stmt.args], ", "))
         Base.print(io, ")")
     else
         Base.print(io, stmt)
