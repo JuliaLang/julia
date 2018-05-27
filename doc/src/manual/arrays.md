@@ -199,9 +199,9 @@ julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
 ```
 
 Generators are implemented via inner functions. As in other cases of
-inner functions in the language, variables from the enclosing scope can be 
+inner functions in the language, variables from the enclosing scope can be
 "captured" in the inner function.  For example, `sum(p[i] - q[i] for i=1:n)`
-captures the three variables `p`, `q` and `n` from the enclosing scope. 
+captures the three variables `p`, `q` and `n` from the enclosing scope.
 Captured variables can present performance challenges described in
 [performance tips](@ref man-performance-tips).
 
