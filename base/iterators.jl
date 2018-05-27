@@ -1022,8 +1022,7 @@ julia> for x in a; x == 1 || break; end
 julia> Base.peek(a)
 3
 
-# Sum the remaining elements
-julia> sum(a)
+julia> sum(a) # Sum the remaining elements
 7
 ```
 """
@@ -1086,7 +1085,7 @@ end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
 IteratorSize(::Type{Stateful{VS,T}} where VS) where {T} =
     isa(IteratorSize(T), SizeUnknown) ? SizeUnknown() : HasLength()
-eltype(::Type{Stateful{VS, T}} where VS) where {T} = eltype(T)
+eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
 IteratorEltype(::Type{Stateful{VS,T}} where VS) where {T} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
 

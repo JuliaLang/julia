@@ -530,6 +530,7 @@ end
         @test Base.peek(a) == 3
         @test sum(a) == 7
     end
+    @test eltype(Iterators.Stateful("a")) == Char
     # Interaction of zip/Stateful
     let a = Iterators.Stateful("a"), b = ""
 	@test isempty(collect(zip(a,b)))
