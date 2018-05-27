@@ -263,7 +263,7 @@ julia> counter()
 ```
 
 See also the closures in the examples in the next two sections. A variable
-such `x` in the first example and `state` in the second that is inherited
+such as `x` in the first example and `state` in the second that is inherited
 from the enclosing scope by the inner function is sometimes called a
 *captured* variable. Captured variables can present performance challenges
 discussed in [performance tips](@ref man-performance-tips).

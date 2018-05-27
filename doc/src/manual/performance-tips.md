@@ -1511,16 +1511,16 @@ The following examples may help you interpret expressions marked as containing n
 ## [Performance of captured variable](@id man-performance-captured)
 
 Consider the following example that defines two inner functions:
-```
-    function abmult(r::Int)
-        if r >= 0
-            f = x -> x * r
-        else
-            r = -r
-            f = x -> x * r
-        end
-        return f
+```julia
+function abmult(r::Int)
+    if r >= 0
+        f = x -> x * r
+    else
+        r = -r
+        f = x -> x * r
     end
+    return f
+end
 ```
 
 Function `abmult` returns a function `f` that multiplies its argument by
@@ -1557,37 +1557,36 @@ then the following tips help ensure that their use is performant. First, if
 it is known that a captured variable does not change its type, then this can
 be declared explicitly with a type annotation (on the variable, not the
 right-hand side):
-```
-    function abmult(r0::Int)
-        r::Int = r0
-        if r >= 0
-            f = x -> x * r
-        else
-            r = -r
-            f = x -> x * r
-        end
-        return f
+```julia
+function abmult(r0::Int)
+    r::Int = r0
+    if r >= 0
+        f = x -> x * r
+    else
+        r = -r
+        f = x -> x * r
     end
+    return f
+end
 ```
 The type annotation partially recovers lost performance due to capturing because
 the parser can associate a concrete type to the object in the box.
 Second, if the captured variable does not need to be boxed (because it
 will not be reassigned after the closure is created), this can be indicated
 with `let` blocks as follows.
-```
-    function abmult3(r::Int)
-        f =
-            if r >= 0
-                let r = r
-                    x -> x * r
-                end
-            else
-                let r = -r
-                    x -> x * r
-                end
-            end
-        return f
+```julia
+function abmult3(r::Int)
+    f = if r >= 0
+        let r = r
+            x -> x * r
+        end
+    else
+        let r = -r
+            x -> x * r
+        end
     end
+    return f
+end
 ```
 Each `let` block creates a new variable `r` whose scope is only the
 inner function. The second technique recovers full language performance
