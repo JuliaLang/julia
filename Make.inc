@@ -1,4 +1,5 @@
 # -*- mode: makefile-gmake -*-
+# vi:syntax=make
 
 ## Note:
 ##   It is generally preferable to change these options, for
@@ -519,6 +520,33 @@ ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
 include $(BUILDROOT)/Make.user
 endif
 
+# A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
+# Instead, let's link to the libgcc_s corresponding to the installation of gfortran
+ifeq ($(OS),FreeBSD)
+ifneq (,$(findstring gfortran,$(FC)))
+
+# First let's figure out what version of GCC we're dealing with
+_GCCMAJOR := $(shell $(FC) -dumpversion | cut -d'.' -f1)
+_GCCMINOR := $(shell $(FC) -dumpversion | cut -d'.' -f2)
+
+# The ports system uses major and minor for GCC < 5 (e.g. gcc49 for GCC 4.9), otherwise major only
+ifeq ($(_GCCMAJOR),4)
+  _GCCVER := $(_GCCMAJOR)$(_GCCMINOR)
+else
+  _GCCVER := $(_GCCMAJOR)
+endif
+
+# Allow the user to specify this in Make.user
+GCCPATH ?= $(LOCALBASE)/lib/gcc$(_GCCVER)
+
+LDFLAGS += -L$(build_libdir) -L$(GCCPATH) -Wl,-rpath,$(build_libdir) -Wl,-rpath,$(GCCPATH)
+
+# This ensures we get the right RPATH even if we're missing FFLAGS somewhere
+FC += -Wl,-rpath=$(GCCPATH)
+
+endif # gfortran
+endif # FreeBSD
+
 ifneq ($(CC_BASE)$(CXX_BASE),$(shell echo $(CC) | cut -d' ' -f1)$(shell echo $(CXX) | cut -d' ' -f1))
     $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
 endif
@@ -903,12 +931,12 @@ else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/' -Wl,-rpath,'@loader_path/julia/'
+  RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN' -Wl,-rpath,'$$ORIGIN/julia' -Wl,-z,origin
+  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 endif
 
 # --whole-archive
@@ -946,7 +974,16 @@ endif
 
 ifeq ($(OS), FreeBSD)
 JLDFLAGS := -Wl,-Bdynamic
-OSLIBS += -lelf -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
+OSLIBS += -lelf -lkvm -lrt
+
+# Tweak order of libgcc_s in DT_NEEDED,
+# make it loaded first to
+# prevent from linking to outdated system libs.
+# See #21788
+OSLIBS += -lgcc_s
+
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
+	$(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)

@@ -188,6 +188,14 @@ function set_process_title(title::AbstractString)
     Base.uv_error("set_process_title", err)
 end
 
+"""
+    Sys.maxrss()
+
+Get the maximum resident set size utilized in bytes.
+See also:
+    - man page of getrusage(2) on Linux and FreeBSD.
+    - windows api `GetProcessMemoryInfo`
+"""
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
 if is_windows()

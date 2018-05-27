@@ -80,30 +80,7 @@ endif
 # Do not overwrite the "-j" flag
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
-# Patch submitted upstream: https://github.com/xianyi/OpenBLAS/pull/1015
-# Remove the patch here once we're using a version of OpenBLAS that includes the upstream patch
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/openblas-freebsd.patch
-	echo 1 > $@
-
-# Clang assembler bug workaround from https://github.com/xianyi/OpenBLAS/pull/982
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-clangasmbug.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/openblas-clangasmbug.patch
-	echo 1 > $@
-
-# Cross compiler autodetection workaround from https://github.com/xianyi/OpenBLAS/pull/968
-# Remove this when we upgrade beyond OpenBLAS v0.2.19
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cross-compile.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-clangasmbug.patch-applied
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/openblas-cross-compile.patch
-	echo 1 > $@
-
-# Power inline assembly fixes from https://github.com/xianyi/OpenBLAS/pull/1098
-# Remove this when we upgrade beyond OpenBLAS v0.2.19
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-assembly-fixes.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cross-compile.patch-applied
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/openblas-power-assembly-fixes.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-assembly-fixes.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(dir $<)/Makefile.system
 	echo 1 > $@
 

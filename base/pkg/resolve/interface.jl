@@ -44,7 +44,7 @@ mutable struct Interface
 
     function Interface(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
         # generate pkgs
-        pkgs = sort!(String[Set{String}(keys(deps))...])
+        pkgs = sort!(String[keys(deps)...])
 
         np = length(pkgs)
 
@@ -216,9 +216,23 @@ function verify_solution(sol::Vector{Int}, interface::Interface)
             if sol[p0] == v0
                 for (rp, rvs) in a.requires
                     p1 = pdict[rp]
-                    sol[p1] != spp[p1] || return false
-                    vn = pvers[p1][sol[p1]]
-                    vn ∈ rvs || return false
+                    if sol[p1] == spp[p1]
+                        println("""
+                                VERIFICATION ERROR: REQUIRED DEPENDENCY NOT INSTALLED
+                                    package p=$p (p0=$p0) version=$vn (v0=$v0) requires package rp=$rp in version set rvs=$rvs
+                                    but package $rp is not being installed (p1=$p1 sol[p1]=$(sol[p1]) == spp[p1]=$(spp[p1]))
+                                """)
+                        return false
+                    end
+                    vn1 = pvers[p1][sol[p1]]
+                    if vn1 ∉ rvs
+                        println("""
+                                VERIFICATION ERROR: INVALID VERSION
+                                    package p=$p (p0=$p0) version=$vn (v0=$v0) requires package rp=$rp in version set rvs=$rvs
+                                    but package $rp version is being set to $vn1 (p1=$p1 sol[p1]=$(sol[p1]) spp[p1]=$(spp[p1]))
+                                """)
+                        return false
+                    end
                 end
             end
         end

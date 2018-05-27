@@ -1,5 +1,9 @@
 ## Some shared configuration options ##
 
+# NOTE: Do not make RPATH changes in CMAKE_COMMON on platforms other than FreeBSD, since
+# it will make its way into the LLVM build flags, and LLVM is picky about RPATH (though
+# apparently not on FreeBSD). Ref PR #22352
+
 CONFIGURE_COMMON := --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
@@ -66,6 +70,15 @@ ifeq ($(USEIFC),1)
 USE_BLAS_FFLAGS += -i8
 else
 USE_BLAS_FFLAGS += -fdefault-integer-8
+endif
+endif
+
+ifeq ($(USE_INTEL_MKL),1)
+# We want to test if gfortran is used but currently only gfortran and ifort are supported
+# so not ifort is the same as gfortran. If support for new Fortran compilers is added
+# then this should be adjusted
+ifneq ($(USEIFC),1)
+USE_BLAS_FFLAGS += -ff2c
 endif
 endif
 

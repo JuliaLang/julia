@@ -115,7 +115,7 @@ IndexStyle(::RowVector) = IndexLinear()
 IndexStyle(::Type{<:RowVector}) = IndexLinear()
 
 @propagate_inbounds getindex(rowvec::RowVector, i) = transpose(rowvec.vec[i])
-@propagate_inbounds setindex!(rowvec::RowVector, v, i) = setindex!(rowvec.vec, transpose(v), i)
+@propagate_inbounds setindex!(rowvec::RowVector, v, i) = (setindex!(rowvec.vec, transpose(v), i); rowvec)
 
 # Cartesian indexing is distorted by getindex
 # Furthermore, Cartesian indexes don't have to match shape, apparently!

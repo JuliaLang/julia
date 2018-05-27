@@ -116,9 +116,9 @@ const PAGES = [
 ]
 
 makedocs(
-    build     = joinpath(pwd(), "_build/html/en"),
+    build     = joinpath(@__DIR__, "_build/html/en"),
     modules   = [Base, Core, BuildSysImg],
-    clean     = false,
+    clean     = true,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
@@ -130,6 +130,8 @@ makedocs(
     analytics = "UA-28835595-6",
     pages     = PAGES,
     html_prettyurls = ("deploy" in ARGS),
+    html_canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/stable/" : nothing,
+    assets = ["assets/julia-manual.css"],
 )
 
 if "deploy" in ARGS

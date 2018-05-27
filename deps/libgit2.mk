@@ -18,7 +18,7 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
 endif
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifneq ($(ARCH),x86_64)
@@ -39,13 +39,12 @@ endif
 ifeq ($(OS),Linux)
 LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DUSE_MBEDTLS=ON -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
-
 ifeq ($(OS),FreeBSD)
 LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 # We need to bundle ca certs on linux now that we're using libgit2 with ssl
-ifeq ($(OS),Linux)
+ifneq (,$(findstring $(OS),Linux FreeBSD))
 OPENSSL_DIR=$(shell openssl version -d | cut -d '"' -f 2)
 # This certfile location observed on Ubuntu 16.04
 ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca-certificates.crt ] && echo exists),exists)
@@ -53,14 +52,14 @@ CERTFILE=$(OPENSSL_DIR)/certs/ca-certificates.crt
 # This certfile location observed on openSUSE Leap 42.1
 else ifeq ($(shell [ -e $(OPENSSL_DIR)/ca-bundle.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/ca-bundle.pem
-# This certfile location observed on Ubuntu 14.04
+# This certfile location observed on Ubuntu 14.04 and FreeBSD
 else ifeq ($(shell [ -e $(OPENSSL_DIR)/cert.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/cert.pem
 # This certfile location observed on Debian 7
 else ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/certs/ca.pem
 endif
-endif # Linux
+endif # Linux and FreeBSD
 
 LIBGIT2_SRC_PATH := $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)
 
@@ -104,6 +103,11 @@ $(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied: $(LIBGIT2_SRC_PATH)/
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-remote-push-NULL.patch
 	echo 1 > $@
 
+$(LIBGIT2_SRC_PATH)/libgit2-bundled_zlib.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-bundled_zlib.patch
+	echo 1 > $@
+
 $(build_datarootdir)/julia/cert.pem: $(CERTFILE)
 	mkdir -p $(build_datarootdir)/julia
 	-cp $(CERTFILE) $@
@@ -116,7 +120,8 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-gitconfig-symlink.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-free-config.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied
+	$(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-bundled_zlib.patch-applied
 
 ifneq ($(CERTFILE),)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem

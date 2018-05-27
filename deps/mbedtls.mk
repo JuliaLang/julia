@@ -15,11 +15,7 @@ ifeq ($(BUILD_OS),WINNT)
 MBEDTLS_OPTS += -G"MSYS Makefiles"
 endif
 
-ifeq ($(OS),Linux)
-MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
-endif
-
-ifeq ($(OS),FreeBSD)
+ifneq (,$(findstring $(OS),Linux FreeBSD))
 MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 

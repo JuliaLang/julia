@@ -60,12 +60,19 @@ else
 LLVM_TARGETS := host;NVPTX
 endif
 
+LLVM_CFLAGS :=
+LLVM_CXXFLAGS :=
+LLVM_CPPFLAGS :=
+LLVM_LDFLAGS :=
+LLVM_CMAKE :=
+
 # Allow adding LLVM specific flags
 LLVM_CFLAGS += $(CFLAGS)
 LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
+LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 LLVM_FLAGS += --disable-profiling --enable-static --enable-targets=$(LLVM_TARGETS)
@@ -497,6 +504,7 @@ $(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D32593))
 $(eval $(call LLVM_PATCH,llvm-D33179))
 $(eval $(call LLVM_PATCH,llvm-3.9.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
+$(eval $(call LLVM_PATCH,llvm-D31524-sovers_4.0)) # Remove for 4.0
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,compiler_rt-3.9-glibc_2.25.90)) # Remove for 5.0
 endif
@@ -510,6 +518,12 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,compiler-rt-3.7.1))
 endif
 endif
+
+# Independent to the llvm version add a JL prefix to the version map
+# Depends on `llvm-D31524-sovers_4.0` for LLVM_VER==3.9
+$(eval $(call LLVM_PATCH,llvm-symver-jlprefix)) # DO NOT REMOVE
+
+
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
 
 ifeq ($(LLVM_USE_CMAKE),1)

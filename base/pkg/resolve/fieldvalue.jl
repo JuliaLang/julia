@@ -34,6 +34,22 @@ FieldValue(l0::Integer, l1::VersionWeight) = FieldValue(l0, l1, zero(VersionWeig
 FieldValue(l0::Integer) = FieldValue(l0, zero(VersionWeight))
 FieldValue() = FieldValue(0)
 
+# This isn't nice, but it's for debugging only anyway
+function Base.show(io::IO, a::FieldValue)
+    print(io, a.l0)
+    a == FieldValue(a.l0) && return
+    print(io, ".", a.l1)
+    a == FieldValue(a.l0, a.l1) && return
+    print(io, ".", a.l2)
+    a == FieldValue(a.l0, a.l1, a.l2) && return
+    print(io, ".", a.l3)
+    a == FieldValue(a.l0, a.l1, a.l2, a.l3) && return
+    print(io, ".", a.l4)
+    a == FieldValue(a.l0, a.l1, a.l2, a.l3, a.l4) && return
+    print(io, ".", a.l5)
+    return
+end
+
 const Field = Vector{FieldValue}
 
 Base.zero(::Type{FieldValue}) = FieldValue()
