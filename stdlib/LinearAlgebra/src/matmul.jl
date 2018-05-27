@@ -178,13 +178,11 @@ Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the resu
 
 # Examples
 ```jldoctest
-julia> using LinearAlgebra;
-
 julia> A = [0 1; 1 0];
 
-julia> B = UpperTriangular([1 2; 0 3]);
+julia> B = LinearAlgebra.UpperTriangular([1 2; 0 3]);
 
-julia> rmul!(A, B);
+julia> LinearAlgebra.rmul!(A, B);
 
 julia> A
 2×2 Array{Int64,2}:
@@ -201,13 +199,11 @@ Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the resu
 
 # Examples
 ```jldoctest
-julia> using LinearAlgebra;
-
 julia> B = [0 1; 1 0];
 
-julia> A = UpperTriangular([1 2; 0 3]);
+julia> A = LinearAlgebra.UpperTriangular([1 2; 0 3]);
 
-julia> lmul!(A, B);
+julia> LinearAlgebra.lmul!(A, B);
 
 julia> B
 2×2 Array{Int64,2}:

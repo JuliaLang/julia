@@ -256,15 +256,13 @@ control over the factorization of `A`.
 
 # Examples
 ```jldoctest
-julia> using LinearAlgebra
-
 julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
 
 julia> X = [1; 2.5; 3];
 
 julia> Y = zero(X);
 
-julia> ldiv!(Y, qr(A), X);
+julia> LinearAlgebra.ldiv!(Y, qr(A), X);
 
 julia> Y
 3-element Array{Float64,1}:
@@ -295,15 +293,13 @@ control over the factorization of `A`.
 
 # Examples
 ```jldoctest
-julia> using LinearAlgebra
-
 julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
 
 julia> X = [1; 2.5; 3];
 
 julia> Y = copy(X);
 
-julia> ldiv!(qr(A), X);
+julia> LinearAlgebra.ldiv!(qr(A), X);
 
 julia> X
 3-element Array{Float64,1}:
