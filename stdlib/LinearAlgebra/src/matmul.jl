@@ -175,6 +175,22 @@ mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = generic_matm
     rmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `A`, and return the result.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra;
+
+julia> A = [0 1; 1 0];
+
+julia> B = UpperTriangular([1 2; 0 3]);
+
+julia> rmul!(A, B);
+
+julia> A
+2×2 Array{Int64,2}:
+ 0  3
+ 1  2
+```
 """
 rmul!(A, B)
 
@@ -182,6 +198,22 @@ rmul!(A, B)
     lmul!(A, B)
 
 Calculate the matrix-matrix product ``AB``, overwriting `B`, and return the result.
+
+# Examples
+```jldoctest
+julia> using LinearAlgebra;
+
+julia> B = [0 1; 1 0];
+
+julia> A = UpperTriangular([1 2; 0 3]);
+
+julia> lmul!(A, B);
+
+julia> B
+2×2 Array{Int64,2}:
+ 2  1
+ 3  0
+```
 """
 lmul!(A, B)
 
