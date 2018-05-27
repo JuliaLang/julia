@@ -2,6 +2,20 @@
 
 import Libdl
 
+# N.B.: In most situations this is not how you want to schedule a timeout.
+# Do not copy this macro.
+macro with_timeout(arg)
+    quote
+        t = @async $(esc(arg))
+        @async begin
+            sleep(100)
+            istaskdone(t) && return
+            schedule(t, ErrorException("Timeout exceeded"); error=true)
+        end
+        fetch(t)
+    end
+end
+
 # helper function for passing input to stdin
 # and returning the stdout result
 function writereadpipeline(input, exename)
@@ -27,20 +41,20 @@ end
 
 let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     # tests for handling of ENV errors
-    let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
+    @with_timeout let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
                 setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
                     "JULIA_LOAD_PATH"=>"", "JULIA_DEPOT_PATH"=>""))
         @test v[1] == "false\nREPL: InteractiveUtilstrue\n"
         @test v[2]
     end
-    let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
+    @with_timeout let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
                 setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
                     "JULIA_LOAD_PATH"=>";;;:::", "JULIA_DEPOT_PATH"=>";;;:::"))
         # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InterativeUtils`
         @test v[1] == "REPL: 3\n"
         @test v[2]
     end
-    let v = readchomperrors(`$exename -i -e '
+    @with_timeout let v = readchomperrors(`$exename -i -e '
             empty!(LOAD_PATH)
             Base.unreference_module(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
             '`)
@@ -57,75 +71,77 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
                          """)
     end
     for nc in ("0", "-2", "x", "2x", " ")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
-        @test v[1]
-        @test v[2] == "1"
-        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1."
+        @with_timeout let v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
+            @test v[1]
+            @test v[2] == "1"
+            @test v[3] == "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1."
+        end
     end
     real_cores = string(ccall(:jl_cpu_cores, Int32, ()))
     for nc in ("1", " 1 ", " +1 ", " 0x1 ", "")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
-        @test v[1]
-        @test v[2] == (isempty(nc) ? real_cores : "1")
-        @test isempty(v[3])
+        @with_timeout let v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
+            @test v[1]
+            @test v[2] == (isempty(nc) ? real_cores : "1")
+            @test isempty(v[3])
+        end
     end
 end
 
 let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     # --version
-    let v = split(read(`$exename -v`, String), "julia version ")[end]
+    @with_timeout let v = split(read(`$exename -v`, String), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
     end
-    @test read(`$exename -v`, String) == read(`$exename --version`, String)
+    @with_timeout @test read(`$exename -v`, String) == read(`$exename --version`, String)
 
     # --help
-    let header = "julia [switches] -- [programfile] [args...]"
+    @with_timeout let header = "julia [switches] -- [programfile] [args...]"
         @test startswith(read(`$exename -h`, String), header)
         @test startswith(read(`$exename --help`, String), header)
     end
 
     # --quiet, --banner
     let t(q,b) = "Base.JLOptions().quiet == $q && Base.JLOptions().banner == $b"
-        @test success(`$exename                 -e $(t(0, -1))`)
-        @test success(`$exename -q              -e $(t(1,  0))`)
-        @test success(`$exename --quiet         -e $(t(1,  0))`)
-        @test success(`$exename --banner=no     -e $(t(0,  0))`)
-        @test success(`$exename --banner=yes    -e $(t(0,  1))`)
-        @test success(`$exename -q --banner=no  -e $(t(1,  0))`)
-        @test success(`$exename -q --banner=yes -e $(t(1,  1))`)
-        @test success(`$exename --banner=no  -q -e $(t(1,  0))`)
-        @test success(`$exename --banner=yes -q -e $(t(1,  1))`)
+        @with_timeout @test success(`$exename                 -e $(t(0, -1))`)
+        @with_timeout @test success(`$exename -q              -e $(t(1,  0))`)
+        @with_timeout @test success(`$exename --quiet         -e $(t(1,  0))`)
+        @with_timeout @test success(`$exename --banner=no     -e $(t(0,  0))`)
+        @with_timeout @test success(`$exename --banner=yes    -e $(t(0,  1))`)
+        @with_timeout @test success(`$exename -q --banner=no  -e $(t(1,  0))`)
+        @with_timeout @test success(`$exename -q --banner=yes -e $(t(1,  1))`)
+        @with_timeout @test success(`$exename --banner=no  -q -e $(t(1,  0))`)
+        @with_timeout @test success(`$exename --banner=yes -q -e $(t(1,  1))`)
     end
 
     # --home
-    @test success(`$exename -H $(Sys.BINDIR)`)
-    @test success(`$exename --home=$(Sys.BINDIR)`)
+    @with_timeout @test success(`$exename -H $(Sys.BINDIR)`)
+    @with_timeout @test success(`$exename --home=$(Sys.BINDIR)`)
 
     # --eval
-    @test  success(`$exename -e "exit(0)"`)
-    @test !success(`$exename -e "exit(1)"`)
-    @test  success(`$exename --eval="exit(0)"`)
-    @test !success(`$exename --eval="exit(1)"`)
-    @test !success(`$exename -e`)
-    @test !success(`$exename --eval`)
+    @with_timeout @test  success(`$exename -e "exit(0)"`)
+    @with_timeout @test !success(`$exename -e "exit(1)"`)
+    @with_timeout @test  success(`$exename --eval="exit(0)"`)
+    @with_timeout @test !success(`$exename --eval="exit(1)"`)
+    @with_timeout @test !success(`$exename -e`)
+    @with_timeout @test !success(`$exename --eval`)
     # --eval --interactive (replaced --post-boot)
-    @test  success(`$exename -i -e "exit(0)"`)
-    @test !success(`$exename -i -e "exit(1)"`)
+    @with_timeout @test  success(`$exename -i -e "exit(0)"`)
+    @with_timeout @test !success(`$exename -i -e "exit(1)"`)
 
     # --print
-    @test read(`$exename -E "1+1"`, String) == "2\n"
-    @test read(`$exename --print="1+1"`, String) == "2\n"
-    @test !success(`$exename -E`)
-    @test !success(`$exename --print`)
+    @with_timeout @test read(`$exename -E "1+1"`, String) == "2\n"
+    @with_timeout @test read(`$exename --print="1+1"`, String) == "2\n"
+    @with_timeout @test !success(`$exename -E`)
+    @with_timeout @test !success(`$exename --print`)
 
     # --load
     let testfile = tempname()
         try
             write(testfile, "testvar = :test\nprintln(\"loaded\")\n")
-            @test read(`$exename -i --load=$testfile -e "println(testvar)"`, String) == "loaded\ntest\n"
-            @test read(`$exename -i -L $testfile -e "println(testvar)"`, String) == "loaded\ntest\n"
+            @with_timeout @test read(`$exename -i --load=$testfile -e "println(testvar)"`, String) == "loaded\ntest\n"
+            @with_timeout @test read(`$exename -i -L $testfile -e "println(testvar)"`, String) == "loaded\ntest\n"
             # multiple, combined
-            @test read(```$exename
+            @with_timeout @test read(```$exename
                 -e 'push!(ARGS, "hi")'
                 -E "1+1"
                 -E "2+2"
@@ -149,17 +165,17 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         end
     end
     # -L, --load requires an argument
-    @test !success(`$exename -L`)
-    @test !success(`$exename --load`)
+    @with_timeout @test !success(`$exename -L`)
+    @with_timeout @test !success(`$exename --load`)
 
     # --cpu-target (requires LLVM enabled)
-    @test !success(`$exename -C invalidtarget`)
-    @test !success(`$exename --cpu-target=invalidtarget`)
+    @with_timeout @test !success(`$exename -C invalidtarget`)
+    @with_timeout @test !success(`$exename --cpu-target=invalidtarget`)
 
     # --procs
-    @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
-    @test !success(`$exename -p 0`)
-    @test !success(`$exename --procs=1.0`)
+    @with_timeout @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
+    @with_timeout @test !success(`$exename -p 0`)
+    @with_timeout @test !success(`$exename --procs=1.0`)
 
     # --machine-file
     # this does not check that machine file works,
@@ -168,7 +184,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         touch(fname)
         fname = realpath(fname)
         try
-            @test readchomp(`$exename --machine-file $fname -e
+            @with_timeout @test readchomp(`$exename --machine-file $fname -e
                 "println(unsafe_string(Base.JLOptions().machine_file))"`) == fname
         finally
             rm(fname)
@@ -176,50 +192,50 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     end
 
     # -i, isinteractive
-    @test readchomp(`$exename -E "isinteractive()"`) == "false"
-    @test readchomp(`$exename -E "isinteractive()" -i`) == "true"
+    @with_timeout @test readchomp(`$exename -E "isinteractive()"`) == "false"
+    @with_timeout @test readchomp(`$exename -E "isinteractive()" -i`) == "true"
 
     # --color
-    @test readchomp(`$exename --color=yes -E "Base.have_color"`) == "true"
-    @test readchomp(`$exename --color=no -E "Base.have_color"`) == "false"
-    @test !success(`$exename --color=false`)
+    @with_timeout @test readchomp(`$exename --color=yes -E "Base.have_color"`) == "true"
+    @with_timeout @test readchomp(`$exename --color=no -E "Base.have_color"`) == "false"
+    @with_timeout @test !success(`$exename --color=false`)
 
     # --history-file
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)"
         --history-file=yes`) == "true"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)"
         --history-file=no`) == "false"
-    @test !success(`$exename --history-file=false`)
+    @with_timeout @test !success(`$exename --history-file=false`)
 
     # --code-coverage
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)"`) == "false"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)"`) == "false"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)"
         --code-coverage=none`) == "false"
 
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)"
         --code-coverage`) == "true"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)"
         --code-coverage=user`) == "true"
 
     # --track-allocation
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"`) == "false"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"`) == "false"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
         --track-allocation=none`) == "false"
 
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
         --track-allocation`) == "true"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)"
         --track-allocation=user`) == "true"
 
     # --optimize
-    @test readchomp(`$exename -E "Base.JLOptions().opt_level"`) == "2"
-    @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O`) == "3"
-    @test readchomp(`$exename -E "Base.JLOptions().opt_level" --optimize`) == "3"
-    @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O0`) == "0"
+    @with_timeout @test readchomp(`$exename -E "Base.JLOptions().opt_level"`) == "2"
+    @with_timeout @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O`) == "3"
+    @with_timeout @test readchomp(`$exename -E "Base.JLOptions().opt_level" --optimize`) == "3"
+    @with_timeout @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O0`) == "0"
 
     # -g
-    @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g0`)
+    @with_timeout @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
+    @with_timeout let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g0`)
         @test code[2]
         code = code[1]
         @test occursin("llvm.module.flags", code)
@@ -227,7 +243,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         @test !occursin("int.jl", code)
         @test !occursin("Int64", code)
     end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g1`)
+    @with_timeout let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g1`)
         @test code[2]
         code = code[1]
         @test occursin("llvm.module.flags", code)
@@ -235,7 +251,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         @test occursin("int.jl", code)
         @test !occursin("Int64", code)
     end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g2`)
+    @with_timeout let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g2`)
         @test code[2]
         code = code[1]
         @test occursin("llvm.module.flags", code)
@@ -248,24 +264,24 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     let JL_OPTIONS_CHECK_BOUNDS_DEFAULT = 0,
         JL_OPTIONS_CHECK_BOUNDS_ON = 1,
         JL_OPTIONS_CHECK_BOUNDS_OFF = 2
-        @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"`)) ==
+        @with_timeout @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"`)) ==
             JL_OPTIONS_CHECK_BOUNDS_DEFAULT
-        @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
+        @with_timeout @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
             --check-bounds=yes`)) == JL_OPTIONS_CHECK_BOUNDS_ON
-        @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
+        @with_timeout @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
             --check-bounds=no`)) == JL_OPTIONS_CHECK_BOUNDS_OFF
     end
     # check-bounds takes yes/no as argument
-    @test !success(`$exename -E "exit(0)" --check-bounds=false`)
+    @with_timeout @test !success(`$exename -E "exit(0)" --check-bounds=false`)
 
     # --depwarn
-    @test readchomp(`$exename --depwarn=no  -E "Base.JLOptions().depwarn"`) == "0"
-    @test readchomp(`$exename --depwarn=yes -E "Base.JLOptions().depwarn"`) == "1"
-    @test !success(`$exename --depwarn=false`)
+    @with_timeout @test readchomp(`$exename --depwarn=no  -E "Base.JLOptions().depwarn"`) == "0"
+    @with_timeout @test readchomp(`$exename --depwarn=yes -E "Base.JLOptions().depwarn"`) == "1"
+    @with_timeout @test !success(`$exename --depwarn=false`)
     # test deprecated syntax
-    @test !success(`$exename -e "foo (x::Int) = x * x" --depwarn=error`)
+    @with_timeout @test !success(`$exename -e "foo (x::Int) = x * x" --depwarn=error`)
     # test deprecated method
-    @test !success(`$exename -e "
+    @with_timeout @test !success(`$exename -e "
         foo() = :foo; bar() = :bar
         @deprecate foo() bar()
         foo()
@@ -283,46 +299,46 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         Foo.Deprecated
         """
 
-        @test !success(`$exename -E "$code" --depwarn=error`)
+        @with_timeout @test !success(`$exename -E "$code" --depwarn=error`)
 
-        @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
+        @with_timeout @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
             (true, "true", "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near no file:5")
 
-        @test readchomperrors(`$exename -E "$code" --depwarn=no`) ==
+        @with_timeout @test readchomperrors(`$exename -E "$code" --depwarn=no`) ==
             (true, "true", "")
     end
 
     # --inline
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().can_inline)"`) == "true"
-    @test readchomp(`$exename --inline=yes -E "Bool(Base.JLOptions().can_inline)"`) == "true"
-    @test readchomp(`$exename --inline=no -E "Bool(Base.JLOptions().can_inline)"`) == "false"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().can_inline)"`) == "true"
+    @with_timeout @test readchomp(`$exename --inline=yes -E "Bool(Base.JLOptions().can_inline)"`) == "true"
+    @with_timeout @test readchomp(`$exename --inline=no -E "Bool(Base.JLOptions().can_inline)"`) == "false"
     # --inline takes yes/no as argument
-    @test !success(`$exename --inline=false`)
+    @with_timeout @test !success(`$exename --inline=false`)
 
     # --polly
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().polly)"`) == "true"
-    @test readchomp(`$exename --polly=yes -E "Bool(Base.JLOptions().polly)"`) == "true"
-    @test readchomp(`$exename --polly=no -E "Bool(Base.JLOptions().polly)"`) == "false"
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().polly)"`) == "true"
+    @with_timeout @test readchomp(`$exename --polly=yes -E "Bool(Base.JLOptions().polly)"`) == "true"
+    @with_timeout @test readchomp(`$exename --polly=no -E "Bool(Base.JLOptions().polly)"`) == "false"
     # --polly takes yes/no as argument
-    @test !success(`$exename --polly=false`)
+    @with_timeout @test !success(`$exename --polly=false`)
 
     # --fast-math
     let JL_OPTIONS_FAST_MATH_DEFAULT = 0,
         JL_OPTIONS_FAST_MATH_ON = 1,
         JL_OPTIONS_FAST_MATH_OFF = 2
-        @test parse(Int,readchomp(`$exename -E
+        @with_timeout @test parse(Int,readchomp(`$exename -E
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
-        @test parse(Int,readchomp(`$exename --math-mode=user -E
+        @with_timeout @test parse(Int,readchomp(`$exename --math-mode=user -E
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
-        @test parse(Int,readchomp(`$exename --math-mode=ieee -E
+        @with_timeout @test parse(Int,readchomp(`$exename --math-mode=ieee -E
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
-        @test parse(Int,readchomp(`$exename --math-mode=fast -E
+        @with_timeout @test parse(Int,readchomp(`$exename --math-mode=fast -E
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_ON
     end
 
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
-    @test !success(`$exename --worker=true`)
+    @with_timeout @test !success(`$exename --worker=true`)
 
     # test passing arguments
     mktempdir() do dir
@@ -336,19 +352,19 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
-            @test readchomp(`$exename $testfile foo -bar --baz`) == output
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
+            @with_timeout @test readchomp(`$exename $testfile foo -bar --baz`) == output
+            @with_timeout @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
+            @with_timeout @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
                 output
-            @test readchomp(`$exename --startup-file=yes -e 'exit(0)' -- foo -bar --baz`) ==
+            @with_timeout @test readchomp(`$exename --startup-file=yes -e 'exit(0)' -- foo -bar --baz`) ==
                 output
 
             output = "String[]\nString[]"
-            @test readchomp(`$exename -L $testfile $testfile`) == output
-            @test readchomp(`$exename --startup-file=yes $testfile`) == output
+            @with_timeout @test readchomp(`$exename -L $testfile $testfile`) == output
+            @with_timeout @test readchomp(`$exename --startup-file=yes $testfile`) == output
 
-            @test !success(`$exename --foo $testfile`)
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
+            @with_timeout @test !success(`$exename --foo $testfile`)
+            @with_timeout @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
                 "[\"foo\", \"-bar\", \"--\", \"baz\"]"
         end
     end
@@ -374,21 +390,21 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         readsplit(cmd) = split(readchomp(cmd), '\n')
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
-            @test readsplit(`$exename $a`) ==
+            @with_timeout @test readsplit(`$exename $a`) ==
                 [a, a,
                  b, a]
-            @test readsplit(`$exename -L $b -e 'exit(0)'`) ==
+            @with_timeout @test readsplit(`$exename -L $b -e 'exit(0)'`) ==
                 [realpath(b), ""]
-            @test readsplit(`$exename -L $b $a`) ==
+            @with_timeout @test readsplit(`$exename -L $b $a`) ==
                 [realpath(b), a,
                  a, a,
                  b, a]
-            @test readsplit(`$exename --startup-file=yes -e 'exit(0)'`) ==
+            @with_timeout @test readsplit(`$exename --startup-file=yes -e 'exit(0)'`) ==
                 [c, ""]
-            @test readsplit(`$exename --startup-file=yes -L $b -e 'exit(0)'`) ==
+            @with_timeout @test readsplit(`$exename --startup-file=yes -L $b -e 'exit(0)'`) ==
                 [c, "",
                  realpath(b), ""]
-            @test readsplit(`$exename --startup-file=yes -L $b $a`) ==
+            @with_timeout @test readsplit(`$exename --startup-file=yes -L $b $a`) ==
                 [c, a,
                  realpath(b), a,
                  a, a,
@@ -397,25 +413,25 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     end
 
     # issue #10562
-    @test readchomp(`$exename -e 'println(ARGS);' ''`) == "[\"\"]"
+    @with_timeout @test readchomp(`$exename -e 'println(ARGS);' ''`) == "[\"\"]"
 
     # issue #12679
-    @test readchomperrors(`$exename --startup-file=no --compile=yes -ioo`) ==
+    @with_timeout @test readchomperrors(`$exename --startup-file=no --compile=yes -ioo`) ==
         (false, "", "ERROR: unknown option `-o`")
-    @test readchomperrors(`$exename --startup-file=no -p`) ==
+    @with_timeout @test readchomperrors(`$exename --startup-file=no -p`) ==
         (false, "", "ERROR: option `-p/--procs` is missing an argument")
-    @test readchomperrors(`$exename --startup-file=no --inline`) ==
+    @with_timeout @test readchomperrors(`$exename --startup-file=no --inline`) ==
         (false, "", "ERROR: option `--inline` is missing an argument")
-    @test readchomperrors(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`) ==
+    @with_timeout @test readchomperrors(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`) ==
         (false, "", "ERROR: unknown option `-n`")
 
     # --compiled-modules={yes|no}
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
-    @test readchomp(`$exename --compiled-modules=yes -E
+    @with_timeout @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
+    @with_timeout @test readchomp(`$exename --compiled-modules=yes -E
         "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
-    @test readchomp(`$exename --compiled-modules=no -E
+    @with_timeout @test readchomp(`$exename --compiled-modules=no -E
         "Bool(Base.JLOptions().use_compiled_modules)"`) == "false"
-    @test !success(`$exename --compiled-modules=foo -e "exit(0)"`)
+    @with_timeout @test !success(`$exename --compiled-modules=foo -e "exit(0)"`)
 
     # issue #12671, starting from a non-directory
     # rm(dir) fails on windows with Permission denied
@@ -424,7 +440,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
-            @test success(`$exename -e "exit(0)"`)
+            @with_timeout @test success(`$exename -e "exit(0)"`)
         end
     end
 end
@@ -441,7 +457,7 @@ let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
             joinpath(@__DIR__, "nonexistent"),
             "$sysname.nonexistent",
             )
-        let err = Pipe(),
+        @with_timeout let err = Pipe(),
             p = run(pipeline(`$exename --sysimage=$nonexist_image`, stderr=err), wait=false)
             close(err.in)
             let s = read(err, String)
@@ -454,7 +470,7 @@ let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
             @test p.exitcode == 1
         end
     end
-    let err = Pipe(),
+    @with_timeout let err = Pipe(),
         p = run(pipeline(`$exename --sysimage=$libjulia`, stderr=err), wait=false)
         close(err.in)
         let s = read(err, String)
@@ -466,7 +482,7 @@ let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
     end
 end
 
-let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
+@with_timeout let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
     # --startup-file
     let JL_OPTIONS_STARTUPFILE_ON = 1,
         JL_OPTIONS_STARTUPFILE_OFF = 2
@@ -483,22 +499,22 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
 end
 
 # Make sure `julia --lisp` doesn't break
-run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, devnull))
+@with_timeout run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, devnull))
 
 # Test that `julia [some other option] --lisp` is disallowed
-@test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==
+@with_timeout @test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==
     (false, "", "ERROR: --lisp must be specified as the first argument")
 
 # --sysimage-native-code={yes|no}
 let exename = `$(Base.julia_cmd()) --startup-file=no`
-    @test readchomp(`$exename --sysimage-native-code=yes -E
+    @with_timeout @test readchomp(`$exename --sysimage-native-code=yes -E
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "true"
-    @test readchomp(`$exename --sysimage-native-code=no -E
+    @with_timeout @test readchomp(`$exename --sysimage-native-code=no -E
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
 end
 
 # backtrace contains type and line number info (esp. on windows #17179)
-for precomp in ("yes", "no")
+@with_timeout for precomp in ("yes", "no")
     success, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp
         -E 'include("____nonexistent_file")'`)
     @test !success
@@ -532,29 +548,29 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         end
         exit(0)
         """
-        run(`$exename $flag -e $str`)
+        @with_timeout run(`$exename $flag -e $str`)
     end
 end
 
 # issue #6310
 let exename = `$(Base.julia_cmd()) --startup-file=no`
-    @test writereadpipeline("2+2", exename) == ("4\n", true)
-    @test writereadpipeline("2+2\n3+3\n4+4", exename) == ("4\n6\n8\n", true)
-    @test writereadpipeline("", exename) == ("", true)
-    @test writereadpipeline("print(2)", exename) == ("2", true)
-    @test writereadpipeline("print(2)\nprint(3)", exename) == ("23", true)
+    @with_timeout @test writereadpipeline("2+2", exename) == ("4\n", true)
+    @with_timeout @test writereadpipeline("2+2\n3+3\n4+4", exename) == ("4\n6\n8\n", true)
+    @with_timeout @test writereadpipeline("", exename) == ("", true)
+    @with_timeout @test writereadpipeline("print(2)", exename) == ("2", true)
+    @with_timeout @test writereadpipeline("print(2)\nprint(3)", exename) == ("23", true)
     let infile = tempname()
         touch(infile)
         try
-            @test read(pipeline(exename, stdin=infile), String) == ""
+            @with_timeout @test read(pipeline(exename, stdin=infile), String) == ""
             write(infile, "(1, 2+3)")
-            @test read(pipeline(exename, stdin=infile), String) == "(1, 5)\n"
+            @with_timeout @test read(pipeline(exename, stdin=infile), String) == "(1, 5)\n"
             write(infile, "1+2\n2+2\n1-2\n")
-            @test read(pipeline(exename, stdin=infile), String) == "3\n4\n-1\n"
+            @with_timeout @test read(pipeline(exename, stdin=infile), String) == "3\n4\n-1\n"
             write(infile, "print(2)")
-            @test read(pipeline(exename, stdin=infile), String) == "2"
+            @with_timeout @test read(pipeline(exename, stdin=infile), String) == "2"
             write(infile, "print(2)\nprint(3)")
-            @test read(pipeline(exename, stdin=infile), String) == "23"
+            @with_timeout @test read(pipeline(exename, stdin=infile), String) == "23"
         finally
             rm(infile)
         end
