@@ -243,10 +243,12 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
 
     for uuid in uuids
         uuid == uuid_julia && continue
-        uuid_to_name[uuid] = registered_name(ctx.env, uuid)
-        info = manifest_info(ctx.env, uuid)
-        info ≡ nothing && continue
-        uuid_to_name[UUID(info["uuid"])] = info["name"]
+        if !haskey(uuid_to_name, uuid)
+            uuid_to_name[uuid] = registered_name(ctx.env, uuid)
+            info = manifest_info(ctx.env, uuid)
+            info ≡ nothing && continue
+            uuid_to_name[UUID(info["uuid"])] = info["name"]
+        end
     end
 
     return Graph(all_versions, all_deps, all_compat, uuid_to_name, reqs, fixed, #=verbose=# ctx.graph_verbose)
