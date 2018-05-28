@@ -166,7 +166,7 @@ eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
 """
     eachindex(A...)
 
-Create an iterable object for visiting each index of an AbstractArray `A` in an efficient
+Create an iterable object for visiting each index of an `AbstractArray` `A` in an efficient
 manner. For array types that have opted into fast linear indexing (like `Array`), this is
 simply the range `1:length(A)`. For other array types, return a specialized Cartesian
 range to efficiently index into the array with indices specified for every dimension. For
@@ -972,8 +972,24 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; _ind2sub(sz, i))
 
 """
     setindex!(A, X, inds...)
+    A[inds...] = X
 
 Store values from array `X` within some subset of `A` as specified by `inds`.
+The syntax `A[inds...] = X` is equivalent to `setindex!(A, X, inds...)`.
+
+# Examples
+```jldoctest
+julia> A = zeros(2,2);
+
+julia> setindex!(A, [10, 20], [1, 2]);
+
+julia> A[[3, 4]] = [30, 40];
+
+julia> A
+2×2 Array{Float64,2}:
+ 10.0  30.0
+ 20.0  40.0
+```
 """
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
