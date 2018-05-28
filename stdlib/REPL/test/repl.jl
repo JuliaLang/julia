@@ -96,6 +96,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # long strings.
     origpwd = pwd()
     mktempdir() do tmpdir
+        # Test `cd`'ing to an absolute path
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd $(escape_string(tmpdir))\n")
@@ -104,16 +105,29 @@ fake_repl() do stdin_write, stdout_read, repl
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
         @test pwd() == realpath(tmpdir)
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd -\n")
-        readuntil(stdout_read, origpwd[max(1,end-39):end])
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == origpwd
+
+        # Test using `cd` to move to the home directory
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd\n")
+        readuntil(stdout_read, realpath(homedir())[max(1,end-39):end])
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+        @test pwd() == realpath(homedir())
+
+        # Test using `-` to jump backward to tmpdir
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "cd -\n")
+        readuntil(stdout_read, tmpdir[max(1,end-39):end])
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+        @test pwd() == realpath(tmpdir)
+
+        # Test using `~` in `cd` commands
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "cd ~\n")
         readuntil(stdout_read, realpath(homedir())[max(1,end-39):end])
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
@@ -144,6 +158,28 @@ fake_repl() do stdin_write, stdout_read, repl
         s = readuntil(stdout_read, "\n\n")
         @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
               startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
+    end
+
+    # issue #27293
+    let s, old_stdout = stdout
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "echo ~")
+        s = readuntil(stdout_read, "~")
+
+        proc_stdout_read, proc_stdout = redirect_stdout()
+        get_stdout = @async read(proc_stdout_read, String)
+        try
+            write(stdin_write, "\n")
+            readuntil(stdout_read, "\n")
+            s = readuntil(stdout_read, "\n")
+        finally
+            redirect_stdout(old_stdout)
+        end
+        @test s == "\e[0m" # the child has exited
+        close(proc_stdout)
+        # check for the correct, expanded response
+        @test occursin(expanduser("~"), fetch(get_stdout))
     end
 
     # issues #22176 & #20482
