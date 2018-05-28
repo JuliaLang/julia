@@ -239,20 +239,20 @@ function rpad(
 end
 
 """
-    split(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
-    split(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
+    split(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    split(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 
-Return an array of substrings by splitting the given string on occurrences of the given
-character delimiters, which may be specified in any of the formats allowed by
-[`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
-or as a single character or collection of characters.
+Split `str` into an array of substrings on occurences of the delimiter `dlm`.  `dlm`
+can be any of the formats allowed by [`findnext`](@ref)'s first argument (i.e. as a
+string, regular expression or a function), or as a single character or collection of
+characters.
 
-If `chars` is omitted, it defaults to the set of all space characters.
+If `dlm` is omitted, it defaults to [`isspace`](@ref).
 
 The optional keyword arguments are:
  - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
-   a `chars` argument, `true` with a `chars` argument.
+   a `dlm` argument, `true` with a `dlm` argument.
 
 See also [`rsplit`](@ref).
 
@@ -322,7 +322,7 @@ end
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    split(str, _default_delims; limit=limit, keepempty=keepempty)
+    split(str, isspace; limit=limit, keepempty=keepempty)
 
 """
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
@@ -395,7 +395,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool,
 end
 rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    rsplit(str, _default_delims; limit=limit, keepempty=keepempty)
+    rsplit(str, isspace; limit=limit, keepempty=keepempty)
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
