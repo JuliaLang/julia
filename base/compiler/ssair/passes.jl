@@ -259,6 +259,11 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
+                if isa(lifted, GlobalRef) || isa(lifted, Expr)
+                    lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
+                    def.args[1+field] = lifted
+                    (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
+                end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
             elseif isexpr(def, :new)
@@ -292,6 +297,11 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 lifted = def.args[1+field]
                 if isa(leaf, OldSSAValue) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
+                end
+                if isa(lifted, GlobalRef) || isa(lifted, Expr)
+                    lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
+                    def.args[1+field] = lifted
+                    (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
                 end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
@@ -833,7 +843,10 @@ function type_lift_pass!(ir::IRCode)
             # node (or an UpsilonNode() argument to a PhiC node),
             # so lift all these nodes that have maybe undef values
             processed = IdDict{Int, Union{SSAValue, Bool}}()
-            if !isa(val, SSAValue)
+            while isa(val, SSAValue) && isa(ir.stmts[val.id], PiNode)
+                val = ir.stmts[val.id].val
+            end
+            if !isa(val, SSAValue) || (!isa(ir.stmts[val.id], PhiNode) && !isa(ir.stmts[val.id], PhiCNode))
                 (isa(val, GlobalRef) || isexpr(val, :static_parameter)) && continue
                 if stmt.head === :undefcheck
                     ir.stmts[idx] = nothing
@@ -843,19 +856,8 @@ function type_lift_pass!(ir::IRCode)
                 continue
             end
             stmt_id = val.id
-            while isa(ir.stmts[stmt_id], PiNode)
-                stmt_id = ir.stmts[stmt_id].val.id
-            end
             worklist = Tuple{Int, Int, SSAValue, Int}[(stmt_id, 0, SSAValue(0), 0)]
             def = ir.stmts[stmt_id]
-            if !isa(def, PhiNode) && !isa(def, PhiCNode)
-                if stmt.head === :isdefined
-                    ir.stmts[idx] = true
-                else
-                    ir.stmts[idx] = nothing
-                end
-                continue
-            end
             if !haskey(lifted_undef, stmt_id)
                 first = true
                 while !isempty(worklist)

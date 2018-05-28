@@ -70,6 +70,8 @@ let s = "hello"
     @test c == ['e','l','l','o']
     @test c isa Vector{Char}
 end
+# rest with state from old iteration protocol
+@test collect(rest(1:6, start(1:6))) == collect(1:6)
 
 @test_throws MethodError collect(rest(countfrom(1), 5))
 
@@ -528,6 +530,7 @@ end
         @test Base.peek(a) == 3
         @test sum(a) == 7
     end
+    @test eltype(Iterators.Stateful("a")) == Char
     # Interaction of zip/Stateful
     let a = Iterators.Stateful("a"), b = ""
 	@test isempty(collect(zip(a,b)))

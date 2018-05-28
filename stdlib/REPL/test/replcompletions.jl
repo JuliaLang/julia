@@ -3,7 +3,7 @@
 using REPL.REPLCompletions
 using Test
 using Random
-import Pkg
+import OldPkg
 
 let ex = quote
     module CompletionFoo
@@ -87,14 +87,14 @@ end
 
 function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
-    # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
+    # Unlike the version in test/pkg.jl, this does not run OldPkg.init so does not
     # clone METADATA (only Pkg and LibGit2 tests should need internet access)
     tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
-        @test !isdir(Pkg.dir())
+        @test !isdir(OldPkg.dir())
         try
-            mkpath(Pkg.dir())
-            @test isdir(Pkg.dir())
+            mkpath(OldPkg.dir())
+            @test isdir(OldPkg.dir())
             fn()
         finally
             rm(tmpdir, recursive=true)
@@ -495,31 +495,36 @@ end
 
 # Test completion of packages
 mkp(p) = ((@assert !isdir(p)); mkpath(p))
-temp_pkg_dir_noinit() do
-    # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
-    # but not <Mod>/ if no corresponding .jl file is found
-    pkg_dir = Pkg.dir("CompletionFooPackage", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
+push!(LOAD_PATH, OldPkg.dir)
+try
+    temp_pkg_dir_noinit() do
+        # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
+        # but not <Mod>/ if no corresponding .jl file is found
+        pkg_dir = OldPkg.dir("CompletionFooPackage", "src")
+        mkp(pkg_dir)
+        touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
 
-    pkg_dir = Pkg.dir("CompletionFooPackage2.jl", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
+        pkg_dir = OldPkg.dir("CompletionFooPackage2.jl", "src")
+        mkp(pkg_dir)
+        touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
 
-    touch(Pkg.dir("CompletionFooPackage3.jl"))
+        touch(OldPkg.dir("CompletionFooPackage3.jl"))
 
-    mkp(Pkg.dir("CompletionFooPackageNone"))
-    mkp(Pkg.dir("CompletionFooPackageNone2.jl"))
+        mkp(OldPkg.dir("CompletionFooPackageNone"))
+        mkp(OldPkg.dir("CompletionFooPackageNone2.jl"))
 
-    s = "using Completion"
-    c,r = test_complete(s)
-    @test "CompletionFoo" in c #The module
-    @test "CompletionFooPackage" in c #The package
-    @test "CompletionFooPackage2" in c #The package
-    @test "CompletionFooPackage3" in c #The package
-    @test !("CompletionFooPackageNone" in c) #The package
-    @test !("CompletionFooPackageNone2" in c) #The package
-    @test s[r] == "Completion"
+        s = "using Completion"
+        c,r = test_complete(s)
+        @test "CompletionFoo" in c #The module
+        @test "CompletionFooPackage" in c #The package
+        @test "CompletionFooPackage2" in c #The package
+        @test "CompletionFooPackage3" in c #The package
+        @test !("CompletionFooPackageNone" in c) #The package
+        @test !("CompletionFooPackageNone2" in c) #The package
+        @test s[r] == "Completion"
+    end
+finally
+    @test pop!(LOAD_PATH) == OldPkg.dir
 end
 
 path = joinpath(tempdir(),randstring())

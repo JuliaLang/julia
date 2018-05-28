@@ -31,7 +31,8 @@ for U in (:Nothing, :Missing)
         promote_rule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), $U}
         promote_rule(::Type{Any}, ::Type{$U}) = Any
         promote_rule(::Type{$U}, ::Type{Any}) = Any
-        promote_rule(::Type{$U}, ::Type{$U}) = U
+        # This definition is never actually used, but disambiguates the above definitions
+        promote_rule(::Type{$U}, ::Type{$U}) = $U
     end
 end
 promote_rule(::Type{Union{Nothing, Missing}}, ::Type{Any}) = Any
@@ -176,10 +177,15 @@ end
 IteratorSize(::Type{<:SkipMissing}) = SizeUnknown()
 IteratorEltype(::Type{SkipMissing{T}}) where {T} = IteratorEltype(T)
 eltype(::Type{SkipMissing{T}}) where {T} = nonmissingtype(eltype(T))
+
 function Base.iterate(itr::SkipMissing, state...)
     y = iterate(itr.x, state...)
-    while y !== nothing && y[1] isa Missing
-        y = iterate(itr.x, y[2])
+    y === nothing && return nothing
+    item, state = y
+    while item === missing
+        y = iterate(itr.x, state)
+        y === nothing && return nothing
+        item, state = y
     end
-    y
+    item, state
 end

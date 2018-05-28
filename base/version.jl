@@ -292,7 +292,7 @@ function banner(io::IO = stdout)
         print(io,"""               $(d3)_$(tx)
            $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: https://docs.julialang.org
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
+           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
           $(jl)| | | | | | |/ _` |$(tx)  |
           $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
@@ -304,7 +304,7 @@ function banner(io::IO = stdout)
                        _
            _       _ _(_)_     |  A fresh approach to technical computing
           (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
-           _ _   _| |_  __ _   |  Type \"?help\" for help.
+           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
           | | | | | | |/ _` |  |
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
          _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)

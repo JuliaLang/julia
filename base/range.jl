@@ -117,7 +117,7 @@ convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(
 ## ordinal ranges
 
 abstract type OrdinalRange{T,S} <: AbstractRange{T} end
-abstract type AbstractUnitRange{T} <: OrdinalRange{T,Int} end
+abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
 
 struct StepRange{T,S} <: OrdinalRange{T,S}
     start::T
@@ -374,7 +374,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 ```
 """
 step(r::StepRange) = r.step
-step(r::AbstractUnitRange) = 1
+step(r::AbstractUnitRange{T}) where{T} = oneunit(T)
 step(r::StepRangeLen{T}) where {T} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
 
@@ -450,40 +450,19 @@ copy(r::AbstractRange) = r
 
 ## iteration
 
-function iterate(r::LinRange, i::Int=1)
+function iterate(r::Union{LinRange,StepRangeLen}, i::Int=1)
     @_inline_meta
     length(r) < i && return nothing
-    unsafe_getindex(r, i), i+1
+    unsafe_getindex(r, i), i + 1
 end
 
-function iterate(r::StepRange{T}, i=oftype(r.start + r.step, r.start)) where {T}
-    if i isa Integer
-        (isempty(r) | (i == oftype(i, r.stop) + r.step)) && return nothing
-    else
-        (isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))) && return nothing
-    end
-    (convert(T,i), i+r.step)
-end
+iterate(r::OrdinalRange) = isempty(r) ? nothing : (first(r), first(r))
 
-iterate(r::StepRangeLen{T}, i=1) where {T} = i > length(r) ? nothing : (unsafe_getindex(r, i), i+1)
-
-iterate(r::AbstractUnitRange) = isless(last(r), first(r)) ? nothing : (first(r), first(r))
-
-function iterate(r::AbstractUnitRange{T}, i) where {T}
+function iterate(r::OrdinalRange{T}, i) where {T}
+    @_inline_meta
     i == last(r) && return nothing
-    next = convert(T, i + oneunit(T))
+    next = convert(T, i + step(r))
     (next, next)
-end
-
-# some special cases to favor default Int type to avoid overflow
-let smallint = (Int === Int64 ?
-                Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
-                Union{Int8,UInt8,Int16,UInt16})
-    global iterate
-    function iterate(r::StepRange{T}, i=convert(Int, r.start)) where {T<:smallint}
-        (isempty(r) | (i == oftype(i, r.stop) + r.step)) && return nothing
-        (i % T, i + r.step)
-    end
 end
 
 ## indexing

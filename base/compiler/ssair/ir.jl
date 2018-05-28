@@ -51,6 +51,7 @@ struct CFG
     blocks::Vector{BasicBlock}
     index::Vector{Int}
 end
+copy(c::CFG) = CFG(copy(c.blocks), copy(c.index))
 
 function block_for_inst(index, inst)
     searchsortedfirst(index, inst, lt=(<=))
@@ -156,6 +157,7 @@ struct NewNode
     # The index into the line number table of this entry
     line::Int
 end
+copy(n::NewNode) = copy(n.pos, n.attach_after, n.typ, copy(n.node), n.line)
 
 struct IRCode
     stmts::Vector{Any}
@@ -163,20 +165,23 @@ struct IRCode
     lines::Vector{Int}
     flags::Vector{UInt8}
     argtypes::Vector{Any}
+    linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::Vector{NewNode}
     mod::Module
     meta::Vector{Any}
 
     function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
-            cfg::CFG, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
-        return new(stmts, types, lines, flags, argtypes, cfg, NewNode[], mod, meta)
+            cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
+        return new(stmts, types, lines, flags, argtypes, linetable, cfg, NewNode[], mod, meta)
     end
     function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
             cfg::CFG, new_nodes::Vector{NewNode})
-        return new(stmts, types, lines, flags, ir.argtypes, cfg, new_nodes, ir.mod, ir.meta)
+        return new(stmts, types, lines, flags, ir.argtypes, ir.linetable, cfg, new_nodes, ir.mod, ir.meta)
     end
 end
+copy(code::IRCode) = IRCode(code, copy(code.stmts), copy(code.types),
+    copy(code.lines), copy(code.flags), copy(code.cfg), copy(code.new_nodes))
 
 function getindex(x::IRCode, s::SSAValue)
     if s.id <= length(x.stmts)
@@ -272,7 +277,8 @@ function is_relevant_expr(e::Expr)
     return e.head in (:call, :invoke, :new, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
-                      :undefcheck, :throw_undef_if_not)
+                      :undefcheck, :throw_undef_if_not,
+                      :cfunction)
 end
 
 function setindex!(x::UseRef, @nospecialize(v))
@@ -336,7 +342,22 @@ iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
     end
 end
 
-function scan_ssa_use!(used, @nospecialize(stmt))
+# This function is used from the show code, which may have a different
+# `push!`/`used` type since it's in Base.
+function scan_ssa_use!(push!, used, @nospecialize(stmt))
+    if isa(stmt, SSAValue)
+        push!(used, stmt.id)
+    end
+    for useref in userefs(stmt)
+        val = useref[]
+        if isa(val, SSAValue)
+            push!(used, val.id)
+        end
+    end
+end
+
+# Manually specialized copy of the above with push! === Compiler.push!
+function scan_ssa_use!(used::IdSet, @nospecialize(stmt))
     if isa(stmt, SSAValue)
         push!(used, stmt.id)
     end
@@ -406,6 +427,7 @@ mutable struct IncrementalCompact
     idx::Int
     result_idx::Int
     active_result_bb::Int
+    renamed_new_nodes::Bool
     function IncrementalCompact(code::IRCode)
         # Sort by position with attach after nodes affter regular ones
         perm = my_sortperm(Int[(code.new_nodes[i].pos*2 + Int(code.new_nodes[i].attach_after)) for i in 1:length(code.new_nodes)])
@@ -422,7 +444,7 @@ mutable struct IncrementalCompact
         pending_perm = Int[]
         return new(code, result, result_types, result_lines, result_flags, code.cfg.blocks, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, pending_nodes, pending_perm,
-            1, 1, 1)
+            1, 1, 1, false)
     end
 
     # For inlining
@@ -439,7 +461,7 @@ mutable struct IncrementalCompact
             parent.result_bbs, ssa_rename, parent.used_ssas,
             late_fixup, perm, 1,
             new_new_nodes, pending_nodes, pending_perm,
-            1, result_offset, parent.active_result_bb)
+            1, result_offset, parent.active_result_bb, false)
     end
 end
 
@@ -607,6 +629,12 @@ function getindex(view::TypesView, idx)
     isa(idx, SSAValue) && (idx = idx.id)
     if isa(view.ir, IncrementalCompact) && idx < view.ir.result_idx
         return view.ir.result_types[idx]
+    elseif isa(view.ir, IncrementalCompact) && view.ir.renamed_new_nodes
+        if idx <= length(view.ir.result_types)
+            return view.ir.result_types[idx]
+        else
+            return view.ir.new_new_nodes[idx - length(view.ir.result_types)].typ
+        end
     else
         ir = isa(view.ir, IncrementalCompact) ? view.ir.ir : view.ir
         if idx <= length(ir.types)
@@ -614,12 +642,6 @@ function getindex(view::TypesView, idx)
         else
             return ir.new_nodes[idx - length(ir.types)].typ
         end
-        ir = ir.ir
-    end
-    if idx <= length(ir.types)
-        return ir.types[idx]
-    else
-        return ir.new_nodes[idx - length(ir.types)].typ
     end
 end
 
@@ -938,6 +960,7 @@ function non_dce_finish!(compact::IncrementalCompact)
     bb = compact.result_bbs[end]
     compact.result_bbs[end] = BasicBlock(bb,
                 StmtRange(first(bb.stmts), result_idx-1))
+    compact.renamed_new_nodes = true
 end
 
 function finish(compact::IncrementalCompact)

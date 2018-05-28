@@ -630,6 +630,16 @@ function show(io::IO, l::Core.MethodInstance)
     end
 end
 
+module IRShow
+    const Compiler = Core.Compiler
+    using Core.IR
+    import .Base: IdSet
+    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument
+    Base.size(r::Compiler.StmtRange) = Compiler.size(r)
+    Base.show(io::IO, r::Compiler.StmtRange) = print(io, Compiler.first(r):Compiler.last(r))
+    include("compiler/ssair/show.jl")
+end
+
 function show(io::IO, src::CodeInfo)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
@@ -637,9 +647,15 @@ function show(io::IO, src::CodeInfo)
     if src.slotnames !== nothing
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
     end
-    body = Expr(:body)
-    body.args = src.code
-    show(lambda_io, body)
+    if src.codelocs !== nothing
+        println(io)
+        ir = Core.Compiler.inflate_ir(src)
+        IRShow.show_ir(lambda_io, ir, argnames=sourceinfo_slotnames(src))
+    else
+        body = Expr(:body)
+        body.args = src.code
+        show(lambda_io, body)
+    end
     print(io, ")")
 end
 

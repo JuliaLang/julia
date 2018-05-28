@@ -369,7 +369,7 @@ c=Channel{Int}(1)
 
 # test channel iterations
 function test_iteration(in_c, out_c)
-    t=@schedule for v in in_c
+    t=@async for v in in_c
         put!(out_c, v)
     end
 
@@ -576,8 +576,8 @@ end
 n = 10
 as = [rand(4,4) for i in 1:n]
 bs = deepcopy(as)
-cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
-svdas = map(svdfact, as)
+cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svd(x)), bs))
+svdas = map(svd, as)
 for i in 1:n
     @test cs[i].U ≈ svdas[i].U
     @test cs[i].S ≈ svdas[i].S
@@ -1105,7 +1105,7 @@ append!(testruns, [
 for (addp_testf, expected_errstr, env) in testruns
     old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
-    stdout_txt = @schedule filter!(readlines(stdout_out)) do s
+    stdout_txt = @async filter!(readlines(stdout_out)) do s
             return !startswith(s, "\tFrom failed worker startup:\t")
         end
     try

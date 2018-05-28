@@ -23,7 +23,9 @@ export BINDIR,
        isbsd,
        islinux,
        isunix,
-       iswindows
+       iswindows,
+       isexecutable,
+       which
 
 import ..Base: show
 
@@ -312,14 +314,96 @@ if iswindows()
 else
     windows_version() = v"0.0"
 end
+
 """
     Sys.windows_version()
 
-Returns the version number for the Windows NT Kernel as a `VersionNumber`,
+Return the version number for the Windows NT Kernel as a `VersionNumber`,
 i.e. `v"major.minor.build"`, or `v"0.0.0"` if this is not running on Windows.
 """
 windows_version
 
 const WINDOWS_VISTA_VER = v"6.0"
+
+"""
+    Sys.isexecutable(path::String)
+
+Return `true` if the given `path` has executable permissions.
+"""
+function isexecutable(path::String)
+    if iswindows()
+        return isfile(path)
+    else
+        # We use `access()` and `X_OK` to determine if a given path is
+        # executable by the current user.  `X_OK` comes from `unistd.h`.
+        X_OK = 0x01
+        ccall(:access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
+    end
+end
+isexecutable(path::AbstractString) = isexecutable(String(path))
+
+"""
+    Sys.which(program_name::String)
+
+Given a program name, search the current `PATH` to find the first binary with
+the proper executable permissions that can be run, and return an absolute
+path. Raise `ErrorException` if no such program is available.  If a path with
+a directory in it is passed in for `program_name`, tests that exact path
+for executable permissions only (with `.exe` and `.com` extensions added on
+Windows platforms); no searching of `PATH` is performed.
+"""
+function which(program_name::String)
+    # Build a list of program names that we're going to try
+    program_names = String[]
+    base_pname = basename(program_name)
+    if iswindows()
+        # If the file already has an extension, try that name first
+        if !isempty(splitext(base_pname)[2])
+            push!(program_names, base_pname)
+        end
+
+        # But also try appending .exe and .com`
+        for pe in (".exe", ".com")
+            push!(program_names, string(base_pname, pe))
+        end
+    else
+        # On non-windows, we just always search for what we've been given
+        push!(program_names, base_pname)
+    end
+
+    path_dirs = String[]
+    program_dirname = dirname(program_name)
+    # If we've been given a path that has a directory name in it, then we
+    # check to see if that path exists.  Otherwise, we search the PATH.
+    if isempty(program_dirname)
+        # If we have been given just a program name (not a relative or absolute
+        # path) then we should search `PATH` for it here:
+        pathsep = iswindows() ? ';' : ':'
+        path_dirs = abspath.(split(get(ENV, "PATH", ""), pathsep))
+
+        # On windows we always check the current directory as well
+        if iswindows()
+            pushfirst!(path_dirs, pwd())
+        end
+    else
+        push!(path_dirs, abspath(program_dirname))
+    end
+
+    # Here we combine our directories with our program names, searching for the
+    # first match among all combinations.
+    for path_dir in path_dirs
+        for pname in program_names
+            program_path = joinpath(path_dir, pname)
+            # If we find something that matches our name and we can execute
+            if isexecutable(program_path)
+                return realpath(program_path)
+            end
+        end
+    end
+
+    # If we couldn't find anything, complain
+    error("$program_name not found")
+end
+which(program_name::AbstractString) = which(String(program_name))
 
 end # module Sys

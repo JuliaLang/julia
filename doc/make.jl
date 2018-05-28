@@ -5,12 +5,11 @@ if "deploy" in ARGS
 end
 
 # Install dependencies needed to build the documentation.
-ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
 using Pkg
-Pkg.init()
-cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); force = true)
-Pkg.update()
-Pkg.resolve()
+empty!(DEPOT_PATH)
+pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
+pushfirst!(LOAD_PATH, @__DIR__)
+Pkg.instantiate()
 
 using Documenter
 
@@ -83,7 +82,6 @@ const PAGES = [
         "manual/handling-operating-system-variation.md",
         "manual/environment-variables.md",
         "manual/embedding.md",
-        "manual/packages.md",
         "manual/code-loading.md",
         "manual/profile.md",
         "manual/stacktraces.md",

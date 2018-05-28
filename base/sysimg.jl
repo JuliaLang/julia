@@ -520,7 +520,7 @@ let
             :Random,
             :UUIDs,
             :Future,
-            :Pkg,
+            :OldPkg,
             :LinearAlgebra,
             :IterativeEigensolvers,
             :SparseArrays,
@@ -529,7 +529,7 @@ let
             :Distributed,
             :Test,
             :REPL,
-            :Pkg3,
+            :Pkg,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
@@ -747,7 +747,6 @@ end
     # @deprecate_stdlib kron        LinearAlgebra true
     @deprecate_stdlib ldltfact    LinearAlgebra true
     @deprecate_stdlib ldltfact!   LinearAlgebra true
-    @deprecate_stdlib linreg      LinearAlgebra true
     @deprecate_stdlib logabsdet   LinearAlgebra true
     @deprecate_stdlib logdet      LinearAlgebra true
     @deprecate_stdlib lu          LinearAlgebra true

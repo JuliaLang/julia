@@ -259,7 +259,14 @@ $$(build_depsbindir)/lib$(1).dll: | $$(build_depsbindir)
 	cp $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_depsbindir)
 JL_LIBS += $(1)
 endef
-$(eval $(call std_dll,gfortran-3))
+
+# Given a list of space-separated libraries, return the first library name that is
+# correctly found through `pathsearch`.
+define select_std_dll
+$(firstword $(foreach name,$(1),$(if $(call pathsearch,lib$(name).dll,$(STD_LIB_PATH)),$(name),)))
+endef
+
+$(eval $(call std_dll,$(call select_std_dll,gfortran-3 gfortran-4 gfortran-5)))
 $(eval $(call std_dll,quadmath-0))
 $(eval $(call std_dll,stdc++-6))
 ifeq ($(ARCH),i686)

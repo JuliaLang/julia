@@ -662,7 +662,10 @@ call obsolete versions of a function `f`.
 (The drawback is that `invokelatest` is somewhat slower than calling
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
-function invokelatest(f, args...; kwargs...)
+function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
+    if isempty(kwargs)
+        return Core._apply_latest(f, args)
+    end
     # We use a closure (`inner`) to handle kwargs.
     inner() = f(args...; kwargs...)
     Core._apply_latest(inner)

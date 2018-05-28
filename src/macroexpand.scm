@@ -85,6 +85,8 @@
    ;; where
    (pattern-lambda (where ex . vars)
                    (cons 'varlist (typevar-names vars)))
+   (pattern-lambda (= (curly ex . vars) rhs)
+                   (cons 'varlist (typevar-names vars)))
 
    ;; let
    (pattern-lambda (let binds ex)

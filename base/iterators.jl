@@ -495,6 +495,8 @@ end
 
 @propagate_inbounds iterate(i::Rest, st=i.st) = iterate(i.itr, st)
 isdone(i::Rest, st...) = isdone(i.itr, st...)
+@propagate_inbounds iterate(i::Rest{I,S}, st::S=i.st) where {I,S<:Base.LegacyIterationCompat{I}} =
+    done(i.itr, st) ? nothing : next(i.itr, st)
 
 eltype(::Type{<:Rest{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{<:Rest{I}}) where {I} = IteratorEltype(I)
@@ -976,12 +978,13 @@ end
     Stateful(itr)
 
 There are several different ways to think about this iterator wrapper:
-    1. It provides a mutable wrapper around an iterator and
-       its iteration state.
-    2. It turns an iterator-like abstraction into a Channel-like
-       abstraction.
-    3. It's an iterator that mutates to become its own rest iterator
-       whenever an item is produced.
+
+1. It provides a mutable wrapper around an iterator and
+   its iteration state.
+2. It turns an iterator-like abstraction into a Channel-like
+   abstraction.
+3. It's an iterator that mutates to become its own rest iterator
+   whenever an item is produced.
 
 `Stateful` provides the regular iterator interface. Like other mutable iterators
 (e.g. `Channel`), if iteration is stopped early (e.g. by a `break` in a `for` loop),
@@ -1019,8 +1022,7 @@ julia> for x in a; x == 1 || break; end
 julia> Base.peek(a)
 3
 
-# Sum the remaining elements
-julia> sum(a)
+julia> sum(a) # Sum the remaining elements
 7
 ```
 """
@@ -1083,7 +1085,7 @@ end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
 IteratorSize(::Type{Stateful{VS,T}} where VS) where {T} =
     isa(IteratorSize(T), SizeUnknown) ? SizeUnknown() : HasLength()
-eltype(::Type{Stateful{VS, T}} where VS) where {T} = eltype(T)
+eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
 IteratorEltype(::Type{Stateful{VS,T}} where VS) where {T} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
 

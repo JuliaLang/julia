@@ -155,7 +155,7 @@ termination of the task will close all of the bound channels.
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @schedule foreach(i->put!(c, i), 1:4);
+julia> task = @async foreach(i->put!(c, i), 1:4);
 
 julia> bind(c,task);
 
@@ -174,7 +174,7 @@ false
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @schedule (put!(c,1);error("foo"));
+julia> task = @async (put!(c,1);error("foo"));
 
 julia> bind(c,task);
 

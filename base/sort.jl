@@ -685,22 +685,41 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false)
+    partialsortperm(v, k; by=<transform>, lt=<comparison>, rev=false)
 
-Return a partial permutation of the vector `v`, according to the order specified by
-`by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
-if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index,
-the index in `v` of the value which would be sorted at position `k` is returned;
-if `k` is a range, an array with the indices in `v` of the values which would be sorted in
-these positions is returned.
+Return a partial permutation `I` of the vector `v`, so that `v[I]` returns values of a fully
+sorted version of `v` at index `k`. If `k` is a range, a vector of indices is returned; if
+`k` is an integer, a single index is returned. The order is specified using the same
+keywords as `sort!`. The permutation is stable, meaning that indices of equal elements
+appear in ascending order.
 
-Note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+Note that this function is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2, 1];
+
+julia> v[partialsortperm(v, 1)]
+1
+
+julia> p = partialsortperm(v, 1:3)
+3-element view(::Array{Int64,1}, 1:3) with eltype Int64:
+ 2
+ 4
+ 3
+
+julia> v[p]
+3-element Array{Int64,1}:
+ 1
+ 1
+ 2
+```
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
 
 """
-    partialsortperm!(ix, v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false, initialized=false)
+    partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `1:length(ix)`.
@@ -729,13 +748,10 @@ end
 """
     sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Return a permutation vector of indices of `v` that puts it in sorted order. Specify `alg` to
-choose a particular sorting algorithm (see Sorting Algorithms). `MergeSort` is used by
-default, and since it is stable, the resulting permutation will be the lexicographically
-first one that puts the input array into sorted order – i.e. indices of equal elements
-appear in ascending order. If you choose a non-stable sorting algorithm such as `QuickSort`,
-a different permutation that puts the array into order may be returned. The order is
-specified using the same keywords as `sort!`.
+Return a permutation vector `I` that puts `v[I]` in sorted order. The order is specified
+using the same keywords as `sort!`. The permutation is guaranteed to be stable even if the
+sorting algorithm is unstable, meaning that indices of equal elements appear in ascending
+order.
 
 See also [`sortperm!`](@ref).
 

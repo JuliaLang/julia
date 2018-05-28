@@ -363,7 +363,7 @@ code to help the user avoid other wrong-behavior situations:
 A few other points to be aware of:
 
 1. No code reload / cache invalidation is performed after changes are made to the source files themselves,
-   (including by [`Pkg.update`](@ref)), and no cleanup is done after [`Pkg.rm`](@ref)
+   (including by [`Pkg.update`], and no cleanup is done after [`Pkg.rm`]
 2. The memory sharing behavior of a reshaped array is disregarded by precompilation (each view gets
    its own copy)
 3. Expecting the filesystem to be unchanged between compile-time and runtime e.g. [`@__FILE__`](@ref)/`source_path()`
@@ -383,5 +383,5 @@ command line flag `--compiled-modules={yes|no}` enables you to toggle module pre
 off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
 are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
 manually and it will respect `__precompile__()` directives for the module. The state of this command
-line flag is passed to [`Pkg.build`](@ref) to disable automatic precompilation triggering when installing,
+line flag is passed to [`Pkg.build`] to disable automatic precompilation triggering when installing,
 updating, and explicitly building packages.

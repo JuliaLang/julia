@@ -219,6 +219,9 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * The package manager `Pkg` has been replaced with a new one. See the manual entries on
+    "Code Loading" and "Pkg" for documentation.
+
   * `replace(s::AbstractString, pat=>repl)` for function `repl` arguments formerly
     passed a substring to `repl` in all cases.  It now passes substrings for
     string patterns `pat`, but a `Char` for character patterns (when `pat` is a
@@ -226,6 +229,21 @@ This section lists changes that do not have deprecation warnings.
 
   * `readuntil` now does *not* include the delimiter in its result, matching the
     behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
+
+  * `lu` methods now return decomposition objects such as `LU` rather than
+    tuples of arrays or tuples of numbers ([#26997], [#27159], [#27212]).
+
+  * `schur` methods now return decomposition objects such as `Schur` and
+    `GeneralizedSchur` rather than tuples of arrays ([#26997], [#27159], [#27212]).
+
+  * `lq` methods now return decomposition objects such as `LQ`
+    rather than tuples of arrays ([#26997], [#27159], [#27212]).
+
+  * `qr` methods now return decomposition objects such as `QR`, `QRPivoted`,
+    and `QRCompactWY` rather than tuples of arrays ([#26997], [#27159], [#27212]).
+
+  * `svd` methods now return decomposition objects such as `SVD` and
+    `GeneralizedSVD` rather than tuples of arrays or tuples of numbers ([#26997], [#27159], [#27212]).
 
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
@@ -477,6 +495,13 @@ This section lists changes that do not have deprecation warnings.
     match `café` (not just `caf`). Add the `a` modifier (e.g. `r"\w+"a`) to
     restore the previous behavior ([#27189]).
 
+  * `@sync` now waits only for *lexically* enclosed (i.e. visible directly in the source
+    text of its argument) `@async` expressions. If you need to wait for a task created by
+    a called function `f`, have `f` return the task and put `@async wait(f(...))` within
+    the `@sync` block.
+    This change makes `@schedule` redundant with `@async`, so `@schedule` has been
+    deprecated ([#27164]).
+
 Library improvements
 --------------------
 
@@ -660,6 +685,8 @@ Library improvements
   * `trunc`, `floor`, `ceil`, and `round` specify `digits`, `sigdigits` and `base` using
     keyword arguments. ([#26156], [#26670])
 
+  * `Sys.which()` provides a cross-platform method to find executable files, similar to
+    the Unix `which` command. ([#26559])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -685,6 +712,31 @@ Deprecated or removed
 
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
+
+  * `lufact`, `schurfact`, `lqfact`, `qrfact`, `ldltfact`, `svdfact`,
+    `bkfact`, `hessfact`, `eigfact`, and `cholfact` have respectively been
+    deprecated to `lu`, `schur`, `lq`, `qr`, `ldlt`, `svd`, `bunchkaufman`,
+    `hessenberg`, `eigen`, and `cholesky` ([#26997], [#27159], [#27212]).
+
+  * `lufact!`, `schurfact!`, `lqfact!`, `qrfact!`, `ldltfact!`, `svdfact!`,
+    `bkfact!`, `hessfact!`, and `eigfact!` have respectively been deprecated to
+    `lu!`, `schur!`, `lq!`, `qr!`, `ldlt!`, `svd!`, `bunchkaufman!`,
+    `hessenberg!`, and `eigen!` ([#26997], [#27159], [#27212]).
+
+  * `eig(A[, args...])` has been deprecated in favor of `eigen(A[, args...])`.
+    Whereas the former returns a tuple of arrays, the latter returns an `Eigen` object.
+    So for a direct replacement, use `(eigen(A[, args...])...,)`. But going forward,
+    consider using the direct result of `eigen(A[, args...])` instead, either
+    destructured into its components (`vals, vecs = eigen(A[, args...])`) or
+    as an `Eigen` object (`X = eigen(A[, args...])`) ([#26997], [#27159], [#27212]).
+
+  * `eig(A::AbstractMatrix, B::AbstractMatrix)` and `eig(A::Number, B::Number)`
+    have been deprecated in favor of `eigen(A, B)`. Whereas the former each return
+    a tuple of arrays, the latter returns a `GeneralizedEigen` object. So for a direct
+    replacement, use `(eigen(A, B)...,)`. But going forward, consider using the
+    direct result of `eigen(A, B)` instead, either destructured into its components
+    (`vals, vecs = eigen(A, B)`), or as a `GeneralizedEigen` object
+    (`X = eigen(A, B)`) ([#26997], [#27159], [#27212]).
 
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.

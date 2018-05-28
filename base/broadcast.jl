@@ -60,7 +60,7 @@ For AbstractArray types that support arbitrary dimensionality, `N` can be set to
     Base.BroadcastStyle(::Type{<:MyArray}) = MyArrayStyle()
 
 In cases where you want to be able to mix multiple `AbstractArrayStyle`s and keep track
-of dimensionality, your style needs to support a `Val` constructor:
+of dimensionality, your style needs to support a [`Val`](@ref) constructor:
 
     struct MyArrayStyleDim{N} <: Broadcast.AbstractArrayStyle{N} end
     (::Type{<:MyArrayStyleDim})(::Val{N}) where N = MyArrayStyleDim{N}()
@@ -211,7 +211,7 @@ broadcast_axes(A::Ref) = ()
 
 Compute the axes for `A`.
 
-This should only be specialized for objects that do not define axes but want to participate in broadcasting.
+This should only be specialized for objects that do not define [`axes`](@ref) but want to participate in broadcasting.
 """
 broadcast_axes
 
@@ -267,9 +267,9 @@ instantiate(x) = x
 
 Construct and check the axes for the lazy Broadcasted object `bc`.
 
-Custom `BroadcastStyle`s may override this default in cases where it is fast and easy
+Custom [`BroadcastStyle`](@ref)s may override this default in cases where it is fast and easy
 to compute and verify the resulting `axes` on-demand, leaving the `axis` field
-of the `Broadcasted` object empty (populated with `nothing`).
+of the `Broadcasted` object empty (populated with [`nothing`](@ref)).
 """
 @inline function instantiate(bc::Broadcasted{Style}) where {Style}
     if bc.axes isa Nothing # Not done via dispatch to make it easier to extend instantiate(::Broadcasted{Style})
@@ -479,7 +479,7 @@ end
 
 Recompute index `I` such that it appropriately constrains broadcasted dimensions to the source.
 
-Two methods are supported, both allowing for `I` to be specified as either a `CartesianIndex` or
+Two methods are supported, both allowing for `I` to be specified as either a [`CartesianIndex`](@ref) or
 an `Int`.
 
 * `newindex(argument, I)` dynamically constrains `I` based upon the axes of `argument`.
@@ -529,7 +529,7 @@ Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
 """
     _broadcast_getindex(A, I)
 
-Index into `A` with `I`, collapsing broadcasted indices to their singleton indices as appropriate
+Index into `A` with `I`, collapsing broadcasted indices to their singleton indices as appropriate.
 """
 Base.@propagate_inbounds _broadcast_getindex(A::Union{Ref,AbstractArray{<:Any,0},Number}, I) = A[] # Scalar-likes can just ignore all indices
 Base.@propagate_inbounds _broadcast_getindex(::Ref{Type{T}}, I) where {T} = T
@@ -589,7 +589,7 @@ Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 """
     Broadcast.broadcastable(x)
 
-Return either `x` or an object like `x` such that it supports `axes`, indexing, and its type supports `ndims`.
+Return either `x` or an object like `x` such that it supports [`axes`](@ref), indexing, and its type supports [`ndims`](@ref).
 
 If `x` supports iteration, the returned value should have the same `axes` and indexing
 behaviors as [`collect(x)`](@ref).
@@ -639,13 +639,13 @@ combine_eltypes(f, args::Tuple) = Base._return_type(f, eltypes(args))
 """
     broadcast(f, As...)
 
-Broadcast the function `f` over the arrays, tuples, collections, `Ref`s and/or scalars `As`.
+Broadcast the function `f` over the arrays, tuples, collections, [`Ref`](@ref)s and/or scalars `As`.
 
 Broadcasting applies the function `f` over the elements of the container arguments and the
 scalars themselves in `As`. Singleton and missing dimensions are expanded to match the
 extents of the other arguments by virtually repeating the value. By default, only a limited
 number of types are considered scalars, including `Number`s, `String`s, `Symbol`s, `Type`s,
-`Function`s and some common singletons like `missing` and `nothing`. All other arguments are
+`Function`s and some common singletons like [`missing`](@ref) and [`nothing`](@ref). All other arguments are
 iterated over or indexed into elementwise.
 
 The resulting container type is established by the following rules:

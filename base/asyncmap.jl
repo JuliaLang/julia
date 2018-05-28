@@ -211,7 +211,7 @@ function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
 end
 
 function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
-    t = @schedule begin
+    t = @async begin
         retval = nothing
 
         try

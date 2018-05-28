@@ -1448,3 +1448,12 @@ end
 @test Meta.lower(@__MODULE__, :(Int[ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
 @test [ ()->return 42 for i = 1:1 ][1]() == 42
 @test Function[ identity() do x; return 2x; end for i = 1:1 ][1](21) == 42
+
+# issue #27155
+macro test27155()
+    quote
+        MyTest27155{Arg} = Tuple{Arg}
+        MyTest27155
+    end
+end
+@test @test27155() == (Tuple{T} where T)
