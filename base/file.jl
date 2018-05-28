@@ -39,7 +39,7 @@ Get the current working directory.
 # Examples
 ```julia-repl
 julia> pwd()
-"/home/JuliaUser/.julia/v0.7"
+"/home/JuliaUser"
 
 julia> cd("/home/JuliaUser/Projects/julia")
 
@@ -103,18 +103,29 @@ end
 """
     cd(f::Function, dir::AbstractString=homedir())
 
-Temporarily changes the current working directory and applies function `f` before returning.
+Temporarily change the current working directory, apply function `f` and
+finally return to the original directory.
 
 # Examples
-```jldoctest
-julia> cd(readdir, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia"))
-6-element Array{String,1}:
- "base"
- "base.cache"
- "cert.pem"
- "julia-config.jl"
- "stdlib"
+```julia-repl
+julia> pwd()
+"/home/JuliaUser"
+
+julia> cd(readdir, "/home/JuliaUser/Projects/julia")
+34-element Array{String,1}:
+ ".circleci"
+ ".freebsdci.sh"
+ ".git"
+ ".gitattributes"
+ ".github"
+ ⋮
  "test"
+ "ui"
+ "usr"
+ "usr-staging"
+
+julia> pwd()
+"/home/JuliaUser"
 ```
 """
 cd(f::Function) = cd(f, homedir())
@@ -138,13 +149,13 @@ Return `path`.
 
 # Examples
 ```julia-repl
-julia> mkdir("faketestingdir")
-"faketestingdir"
+julia> mkdir("testingdir")
+"testingdir"
 
-julia> cd("faketestingdir")
+julia> cd("testingdir")
 
 julia> pwd()
-"/home/JuliaUser/faketestingdir"
+"/home/JuliaUser/testingdir"
 ```
 """
 function mkdir(path::AbstractString; mode::Integer = 0o777)
@@ -166,16 +177,16 @@ Return `path`.
 
 # Examples
 ```julia-repl
-julia> mkdir("faketestingdir")
-"faketestingdir"
+julia> mkdir("testingdir")
+"testingdir"
 
-julia> cd("faketestingdir")
+julia> cd("testingdir")
 
 julia> pwd()
-"/home/JuliaUser/faketestingdir"
+"/home/JuliaUser/testingdir"
 
-julia> mkpath("my/fake/dir")
-"my/fake/dir"
+julia> mkpath("my/test/dir")
+"my/test/dir"
 
 julia> readdir()
 1-element Array{String,1}:
@@ -185,9 +196,9 @@ julia> cd("my")
 
 julia> readdir()
 1-element Array{String,1}:
- "fake"
+ "test"
 
-julia> readdir("fake")
+julia> readdir("test")
 1-element Array{String,1}:
  "dir"
 ```
@@ -218,19 +229,16 @@ directory, then all contents are removed recursively.
 
 # Examples
 ```jldoctest
-julia> mkpath("my/fake/dir")
-"my/fake/dir"
+julia> mkpath("my/test/dir");
 
-julia> rm("my/fake/dir", recursive=true)
-
-julia> in("this_file_does_not_exist", readdir())
-false
+julia> rm("my", recursive=true)
 
 julia> rm("this_file_does_not_exist", force=true)
 
-julia> write("my_little_file", 2);
-
-julia> rm("my_little_file")
+julia> rm("this_file_does_not_exist")
+ERROR: unlink: no such file or directory (ENOENT)
+Stacktrace:
+[...]
 ```
 """
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
@@ -377,8 +385,7 @@ julia> write("my_little_file", 2);
 julia> mtime("my_little_file")
 1.5273815391135583e9
 
-julia> touch("my_little_file")
-"my_little_file"
+julia> touch("my_little_file");
 
 julia> mtime("my_little_file")
 1.527381559163435e9
@@ -571,26 +578,19 @@ end
 Return the files and directories in the directory `dir` (or the current working directory if not given).
 
 # Examples
-```jldoctest
-julia> readdir(joinpath(Sys.BINDIR, Base.DATAROOTDIR))
-6-element Array{String,1}:
- "aclocal"
- "doc"
- "info"
- "julia"
- "man"
- "opt-viewer"
-
-julia> cd(joinpath(Sys.BINDIR, Base.DATAROOTDIR))
-
-julia> readdir()
-6-element Array{String,1}:
- "aclocal"
- "doc"
- "info"
- "julia"
- "man"
- "opt-viewer"
+```julia-repl
+julia> readdir("/home/JuliaUser/Projects/julia")
+34-element Array{String,1}:
+ ".circleci"
+ ".freebsdci.sh"
+ ".git"
+ ".gitattributes"
+ ".github"
+ ⋮
+ "test"
+ "ui"
+ "usr"
+ "usr-staging"
 ```
 """
 function readdir(path::AbstractString)
@@ -629,17 +629,34 @@ it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `SystemError` as argument.
 
-    for (root, dirs, files) in walkdir(".")
-        println("Directories in \$root")
-        for dir in dirs
-            println(joinpath(root, dir)) # path to directories
-        end
-        println("Files in \$root")
-        for file in files
-            println(joinpath(root, file)) # path to files
-        end
+# Examples
+```julia
+for (root, dirs, files) in walkdir(".")
+    println("Directories in \$root")
+    for dir in dirs
+        println(joinpath(root, dir)) # path to directories
     end
+    println("Files in \$root")
+    for file in files
+        println(joinpath(root, file)) # path to files
+    end
+end
+```
 
+```julia-repl
+julia> mkpath("my/test/dir");
+
+julia> itr = walkdir("my");
+
+julia> (root, dirs, files) = first(itr)
+("my", ["test"], String[])
+
+julia> (root, dirs, files) = first(itr)
+("my/test", ["dir"], String[])
+
+julia> (root, dirs, files) = first(itr)
+("my/test/dir", String[], String[])
+```
 """
 function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     content = nothing
