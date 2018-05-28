@@ -17,8 +17,7 @@ end</code></pre><p>A simple example is an iterable sequence of square numbers wi
            count::Int
        end
 
-julia&gt; Base.iterate(S::Squares, state=1) = state &gt; S.count ? nothing : (state*state, state+1)
-</code></pre><p>With only <a href="../../base/collections/#Base.iterate"><code>iterate</code></a> definition, the <code>Squares</code> type is already pretty powerful. We can iterate over all the elements:</p><pre><code class="language-julia-repl">julia&gt; for i in Squares(7)
+julia&gt; Base.iterate(S::Squares, state=1) = state &gt; S.count ? nothing : (state*state, state+1)</code></pre><p>With only <a href="../../base/collections/#Base.iterate"><code>iterate</code></a> definition, the <code>Squares</code> type is already pretty powerful. We can iterate over all the elements:</p><pre><code class="language-julia-repl">julia&gt; for i in Squares(7)
            println(i)
        end
 1
@@ -27,14 +26,14 @@ julia&gt; Base.iterate(S::Squares, state=1) = state &gt; S.count ? nothing : (st
 16
 25
 36
-49</code></pre><p>We can use many of the builtin methods that work with iterables, like <a href="../../base/collections/#Base.in"><code>in</code></a>, <a href="../../base/math/#Base.mean"><code>mean</code></a> and <a href="../../base/math/#Base.std"><code>std</code></a>:</p><pre><code class="language-julia-repl">julia&gt; 25 in Squares(10)
+49</code></pre><p>We can use many of the builtin methods that work with iterables, like <a href="../../base/collections/#Base.in"><code>in</code></a>, <a href="../../base/collections/#Base.sum"><code>sum</code></a> and <a href="../../base/math/#Base.mean"><code>mean</code></a>:</p><pre><code class="language-julia-repl">julia&gt; 25 in Squares(10)
 true
 
-julia&gt; mean(Squares(100))
-3383.5
+julia&gt; sum(Squares(100))
+338350
 
-julia&gt; std(Squares(100))
-3024.355854282583</code></pre><p>There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a <code>Squares</code> sequence will always be <code>Int</code>. By extending the <a href="../../base/collections/#Base.eltype"><code>eltype</code></a> method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our sequence, so we can extend <a href="../../base/collections/#Base.length"><code>length</code></a>, too:</p><pre><code class="language-julia-repl">julia&gt; Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
+julia&gt; mean(Squares(100))
+3383.5</code></pre><p>There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a <code>Squares</code> sequence will always be <code>Int</code>. By extending the <a href="../../base/collections/#Base.eltype"><code>eltype</code></a> method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our sequence, so we can extend <a href="../../base/collections/#Base.length"><code>length</code></a>, too:</p><pre><code class="language-julia-repl">julia&gt; Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
 
 julia&gt; Base.length(S::Squares) = S.count</code></pre><p>Now, when we ask Julia to <a href="../../base/collections/#Base.collect-Tuple{Any}"><code>collect</code></a> all the elements into an array it can preallocate a <code>Vector{Int}</code> of the right size instead of blindly <a href="../../base/collections/#Base.push!"><code>push!</code></a>ing each element into a <code>Vector{Any}</code>:</p><pre><code class="language-julia-repl">julia&gt; collect(Squares(4))
 4-element Array{Int64,1}:
