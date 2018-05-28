@@ -11,6 +11,9 @@ julia> function f(x,y)
 f (generic function with 1 method)
 ```
 
+This function accepts two arguments `x` and `y` and returns the value
+of the last expression evaluated, which is `x + y`.
+
 There is a second, more terse syntax for defining a function in Julia. The traditional function
 declaration syntax demonstrated above is equivalent to the following compact "assignment form":
 
@@ -64,8 +67,9 @@ Python, Ruby and Perl, among other dynamic languages.
 
 The value returned by a function is the value of the last expression evaluated, which, by default,
 is the last expression in the body of the function definition. In the example function, `f`, from
-the previous section this is the value of the expression `x + y`. As in C and most other imperative
-or functional languages, the `return` keyword causes a function to return immediately, providing
+the previous section this is the value of the expression `x + y`.
+As an alternative, as in most other languages,
+the `return` keyword causes a function to return immediately, providing
 an expression whose value is returned:
 
 ```julia
@@ -125,7 +129,9 @@ There are three possible points of return from this function, returning the valu
 expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
-A return type can also be specified in the function declaration using the `::` operator. This converts
+### Return type
+
+A return type can be specified in the function declaration using the `::` operator. This converts
 the return value to the specified type.
 
 ```jldoctest
@@ -139,6 +145,32 @@ Int8
 
 This function will always return an `Int8` regardless of the types of `x` and `y`.
 See [Type Declarations](@ref) for more on return types.
+
+Incidentally, the type of the arguments can also be specified similarly,
+but this is the topic of the [Methods](@ref man-methods) chapter.
+
+### Returning nothing
+
+Some functions are used only for their side effects, and do not need to return a value.
+In these cases, the Julia convention is to return the value `nothing`:
+
+```julia
+function printx(x)
+    println("x = $x")
+    return nothing
+end
+```
+
+Notice that `nothing` is not a Julia keyword but a singleton object of type `Nothing`.
+To support this convention, the REPL does not print anything for it:
+
+```
+julia> nothing
+
+```
+
+As a side note on functions with side effects, the [style guide](@ref man-style-exclam)
+recommends to append `!` to the names of functions that modify their arguments.
 
 ## Operators Are Functions
 
