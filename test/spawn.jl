@@ -561,12 +561,12 @@ mktempdir() do dir
             @test Sys.which(foo_path) == realpath(foo_path)
 
             chmod(foo_path, 0o666)
-            @test_throws ErrorException Sys.which("foo")
-            @test_throws ErrorException Sys.which(foo_path)
+            @test Sys.which("foo") === nothing
+            @test Sys.which(foo_path) === nothing
         end
 
-        # Test that completely missing files also fail
-        @test_throws ErrorException Sys.which("this_is_not_a_command")
+        # Test that completely missing files also return nothing
+        @test Sys.which("this_is_not_a_command") === nothing
     end
 end
 
