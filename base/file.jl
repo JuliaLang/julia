@@ -725,8 +725,7 @@ function sendfile(src::AbstractString, dst::AbstractString)
     try
         src_file = open(src, JL_O_RDONLY)
         src_open = true
-        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
-             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
+        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, filemode(src_file))
         dst_open = true
 
         bytes = filesize(stat(src_file))
@@ -738,8 +737,6 @@ function sendfile(src::AbstractString, dst::AbstractString)
         if dst_open && isopen(dst_file)
             close(dst_file)
         end
-        # preserve permissions by default (issue #20925)
-        chmod(dst, filemode(src))
     end
 end
 
