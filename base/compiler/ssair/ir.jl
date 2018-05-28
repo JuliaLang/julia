@@ -206,6 +206,8 @@ struct NewSSAValue
     id::Int
 end
 
+const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
+
 mutable struct UseRef
     stmt::Any
     op::Int
