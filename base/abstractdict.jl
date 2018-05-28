@@ -39,7 +39,6 @@ end
 struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
     dict::T
 end
-KeySet(dict::AbstractDict) = KeySet{keytype(dict), typeof(dict)}(dict)
 
 struct ValueIterator{T<:AbstractDict}
     dict::T

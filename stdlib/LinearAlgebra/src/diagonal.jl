@@ -45,7 +45,8 @@ julia> Diagonal(V)
  ⋅  2
 ```
 """
-Diagonal(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
+Diagonal(V::AbstractVector)
+
 Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
 Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
 
