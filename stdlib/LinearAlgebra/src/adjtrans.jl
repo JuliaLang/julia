@@ -188,6 +188,9 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 
 ### linear algebra
 
+(-)(A::Adjoint)   = Adjoint(  -A.parent)
+(-)(A::Transpose) = Transpose(-A.parent)
+
 ## multiplication *
 
 # Adjoint/Transpose-vector * vector

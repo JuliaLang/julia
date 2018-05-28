@@ -243,10 +243,14 @@ adjoint(B::Bidiagonal) = Adjoint(B)
 transpose(B::Bidiagonal) = Transpose(B)
 adjoint(B::Bidiagonal{<:Real}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
 transpose(B::Bidiagonal{<:Number}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
-Base.copy(aB::Adjoint{<:Any,<:Bidiagonal}) =
-    (B = aB.parent; Bidiagonal(map(x -> copy.(adjoint.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U))
-Base.copy(tB::Transpose{<:Any,<:Bidiagonal}) =
-    (B = tB.parent; Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U))
+function Base.copy(aB::Adjoint{<:Any,<:Bidiagonal})
+    B = aB.parent
+    return Bidiagonal(map(x -> copy.(adjoint.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
+end
+function Base.copy(tB::Transpose{<:Any,<:Bidiagonal})
+    B = tB.parent
+    return Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
+end
 
 istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
 istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
