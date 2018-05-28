@@ -120,7 +120,10 @@ true
 function convert end
 
 convert(::Type{Any}, @nospecialize(x)) = x
-convert(::Type{T}, x::T) where {T} = (@_inline_meta; x)
+convert(::Type{T}, x::T) where {T} = x
+convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
+                                   # in the absence of inlining-enabled
+                                   # (due to fields typed as `Type`, which is generally a bad idea)
 
 """
     @eval [mod,] ex

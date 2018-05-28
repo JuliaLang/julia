@@ -101,7 +101,7 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks, du, phin
     end
 end
 
-function simple_walk(compact::IncrementalCompact, defssa::AnySSAValue, pi_callback=(pi,idx)->nothing)
+function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#), pi_callback=(pi,idx)->nothing)
     while true
         if isa(defssa, OldSSAValue) && already_inserted(compact, defssa)
             rename = compact.ssa_rename[defssa.id]
@@ -347,7 +347,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
     lifted_leaves, maybe_undef
 end
 
-make_MaybeUndef(typ) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
+make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
 function lift_comparison!(compact::IncrementalCompact, idx::Int,
         @nospecialize(c1), @nospecialize(c2), stmt::Expr,

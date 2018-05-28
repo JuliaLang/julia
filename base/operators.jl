@@ -227,7 +227,7 @@ julia> a ≢ a
 false
 ```
 """
-!==(x, y) = !(x === y)
+!==(@nospecialize(x), @nospecialize(y)) = !(x === y)
 const ≢ = !==
 
 """
