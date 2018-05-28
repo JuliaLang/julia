@@ -34,6 +34,9 @@ function repl_cmd(cmd, out)
     shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
     shell_name = Base.basename(shell[1])
 
+    # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
+    cmd.exec .= expanduser.(cmd.exec)
+
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
