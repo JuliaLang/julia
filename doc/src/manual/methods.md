@@ -1,4 +1,4 @@
-# [Methods](@id man-methods)
+# Methods
 
 Recall from [Functions](@ref man-functions) that a function is an object that maps a tuple of arguments to a
 return value, or throws an exception if no appropriate value can be returned. It is common for

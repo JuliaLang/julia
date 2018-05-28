@@ -147,7 +147,7 @@ This function will always return an `Int8` regardless of the types of `x` and `y
 See [Type Declarations](@ref) for more on return types.
 
 Incidentally, the type of the arguments can also be specified similarly,
-but this is the topic of the [Methods](@ref man-methods) chapter.
+but this is the topic of the [Methods](@ref) chapter.
 
 ### Returning nothing
 
