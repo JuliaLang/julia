@@ -263,7 +263,7 @@ end
     split(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
     split(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 
-Split `str` into an array of substrings on occurences of the delimiter `dlm`.  `dlm`
+Split `str` into an array of substrings on occurrences of the delimiter(s) `dlm`.  `dlm`
 can be any of the formats allowed by [`findnext`](@ref)'s first argument (i.e. as a
 string, regular expression or a function), or as a single character or collection of
 characters.
