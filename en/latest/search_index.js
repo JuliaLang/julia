@@ -11821,7 +11821,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.pwd",
     "category": "function",
-    "text": "pwd() -> AbstractString\n\nGet the current working directory.\n\n\n\n\n\n"
+    "text": "pwd() -> AbstractString\n\nGet the current working directory.\n\nExamples\n\njulia> pwd()\n\"/home/JuliaUser\"\n\njulia> cd(\"/home/JuliaUser/Projects/julia\")\n\njulia> pwd()\n\"/home/JuliaUser/Projects/julia\"\n\n\n\n\n\n"
 },
 
 {
@@ -11829,7 +11829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.cd",
     "category": "method",
-    "text": "cd(dir::AbstractString=homedir())\n\nSet the current working directory.\n\n\n\n\n\n"
+    "text": "cd(dir::AbstractString=homedir())\n\nSet the current working directory.\n\nExamples\n\njulia> cd(\"/home/JuliaUser/Projects/julia\")\n\njulia> pwd()\n\"/home/JuliaUser/Projects/julia\"\n\njulia> cd()\n\njulia> pwd()\n\"/home/JuliaUser\"\n\n\n\n\n\n"
 },
 
 {
@@ -11837,7 +11837,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.cd",
     "category": "method",
-    "text": "cd(f::Function, dir::AbstractString=homedir())\n\nTemporarily changes the current working directory and applies function f before returning.\n\n\n\n\n\n"
+    "text": "cd(f::Function, dir::AbstractString=homedir())\n\nTemporarily change the current working directory, apply function f and finally return to the original directory.\n\nExamples\n\njulia> pwd()\n\"/home/JuliaUser\"\n\njulia> cd(readdir, \"/home/JuliaUser/Projects/julia\")\n34-element Array{String,1}:\n \".circleci\"\n \".freebsdci.sh\"\n \".git\"\n \".gitattributes\"\n \".github\"\n ⋮\n \"test\"\n \"ui\"\n \"usr\"\n \"usr-staging\"\n\njulia> pwd()\n\"/home/JuliaUser\"\n\n\n\n\n\n"
 },
 
 {
@@ -11845,7 +11845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.readdir",
     "category": "function",
-    "text": "readdir(dir::AbstractString=\".\") -> Vector{String}\n\nReturn the files and directories in the directory dir (or the current working directory if not given).\n\n\n\n\n\n"
+    "text": "readdir(dir::AbstractString=\".\") -> Vector{String}\n\nReturn the files and directories in the directory dir (or the current working directory if not given).\n\nExamples\n\njulia> readdir(\"/home/JuliaUser/Projects/julia\")\n34-element Array{String,1}:\n \".circleci\"\n \".freebsdci.sh\"\n \".git\"\n \".gitattributes\"\n \".github\"\n ⋮\n \"test\"\n \"ui\"\n \"usr\"\n \"usr-staging\"\n\n\n\n\n\n"
 },
 
 {
@@ -11853,7 +11853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.walkdir",
     "category": "function",
-    "text": "walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)\n\nReturn an iterator that walks the directory tree of a directory. The iterator returns a tuple containing (rootpath, dirs, files). The directory tree can be traversed top-down or bottom-up. If walkdir encounters a SystemError it will rethrow the error by default. A custom error handling function can be provided through onerror keyword argument. onerror is called with a SystemError as argument.\n\nfor (root, dirs, files) in walkdir(\".\")\n    println(\"Directories in $root\")\n    for dir in dirs\n        println(joinpath(root, dir)) # path to directories\n    end\n    println(\"Files in $root\")\n    for file in files\n        println(joinpath(root, file)) # path to files\n    end\nend\n\n\n\n\n\n"
+    "text": "walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)\n\nReturn an iterator that walks the directory tree of a directory. The iterator returns a tuple containing (rootpath, dirs, files). The directory tree can be traversed top-down or bottom-up. If walkdir encounters a SystemError it will rethrow the error by default. A custom error handling function can be provided through onerror keyword argument. onerror is called with a SystemError as argument.\n\nExamples\n\nfor (root, dirs, files) in walkdir(\".\")\n    println(\"Directories in $root\")\n    for dir in dirs\n        println(joinpath(root, dir)) # path to directories\n    end\n    println(\"Files in $root\")\n    for file in files\n        println(joinpath(root, file)) # path to files\n    end\nend\n\njulia> mkpath(\"my/test/dir\");\n\njulia> itr = walkdir(\"my\");\n\njulia> (root, dirs, files) = first(itr)\n(\"my\", [\"test\"], String[])\n\njulia> (root, dirs, files) = first(itr)\n(\"my/test\", [\"dir\"], String[])\n\njulia> (root, dirs, files) = first(itr)\n(\"my/test/dir\", String[], String[])\n\n\n\n\n\n"
 },
 
 {
@@ -11861,7 +11861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.mkdir",
     "category": "function",
-    "text": "mkdir(path::AbstractString; mode::Unsigned = 0o777)\n\nMake a new directory with name path and permissions mode. mode defaults to 0o777, modified by the current file creation mask. This function never creates more than one directory. If the directory already exists, or some intermediate directories do not exist, this function throws an error. See mkpath for a function which creates all required intermediate directories. Return path.\n\n\n\n\n\n"
+    "text": "mkdir(path::AbstractString; mode::Unsigned = 0o777)\n\nMake a new directory with name path and permissions mode. mode defaults to 0o777, modified by the current file creation mask. This function never creates more than one directory. If the directory already exists, or some intermediate directories do not exist, this function throws an error. See mkpath for a function which creates all required intermediate directories. Return path.\n\nExamples\n\njulia> mkdir(\"testingdir\")\n\"testingdir\"\n\njulia> cd(\"testingdir\")\n\njulia> pwd()\n\"/home/JuliaUser/testingdir\"\n\n\n\n\n\n"
 },
 
 {
@@ -11869,7 +11869,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.mkpath",
     "category": "function",
-    "text": "mkpath(path::AbstractString; mode::Unsigned = 0o777)\n\nCreate all directories in the given path, with permissions mode. mode defaults to 0o777, modified by the current file creation mask. Return path.\n\n\n\n\n\n"
+    "text": "mkpath(path::AbstractString; mode::Unsigned = 0o777)\n\nCreate all directories in the given path, with permissions mode. mode defaults to 0o777, modified by the current file creation mask. Return path.\n\nExamples\n\njulia> mkdir(\"testingdir\")\n\"testingdir\"\n\njulia> cd(\"testingdir\")\n\njulia> pwd()\n\"/home/JuliaUser/testingdir\"\n\njulia> mkpath(\"my/test/dir\")\n\"my/test/dir\"\n\njulia> readdir()\n1-element Array{String,1}:\n \"my\"\n\njulia> cd(\"my\")\n\njulia> readdir()\n1-element Array{String,1}:\n \"test\"\n\njulia> readdir(\"test\")\n1-element Array{String,1}:\n \"dir\"\n\n\n\n\n\n"
 },
 
 {
@@ -11901,7 +11901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.chown",
     "category": "function",
-    "text": "chown(path::AbstractString, owner::Integer, group::Integer=-1)\n\nChange the owner and/or group of path to owner and/or group. If the value entered for owner or group is -1 the corresponding ID will not change. Only integer owners and groups are currently supported. Return path\n\n\n\n\n\n"
+    "text": "chown(path::AbstractString, owner::Integer, group::Integer=-1)\n\nChange the owner and/or group of path to owner and/or group. If the value entered for owner or group is -1 the corresponding ID will not change. Only integer owners and groups are currently supported. Return path.\n\n\n\n\n\n"
 },
 
 {
@@ -12005,7 +12005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.rm",
     "category": "function",
-    "text": "rm(path::AbstractString; force::Bool=false, recursive::Bool=false)\n\nDelete the file, link, or empty directory at the given path. If force=true is passed, a non-existing path is not treated as error. If recursive=true is passed and the path is a directory, then all contents are removed recursively.\n\n\n\n\n\n"
+    "text": "rm(path::AbstractString; force::Bool=false, recursive::Bool=false)\n\nDelete the file, link, or empty directory at the given path. If force=true is passed, a non-existing path is not treated as error. If recursive=true is passed and the path is a directory, then all contents are removed recursively.\n\nExamples\n\njulia> mkpath(\"my/test/dir\");\n\njulia> rm(\"my\", recursive=true)\n\njulia> rm(\"this_file_does_not_exist\", force=true)\n\njulia> rm(\"this_file_does_not_exist\")\nERROR: unlink: no such file or directory (ENOENT)\nStacktrace:\n[...]\n\n\n\n\n\n"
 },
 
 {
@@ -12013,7 +12013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.touch",
     "category": "function",
-    "text": "touch(path::AbstractString)\n\nUpdate the last-modified timestamp on a file to the current time. Return path.\n\n\n\n\n\n"
+    "text": "touch(path::AbstractString)\n\nUpdate the last-modified timestamp on a file to the current time. Return path.\n\nExamples\n\njulia> write(\"my_little_file\", 2);\n\njulia> mtime(\"my_little_file\")\n1.5273815391135583e9\n\njulia> touch(\"my_little_file\");\n\njulia> mtime(\"my_little_file\")\n1.527381559163435e9\n\nWe can see the mtime has been modified by touch.\n\n\n\n\n\n"
 },
 
 {
@@ -20141,7 +20141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
+    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
 },
 
 {
