@@ -533,7 +533,7 @@
                                                ,(if (or (eq? T 'ANY)
                                                         (and (globalref? T)
                                                              (eq? (caddr T) 'ANY)))
-                                                    `(call (|.| (core Intrinsics) 'select_value)
+                                                    `(call (core ifelse)
                                                            (call (core ===) ,T (core ANY))
                                                            (core Any)
                                                            ,T)
@@ -1581,7 +1581,8 @@
          (if (null? lhss)
              body
              (let* ((coll  (make-ssavalue))
-                    (state (gensy))
+                    (next  (gensy))
+                    (state (make-ssavalue))
                     (outer (outer? (car lhss)))
                     (lhs   (if outer (cadar lhss) (car lhss)))
                     (body
@@ -1591,8 +1592,7 @@
                        ,@(if (not outer)
                              (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
                              '())
-                       ,(lower-tuple-assignment (list lhs state)
-                                                `(call (top next) ,coll ,state))
+                       ,(lower-tuple-assignment (list lhs state) next)
                        ,(nest (cdr lhss) (cdr itrs))))
                     (body
                      (if (null? (cdr lhss))
@@ -1602,13 +1602,15 @@
                              ,body))
                          `(scope-block ,body))))
                `(block (= ,coll ,(car itrs))
-                       (= ,state (call (top start) ,coll))
+                       (= ,next (call (top iterate) ,coll))
                        ;; TODO avoid `local declared twice` error from this
                        ;;,@(if outer `((local ,lhs)) '())
                        ,@(if outer `((require-existing-local ,lhs)) '())
-                       (_while
-                        (call (top not_int) (call (core typeassert) (call (top done) ,coll ,state) (core Bool)))
-                        ,body))))))))
+                       (if (call (top not_int) (call (core ===) ,next (null)))
+                           (_do_while
+			    (block ,body
+				   (= ,next (call (top iterate) ,coll ,state)))
+			    (call (|.| (core Intrinsics) 'not_int) (call (core ===) ,next (null))))))))))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs flat outervars)
@@ -1978,13 +1980,12 @@
                        (st  (gensy)))
                   `(block
                     ,@ini
-                    (= ,st (call (top start) ,xx))
                     ,.(map (lambda (i lhs)
                              (expand-forms
                               (lower-tuple-assignment
                                (list lhs st)
-                               `(call (top indexed_next)
-                                      ,xx ,(+ i 1) ,st))))
+                               `(call (top indexed_iterate)
+                                      ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
                            (iota (length lhss))
                            lhss)
                     (unnecessary ,xx))))))
@@ -2292,7 +2293,9 @@
                             (return (expand-forms `(call transpose ,(cadr e))))))
 
    'generator
-   (lambda (e) (expand-generator e #f '()))
+   (lambda (e)
+     (check-no-return e)
+     (expand-generator e #f '()))
 
    'flatten
    (lambda (e) (expand-generator (cadr e) #t '()))
@@ -2314,56 +2317,75 @@
                (let ((ranges (cddr (caddr e))))
                  (if (any (lambda (x) (eq? x ':)) ranges)
                      (error "comprehension syntax with `:` ranges has been removed"))
-                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)
-                                              (pair? (caddr x))
-                                              (eq? (car (caddr x)) 'call)
-                                              (eq? (cadr (caddr x)) ':)))
+                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)))
                              ranges)
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
                       (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
           `(call (top collect) ,(cadr e) ,(caddr e)))))))
 
-(define (lower-comprehension atype expr ranges)
-  (let ((result    (make-ssavalue))
-        (ri        (gensy))
-        (oneresult (make-ssavalue))
-        (lengths   (map (lambda (x) (make-ssavalue)) ranges))
-        (states    (map (lambda (x) (gensy)) ranges))
-        (rv        (map (lambda (x) (make-ssavalue)) ranges)))
+(define (has-return? e)
+  (expr-contains-p return? e (lambda (x) (not (function-def? x)))))
 
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges rv states lengths)
-      (if (null? ranges)
+(define (check-no-return e)
+  (if (has-return? e)
+      (error "\"return\" not allowed inside comprehension or generator")))
+
+(define (has-break-or-continue? e)
+  (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
+                   e
+                   (lambda (x) (not (and (pair? x)
+                                         (memq (car x) '(for while)))))))
+
+(define (lower-comprehension ty expr itrs)
+  (check-no-return expr)
+  (if (has-break-or-continue? expr)
+      (error "break or continue outside loop"))
+  (let ((result    (gensy))
+        (idx       (gensy))
+        (oneresult (make-ssavalue))
+        (prod      (make-ssavalue))
+        (isz       (make-ssavalue))
+        (szunk     (make-ssavalue))
+        (iv        (map (lambda (x) (make-ssavalue)) itrs)))
+
+    ;; construct loops over all iterators
+    (define (construct-loops itrs iv)
+      (if (null? itrs)
           `(block (= ,oneresult ,expr)
                   (inbounds true)
-                  (call (top setindex!) ,result ,oneresult ,ri)
+                  (if ,szunk
+                      (call (top push!) ,result ,oneresult)
+                      (call (top setindex!) ,result ,oneresult ,idx))
                   (inbounds pop)
-                  (= ,ri (call (top add_int) ,ri 1)))
-          `(block
-            (= ,(car states) (call (top start) ,(car rv)))
-            (while (call (top not_int) (call (core typeassert) (call (top done) ,(car rv) ,(car states)) (core Bool)))
-                   (scope-block
-                   (block
-                    (= (tuple ,(cadr (car ranges)) ,(car states))
-                       (call (top next) ,(car rv) ,(car states)))
-                    ;; *** either this or force all for loop vars local
-                    ,.(map (lambda (r) `(local ,r))
-                           (lhs-vars (cadr (car ranges))))
-                    ,(construct-loops (cdr ranges) (cdr rv) (cdr states) (cdr lengths))))))))
+                  (= ,idx (call (top add_int) ,idx 1)))
+          `(for (= ,(cadr (car itrs)) ,(car iv))
+                (block
+                 ;; TODO: remove when all loop vars are local in 1.0
+                 ,.(map (lambda (v) `(local ,v))
+                        (lhs-vars (cadr (car itrs))))
+                 ,(construct-loops (cdr itrs) (cdr iv))))))
 
-    ;; Evaluate the comprehension
-    `(block
-      ,.(map (lambda (v) `(local ,v)) states)
-      (local ,ri)
-      ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-      ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
-      (scope-block
-       (block
-        (= ,result (call (curly Array ,atype ,(length lengths)) undef ,@lengths))
-        (= ,ri 1)
-        ,(construct-loops (reverse ranges) (reverse rv) states (reverse lengths))
-        ,result)))))
+    (let ((overall-itr (if (length= itrs 1) (car iv) prod)))
+      `(scope-block
+        (block
+         (local ,result) (local ,idx)
+         ,.(map (lambda (v r) `(= ,v ,(caddr r))) iv itrs)
+         ,.(if (length= itrs 1)
+               '()
+               `((= ,prod (call (top product) ,@iv))))
+         (= ,isz (call (top IteratorSize) ,overall-itr))
+         (= ,szunk (call (core isa) ,isz (top SizeUnknown)))
+         (if ,szunk
+             (= ,result (call (curly (core Array) ,ty 1) (core undef) 0))
+             (if (call (core isa) ,isz (top HasShape))
+                 (= ,result (call (top similar) (curly (core Array) ,ty) (call (top axes) ,overall-itr)))
+                 (= ,result (call (curly (core Array) ,ty 1) (core undef) (call (core Int)
+                                                                                (|::| (call (top length) ,overall-itr)
+                                                                                 (core Integer)))))))
+         (= ,idx (call (top first) (call (top LinearIndices) ,result)))
+         ,(construct-loops (reverse itrs) (reverse iv))
+         ,result)))))
 
 (define (lhs-vars e)
   (cond ((symbol? e) (list e))
@@ -2549,6 +2571,12 @@
                            (if (memq v all-vars)
                                (error (string "variable \"" v "\" declared both local and global"))))
                          glob)
+               (let ((argnames (if lam (lam:vars lam) '())))
+                 (if (pair? argnames)
+                     (for-each (lambda (v)
+                                 (if (memq v argnames)
+                                     (error (string "local variable name \"" v "\" conflicts with an argument"))))
+                               locals-declared)))
                (if lam ;; update in-place the list of local variables in lam
                    (set-car! (cddr lam)
                              (append real-new-vars real-new-vars-def (caddr lam))))
@@ -3312,13 +3340,13 @@ f(x) = yt(x)
   (or (simple-atom? e) (symbol? e)
       (and (pair? e)
            (memq (car e) '(quote inert top core globalref outerref
-                                 slot static_parameter boundscheck copyast)))))
+                                 slot static_parameter boundscheck)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin)))))
+           (memq (car e) '(new the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -3424,7 +3452,7 @@ f(x) = yt(x)
                                  (cdr lst))))
                 (simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
                                                 (and (pair? x)
-                                                     (memq (car x) '(quote inert top core globalref outerref copyast boundscheck)))))
+                                                     (memq (car x) '(quote inert top core globalref outerref boundscheck)))))
                                 lst)))
             (let loop ((lst  lst)
                        (vals '()))
@@ -3439,7 +3467,7 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))
                                          (not (simple-atom? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(& quote inert top core globalref outerref copyast boundscheck))))
+                                                   (memq (car arg) '(& quote inert top core globalref outerref boundscheck))))
                                          (not (and (symbol? aval) ;; function args are immutable and always assigned
                                                    (memq aval (lam:args lam))))
                                          (not (and (symbol? arg)
@@ -3629,6 +3657,14 @@ f(x) = yt(x)
                (compile (caddr e) break-labels #f #f)
                (emit `(goto ,topl))
                (mark-label endl)))
+            ((_do_while)
+              (let* ((endl (make-label))
+                     (topl (make&mark-label)))
+				(compile (cadr e) break-labels #f #f)
+                (let ((test (compile-cond (caddr e) break-labels)))
+                  (emit `(gotoifnot ,test ,endl)))
+                (emit `(goto ,topl))
+                (mark-label endl)))
             ((break-block)
              (let ((endl (make-label)))
                (begin0 (compile (caddr e)
@@ -3736,7 +3772,7 @@ f(x) = yt(x)
              (if value (error "misplaced \"global\" declaration"))
              (let ((vname (cadr e)))
                (if (var-info-for vname vi) ;; issue #7264
-                   (error (string "`global " vname "`: " vname " is local variable in the enclosing scope"))
+                   (error (string "`global " vname "`: " vname " is a local variable in its enclosing scope"))
                    (emit e))))
             ((local-def) #f)
             ((local) #f)

@@ -90,10 +90,12 @@ struct SHA1
         return new(bytes)
     end
 end
-SHA1(s::Union{String,SubString{String}}) = SHA1(hex2bytes(s))
-string(hash::SHA1) = bytes2hex(hash.bytes)
+SHA1(s::AbstractString) = SHA1(hex2bytes(s))
 
-show(io::IO, hash::SHA1) = print(io, "SHA1(", string(hash), ")")
+string(hash::SHA1) = bytes2hex(hash.bytes)
+print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
+show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
+
 isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
@@ -625,7 +627,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
+    base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? base_path : nothing
 end
 
@@ -853,10 +855,11 @@ current `include` path but does not use it to search for files (see help for `in
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
-When searching for files, `require` first looks for package code under `Pkg.dir()`,
-then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
-all platforms, including those with case-insensitive filesystems like macOS and
-Windows.
+When searching for files, `require` first looks for package code in the global array
+`LOAD_PATH`. `require` is case-sensitive on all platforms, including those with
+case-insensitive filesystems like macOS and Windows.
+
+For more details regarding code loading, see the manual.
 """
 function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
@@ -1076,30 +1079,32 @@ function include_relative(mod::Module, _path::String)
 end
 
 """
-    include(m::Module, path::AbstractString)
+    Base.include([m::Module,] path::AbstractString)
 
-Evaluate the contents of the input source file into module `m`. Returns the result
-of the last evaluated expression of the input file. During including, a task-local include
-path is set to the directory containing the file. Nested calls to `include` will search
-relative to that path. This function is typically used to load source
+Evaluate the contents of the input source file in the global scope of module `m`.
+Every module (except those defined with `baremodule`) has its own 1-argument
+definition of `include`, which evaluates the file in that module.
+Returns the result of the last evaluated expression of the input file. During including,
+a task-local include path is set to the directory containing the file. Nested calls to
+`include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
 """
-include # defined in sysimg.jl
+Base.include # defined in sysimg.jl
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](@ref), evaluate all expressions,
+Load the file using [`Base.include`](@ref), evaluate all expressions,
 and return the value of the last one.
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
-    return eval(Module(:__anon__),
-                Expr(:toplevel,
-                     :(const ARGS = $args),
-                     :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
-                     :(eval(m, x) = $(Expr(:core, :eval))(m, x)),
-                     :(include(x) = $(Expr(:top, :include))(__anon__, x)),
-                     :(include($path))))
+    return Core.eval(Module(:__anon__),
+        Expr(:toplevel,
+             :(const ARGS = $args),
+             :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
+             :(@deprecate eval(m, x) Core.eval(m, x)),
+             :(include(x) = $(Expr(:top, :include))(__anon__, x)),
+             :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
@@ -1108,7 +1113,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     code_object = """
         while !eof(stdin)
             code = readuntil(stdin, '\\0')
-            eval(Main, Meta.parse(code))
+            eval(Meta.parse(code))
         end
         """
     io = open(pipeline(detach(`$(julia_cmd()) -O0
@@ -1121,7 +1126,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     try
         write(in, """
         begin
-        import Pkg
+        import OldPkg
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)
@@ -1404,16 +1409,6 @@ function stale_cachefile(modpath::String, cachefile::String)
     finally
         close(io)
     end
-end
-
-"""
-    @__LINE__ -> Int
-
-`@__LINE__` expands to the line number of the location of the macrocall.
-Returns `0` if the line number could not be determined.
-"""
-macro __LINE__()
-    return __source__.line
 end
 
 """

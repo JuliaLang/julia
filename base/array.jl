@@ -29,6 +29,12 @@ Supertype for two-dimensional arrays (or array-like types) with
 elements of type `T`. Alias for [`AbstractArray{T,2}`](@ref).
 """
 const AbstractMatrix{T} = AbstractArray{T,2}
+
+"""
+    AbstractVecOrMat{T}
+
+Union type of [`AbstractVector{T}`](@ref) and [`AbstractMatrix{T}`](@ref).
+"""
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
 const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
@@ -58,6 +64,11 @@ Two-dimensional dense array with elements of type `T`, often used to represent
 a mathematical matrix. Alias for [`Array{T,2}`](@ref).
 """
 const Matrix{T} = Array{T,2}
+"""
+    VecOrMat{T}
+
+Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref).
+"""
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
 const DenseVector{T} = DenseArray{T,1}
@@ -231,6 +242,8 @@ Create a shallow copy of `x`: the outer structure is copied, but not all interna
 For example, copying an array produces a new array with identically-same elements as the
 original.
 """
+copy
+
 copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
 # reshaping to same # of dimensions
@@ -266,7 +279,6 @@ similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1)
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
-similar(::Type{T}, shape::Tuple) where {T<:Array}   = T(undef, to_shape(shape))
 
 # T[x...] constructs Array{T,1}
 """
@@ -508,9 +520,9 @@ end
 
 _collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
+    copyto!(Array{eltype(A)}(undef, _length.(indsA)), A)
 function _collect_indices(indsA, A)
-    B = Array{eltype(A)}(undef, length.(indsA))
+    B = Array{eltype(A)}(undef, _length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
 end
 
@@ -543,7 +555,7 @@ else
 end
 
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(undef, Int(length(itr)::Integer))
-_array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, axes(itr))::Array{T}
+_array_for(::Type{T}, itr, ::HasShape{N}) where {T,N} = similar(Array{T,N}, axes(itr))
 
 function collect(itr::Generator)
     isz = IteratorSize(itr.iter)
@@ -551,11 +563,11 @@ function collect(itr::Generator)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
     else
-        st = start(itr)
-        if done(itr,st)
+        y = iterate(itr)
+        if y === nothing
             return _array_for(et, itr.iter, isz)
         end
-        v1, st = next(itr, st)
+        v1, st = y
         collect_to_with_first!(_array_for(typeof(v1), itr.iter, isz), v1, itr, st)
     end
 end
@@ -564,16 +576,16 @@ _collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
     grow_to!(_similar_for(c, @default_eltype(itr), itr, isz), itr)
 
 function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
-    st = start(itr)
-    if done(itr,st)
+    y = iterate(itr)
+    if y === nothing
         return _similar_for(c, @default_eltype(itr), itr, isz)
     end
-    v1, st = next(itr, st)
+    v1, st = y
     collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
 end
 
 function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
-    i1 = first(linearindices(dest))
+    i1 = first(LinearIndices(dest))
     dest[i1] = v1
     return collect_to!(dest, itr, i1+1, st)
 end
@@ -587,8 +599,10 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     i = offs
-    while !done(itr, st)
-        el, st = next(itr, st)
+    while true
+        y = iterate(itr, st)
+        y === nothing && break
+        el, st = y
         if el isa T || typeof(el) === T
             @inbounds dest[i] = el::T
             i += 1
@@ -604,21 +618,18 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
 end
 
 function grow_to!(dest, itr)
-    st = start(itr)
-    if done(itr, st)
-        return dest
-    else
-        v1, st = next(itr, st)
-        dest2 = empty(dest, typeof(v1))
-        push!(dest2, v1)
-        return grow_to!(dest2, itr, st)
-    end
+    y = iterate(itr)
+    y === nothing && return dest
+    dest2 = empty(dest, typeof(y[1]))
+    push!(dest2, y[1])
+    grow_to!(dest2, itr, y[2])
 end
 
 function grow_to!(dest, itr, st)
     T = eltype(dest)
-    while !done(itr, st)
-        el, st = next(itr, st)
+    y = iterate(itr, st)
+    while y !== nothing
+        el, st = y
         S = typeof(el)
         if S === T || S <: T
             push!(dest, el::T)
@@ -633,14 +644,16 @@ function grow_to!(dest, itr, st)
             push!(new, el)
             return grow_to!(new, itr, st)
         end
+        y = iterate(itr, st)
     end
     return dest
 end
 
 ## Iteration ##
-start(A::Array) = 1
-next(a::Array,i) = (@_propagate_inbounds_meta; (a[i],i+1))
-done(a::Array,i) = (@_inline_meta; i == length(a)+1)
+function iterate(A::Array, i=1)
+    @_propagate_inbounds_meta
+    i >= length(A) + 1 ? nothing : (A[i], i+1)
+end
 
 ## Indexing: getindex ##
 
@@ -706,15 +719,7 @@ function setindex! end
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
     (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
 
-# These are redundant with the abstract fallbacks but needed for bootstrap
-function setindex!(A::Array, x, I::AbstractVector{Int})
-    @_propagate_inbounds_meta
-    I′ = unalias(A, I)
-    for i in I′
-        A[i] = x
-    end
-    return A
-end
+# This is redundant with the abstract fallbacks but needed and helpful for bootstrap
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     @boundscheck setindex_shape_check(X, length(I))
@@ -749,9 +754,6 @@ function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
     end
     return A
 end
-
-setindex!(A::Array, x::Number, ::Colon) = fill!(A, x)
-setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A, x)
 
 # efficiently grow an array
 
@@ -839,7 +841,7 @@ themselves in another collection. The result is of the preceding example is equi
 """
 function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
-    n = length(itemindices)
+    n = _length(itemindices)
     _growend!(a, n)
     copyto!(a, length(a)-n+1, items, first(itemindices), n)
     return a
@@ -882,7 +884,7 @@ function prepend! end
 
 function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
-    n = length(itemindices)
+    n = _length(itemindices)
     _growbeg!(a, n)
     if a === items
         copyto!(a, 1, items, n+1, n)
@@ -1160,12 +1162,14 @@ deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,)
 
 function _deleteat!(a::Vector, inds)
     n = length(a)
-    s = start(inds)
-    done(inds, s) && return a
-    (p, s) = next(inds, s)
+    y = iterate(inds)
+    y === nothing && return a
+    (p, s) = y
     q = p+1
-    while !done(inds, s)
-        (i,s) = next(inds, s)
+    while true
+        y = iterate(inds, s)
+        y === nothing && break
+        (i,s) = y
         if !(q <= i <= n)
             if i < q
                 throw(ArgumentError("indices must be unique and sorted"))
@@ -1391,15 +1395,15 @@ julia> reverse(A, 3, 5)
  3
 ```
 """
-function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
+function reverse(A::AbstractVector, s=first(LinearIndices(A)), n=last(LinearIndices(A)))
     B = similar(A)
-    for i = first(linearindices(A)):s-1
+    for i = first(LinearIndices(A)):s-1
         B[i] = A[i]
     end
     for i = s:n
         B[i] = A[n+s-i]
     end
-    for i = n+1:last(linearindices(A))
+    for i = n+1:last(LinearIndices(A))
         B[i] = A[i]
     end
     return B
@@ -1409,7 +1413,7 @@ end
 reverse(A::Vector) = invoke(reverse, Tuple{AbstractVector}, A)
 
 function reverseind(a::AbstractVector, i::Integer)
-    li = linearindices(a)
+    li = LinearIndices(a)
     first(li) + last(li) - i
 end
 
@@ -1439,8 +1443,8 @@ julia> A
  1
 ```
 """
-function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
-    liv = linearindices(v)
+function reverse!(v::AbstractVector, s=first(LinearIndices(v)), n=last(LinearIndices(v)))
+    liv = LinearIndices(v)
     if n <= s  # empty case; ok
     elseif !(first(liv) ≤ s ≤ last(liv))
         throw(BoundsError(v, s))
@@ -1509,7 +1513,7 @@ function vcat(arrays::Vector{T}...) where T
     return arr
 end
 
-cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
+_cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
 
 ## find ##
 
@@ -2017,16 +2021,18 @@ julia> findmax([1,7,7,NaN])
 findmax(a) = _findmax(a, :)
 
 function _findmax(a, ::Colon)
-    if isempty(a)
+    p = pairs(a)
+    y = iterate(p)
+    if y === nothing
         throw(ArgumentError("collection must be non-empty"))
     end
-    p = pairs(a)
-    s = start(p)
-    (mi, m), s = next(p, s)
+    (mi, m), s = y
     i = mi
-    while !done(p, s)
+    while true
+        y = iterate(p, s)
+        y === nothing && break
         m != m && break
-        (i, ai), s = next(p, s)
+        (i, ai), s = y
         if ai != ai || isless(m, ai)
             m = ai
             mi = i
@@ -2060,16 +2066,18 @@ julia> findmin([7,1,1,NaN])
 findmin(a) = _findmin(a, :)
 
 function _findmin(a, ::Colon)
-    if isempty(a)
+    p = pairs(a)
+    y = iterate(p)
+    if y === nothing
         throw(ArgumentError("collection must be non-empty"))
     end
-    p = pairs(a)
-    s = start(p)
-    (mi, m), s = next(p, s)
+    (mi, m), s = y
     i = mi
-    while !done(p, s)
+    while true
+        y = iterate(p, s)
+        y === nothing && break
         m != m && break
-        (i, ai), s = next(p, s)
+        (i, ai), s = y
         if ai != ai || isless(ai, m)
             m = ai
             mi = i
@@ -2178,35 +2186,38 @@ end
 function _sortedfindin(v, w)
     viter, witer = eachindex(v), eachindex(w)
     out  = eltype(viter)[]
-    i, j = start(viter), start(witer)
-    if done(viter, i) || done(witer, j)
+    vy, wy = iterate(viter), iterate(witer)
+    if vy === nothing || wy === nothing
         return out
     end
-    viteri, i = next(viter, i)
-    witerj, j = next(witer, j)
+    viteri, i = vy
+    witerj, j = wy
     @inbounds begin
         vi, wj = v[viteri], w[witerj]
         while true
             if isless(vi, wj)
-                if done(viter, i)
+                vy = iterate(viter, i)
+                if vy === nothing
                     break
                 end
-                viteri, i = next(viter, i)
+                viteri, i = vy
                 vi        = v[viteri]
             elseif isless(wj, vi)
-                if done(witer, j)
+                wy = iterate(witer, j)
+                if wy === nothing
                     break
                 end
-                witerj, j = next(witer, j)
+                witerj, j = wy
                 wj        = w[witerj]
             else
                 push!(out, viteri)
-                if done(viter, i)
+                vy = iterate(viter, i)
+                if vy === nothing
                     break
                 end
                 # We only increment the v iterator because v can have
                 # repeated matches to a single value in w
-                viteri, i = next(viter, i)
+                viteri, i = vy
                 vi        = v[viteri]
             end
         end
@@ -2290,16 +2301,17 @@ julia> filter!(isodd, Vector(1:10))
 ```
 """
 function filter!(f, a::AbstractVector)
-    isempty(a) && return a
-
     idx = eachindex(a)
-    state = start(idx)
-    i, state = next(idx, state)
+    y = iterate(idx)
+    y === nothing && return a
+    i, state = y
 
     for acurr in a
         if f(acurr)
             a[i] = acurr
-            i, state = next(idx, state)
+            y = iterate(idx, state)
+            y === nothing && (i += 1; break)
+            i, state = y
         end
     end
 

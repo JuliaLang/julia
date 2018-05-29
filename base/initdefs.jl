@@ -43,7 +43,7 @@ isinteractive() = (is_interactive::Bool)
 
 const DEPOT_PATH = String[]
 
-function init_depot_path(BINDIR = Sys.BINDIR)
+function init_depot_path(BINDIR::String = Sys.BINDIR)
     if haskey(ENV, "JULIA_DEPOT_PATH")
         depots = split(ENV["JULIA_DEPOT_PATH"], Sys.iswindows() ? ';' : ':')
         append!(empty!(DEPOT_PATH), map(expanduser, depots))
@@ -119,7 +119,7 @@ end
 
 const default_named = parse_load_path("@v#.#.#|@v#.#|@v#|@default|@!v#.#")
 
-function init_load_path(BINDIR = Sys.BINDIR)
+function init_load_path(BINDIR::String = Sys.BINDIR)
     vers = "v$(VERSION.major).$(VERSION.minor)"
     stdlib = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     load_path = Base.creating_sysimg           ? Any[stdlib] :

@@ -4,11 +4,6 @@ using Base: @deprecate, depwarn
 
 # BEGIN 0.7 deprecations
 
-# PR #22475
-import Base: cat
-@deprecate cat(::Type{Val{N}}, A::_SparseConcatGroup...) where {N} cat(Val(N), A...)
-@deprecate cat(::Type{Val{N}}, A::_DenseConcatGroup...) where {N} cat(Val(N), A...)
-
 # deprecate remaining vectorized methods over SparseVectors (zero-preserving)
 for op in (:floor, :ceil, :trunc, :round,
         :log1p, :expm1,  :sinpi,
@@ -221,6 +216,9 @@ end
 
 import Base: asyncmap
 @deprecate asyncmap(f, s::AbstractSparseArray...; kwargs...) sparse(asyncmap(f, map(Array, s)...; kwargs...))
+
+# PR 26347: implicit scalar broadcasting within setindex!
+@deprecate setindex!(A::SparseMatrixCSC{<:Any,<:Any}, x, i::Union{Integer, AbstractVector{<:Integer}, Colon}, j::Union{Integer, AbstractVector{<:Integer}, Colon}) (A[i, j] .= x; A)
 
 #25395 keywords unlocked
 @deprecate dropzeros(x, trim)     dropzeros(x, trim = trim)

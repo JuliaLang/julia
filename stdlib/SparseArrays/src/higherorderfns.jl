@@ -522,11 +522,16 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
         end
     # Cases with vertical expansion
     else # numrows(A) != numrows(C) (=> numrows(A) == 1)
+        svA, svC = storedvals(A), storedvals(C)
         @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
-            Ax = Ak < stopAk ? storedvals(A)[Ak] : zero(eltype(A))
+            Ax = Ak < stopAk ? svA[Ak] : zero(eltype(A))
             fofAx = f(Ax)
-            fofAx != fillvalue && (storedvals(C)[(jo + 1):(jo + numrows(C))] = fofAx)
+            if fofAx != fillvalue
+                for i in (jo + 1):(jo + numrows(C))
+                    svC[i] = fofAx
+                end
+            end
         end
     end
     return C
@@ -1075,7 +1080,7 @@ function copy(bc::Broadcasted{PromoteToSparse})
     if is_supported_sparse_broadcast(bcf.args...)
         broadcast(bcf.f, map(_sparsifystructured, bcf.args)...)
     else
-        return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{2}}, bc))
+        return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{length(axes(bc))}}, bc))
     end
 end
 
@@ -1086,7 +1091,6 @@ end
 
 _sparsifystructured(M::AbstractMatrix) = SparseMatrixCSC(M)
 _sparsifystructured(V::AbstractVector) = SparseVector(V)
-_sparsifystructured(P::AbstractArray{<:Any,0}) = SparseVector(reshape(P, 1))
 _sparsifystructured(M::AbstractSparseMatrix) = SparseMatrixCSC(M)
 _sparsifystructured(V::AbstractSparseVector) = SparseVector(V)
 _sparsifystructured(S::SparseVecOrMat) = S

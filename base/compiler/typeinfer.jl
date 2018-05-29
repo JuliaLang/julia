@@ -262,12 +262,8 @@ function typeinf_work(frame::InferenceState)
             local pc´::Int = pc + 1 # next program-counter (after executing instruction)
             if pc == frame.pc´´
                 # need to update pc´´ to point at the new lowest instruction in W
-                min_pc = next(W, pc)[2]
-                if done(W, min_pc)
-                    frame.pc´´ = max(min_pc, n + 1)
-                else
-                    frame.pc´´ = min_pc
-                end
+                min_pc = _bits_findnext(W.bits, pc + 1)
+                frame.pc´´ = min_pc == -1 ? n + 1 : min_pc
             end
             delete!(W, pc)
             frame.currpc = pc

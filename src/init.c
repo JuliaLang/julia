@@ -891,6 +891,7 @@ void jl_get_builtins(void)
     jl_builtin_arrayset = core("arrayset");     jl_builtin_arraysize = core("arraysize");
     jl_builtin_apply_type = core("apply_type"); jl_builtin_applicable = core("applicable");
     jl_builtin_invoke = core("invoke");         jl_builtin__expr = core("_expr");
+    jl_builtin_ifelse = core("ifelse");
 }
 
 #ifdef __cplusplus

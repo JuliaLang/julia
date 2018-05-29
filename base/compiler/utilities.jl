@@ -293,3 +293,16 @@ function get_label_map(body::Vector{Any})
     end
     return labelmap
 end
+
+###########
+# options #
+###########
+
+inlining_enabled() = (JLOptions().can_inline == 1)
+coverage_enabled() = (JLOptions().code_coverage != 0)
+function inbounds_option()
+    opt_check_bounds = JLOptions().check_bounds
+    opt_check_bounds == 0 && return :default
+    opt_check_bounds == 1 && return :on
+    return :off
+end

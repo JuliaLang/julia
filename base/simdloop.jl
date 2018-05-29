@@ -44,10 +44,10 @@ check_body!(x) = true
 simd_outer_range(r) = 0:0
 
 # Get trip count for inner loop.
-@inline simd_inner_length(r,j::Int) = length(r)
+@inline simd_inner_length(r,j::Int) = Base._length(r)
 
 # Construct user-level element from original range, outer loop index j, and inner loop index i.
-@inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+1]; ret)
+@inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+firstindex(r)]; ret)
 
 # Compile Expr x in context of @simd.
 function compile(x)

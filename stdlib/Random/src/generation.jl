@@ -340,7 +340,7 @@ end
 ## random values from AbstractArray
 
 Sampler(rng::AbstractRNG, r::AbstractArray, n::Repetition) =
-    SamplerSimple(r, Sampler(rng, linearindices(r), n))
+    SamplerSimple(r, Sampler(rng, firstindex(r):lastindex(r), n))
 
 rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
     @inbounds return sp[][rand(rng, sp.data)]
@@ -352,7 +352,7 @@ function Sampler(rng::AbstractRNG, t::Dict, ::Repetition)
     isempty(t) && throw(ArgumentError("collection must be non-empty"))
     # we use Val(Inf) below as rand is called repeatedly internally
     # even for generating only one random value from t
-    SamplerSimple(t, Sampler(rng, linearindices(t.slots), Val(Inf)))
+    SamplerSimple(t, Sampler(rng, LinearIndices(t.slots), Val(Inf)))
 end
 
 function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})

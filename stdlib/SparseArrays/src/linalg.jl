@@ -618,7 +618,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
 
     # Generate the block matrix
     X = Matrix{Ti}(undef, n, t)
-    X[1:n,1] = 1
+    X[1:n,1] .= 1
     for j = 2:t
         while true
             _rand_pm1!(view(X,1:n,j))
@@ -937,9 +937,9 @@ function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
         if ishermitian(A)
             return \(Hermitian(A), B)
         end
-        return \(lufact(A), B)
+        return \(lu(A), B)
     else
-        return \(qrfact(A), B)
+        return \(qr(A), B)
     end
 end
 for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
@@ -960,9 +960,9 @@ for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
                 if ishermitian(A)
                     return \($xformop(Hermitian(A)), B)
                 end
-                return \($xformop(lufact(A)), B)
+                return \($xformop(lu(A)), B)
             else
-                return \($xformop(qrfact(A)), B)
+                return \($xformop(qr(A)), B)
             end
         end
     end
@@ -983,55 +983,30 @@ function factorize(A::SparseMatrixCSC)
         if ishermitian(A)
             return factorize(Hermitian(A))
         end
-        return lufact(A)
+        return lu(A)
     else
-        return qrfact(A)
+        return qr(A)
     end
 end
 
 # function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
-#     F = cholfact(A)
+#     F = cholesky(A)
 #     if LinearAlgebra.issuccess(F)
 #         return F
 #     else
-#         ldltfact!(F, A)
+#         ldlt!(F, A)
 #         return F
 #     end
 # end
 function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
-    F = cholfact(A)
+    F = cholesky(A)
     if LinearAlgebra.issuccess(F)
         return F
     else
-        ldltfact!(F, A)
+        ldlt!(F, A)
         return F
     end
 end
 
-chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
-lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
-eig(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eig() for sparse matrices.")
-
-function Base.cov(X::SparseMatrixCSC; dims::Int=1, corrected::Bool=true)
-    vardim = dims
-    a, b = size(X)
-    n, p = vardim == 1 ? (a, b) : (b, a)
-
-    # The covariance can be decomposed into two terms
-    # 1/(n - 1) ∑ (x_i - x̄)*(x_i - x̄)' = 1/(n - 1) (∑ x_i*x_i' - n*x̄*x̄')
-    # which can be evaluated via a sparse matrix-matrix product
-
-    # Compute ∑ x_i*x_i' = X'X using sparse matrix-matrix product
-    out = Matrix(Base.unscaled_covzm(X, vardim))
-
-    # Compute x̄
-    x̄ᵀ = mean(X, dims=vardim)
-
-    # Subtract n*x̄*x̄' from X'X
-    @inbounds for j in 1:p, i in 1:p
-        out[i,j] -= x̄ᵀ[i] * x̄ᵀ[j]' * n
-    end
-
-    # scale with the sample size n or the corrected sample size n - 1
-    return rmul!(out, inv(n - corrected))
-end
+chol(A::SparseMatrixCSC) = error("Use cholesky() instead of chol() for sparse matrices.")
+eigen(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eigen() for sparse matrices.")

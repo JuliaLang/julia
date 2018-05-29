@@ -136,7 +136,7 @@ function Dict(kv)
     try
         dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
     catch e
-        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow(e)
@@ -144,16 +144,21 @@ function Dict(kv)
     end
 end
 
-# this is a special case due to (1) allowing both Pairs and Tuples as elements,
-# and (2) Pair being invariant. a bit annoying.
-function grow_to!(dest::AbstractDict, itr)
-    out = grow_to!(empty(dest, Union{}, Union{}), itr, start(itr))
-    return isempty(out) ? dest : out
+function grow_to!(dest::AbstractDict{K, V}, itr) where V where K
+    y = iterate(itr)
+    y === nothing && return dest
+    ((k,v), st) = y
+    dest2 = empty(dest, typeof(k), typeof(v))
+    dest2[k] = v
+    grow_to!(dest2, itr, st)
 end
 
+# this is a special case due to (1) allowing both Pairs and Tuples as elements,
+# and (2) Pair being invariant. a bit annoying.
 function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
-    while !done(itr, st)
-        (k,v), st = next(itr, st)
+    y = iterate(itr, st)
+    while y !== nothing
+        (k,v), st = y
         if isa(k,K) && isa(v,V)
             dest[k] = v
         else
@@ -162,6 +167,7 @@ function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
             new[k] = v
             return grow_to!(new, itr, st)
         end
+        y = iterate(itr, st)
     end
     return dest
 end
@@ -611,7 +617,7 @@ end
 
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
-    idx = start(h)
+    idx = skip_deleted_floor!(h)
     @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
     _delete!(h, idx)
@@ -662,25 +668,26 @@ function skip_deleted(h::Dict, i)
     end
     return i
 end
+function skip_deleted_floor!(h::Dict)
+    idx = skip_deleted(h, h.idxfloor)
+    h.idxfloor = idx
+    idx
+end
 
-function start(t::Dict)
-    i = skip_deleted(t, t.idxfloor)
-    t.idxfloor = i
-    return i
+@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i > length(t.vals) ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
+@propagate_inbounds function iterate(t::Dict)
+    _iterate(t, skip_deleted_floor!(t))
 end
-done(t::Dict, i) = i > length(t.vals)
-@propagate_inbounds function next(t::Dict{K,V}, i) where {K,V}
-    return (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
-end
+@propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function next(v::KeySet{<:Any, <:Dict}, i)
-    return (v.dict.keys[i], skip_deleted(v.dict,i+1))
-end
-@propagate_inbounds function next(v::ValueIterator{<:Dict}, i)
-    return (v.dict.vals[i], skip_deleted(v.dict,i+1))
+@propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}},
+                                     i=v.dict.idxfloor)
+    i = skip_deleted(v.dict, i)
+    i > length(v.dict.vals) && return nothing
+    (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], i+1)
 end
 
 filter!(f, d::Dict) = filter_in_one_pass!(f, d)
@@ -749,11 +756,12 @@ function get(dict::ImmutableDict, key, default)
 end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
-start(t::ImmutableDict) = t
-next(::ImmutableDict{K,V}, t) where {K,V} = (Pair{K,V}(t.key, t.value), t.parent)
-done(::ImmutableDict, t) = !isdefined(t, :parent)
+function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
+    !isdefined(t, :parent) && return nothing
+    (Pair{K,V}(t.key, t.value), t.parent)
+end
 length(t::ImmutableDict) = count(x->true, t)
-isempty(t::ImmutableDict) = done(t, start(t))
+isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
 _similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)

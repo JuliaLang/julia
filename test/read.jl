@@ -556,7 +556,7 @@ end
 
 let p = Pipe()
     Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
-    t = @schedule read(p)
+    t = @async read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))
         for i = 1:typemax(UInt16)

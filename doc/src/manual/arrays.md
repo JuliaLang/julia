@@ -83,11 +83,11 @@ converted to that type using [`convert`](@ref).
 
 Arrays can be constructed and also concatenated using the following functions:
 
-| Function               | Description                                          |
-|:---------------------- |:---------------------------------------------------- |
-| [`cat(k, A...)`](@ref) | concatenate input n-d arrays along the dimension `k` |
-| [`vcat(A...)`](@ref)   | shorthand for `cat(1, A...)`                         |
-| [`hcat(A...)`](@ref)   | shorthand for `cat(2, A...)`                         |
+| Function                    | Description                                     |
+|:--------------------------- |:----------------------------------------------- |
+| [`cat(A...; dims=k)`](@ref) | concatenate input arrays along dimension(s) `k` |
+| [`vcat(A...)`](@ref)        | shorthand for `cat(A...; dims=1)`               |
+| [`hcat(A...)`](@ref)        | shorthand for `cat(A...; dims=2)`               |
 
 Scalar values passed to these functions are treated as 1-element arrays.
 
@@ -392,14 +392,15 @@ julia> x = collect(reshape(1:9, 3, 3))
  2  5  8
  3  6  9
 
-julia> x[1:2, 2:3] = -1
--1
+julia> x[3, 3] = -9;
+
+julia> x[1:2, 1:2] = [-1 -4; -2 -5];
 
 julia> x
 3×3 Array{Int64,2}:
- 1  -1  -1
- 2  -1  -1
- 3   6   9
+ -1  -4   7
+ -2  -5   8
+  3   6  -9
 ```
 
 ### [Supported index types](@id man-supported-index-types)
@@ -654,8 +655,7 @@ julia> broadcast(+, a, b)
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
 to `broadcast` calls (except that they fuse, as described below). There is also a
 [`broadcast!`](@ref) function to specify an explicit destination (which can also
-be accessed in a fusing fashion by `.=` assignment), and functions [`broadcast_getindex`](@ref)
-and [`broadcast_setindex!`](@ref) that broadcast the indices before indexing. Moreover, `f.(args...)`
+be accessed in a fusing fashion by `.=` assignment). Moreover, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
 ([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
@@ -722,6 +722,10 @@ indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
 block of code, any `array[...]` slice in that expression will be converted to
 create a `SubArray` view instead.
 
+[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
+and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
+
 A "strided" array is stored in memory with elements laid out in regular offsets such that
 an instance with a supported `isbits` element type can be passed to
 external C and Fortran functions that expect this memory layout. Strided arrays
@@ -742,37 +746,37 @@ creating any temporaries, and by calling the appropriate LAPACK function with th
 dimension size and stride parameters.
 
 ```julia-repl
-julia> a = rand(10,10)
+julia> a = rand(10, 10)
 10×10 Array{Float64,2}:
- 0.561255   0.226678   0.203391  0.308912   …  0.750307  0.235023   0.217964
- 0.718915   0.537192   0.556946  0.996234      0.666232  0.509423   0.660788
- 0.493501   0.0565622  0.118392  0.493498      0.262048  0.940693   0.252965
- 0.0470779  0.736979   0.264822  0.228787      0.161441  0.897023   0.567641
- 0.343935   0.32327    0.795673  0.452242      0.468819  0.628507   0.511528
- 0.935597   0.991511   0.571297  0.74485    …  0.84589   0.178834   0.284413
- 0.160706   0.672252   0.133158  0.65554       0.371826  0.770628   0.0531208
- 0.306617   0.836126   0.301198  0.0224702     0.39344   0.0370205  0.536062
- 0.890947   0.168877   0.32002   0.486136      0.096078  0.172048   0.77672
- 0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
+ 0.517515  0.0348206  0.749042   0.0979679  …  0.75984     0.950481   0.579513
+ 0.901092  0.873479   0.134533   0.0697848     0.0586695   0.193254   0.726898
+ 0.976808  0.0901881  0.208332   0.920358      0.288535    0.705941   0.337137
+ 0.657127  0.0317896  0.772837   0.534457      0.0966037   0.700694   0.675999
+ 0.471777  0.144969   0.0718405  0.0827916     0.527233    0.173132   0.694304
+ 0.160872  0.455168   0.489254   0.827851   …  0.62226     0.0995456  0.946522
+ 0.291857  0.769492   0.68043    0.629461      0.727558    0.910796   0.834837
+ 0.775774  0.700731   0.700177   0.0126213     0.00822304  0.327502   0.955181
+ 0.9715    0.64354    0.848441   0.241474      0.591611    0.792573   0.194357
+ 0.646596  0.575456   0.0995212  0.038517      0.709233    0.477657   0.0507231
 
 julia> b = view(a, 2:2:8,2:2:4)
-4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},false}:
- 0.537192  0.996234
- 0.736979  0.228787
- 0.991511  0.74485
- 0.836126  0.0224702
+4×2 view(::Array{Float64,2}, 2:2:8, 2:2:4) with eltype Float64:
+ 0.873479   0.0697848
+ 0.0317896  0.534457
+ 0.455168   0.827851
+ 0.700731   0.0126213
 
-julia> (q,r) = qr(b);
+julia> (q, r) = qr(b);
 
 julia> q
-4×2 Array{Float64,2}:
- -0.338809   0.78934
- -0.464815  -0.230274
- -0.625349   0.194538
- -0.527347  -0.534856
+4×4 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+ -0.722358    0.227524  -0.247784    -0.604181
+ -0.0262896  -0.575919  -0.804227     0.144377
+ -0.376419   -0.75072    0.540177    -0.0541979
+ -0.579497    0.230151  -0.00552346   0.781782
 
 julia> r
 2×2 Array{Float64,2}:
- -1.58553  -0.921517
-  0.0       0.866567
+ -1.20921  -0.383393
+  0.0      -0.910506
 ```

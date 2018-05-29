@@ -188,26 +188,26 @@ similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), simil
 
 #Singular values
 svdvals!(M::Bidiagonal{<:BlasReal}) = LAPACK.bdsdc!(M.uplo, 'N', M.dv, M.ev)[1]
-function svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+function svd!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
+        Base.depwarn(string("the `thin` keyword argument in `svd!(A; thin = $(thin))` has ",
             "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svdfact!(A; full = $(!thin))`."), :svdfact!)
+            "e.g. `svd!(A; full = $(!thin))`."), :svd!)
         full::Bool = !thin
     end
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.uplo, 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
-function svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
+function svd(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing)
     # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
     if thin != nothing
-        Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
+        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
             "been deprecated in favor of `full`, which has the opposite meaning, ",
-            "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
+            "e.g. `svd(A; full = $(!thin))`."), :svd)
         full::Bool = !thin
     end
-    return svdfact!(copy(M), full = full)
+    return svd!(copy(M), full = full)
 end
 
 ####################
@@ -551,20 +551,39 @@ function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) w
     if N != length(b) || N != length(x)
         throw(DimensionMismatch("second dimension of A, $N, does not match one of the lengths of x, $(length(x)), or b, $(length(b))"))
     end
-    if A.uplo == 'L' #do forward substitution
-        for j = 1:N
-            x[j] = b[j]
-            j > 1 && (x[j] -= A.ev[j-1] * x[j-1])
-            x[j] /= A.dv[j] == zero(T) ? throw(SingularException(j)) : A.dv[j]
-        end
-    else #do backward substitution
-        for j = N:-1:1
-            x[j] = b[j]
-            j < N && (x[j] -= A.ev[j] * x[j+1])
-            x[j] /= A.dv[j] == zero(T) ? throw(SingularException(j)) : A.dv[j]
+
+    if N == 0
+        return x
+    end
+
+    @inbounds begin
+        if A.uplo == 'L' #do forward substitution
+            x[1] = xj1 = A.dv[1]\b[1]
+            for j = 2:N
+                xj  = b[j]
+                xj -= A.ev[j - 1] * xj1
+                dvj = A.dv[j]
+                if iszero(dvj)
+                    throw(SingularException(j))
+                end
+                xj   = dvj\xj
+                x[j] = xj1 = xj
+            end
+        else #do backward substitution
+            x[N] = xj1 = A.dv[N]\b[N]
+            for j = (N - 1):-1:1
+                xj  = b[j]
+                xj -= A.ev[j] * xj1
+                dvj = A.dv[j]
+                if iszero(dvj)
+                    throw(SingularException(j))
+                end
+                xj   = dvj\xj
+                x[j] = xj1 = xj
+            end
         end
     end
-    x
+    return x
 end
 
 ### Generic promotion methods and fallbacks
@@ -625,4 +644,4 @@ function eigvecs(M::Bidiagonal{T}) where T
     end
     Q #Actually Triangular
 end
-eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
+eigen(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))

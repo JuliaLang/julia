@@ -22,7 +22,7 @@ about strings:
 
 Some string functions that extract code units, characters or substrings from
 strings error if you pass them out-of-bounds or invalid string indices. This
-includes `codeunit(s, i)`, `s[i]`, and `next(s, i)`. Functions that do string
+includes `codeunit(s, i)` and `s[i]`. Functions that do string
 index arithmetic take a more relaxed approach to indexing and give you the
 closest valid string index when in-bounds, or when out-of-bounds, behave as if
 there were an infinite number of characters padding each side of the string.
@@ -95,7 +95,7 @@ In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must be
 [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code) this
 is a basic assumption of Julia's generic string support.
 
-See also: [`getindex`](@ref), [`next`](@ref), [`thisind`](@ref),
+See also: [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
 [`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
 
 # Examples
@@ -122,32 +122,45 @@ Stacktrace:
     throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
 
 """
-    next(s::AbstractString, i::Integer) -> Tuple{<:AbstractChar, Int}
+    iterate(s::AbstractString, i::Integer) -> Union{Tuple{<:AbstractChar, Int}, Nothing}
 
 Return a tuple of the character in `s` at index `i` with the index of the start
 of the following character in `s`. This is the key method that allows strings to
 be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
-then a bounds error is raised. The `next` function, as part of the iteration
-protocoal may assume that `i` is the start of a character in `s`.
+then a bounds error is raised. The `iterate` function, as part of the iteration
+protocol may assume that `i` is the start of a character in `s`.
 
-See also: [`getindex`](@ref), [`start`](@ref), [`done`](@ref),
-[`checkbounds`](@ref)
+See also: [`getindex`](@ref), [`checkbounds`](@ref)
 """
-@propagate_inbounds next(s::AbstractString, i::Integer) = typeof(i) === Int ?
-    throw(MethodError(next, (s, i))) : next(s, Int(i))
+@propagate_inbounds iterate(s::AbstractString, i::Integer) = typeof(i) === Int ?
+    throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
 
 ## basic generic definitions ##
 
-start(s::AbstractString) = 1
-done(s::AbstractString, i::Integer) = i > ncodeunits(s)
 eltype(::Type{<:AbstractString}) = Char # some string types may use another AbstractChar
+
+"""
+    sizeof(str::AbstractString)
+
+Size, in bytes, of the string `s`. Equal to the number of code units in `s` multiplied by
+the size, in bytes, of one code unit in `s`.
+
+# Examples
+```jldoctest
+julia> sizeof("")
+0
+
+julia> sizeof("∀")
+3
+```
+"""
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
 firstindex(s::AbstractString) = 1
 lastindex(s::AbstractString) = thisind(s, ncodeunits(s))
 
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
-    @inbounds return isvalid(s, i) ? next(s, i)[1] : string_index_err(s, i)
+    @inbounds return isvalid(s, i) ? iterate(s, i)[1] : string_index_err(s, i)
 end
 
 getindex(s::AbstractString, i::Colon) = s
@@ -357,10 +370,10 @@ return `i`. In all other cases throw `BoundsError`.
 
 # Examples
 ```jldoctest
-julia> thisind("α", 0)
+julia> thisind("αβγdef", 0)
 0
 
-julia> thisind("α", 1)
+julia> thisind("αβγdef", 1)
 1
 
 julia> thisind("α", 2)
@@ -378,6 +391,12 @@ julia> thisind("α", -1)
 ERROR: BoundsError: attempt to access "α"
   at index [-1]
 [...]
+
+julia> thisind("αβγdef", 9)
+9
+
+julia> thisind("αβγdef", 10)
+10
 ```
 """
 thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
@@ -522,9 +541,7 @@ keys(s::AbstractString) = EachStringIndex(s)
 length(e::EachStringIndex) = length(e.s)
 first(::EachStringIndex) = 1
 last(e::EachStringIndex) = lastindex(e.s)
-start(e::EachStringIndex) = start(e.s)
-next(e::EachStringIndex, state) = (state, nextind(e.s, state))
-done(e::EachStringIndex, state) = done(e.s, state)
+iterate(e::EachStringIndex, state=firstindex(e.s)) = state > ncodeunits(e.s) ? nothing : (state, nextind(e.s, state))
 eltype(::Type{<:EachStringIndex}) = Int
 
 """
@@ -663,12 +680,8 @@ julia> "Test "^3
 (^)(s::Union{AbstractString,AbstractChar}, r::Integer) = repeat(s, r)
 
 # reverse-order iteration for strings and indices thereof
-start(r::Iterators.Reverse{<:AbstractString}) = lastindex(r.itr)
-done(r::Iterators.Reverse{<:AbstractString}, i) = i < start(r.itr)
-next(r::Iterators.Reverse{<:AbstractString}, i) = (r.itr[i], prevind(r.itr, i))
-start(r::Iterators.Reverse{<:EachStringIndex}) = lastindex(r.itr.s)
-done(r::Iterators.Reverse{<:EachStringIndex}, i) = i < start(r.itr.s)
-next(r::Iterators.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.s, i))
+iterate(r::Iterators.Reverse{<:AbstractString}, i=lastindex(r.itr)) = i < firstindex(r.itr) ? nothing : (r.itr[i], prevind(r.itr, i))
+iterate(r::Iterators.Reverse{<:EachStringIndex}, i=lastindex(r.itr.s)) = i < firstindex(r.itr.s) ? nothing : (i, prevind(r.itr.s, i))
 
 ## code unit access ##
 
@@ -690,9 +703,7 @@ strides(s::CodeUnits) = (1,)
 elsize(s::CodeUnits{T}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
-start(s::CodeUnits) = 1
-next(s::CodeUnits, i) = (@_propagate_inbounds_meta; (s[i], i+1))
-done(s::CodeUnits, i) = (@_inline_meta; i == length(s)+1)
+iterate(s::CodeUnits, i=1) = (@_propagate_inbounds_meta; i == length(s)+1 ? nothing : (s[i], i+1))
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 

@@ -20,7 +20,6 @@
 
 macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
-    @gensym oldmtname
     if isa(old, Symbol)
         oldname = Expr(:quote, old)
         newname = Expr(:quote, new)
@@ -28,10 +27,9 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", $oldmtname)
+                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
                   $(esc(new))(args...)
-              end),
-            :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
+              end))
     elseif isa(old, Expr) && (old.head == :call || old.head == :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
@@ -53,10 +51,9 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", $oldmtname)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
                   $(esc(new))
-              end),
-            :(const $oldmtname = Core.Typeof($(esc(oldsym))).name.mt.name))
+              end))
     else
         error("invalid usage of @deprecate")
     end
@@ -296,12 +293,6 @@ deprecate(Base, :DSP, 2)
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
 
-# PR #21709
-@deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
-@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, dims=vardim, corrected=corrected)
-@deprecate cov(X::AbstractVector, Y::AbstractVector, corrected::Bool) cov(X, Y, corrected=corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, dims=vardim, corrected=corrected)
-
 # PR #22325
 # TODO: when this replace is removed from deprecated.jl:
 # 1) rename the function replace_new from strings/util.jl to replace
@@ -328,9 +319,16 @@ end
 @deprecate fill_to_length(t, val, ::Type{Val{N}}) where {N} fill_to_length(t, val, Val(N)) false
 @deprecate literal_pow(a, b, ::Type{Val{N}}) where {N} literal_pow(a, b, Val(N)) false
 @eval IteratorsMD @deprecate split(t, V::Type{Val{n}}) where {n} split(t, Val(n)) false
-@deprecate cat(::Type{Val{N}}, A::AbstractArray...) where {N} cat(Val(N), A...)
-@deprecate cat_t(::Type{Val{N}}, ::Type{T}, A, B) where {N,T} cat_t(Val(N), T, A, B) false
+@deprecate cat(::Type{Val{N}}, A::AbstractArray...) where {N} cat(A..., dims=Val(N))
+@deprecate cat_t(::Type{Val{N}}, ::Type{T}, A, B) where {N,T} cat_t(T, A, B, dims=Val(N)) false
 @deprecate reshape(A::AbstractArray, ::Type{Val{N}}) where {N} reshape(A, Val(N))
+
+# Issue #
+@deprecate cat(dims, As...) cat(As..., dims=dims)
+@deprecate cat_t(dims, ::Type{T}, As...) where {T}  cat_t(T, As...; dims=dims) false
+# Disambiguate
+cat_t(::Type{T}, ::Type{S}, As...; dims=dims) where {T,S} = _cat_t(T, S, As...; dims=dims)
+
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
 
@@ -576,16 +574,18 @@ import .Iterators.enumerate
 
 # issue #5794
 @deprecate map(f, d::T) where {T<:AbstractDict}  T( f(p) for p in pairs(d) )
+# issue #26359 - map over sets
+@deprecate map(f, s::AbstractSet)  Set( f(v) for v in s )
 
 # issue #17086
 @deprecate isleaftype isconcretetype
 @deprecate isabstract isabstracttype
 
 # PR #22932
-@deprecate +(a::Number, b::AbstractArray) broadcast(+, a, b)
-@deprecate +(a::AbstractArray, b::Number) broadcast(+, a, b)
-@deprecate -(a::Number, b::AbstractArray) broadcast(-, a, b)
-@deprecate -(a::AbstractArray, b::Number) broadcast(-, a, b)
+@deprecate +(a::Number, b::AbstractArray) a .+ b
+@deprecate +(a::AbstractArray, b::Number) a .+ b
+@deprecate -(a::Number, b::AbstractArray) a .- b
+@deprecate -(a::AbstractArray, b::Number) a .- b
 
 @deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
 
@@ -1083,7 +1083,7 @@ end
 @deprecate_moved sum_kbn "KahanSummation"
 @deprecate_moved cumsum_kbn "KahanSummation"
 
-@deprecate isalnum(c::Char) isalpha(c) || isnumeric(c)
+@deprecate isalnum(c::Char) isletter(c) || isnumeric(c)
 @deprecate isgraph(c::Char) isprint(c) && !isspace(c)
 @deprecate isnumber(c::Char) isnumeric(c)
 
@@ -1345,13 +1345,6 @@ export readandwrite
 @deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
 
 @deprecate mean(A::AbstractArray, dims)                              mean(A, dims=dims)
-@deprecate varm(A::AbstractArray, m::AbstractArray, dims; kwargs...) varm(A, m; kwargs..., dims=dims)
-@deprecate var(A::AbstractArray, dims; kwargs...)                    var(A; kwargs..., dims=dims)
-@deprecate std(A::AbstractArray, dims; kwargs...)                    std(A; kwargs..., dims=dims)
-@deprecate cov(X::AbstractMatrix, dim::Int; kwargs...)               cov(X; kwargs..., dims=dim)
-@deprecate cov(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int; kwargs...) cov(x, y; kwargs..., dims=dim)
-@deprecate cor(X::AbstractMatrix, dim::Int)                          cor(X, dims=dim)
-@deprecate cor(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int)   cor(x, y, dims=dim)
 @deprecate median(A::AbstractArray, dims; kwargs...)                 median(A; kwargs..., dims=dims)
 
 @deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
@@ -1491,6 +1484,28 @@ function slicedim(A::AbstractVector, d::Integer, i::Number)
     end
 end
 
+# PR #26347: Deprecate implicit scalar broadcasting in setindex!
+_axes(::Ref) = ()
+_axes(x) = axes(x)
+setindex_shape_check(X::Base.Iterators.Repeated, I...) = nothing
+function deprecate_scalar_setindex_broadcast_message(v, I...)
+    value = (_axes(Base.Broadcast.broadcastable(v)) == () ? "x" : "(x,)")
+    "using `A[I...] = x` to implicitly broadcast `x` across many locations is deprecated. Use `A[I...] .= $value` instead."
+end
+deprecate_scalar_setindex_broadcast_message(v, ::Colon, ::Vararg{Colon}) =
+    "using `A[:] = x` to implicitly broadcast `x` across many locations is deprecated. Use `fill!(A, x)` instead."
+
+function _iterable(v, I...)
+    depwarn(deprecate_scalar_setindex_broadcast_message(v, I...), :setindex!)
+    Iterators.repeated(v)
+end
+function setindex!(B::BitArray, x, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+    depwarn(deprecate_scalar_setindex_broadcast_message(x, I0, I...), :setindex!)
+    B[I0, I...] .= (x,)
+    B
+end
+
+
 # PR #26283
 @deprecate contains(haystack, needle) occursin(needle, haystack)
 @deprecate contains(s::AbstractString, r::Regex, offset::Integer) occursin(r, s, offset=offset)
@@ -1556,10 +1571,18 @@ end
 @deprecate_binding OccursIn Base.Fix2{typeof(in)} false
 
 # Remove ambiguous CartesianIndices and LinearIndices constructors that are ambiguous between an axis and an array (#26448)
-@eval IteratorsMD @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} CartesianIndices(inds)
-@eval IteratorsMD @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} CartesianIndices(inds)
-@eval IteratorsMD @deprecate LinearIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} LinearIndices(inds)
-@eval IteratorsMD @deprecate LinearIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} LinearIndices(inds)
+@eval IteratorsMD begin
+    import Base: LinearIndices
+    @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} CartesianIndices(inds)
+    @deprecate CartesianIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} CartesianIndices(inds)
+    @deprecate LinearIndices(inds::Vararg{AbstractUnitRange{Int},N}) where {N} LinearIndices(inds)
+    @deprecate LinearIndices(inds::Vararg{AbstractUnitRange{<:Integer},N}) where {N} LinearIndices(inds)
+    # preserve the case with N = 1 (only needed as long as the above deprecations are here)
+    CartesianIndices(inds::AbstractUnitRange{Int}) = CartesianIndices(axes(inds))
+    CartesianIndices(inds::AbstractUnitRange{<:Integer}) = CartesianIndices(axes(inds))
+    LinearIndices(inds::AbstractUnitRange{Int}) = LinearIndices(axes(inds))
+    LinearIndices(inds::AbstractUnitRange{<:Integer}) = LinearIndices(axes(inds))
+end
 
 # rename uninitialized
 @deprecate_binding uninitialized undef
@@ -1599,10 +1622,17 @@ end
 @deprecate showcompact(io, x) show(IOContext(io, :compact => true), x)
 @deprecate sprint(::typeof(showcompact), args...) sprint(show, args...; context=:compact => true)
 
+# PR 27075
+@deprecate broadcast_getindex(A, I...)      getindex.((A,), I...)
+@deprecate broadcast_setindex!(A, v, I...)  setindex!.((A,), v, I...)
+
 @deprecate isupper isuppercase
 @deprecate islower islowercase
 @deprecate ucfirst uppercasefirst
 @deprecate lcfirst lowercasefirst
+
+# Issue #26932
+@deprecate isalpha isletter
 
 function search(buf::IOBuffer, delim::UInt8)
     Base.depwarn("search(buf::IOBuffer, delim::UInt8) is deprecated: use occursin(delim, buf) or readuntil(buf, delim) instead", :search)
@@ -1612,6 +1642,11 @@ function search(buf::IOBuffer, delim::UInt8)
     return Int(q-p+1)
 end
 
+# Issue #27067
+@deprecate flipbits!(B::BitArray) B .= .!B
+
+@deprecate linearindices(x::AbstractArray) LinearIndices(x)
+
 # PR #26647
 # The `keep` argument in `split` and `rpslit` has been renamed to `keepempty`.
 # To remove this deprecation, remove the `keep` argument from the function signatures as well as
@@ -1619,6 +1654,26 @@ end
 
 # when this is removed, `isbitstype(typeof(x))` can be replaced with `isbits(x)`
 @deprecate isbits(@nospecialize(t::Type)) isbitstype(t)
+
+# Special string deprecation
+@deprecate start(s::AbstractString) firstindex(s)
+@deprecate next(s::AbstractString, i::Integer) iterate(s, i)
+@deprecate done(s::AbstractString, i::Integer) i > ncodeunits(s)
+
+# #27140, #27152
+@deprecate_moved cor "StatsBase"
+@deprecate_moved cov "StatsBase"
+@deprecate_moved std "StatsBase"
+@deprecate_moved stdm "StatsBase"
+@deprecate_moved var "StatsBase"
+@deprecate_moved varm "StatsBase"
+@deprecate_moved linreg "StatsBase"
+
+# issue #27093
+# in src/jlfrontend.scm a call to `@deprecate` is generated for per-module `eval(m, x)`
+@eval Core Main.Base.@deprecate(eval(e), Core.eval(Main, e))
+
+@eval @deprecate $(Symbol("@schedule")) $(Symbol("@async"))
 
 # END 0.7 deprecations
 

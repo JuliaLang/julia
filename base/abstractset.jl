@@ -198,23 +198,6 @@ end
 <( l::AbstractSet, r::AbstractSet) = l ⊊ r
 <=(l::AbstractSet, r::AbstractSet) = l ⊆ r
 
-"""
-    issubset(a, b)
-    ⊆(a,b) -> Bool
-    ⊈(a,b) -> Bool
-    ⊊(a,b) -> Bool
-
-Determine whether every element of `a` is also in `b`, using [`in`](@ref).
-
-# Examples
-```jldoctest
-julia> issubset([1, 2], [1, 2, 3])
-true
-
-julia> issubset([1, 2, 3], [1, 2])
-false
-```
-"""
 function issubset(l, r)
 
     rlen = length(r)
@@ -233,10 +216,30 @@ function issubset(l, r)
     end
     return true
 end
-# use the implementation below when it becoms as efficient
+# use the implementation below when it becomes as efficient
 # issubset(l, r) = all(_in(r), l)
-
 const ⊆ = issubset
+⊇(l, r) = r ⊆ l
+"""
+    issubset(a, b)
+    ⊆(a,b)  -> Bool
+    ⊇(b, a) -> Bool
+
+Determine whether every element of `a` is also in `b`, using [`in`](@ref).
+
+# Examples
+```jldoctest
+julia> issubset([1, 2], [1, 2, 3])
+true
+
+julia> [1, 2, 3] ⊆ [1, 2]
+false
+
+julia> [1, 2, 3] ⊇ [1, 2]
+true
+```
+"""
+issubset, ⊆, ⊇
 
 """
     issetequal(a, b)
@@ -257,11 +260,42 @@ issetequal(l, r) = length(l) == length(r) && l ⊆ r
 issetequal(l::AbstractSet, r::AbstractSet) = l == r
 
 ⊊(l, r) = length(l) < length(r) && l ⊆ r
-⊈(l, r) = !⊆(l, r)
-
-⊇(l, r) = r ⊆ l
-⊉(l, r) = r ⊈ l
 ⊋(l, r) = r ⊊ l
+"""
+    ⊊(a, b)
+    ⊋(b, a)
+
+Determines if `a` is a subset of, but not equal to, `b`.
+
+# Examples
+```jldoctest
+julia> (1, 2) ⊊ (1, 2, 3)
+true
+
+julia> (1, 2) ⊊ (1, 2)
+false
+```
+"""
+⊊, ⊋
+
+⊈(l, r) = !⊆(l, r)
+⊉(l, r) = r ⊈ l
+"""
+    ⊈(a, b)
+    ⊉(b, a)
+
+Negation of `⊆` and `⊇`, i.e. checks that `a` is not a subset of `b`.
+
+# Examples
+```jldoctest
+julia> (1, 2) ⊈ (2, 3)
+true
+
+julia> (1, 2) ⊈ (1, 2, 3)
+false
+```
+"""
+⊈, ⊉
 
 filter(pred, s::AbstractSet) = mapfilter(pred, push!, s, emptymutable(s))
 

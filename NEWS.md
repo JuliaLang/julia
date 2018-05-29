@@ -219,6 +219,9 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * The package manager `Pkg` has been replaced with a new one. See the manual entries on
+    "Code Loading" and "Pkg" for documentation.
+
   * `replace(s::AbstractString, pat=>repl)` for function `repl` arguments formerly
     passed a substring to `repl` in all cases.  It now passes substrings for
     string patterns `pat`, but a `Char` for character patterns (when `pat` is a
@@ -226,6 +229,21 @@ This section lists changes that do not have deprecation warnings.
 
   * `readuntil` now does *not* include the delimiter in its result, matching the
     behavior of `readline`. Pass `keep=true` to get the old behavior ([#25633]).
+
+  * `lu` methods now return decomposition objects such as `LU` rather than
+    tuples of arrays or tuples of numbers ([#26997], [#27159], [#27212]).
+
+  * `schur` methods now return decomposition objects such as `Schur` and
+    `GeneralizedSchur` rather than tuples of arrays ([#26997], [#27159], [#27212]).
+
+  * `lq` methods now return decomposition objects such as `LQ`
+    rather than tuples of arrays ([#26997], [#27159], [#27212]).
+
+  * `qr` methods now return decomposition objects such as `QR`, `QRPivoted`,
+    and `QRCompactWY` rather than tuples of arrays ([#26997], [#27159], [#27212]).
+
+  * `svd` methods now return decomposition objects such as `SVD` and
+    `GeneralizedSVD` rather than tuples of arrays or tuples of numbers ([#26997], [#27159], [#27212]).
 
   * `countlines` now always counts the last non-empty line even if it does not
     end with EOL, matching the behavior of `eachline` and `readlines` ([#25845]).
@@ -469,6 +487,21 @@ This section lists changes that do not have deprecation warnings.
   * `widen` on 8- and 16-bit integer types now widens to the platform word size (`Int`)
     instead of to a 32-bit type ([#26859]).
 
+  * `mv`,`cp`, `touch`, `mkdir`, `mkpath` now return the path that was created/modified
+    rather than `nothing` ([#27071]).
+
+  * Regular expressions now default to UCP mode. Escape sequences such as `\w`
+    will now match based on unicode character properties, e.g. `r"\w+"` will
+    match `café` (not just `caf`). Add the `a` modifier (e.g. `r"\w+"a`) to
+    restore the previous behavior ([#27189]).
+
+  * `@sync` now waits only for *lexically* enclosed (i.e. visible directly in the source
+    text of its argument) `@async` expressions. If you need to wait for a task created by
+    a called function `f`, have `f` return the task and put `@async wait(f(...))` within
+    the `@sync` block.
+    This change makes `@schedule` redundant with `@async`, so `@schedule` has been
+    deprecated ([#27164]).
+
 Library improvements
 --------------------
 
@@ -477,6 +510,9 @@ Library improvements
 
   * `Char` is now a subtype of `AbstractChar`, and most of the functions that
     take character arguments now accept any `AbstractChar` ([#26286]).
+
+  * `bytes2hex` now accepts an optional `io` argument to output to a hexadecimal stream
+    without allocating a `String` first ([#27121]).
 
   * `String(array)` now accepts an arbitrary `AbstractVector{UInt8}`. For `Vector`
     inputs, it "steals" the memory buffer, leaving them with an empty buffer which
@@ -634,8 +670,10 @@ Library improvements
       other containers, by taking the multiplicity of the arguments into account.
       Use `unique` to get the old behavior.
 
-  * The type `LinearIndices` has been added, providing conversion from
-    cartesian indices to linear indices using the normal indexing operation. ([#24715])
+  * The `linearindices` function has been deprecated in favor of the new
+    `LinearIndices` type, which additionnally provides conversion from
+    cartesian indices to linear indices using the normal indexing operation.
+    ([#24715], [#26775]).
 
   * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
     like other `AbstractDict` subtypes and its constructors mirror the
@@ -647,6 +685,8 @@ Library improvements
   * `trunc`, `floor`, `ceil`, and `round` specify `digits`, `sigdigits` and `base` using
     keyword arguments. ([#26156], [#26670])
 
+  * `Sys.which()` provides a cross-platform method to find executable files, similar to
+    the Unix `which` command. ([#26559])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -673,6 +713,31 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
+  * `lufact`, `schurfact`, `lqfact`, `qrfact`, `ldltfact`, `svdfact`,
+    `bkfact`, `hessfact`, `eigfact`, and `cholfact` have respectively been
+    deprecated to `lu`, `schur`, `lq`, `qr`, `ldlt`, `svd`, `bunchkaufman`,
+    `hessenberg`, `eigen`, and `cholesky` ([#26997], [#27159], [#27212]).
+
+  * `lufact!`, `schurfact!`, `lqfact!`, `qrfact!`, `ldltfact!`, `svdfact!`,
+    `bkfact!`, `hessfact!`, and `eigfact!` have respectively been deprecated to
+    `lu!`, `schur!`, `lq!`, `qr!`, `ldlt!`, `svd!`, `bunchkaufman!`,
+    `hessenberg!`, and `eigen!` ([#26997], [#27159], [#27212]).
+
+  * `eig(A[, args...])` has been deprecated in favor of `eigen(A[, args...])`.
+    Whereas the former returns a tuple of arrays, the latter returns an `Eigen` object.
+    So for a direct replacement, use `(eigen(A[, args...])...,)`. But going forward,
+    consider using the direct result of `eigen(A[, args...])` instead, either
+    destructured into its components (`vals, vecs = eigen(A[, args...])`) or
+    as an `Eigen` object (`X = eigen(A[, args...])`) ([#26997], [#27159], [#27212]).
+
+  * `eig(A::AbstractMatrix, B::AbstractMatrix)` and `eig(A::Number, B::Number)`
+    have been deprecated in favor of `eigen(A, B)`. Whereas the former each return
+    a tuple of arrays, the latter returns a `GeneralizedEigen` object. So for a direct
+    replacement, use `(eigen(A, B)...,)`. But going forward, consider using the
+    direct result of `eigen(A, B)` instead, either destructured into its components
+    (`vals, vecs = eigen(A, B)`), or as a `GeneralizedEigen` object
+    (`X = eigen(A, B)`) ([#26997], [#27159], [#27212]).
+
   * Indexing into multidimensional arrays with more than one index but fewer indices than there are
     dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.
     Instead, reshape the array or add trailing indices so the dimensionality and number of indices
@@ -682,7 +747,7 @@ Deprecated or removed
     `dims` keyword argument. This includes the functions `sum`, `prod`, `maximum`,
     `minimum`, `all`, `any`, `findmax`, `findmin`, `mean`, `varm`, `std`, `var`, `cov`,
     `cor`, `median`, `mapreducedim`, `reducedim`, `sort`, `accumulate`, `accumulate!`,
-    `cumsum`, `cumsum!`, `cumprod`, `cumprod!`, `flipdim`, and `squeeze` ([#25501]).
+    `cumsum`, `cumsum!`, `cumprod`, `cumprod!`, `flipdim`, `squeeze`, and `cat` ([#25501], [#26660], [#27100]).
 
   * `indices(a)` and `indices(a,d)` have been deprecated in favor of `axes(a)` and
     `axes(a, d)` ([#25057]).
@@ -696,6 +761,21 @@ Deprecated or removed
     `Vector(3)` is now `Vector(undef, 3)`, `Matrix{Int}((2, 4))` is now,
     `Matrix{Int}(undef, (2, 4))`, and `Array{Float32,3}(11, 13, 17)` is now
     `Array{Float32,3}(undef, 11, 13, 17)` ([#24781]).
+
+  * Previously `setindex!(A, x, I...)` (and the syntax `A[I...] = x`) supported two
+    different modes of operation when supplied with a set of non-scalar indices `I`
+    (e.g., at least one index is an `AbstractArray`) depending upon the value of `x`
+    on the right hand side. If `x` is an `AbstractArray`, its _contents_ are copied
+    elementwise into the locations in `A` selected by `I` and it must have the same
+    number of elements as `I` selects locations. Otherwise, if `x` is not an
+    `AbstractArray`, then its _value_ is implicitly broadcast to all locations to
+    all locations in `A` selected by `I`. This latter behavior—implicitly broadcasting
+    "scalar"-like values across many locations—is now deprecated in favor of explicitly
+    using the broadcasted assignment syntax `A[I...] .= x` or `fill!(view(A, I...), x)`
+    ([#26347]).
+
+  * `broadcast_getindex(A, I...)` and `broadcast_setindex!(A, v, I...)` are deprecated in
+    favor of `getindex.((A,), I...)` and `setindex!.((A,), v, I...)`, respectively ([#27075]).
 
   * `LinAlg.fillslots!` has been renamed `LinAlg.fillstored!` ([#25030]).
 
@@ -713,9 +793,9 @@ Deprecated or removed
   * `slicedim(A, d, i)` has been deprecated in favor of `copy(selectdim(A, d, i))`. The new
     `selectdim` function now always returns a view into `A`; in many cases the `copy` is
     not necessary. Previously, `slicedim` on a vector `V` over dimension `d=1` and scalar
-	index `i` would return the just selected element (unless `V` was a `BitVector`). This
-	has now been made consistent: `selectdim` now always returns a view into the original
-	array, with a zero-dimensional view in this specific case ([#26009]).
+    index `i` would return the just selected element (unless `V` was a `BitVector`). This
+    has now been made consistent: `selectdim` now always returns a view into the original
+    array, with a zero-dimensional view in this specific case ([#26009]).
 
   * `whos` has been renamed `varinfo`, and now returns a markdown table instead of printing
     output ([#12131]).
@@ -947,6 +1027,9 @@ Deprecated or removed
   * `map` on dictionaries previously operated on `key=>value` pairs. This behavior is deprecated,
     and in the future `map` will operate only on values ([#5794]).
 
+  * `map` on sets previously returned a `Set`, possibly changing the order or number of elements. This
+    behavior is deprecated and in the future `map` will preserve order and number of elements ([#26980]).
+
   * Previously, broadcast defaulted to treating its arguments as scalars if they were not
     arrays. This behavior is deprecated, and in the future `broadcast` will default to
     iterating over all its arguments. Wrap arguments you wish to be treated as scalars with
@@ -956,6 +1039,9 @@ Deprecated or removed
   * Automatically broadcasted `+` and `-` for `array + scalar`, `scalar - array`, and so-on have
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead ([#22880], [#22932]).
+
+  * `flipbits!(B)` is deprecated in favor of using in-place broadcast to negate each element:
+    `B .= .!B` ([#27067]).
 
   * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`.
     Concrete types are those that might equal `typeof(x)` for some `x`;
@@ -1022,6 +1108,8 @@ Deprecated or removed
     [KahanSummation](https://github.com/JuliaMath/KahanSummation.jl) package ([#24869]).
 
   * `isnumber` has been renamed to `isnumeric` ([#25021]).
+
+  * `isalpha` has been renamed to `isletter` ([#26932]).
 
   * `is_assigned_char` and `normalize_string` have been renamed to `isassigned` and
     `normalize`, and moved to the new `Unicode` standard library module.
@@ -1470,3 +1558,5 @@ Command-line option changes
 [#26442]: https://github.com/JuliaLang/julia/issues/26442
 [#26600]: https://github.com/JuliaLang/julia/issues/26600
 [#26670]: https://github.com/JuliaLang/julia/issues/26670
+[#26775]: https://github.com/JuliaLang/julia/issues/26775
+[#26932]: https://github.com/JuliaLang/julia/issues/26932

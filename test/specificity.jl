@@ -193,3 +193,12 @@ let A = Tuple{Array{T,N}, Vararg{Int,N}} where {T,N},
     @test args_morespecific(B, C)
     @test args_morespecific(A, C)
 end
+
+# transitivity issue found in #26915
+let A = Tuple{Vector, AbstractVector},
+    B = Tuple{AbstractVecOrMat{T}, AbstractVector{T}} where T,
+    C = Tuple{AbstractVecOrMat{T}, AbstractVecOrMat{T}} where T
+    @test args_morespecific(A, B)
+    @test args_morespecific(B, C)
+    @test args_morespecific(A, C)
+end

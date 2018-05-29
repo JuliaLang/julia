@@ -1969,11 +1969,9 @@
   (cond ((eq? (car e) 'tuple)  (map =-to-kw (cdr e)))
         ((eq? (car e) 'block)
          (cond ((length= e 1) '())
-               ((length= e 2) (list (cadr e)))
+               ((length= e 2) (list (=-to-kw (cadr e))))
                ((length= e 3)
-                (if (assignment? (caddr e))
-                    `((parameters (kw ,@(cdr (caddr e)))) ,(cadr e))
-                    `((parameters ,(caddr e)) ,(cadr e))))
+                `((parameters ,(=-to-kw (caddr e))) ,(=-to-kw (cadr e))))
                (else
                 (error "more than one semicolon in argument list"))))
         (else

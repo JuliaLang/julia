@@ -125,19 +125,20 @@ Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
 """
-promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
-promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
+promote_typejoin(@nospecialize(a), @nospecialize(b)) = _promote_typejoin(a, b)::Type
+_promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
+_promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
+_promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
+_promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
+_promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
     isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
-promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
-promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
-promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
+_promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
+_promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
+_promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
+_promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
 
 # Returns length, isfixed
 function full_va_len(p)
@@ -432,8 +433,8 @@ min(x::Real) = x
 max(x::Real) = x
 minmax(x::Real) = (x, x)
 
-max(x::T, y::T) where {T<:Real} = select_value(y < x, x, y)
-min(x::T, y::T) where {T<:Real} = select_value(y < x, y, x)
+max(x::T, y::T) where {T<:Real} = ifelse(y < x, x, y)
+min(x::T, y::T) where {T<:Real} = ifelse(y < x, y, x)
 minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)
 
 flipsign(x::T, y::T) where {T<:Signed} = no_op_err("flipsign", T)

@@ -162,7 +162,7 @@ end
     max_pos = max_width <= 0 ? len : min(i + max_width - 1, len)
     d::Int64 = 0
     @inbounds while i <= max_pos
-        c, ii = next(str, i)
+        c, ii = iterate(str, i)::Tuple{Char, Int}
         if '0' <= c <= '9'
             d = d * 10 + (c - '0')
         else
@@ -181,8 +181,8 @@ end
     word_start, word_end = i, 0
     max_pos = maxchars <= 0 ? len : min(len, nextind(str, i, maxchars-1))
     @inbounds while i <= max_pos
-        c, ii = next(str, i)
-        if isalpha(c)
+        c, ii = iterate(str, i)::Tuple{Char, Int}
+        if isletter(c)
             word_end = i
         else
             break
@@ -209,7 +209,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto error
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != '-' && @goto error
     i > end_pos && @goto done
 
@@ -219,7 +219,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != '-' && @goto error
     i > end_pos && @goto done
 
@@ -229,7 +229,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != 'T' && @goto error
     i > end_pos && @goto done
 
@@ -239,7 +239,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != ':' && @goto error
     i > end_pos && @goto done
 
@@ -249,7 +249,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != ':' && @goto error
     i > end_pos && @goto done
 
@@ -259,7 +259,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != '.' && @goto error
     i > end_pos && @goto done
 

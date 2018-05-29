@@ -541,7 +541,7 @@ let filename = tempname()
 
     # stdin is unavailable on the workers. Run test on master.
     @test occursin("WARNING: hello", read(filename, String))
-    ret = eval(Main, quote
+    ret = Core.eval(Main, quote
         remotecall_fetch(1, $filename) do fname
             open(fname) do f
                 redirect_stdin(f) do
@@ -726,10 +726,27 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test_repr "continue"
 @test_repr "break"
 
-let x = [], y = []
+let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(x, y)
     push!(y, x)
-    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]]]"
+    push!(y, z)
+    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(Any[Any[#= circular reference @-3 =#]]=>Any[#= circular reference @-2 =#])]"
+    @test repr(z) == "Base.ImmutableDict(Any[Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]]=>Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
+    @test sprint(dump, x) == """
+        Array{Any}((1,))
+          1: Array{Any}((2,))
+            1: Array{Any}((1,))#= circular reference @-2 =#
+            2: Base.ImmutableDict{Array{Any,1},Array{Any,1}}
+              parent: Base.ImmutableDict{Array{Any,1},Array{Any,1}}
+                parent: #undef
+                key: #undef
+                value: #undef
+              key: Array{Any}((1,))#= circular reference @-3 =#
+              value: Array{Any}((2,))#= circular reference @-2 =#
+        """
+    dz = sprint(dump, z)
+    @test 10 < countlines(IOBuffer(dz)) < 40
+    @test sum(x -> 1, eachmatch(r"circular reference", dz)) == 4
 end
 
 # PR 16221
@@ -784,6 +801,9 @@ let repr = sprint(dump, Integer)
 end
 let repr = sprint(dump, Union{Integer, Float32})
     @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
+end
+let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
+    @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
 end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
@@ -1196,3 +1216,27 @@ end
     @test summary(BigInt(1):BigInt(10)) == "10-element UnitRange{BigInt}"
     @test summary(Base.OneTo(BigInt(10))) == "10-element Base.OneTo{BigInt}"
 end
+
+# Tests for code_typed linetable annotations
+function compute_annotations(f, types)
+    src = code_typed(f, types)[1][1]
+    ir = Core.Compiler.inflate_ir(src)
+    la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
+    max_loc_method = maximum(length(s) for s in la)
+    join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
+end
+
+g_line() = leaf() # Deliberately not implemented to end up as a leaf after inlining
+
+# Test that separate instances of the same function do not get merged
+function f_line()
+   g_line()
+   g_line()
+   g_line()
+   nothing
+end
+h_line() = f_line()
+@test startswith(compute_annotations(h_line, Tuple{}), """
+    │╻╷ f_line
+    ││╻  g_line
+    ││╻  g_line""")

@@ -23,3 +23,11 @@ let code = Any[
 
     Compiler.run_passes(ci, 1, Compiler.LineInfoNode[Compiler.NullLineInfo])
 end
+
+# test >:
+let
+
+f(a,b) = a >: b
+code_typed(f, Tuple{Any, Any})
+
+end

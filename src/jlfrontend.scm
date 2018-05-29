@@ -131,10 +131,15 @@
           (block
            ,loc
            (call (core eval) ,name ,x)))
-       (= (call eval m ,x)
-          (block
-           ,loc
-           (call (core eval) m ,x)))
+       (if (&& (call (top isdefined) (core Main) (quote Base))
+               (call (top isdefined) (top Base) (quote @deprecate)))
+           (call eval
+                 (quote
+                  (macrocall (top @deprecate)
+                             (line 0 none)
+                             (call eval m x)
+                             (call (|.| Core (quote eval)) m x)
+                             false))))
        (= (call include ,x)
           (block
            ,loc

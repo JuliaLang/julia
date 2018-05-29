@@ -31,7 +31,7 @@ DECLARE_BUILTIN(fieldtype);  DECLARE_BUILTIN(arrayref);
 DECLARE_BUILTIN(arrayset);   DECLARE_BUILTIN(arraysize);
 DECLARE_BUILTIN(apply_type); DECLARE_BUILTIN(applicable);
 DECLARE_BUILTIN(invoke);     DECLARE_BUILTIN(_expr);
-DECLARE_BUILTIN(typeassert);
+DECLARE_BUILTIN(typeassert); DECLARE_BUILTIN(ifelse);
 
 JL_CALLABLE(jl_f_invoke_kwsorter);
 

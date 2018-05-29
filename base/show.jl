@@ -630,6 +630,16 @@ function show(io::IO, l::Core.MethodInstance)
     end
 end
 
+module IRShow
+    const Compiler = Core.Compiler
+    using Core.IR
+    import .Base: IdSet
+    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument
+    Base.size(r::Compiler.StmtRange) = Compiler.size(r)
+    Base.show(io::IO, r::Compiler.StmtRange) = print(io, Compiler.first(r):Compiler.last(r))
+    include("compiler/ssair/show.jl")
+end
+
 function show(io::IO, src::CodeInfo)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
@@ -637,14 +647,20 @@ function show(io::IO, src::CodeInfo)
     if src.slotnames !== nothing
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
     end
-    body = Expr(:body)
-    body.args = src.code
-    show(lambda_io, body)
+    if src.codelocs !== nothing
+        println(io)
+        ir = Core.Compiler.inflate_ir(src)
+        IRShow.show_ir(lambda_io, ir, argnames=sourceinfo_slotnames(src))
+    else
+        body = Expr(:body)
+        body.args = src.code
+        show(lambda_io, body)
+    end
     print(io, ")")
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
-                          delim_one, i1=first(linearindices(itr)), l=last(linearindices(itr)))
+                          delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
@@ -679,22 +695,23 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
-        state = start(itr)
+        y = iterate(itr)
         first = true
         i0 = i1-1
-        while i1 > 1 && !done(itr, state)
-            _, state = next(itr, state)
+        while i1 > 2 && y !== nothing
+            y = iterate(itr, y[2])
             i1 -= 1
         end
-        if !done(itr, state)
+        if y !== nothing
             typeinfo = get(io, :typeinfo, Any)
             while true
-                x, state = next(itr, state)
+                x = y[1]
+                y = iterate(itr, y[2])
                 show(IOContext(recur_io, :typeinfo =>
                                typeinfo <: Tuple ? fieldtype(typeinfo, i1+i0) : typeinfo),
                      x)
                 i1 += 1
-                if done(itr, state) || i1 > n
+                if y === nothing || i1 > n
                     delim_one && first && print(io, delim)
                     break
                 end
@@ -1599,7 +1616,7 @@ function show(io::IO, tv::TypeVar)
     nothing
 end
 
-function dump(io::IO, x::SimpleVector, n::Int, indent)
+function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)
         print(io, "empty SimpleVector")
         return
@@ -1619,37 +1636,41 @@ function dump(io::IO, x::SimpleVector, n::Int, indent)
     nothing
 end
 
-function dump(io::IO, @nospecialize(x), n::Int, indent)
+function dump(io::IOContext, @nospecialize(x), n::Int, indent)
     T = typeof(x)
     if isa(x, Function)
         print(io, x, " (function of type ", T, ")")
     else
         print(io, T)
     end
-    if nfields(x) > 0
-        if n > 0
-            for field in (isa(x,Tuple) ? (1:length(x)) : fieldnames(T))
+    nf = nfields(x)
+    if nf > 0
+        if n > 0 && !show_circular(io, x)
+            recur_io = IOContext(io, Pair{Symbol,Any}(:SHOWN_SET, x))
+            for field in 1:nf
                 println(io)
-                print(io, indent, "  ", field, ": ")
+                fname = string(fieldname(T, field))
+                print(io, indent, "  ", fname, ": ")
                 if isdefined(x,field)
-                    dump(io, getfield(x, field), n - 1, string(indent, "  "))
+                    dump(recur_io, getfield(x, field), n - 1, string(indent, "  "))
                 else
                     print(io, undef_ref_str)
                 end
             end
         end
     else
-        !isa(x,Function) && print(io, " ", x)
+        !isa(x, Function) && print(io, " ", x)
     end
     nothing
 end
 
-dump(io::IO, x::Module, n::Int, indent) = print(io, "Module ", x)
-dump(io::IO, x::String, n::Int, indent) = (print(io, "String "); show(io, x))
-dump(io::IO, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
-dump(io::IO, x::Union,  n::Int, indent) = print(io, x)
+dump(io::IOContext, x::Module, n::Int, indent) = print(io, "Module ", x)
+dump(io::IOContext, x::String, n::Int, indent) = (print(io, "String "); show(io, x))
+dump(io::IOContext, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
+dump(io::IOContext, x::Union,  n::Int, indent) = print(io, x)
+dump(io::IOContext, x::Ptr,    n::Int, indent) = print(io, x)
 
-function dump_elts(io::IO, x::Array, n::Int, indent, i0, i1)
+function dump_elts(io::IOContext, x::Array, n::Int, indent, i0, i1)
     for i in i0:i1
         print(io, indent, "  ", i, ": ")
         if !isassigned(x,i)
@@ -1661,23 +1682,25 @@ function dump_elts(io::IO, x::Array, n::Int, indent, i0, i1)
     end
 end
 
-function dump(io::IO, x::Array, n::Int, indent)
+function dump(io::IOContext, x::Array, n::Int, indent)
     print(io, "Array{$(eltype(x))}($(size(x)))")
     if eltype(x) <: Number
         print(io, " ")
         show(io, x)
     else
-        if n > 0 && !isempty(x)
+        if n > 0 && !isempty(x) && !show_circular(io, x)
             println(io)
+            recur_io = IOContext(io, :SHOWN_SET => x)
+            lx = length(x)
             if get(io, :limit, false)
-                dump_elts(io, x, n, indent, 1, (length(x) <= 10 ? length(x) : 5))
-                if length(x) > 10
+                dump_elts(recur_io, x, n, indent, 1, (lx <= 10 ? lx : 5))
+                if lx > 10
                     println(io)
                     println(io, indent, "  ...")
-                    dump_elts(io, x, n, indent, length(x)-4, length(x))
+                    dump_elts(recur_io, x, n, indent, lx - 4, lx)
                 end
             else
-                dump_elts(io, x, n, indent, 1, length(x))
+                dump_elts(recur_io, x, n, indent, 1, lx)
             end
         end
     end
@@ -1685,7 +1708,7 @@ function dump(io::IO, x::Array, n::Int, indent)
 end
 
 # Types
-function dump(io::IO, x::DataType, n::Int, indent)
+function dump(io::IOContext, x::DataType, n::Int, indent)
     print(io, x)
     if x !== Any
         print(io, " <: ", supertype(x))
@@ -1712,12 +1735,16 @@ end
 
 const DUMP_DEFAULT_MAXDEPTH = 8
 
-dump(io::IO, arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = (dump(io, arg, maxdepth, ""); println(io))
+function dump(io::IO, @nospecialize(x); maxdepth=DUMP_DEFAULT_MAXDEPTH)
+    dump(IOContext(io), x, maxdepth, "")
+    println(io)
+end
 
 """
     dump(x; maxdepth=$DUMP_DEFAULT_MAXDEPTH)
 
 Show every part of the representation of a value.
+The depth of the output is truncated at `maxdepth`.
 
 # Examples
 ```jldoctest
@@ -1734,32 +1761,11 @@ MyStruct
   y: Tuple{Int64,Int64}
     1: Int64 2
     2: Int64 3
-```
-Nested data structures are truncated at `maxdepth`.
-```jldoctest
-julia> struct DeeplyNested
-           xs::Vector{DeeplyNested}
-       end;
 
-julia> x = DeeplyNested([]);
-
-julia> push!(x.xs, x);
-
-julia> dump(x)
-DeeplyNested
-  xs: Array{DeeplyNested}((1,))
-    1: DeeplyNested
-      xs: Array{DeeplyNested}((1,))
-        1: DeeplyNested
-          xs: Array{DeeplyNested}((1,))
-            1: DeeplyNested
-              xs: Array{DeeplyNested}((1,))
-                1: DeeplyNested
-
-julia> dump(x, maxdepth=2)
-DeeplyNested
-  xs: Array{DeeplyNested}((1,))
-    1: DeeplyNested
+julia> dump(x; maxdepth = 1)
+MyStruct
+  x: Int64 1
+  y: Tuple{Int64,Int64}
 ```
 """
 dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(stdout::IO, :limit => true), arg; maxdepth=maxdepth)
@@ -1839,7 +1845,9 @@ dims2string(d) = isempty(d) ? "0-dimensional" :
                  length(d) == 1 ? "$(d[1])-element" :
                  join(map(string,d), '×')
 
-inds2string(inds) = join(map(string,inds), '×')
+inds2string(inds) = join(map(_indsstring,inds), '×')
+_indsstring(i) = string(i)
+_indsstring(i::Slice) = string(i.indices)
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
 summary(io::IO, a::AbstractArray) = summary(io, a, axes(a))
@@ -1935,7 +1943,7 @@ function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
 end
 
 # pretty printing for Iterators.Pairs
-function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, <:AbstractArray}, toplevel)
+function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, toplevel) where T<:AbstractArray
     print(io, "pairs(IndexLinear(), ::$T)")
 end
 

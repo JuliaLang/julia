@@ -120,22 +120,22 @@ for arr in (identity, as_sub)
     @test arr(BitArray([true false])) .^ arr([0, 3]) == [true true; true false]
 
     M = arr([11 12; 21 22])
-    @test broadcast_getindex(M, [2 1; 1 2], arr([1, 2])) == [21 11; 12 22]
-    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, -1]))
-    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, 2]), [2])
-    @test broadcast_getindex(M, [2 1; 1 2],arr([2, 1]), [1]) == [22 12; 11 21]
+    @test getindex.((M,), [2 1; 1 2], arr([1, 2])) == [21 11; 12 22]
+    @test_throws BoundsError getindex.((M,), [2 1; 1 2], arr([1, -1]))
+    @test_throws BoundsError getindex.((M,), [2 1; 1 2], arr([1, 2]), [2])
+    @test getindex.((M,), [2 1; 1 2],arr([2, 1]), [1]) == [22 12; 11 21]
 
     A = arr(zeros(2,2))
-    broadcast_setindex!(A, arr([21 11; 12 22]), [2 1; 1 2], arr([1, 2]))
+    setindex!.((A,), arr([21 11; 12 22]), [2 1; 1 2], arr([1, 2]))
     @test A == M
-    broadcast_setindex!(A, 5, [1,2], [2 2])
+    setindex!.((A,), 5, [1,2], [2 2])
     @test A == [11 5; 21 5]
-    broadcast_setindex!(A, 7, [1,2], [1 2])
+    setindex!.((A,), 7, [1,2], [1 2])
     @test A == fill(7, 2, 2)
     A = arr(zeros(3,3))
-    broadcast_setindex!(A, 10:12, 1:3, 1:3)
+    setindex!.((A,), 10:12, 1:3, 1:3)
     @test A == [10 0 0; 0 11 0; 0 0 12]
-    @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
+    @test_throws BoundsError setindex!.((A,), 7, [1,-1], [1 2])
 
     for f in ((==), (<) , (!=), (<=))
         bittest(f, arr([1 0; 0 1]), arr([1, 4]))
@@ -430,8 +430,8 @@ abstract type ArrayData{T,N} <: AbstractArray{T,N} end
 Base.getindex(A::ArrayData, i::Integer...) = A.data[i...]
 Base.setindex!(A::ArrayData, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::ArrayData) = size(A.data)
-Base.broadcast_similar(::Broadcast.ArrayStyle{A}, ::Type{T}, inds::Tuple, bc) where {A,T} =
-    A(Array{T}(undef, length.(inds)))
+Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{A}}, ::Type{T}) where {A,T} =
+    A(Array{T}(undef, length.(axes(bc))))
 
 struct Array19745{T,N} <: ArrayData{T,N}
     data::Array{T,N}
@@ -487,6 +487,17 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2C} = Broadcast.ArrayStyle{AD2C}()
 Base.BroadcastStyle(a1::Broadcast.ArrayStyle{AD1C}, a2::Broadcast.ArrayStyle{AD2C}) = a1
 Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1C}) = a2
 
+# A Custom type with specific dimensionality
+struct AD2Dim{T} <: ArrayData{T,2}
+    data::Array{T,2}
+end
+struct AD2DimStyle <: Broadcast.AbstractArrayStyle{2}; end
+AD2DimStyle(::Val{2}) = AD2DimStyle()
+AD2DimStyle(::Val{N}) where {N} = Broadcast.DefaultArrayStyle{N}()
+Base.similar(bc::Broadcast.Broadcasted{AD2DimStyle}, ::Type{T}) where {T} =
+    AD2Dim(Array{T}(undef, length.(axes(bc))))
+Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
+
 @testset "broadcasting for custom AbstractArray" begin
     a  = randn(10)
     aa = Array19745(a)
@@ -536,6 +547,13 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
     @test a1 .+ 1 .* 2 isa AD1C
     @test a2 .+ 1 .* 2 isa AD2C
     @test_throws ErrorException a1 .+ a2
+    a2d = AD2Dim(rand(2, 3))
+    a2 = AD2(rand(2))
+    @test a2d .+ 1 isa AD2Dim
+    @test a2d .+ a2 isa Matrix
+    @test a2d .+ (1:2) isa AD2Dim
+    @test a2d .+ ones(2, 3) isa AD2Dim
+    @test a2d .+ ones(2, 3, 4) isa Array{Float64, 3}
 end
 
 # broadcast should only "peel off" one container layer
@@ -707,4 +725,27 @@ let f(args...) = *(args...)
     x, y, z = (1,2), 3, (4, 5)
     @test f.(x..., y, z...) == broadcast(f, x..., y, z...) == 120
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
+end
+
+# Broadcasted iterable/indexable APIs
+let
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5))
+    @test eachindex(bc) === Base.OneTo(5)
+    @test length(bc) === 5
+    @test ndims(bc) === 1
+    @test ndims(typeof(bc)) === 1
+    @test bc[1] === bc[CartesianIndex((1,))] === 5.0
+    @test copy(bc) == [v for v in bc] == collect(bc)
+    @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
+    @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5*ones(1, 4)))
+    @test eachindex(bc) === CartesianIndices((Base.OneTo(5), Base.OneTo(4)))
+    @test length(bc) === 20
+    @test ndims(bc) === 2
+    @test ndims(typeof(bc)) === 2
+    @test bc[1,1] == bc[CartesianIndex((1,1))] === 5.0
+    @test copy(bc) == [v for v in bc] == collect(bc)
+    @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
+    @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end

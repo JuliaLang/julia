@@ -258,7 +258,7 @@ function common_prefix(completions)
     c1 = completions[1]
     isempty(c1) && return ret
     i = 1
-    cc, nexti = next(c1, i)
+    cc, nexti = iterate(c1, i)
     while true
         for c in completions
             (i > lastindex(c) || c[i] != cc) && return ret
@@ -266,7 +266,7 @@ function common_prefix(completions)
         ret = string(ret, cc)
         i >= lastindex(c1) && return ret
         i = nexti
-        cc, nexti = next(c1, i)
+        cc, nexti = iterate(c1, i)
     end
 end
 
@@ -1204,25 +1204,25 @@ normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
     wildcard in key && error("Matching '\U10f7ff' not supported.")
     buf = IOBuffer()
-    i = start(key)
-    while !done(key, i)
-        c, i = next(key, i)
+    i = firstindex(key)
+    while i <= ncodeunits(key)
+        c, i = iterate(key, i)
         if c == '*'
             write(buf, wildcard)
         elseif c == '^'
-            c, i = next(key, i)
+            c, i = iterate(key, i)
             write(buf, uppercase(c)-64)
         elseif c == '\\'
-            c, i = next(key, i)
+            c, i = iterate(key, i)
             if c == 'C'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 @assert c == '-'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 write(buf, uppercase(c)-64)
             elseif c == 'M'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 @assert c == '-'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 write(buf, '\e')
                 write(buf, c)
             end
@@ -1247,14 +1247,15 @@ function normalize_keys(keymap::Dict)
 end
 
 function add_nested_key!(keymap::Dict, key, value; override = false)
-    i = start(key)
-    while !done(key, i)
-        c, i = next(key, i)
-        if !override && c in keys(keymap) && (done(key, i) || !isa(keymap[c], Dict))
+    y = iterate(key)
+    while y !== nothing
+        c, i = y
+        y = iterate(key, i)
+        if !override && c in keys(keymap) && (y === nothing || !isa(keymap[c], Dict))
             error("Conflicting definitions for keyseq " * escape_string(key) *
                   " within one keymap")
         end
-        if done(key, i)
+        if y === nothing
             keymap[c] = value
             break
         elseif !(c in keys(keymap) && isa(keymap[c], Dict))
@@ -1298,7 +1299,7 @@ end
 keymap_fcn(f::Nothing, c) = (s, p) -> return :ok
 function keymap_fcn(f::Function, c)
     return function (s, p)
-        r = eval(Expr(:call,f,s, p, c))
+        r = Base.invokelatest(f, s, p, c)
         if isa(r, Symbol)
             return r
         else
@@ -1680,7 +1681,9 @@ function complete_line(s::SearchState, repeats)
         prev_pos = position(s)
         push_undo(s)
         edit_splice!(s, prev_pos-sizeof(partial) => prev_pos, completions[1])
+        return true
     end
+    false
 end
 
 function accept_result(s, p)
@@ -2210,7 +2213,7 @@ function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=ini
             @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
-        eval(Main,
+        Core.eval(Main,
             Expr(:body,
                 Expr(:return,
                      Expr(:call,

@@ -247,13 +247,12 @@ end
 
 # issue #12474
 @generated function f12474(::Any)
-    :(for i in 1
-      end)
+    return :(for i in 1
+        end)
 end
-let
-    ast12474 = code_typed(f12474, Tuple{Float64})
+let ast12474 = code_typed(f12474, Tuple{Float64})
     @test isdispatchelem(ast12474[1][2])
-    @test all(isdispatchelem, ast12474[1][1].slottypes)
+    @test all(x -> isdispatchelem(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
 end
 
 
@@ -526,7 +525,7 @@ function g19348(x)
     a, b = x
     g = 1
     g = 2
-    c = Base.indexed_next(x, g, g)
+    c = Base.indexed_iterate(x, g, g)
     return a + b + c[1]
 end
 
@@ -1118,6 +1117,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
 end
 
 function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
+    new_style_ir = code.codelocs !== nothing
     for ex in code.code
         Meta.isexpr(ex, :(=)) && (ex = ex.args[2])
         isa(ex, Expr) || continue
@@ -1128,7 +1128,7 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                     farg = typeof(getfield(farg.mod, farg.name))
                 end
             elseif isa(farg, Core.SSAValue)
-                farg = code.ssavaluetypes[farg.id + 1]
+                farg = code.ssavaluetypes[farg.id + (new_style_ir ? 0 : 1)]
             else
                 farg = typeof(farg)
             end
@@ -1523,3 +1523,60 @@ f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
 g26172(::Val{0}) = ()
 g26172(v) = (nothing, g26172(f26172(v))...)
 @test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)
+
+# 26826 constant prop through varargs
+
+struct Foo26826{A,B}
+    a::A
+    b::B
+end
+
+x26826 = rand()
+
+apply26826(f, args...) = f(args...)
+
+# We use getproperty to drive these tests because it requires constant
+# propagation in order to lower to a well-inferred getfield call.
+f26826(x) = apply26826(Base.getproperty, Foo26826(1, x), :b)
+
+@test @inferred(f26826(x26826)) === x26826
+
+getfield26826(x, args...) = Base.getproperty(x, getfield(args, 2))
+
+g26826(x) = getfield26826(x, :a, :b)
+
+@test @inferred(g26826(Foo26826(1, x26826))) === x26826
+
+# Somewhere in here should be a single getfield call, and it should be inferred as Float64.
+# If this test is broken (especially if inference is getting a correct, but loose result,
+# like a Union) then it's potentially an indication that the optimizer isn't hitting the
+# InferenceResult cache properly for varargs methods.
+typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first.code
+found_well_typed_getfield_call = false
+for stmt in typed_code
+    lhs = Meta.isexpr(stmt, :(=)) ? stmt.args[2] : stmt
+    if Meta.isexpr(lhs, :call) && lhs.args[1] == GlobalRef(Base, :getfield) && lhs.typ === Float64
+        global found_well_typed_getfield_call = true
+    end
+end
+
+@test found_well_typed_getfield_call
+
+# 27059 fix fieldtype vararg and union handling
+
+f27059(::Type{T}) where T = i -> fieldtype(T, i)
+T27059 = Tuple{Float64,Vararg{Float32}}
+@test f27059(T27059)(2) === fieldtype(T27059, 2) === Float32
+@test f27059(Union{T27059,Tuple{Vararg{Symbol}}})(2) === Union{Float32,Symbol}
+@test fieldtype(Union{Tuple{Int,Symbol},Tuple{Float64,String}}, 1) === Union{Int,Float64}
+@test fieldtype(Union{Tuple{Int,Symbol},Tuple{Float64,String}}, 2) === Union{Symbol,String}
+@test fieldtype(Union{Tuple{T,Symbol},Tuple{S,String}} where {T<:Number,S<:T}, 1) === Union{S,T} where {T<:Number,S<:T}
+
+# PR #27068, improve `ifelse` inference
+
+@noinline _f_ifelse_isa_() = rand(Bool) ? 1 : nothing
+function _g_ifelse_isa_()
+    x = _f_ifelse_isa_()
+    ifelse(isa(x, Nothing), 1, x)
+end
+@test Base.return_types(_g_ifelse_isa_, ()) == [Int]

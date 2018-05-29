@@ -234,7 +234,7 @@ end
 
 any_gc_flag = Condition()
 function start_gc_msgs_task()
-    @schedule while true
+    @async while true
         wait(any_gc_flag)
         flush_gc_msgs()
     end
@@ -574,10 +574,13 @@ removing the value(s) in the process.
 """
 take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)
 
-# close is not supported on Future
+# close and isopen are not supported on Future
 
 close_ref(rid) = (close(lookup_ref(rid).c); nothing)
 close(rr::RemoteChannel) = call_on_owner(close_ref, rr)
+
+isopen_ref(rid) = isopen(lookup_ref(rid).c)
+isopen(rr::RemoteChannel) = call_on_owner(isopen_ref, rr)
 
 getindex(r::RemoteChannel) = fetch(r)
 getindex(r::Future) = fetch(r)

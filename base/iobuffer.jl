@@ -117,7 +117,7 @@ function IOBuffer(;
         append=flags.append,
         truncate=flags.truncate,
         maxsize=maxsize)
-    buf.data[:] = 0
+    fill!(buf.data, 0)
     return buf
 end
 
@@ -246,7 +246,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     if n > length(io.data)
         resize!(io.data, n)
     end
-    io.data[io.size+1:n] = 0
+    io.data[io.size+1:n] .= 0
     io.size = n
     io.ptr = min(io.ptr, n+1)
     ismarked(io) && io.mark > n && unmark(io)

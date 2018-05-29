@@ -239,20 +239,20 @@ function rpad(
 end
 
 """
-    split(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
-    split(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
+    split(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    split(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 
-Return an array of substrings by splitting the given string on occurrences of the given
-character delimiters, which may be specified in any of the formats allowed by
-[`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
-or as a single character or collection of characters.
+Split `str` into an array of substrings on occurences of the delimiter `dlm`.  `dlm`
+can be any of the formats allowed by [`findnext`](@ref)'s first argument (i.e. as a
+string, regular expression or a function), or as a single character or collection of
+characters.
 
-If `chars` is omitted, it defaults to the set of all space characters.
+If `dlm` is omitted, it defaults to [`isspace`](@ref).
 
 The optional keyword arguments are:
  - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
-   a `chars` argument, `true` with a `chars` argument.
+   a `dlm` argument, `true` with a `dlm` argument.
 
 See also [`rsplit`](@ref).
 
@@ -313,7 +313,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
             j, k = first(r), nextind(str,last(r))
         end
     end
-    if keepempty || !done(str,i)
+    if keepempty || i <= ncodeunits(str)
         push!(strs, SubString(str,i))
     end
     return strs
@@ -322,7 +322,7 @@ end
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    split(str, _default_delims; limit=limit, keepempty=keepempty)
+    split(str, isspace; limit=limit, keepempty=keepempty)
 
 """
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
@@ -395,7 +395,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool,
 end
 rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    rsplit(str, _default_delims; limit=limit, keepempty=keepempty)
+    rsplit(str, isspace; limit=limit, keepempty=keepempty)
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
@@ -547,10 +547,13 @@ end
     throw(ArgumentError("byte is not an ASCII hexadecimal digit"))
 
 """
-    bytes2hex(bin_arr::Array{UInt8, 1}) -> String
+    bytes2hex(a::AbstractArray{UInt8}) -> String
+    bytes2hex(io::IO, a::AbstractArray{UInt8})
 
-Convert an array of bytes to its hexadecimal representation.
-All characters are in lower-case.
+Convert an array `a` of bytes to its hexadecimal string representation, either
+returning a `String` via `bytes2hex(a)` or writing the string to an `io` stream
+via `bytes2hex(io, a)`.  The hexadecimal characters are all lowercase.
+
 # Examples
 ```jldoctest
 julia> a = string(12345, base = 16)
@@ -565,8 +568,10 @@ julia> bytes2hex(b)
 "3039"
 ```
 """
+function bytes2hex end
+
 function bytes2hex(a::AbstractArray{UInt8})
-    b = Vector{UInt8}(undef, 2*length(a))
+    b = Base.StringVector(2*length(a))
     i = 0
     for x in a
         b[i += 1] = hex_chars[1 + x >> 4]
@@ -574,6 +579,11 @@ function bytes2hex(a::AbstractArray{UInt8})
     end
     return String(b)
 end
+
+bytes2hex(io::IO, a::AbstractArray{UInt8}) =
+    for x in a
+        print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
+    end
 
 # check for pure ASCII-ness
 

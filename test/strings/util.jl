@@ -94,6 +94,7 @@ end
 
     @test split("a b c") == ["a","b","c"]
     @test split("a  b \t c\n") == ["a","b","c"]
+    @test split("α  β \u2009 γ\n") == ["α","β","γ"]
 
     @test split("a b c"; limit=2) == ["a","b c"]
     @test split("a  b \t c\n"; limit=3) == ["a","b","\t c\n"]
@@ -324,7 +325,7 @@ end
     bin_val = hex2bytes(hex_str)
 
     @test div(length(hex_str), 2) == length(bin_val)
-    @test hex_str == bytes2hex(bin_val)
+    @test hex_str == bytes2hex(bin_val) == sprint(bytes2hex, bin_val)
 
     bin_val = hex2bytes("07bf")
     @test bin_val[1] == 7

@@ -82,10 +82,10 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 put!(backend.response_channel, lasterr)
             else
                 backend.in_eval = true
-                value = eval(Main, ast)
+                value = Core.eval(Main, ast)
                 backend.in_eval = false
                 # note: value wrapped carefully here to ensure it doesn't get passed through expand
-                eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
+                Core.eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 put!(backend.response_channel, (value, nothing))
             end
             break
@@ -102,7 +102,7 @@ end
 
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     backend = REPLBackend(repl_channel, response_channel, false)
-    backend.backend_task = @schedule begin
+    backend.backend_task = @async begin
         # include looks at this to determine the relative include path
         # nothing means cwd
         while true
@@ -937,7 +937,7 @@ function setup_interface(
                 end
                 ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
                 if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
-                        (done(input, pos) && !endswith(input, '\n'))
+                        (pos > ncodeunits(input) && !endswith(input, '\n'))
                     # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)
                     tail = input[oldpos:end]

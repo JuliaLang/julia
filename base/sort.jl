@@ -5,7 +5,7 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length, (:),
+using .Base: copymutable, LinearIndices, IndexStyle, viewindexing, IndexLinear, _length, (:),
     eachindex, axes, first, last, similar, start, next, done, zip, @views, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
@@ -56,13 +56,15 @@ export # not exported by Base
 ## functions requiring only ordering ##
 
 function issorted(itr, order::Ordering)
-    state = start(itr)
-    done(itr,state) && return true
-    prev, state = next(itr, state)
-    while !done(itr, state)
-        this, state = next(itr, state)
+    y = iterate(itr)
+    y === nothing && return true
+    prev, state = y
+    y = iterate(itr, state)
+    while y !== nothing
+        this, state = y
         lt(order, this, prev) && return false
         prev = this
+        y = iterate(itr, state)
     end
     return true
 end
@@ -683,22 +685,41 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false)
+    partialsortperm(v, k; by=<transform>, lt=<comparison>, rev=false)
 
-Return a partial permutation of the vector `v`, according to the order specified by
-`by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
-if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index,
-the index in `v` of the value which would be sorted at position `k` is returned;
-if `k` is a range, an array with the indices in `v` of the values which would be sorted in
-these positions is returned.
+Return a partial permutation `I` of the vector `v`, so that `v[I]` returns values of a fully
+sorted version of `v` at index `k`. If `k` is a range, a vector of indices is returned; if
+`k` is an integer, a single index is returned. The order is specified using the same
+keywords as `sort!`. The permutation is stable, meaning that indices of equal elements
+appear in ascending order.
 
-Note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+Note that this function is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2, 1];
+
+julia> v[partialsortperm(v, 1)]
+1
+
+julia> p = partialsortperm(v, 1:3)
+3-element view(::Array{Int64,1}, 1:3) with eltype Int64:
+ 2
+ 4
+ 3
+
+julia> v[p]
+3-element Array{Int64,1}:
+ 1
+ 1
+ 2
+```
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
 
 """
-    partialsortperm!(ix, v, k; alg=<algorithm>, by=<transform>, lt=<comparison>, rev=false, initialized=false)
+    partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `1:length(ix)`.
@@ -727,13 +748,10 @@ end
 """
     sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Return a permutation vector of indices of `v` that puts it in sorted order. Specify `alg` to
-choose a particular sorting algorithm (see Sorting Algorithms). `MergeSort` is used by
-default, and since it is stable, the resulting permutation will be the lexicographically
-first one that puts the input array into sorted order – i.e. indices of equal elements
-appear in ascending order. If you choose a non-stable sorting algorithm such as `QuickSort`,
-a different permutation that puts the array into order may be returned. The order is
-specified using the same keywords as `sort!`.
+Return a permutation vector `I` that puts `v[I]` in sorted order. The order is specified
+using the same keywords as `sort!`. The permutation is guaranteed to be stable even if the
+sorting algorithm is unstable, meaning that indices of equal elements appear in ascending
+order.
 
 See also [`sortperm!`](@ref).
 
@@ -887,7 +905,7 @@ function sort(A::AbstractArray;
         Base.depwarn("`initialized` keyword argument is deprecated", :sort)
     end
     order = ord(lt,by,rev,order)
-    n = length(axes(A, dim))
+    n = _length(axes(A, dim))
     if dim != 1
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
@@ -902,7 +920,7 @@ function sort(A::AbstractArray;
 end
 
 @noinline function sort_chunks!(Av, n, alg, order)
-    inds = linearindices(Av)
+    inds = LinearIndices(Av)
     for s = first(inds):n:last(inds)
         sort!(Av, s, s+n-1, alg, order)
     end
@@ -939,12 +957,7 @@ julia> sortrows([7 3 5; -1 6 4; 9 -2 8], rev=true)
 ```
 """
 function sortrows(A::AbstractMatrix; kws...)
-    inds = axes(A,1)
-    T = slicetypeof(A, inds, :)
-    rows = similar(A, T, axes(A, 1))
-    for i in inds
-        rows[i] = view(A, i, :)
-    end
+    rows = [view(A, i, :) for i in axes(A,1)]
     p = sortperm(rows; kws...)
     A[p,:]
 end
@@ -978,23 +991,10 @@ julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], rev=true)
 ```
 """
 function sortcols(A::AbstractMatrix; kws...)
-    inds = axes(A,2)
-    T = slicetypeof(A, :, inds)
-    cols = similar(A, T, axes(A, 2))
-    for i in inds
-        cols[i] = view(A, :, i)
-    end
+    cols = [view(A, :, i) for i in axes(A,2)]
     p = sortperm(cols; kws...)
     A[:,p]
 end
-
-function slicetypeof(A::AbstractArray{T}, i1, i2) where T
-    I = map(slice_dummy, to_indices(A, (i1, i2)))
-    fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
-    SubArray{T,1,typeof(A),typeof(I),fast}
-end
-slice_dummy(S::Slice) = S
-slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
 
 ## fast clever sorting for floats ##
 

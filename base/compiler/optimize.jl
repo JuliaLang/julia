@@ -6,7 +6,7 @@
 
 mutable struct OptimizationState
     linfo::MethodInstance
-    vararg_type_container #::Type
+    result_vargs::Vector{Any}
     backedges::Vector{Any}
     src::CodeInfo
     mod::Module
@@ -23,7 +23,7 @@ mutable struct OptimizationState
         end
         src = frame.src
         next_label = max(label_counter(src.code), length(src.code)) + 10
-        return new(frame.linfo, frame.vararg_type_container,
+        return new(frame.linfo, frame.result.vargs,
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
                    next_label, frame.min_valid, frame.max_valid,
@@ -53,8 +53,8 @@ mutable struct OptimizationState
             nargs = 0
         end
         next_label = max(label_counter(src.code), length(src.code)) + 10
-        vararg_type_container = nothing # if you want something more accurate, set it yourself :P
-        return new(linfo, vararg_type_container,
+        result_vargs = Any[] # if you want something more accurate, set it yourself :P
+        return new(linfo, result_vargs,
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
                    next_label,
@@ -98,11 +98,6 @@ function add_backedge!(li::MethodInstance, caller::OptimizationState)
     push!(caller.backedges, li)
     update_valid_age!(li, caller)
     nothing
-end
-
-function is_specializable_vararg_slot(@nospecialize(arg), sv::OptimizationState)
-    return (isa(arg, Slot) && slot_id(arg) == sv.nargs &&
-            isa(sv.vararg_type_container, DataType))
 end
 
 ###########
@@ -255,7 +250,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
             isa(sig,DataType) &&
             sig == Tuple{sig.parameters[1],Any,Any,Any,Vararg{Any}})
             inlineable = true
-        elseif (name === :next || name === :done || name === :unsafe_convert ||
+        elseif (name === :iterate || name === :unsafe_convert ||
                 name === :cconvert)
             cost_threshold *= 4
         end
@@ -266,7 +261,7 @@ function isinlineable(m::Method, src::CodeInfo, mod::Module, params::Params, bon
     return inlineable
 end
 
-const enable_new_optimizer = RefValue(false)
+const enable_new_optimizer = RefValue(true)
 
 # converge the optimization work
 function optimize(me::InferenceState)
@@ -461,7 +456,7 @@ function finish(me::InferenceState)
                     def = me.linfo.def::Method
                     keeptree = me.optimize &&
                         (me.src.inlineable ||
-                         ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any), me.linfo.specTypes, def.sig, def) != 0)
+                         ccall(:jl_isa_compileable_sig, Int32, (Any, Any), me.linfo.specTypes, def) != 0)
                     if keeptree
                         # compress code for non-toplevel thunks
                         inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
@@ -1333,14 +1328,22 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     if invoke_api(linfo) == 2
         # in this case function can be inlined to a constant
         add_backedge!(linfo, sv)
+        # XXX: @vtjnash thinks this should be `argexprs0`, but doing so exposes a
+        # downstream optimizer problem that breaks tests, so we're going to avoid
+        # changing it for now. ref
+        # https://github.com/JuliaLang/julia/pull/26826#issuecomment-386381103
         return inline_as_constant(linfo.inferred_const, argexprs, sv, invoke_data)
     end
 
-    # see if the method has a InferenceResult in the current cache
+    # See if the method has a InferenceResult in the current cache
     # or an existing inferred code info store in `.inferred`
+    #
+    # Above, we may have rewritten trailing varargs in `atypes` to a tuple type. However,
+    # inference populates the cache with the pre-rewrite version (`atypes0`), so here, we
+    # check against that instead.
     haveconst = false
-    for i in 1:length(atypes)
-        a = atypes[i]
+    for i in 1:length(atypes0)
+        a = atypes0[i]
         if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
             # have new information from argtypes that wasn't available from the signature
             haveconst = true
@@ -1348,7 +1351,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         end
     end
     if haveconst
-        inf_result = cache_lookup(linfo, atypes, sv.params.cache) # Union{Nothing, InferenceResult}
+        inf_result = cache_lookup(linfo, atypes0, sv.params.cache) # Union{Nothing, InferenceResult}
     else
         inf_result = nothing
     end
@@ -2003,8 +2006,8 @@ function inline_call(e::Expr, sv::OptimizationState, stmts::Vector{Any}, boundsc
                         tmpv = newvar!(sv, t)
                         push!(newstmts, Expr(:(=), tmpv, aarg))
                     end
-                    if is_specializable_vararg_slot(aarg, sv)
-                        tp = sv.vararg_type_container.parameters
+                    if is_specializable_vararg_slot(aarg, sv.nargs, sv.result_vargs)
+                        tp = sv.result_vargs
                     else
                         tp = t.parameters
                     end

@@ -368,6 +368,37 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
     return jl_new_struct(jl_uniontype_type, a, b);
 }
 
+// compute a greatest lower bound of `a` and `b`
+// in many cases, we need to over-estimate this by returning `b`.
+static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b)
+{
+    if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type)
+        return b;
+    if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type)
+        return a;
+    if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
+        return jl_bottom_type;
+    if (jl_is_uniontype(a) && in_union(a, b))
+        return b;
+    if (jl_is_uniontype(b) && in_union(b, a))
+        return a;
+    if (jl_is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
+        return b;
+    if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
+        return a;
+    if (jl_is_typevar(a) && obviously_egal(b, ((jl_tvar_t*)a)->ub))
+        return a;
+    if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->ub))
+        return b;
+    if (obviously_disjoint(a, b, 0))
+        return jl_bottom_type;
+    if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b)) {
+        if (jl_subtype(a, b)) return a;
+        if (jl_subtype(b, a)) return b;
+    }
+    return b;
+}
+
 static jl_unionall_t *rename_unionall(jl_unionall_t *u)
 {
     jl_tvar_t *v = jl_new_typevar(u->var->name, u->var->lb, u->var->ub);
@@ -462,9 +493,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         return 1;
     if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(bb->lb, a, e)))
         return 0;
-    // for contravariance we would need to compute a meet here, but
-    // because of invariance bb.ub ⊓ a == a here always. however for this
-    // to work we need to compute issub(left,right) before issub(right,left),
+    // for this to work we need to compute issub(left,right) before issub(right,left),
     // since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
     if (e->intersection) {
         jl_value_t *ub = intersect_ufirst(bb->ub, a, e, bb->depth0);
@@ -472,7 +501,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
             bb->ub = ub;
     }
     else {
-        bb->ub = a;  // meet(bb->ub, a)
+        bb->ub = simple_meet(bb->ub, a);
     }
     assert(bb->ub != (jl_value_t*)b);
     if (jl_is_typevar(a)) {
@@ -2056,11 +2085,15 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     break;
                 newparams[i] = ii;
             }
-            jl_value_t *res;
-            if (i < np)
-                res = jl_bottom_type;
-            else
-                res = jl_apply_type(xd->name->wrapper, newparams, np);
+            jl_value_t *res = jl_bottom_type;
+            if (i >= np) {
+                JL_TRY {
+                    res = jl_apply_type(xd->name->wrapper, newparams, np);
+                }
+                JL_CATCH {
+                    res = jl_bottom_type;
+                }
+            }
             JL_GC_POP();
             return res;
         }
@@ -2377,7 +2410,7 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
         int cms = type_morespecific_(ce, pe, invariant, env);
         int eqv = !cms && eq_msp(ce, pe, env);
 
-        if (!cms && !eqv) {
+        if (!cms && !eqv && !sub_msp(ce, pe, env)) {
             /*
               A bound vararg tuple can be more specific despite disjoint elements in order to
               preserve transitivity. For example in

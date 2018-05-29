@@ -231,8 +231,8 @@ srand(1)
 
         @testset "Eigensystems" begin
             if relty <: AbstractFloat
-                d1, v1 = eig(T)
-                d2, v2 = eig(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
+                d1, v1 = eigen(T)
+                d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull))
                 @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
@@ -242,14 +242,14 @@ srand(1)
 
         @testset "Singular systems" begin
             if (elty <: BlasReal)
-                @test AbstractArray(svdfact(T)) ≈ AbstractArray(svdfact!(copy(Tfull)))
+                @test AbstractArray(svd(T)) ≈ AbstractArray(svd!(copy(Tfull)))
                 @test svdvals(Tfull) ≈ svdvals(T)
                 u1, d1, v1 = svd(Tfull)
                 u2, d2, v2 = svd(T)
                 @test d1 ≈ d2
                 if elty <: Real
                     test_approx_eq_modphase(u1, u2)
-                    test_approx_eq_modphase(v1, v2)
+                    test_approx_eq_modphase(copy(v1), copy(v2))
                 end
                 @test 0 ≈ vecnorm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*Diagonal(d1)*v1'-Tfull))
                 @inferred svdvals(T)
@@ -363,6 +363,18 @@ end
     @test promote_type(Tridiagonal{Int}, Bidiagonal{Tuple{S}} where S<:Integer) <: Tridiagonal
     @test promote_type(Tridiagonal{Tuple{T}} where T<:Integer, Bidiagonal{Tuple{S}} where S<:Integer) <: Tridiagonal
     @test promote_type(Tridiagonal{Tuple{T}} where T<:Integer, Bidiagonal{Int}) <: Tridiagonal
+end
+
+@testset "solve with matrix elements" begin
+    A = triu(tril(randn(9, 9), 3), -3)
+    b = randn(9)
+    Alb = Bidiagonal(Any[tril(A[1:3,1:3]), tril(A[4:6,4:6]), tril(A[7:9,7:9])],
+                     Any[triu(A[4:6,1:3]), triu(A[7:9,4:6])], 'L')
+    Aub = Bidiagonal(Any[triu(A[1:3,1:3]), triu(A[4:6,4:6]), triu(A[7:9,7:9])],
+                     Any[tril(A[1:3,4:6]), tril(A[4:6,7:9])], 'U')
+    bb = Any[b[1:3], b[4:6], b[7:9]]
+    @test vcat((Alb\bb)...) ≈ LowerTriangular(A)\b
+    @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
 end
 
 end # module TestBidiagonal

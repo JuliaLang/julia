@@ -1,5 +1,20 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+struct Pair{A, B}
+    first::A
+    second::B
+    function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
+        @_inline_meta
+        # if we didn't inline this, it's probably because the callsite was actually dynamic
+        # to avoid potentially compiling many copies of this, we mark the arguments with `@nospecialize`
+        # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
+        # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
+        return new(a, b)
+    end
+end
+Pair(a::A, b::B) where {A, B} = Pair{A, B}(a, b)
+const => = Pair
+
 """
     Pair(x, y)
     x => y
@@ -28,27 +43,11 @@ foo
 7
 ```
 """
-struct Pair{A, B}
-    first::A
-    second::B
-    function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
-        @_inline_meta
-        # if we didn't inline this, it's probably because the callsite was actually dynamic
-        # to avoid potentially compiling many copies of this, we mark the arguments with `@nospecialize`
-        # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
-        # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
-        return new(a, b)
-    end
-end
-Pair(a::A, b::B) where {A, B} = Pair{A, B}(a, b)
-const => = Pair
+Pair, =>
 
-start(p::Pair) = 1
-done(p::Pair, i) = i>2
-next(p::Pair, i) = (getfield(p, i), i+1)
 eltype(p::Type{Pair{A, B}}) where {A, B} = Union{A, B}
-
-indexed_next(p::Pair, i::Int, state) = (getfield(p, i), i+1)
+iterate(p::Pair, i=1) = i > 2 ? nothing : (getfield(p, i), i + 1)
+indexed_iterate(p::Pair, i::Int, state=1) = (getfield(p, i), i + 1)
 
 hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
 

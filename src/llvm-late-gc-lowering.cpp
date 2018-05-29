@@ -266,16 +266,9 @@ struct BBState {
     BitVector UpExposedUsesUnrooted;
     //// All other uses
     BitVector UpExposedUses;
-    //// Downward exposed uses that were not followed by a safepoint
-    BitVector DownExposedUnrooted;
     // These get updated during dataflow
     BitVector LiveIn;
     BitVector LiveOut;
-    //// Incoming values that are unrooted - these are propagated forward. I.e.
-    //// they need not necessarily be LiveIn if there are no following uses,
-    //// but if they are they haven't been rooted yet.
-    BitVector UnrootedIn;
-    BitVector UnrootedOut;
     std::vector<int> Safepoints;
     int TopmostSafepoint = -1;
     bool HasSafepoint = false;
@@ -499,6 +492,21 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 break;
             CurrentV = Operand;
         }
+        else if (isa<InsertValueInst>(CurrentV)) {
+            if (!isUnionRep(CurrentV->getType()))
+                break;
+            InsertValueInst *IVI = cast<InsertValueInst>(CurrentV);
+            assert(IVI->getNumIndices() == 1);
+            unsigned idx = IVI->getIndices()[0];
+            if (idx == 0) {
+                // Updating the pointer in the union. Follow the pointer.
+                CurrentV = IVI->getOperand(1);
+            } else {
+                // Updating which tindex is active. Follow the union.
+                assert(idx == 1);
+                CurrentV = IVI->getOperand(0);
+            }
+        }
         else if (auto EEI = dyn_cast<ExtractElementInst>(CurrentV)) {
             assert(CurrentV->getType()->isPointerTy() && fld_idx == -1);
             // For now, only support constant index.
@@ -574,6 +582,7 @@ int LateLowerGCFrame::NumberBase(State &S, Value *V, Value *CurrentV)
     if (it != S.AllPtrNumbering.end())
         return it->second;
     int Number;
+    bool isUnion = isUnionRep(CurrentV->getType());
     if (isa<Constant>(CurrentV)) {
         // Perm rooted
         Number = -2;
@@ -582,22 +591,22 @@ int LateLowerGCFrame::NumberBase(State &S, Value *V, Value *CurrentV)
                 getValueAddrSpace(CurrentV) != AddressSpace::Tracked)) {
         // We know this is rooted in the parent
         Number = -1;
-    } else if (isa<SelectInst>(CurrentV) && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
+    } else if (isa<SelectInst>(CurrentV) && !isUnion && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
         int Number = LiftSelect(S, cast<SelectInst>(CurrentV));
         S.AllPtrNumbering[V] = Number;
         return Number;
-    } else if (isa<PHINode>(CurrentV) && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
+    } else if (isa<PHINode>(CurrentV) && !isUnion && getValueAddrSpace(CurrentV) != AddressSpace::Tracked) {
         int Number = LiftPhi(S, cast<PHINode>(CurrentV));
         S.AllPtrNumbering[V] = Number;
         return Number;
-    } else if (isa<ExtractValueInst>(CurrentV) && !isUnionRep(CurrentV->getType())) {
+    } else if (isa<ExtractValueInst>(CurrentV) && !isUnion) {
         assert(false && "TODO: Extract");
         abort();
     } else {
         assert(
             (CurrentV->getType()->isPointerTy() &&
                 getValueAddrSpace(CurrentV) == AddressSpace::Tracked) ||
-            isUnionRep(CurrentV->getType()));
+            isUnion);
         Number = ++S.MaxPtrNumber;
         S.ReversePtrNumbering[Number] = CurrentV;
     }
@@ -662,7 +671,6 @@ static void MaybeResize(BBState &BBS, unsigned Idx) {
         BBS.Defs.resize(Idx + 1);
         BBS.UpExposedUses.resize(Idx + 1);
         BBS.UpExposedUsesUnrooted.resize(Idx + 1);
-        BBS.DownExposedUnrooted.resize(Idx + 1);
         BBS.PhiOuts.resize(Idx + 1);
     }
 }
@@ -678,8 +686,6 @@ static void NoteDef(State &S, BBState &BBS, int Num, const std::vector<int> &Saf
     BBS.Defs[Num] = 1;
     BBS.UpExposedUses[Num] = 0;
     BBS.UpExposedUsesUnrooted[Num] = 0;
-    if (!BBS.HasSafepoint)
-        BBS.DownExposedUnrooted[Num] = 1;
     // This value could potentially be live at any following safe point
     // if it ends up live out, so add it to the LiveIfLiveOut lists for all
     // following safepoints.
@@ -769,7 +775,7 @@ void RecursivelyVisit(callback f, Value *V) {
             f(VU);
         if (isa<CallInst>(TheUser) || isa<LoadInst>(TheUser) ||
             isa<SelectInst>(TheUser) || isa<PHINode>(TheUser) ||
-            isa<StoreInst>(TheUser))
+            isa<StoreInst>(TheUser) || isa<PtrToIntInst>(TheUser))
             continue;
         if (isa<GetElementPtrInst>(TheUser) || isa<BitCastInst>(TheUser) || isa<AddrSpaceCastInst>(TheUser)) {
             RecursivelyVisit<VisitInst, callback>(f, TheUser);
@@ -803,16 +809,10 @@ JL_USED_FUNC static void dumpLivenessState(Function &F, State &S) {
         dumpBitVectorValues(S, S.BBStates[&BB].UpExposedUsesUnrooted);
         dbgs() << "\n\tUpExposedUses: ";
         dumpBitVectorValues(S, S.BBStates[&BB].UpExposedUses);
-        dbgs() << "\n\tDownExposedUnrooted: ";
-        dumpBitVectorValues(S, S.BBStates[&BB].DownExposedUnrooted);
         dbgs() << "\n\tLiveIn: ";
         dumpBitVectorValues(S, S.BBStates[&BB].LiveIn);
         dbgs() << "\n\tLiveOut: ";
         dumpBitVectorValues(S, S.BBStates[&BB].LiveOut);
-        dbgs() << "\n\tUnrootedIn: ";
-        dumpBitVectorValues(S, S.BBStates[&BB].UnrootedIn);
-        dbgs() << "\n\tUnrootedOut: ";
-        dumpBitVectorValues(S, S.BBStates[&BB].UnrootedOut);
         dbgs() << "\n";
     }
 }
@@ -902,16 +902,19 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
     // Now we have all the possible refinement information, we can remove ones for the invalid
 
     // * First find all values that must be externally rooted.
-    //   Values that might not be externally rooted must either have no refinement (the majority)
-    //   or have one of the value it's derived from (one of its refinements) be possibly
-    //   not externally rooted.
+    //   Values may either be obviously externally rooted (e.g. arguments) - (this is indicated by a
+    //   value of -1 or -2 in the refinement map), or may be externally rooted by refinement to other
+    //   values. Thus a value is not externally rooted if it either:
+    //   either:
+    //     - Has no refinements (all obiviously externally rooted values are annotated by -1/-2 in the
+    //       refinement map).
+    //     - Recursively reaches a not-externally rooted value through its refinements
     //
-    //   All other values can only possibly be externally rooted values,
-    //   which can include loops (of phi nodes).
-    //   We do this by first assuming all values to be externally rooted and then removing
-    //   values that are or can be derived from non-externally rooted values recursively.
+    //   We compute this set by first assuming all values are externally rooted and then iteratively
+    //   removing the ones that are not.
     BitVector extern_rooted(S.MaxPtrNumber + 1, true);
     BitVector perm_rooted(S.MaxPtrNumber + 1, true);
+
     //   * First clear all values that are not derived from anything.
     //     This only needs to be done once.
     for (int i = 0; i <= S.MaxPtrNumber; i++) {
@@ -993,6 +996,7 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
         // Not sure if `Num` can be `-1`
         if (Num < 0 || HasBitSet(extern_rooted, Num))
             continue;
+        // N.B.: We reset the bit vector below on every iteration
         visited[Num] = true;
         auto Phi = cast<PHINode>(S.ReversePtrNumbering[Num]);
         auto &RefinedPtr = S.Refinements[Num];
@@ -1027,8 +1031,8 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
                         RefinedPtr.append(it->second.begin() + k, it->second.end());
                     continue;
                 }
-                // Invalid
-                RefinedPtr = SmallVector<int, 1>{};
+                // Invalid - Remove All refinements
+                RefinedPtr.resize(0);
                 break;
             }
         }
@@ -1097,6 +1101,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Known functions emitted in codegen that are not safepoints
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
+                        callee == ptls_getter ||
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
@@ -1139,9 +1144,9 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
                 // We need to insert an extra select for the GC root
-                if (!isSpecialPtr(SI->getType()))
+                if (!isSpecialPtr(SI->getType()) && !isUnionRep(SI->getType()))
                     continue;
-                if (getValueAddrSpace(SI) != AddressSpace::Tracked) {
+                if (!isUnionRep(SI->getType()) && getValueAddrSpace(SI) != AddressSpace::Tracked) {
                     if (S.AllPtrNumbering.find(SI) != S.AllPtrNumbering.end())
                         continue;
                     auto Num = LiftSelect(S, SI);
@@ -1158,12 +1163,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
                 }
             } else if (PHINode *Phi = dyn_cast<PHINode>(&I)) {
-                if (!isSpecialPtr(Phi->getType())) {
+                if (!isSpecialPtr(Phi->getType()) && !isUnionRep(Phi->getType())) {
                     continue;
                 }
                 auto nIncoming = Phi->getNumIncomingValues();
                 // We need to insert an extra phi for the GC root
-                if (getValueAddrSpace(Phi) != AddressSpace::Tracked) {
+                if (!isUnionRep(Phi->getType()) && getValueAddrSpace(Phi) != AddressSpace::Tracked) {
                     if (S.AllPtrNumbering.find(Phi) != S.AllPtrNumbering.end())
                         continue;
                     auto Num = LiftPhi(S, Phi);
@@ -1202,7 +1207,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
         // Pre-seed the dataflow variables;
         BBS.LiveIn = BBS.UpExposedUses;
         BBS.LiveIn |= BBS.UpExposedUsesUnrooted;
-        BBS.UnrootedOut = BBS.DownExposedUnrooted;
         BBS.Done = true;
     }
     FixUpRefinements(PHINumbers, S);
@@ -1213,19 +1217,14 @@ State LateLowerGCFrame::LocalScan(Function &F) {
  * DataFlow equations:
  * LiveIn[BB] = UpExposedUses[BB] ∪ (LiveOut[BB] - Defs[BB])
  * LiveOut[BB] =  PhiUses[BB] ∪ ∪_{Succ} LiveIn[Succ]
- * UnrootedOut[BB] = DownExposedUnrooted[BB] ∪ (HasSafepoint ? {} : UnrootedIn[BB])
- * UnrootedIn[BB] = ∪_{Pred} UnrootedOut[Pred]
  *
  * We'll perform textbook iterative dataflow to compute this. There are better
  * algorithms. If this starts becoming a problem, we should use one of them.
  */
 void LateLowerGCFrame::ComputeLiveness(State &S) {
     bool Converged = false;
-    /* Liveness is a reverse problem. Our problem is slightly more general,
-     * because the Unrooted* variables are forward problems. Nevertheless,
-     * we use reverse postorder in an attempt to speed convergence of the Live*
-     * variables, in anticipation of the live ranges being larger than the
-     * unrooted ranges (since those terminate at any safe point).
+    /* Liveness is a reverse problem, so RPOT is a good way to
+     * perform this iteration.
      */
     ReversePostOrderTraversal<Function *> RPOT(S.F);
     while (!Converged) {
@@ -1252,16 +1251,6 @@ void LateLowerGCFrame::ComputeLiveness(State &S) {
             if (NewLiveIn != BBS.LiveIn) {
                 AnyChanged = true;
                 BBS.LiveIn = NewLiveIn;
-            }
-            BitVector NewUnrootedIn;
-            for (BasicBlock *Pred : predecessors(BB))
-                NewUnrootedIn |= S.BBStates[Pred].UnrootedOut;
-            if (NewUnrootedIn != BBS.UnrootedIn) {
-                AnyChanged = true;
-                BBS.UnrootedIn = NewUnrootedIn;
-                if (!BBS.HasSafepoint) {
-                    BBS.UnrootedOut |= BBS.UnrootedIn;
-                }
             }
         }
         Converged = !AnyChanged;
@@ -1842,6 +1831,11 @@ static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
     while (!WorkList.empty()) {
         BB = &*WorkList.back();
         WorkList.pop_back();
+        // Nothing is live at function entry
+        if (BB == &S.F->getEntryBlock()) {
+            LiveIn.reset();
+            return;
+        }
         for (BasicBlock *Pred : predecessors(BB)) {
             if (!Visited.insert(Pred).second)
                 continue;
@@ -1856,6 +1850,8 @@ static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
                 } else {
                     LiveIn &= S.LiveSets[LastSP];
                 }
+                if (LiveIn.empty()) // Just a compiler performance optimization
+                    return;
             }
         }
     }

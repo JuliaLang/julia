@@ -126,7 +126,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
 
     for (i,(machine, cnt)) in enumerate(manager.machines)
         let machine=machine, cnt=cnt
-            launch_tasks[i] = @schedule try
+            launch_tasks[i] = @async try
                     launch_on_machine(manager, machine, cnt, params, launched, launch_ntfy)
                 catch e
                     print(stderr, "exception launching on machine $(machine) : $(e)\n")

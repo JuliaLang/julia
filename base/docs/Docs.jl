@@ -76,7 +76,7 @@ meta(m::Module) = isdefined(m, META) ? getfield(m, META) : IdDict()
 
 function initmeta(m::Module)
     if !isdefined(m, META)
-        eval(m, :(const $META = $(IdDict())))
+        Core.eval(m, :(const $META = $(IdDict())))
         push!(modules, m)
     end
     nothing
@@ -374,7 +374,7 @@ function moduledoc(__source__, __module__, meta, def, def′)
     docex = Expr(:call, doc!, name, bindingexpr(name),
         docexpr(__source__, name, lazy_iterpolate(meta), metadata(__source__, __module__, name, true)))
     if def === nothing
-        esc(:($eval($name, $(quot(docex)))))
+        esc(:(Core.eval($name, $(quot(docex)))))
     else
         def = unblock(def)
         block = def.args[3].args
@@ -580,7 +580,7 @@ function loaddocs(docs)
         data = Dict(:path => string(file), :linenumber => line)
         doc = docstr(str, data)
         docstring = docm(LineNumberNode(line, file), mod, doc, ex, false) # expand the real @doc macro now
-        eval(mod, Expr(:macrocall, unescape, nothing, docstring))
+        Core.eval(mod, Expr(:macrocall, unescape, nothing, docstring))
     end
     empty!(docs)
 end

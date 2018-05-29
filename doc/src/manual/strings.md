@@ -678,11 +678,6 @@ Some other useful functions include:
   * [`length(str, i, j)`](@ref) the number of valid character indices in `str` from `i` to `j`.
   * [`ncodeunits(str)`](@ref) number of [code units](https://en.wikipedia.org/wiki/Character_encoding#Terminology) in a string.
   * [`codeunit(str, i)`](@ref) gives the code unit value in the string `str` at index `i`.
-  * [`i = start(str)`](@ref start) gives the first valid index at which a character can be found in `str`
-    (typically 1).
-  * [`c, j = next(str,i)`](@ref next) returns next character at or after the index `i` and the next valid
-    character index following that. With [`start`](@ref) and [`lastindex`](@ref), can be used to iterate
-    through the characters in `str`.
   * [`thisind(str, i)`](@ref) given an arbitrary index into a string find the first index of the character into which the index points.
   * [`nextind(str, i, n=1)`](@ref) find the start of the `n`th character starting after index `i`.
   * [`prevind(str, i, n=1)`](@ref) find the start of the `n`th character starting before index `i`.
@@ -1010,8 +1005,9 @@ some confusion regarding the matter.
 
 ## [Version Number Literals](@id man-version-number-literals)
 
-Version numbers can easily be expressed with non-standard string literals of the form `v"..."`.
-Version number literals create `VersionNumber` objects which follow the specifications of [semantic versioning](http://semver.org),
+Version numbers can easily be expressed with non-standard string literals of the form [`v"..."`](@ref @v_str).
+Version number literals create [`VersionNumber`](@ref) objects which follow the
+specifications of [semantic versioning](http://semver.org),
 and therefore are composed of major, minor and patch numeric values, followed by pre-release and
 build alpha-numeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
 `0`, minor version `2`, patch version `1`, pre-release `rc1` and build `win64`. When entering

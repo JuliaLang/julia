@@ -9,13 +9,12 @@ module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, kill, close, showerror
+             hash, ==, kill, close, isopen, showerror
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
-            VERSION_STRING, sync_begin, sync_add, sync_end, async_run_thunk,
-            binding_module, notify_error, atexit, julia_exename, julia_cmd,
-            AsyncGenerator, acquire, release, invokelatest,
+            VERSION_STRING, binding_module, notify_error, atexit, julia_exename,
+            julia_cmd, AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, uv_error, coalesce, notnothing
 
 using Serialization, Sockets

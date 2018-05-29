@@ -30,6 +30,8 @@ using Test
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
+    # issue 26823
+    @test_throws InexactError rationalize(Int, NaN)
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
