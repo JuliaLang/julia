@@ -54,7 +54,7 @@ that only support specific dimensionalities:
     struct SparseMatrixStyle <: Broadcast.AbstractArrayStyle{2} end
     Base.BroadcastStyle(::Type{<:SparseMatrixCSC}) = SparseMatrixStyle()
 
-For AbstractArray types that support arbitrary dimensionality, `N` can be set to `Any`:
+For `AbstractArray` types that support arbitrary dimensionality, `N` can be set to `Any`:
 
     struct MyArrayStyle <: Broadcast.AbstractArrayStyle{Any} end
     Base.BroadcastStyle(::Type{<:MyArray}) = MyArrayStyle()
@@ -87,7 +87,7 @@ ArrayStyle{A}(::Val) where A = ArrayStyle{A}()
 `Broadcast.DefaultArrayStyle{N}()` is a [`BroadcastStyle`](@ref) indicating that an object
 behaves as an `N`-dimensional array for broadcasting. Specifically, `DefaultArrayStyle` is
 used for any
-AbstractArray type that hasn't defined a specialized style, and in the absence of
+`AbstractArray` type that hasn't defined a specialized style, and in the absence of
 overrides from other `broadcast` arguments the resulting output type is `Array`.
 When there are multiple inputs to `broadcast`, `DefaultArrayStyle` "loses" to any other [`Broadcast.ArrayStyle`](@ref).
 """
