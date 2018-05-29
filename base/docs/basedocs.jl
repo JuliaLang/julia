@@ -1044,7 +1044,7 @@ julia> nfields(ex)
 
 In these examples, `a` is a [`Rational`](@ref), which has two fields.
 `b` is an `Int`, which is a primitive bitstype with no fields at all.
-`ex` is an [`ErrorException`](@ref), whcih has one field.
+`ex` is an [`ErrorException`](@ref), which has one field.
 """
 nfields
 
@@ -1366,7 +1366,7 @@ or a composite object and field name (as a symbol) or index.
 
 # Examples
 ```jldoctest
-julia> isdefined(Base, :redisplay)
+julia> isdefined(Base, :sum)
 true
 
 julia> isdefined(Base, :NonExistentMethod)
@@ -1714,6 +1714,8 @@ Optional argument `msg` is a descriptive error string.
 julia> @assert false "this is not true"
 ERROR: AssertionError: this is not true
 ```
+
+`AssertionError` is usually thrown from [`@assert`](@ref).
 """
 AssertionError
 
