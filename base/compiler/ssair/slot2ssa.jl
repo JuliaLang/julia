@@ -225,34 +225,87 @@ struct BlockLiveness
 end
 
 # Run iterated dominance frontier
+#
+# The algorithm we have here essentially follows LLVM, which itself is a
+# a cleaned up version of the linear-time algorithm described in
+#
+#  A Linear Time Algorithm for Placing phi-Nodes (by Sreedhar and Gao)
+#
+# The algorithm here, is quite straightforward. Suppose we have a CFG:
+#
+# A -> B -> D -> F
+#  \-> C -------/
+#
+# and a corresponding dominator tree:
+#
+# A
+# |- B - D
+# |- C
+# |- F
+#
+# Now, for every definition of our slot, we simply walk down the dominator
+# tree and look for any edges that leave the sub-domtree rooted by our definition.
+#
+# E.g. in our example above, if we have a definition in `B`, we look at its successors,
+#      which is only `D`, which is dominated by `B` and hence doesn't need a phi node.
+#      Then we descend down the subtree rooted at `B` and end up in `D`. `D` has a successor
+#      `F`, which is not part of the current subtree, (i.e. not dominated by `B`), so it
+#      needs a phi node.
+#
+# Now, the key insight of that algorithm is that we have two defs, in blocks `A` and `B`,
+# and `A` dominates `B`, then we do not need to recurse into `B`, because the set of
+# potential backedges from a subtree rooted at `B` (to outside the subtree) is a strict
+# subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
+# at `A`). Note however that this does not work the other way. Thus, the algorithm
+# needs to make sure that we always visit `B` before `A`.
 function idf(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
     # This should be a priority queue, but TODO - sorted array for now
     defs = liveness.def_bbs
     pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
     sort!(pq, by=x->x[2])
     phiblocks = Int[]
+    # This bitset makes sure we only add a phi node to a given block once.
     processed = BitSet()
+    # This bitset implements the `key insight` mentioned above. In particular, it prevents
+    # us from visiting a subtree that we have already visited before.
+    visited = BitSet()
     while !isempty(pq)
+        # We pop from the end of the array - i.e. the element with the highest level.
         node, level = pop!(pq)
         worklist = Int[]
-        visited = BitSet()
         push!(worklist, node)
         while !isempty(worklist)
             active = pop!(worklist)
             for succ in cfg.blocks[active].succs
+                # Check whether the current root (`node`) dominates succ.
+                # We are guaranteed that `node` dominates `active`, since
+                # we've arrived at `active` by following dominator tree edges.
+                # If `succ`'s level is less than or equal to that of `node`,
+                # it cannot possibly be dominated by `node`. On the other hand,
+                # since at this point we know that there is an edge from `node`'s
+                # subtree to `succ`, we know that if succ's level is greater than
+                # that of `node`, it must be dominated by `node`.
                 succ_level = domtree.nodes[succ].level
                 succ_level > level && continue
+                # We don't dominate succ. We need to place a phinode,
+                # unless liveness said otherwise.
                 succ in processed && continue
                 push!(processed, succ)
                 if !(succ in liveness.live_in_bbs)
                     continue
                 end
                 push!(phiblocks, succ)
+                # Basically: Consider the phi node we just added another
+                # def of this value. N.B.: This needs to retain the invariant that it
+                # is processed before any of its parents in the dom tree. This is guaranteed,
+                # because succ_level <= level, which is the greatest level we have currently
+                # processed. Thus, we have not yet processed any subtrees of level < succ_level.
                 if !(succ in defs)
                     push!(pq, (succ, succ_level))
                     sort!(pq, by=x->x[2])
                 end
             end
+            # Recurse down the current subtree
             for child in domtree.nodes[active].children
                 child in visited && continue
                 push!(visited, child)
