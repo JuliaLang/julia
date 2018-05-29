@@ -410,7 +410,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, topmod::Module, idx:
             argexprs′ = copy(argexprs)
             for i = 1:length(metharg.parameters)
                 a, m = atype.parameters[i], metharg.parameters[i]
-                isa(argexprs[i], SSAValue) || continue
+                (isa(argexprs[i], SSAValue) || isa(argexprs[i], Argument)) || continue
                 if !(a <: m)
                     argexprs′[i] = insert_node_here!(compact, PiNode(argexprs′[i], m),
                                                      m, line)
