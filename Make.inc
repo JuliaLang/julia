@@ -72,6 +72,9 @@ endif
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
 
+# Set to 1 to enable profiling with perf
+USE_PERF_JITEVENTS ?= 0
+
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP := 0
 
@@ -1066,6 +1069,12 @@ endif
 ifeq ($(DISABLE_LIBUNWIND), 1)
 JCPPFLAGS += -DJL_DISABLE_LIBUNWIND
 endif
+
+# perf
+ifeq ($(USE_PERF_JITEVENTS), 1)
+JCPPFLAGS += -DJL_USE_PERF_JITEVENTS
+endif
+
 
 # Intel libraries
 

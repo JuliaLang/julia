@@ -7467,6 +7467,22 @@ extern "C" void *jl_init_llvm(void)
     jl_setup_module(engine_module);
     jl_setup_module(m);
     return (void*)m;
+
+#ifdef JL_USE_INTEL_JITEVENTS
+    if (jl_using_intel_jitevents)
+        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createIntelJITEventListener());
+#endif
+
+#ifdef JL_USE_OPROFILE_JITEVENTS
+    if (jl_using_oprofile_jitevents)
+        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createOProfileJITEventListener());
+#endif
+
+#ifdef JL_USE_PERF_JITEVENTS
+    if (jl_using_perf_jitevents) {
+        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
+    }
+#endif
 }
 
 extern "C" void jl_init_codegen(void)
