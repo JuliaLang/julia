@@ -314,20 +314,7 @@ x   Tells the regular expression parser to ignore most whitespace
 r&quot;a+.*b+.*?d$&quot;ims
 
 julia&gt; match(r&quot;a+.*b+.*?d$&quot;ism, &quot;Goodbye,\nOh, angry,\nBad world\n&quot;)
-RegexMatch(&quot;angry,\nBad world&quot;)</code></pre><p>The <code>r&quot;...&quot;</code> literal is constructed without interpolation and unescaping (except for quotation mark <code>&quot;</code> which still has to be escaped). Here is an example showing the difference from standard string literals:</p><pre><code class="language-julia-repl">julia&gt; x = 10
-10
-
-julia&gt; r&quot;$x&quot;
-r&quot;$x&quot;
-
-julia&gt; &quot;$x&quot;
-&quot;10&quot;
-
-julia&gt; r&quot;\x&quot;
-r&quot;\x&quot;
-
-julia&gt; &quot;\x&quot;
-ERROR: syntax: invalid escape sequence</code></pre><p>Triple-quoted regex strings, of the form <code>r&quot;&quot;&quot;...&quot;&quot;&quot;</code>, are also supported (and may be convenient for regular expressions containing quotation marks or newlines).</p><h2><a class="nav-anchor" id="man-byte-array-literals-1" href="#man-byte-array-literals-1">Byte Array Literals</a></h2><p>Another useful non-standard string literal is the byte-array string literal: <code>b&quot;...&quot;</code>. This form lets you use string notation to express read only literal byte arrays – i.e. arrays of <a href="../base/numbers.html#Core.UInt8"><code>UInt8</code></a> values. The type of those objects is <code>CodeUnits{UInt8, String}</code>. The rules for byte array literals are the following:</p><ul><li>ASCII characters and ASCII escapes produce a single byte.</li><li><code>\x</code> and octal escape sequences produce the <em>byte</em> corresponding to the escape value.</li><li>Unicode escape sequences produce a sequence of bytes encoding that code point in UTF-8.</li></ul><p>There is some overlap between these rules since the behavior of <code>\x</code> and octal escapes less than 0x80 (128) are covered by both of the first two rules, but here these rules agree. Together, these rules allow one to easily use ASCII characters, arbitrary byte values, and UTF-8 sequences to produce arrays of bytes. Here is an example using all three:</p><pre><code class="language-julia-repl">julia&gt; b&quot;DATA\xff\u2200&quot;
+RegexMatch(&quot;angry,\nBad world&quot;)</code></pre><p>Triple-quoted regex strings, of the form <code>r&quot;&quot;&quot;...&quot;&quot;&quot;</code>, are also supported (and may be convenient for regular expressions containing quotation marks or newlines).</p><h2><a class="nav-anchor" id="man-byte-array-literals-1" href="#man-byte-array-literals-1">Byte Array Literals</a></h2><p>Another useful non-standard string literal is the byte-array string literal: <code>b&quot;...&quot;</code>. This form lets you use string notation to express read only literal byte arrays – i.e. arrays of <a href="../base/numbers.html#Core.UInt8"><code>UInt8</code></a> values. The type of those objects is <code>CodeUnits{UInt8, String}</code>. The rules for byte array literals are the following:</p><ul><li>ASCII characters and ASCII escapes produce a single byte.</li><li><code>\x</code> and octal escape sequences produce the <em>byte</em> corresponding to the escape value.</li><li>Unicode escape sequences produce a sequence of bytes encoding that code point in UTF-8.</li></ul><p>There is some overlap between these rules since the behavior of <code>\x</code> and octal escapes less than 0x80 (128) are covered by both of the first two rules, but here these rules agree. Together, these rules allow one to easily use ASCII characters, arbitrary byte values, and UTF-8 sequences to produce arrays of bytes. Here is an example using all three:</p><pre><code class="language-julia-repl">julia&gt; b&quot;DATA\xff\u2200&quot;
 8-element Base.CodeUnits{UInt8,String}:
  0x44
  0x41
