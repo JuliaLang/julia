@@ -142,18 +142,19 @@ function steprange_last(start::T, step, stop) where T
         if (step > z) != (stop > start)
             last = steprange_last_empty(start, step, stop)
         else
-            diff = stop - start
-            if (diff > zero(diff)) != (stop > start)
-                # handle overflowed subtraction with unsigned rem
-                if diff > zero(diff)
-                    remain = -convert(T, unsigned(-diff) % step)
-                else
-                    remain = convert(T, unsigned(diff) % step)
-                end
+            # Compute absolute value of difference between `start` and `stop`
+            # (to simplify handling both signed and unsigned T and checking for signed overflow):
+            absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
+
+            # Compute remainder as a nonnegative number:
+            if T <: Signed && absdiff < zero(absdiff)
+                # handle signed overflow with unsigned rem
+                remain = convert(T, unsigned(absdiff) % absstep)
             else
-                remain = steprem(start,stop,step)
+                remain = absdiff % absstep
             end
-            last = stop - remain
+            # Move `stop` closer to `start` if there is a remainder:
+            last = stop > start ? stop - remain : stop + remain
         end
     end
     last
@@ -173,8 +174,6 @@ function steprange_last_empty(start::Integer, step, stop)
 end
 # For types where x+oneunit(x) may not be well-defined
 steprange_last_empty(start, step, stop) = start - step
-
-steprem(start,stop,step) = (stop-start) % step
 
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
