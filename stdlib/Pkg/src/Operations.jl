@@ -559,10 +559,14 @@ end
 function find_stdlib_deps(ctx::Context, path::String)
     stdlib_deps = Dict{UUID, String}()
     regexps = [Regex("\\b(import|using)\\s+((\\w|\\.)+\\s*,\\s*)*$lib\\b") for lib in values(ctx.stdlibs)]
-    for (root, dirs, files) in walkdir(path)
+    for (root, dirs, files) in walkdir(path; onerror = x->nothing)
         for file in files
             endswith(file, ".jl") || continue
-            filecontent = read(joinpath(root, file), String)
+            filecontent = try read(joinpath(root, file), String)
+                catch e
+                    e isa SystemError || rethrow(e)
+                    ""
+                end
             for ((uuid, stdlib), r) in zip(ctx.stdlibs, regexps)
                 if occursin(r, filecontent)
                     stdlib_deps[uuid] = stdlib
