@@ -9,7 +9,7 @@ function fencedcode(stream::IO, block::MD)
         skip(stream, -1)
         ch = read(stream, Char)
         trailing = strip(readline(stream))
-        flavor = lstrip(trailing, ch)
+        flavor = lstrip(isequal(ch), trailing)
         n = 3 + length(trailing) - length(flavor)
 
         # inline code block

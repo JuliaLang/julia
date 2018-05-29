@@ -932,7 +932,7 @@ function _prettify_bigfloat(s::String)::String
     if !occursin('.', mantissa)
         mantissa = string(mantissa, '.')
     end
-    mantissa = rstrip(mantissa, '0')
+    mantissa = rstrip(isequal('0'), mantissa)
     if endswith(mantissa, '.')
         mantissa = string(mantissa, '0')
     end

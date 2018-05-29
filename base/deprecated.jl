@@ -1675,6 +1675,10 @@ end
 
 @eval @deprecate $(Symbol("@schedule")) $(Symbol("@async"))
 
+@deprecate lstrip(str::AbstractString, chars::Chars) lstrip(in(chars), str)
+@deprecate rstrip(str::AbstractString, chars::Chars) rstrip(in(chars), str)
+@deprecate strip(str::AbstractString, chars::Chars) strip(in(chars), str)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

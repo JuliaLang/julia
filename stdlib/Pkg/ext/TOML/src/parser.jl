@@ -392,7 +392,7 @@ function numdatetime(p::Parser, st::Int)
         elseif !isnull(decimal) && !isnull(exponent)
             "$(prefix)."*get(decimal,"")*"E"*get(exponent,"")
         end
-        input = lstrip(input, '+')
+        input = lstrip(isequal('+'), input)
         try
             SOME(Base.parse(isfloat ? Float64 : Int, input))
         catch
