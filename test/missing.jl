@@ -362,3 +362,55 @@ end
     @test collect(x) == [1, 2, 4]
     @test collect(x) isa Vector{Int}
 end
+
+@testset "lift" begin
+    x = ["a", missing, "b", missing]
+    for v in x
+        if ismissing(v)
+            @test ismissing(lift(uppercase)(v))
+            @test ismissing(lift(uppercase, v))
+        else
+            @test lift(uppercase)(v) == uppercase(v)
+            @test lift(uppercase, v) == uppercase(v)
+        end
+    end
+    ref = [ismissing(v) ? missing : uppercase(v) for v in x]
+    @test isequal(lift(uppercase).(x), ref)
+    @test isequal(lift.(uppercase, x), ref)
+
+    x = ["12345", missing, "1234567", missing]
+    for v in x
+        if ismissing(v)
+            @test ismissing(lift(chop)(v, head=2, tail=2))
+            @test ismissing(lift(chop, v, head=2, tail=2))
+        else
+            @test lift(chop)(v, head=2, tail=2) == chop(v, head=2, tail=2)
+            @test lift(chop, v, head=2, tail=2) == chop(v, head=2, tail=2)
+        end
+    end
+    ref = [ismissing(v) ? missing : chop(v, head=2, tail=2) for v in x]
+    @test isequal(lift(chop).(x, head=2, tail=2), ref)
+    @test isequal(lift.(chop, x, head=2, tail=2), ref)
+
+    s = ["12345", missing, "1234567", missing]
+    t = [Int, Int, missing, missing]
+    for (v, w) in zip(s, t)
+        if ismissing(v) || ismissing(w)
+            @test ismissing(lift(parse)(w, v))
+            @test ismissing(lift(parse, w, v))
+            @test ismissing(lift(parse)(w, v, base=16))
+            @test ismissing(lift(parse, w, v, base=16))
+        else
+            @test lift(parse)(w, v) == parse(w, v)
+            @test lift(parse, w, v) == parse(w, v)
+            @test lift(parse)(w, v, base=16) == parse(w, v, base=16)
+            @test lift(parse, w, v, base=16) == parse(w, v, base=16)
+        end
+    end
+    ref10 = [any(ismissing, (v,w)) ? missing : parse(w, v) for (v, w) in zip(s, t)]
+    ref16 = [any(ismissing, (v,w)) ? missing : parse(w, v, base=16) for (v, w) in zip(s, t)]
+    @test isequal(lift(parse).(t, s), ref10)
+    @test isequal(lift(parse).(t, s, base=16), ref16)
+    @test isequal(lift.(parse, t, s), ref10)
+    @test isequal(lift.(parse, t, s, base=16), ref16)
+end
