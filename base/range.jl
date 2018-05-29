@@ -374,7 +374,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 ```
 """
 step(r::StepRange) = r.step
-step(r::AbstractUnitRange{T}) where{T} = oneunit(T)
+step(r::AbstractUnitRange{T}) where{T} = oneunit(T) - zero(T)
 step(r::StepRangeLen{T}) where {T} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
 
@@ -388,8 +388,8 @@ function unsafe_length(r::StepRange)
     isempty(r) ? zero(n) : n
 end
 length(r::StepRange) = unsafe_length(r)
-unsafe_length(r::AbstractUnitRange) = Integer(last(r) - first(r) + 1)
-unsafe_length(r::OneTo) = r.stop
+unsafe_length(r::AbstractUnitRange) = Integer(last(r) - first(r) + step(r))
+unsafe_length(r::OneTo) = Integer(r.stop - zero(r.stop))
 length(r::AbstractUnitRange) = unsafe_length(r)
 length(r::OneTo) = unsafe_length(r)
 length(r::StepRangeLen) = r.len

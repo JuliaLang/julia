@@ -1276,3 +1276,62 @@ end
     @test step(x) == 0.0
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
 end
+
+module NonStandardIntegerRangeTest
+
+using Test
+
+struct Position <: Integer
+    val::Int
+end
+Position(x::Position) = x # to resolve ambiguity with boot.jl:728
+
+struct Displacement <: Integer
+    val::Int
+end
+Displacement(x::Displacement) = x # to resolve ambiguity with boot.jl:728
+
+Base.:-(x::Displacement) = Displacement(-x.val)
+Base.:-(x::Position, y::Position) = Displacement(x.val - y.val)
+Base.:-(x::Position, y::Displacement) = Position(x.val - y.val)
+Base.:-(x::Displacement, y::Displacement) = Displacement(x.val - y.val)
+Base.:+(x::Position, y::Displacement) = Position(x.val + y.val)
+Base.:+(x::Displacement, y::Displacement) = Displacement(x.val + y.val)
+Base.:(<=)(x::Position, y::Position) = x.val <= y.val
+Base.:(<)(x::Position, y::Position) = x.val < y.val
+Base.:(<)(x::Displacement, y::Displacement) = x.val < y.val
+
+# for StepRange computation:
+Base.Unsigned(x::Displacement) = Unsigned(x.val)
+Base.rem(x::Displacement, y::Displacement) = Displacement(rem(x.val, y.val))
+Base.div(x::Displacement, y::Displacement) = Displacement(div(x.val, y.val))
+
+# required for collect (summing lengths); alternatively, should unsafe_length return Int by default?
+Base.promote_rule(::Type{Displacement}, ::Type{Int}) = Int
+Base.convert(::Type{Int}, x::Displacement) = x.val
+
+@testset "Ranges with nonstandard Integers" begin
+    for (start, stop) in [(2, 4), (3, 3), (3, -2)]
+        @test collect(Position(start) : Position(stop)) == Position.(start : stop)
+    end
+
+    for start in [3, 0, -2]
+        @test collect(Base.OneTo(Position(start))) == Position.(Base.OneTo(start))
+    end
+
+    for step in [1, 2, 3]
+        for start in [-1, 0, 2]
+            for stop in [start, start - 1, start + 2 * step, start + 2 * step + 1]
+                r1 = StepRange(Position(start), Displacement(step), Position(stop))
+                @test collect(r1) == Position.(start : step : stop)
+
+                @test_broken begin
+                    r2 = Position(start) : Displacement(step) : Position(stop)
+                    r1 === r2
+                end
+            end
+        end
+    end
+end
+
+end # module NonStandardIntegerRangeTest
