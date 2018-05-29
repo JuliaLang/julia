@@ -4,8 +4,6 @@ IOContext(io::IO, KV::Pair) = IOContext(io, Base.Pair(KV[1], KV[2]))
 length(s::String) = Base.length(s)
 ^(s::String, i::Int) = Base.:^(s, i)
 end
-isexpr(e::Expr, s::Symbol) = e.head === s
-isexpr(@nospecialize(e), s::Symbol) = false
 
 function Base.show(io::IO, cfg::CFG)
     foreach(pairs(cfg.blocks)) do (idx, block)
