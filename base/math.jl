@@ -472,6 +472,7 @@ Stacktrace:
 [...]
 ```
 """
+hypot() = throw(ArgumentError("at least one argument is required"))
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
@@ -503,15 +504,14 @@ end
 
 Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
-function hypot(x::Number...)
+hypot(x::Number...) = hypot(promote(x...)...)
+function hypot(x::T...) where T<:Number
 
-    xp = promote(x...)
-
-    # compute infnorm xp (modeled on generic_vecnormMinusInf(x) in LinearAlgebra/generic.gl)
-    (v, s) = iterate(xp)::Tuple
+    # compute infnorm x (modeled on generic_vecnormMinusInf(x) in LinearAlgebra/generic.gl)
+    (v, s) = iterate(x)::Tuple
     maxabs = abs(v)
     while true
-        y = iterate(xp, s)
+        y = iterate(x, s)
         y === nothing && break
         (v, s) = y
         vnorm = abs(v)
@@ -519,28 +519,28 @@ function hypot(x::Number...)
     end
     maxabsf = float(maxabs)
 
-    # compute vecnorm2(xp) (modeled on generic_vecnorm2(x) in LinearAlgebra/generic.gl)
+    # compute vecnorm2(x) (modeled on generic_vecnorm2(x) in LinearAlgebra/generic.gl)
     (maxabsf == 0 || isinf(maxabsf)) && return maxabsf
-    (v, s) = iterate(xp)::Tuple
-    T = typeof(maxabsf)
-    if isfinite(length(xp)*maxabsf*maxabsf) && maxabsf*maxabsf != 0 # Scaling not necessary
-        sum::promote_type(Float64, T) = abs2(v)
+    (v, s) = iterate(x)::Tuple
+    Tfloat = typeof(maxabsf)
+    if isfinite(length(x)*maxabsf*maxabsf) && maxabsf*maxabsf != 0 # Scaling not necessary
+        sum::promote_type(Float64, Tfloat) = abs2(v)
         while true
-            y = iterate(xp, s)
+            y = iterate(x, s)
             y === nothing && break
             (v, s) = y
             sum += abs2(v)
         end
-        return convert(T, sqrt(sum))
+        return convert(Tfloat, sqrt(sum))
     else
         sum = (abs(v)/maxabsf)^2
         while true
-            y = iterate(xp, s)
+            y = iterate(x, s)
             y === nothing && break
             (v, s) = y
             sum += (abs(v)/maxabsf)^2
         end
-        return convert(T, maxabsf*sqrt(sum))
+        return convert(Tfloat, maxabsf*sqrt(sum))
     end
 end
 
