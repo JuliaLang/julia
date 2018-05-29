@@ -20,7 +20,7 @@ body, input {
   text-rendering: optimizeLegibility;
 }
 
-pre, code {
+pre, code, kbd {
   font-family: 'Roboto Mono', Monaco, courier, monospace;
   font-size: 0.90em;
 }
@@ -46,15 +46,37 @@ body {
     line-height: 1.5;
 }
 
-h1 { font-size: 1.75em; }
-h2 { font-size: 1.50em; }
-h3 { font-size: 1.25em; }
+h1 {
+    font-size: 1.75em;
+}
+
+/* Unless the <h1> the is very first thing on the page (i.e. the second element
+ * in the <article>, * after the <header>, we add some additional styling to it
+ * to make it stand out a bit more. This way we get a reasonable fallback if CSS3
+ * selectors are not supported in the browser.
+ */
+article > h1:not(:nth-child(2)) {
+    margin: 2.5em 0 0;
+    padding-bottom: 0.30em;
+    border-bottom: 1px solid #e5e5e5;
+}
+h2 {
+    font-size: 1.50em;
+    margin: 2.3em 0 0;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid #e5e5e5;
+}
+h3 {
+    font-size: 1.25em;
+    margin: 2.0em 0 0;
+}
 h4 { font-size: 1.15em; }
 h5 { font-size: 1.10em; }
 h6 { font-size: 1em; }
 
 h4, h5, h6 {
-    margin: 1em 0;
+    margin-top: 1.5em;
+    margin-bottom: 1em;
 }
 
 img {
@@ -103,6 +125,20 @@ pre {
 pre code {
     padding: 0;
     background-color: initial;
+}
+
+kbd {
+    font-size: 0.70em;
+    display: inline-block;
+    padding: 0.1em 0.5em 0.4em 0.5em;
+    line-height: 1.0em;
+    color: #444d56;
+    vertical-align: middle;
+    background-color: #fafbfc;
+    border: solid 1px #c6cbd1;
+    border-bottom-color: #959da5;
+    border-radius: 3px;
+    box-shadow: inset 0 -1px 0 #959da5;
 }
 
 /* Headers in admonitions and docstrings */
@@ -235,7 +271,7 @@ nav.toc ul.internal {
 }
 
 nav.toc ul.internal li.toplevel {
-    border-top: 1px solid #c9c9c9;
+    border-top: 1px solid #909090;
     font-weight: bold;
 }
 
@@ -341,8 +377,8 @@ article section.docstring .docstring-category {
 }
 
 article section.docstring a.source-link {
-  float: left;
-  font-weight: bold;
+    display: block;
+    font-weight: bold;
 }
 
 .nav-anchor,
@@ -422,10 +458,6 @@ article section.docstring a.source-link {
 /* Search page */
 #search-results .category {
     font-size: smaller;
-}
-
-#search-results .category:before {
-    content: " ";
 }
 
 /* Overriding the <code> block style of highligh.js.
