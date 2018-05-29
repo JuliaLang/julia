@@ -543,7 +543,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
             end
         end
         uuid == where || return false
-        deps == nothing && return true
+        deps === nothing && return true
         # TODO: handle inline table syntax
         if deps[1] != '[' || deps[end] != ']'
             @warn "Unexpected TOML deps format:\n$deps"
@@ -551,7 +551,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
         end
         occursin(repr(name), deps) || return true
         seekstart(io) # rewind IO handle
-        manifest_file_name_uuid(manifest_file, name, io)
+        return manifest_file_name_uuid(manifest_file, name, io)
     end
 end
 
