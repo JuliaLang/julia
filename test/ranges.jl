@@ -1319,7 +1319,7 @@ Base.convert(::Type{Int}, x::Displacement) = x.val
         @test collect(Base.OneTo(Position(start))) == Position.(Base.OneTo(start))
     end
 
-    for step in [1, 2, 3]
+    for step in [-3, -2, -1, 1, 2, 3]
         for start in [-1, 0, 2]
             for stop in [start, start - 1, start + 2 * step, start + 2 * step + 1]
                 r1 = StepRange(Position(start), Displacement(step), Position(stop))
@@ -1333,3 +1333,23 @@ Base.convert(::Type{Int}, x::Displacement) = x.val
 end
 
 end # module NonStandardIntegerRangeTest
+
+@testset "Issue #26619" begin
+    @test length(UInt(100) : -1 : 1) === UInt(100)
+    @test collect(UInt(5) : -1 : 3) == [UInt(5), UInt(4), UInt(3)]
+
+    let r = UInt(5) : -2 : 2
+        @test r.start === UInt(5)
+        @test r.step === -2
+        @test r.stop === UInt(3)
+        @test collect(r) == [UInt(5), UInt(3)]
+    end
+
+    for step in [-3, -2, -1, 1, 2, 3]
+        for start in [0, 15]
+            for stop in [0, 15]
+                @test collect(UInt(start) : step : UInt(stop)) == start : step : stop
+            end
+        end
+    end
+end

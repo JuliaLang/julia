@@ -143,7 +143,7 @@ function steprange_last(start::T, step, stop) where T
             last = steprange_last_empty(start, step, stop)
         else
             diff = stop - start
-            if T<:Signed && (diff > zero(diff)) != (stop > start)
+            if (diff > zero(diff)) != (stop > start)
                 # handle overflowed subtraction with unsigned rem
                 if diff > zero(diff)
                     remain = -convert(T, unsigned(-diff) % step)
@@ -400,8 +400,10 @@ function length(r::StepRange{T}) where T<:Union{Int,UInt,Int64,UInt64}
         return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
     elseif r.step < -1
         return checked_add(convert(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
+    elseif r.step > 0
+        return checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
     else
-        checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
+        return checked_add(div(checked_sub(r.start, r.stop), -r.step), one(T))
     end
 end
 
