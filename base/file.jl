@@ -35,6 +35,17 @@ import .Base.RefValue
     pwd() -> AbstractString
 
 Get the current working directory.
+
+# Examples
+```julia-repl
+julia> pwd()
+"/home/JuliaUser"
+
+julia> cd("/home/JuliaUser/Projects/julia")
+
+julia> pwd()
+"/home/JuliaUser/Projects/julia"
+```
 """
 function pwd()
     b = Vector{UInt8}(undef, 1024)
@@ -47,6 +58,19 @@ end
     cd(dir::AbstractString=homedir())
 
 Set the current working directory.
+
+# Examples
+```julia-repl
+julia> cd("/home/JuliaUser/Projects/julia")
+
+julia> pwd()
+"/home/JuliaUser/Projects/julia"
+
+julia> cd()
+
+julia> pwd()
+"/home/JuliaUser"
+```
 """
 function cd(dir::AbstractString)
     uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
@@ -79,7 +103,30 @@ end
 """
     cd(f::Function, dir::AbstractString=homedir())
 
-Temporarily changes the current working directory and applies function `f` before returning.
+Temporarily change the current working directory, apply function `f` and
+finally return to the original directory.
+
+# Examples
+```julia-repl
+julia> pwd()
+"/home/JuliaUser"
+
+julia> cd(readdir, "/home/JuliaUser/Projects/julia")
+34-element Array{String,1}:
+ ".circleci"
+ ".freebsdci.sh"
+ ".git"
+ ".gitattributes"
+ ".github"
+ ⋮
+ "test"
+ "ui"
+ "usr"
+ "usr-staging"
+
+julia> pwd()
+"/home/JuliaUser"
+```
 """
 cd(f::Function) = cd(f, homedir())
 
@@ -99,6 +146,17 @@ directory. If the directory already exists, or some intermediate directories do 
 this function throws an error. See [`mkpath`](@ref) for a function which creates all
 required intermediate directories.
 Return `path`.
+
+# Examples
+```julia-repl
+julia> mkdir("testingdir")
+"testingdir"
+
+julia> cd("testingdir")
+
+julia> pwd()
+"/home/JuliaUser/testingdir"
+```
 """
 function mkdir(path::AbstractString; mode::Integer = 0o777)
     @static if Sys.iswindows()
@@ -116,6 +174,34 @@ end
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
 `0o777`, modified by the current file creation mask.
 Return `path`.
+
+# Examples
+```julia-repl
+julia> mkdir("testingdir")
+"testingdir"
+
+julia> cd("testingdir")
+
+julia> pwd()
+"/home/JuliaUser/testingdir"
+
+julia> mkpath("my/test/dir")
+"my/test/dir"
+
+julia> readdir()
+1-element Array{String,1}:
+ "my"
+
+julia> cd("my")
+
+julia> readdir()
+1-element Array{String,1}:
+ "test"
+
+julia> readdir("test")
+1-element Array{String,1}:
+ "dir"
+```
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
@@ -140,6 +226,20 @@ end
 Delete the file, link, or empty directory at the given path. If `force=true` is passed, a
 non-existing path is not treated as error. If `recursive=true` is passed and the path is a
 directory, then all contents are removed recursively.
+
+# Examples
+```jldoctest
+julia> mkpath("my/test/dir");
+
+julia> rm("my", recursive=true)
+
+julia> rm("this_file_does_not_exist", force=true)
+
+julia> rm("this_file_does_not_exist")
+ERROR: unlink: no such file or directory (ENOENT)
+Stacktrace:
+[...]
+```
 """
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
@@ -277,6 +377,21 @@ end
 
 Update the last-modified timestamp on a file to the current time.
 Return `path`.
+
+# Examples
+```julia-repl
+julia> write("my_little_file", 2);
+
+julia> mtime("my_little_file")
+1.5273815391135583e9
+
+julia> touch("my_little_file");
+
+julia> mtime("my_little_file")
+1.527381559163435e9
+```
+
+We can see the [`mtime`](@ref) has been modified by `touch`.
 """
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
@@ -461,6 +576,22 @@ end
     readdir(dir::AbstractString=".") -> Vector{String}
 
 Return the files and directories in the directory `dir` (or the current working directory if not given).
+
+# Examples
+```julia-repl
+julia> readdir("/home/JuliaUser/Projects/julia")
+34-element Array{String,1}:
+ ".circleci"
+ ".freebsdci.sh"
+ ".git"
+ ".gitattributes"
+ ".github"
+ ⋮
+ "test"
+ "ui"
+ "usr"
+ "usr-staging"
+```
 """
 function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
@@ -498,17 +629,34 @@ it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `SystemError` as argument.
 
-    for (root, dirs, files) in walkdir(".")
-        println("Directories in \$root")
-        for dir in dirs
-            println(joinpath(root, dir)) # path to directories
-        end
-        println("Files in \$root")
-        for file in files
-            println(joinpath(root, file)) # path to files
-        end
+# Examples
+```julia
+for (root, dirs, files) in walkdir(".")
+    println("Directories in \$root")
+    for dir in dirs
+        println(joinpath(root, dir)) # path to directories
     end
+    println("Files in \$root")
+    for file in files
+        println(joinpath(root, file)) # path to files
+    end
+end
+```
 
+```julia-repl
+julia> mkpath("my/test/dir");
+
+julia> itr = walkdir("my");
+
+julia> (root, dirs, files) = first(itr)
+("my", ["test"], String[])
+
+julia> (root, dirs, files) = first(itr)
+("my/test", ["dir"], String[])
+
+julia> (root, dirs, files) = first(itr)
+("my/test/dir", String[], String[])
+```
 """
 function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     content = nothing
@@ -678,7 +826,7 @@ end
 
 Change the owner and/or group of `path` to `owner` and/or `group`. If the value entered for `owner` or `group`
 is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
-Return `path`
+Return `path`.
 """
 function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
