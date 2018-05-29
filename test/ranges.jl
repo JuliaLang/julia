@@ -1325,10 +1325,8 @@ Base.convert(::Type{Int}, x::Displacement) = x.val
                 r1 = StepRange(Position(start), Displacement(step), Position(stop))
                 @test collect(r1) == Position.(start : step : stop)
 
-                @test_broken begin
-                    r2 = Position(start) : Displacement(step) : Position(stop)
-                    r1 === r2
-                end
+                r2 = Position(start) : Displacement(step) : Position(stop)
+                @test r1 === r2
             end
         end
     end

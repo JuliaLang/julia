@@ -6,10 +6,9 @@
 
 (:)(start::T, stop::T) where {T} = (:)(start, oftype(stop-start, 1), stop)
 
-# first promote start and stop, leaving step alone
+# promote start and stop, leaving step alone
 (:)(start::A, step, stop::C) where {A<:Real,C<:Real} =
     (:)(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
-(:)(start::T, step::Real, stop::T) where {T<:Real} = (:)(promote(start, step, stop)...)
 
 # AbstractFloat specializations
 (:)(a::T, b::T) where {T<:AbstractFloat} = (:)(a, T(1), b)
