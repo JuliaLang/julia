@@ -503,7 +503,8 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
                 if (m = match(re_key_to_string, line)) != nothing
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
-            elseif occursin(re_section, line)
+            end
+            if occursin(re_section, line)
                 state = occursin(re_section_deps, line) ? :deps : :other
             end
         end
