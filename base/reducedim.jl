@@ -169,7 +169,7 @@ function check_reducedims(R, A)
     had_nonreduc = false
     for i = 1:ndims(A)
         Ri, Ai = axes(R, i), axes(A, i)
-        sRi, sAi = length(Ri), length(Ai)
+        sRi, sAi = _length(Ri), _length(Ai)
         if sRi == 1
             if sAi > 1
                 if had_nonreduc
@@ -804,4 +804,4 @@ function _findmax(A, region)
     end
 end
 
-reducedim1(R, A) = length(indices1(R)) == 1
+reducedim1(R, A) = _length(indices1(R)) == 1

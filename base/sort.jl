@@ -905,7 +905,7 @@ function sort(A::AbstractArray;
         Base.depwarn("`initialized` keyword argument is deprecated", :sort)
     end
     order = ord(lt,by,rev,order)
-    n = length(axes(A, dim))
+    n = _length(axes(A, dim))
     if dim != 1
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
@@ -957,12 +957,7 @@ julia> sortrows([7 3 5; -1 6 4; 9 -2 8], rev=true)
 ```
 """
 function sortrows(A::AbstractMatrix; kws...)
-    inds = axes(A,1)
-    T = slicetypeof(A, inds, :)
-    rows = similar(A, T, axes(A, 1))
-    for i in inds
-        rows[i] = view(A, i, :)
-    end
+    rows = [view(A, i, :) for i in axes(A,1)]
     p = sortperm(rows; kws...)
     A[p,:]
 end
@@ -996,23 +991,10 @@ julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], rev=true)
 ```
 """
 function sortcols(A::AbstractMatrix; kws...)
-    inds = axes(A,2)
-    T = slicetypeof(A, :, inds)
-    cols = similar(A, T, axes(A, 2))
-    for i in inds
-        cols[i] = view(A, :, i)
-    end
+    cols = [view(A, :, i) for i in axes(A,2)]
     p = sortperm(cols; kws...)
     A[:,p]
 end
-
-function slicetypeof(A::AbstractArray{T}, i1, i2) where T
-    I = map(slice_dummy, to_indices(A, (i1, i2)))
-    fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
-    SubArray{T,1,typeof(A),typeof(I),fast}
-end
-slice_dummy(S::Slice) = S
-slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
 
 ## fast clever sorting for floats ##
 

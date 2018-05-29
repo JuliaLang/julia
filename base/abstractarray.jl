@@ -345,7 +345,7 @@ size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
 
-function isassigned(a::AbstractArray, i::Int...)
+function isassigned(a::AbstractArray, i::Integer...)
     try
         a[i...]
         true
@@ -572,7 +572,12 @@ similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, 
 similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, to_shape(dims))
 similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, to_shape(dims))
 similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::NeedsShaping) where {T} = similar(a, T, to_shape(dims))
+# Similar supports specifying dims as either Integers or AbstractUnitRanges or any mixed combination
+# thereof. Ideally, we'd just convert Integers to OneTos and then call a canonical method with the axes,
+# but we don't want to require all AbstractArray subtypes to dispatch on Base.OneTo. So instead we
+# define this method to convert supported axes to Ints, with the expectation that an offset array
+# package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
+similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
 
@@ -607,8 +612,9 @@ indices of the result will match `A`.
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 """
-similar(::Type{T}, shape::Tuple) where {T} = T(to_shape(shape))
-similar(::Type{T}, dims::DimOrInd...) where {T} = similar(T, dims)
+similar(::Type{T}, dims::DimOrInd...) where {T<:AbstractArray} = similar(T, dims)
+similar(::Type{T}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
+similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
 """
     empty(v::AbstractVector, [eltype])
@@ -1701,6 +1707,7 @@ end
 
 nextL(L, l::Integer) = L*l
 nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
+nextL(L, r::Slice) = L*unsafe_length(r.indices)
 offsetin(i, l::Integer) = i-1
 offsetin(i, r::AbstractUnitRange) = i-first(r)
 
