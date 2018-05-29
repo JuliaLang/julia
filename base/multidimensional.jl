@@ -202,7 +202,7 @@ module IteratorsMD
 
     ```jldoctest
     julia> cartesian = CartesianIndices((1:3, 1:2))
-    CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
+    3×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
      CartesianIndex(1, 1)  CartesianIndex(1, 2)
      CartesianIndex(2, 1)  CartesianIndex(2, 2)
      CartesianIndex(3, 1)  CartesianIndex(3, 2)
