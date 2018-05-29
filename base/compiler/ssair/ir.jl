@@ -206,6 +206,8 @@ struct NewSSAValue
     id::Int
 end
 
+const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
+
 mutable struct UseRef
     stmt::Any
     op::Int
@@ -882,7 +884,7 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     return false
 end
 
-function fixup_phinode_values!(compact, old_values)
+function fixup_phinode_values!(compact::IncrementalCompact, old_values::Vector{Any})
     values = Vector{Any}(undef, length(old_values))
     for i = 1:length(old_values)
         isassigned(old_values, i) || continue
@@ -900,7 +902,7 @@ function fixup_phinode_values!(compact, old_values)
     values
 end
 
-function fixup_node(compact, @nospecialize(stmt))
+function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
     if isa(stmt, PhiNode)
         return PhiNode(stmt.edges, fixup_phinode_values!(compact, stmt.values))
     elseif isa(stmt, PhiCNode)
@@ -920,7 +922,7 @@ function fixup_node(compact, @nospecialize(stmt))
     end
 end
 
-function just_fixup!(compact)
+function just_fixup!(compact::IncrementalCompact)
     for idx in compact.late_fixup
         stmt = compact.result[idx]
         new_stmt = fixup_node(compact, stmt)
@@ -937,7 +939,7 @@ function just_fixup!(compact)
     end
 end
 
-function simple_dce!(compact)
+function simple_dce!(compact::IncrementalCompact)
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
@@ -961,15 +963,16 @@ function non_dce_finish!(compact::IncrementalCompact)
     compact.result_bbs[end] = BasicBlock(bb,
                 StmtRange(first(bb.stmts), result_idx-1))
     compact.renamed_new_nodes = true
+    nothing
 end
 
 function finish(compact::IncrementalCompact)
     non_dce_finish!(compact)
     simple_dce!(compact)
-    complete(compact)
+    return complete(compact)
 end
 
-function complete(compact)
+function complete(compact::IncrementalCompact)
     cfg = CFG(compact.result_bbs, Int[first(bb.stmts) for bb in compact.result_bbs[2:end]])
     return IRCode(compact.ir, compact.result, compact.result_types, compact.result_lines, compact.result_flags, cfg, compact.new_new_nodes)
 end
@@ -977,7 +980,7 @@ end
 function compact!(code::IRCode)
     compact = IncrementalCompact(code)
     # Just run through the iterator without any processing
-    foreach((args...)->nothing, compact)
+    foreach(x -> nothing, compact) # x isa Pair{Int, Any}
     return finish(compact)
 end
 
@@ -985,9 +988,9 @@ struct BBIdxIter
     ir::IRCode
 end
 
-bbidxiter(ir) = BBIdxIter(ir)
+bbidxiter(ir::IRCode) = BBIdxIter(ir)
 
-function iterate(x::BBIdxIter, (idx, bb)=(1, 1))
+function iterate(x::BBIdxIter, (idx, bb)::Tuple{Int, Int}=(1, 1))
     idx > length(x.ir.stmts) && return nothing
     active_bb = x.ir.cfg.blocks[bb]
     next_bb = bb
