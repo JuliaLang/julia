@@ -932,7 +932,7 @@ function check_constraints(graph::Graph)
             err_msg = "Resolve failed to satisfy requirements for package $(id(p0)):\n"
         end
         err_msg *= sprint(showlog, rlog, pkgs[p0])
-        throw(ResolverError(err_msg))
+        throw(ResolverError(chomp(err_msg)))
     end
     return true
 end
@@ -1002,7 +1002,7 @@ function propagate_constraints!(graph::Graph, sources::Set{Int} = Set{Int}(); lo
                         err_msg = "Resolve failed to satisfy requirements for package $(id(p1)):\n"
                     end
                     err_msg *= sprint(showlog, rlog, pkgs[p1])
-                    throw(ResolverError(err_msg))
+                    throw(ResolverError(chomp(err_msg)))
                 end
             end
         end

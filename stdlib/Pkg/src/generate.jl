@@ -47,10 +47,10 @@ function project(pkg::String, dir::String)
     genfile(pkg, dir, "Project.toml") do io
         print(io,
             """
+            authors = $authorstr
             name = "$pkg"
             uuid = "$(UUIDs.uuid1())"
             version = "0.1.0"
-            authors = $authorstr
 
             [deps]
             """
