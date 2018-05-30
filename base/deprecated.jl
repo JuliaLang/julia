@@ -1138,13 +1138,35 @@ workspace() = error("`workspace()` is discontinued, consider Revise.jl for an al
 @deprecate_moved unsafe_get "Nullables"
 
 # sub2ind and ind2sub deprecation (PR #24715)
-@deprecate ind2sub(A::AbstractArray, ind) CartesianIndices(A)[ind]
-@deprecate ind2sub(::Tuple{}, ind::Integer) CartesianIndices()[ind]
-@deprecate ind2sub(dims::Tuple{Vararg{Integer,N}} where N, ind::Integer) CartesianIndices(dims)[ind]
-@deprecate ind2sub(inds::Tuple{Base.OneTo}, ind::Integer) CartesianIndices(inds)[ind]
-@deprecate ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer) CartesianIndices(inds)[ind]
-@deprecate ind2sub(inds::Tuple{Vararg{AbstractUnitRange,N}} where N, ind::Integer) CartesianIndices(inds)[ind]
-@deprecate ind2sub(inds::Union{DimsInteger{N},Indices{N}}  where N, ind::AbstractVector{<:Integer}) CartesianIndices(inds)[ind]
+_ind2sub_depwarn(x, y) = "`ind2sub($x, $y)` is deprecated, use `Tuple(CartesianIndices($x)[$y])` for a direct replacement. In many cases, the conversion to `Tuple` is not necessary."
+function ind2sub(A::AbstractArray, ind)
+    depwarn(_ind2sub_depwarn("A", "ind"), :ind2sub)
+    Tuple(CartesianIndices(A)[ind])
+end
+function ind2sub(::Tuple{}, ind::Integer)
+    depwarn(_ind2sub_depwarn("()", "ind"), :ind2sub)
+    Tuple(CartesianIndices(())[ind])
+end
+function ind2sub(dims::Tuple{Vararg{Integer,N}} where N, ind::Integer)
+    depwarn(_ind2sub_depwarn("dims", "ind"), :ind2sub)
+    Tuple(CartesianIndices(dims)[ind])
+end
+function ind2sub(inds::Tuple{Base.OneTo}, ind::Integer)
+    depwarn(_ind2sub_depwarn("inds", "ind"), :ind2sub)
+    Tuple(CartesianIndices(inds)[ind])
+end
+function ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer)
+    depwarn(_ind2sub_depwarn("inds", "ind"), :ind2sub)
+    Tuple(CartesianIndices(inds)[ind])
+end
+function ind2sub(inds::Tuple{Vararg{AbstractUnitRange,N}} where N, ind::Integer)
+    depwarn(_ind2sub_depwarn("inds", "ind"), :ind2sub)
+    Tuple(CartesianIndices(inds)[ind])
+end
+function ind2sub(inds::Union{DimsInteger{N},Indices{N}}  where N, ind::AbstractVector{<:Integer})
+    depwarn(_ind2sub_depwarn("inds", "ind"), :ind2sub)
+    Tuple(CartesianIndices(inds)[ind])
+end
 
 @deprecate sub2ind(A::AbstractArray, I...) LinearIndices(A)[I...]
 @deprecate sub2ind(dims::Tuple{}) LinearIndices(dims)[]
