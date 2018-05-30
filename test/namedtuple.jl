@@ -236,3 +236,7 @@ y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
 # issue #27187
 @test reduce(merge,[(a = 1, b = 2), (c = 3, d = 4)]) == (a = 1, b = 2, c = 3, d = 4)
 @test typeintersect(NamedTuple{()}, NamedTuple{names, Tuple{Int,Int}} where names) == Union{}
+
+# Iterator constructor
+@test NamedTuple{(:a, :b), Tuple{Int, Float64}}(Any[1.0, 2]) === (a=1, b=2.0)
+@test NamedTuple{(:a, :b)}(Any[1.0, 2]) === (a=1.0, b=2)
