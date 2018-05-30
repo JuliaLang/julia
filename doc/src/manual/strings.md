@@ -364,7 +364,7 @@ a sequence of code units from left to right characters are formed by the longest
 In particular this implies that overlong and too high code unit sequences are accepted.
 This rule is best explained by an example:
 
-```jldoctest unicodestring
+```julia-repl
 julia> s = "\xc0\xa0\xe2\x88\xe2|"
 "\xc0\xa0\xe2\x88\xe2|"
 
@@ -424,7 +424,7 @@ In that case the resulting string may contain different characters than the inpu
 and its number of characters may be lower than sum of numbers of characters
 of the concatenated strings, e.g.:
 
-```jldoctest stringconcat
+```julia-repl
 julia> a, b = "\xe2\x88", "\x80"
 ("\xe2\x88", "\x80")
 
