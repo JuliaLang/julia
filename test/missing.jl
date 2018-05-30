@@ -362,3 +362,20 @@ end
     @test collect(x) == [1, 2, 4]
     @test collect(x) isa Vector{Int}
 end
+
+@testset "coalesce" begin
+    @test coalesce() === missing
+    @test coalesce(1) === 1
+    @test coalesce(nothing) === nothing
+    @test coalesce(missing) === missing
+    @test coalesce(missing, 1) === 1
+    @test coalesce(1, missing) === 1
+    @test coalesce(missing, missing) === missing
+    @test coalesce(missing, 1, 2) === 1
+    @test coalesce(1, missing, 2) === 1
+    @test coalesce(missing, missing, 2) === 2
+    @test coalesce(missing, missing, missing) === missing
+
+    @test coalesce(nothing, missing) === nothing
+    @test coalesce(missing, nothing) === nothing
+end

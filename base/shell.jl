@@ -46,7 +46,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     end
     function consume_upto(j)
         update_arg(s[i:prevind(s, j)])
-        i = coalesce(peek(st), (lastindex(s)+1,'\0'))[1]
+        i = something(peek(st), (lastindex(s)+1,'\0'))[1]
     end
     function append_arg()
         if isempty(arg); arg = Any["",]; end

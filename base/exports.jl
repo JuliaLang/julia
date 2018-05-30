@@ -695,6 +695,7 @@ export
     ismissing,
     missing,
     skipmissing,
+    something,
 
 # time
     sleep,

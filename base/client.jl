@@ -15,7 +15,7 @@ color_normal = text_colors[:normal]
 function repl_color(key, default)
     env_str = get(ENV, key, "")
     c = tryparse(Int, env_str)
-    c_conv = coalesce(c, Symbol(env_str))
+    c_conv = something(c, Symbol(env_str))
     haskey(text_colors, c_conv) ? c_conv : default
 end
 

@@ -450,7 +450,7 @@ function setup_launched_worker(manager, wconfig, launched_q)
     # When starting workers on remote multi-core hosts, `launch` can (optionally) start only one
     # process on the remote machine, with a request to start additional workers of the
     # same type. This is done by setting an appropriate value to `WorkerConfig.cnt`.
-    cnt = coalesce(wconfig.count, 1)
+    cnt = something(wconfig.count, 1)
     if cnt === :auto
         cnt = wconfig.environ[:cpu_cores]
     end
@@ -465,7 +465,7 @@ end
 function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launched_q)
     @sync begin
         exename = notnothing(fromconfig.exename)
-        exeflags = coalesce(fromconfig.exeflags, ``)
+        exeflags = something(fromconfig.exeflags, ``)
         cmd = `$exename $exeflags`
 
         new_addresses = remotecall_fetch(launch_additional, frompid, cnt, cmd)
@@ -550,7 +550,7 @@ function create_worker(manager, wconfig)
     elseif PGRP.topology == :custom
         # wait for requested workers to be up before connecting to them.
         filterfunc(x) = (x.id != 1) && isdefined(x, :config) &&
-            (notnothing(x.config.ident) in coalesce(wconfig.connect_idents, []))
+            (notnothing(x.config.ident) in something(wconfig.connect_idents, []))
 
         wlist = filter(filterfunc, PGRP.workers)
         while wconfig.connect_idents !== nothing &&
@@ -566,11 +566,11 @@ function create_worker(manager, wconfig)
     end
 
     all_locs = map(x -> isa(x, Worker) ?
-                   (coalesce(x.config.connect_at, ()), x.id) :
+                   (something(x.config.connect_at, ()), x.id) :
                    ((), x.id, true),
                    join_list)
     send_connection_hdr(w, true)
-    enable_threaded_blas = coalesce(wconfig.enable_threaded_blas, false)
+    enable_threaded_blas = something(wconfig.enable_threaded_blas, false)
     join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, enable_threaded_blas, isclusterlazy())
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
@@ -693,7 +693,7 @@ function topology(t)
     t
 end
 
-isclusterlazy() = coalesce(PGRP.lazy, false)
+isclusterlazy() = something(PGRP.lazy, false)
 
 get_bind_addr(pid::Integer) = get_bind_addr(worker_from_id(pid))
 get_bind_addr(w::LocalProcess) = LPROC.bind_addr
