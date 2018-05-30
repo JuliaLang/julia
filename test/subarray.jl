@@ -31,6 +31,8 @@ _Agen(A, i1) = [A[j1] for j1 in i1]
 _Agen(A, i1, i2) = [A[j1,j2] for j1 in i1, j2 in i2]
 _Agen(A, i1, i2, i3) = [A[j1,j2,j3] for j1 in i1, j2 in i2, j3 in i3]
 _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 in i4]
+_Agen(A, i1, i2, i3, i4, i5) = [A[j1,j2,j3,j4,j5] for j1 in i1, j2 in i2, j3 in i3, j4 in i4, j5 in i5]
+_Agen(A, i1, i2, i3, i4, i5, i6) = [A[j1,j2,j3,j4,j5,j6] for j1 in i1, j2 in i2, j3 in i3, j4 in i4, j5 in i5, j6 in i6]
 
 function replace_colon(A::AbstractArray, I)
     Iout = Vector{Any}(undef, length(I))
