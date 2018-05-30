@@ -101,7 +101,7 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks, du, phin
     end
 end
 
-function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#), pi_callback=(pi,idx)->false)
+function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#), pi_callback=(@nospecialize(pi),@nospecialize(idx))->false)
     while true
         if isa(defssa, OldSSAValue) && already_inserted(compact, defssa)
             rename = compact.ssa_rename[defssa.id]
@@ -137,7 +137,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
 end
 
 function simple_walk_constraint(compact, defidx, typeconstraint = types(compact)[defidx])
-    callback = (pi, _)->(isa(pi, PiNode) && (typeconstraint = typeintersect(typeconstraint, pi.typ)); false)
+    callback = (@nospecialize(pi), _)->(isa(pi, PiNode) && (typeconstraint = typeintersect(typeconstraint, pi.typ)); false)
     def = simple_walk(compact, defidx, callback)
     def, typeconstraint
 end
