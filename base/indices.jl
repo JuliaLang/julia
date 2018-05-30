@@ -350,7 +350,6 @@ struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int
 end
 
 LinearIndices(::Tuple{}) = LinearIndices{0,typeof(())}(())
-LinearIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = LinearIndices{N,typeof(inds)}(inds)
 LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
     LinearIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
 LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(map(Base.OneTo, sz))

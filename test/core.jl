@@ -6149,3 +6149,9 @@ g27209(x) = f27209(x ? nothing : 1.0)
 end
 bar27240() = foo27240()
 @test_throws UndefVarError bar27240()
+
+# issue #27269
+struct T27269{X, Y <: Vector{X}}
+    v::Vector{Y}
+end
+@test T27269([[1]]) isa T27269{Int, Vector{Int}}

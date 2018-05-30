@@ -881,12 +881,17 @@
        ;; "outer" constructors
        ,@(if (and (null? defs)
                   (not (null? params))
-                  ;; don't generate an outer constructor if the type has
-                  ;; parameters not mentioned in the field types. such a
-                  ;; constructor would not be callable anyway.
-                  (every (lambda (sp)
-                           (expr-contains-eq sp (cons 'list field-types)))
-                         params))
+                  ;; To generate an outer constructor, each parameter must occur in a field
+                  ;; type, or in the bounds of a subsequent parameter.
+                  ;; Otherwise the constructor would not work, since the parameter values
+                  ;; would never be specified.
+                  (let loop ((root-types field-types)
+                             (sp         (reverse bounds)))
+                    (or (null? sp)
+                        (let ((p (car sp)))
+                          (and (expr-contains-eq (car p) (cons 'list root-types))
+                               (loop (append (cdr p) root-types)
+                                     (cdr sp)))))))
              `((scope-block
                 (block
                  (global ,name)
