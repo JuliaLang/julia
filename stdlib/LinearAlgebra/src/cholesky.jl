@@ -4,7 +4,7 @@
 # Cholesky Factorization #
 ##########################
 
-# The dispatch structure in the chol!, chol, cholesky, and cholesky! methods is a bit
+# The dispatch structure in the cholesky, and cholesky! methods is a bit
 # complicated and some explanation is therefore provided in the following
 #
 # In the methods below, LAPACK is called when possible, i.e. StridedMatrices with Float32,
@@ -20,7 +20,6 @@
 
 # The internal structure is as follows
 # - _chol! returns the factor and info without checking positive definiteness
-# - chol/chol! returns the factor and checks for positive definiteness
 # - cholesky/cholesky! returns Cholesky without checking positive definiteness
 
 # FixMe? The dispatch below seems overly complicated. One simplification could be to
@@ -53,7 +52,7 @@ function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{B
 end
 
 # make a copy that allow inplace Cholesky factorization
-@inline choltype(A) = promote_type(typeof(chol(one(eltype(A)))), Float32)
+@inline choltype(A) = promote_type(typeof(sqrt(one(eltype(A)))), Float32)
 @inline cholcopy(A) = copy_oftype(A, choltype(A))
 
 # _chol!. Internal methods for calling unpivoted Cholesky
@@ -132,74 +131,7 @@ function _chol!(x::Number, uplo)
     rx == abs(x) ? (rval, convert(BlasInt, 0)) : (rval, convert(BlasInt, 1))
 end
 
-# chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
-# matrix
-function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
-    C, info = _chol!(A.uplo == 'U' ? A.data : LinearAlgebra.copytri!(A.data, 'L', true), UpperTriangular)
-    @assertposdef C info
-end
-function chol!(A::StridedMatrix)
-    checksquare(A)
-    C, info = _chol!(A)
-    @assertposdef C info
-end
-
-
-
-# chol. Non-destructive methods for computing Cholesky factor of a real symmetric or
-# Hermitian matrix. Promotes elements to a type that is stable under square roots.
-function chol(A::RealHermSymComplexHerm)
-    AA = similar(A, choltype(A), size(A))
-    if A.uplo == 'U'
-        copyto!(AA, A.data)
-    else
-        adjoint!(AA, A.data)
-    end
-    chol!(Hermitian(AA, :U))
-end
-
 ## for StridedMatrices, check that matrix is symmetric/Hermitian
-"""
-    chol(A) -> U
-
-Compute the Cholesky factorization of a positive definite matrix `A`
-and return the [`UpperTriangular`](@ref) matrix `U` such that `A = U'U`.
-
-# Examples
-```jldoctest
-julia> A = [1. 2.; 2. 50.]
-2×2 Array{Float64,2}:
- 1.0   2.0
- 2.0  50.0
-
-julia> U = chol(A)
-2×2 UpperTriangular{Float64,Array{Float64,2}}:
- 1.0  2.0
-  ⋅   6.78233
-
-julia> U'U
-2×2 Array{Float64,2}:
- 1.0   2.0
- 2.0  50.0
-```
-"""
-chol(A::AbstractMatrix) = chol!(cholcopy(A))
-
-## Numbers
-"""
-    chol(x::Number) -> y
-
-Compute the square root of a non-negative number `x`.
-
-# Examples
-```jldoctest
-julia> chol(16)
-4.0
-```
-"""
-chol(x::Number, args...) = ((C, info) = _chol!(x, nothing); @assertposdef C info)
-
-
 
 # cholesky!. Destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
@@ -385,12 +317,13 @@ size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
+    info     = getfield(C, :info)
     if d == :U
-        return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return @assertposdef UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors')) info
     elseif d == :L
-        return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        return @assertposdef LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors')) info
     elseif d == :UL
-        return Symbol(Cuplo) == :U ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors)
+        return @assertposdef (Symbol(Cuplo) == :U ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors)) info
     else
         return getfield(C, d)
     end
@@ -402,12 +335,16 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d == :U
+        chkfullrank(C)
         return UpperTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :L
+        chkfullrank(C)
         return LowerTriangular(Symbol(Cuplo) == d ? Cfactors : copy(Cfactors'))
     elseif d == :p
+        chkfullrank(C)
         return getfield(C, :piv)
     elseif d == :P
+        chkfullrank(C)
         n = size(C, 1)
         P = zeros(T, n, n)
         for i = 1:n

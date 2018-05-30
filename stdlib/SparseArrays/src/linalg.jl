@@ -1008,5 +1008,4 @@ function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatri
     end
 end
 
-chol(A::SparseMatrixCSC) = error("Use cholesky() instead of chol() for sparse matrices.")
 eigen(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eigen() for sparse matrices.")
