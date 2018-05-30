@@ -853,11 +853,17 @@ end
 @test_throws ArgumentError parse(BigFloat, "1\0")
 
 @testset "serialization (issue #12386)" begin
-    b = IOBuffer()
-    x = 2.1 * big(pi)
-    serialize(b, x)
-    seekstart(b)
-    @test deserialize(b) == x
+    b = PipeBuffer()
+    let x = setprecision(53) do
+            return 2.1 * big(pi)
+        end
+        serialize(b, x)
+        @test deserialize(b) == x
+    end
+    let x = BigFloat(Inf, 46)
+        serialize(b, x)
+        @test deserialize(b) == x == BigFloat(Inf, 2)
+    end
 end
 @test isnan(sqrt(BigFloat(NaN)))
 
