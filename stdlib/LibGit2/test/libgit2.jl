@@ -10,7 +10,7 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
 import .Main.TestHelpers: with_fake_pty
 
-function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
+function challenge_prompt(code::Expr, challenges; timeout::Integer=60, debug::Bool=true)
     output_file = tempname()
     wrapped_code = quote
         using Serialization
@@ -34,7 +34,7 @@ function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bo
     return nothing
 end
 
-function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
+function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool=true)
     function format_output(output)
         !debug && return ""
         str = read(seekstart(output), String)
