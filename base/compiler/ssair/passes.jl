@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
     This struct keeps track of all uses of some mutable struct allocated
     in the current function. `uses` are all instances of `getfield` on the

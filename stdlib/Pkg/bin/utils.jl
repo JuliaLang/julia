@@ -1,4 +1,5 @@
 #!/usr/bin/env julia
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function packagelt(a::String, b::String)
     a == "julia" && b != "julia" && return true

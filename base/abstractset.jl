@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
 sizehint!(s::AbstractSet, n) = nothing
 

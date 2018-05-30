@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 if Pair != Base.Pair
 import Base: Base, IOContext, string, join, sprint
 IOContext(io::IO, KV::Pair) = IOContext(io, Base.Pair(KV[1], KV[2]))

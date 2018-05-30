@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 struct InliningTodo
     idx::Int # The statement to replace
     # Properties of the call - these determine how arguments

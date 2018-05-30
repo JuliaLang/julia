@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function inflate_ir(ci::CodeInfo)
     code = copy_exprargs(ci.code)
     for i = 1:length(code)

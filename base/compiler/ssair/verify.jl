@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
         arg isa String && return esc(:(println($arg)))
