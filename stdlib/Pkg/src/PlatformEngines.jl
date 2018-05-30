@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Content in this file is extracted from BinaryProvider.jl, see LICENSE.method
 
 module BinaryProvider

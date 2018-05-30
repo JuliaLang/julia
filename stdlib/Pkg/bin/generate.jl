@@ -1,4 +1,5 @@
 #!/usr/bin/env julia
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 prefix = joinpath(homedir(), ".julia", "registries", "Uncurated")
 

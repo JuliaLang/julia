@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function temp_pkg_dir(fn::Function)
     local env_dir
     local old_load_path

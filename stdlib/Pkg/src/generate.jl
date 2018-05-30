@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function generate(path::String)
     dir, pkg = dirname(path), basename(path)
     isdir(path) && cmderror("$(abspath(path)) already exists")

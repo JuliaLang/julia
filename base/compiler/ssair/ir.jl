@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 @inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
 @eval Core.UpsilonNode() = $(Expr(:new, Core.UpsilonNode))
 Core.PhiNode() = Core.PhiNode(Any[], Any[])

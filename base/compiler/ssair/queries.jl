@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
 Determine whether a statement is side-effect-free, i.e. may be removed if it has no uses.
 """

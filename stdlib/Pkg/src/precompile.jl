@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 precompile(Tuple{Type{Base.Generator{I, F} where F where I}, typeof(Pkg.TOML.table2dict), Array{Any, 1}})
 precompile(Tuple{Type{Base.IOContext{IO_t} where IO_t<:IO}, Base.GenericIOBuffer{Array{UInt8, 1}}, Base.TTY})
 precompile(Tuple{Type{Base.SHA1}, Base.SubString{String}})
