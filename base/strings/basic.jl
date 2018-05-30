@@ -370,10 +370,10 @@ return `i`. In all other cases throw `BoundsError`.
 
 # Examples
 ```jldoctest
-julia> thisind("αβγdef", 0)
+julia> thisind("α", 0)
 0
 
-julia> thisind("αβγdef", 1)
+julia> thisind("α", 1)
 1
 
 julia> thisind("α", 2)
@@ -391,12 +391,6 @@ julia> thisind("α", -1)
 ERROR: BoundsError: attempt to access "α"
   at index [-1]
 [...]
-
-julia> thisind("αβγdef", 9)
-9
-
-julia> thisind("αβγdef", 10)
-10
 ```
 """
 thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
@@ -453,7 +447,7 @@ julia> prevind("α", 2, 2)
 0
 
 julia> prevind("α", 2, 3)
-0
+-1
 ```
 """
 prevind(s::AbstractString, i::Integer, n::Integer) = prevind(s, Int(i), Int(n))
