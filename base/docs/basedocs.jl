@@ -333,6 +333,10 @@ function compare(a, b)
     a < b ? "less than" : "greater than"
 end
 ```
+
+If the returned value is omitted, `return` returns the value [`nothing`](@ref)
+(quite similar to C).
+
 In general you can place a `return` statement anywhere within a function body, including
 within deeply nested loops or conditionals, but be careful with `do` blocks. For
 example:

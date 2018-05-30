@@ -43,7 +43,7 @@ obj3 = MyModule.someotherfunction(obj2, c)
 
 ## Functions
 
-### I passed an argument `x` to a function, modified it inside that function, but on the outside, the variable `x` is still unchanged. Why?
+### [I passed an argument `x` to a function, modified it inside that function, but on the outside, the variable `x` is still unchanged. Why?](@id faq-arg-modif)
 
 Suppose you call a function like this:
 

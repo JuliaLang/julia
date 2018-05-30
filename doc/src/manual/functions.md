@@ -59,9 +59,17 @@ julia> ∑(2, 3)
 Julia function arguments follow a convention sometimes called "pass-by-sharing", which means that
 values are not copied when they are passed to functions. Function arguments themselves act as
 new variable *bindings* (new locations that can refer to values), but the values they refer to
-are identical to the passed values. Modifications to mutable values (such as `Array`s) made within
-a function will be visible to the caller. This is the same behavior found in Scheme, most Lisps,
+are identical to the passed values.
+Consequently, assigning a new value to a function argument just rebinds it to that new value,
+but does not modify any variable in the caller scope.
+However, modifications to *mutable* values (such as `Array`s) made within
+a function will be visible to the caller.
+
+There is a dedicated [FAQ section](@ref faq-arg-modif) on how a function
+can or cannot modify its arguments, with a set of code examples.
+Julia argument passing behavior is the same behavior found in Scheme, most Lisps,
 Python, Ruby and Perl, among other dynamic languages.
+
 
 ## The `return` Keyword
 
@@ -152,7 +160,7 @@ but this is the topic of the [Methods](@ref) chapter.
 ### Returning nothing
 
 Some functions are used only for their side effects, and do not need to return a value.
-In these cases, the Julia convention is to return the value `nothing`:
+In these cases, the Julia convention is to return the value [`nothing`](@ref):
 
 ```julia
 function printx(x)
@@ -164,10 +172,19 @@ end
 Notice that `nothing` is not a Julia keyword but a singleton object of type `Nothing`.
 To support this convention, the REPL does not print anything for it:
 
-```
+```jldoctest
 julia> nothing
-
+ 
 ```
+
+There are two possible shortened forms for the `return nothing` expression.
+On the one hand, the `return` keyword implicitly returns `nothing`, so it can be used alone
+(similar in that sense to `return;` in C).
+On the other hand, since functions implicitly return their last expression evaluated,
+`nothing` can be used alone when it's the last exression.
+The preference for the expression `return nothing` as opposed to `return` or `nothing`
+alone is a subjective matter of coding style. Some people prefer explicitness
+(always specifying the returned value), while some others favor compactness.
 
 As a side note on functions with side effects, the [style guide](@ref man-style-exclam)
 recommends to append `!` to the names of functions that modify their arguments.
