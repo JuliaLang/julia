@@ -186,7 +186,7 @@ function optimize(me::InferenceState)
         # (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
-        if length(me.src.code) < 10
+        if length(me.src.code) < 100
             proven_pure = true
             for i in 1:length(me.src.code)
                 if !statement_effect_free(me.src.code[i], me, me.src.ssavaluetypes[i])
