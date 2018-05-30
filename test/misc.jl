@@ -512,8 +512,8 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
         Demo_20254(string.(arr))
     end
 
-    _get(x::NTuple{1}) = (get(x[1]),)
-    _get_19433(xs::Vararg) = (get(xs[1]), _get_19433(xs[2:end])...)
+    _get_19433(x::NTuple{1}) = (something(x[1]),)
+    _get_19433(xs::Vararg) = (something(xs[1]), _get_19433(xs[2:end])...)
 
     f_19433(f_19433, xs...) = f_19433(_get_19433(xs)...)
 
