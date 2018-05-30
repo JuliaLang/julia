@@ -1,7 +1,7 @@
 var documenterSearchIndex = {"docs": [
 
 {
-    "location": "index.html#",
+    "location": "#",
     "page": "Home",
     "title": "Home",
     "category": "page",
@@ -9,7 +9,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "index.html#Julia-0.7-Documentation-1",
+    "location": "#Julia-0.7-Documentation-1",
     "page": "Home",
     "title": "Julia 0.7 Documentation",
     "category": "section",
@@ -17,7 +17,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "index.html#man-introduction-1",
+    "location": "#man-introduction-1",
     "page": "Home",
     "title": "Introduction",
     "category": "section",
@@ -25,7 +25,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "NEWS.html#",
+    "location": "NEWS/#",
     "page": "Julia v0.7.0 Release Notes",
     "title": "Julia v0.7.0 Release Notes",
     "category": "page",
@@ -33,7 +33,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "NEWS.html#Julia-v0.7.0-Release-Notes-1",
+    "location": "NEWS/#Julia-v0.7.0-Release-Notes-1",
     "page": "Julia v0.7.0 Release Notes",
     "title": "Julia v0.7.0 Release Notes",
     "category": "section",
@@ -41,7 +41,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "NEWS.html#New-language-features-1",
+    "location": "NEWS/#New-language-features-1",
     "page": "Julia v0.7.0 Release Notes",
     "title": "New language features",
     "category": "section",
@@ -49,7 +49,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "NEWS.html#Language-changes-1",
+    "location": "NEWS/#Language-changes-1",
     "page": "Julia v0.7.0 Release Notes",
     "title": "Language changes",
     "category": "section",
@@ -57,7 +57,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "NEWS.html#Breaking-changes-1",
+    "location": "NEWS/#Breaking-changes-1",
     "page": "Julia v0.7.0 Release Notes",
     "title": "Breaking changes",
     "category": "section",
@@ -65,7 +65,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "NEWS.html#Library-improvements-1",
+    "location": "NEWS/#Library-improvements-1",
     "page": "Julia v0.7.0 Release Notes",
     "title": "Library improvements",
     "category": "section",
@@ -73,7 +73,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "NEWS.html#Compiler/Runtime-improvements-1",
+    "location": "NEWS/#Compiler/Runtime-improvements-1",
     "page": "Julia v0.7.0 Release Notes",
     "title": "Compiler/Runtime improvements",
     "category": "section",
@@ -81,7 +81,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "NEWS.html#Deprecated-or-removed-1",
+    "location": "NEWS/#Deprecated-or-removed-1",
     "page": "Julia v0.7.0 Release Notes",
     "title": "Deprecated or removed",
     "category": "section",
@@ -89,7 +89,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "NEWS.html#Command-line-option-changes-1",
+    "location": "NEWS/#Command-line-option-changes-1",
     "page": "Julia v0.7.0 Release Notes",
     "title": "Command-line option changes",
     "category": "section",
@@ -97,7 +97,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/getting-started.html#",
+    "location": "manual/getting-started/#",
     "page": "Getting Started",
     "title": "Getting Started",
     "category": "page",
@@ -105,7 +105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/getting-started.html#man-getting-started-1",
+    "location": "manual/getting-started/#man-getting-started-1",
     "page": "Getting Started",
     "title": "Getting Started",
     "category": "section",
@@ -113,7 +113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/getting-started.html#Resources-1",
+    "location": "manual/getting-started/#Resources-1",
     "page": "Getting Started",
     "title": "Resources",
     "category": "section",
@@ -121,7 +121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables.html#",
+    "location": "manual/variables/#",
     "page": "Variables",
     "title": "Variables",
     "category": "page",
@@ -129,7 +129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables.html#Variables-1",
+    "location": "manual/variables/#Variables-1",
     "page": "Variables",
     "title": "Variables",
     "category": "section",
@@ -137,7 +137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables.html#Allowed-Variable-Names-1",
+    "location": "manual/variables/#Allowed-Variable-Names-1",
     "page": "Variables",
     "title": "Allowed Variable Names",
     "category": "section",
@@ -145,7 +145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables.html#Stylistic-Conventions-1",
+    "location": "manual/variables/#Stylistic-Conventions-1",
     "page": "Variables",
     "title": "Stylistic Conventions",
     "category": "section",
@@ -153,7 +153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#",
+    "location": "manual/integers-and-floating-point-numbers/#",
     "page": "Integers and Floating-Point Numbers",
     "title": "Integers and Floating-Point Numbers",
     "category": "page",
@@ -161,7 +161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Integers-and-Floating-Point-Numbers-1",
+    "location": "manual/integers-and-floating-point-numbers/#Integers-and-Floating-Point-Numbers-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Integers and Floating-Point Numbers",
     "category": "section",
@@ -169,7 +169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Integers-1",
+    "location": "manual/integers-and-floating-point-numbers/#Integers-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Integers",
     "category": "section",
@@ -177,7 +177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Overflow-behavior-1",
+    "location": "manual/integers-and-floating-point-numbers/#Overflow-behavior-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Overflow behavior",
     "category": "section",
@@ -185,7 +185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Division-errors-1",
+    "location": "manual/integers-and-floating-point-numbers/#Division-errors-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Division errors",
     "category": "section",
@@ -193,7 +193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Floating-Point-Numbers-1",
+    "location": "manual/integers-and-floating-point-numbers/#Floating-Point-Numbers-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Floating-Point Numbers",
     "category": "section",
@@ -201,7 +201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Floating-point-zero-1",
+    "location": "manual/integers-and-floating-point-numbers/#Floating-point-zero-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Floating-point zero",
     "category": "section",
@@ -209,7 +209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Special-floating-point-values-1",
+    "location": "manual/integers-and-floating-point-numbers/#Special-floating-point-values-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Special floating-point values",
     "category": "section",
@@ -217,7 +217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Machine-epsilon-1",
+    "location": "manual/integers-and-floating-point-numbers/#Machine-epsilon-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Machine epsilon",
     "category": "section",
@@ -225,7 +225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Rounding-modes-1",
+    "location": "manual/integers-and-floating-point-numbers/#Rounding-modes-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Rounding modes",
     "category": "section",
@@ -233,7 +233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Background-and-References-1",
+    "location": "manual/integers-and-floating-point-numbers/#Background-and-References-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Background and References",
     "category": "section",
@@ -241,7 +241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Arbitrary-Precision-Arithmetic-1",
+    "location": "manual/integers-and-floating-point-numbers/#Arbitrary-Precision-Arithmetic-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Arbitrary Precision Arithmetic",
     "category": "section",
@@ -249,7 +249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#man-numeric-literal-coefficients-1",
+    "location": "manual/integers-and-floating-point-numbers/#man-numeric-literal-coefficients-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Numeric Literal Coefficients",
     "category": "section",
@@ -257,7 +257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Syntax-Conflicts-1",
+    "location": "manual/integers-and-floating-point-numbers/#Syntax-Conflicts-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Syntax Conflicts",
     "category": "section",
@@ -265,7 +265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/integers-and-floating-point-numbers.html#Literal-zero-and-one-1",
+    "location": "manual/integers-and-floating-point-numbers/#Literal-zero-and-one-1",
     "page": "Integers and Floating-Point Numbers",
     "title": "Literal zero and one",
     "category": "section",
@@ -273,7 +273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#",
+    "location": "manual/mathematical-operations/#",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Mathematical Operations and Elementary Functions",
     "category": "page",
@@ -281,7 +281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Mathematical-Operations-and-Elementary-Functions-1",
+    "location": "manual/mathematical-operations/#Mathematical-Operations-and-Elementary-Functions-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Mathematical Operations and Elementary Functions",
     "category": "section",
@@ -289,7 +289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Arithmetic-Operators-1",
+    "location": "manual/mathematical-operations/#Arithmetic-Operators-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Arithmetic Operators",
     "category": "section",
@@ -297,7 +297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Bitwise-Operators-1",
+    "location": "manual/mathematical-operations/#Bitwise-Operators-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Bitwise Operators",
     "category": "section",
@@ -305,7 +305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Updating-operators-1",
+    "location": "manual/mathematical-operations/#Updating-operators-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Updating operators",
     "category": "section",
@@ -313,7 +313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#man-dot-operators-1",
+    "location": "manual/mathematical-operations/#man-dot-operators-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Vectorized \"dot\" operators",
     "category": "section",
@@ -321,7 +321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Numeric-Comparisons-1",
+    "location": "manual/mathematical-operations/#Numeric-Comparisons-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Numeric Comparisons",
     "category": "section",
@@ -329,7 +329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Chaining-comparisons-1",
+    "location": "manual/mathematical-operations/#Chaining-comparisons-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Chaining comparisons",
     "category": "section",
@@ -337,7 +337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Elementary-Functions-1",
+    "location": "manual/mathematical-operations/#Elementary-Functions-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Elementary Functions",
     "category": "section",
@@ -345,7 +345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Operator-Precedence-and-Associativity-1",
+    "location": "manual/mathematical-operations/#Operator-Precedence-and-Associativity-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Operator Precedence and Associativity",
     "category": "section",
@@ -353,7 +353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Numerical-Conversions-1",
+    "location": "manual/mathematical-operations/#Numerical-Conversions-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Numerical Conversions",
     "category": "section",
@@ -361,7 +361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Rounding-functions-1",
+    "location": "manual/mathematical-operations/#Rounding-functions-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Rounding functions",
     "category": "section",
@@ -369,7 +369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Division-functions-1",
+    "location": "manual/mathematical-operations/#Division-functions-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Division functions",
     "category": "section",
@@ -377,7 +377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Sign-and-absolute-value-functions-1",
+    "location": "manual/mathematical-operations/#Sign-and-absolute-value-functions-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Sign and absolute value functions",
     "category": "section",
@@ -385,7 +385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Powers,-logs-and-roots-1",
+    "location": "manual/mathematical-operations/#Powers,-logs-and-roots-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Powers, logs and roots",
     "category": "section",
@@ -393,7 +393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Trigonometric-and-hyperbolic-functions-1",
+    "location": "manual/mathematical-operations/#Trigonometric-and-hyperbolic-functions-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Trigonometric and hyperbolic functions",
     "category": "section",
@@ -401,7 +401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/mathematical-operations.html#Special-functions-1",
+    "location": "manual/mathematical-operations/#Special-functions-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Special functions",
     "category": "section",
@@ -409,7 +409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/complex-and-rational-numbers.html#",
+    "location": "manual/complex-and-rational-numbers/#",
     "page": "Complex and Rational Numbers",
     "title": "Complex and Rational Numbers",
     "category": "page",
@@ -417,7 +417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/complex-and-rational-numbers.html#Complex-and-Rational-Numbers-1",
+    "location": "manual/complex-and-rational-numbers/#Complex-and-Rational-Numbers-1",
     "page": "Complex and Rational Numbers",
     "title": "Complex and Rational Numbers",
     "category": "section",
@@ -425,7 +425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/complex-and-rational-numbers.html#Complex-Numbers-1",
+    "location": "manual/complex-and-rational-numbers/#Complex-Numbers-1",
     "page": "Complex and Rational Numbers",
     "title": "Complex Numbers",
     "category": "section",
@@ -433,7 +433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/complex-and-rational-numbers.html#Rational-Numbers-1",
+    "location": "manual/complex-and-rational-numbers/#Rational-Numbers-1",
     "page": "Complex and Rational Numbers",
     "title": "Rational Numbers",
     "category": "section",
@@ -441,7 +441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#",
+    "location": "manual/strings/#",
     "page": "Strings",
     "title": "Strings",
     "category": "page",
@@ -449,7 +449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#man-strings-1",
+    "location": "manual/strings/#man-strings-1",
     "page": "Strings",
     "title": "Strings",
     "category": "section",
@@ -457,7 +457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#man-characters-1",
+    "location": "manual/strings/#man-characters-1",
     "page": "Strings",
     "title": "Characters",
     "category": "section",
@@ -465,7 +465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#String-Basics-1",
+    "location": "manual/strings/#String-Basics-1",
     "page": "Strings",
     "title": "String Basics",
     "category": "section",
@@ -473,7 +473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#Unicode-and-UTF-8-1",
+    "location": "manual/strings/#Unicode-and-UTF-8-1",
     "page": "Strings",
     "title": "Unicode and UTF-8",
     "category": "section",
@@ -481,7 +481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#Concatenation-1",
+    "location": "manual/strings/#Concatenation-1",
     "page": "Strings",
     "title": "Concatenation",
     "category": "section",
@@ -489,7 +489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#string-interpolation-1",
+    "location": "manual/strings/#string-interpolation-1",
     "page": "Strings",
     "title": "Interpolation",
     "category": "section",
@@ -497,7 +497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#Triple-Quoted-String-Literals-1",
+    "location": "manual/strings/#Triple-Quoted-String-Literals-1",
     "page": "Strings",
     "title": "Triple-Quoted String Literals",
     "category": "section",
@@ -505,7 +505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#Common-Operations-1",
+    "location": "manual/strings/#Common-Operations-1",
     "page": "Strings",
     "title": "Common Operations",
     "category": "section",
@@ -513,7 +513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#non-standard-string-literals-1",
+    "location": "manual/strings/#non-standard-string-literals-1",
     "page": "Strings",
     "title": "Non-Standard String Literals",
     "category": "section",
@@ -521,7 +521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#Regular-Expressions-1",
+    "location": "manual/strings/#Regular-Expressions-1",
     "page": "Strings",
     "title": "Regular Expressions",
     "category": "section",
@@ -529,7 +529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#man-byte-array-literals-1",
+    "location": "manual/strings/#man-byte-array-literals-1",
     "page": "Strings",
     "title": "Byte Array Literals",
     "category": "section",
@@ -537,7 +537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#man-version-number-literals-1",
+    "location": "manual/strings/#man-version-number-literals-1",
     "page": "Strings",
     "title": "Version Number Literals",
     "category": "section",
@@ -545,7 +545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/strings.html#man-raw-string-literals-1",
+    "location": "manual/strings/#man-raw-string-literals-1",
     "page": "Strings",
     "title": "Raw String Literals",
     "category": "section",
@@ -553,7 +553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#",
+    "location": "manual/functions/#",
     "page": "Functions",
     "title": "Functions",
     "category": "page",
@@ -561,7 +561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#man-functions-1",
+    "location": "manual/functions/#man-functions-1",
     "page": "Functions",
     "title": "Functions",
     "category": "section",
@@ -569,7 +569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Argument-Passing-Behavior-1",
+    "location": "manual/functions/#Argument-Passing-Behavior-1",
     "page": "Functions",
     "title": "Argument Passing Behavior",
     "category": "section",
@@ -577,7 +577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#The-return-Keyword-1",
+    "location": "manual/functions/#The-return-Keyword-1",
     "page": "Functions",
     "title": "The return Keyword",
     "category": "section",
@@ -585,7 +585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Operators-Are-Functions-1",
+    "location": "manual/functions/#Operators-Are-Functions-1",
     "page": "Functions",
     "title": "Operators Are Functions",
     "category": "section",
@@ -593,7 +593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Operators-With-Special-Names-1",
+    "location": "manual/functions/#Operators-With-Special-Names-1",
     "page": "Functions",
     "title": "Operators With Special Names",
     "category": "section",
@@ -601,7 +601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#man-anonymous-functions-1",
+    "location": "manual/functions/#man-anonymous-functions-1",
     "page": "Functions",
     "title": "Anonymous Functions",
     "category": "section",
@@ -609,7 +609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Tuples-1",
+    "location": "manual/functions/#Tuples-1",
     "page": "Functions",
     "title": "Tuples",
     "category": "section",
@@ -617,7 +617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Named-Tuples-1",
+    "location": "manual/functions/#Named-Tuples-1",
     "page": "Functions",
     "title": "Named Tuples",
     "category": "section",
@@ -625,7 +625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Multiple-Return-Values-1",
+    "location": "manual/functions/#Multiple-Return-Values-1",
     "page": "Functions",
     "title": "Multiple Return Values",
     "category": "section",
@@ -633,7 +633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Argument-destructuring-1",
+    "location": "manual/functions/#Argument-destructuring-1",
     "page": "Functions",
     "title": "Argument destructuring",
     "category": "section",
@@ -641,7 +641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Varargs-Functions-1",
+    "location": "manual/functions/#Varargs-Functions-1",
     "page": "Functions",
     "title": "Varargs Functions",
     "category": "section",
@@ -649,7 +649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Optional-Arguments-1",
+    "location": "manual/functions/#Optional-Arguments-1",
     "page": "Functions",
     "title": "Optional Arguments",
     "category": "section",
@@ -657,7 +657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Keyword-Arguments-1",
+    "location": "manual/functions/#Keyword-Arguments-1",
     "page": "Functions",
     "title": "Keyword Arguments",
     "category": "section",
@@ -665,7 +665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Evaluation-Scope-of-Default-Values-1",
+    "location": "manual/functions/#Evaluation-Scope-of-Default-Values-1",
     "page": "Functions",
     "title": "Evaluation Scope of Default Values",
     "category": "section",
@@ -673,7 +673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Do-Block-Syntax-for-Function-Arguments-1",
+    "location": "manual/functions/#Do-Block-Syntax-for-Function-Arguments-1",
     "page": "Functions",
     "title": "Do-Block Syntax for Function Arguments",
     "category": "section",
@@ -681,7 +681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#man-vectorized-1",
+    "location": "manual/functions/#man-vectorized-1",
     "page": "Functions",
     "title": "Dot Syntax for Vectorizing Functions",
     "category": "section",
@@ -689,7 +689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Further-Reading-1",
+    "location": "manual/functions/#Further-Reading-1",
     "page": "Functions",
     "title": "Further Reading",
     "category": "section",
@@ -697,7 +697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#",
+    "location": "manual/control-flow/#",
     "page": "Control Flow",
     "title": "Control Flow",
     "category": "page",
@@ -705,7 +705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#Control-Flow-1",
+    "location": "manual/control-flow/#Control-Flow-1",
     "page": "Control Flow",
     "title": "Control Flow",
     "category": "section",
@@ -713,7 +713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#man-compound-expressions-1",
+    "location": "manual/control-flow/#man-compound-expressions-1",
     "page": "Control Flow",
     "title": "Compound Expressions",
     "category": "section",
@@ -721,7 +721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#man-conditional-evaluation-1",
+    "location": "manual/control-flow/#man-conditional-evaluation-1",
     "page": "Control Flow",
     "title": "Conditional Evaluation",
     "category": "section",
@@ -729,7 +729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#Short-Circuit-Evaluation-1",
+    "location": "manual/control-flow/#Short-Circuit-Evaluation-1",
     "page": "Control Flow",
     "title": "Short-Circuit Evaluation",
     "category": "section",
@@ -737,7 +737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#man-loops-1",
+    "location": "manual/control-flow/#man-loops-1",
     "page": "Control Flow",
     "title": "Repeated Evaluation: Loops",
     "category": "section",
@@ -745,7 +745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#Exception-Handling-1",
+    "location": "manual/control-flow/#Exception-Handling-1",
     "page": "Control Flow",
     "title": "Exception Handling",
     "category": "section",
@@ -753,7 +753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#Built-in-Exceptions-1",
+    "location": "manual/control-flow/#Built-in-Exceptions-1",
     "page": "Control Flow",
     "title": "Built-in Exceptions",
     "category": "section",
@@ -761,7 +761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#The-[throw](@ref)-function-1",
+    "location": "manual/control-flow/#The-[throw](@ref)-function-1",
     "page": "Control Flow",
     "title": "The throw function",
     "category": "section",
@@ -769,7 +769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#Errors-1",
+    "location": "manual/control-flow/#Errors-1",
     "page": "Control Flow",
     "title": "Errors",
     "category": "section",
@@ -777,7 +777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#The-try/catch-statement-1",
+    "location": "manual/control-flow/#The-try/catch-statement-1",
     "page": "Control Flow",
     "title": "The try/catch statement",
     "category": "section",
@@ -785,7 +785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#finally-Clauses-1",
+    "location": "manual/control-flow/#finally-Clauses-1",
     "page": "Control Flow",
     "title": "finally Clauses",
     "category": "section",
@@ -793,7 +793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#man-tasks-1",
+    "location": "manual/control-flow/#man-tasks-1",
     "page": "Control Flow",
     "title": "Tasks (aka Coroutines)",
     "category": "section",
@@ -801,7 +801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#Core-task-operations-1",
+    "location": "manual/control-flow/#Core-task-operations-1",
     "page": "Control Flow",
     "title": "Core task operations",
     "category": "section",
@@ -809,7 +809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#Tasks-and-events-1",
+    "location": "manual/control-flow/#Tasks-and-events-1",
     "page": "Control Flow",
     "title": "Tasks and events",
     "category": "section",
@@ -817,7 +817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/control-flow.html#Task-states-1",
+    "location": "manual/control-flow/#Task-states-1",
     "page": "Control Flow",
     "title": "Task states",
     "category": "section",
@@ -825,7 +825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables-and-scoping.html#",
+    "location": "manual/variables-and-scoping/#",
     "page": "Scope of Variables",
     "title": "Scope of Variables",
     "category": "page",
@@ -833,7 +833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables-and-scoping.html#scope-of-variables-1",
+    "location": "manual/variables-and-scoping/#scope-of-variables-1",
     "page": "Scope of Variables",
     "title": "Scope of Variables",
     "category": "section",
@@ -841,7 +841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables-and-scoping.html#man-scope-table-1",
+    "location": "manual/variables-and-scoping/#man-scope-table-1",
     "page": "Scope of Variables",
     "title": "",
     "category": "section",
@@ -849,7 +849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables-and-scoping.html#Global-Scope-1",
+    "location": "manual/variables-and-scoping/#Global-Scope-1",
     "page": "Scope of Variables",
     "title": "Global Scope",
     "category": "section",
@@ -857,7 +857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables-and-scoping.html#Local-Scope-1",
+    "location": "manual/variables-and-scoping/#Local-Scope-1",
     "page": "Scope of Variables",
     "title": "Local Scope",
     "category": "section",
@@ -865,7 +865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables-and-scoping.html#Let-Blocks-1",
+    "location": "manual/variables-and-scoping/#Let-Blocks-1",
     "page": "Scope of Variables",
     "title": "Let Blocks",
     "category": "section",
@@ -873,7 +873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables-and-scoping.html#For-Loops-and-Comprehensions-1",
+    "location": "manual/variables-and-scoping/#For-Loops-and-Comprehensions-1",
     "page": "Scope of Variables",
     "title": "For Loops and Comprehensions",
     "category": "section",
@@ -881,7 +881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/variables-and-scoping.html#Constants-1",
+    "location": "manual/variables-and-scoping/#Constants-1",
     "page": "Scope of Variables",
     "title": "Constants",
     "category": "section",
@@ -889,7 +889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#",
+    "location": "manual/types/#",
     "page": "Types",
     "title": "Types",
     "category": "page",
@@ -897,7 +897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#man-types-1",
+    "location": "manual/types/#man-types-1",
     "page": "Types",
     "title": "Types",
     "category": "section",
@@ -905,7 +905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Type-Declarations-1",
+    "location": "manual/types/#Type-Declarations-1",
     "page": "Types",
     "title": "Type Declarations",
     "category": "section",
@@ -913,7 +913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Abstract-Types-1",
+    "location": "manual/types/#Abstract-Types-1",
     "page": "Types",
     "title": "Abstract Types",
     "category": "section",
@@ -921,7 +921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Primitive-Types-1",
+    "location": "manual/types/#Primitive-Types-1",
     "page": "Types",
     "title": "Primitive Types",
     "category": "section",
@@ -929,7 +929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Composite-Types-1",
+    "location": "manual/types/#Composite-Types-1",
     "page": "Types",
     "title": "Composite Types",
     "category": "section",
@@ -937,7 +937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Mutable-Composite-Types-1",
+    "location": "manual/types/#Mutable-Composite-Types-1",
     "page": "Types",
     "title": "Mutable Composite Types",
     "category": "section",
@@ -945,7 +945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Declared-Types-1",
+    "location": "manual/types/#Declared-Types-1",
     "page": "Types",
     "title": "Declared Types",
     "category": "section",
@@ -953,7 +953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Type-Unions-1",
+    "location": "manual/types/#Type-Unions-1",
     "page": "Types",
     "title": "Type Unions",
     "category": "section",
@@ -961,7 +961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Parametric-Types-1",
+    "location": "manual/types/#Parametric-Types-1",
     "page": "Types",
     "title": "Parametric Types",
     "category": "section",
@@ -969,7 +969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Parametric-Composite-Types-1",
+    "location": "manual/types/#Parametric-Composite-Types-1",
     "page": "Types",
     "title": "Parametric Composite Types",
     "category": "section",
@@ -977,7 +977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Parametric-Abstract-Types-1",
+    "location": "manual/types/#Parametric-Abstract-Types-1",
     "page": "Types",
     "title": "Parametric Abstract Types",
     "category": "section",
@@ -985,7 +985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Tuple-Types-1",
+    "location": "manual/types/#Tuple-Types-1",
     "page": "Types",
     "title": "Tuple Types",
     "category": "section",
@@ -993,7 +993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Vararg-Tuple-Types-1",
+    "location": "manual/types/#Vararg-Tuple-Types-1",
     "page": "Types",
     "title": "Vararg Tuple Types",
     "category": "section",
@@ -1001,7 +1001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Named-Tuple-Types-1",
+    "location": "manual/types/#Named-Tuple-Types-1",
     "page": "Types",
     "title": "Named Tuple Types",
     "category": "section",
@@ -1009,7 +1009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#man-singleton-types-1",
+    "location": "manual/types/#man-singleton-types-1",
     "page": "Types",
     "title": "Singleton Types",
     "category": "section",
@@ -1017,7 +1017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Parametric-Primitive-Types-1",
+    "location": "manual/types/#Parametric-Primitive-Types-1",
     "page": "Types",
     "title": "Parametric Primitive Types",
     "category": "section",
@@ -1025,7 +1025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#UnionAll-Types-1",
+    "location": "manual/types/#UnionAll-Types-1",
     "page": "Types",
     "title": "UnionAll Types",
     "category": "section",
@@ -1033,7 +1033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Type-Aliases-1",
+    "location": "manual/types/#Type-Aliases-1",
     "page": "Types",
     "title": "Type Aliases",
     "category": "section",
@@ -1041,7 +1041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#Operations-on-Types-1",
+    "location": "manual/types/#Operations-on-Types-1",
     "page": "Types",
     "title": "Operations on Types",
     "category": "section",
@@ -1049,7 +1049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#man-custom-pretty-printing-1",
+    "location": "manual/types/#man-custom-pretty-printing-1",
     "page": "Types",
     "title": "Custom pretty-printing",
     "category": "section",
@@ -1057,7 +1057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/types.html#\"Value-types\"-1",
+    "location": "manual/types/#\"Value-types\"-1",
     "page": "Types",
     "title": "\"Value types\"",
     "category": "section",
@@ -1065,7 +1065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#",
+    "location": "manual/methods/#",
     "page": "Methods",
     "title": "Methods",
     "category": "page",
@@ -1073,7 +1073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Methods-1",
+    "location": "manual/methods/#Methods-1",
     "page": "Methods",
     "title": "Methods",
     "category": "section",
@@ -1081,7 +1081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Defining-Methods-1",
+    "location": "manual/methods/#Defining-Methods-1",
     "page": "Methods",
     "title": "Defining Methods",
     "category": "section",
@@ -1089,7 +1089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#man-ambiguities-1",
+    "location": "manual/methods/#man-ambiguities-1",
     "page": "Methods",
     "title": "Method Ambiguities",
     "category": "section",
@@ -1097,7 +1097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Parametric-Methods-1",
+    "location": "manual/methods/#Parametric-Methods-1",
     "page": "Methods",
     "title": "Parametric Methods",
     "category": "section",
@@ -1105,7 +1105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Redefining-Methods-1",
+    "location": "manual/methods/#Redefining-Methods-1",
     "page": "Methods",
     "title": "Redefining Methods",
     "category": "section",
@@ -1113,7 +1113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Design-Patterns-with-Parametric-Methods-1",
+    "location": "manual/methods/#Design-Patterns-with-Parametric-Methods-1",
     "page": "Methods",
     "title": "Design Patterns with Parametric Methods",
     "category": "section",
@@ -1121,7 +1121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Extracting-the-type-parameter-from-a-super-type-1",
+    "location": "manual/methods/#Extracting-the-type-parameter-from-a-super-type-1",
     "page": "Methods",
     "title": "Extracting the type parameter from a super-type",
     "category": "section",
@@ -1129,7 +1129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Building-a-similar-type-with-a-different-type-parameter-1",
+    "location": "manual/methods/#Building-a-similar-type-with-a-different-type-parameter-1",
     "page": "Methods",
     "title": "Building a similar type with a different type parameter",
     "category": "section",
@@ -1137,7 +1137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Iterated-dispatch-1",
+    "location": "manual/methods/#Iterated-dispatch-1",
     "page": "Methods",
     "title": "Iterated dispatch",
     "category": "section",
@@ -1145,7 +1145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Trait-based-dispatch-1",
+    "location": "manual/methods/#Trait-based-dispatch-1",
     "page": "Methods",
     "title": "Trait-based dispatch",
     "category": "section",
@@ -1153,7 +1153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Output-type-computation-1",
+    "location": "manual/methods/#Output-type-computation-1",
     "page": "Methods",
     "title": "Output-type computation",
     "category": "section",
@@ -1161,7 +1161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Separate-convert-and-kernel-logic-1",
+    "location": "manual/methods/#Separate-convert-and-kernel-logic-1",
     "page": "Methods",
     "title": "Separate convert and kernel logic",
     "category": "section",
@@ -1169,7 +1169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Parametrically-constrained-Varargs-methods-1",
+    "location": "manual/methods/#Parametrically-constrained-Varargs-methods-1",
     "page": "Methods",
     "title": "Parametrically-constrained Varargs methods",
     "category": "section",
@@ -1177,7 +1177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Note-on-Optional-and-keyword-Arguments-1",
+    "location": "manual/methods/#Note-on-Optional-and-keyword-Arguments-1",
     "page": "Methods",
     "title": "Note on Optional and keyword Arguments",
     "category": "section",
@@ -1185,7 +1185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Function-like-objects-1",
+    "location": "manual/methods/#Function-like-objects-1",
     "page": "Methods",
     "title": "Function-like objects",
     "category": "section",
@@ -1193,7 +1193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Empty-generic-functions-1",
+    "location": "manual/methods/#Empty-generic-functions-1",
     "page": "Methods",
     "title": "Empty generic functions",
     "category": "section",
@@ -1201,7 +1201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#man-method-design-ambiguities-1",
+    "location": "manual/methods/#man-method-design-ambiguities-1",
     "page": "Methods",
     "title": "Method design and the avoidance of ambiguities",
     "category": "section",
@@ -1209,7 +1209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Tuple-and-NTuple-arguments-1",
+    "location": "manual/methods/#Tuple-and-NTuple-arguments-1",
     "page": "Methods",
     "title": "Tuple and NTuple arguments",
     "category": "section",
@@ -1217,7 +1217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#man-methods-orthogonalize-1",
+    "location": "manual/methods/#man-methods-orthogonalize-1",
     "page": "Methods",
     "title": "Orthogonalize your design",
     "category": "section",
@@ -1225,7 +1225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Dispatch-on-one-argument-at-a-time-1",
+    "location": "manual/methods/#Dispatch-on-one-argument-at-a-time-1",
     "page": "Methods",
     "title": "Dispatch on one argument at a time",
     "category": "section",
@@ -1233,7 +1233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Abstract-containers-and-element-types-1",
+    "location": "manual/methods/#Abstract-containers-and-element-types-1",
     "page": "Methods",
     "title": "Abstract containers and element types",
     "category": "section",
@@ -1241,7 +1241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Complex-method-\"cascades\"-with-default-arguments-1",
+    "location": "manual/methods/#Complex-method-\"cascades\"-with-default-arguments-1",
     "page": "Methods",
     "title": "Complex method \"cascades\" with default arguments",
     "category": "section",
@@ -1249,7 +1249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/constructors.html#",
+    "location": "manual/constructors/#",
     "page": "Constructors",
     "title": "Constructors",
     "category": "page",
@@ -1257,7 +1257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/constructors.html#man-constructors-1",
+    "location": "manual/constructors/#man-constructors-1",
     "page": "Constructors",
     "title": "Constructors",
     "category": "section",
@@ -1265,7 +1265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/constructors.html#Outer-Constructor-Methods-1",
+    "location": "manual/constructors/#Outer-Constructor-Methods-1",
     "page": "Constructors",
     "title": "Outer Constructor Methods",
     "category": "section",
@@ -1273,7 +1273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/constructors.html#Inner-Constructor-Methods-1",
+    "location": "manual/constructors/#Inner-Constructor-Methods-1",
     "page": "Constructors",
     "title": "Inner Constructor Methods",
     "category": "section",
@@ -1281,7 +1281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/constructors.html#Incomplete-Initialization-1",
+    "location": "manual/constructors/#Incomplete-Initialization-1",
     "page": "Constructors",
     "title": "Incomplete Initialization",
     "category": "section",
@@ -1289,7 +1289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/constructors.html#Parametric-Constructors-1",
+    "location": "manual/constructors/#Parametric-Constructors-1",
     "page": "Constructors",
     "title": "Parametric Constructors",
     "category": "section",
@@ -1297,7 +1297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/constructors.html#Case-Study:-Rational-1",
+    "location": "manual/constructors/#Case-Study:-Rational-1",
     "page": "Constructors",
     "title": "Case Study: Rational",
     "category": "section",
@@ -1305,7 +1305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/constructors.html#Outer-only-constructors-1",
+    "location": "manual/constructors/#Outer-only-constructors-1",
     "page": "Constructors",
     "title": "Outer-only constructors",
     "category": "section",
@@ -1313,7 +1313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#",
+    "location": "manual/conversion-and-promotion/#",
     "page": "Conversion and Promotion",
     "title": "Conversion and Promotion",
     "category": "page",
@@ -1321,7 +1321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#conversion-and-promotion-1",
+    "location": "manual/conversion-and-promotion/#conversion-and-promotion-1",
     "page": "Conversion and Promotion",
     "title": "Conversion and Promotion",
     "category": "section",
@@ -1329,7 +1329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Conversion-1",
+    "location": "manual/conversion-and-promotion/#Conversion-1",
     "page": "Conversion and Promotion",
     "title": "Conversion",
     "category": "section",
@@ -1337,7 +1337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#When-is-convert-called?-1",
+    "location": "manual/conversion-and-promotion/#When-is-convert-called?-1",
     "page": "Conversion and Promotion",
     "title": "When is convert called?",
     "category": "section",
@@ -1345,7 +1345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Conversion-vs.-Construction-1",
+    "location": "manual/conversion-and-promotion/#Conversion-vs.-Construction-1",
     "page": "Conversion and Promotion",
     "title": "Conversion vs. Construction",
     "category": "section",
@@ -1353,7 +1353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Constructors-for-types-unrelated-to-their-arguments-1",
+    "location": "manual/conversion-and-promotion/#Constructors-for-types-unrelated-to-their-arguments-1",
     "page": "Conversion and Promotion",
     "title": "Constructors for types unrelated to their arguments",
     "category": "section",
@@ -1361,7 +1361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Mutable-collections-1",
+    "location": "manual/conversion-and-promotion/#Mutable-collections-1",
     "page": "Conversion and Promotion",
     "title": "Mutable collections",
     "category": "section",
@@ -1369,7 +1369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Wrapper-types-1",
+    "location": "manual/conversion-and-promotion/#Wrapper-types-1",
     "page": "Conversion and Promotion",
     "title": "Wrapper types",
     "category": "section",
@@ -1377,7 +1377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Constructors-that-don\'t-return-instances-of-their-own-type-1",
+    "location": "manual/conversion-and-promotion/#Constructors-that-don\'t-return-instances-of-their-own-type-1",
     "page": "Conversion and Promotion",
     "title": "Constructors that don\'t return instances of their own type",
     "category": "section",
@@ -1385,7 +1385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Defining-New-Conversions-1",
+    "location": "manual/conversion-and-promotion/#Defining-New-Conversions-1",
     "page": "Conversion and Promotion",
     "title": "Defining New Conversions",
     "category": "section",
@@ -1393,7 +1393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Promotion-1",
+    "location": "manual/conversion-and-promotion/#Promotion-1",
     "page": "Conversion and Promotion",
     "title": "Promotion",
     "category": "section",
@@ -1401,7 +1401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Defining-Promotion-Rules-1",
+    "location": "manual/conversion-and-promotion/#Defining-Promotion-Rules-1",
     "page": "Conversion and Promotion",
     "title": "Defining Promotion Rules",
     "category": "section",
@@ -1409,7 +1409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/conversion-and-promotion.html#Case-Study:-Rational-Promotions-1",
+    "location": "manual/conversion-and-promotion/#Case-Study:-Rational-Promotions-1",
     "page": "Conversion and Promotion",
     "title": "Case Study: Rational Promotions",
     "category": "section",
@@ -1417,7 +1417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#",
+    "location": "manual/interfaces/#",
     "page": "Interfaces",
     "title": "Interfaces",
     "category": "page",
@@ -1425,7 +1425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#Interfaces-1",
+    "location": "manual/interfaces/#Interfaces-1",
     "page": "Interfaces",
     "title": "Interfaces",
     "category": "section",
@@ -1433,7 +1433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#man-interface-iteration-1",
+    "location": "manual/interfaces/#man-interface-iteration-1",
     "page": "Interfaces",
     "title": "Iteration",
     "category": "section",
@@ -1441,7 +1441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#Indexing-1",
+    "location": "manual/interfaces/#Indexing-1",
     "page": "Interfaces",
     "title": "Indexing",
     "category": "section",
@@ -1449,7 +1449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#man-interface-array-1",
+    "location": "manual/interfaces/#man-interface-array-1",
     "page": "Interfaces",
     "title": "Abstract Arrays",
     "category": "section",
@@ -1457,7 +1457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#man-interface-strided-arrays-1",
+    "location": "manual/interfaces/#man-interface-strided-arrays-1",
     "page": "Interfaces",
     "title": "Strided Arrays",
     "category": "section",
@@ -1465,7 +1465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#man-interfaces-broadcasting-1",
+    "location": "manual/interfaces/#man-interfaces-broadcasting-1",
     "page": "Interfaces",
     "title": "Customizing broadcasting",
     "category": "section",
@@ -1473,7 +1473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#Broadcast-Styles-1",
+    "location": "manual/interfaces/#Broadcast-Styles-1",
     "page": "Interfaces",
     "title": "Broadcast Styles",
     "category": "section",
@@ -1481,7 +1481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#Selecting-an-appropriate-output-array-1",
+    "location": "manual/interfaces/#Selecting-an-appropriate-output-array-1",
     "page": "Interfaces",
     "title": "Selecting an appropriate output array",
     "category": "section",
@@ -1489,7 +1489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#extending-in-place-broadcast-1",
+    "location": "manual/interfaces/#extending-in-place-broadcast-1",
     "page": "Interfaces",
     "title": "Extending broadcast with custom implementations",
     "category": "section",
@@ -1497,7 +1497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#extending-in-place-broadcast-2",
+    "location": "manual/interfaces/#extending-in-place-broadcast-2",
     "page": "Interfaces",
     "title": "Extending in-place broadcasting",
     "category": "section",
@@ -1505,7 +1505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#Working-with-Broadcasted-objects-1",
+    "location": "manual/interfaces/#Working-with-Broadcasted-objects-1",
     "page": "Interfaces",
     "title": "Working with Broadcasted objects",
     "category": "section",
@@ -1513,7 +1513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/interfaces.html#writing-binary-broadcasting-rules-1",
+    "location": "manual/interfaces/#writing-binary-broadcasting-rules-1",
     "page": "Interfaces",
     "title": "Writing binary broadcasting rules",
     "category": "section",
@@ -1521,7 +1521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#",
+    "location": "manual/modules/#",
     "page": "Modules",
     "title": "Modules",
     "category": "page",
@@ -1529,7 +1529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#modules-1",
+    "location": "manual/modules/#modules-1",
     "page": "Modules",
     "title": "Modules",
     "category": "section",
@@ -1537,7 +1537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#Summary-of-module-usage-1",
+    "location": "manual/modules/#Summary-of-module-usage-1",
     "page": "Modules",
     "title": "Summary of module usage",
     "category": "section",
@@ -1545,7 +1545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#Modules-and-files-1",
+    "location": "manual/modules/#Modules-and-files-1",
     "page": "Modules",
     "title": "Modules and files",
     "category": "section",
@@ -1553,7 +1553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#Standard-modules-1",
+    "location": "manual/modules/#Standard-modules-1",
     "page": "Modules",
     "title": "Standard modules",
     "category": "section",
@@ -1561,7 +1561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#Default-top-level-definitions-and-bare-modules-1",
+    "location": "manual/modules/#Default-top-level-definitions-and-bare-modules-1",
     "page": "Modules",
     "title": "Default top-level definitions and bare modules",
     "category": "section",
@@ -1569,7 +1569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#Relative-and-absolute-module-paths-1",
+    "location": "manual/modules/#Relative-and-absolute-module-paths-1",
     "page": "Modules",
     "title": "Relative and absolute module paths",
     "category": "section",
@@ -1577,7 +1577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#Module-file-paths-1",
+    "location": "manual/modules/#Module-file-paths-1",
     "page": "Modules",
     "title": "Module file paths",
     "category": "section",
@@ -1585,7 +1585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#Namespace-miscellanea-1",
+    "location": "manual/modules/#Namespace-miscellanea-1",
     "page": "Modules",
     "title": "Namespace miscellanea",
     "category": "section",
@@ -1593,7 +1593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/modules.html#Module-initialization-and-precompilation-1",
+    "location": "manual/modules/#Module-initialization-and-precompilation-1",
     "page": "Modules",
     "title": "Module initialization and precompilation",
     "category": "section",
@@ -1601,7 +1601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#",
+    "location": "manual/documentation/#",
     "page": "Documentation",
     "title": "Documentation",
     "category": "page",
@@ -1609,7 +1609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Documentation-1",
+    "location": "manual/documentation/#Documentation-1",
     "page": "Documentation",
     "title": "Documentation",
     "category": "section",
@@ -1617,7 +1617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Accessing-Documentation-1",
+    "location": "manual/documentation/#Accessing-Documentation-1",
     "page": "Documentation",
     "title": "Accessing Documentation",
     "category": "section",
@@ -1625,7 +1625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Functions-and-Methods-1",
+    "location": "manual/documentation/#Functions-and-Methods-1",
     "page": "Documentation",
     "title": "Functions & Methods",
     "category": "section",
@@ -1633,7 +1633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Advanced-Usage-1",
+    "location": "manual/documentation/#Advanced-Usage-1",
     "page": "Documentation",
     "title": "Advanced Usage",
     "category": "section",
@@ -1641,7 +1641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Dynamic-documentation-1",
+    "location": "manual/documentation/#Dynamic-documentation-1",
     "page": "Documentation",
     "title": "Dynamic documentation",
     "category": "section",
@@ -1649,7 +1649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Syntax-Guide-1",
+    "location": "manual/documentation/#Syntax-Guide-1",
     "page": "Documentation",
     "title": "Syntax Guide",
     "category": "section",
@@ -1657,7 +1657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Functions-and-Methods-2",
+    "location": "manual/documentation/#Functions-and-Methods-2",
     "page": "Documentation",
     "title": "Functions and Methods",
     "category": "section",
@@ -1665,7 +1665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Macros-1",
+    "location": "manual/documentation/#Macros-1",
     "page": "Documentation",
     "title": "Macros",
     "category": "section",
@@ -1673,7 +1673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Types-1",
+    "location": "manual/documentation/#Types-1",
     "page": "Documentation",
     "title": "Types",
     "category": "section",
@@ -1681,7 +1681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Modules-1",
+    "location": "manual/documentation/#Modules-1",
     "page": "Documentation",
     "title": "Modules",
     "category": "section",
@@ -1689,7 +1689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Global-Variables-1",
+    "location": "manual/documentation/#Global-Variables-1",
     "page": "Documentation",
     "title": "Global Variables",
     "category": "section",
@@ -1697,7 +1697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Multiple-Objects-1",
+    "location": "manual/documentation/#Multiple-Objects-1",
     "page": "Documentation",
     "title": "Multiple Objects",
     "category": "section",
@@ -1705,7 +1705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Core.@__doc__",
+    "location": "manual/documentation/#Core.@__doc__",
     "page": "Documentation",
     "title": "Core.@__doc__",
     "category": "macro",
@@ -1713,7 +1713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Macro-generated-code-1",
+    "location": "manual/documentation/#Macro-generated-code-1",
     "page": "Documentation",
     "title": "Macro-generated code",
     "category": "section",
@@ -1721,7 +1721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Markdown-syntax-1",
+    "location": "manual/documentation/#Markdown-syntax-1",
     "page": "Documentation",
     "title": "Markdown syntax",
     "category": "section",
@@ -1729,7 +1729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Inline-elements-1",
+    "location": "manual/documentation/#Inline-elements-1",
     "page": "Documentation",
     "title": "Inline elements",
     "category": "section",
@@ -1737,7 +1737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Bold-1",
+    "location": "manual/documentation/#Bold-1",
     "page": "Documentation",
     "title": "Bold",
     "category": "section",
@@ -1745,7 +1745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Italics-1",
+    "location": "manual/documentation/#Italics-1",
     "page": "Documentation",
     "title": "Italics",
     "category": "section",
@@ -1753,7 +1753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Literals-1",
+    "location": "manual/documentation/#Literals-1",
     "page": "Documentation",
     "title": "Literals",
     "category": "section",
@@ -1761,7 +1761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#\\LaTeX-1",
+    "location": "manual/documentation/#\\LaTeX-1",
     "page": "Documentation",
     "title": "LaTeX",
     "category": "section",
@@ -1769,7 +1769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Links-1",
+    "location": "manual/documentation/#Links-1",
     "page": "Documentation",
     "title": "Links",
     "category": "section",
@@ -1777,7 +1777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Footnote-references-1",
+    "location": "manual/documentation/#Footnote-references-1",
     "page": "Documentation",
     "title": "Footnote references",
     "category": "section",
@@ -1785,7 +1785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Toplevel-elements-1",
+    "location": "manual/documentation/#Toplevel-elements-1",
     "page": "Documentation",
     "title": "Toplevel elements",
     "category": "section",
@@ -1793,7 +1793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Paragraphs-1",
+    "location": "manual/documentation/#Paragraphs-1",
     "page": "Documentation",
     "title": "Paragraphs",
     "category": "section",
@@ -1801,7 +1801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Headers-1",
+    "location": "manual/documentation/#Headers-1",
     "page": "Documentation",
     "title": "Headers",
     "category": "section",
@@ -1809,7 +1809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Code-blocks-1",
+    "location": "manual/documentation/#Code-blocks-1",
     "page": "Documentation",
     "title": "Code blocks",
     "category": "section",
@@ -1817,7 +1817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Block-quotes-1",
+    "location": "manual/documentation/#Block-quotes-1",
     "page": "Documentation",
     "title": "Block quotes",
     "category": "section",
@@ -1825,7 +1825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Images-1",
+    "location": "manual/documentation/#Images-1",
     "page": "Documentation",
     "title": "Images",
     "category": "section",
@@ -1833,7 +1833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Lists-1",
+    "location": "manual/documentation/#Lists-1",
     "page": "Documentation",
     "title": "Lists",
     "category": "section",
@@ -1841,7 +1841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Display-equations-1",
+    "location": "manual/documentation/#Display-equations-1",
     "page": "Documentation",
     "title": "Display equations",
     "category": "section",
@@ -1849,7 +1849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Footnotes-1",
+    "location": "manual/documentation/#Footnotes-1",
     "page": "Documentation",
     "title": "Footnotes",
     "category": "section",
@@ -1857,7 +1857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Horizontal-rules-1",
+    "location": "manual/documentation/#Horizontal-rules-1",
     "page": "Documentation",
     "title": "Horizontal rules",
     "category": "section",
@@ -1865,7 +1865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Tables-1",
+    "location": "manual/documentation/#Tables-1",
     "page": "Documentation",
     "title": "Tables",
     "category": "section",
@@ -1873,7 +1873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Admonitions-1",
+    "location": "manual/documentation/#Admonitions-1",
     "page": "Documentation",
     "title": "Admonitions",
     "category": "section",
@@ -1881,7 +1881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/documentation.html#Markdown-Syntax-Extensions-1",
+    "location": "manual/documentation/#Markdown-Syntax-Extensions-1",
     "page": "Documentation",
     "title": "Markdown Syntax Extensions",
     "category": "section",
@@ -1889,7 +1889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#",
+    "location": "manual/metaprogramming/#",
     "page": "Metaprogramming",
     "title": "Metaprogramming",
     "category": "page",
@@ -1897,7 +1897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Metaprogramming-1",
+    "location": "manual/metaprogramming/#Metaprogramming-1",
     "page": "Metaprogramming",
     "title": "Metaprogramming",
     "category": "section",
@@ -1905,7 +1905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Program-representation-1",
+    "location": "manual/metaprogramming/#Program-representation-1",
     "page": "Metaprogramming",
     "title": "Program representation",
     "category": "section",
@@ -1913,7 +1913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Symbols-1",
+    "location": "manual/metaprogramming/#Symbols-1",
     "page": "Metaprogramming",
     "title": "Symbols",
     "category": "section",
@@ -1921,7 +1921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Expressions-and-evaluation-1",
+    "location": "manual/metaprogramming/#Expressions-and-evaluation-1",
     "page": "Metaprogramming",
     "title": "Expressions and evaluation",
     "category": "section",
@@ -1929,7 +1929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Quoting-1",
+    "location": "manual/metaprogramming/#Quoting-1",
     "page": "Metaprogramming",
     "title": "Quoting",
     "category": "section",
@@ -1937,7 +1937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Interpolation-1",
+    "location": "manual/metaprogramming/#Interpolation-1",
     "page": "Metaprogramming",
     "title": "Interpolation",
     "category": "section",
@@ -1945,7 +1945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Splatting-interpolation-1",
+    "location": "manual/metaprogramming/#Splatting-interpolation-1",
     "page": "Metaprogramming",
     "title": "Splatting interpolation",
     "category": "section",
@@ -1953,7 +1953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Nested-quote-1",
+    "location": "manual/metaprogramming/#Nested-quote-1",
     "page": "Metaprogramming",
     "title": "Nested quote",
     "category": "section",
@@ -1961,7 +1961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#QuoteNode-1",
+    "location": "manual/metaprogramming/#QuoteNode-1",
     "page": "Metaprogramming",
     "title": "QuoteNode",
     "category": "section",
@@ -1969,7 +1969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#[eval](@ref)-and-effects-1",
+    "location": "manual/metaprogramming/#[eval](@ref)-and-effects-1",
     "page": "Metaprogramming",
     "title": "eval and effects",
     "category": "section",
@@ -1977,7 +1977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Functions-on-Expressions-1",
+    "location": "manual/metaprogramming/#Functions-on-Expressions-1",
     "page": "Metaprogramming",
     "title": "Functions on Expressions",
     "category": "section",
@@ -1985,7 +1985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#man-macros-1",
+    "location": "manual/metaprogramming/#man-macros-1",
     "page": "Metaprogramming",
     "title": "Macros",
     "category": "section",
@@ -1993,7 +1993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Basics-1",
+    "location": "manual/metaprogramming/#Basics-1",
     "page": "Metaprogramming",
     "title": "Basics",
     "category": "section",
@@ -2001,7 +2001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Hold-up:-why-macros?-1",
+    "location": "manual/metaprogramming/#Hold-up:-why-macros?-1",
     "page": "Metaprogramming",
     "title": "Hold up: why macros?",
     "category": "section",
@@ -2009,7 +2009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Macro-invocation-1",
+    "location": "manual/metaprogramming/#Macro-invocation-1",
     "page": "Metaprogramming",
     "title": "Macro invocation",
     "category": "section",
@@ -2017,7 +2017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Building-an-advanced-macro-1",
+    "location": "manual/metaprogramming/#Building-an-advanced-macro-1",
     "page": "Metaprogramming",
     "title": "Building an advanced macro",
     "category": "section",
@@ -2025,7 +2025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Hygiene-1",
+    "location": "manual/metaprogramming/#Hygiene-1",
     "page": "Metaprogramming",
     "title": "Hygiene",
     "category": "section",
@@ -2033,7 +2033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Macros-and-dispatch-1",
+    "location": "manual/metaprogramming/#Macros-and-dispatch-1",
     "page": "Metaprogramming",
     "title": "Macros and dispatch",
     "category": "section",
@@ -2041,7 +2041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Code-Generation-1",
+    "location": "manual/metaprogramming/#Code-Generation-1",
     "page": "Metaprogramming",
     "title": "Code Generation",
     "category": "section",
@@ -2049,7 +2049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Non-Standard-String-Literals-1",
+    "location": "manual/metaprogramming/#Non-Standard-String-Literals-1",
     "page": "Metaprogramming",
     "title": "Non-Standard String Literals",
     "category": "section",
@@ -2057,7 +2057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Generated-functions-1",
+    "location": "manual/metaprogramming/#Generated-functions-1",
     "page": "Metaprogramming",
     "title": "Generated functions",
     "category": "section",
@@ -2065,7 +2065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#An-advanced-example-1",
+    "location": "manual/metaprogramming/#An-advanced-example-1",
     "page": "Metaprogramming",
     "title": "An advanced example",
     "category": "section",
@@ -2073,7 +2073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/metaprogramming.html#Optionally-generated-functions-1",
+    "location": "manual/metaprogramming/#Optionally-generated-functions-1",
     "page": "Metaprogramming",
     "title": "Optionally-generated functions",
     "category": "section",
@@ -2081,7 +2081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#",
+    "location": "manual/arrays/#",
     "page": "Multi-dimensional Arrays",
     "title": "Multi-dimensional Arrays",
     "category": "page",
@@ -2089,7 +2089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#man-multi-dim-arrays-1",
+    "location": "manual/arrays/#man-multi-dim-arrays-1",
     "page": "Multi-dimensional Arrays",
     "title": "Multi-dimensional Arrays",
     "category": "section",
@@ -2097,7 +2097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Arrays-1",
+    "location": "manual/arrays/#Arrays-1",
     "page": "Multi-dimensional Arrays",
     "title": "Arrays",
     "category": "section",
@@ -2105,7 +2105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Basic-Functions-1",
+    "location": "manual/arrays/#Basic-Functions-1",
     "page": "Multi-dimensional Arrays",
     "title": "Basic Functions",
     "category": "section",
@@ -2113,7 +2113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Construction-and-Initialization-1",
+    "location": "manual/arrays/#Construction-and-Initialization-1",
     "page": "Multi-dimensional Arrays",
     "title": "Construction and Initialization",
     "category": "section",
@@ -2121,7 +2121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Concatenation-1",
+    "location": "manual/arrays/#Concatenation-1",
     "page": "Multi-dimensional Arrays",
     "title": "Concatenation",
     "category": "section",
@@ -2129,7 +2129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Typed-array-initializers-1",
+    "location": "manual/arrays/#Typed-array-initializers-1",
     "page": "Multi-dimensional Arrays",
     "title": "Typed array initializers",
     "category": "section",
@@ -2137,7 +2137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Comprehensions-1",
+    "location": "manual/arrays/#Comprehensions-1",
     "page": "Multi-dimensional Arrays",
     "title": "Comprehensions",
     "category": "section",
@@ -2145,7 +2145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Generator-Expressions-1",
+    "location": "manual/arrays/#Generator-Expressions-1",
     "page": "Multi-dimensional Arrays",
     "title": "Generator Expressions",
     "category": "section",
@@ -2153,7 +2153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#man-array-indexing-1",
+    "location": "manual/arrays/#man-array-indexing-1",
     "page": "Multi-dimensional Arrays",
     "title": "Indexing",
     "category": "section",
@@ -2161,7 +2161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Assignment-1",
+    "location": "manual/arrays/#Assignment-1",
     "page": "Multi-dimensional Arrays",
     "title": "Assignment",
     "category": "section",
@@ -2169,7 +2169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#man-supported-index-types-1",
+    "location": "manual/arrays/#man-supported-index-types-1",
     "page": "Multi-dimensional Arrays",
     "title": "Supported index types",
     "category": "section",
@@ -2177,7 +2177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Cartesian-indices-1",
+    "location": "manual/arrays/#Cartesian-indices-1",
     "page": "Multi-dimensional Arrays",
     "title": "Cartesian indices",
     "category": "section",
@@ -2185,7 +2185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Logical-indexing-1",
+    "location": "manual/arrays/#Logical-indexing-1",
     "page": "Multi-dimensional Arrays",
     "title": "Logical indexing",
     "category": "section",
@@ -2193,7 +2193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Iteration-1",
+    "location": "manual/arrays/#Iteration-1",
     "page": "Multi-dimensional Arrays",
     "title": "Iteration",
     "category": "section",
@@ -2201,7 +2201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Array-traits-1",
+    "location": "manual/arrays/#Array-traits-1",
     "page": "Multi-dimensional Arrays",
     "title": "Array traits",
     "category": "section",
@@ -2209,7 +2209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Array-and-Vectorized-Operators-and-Functions-1",
+    "location": "manual/arrays/#Array-and-Vectorized-Operators-and-Functions-1",
     "page": "Multi-dimensional Arrays",
     "title": "Array and Vectorized Operators and Functions",
     "category": "section",
@@ -2217,7 +2217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Broadcasting-1",
+    "location": "manual/arrays/#Broadcasting-1",
     "page": "Multi-dimensional Arrays",
     "title": "Broadcasting",
     "category": "section",
@@ -2225,7 +2225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/arrays.html#Implementation-1",
+    "location": "manual/arrays/#Implementation-1",
     "page": "Multi-dimensional Arrays",
     "title": "Implementation",
     "category": "section",
@@ -2233,7 +2233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/missing.html#",
+    "location": "manual/missing/#",
     "page": "Missing Values",
     "title": "Missing Values",
     "category": "page",
@@ -2241,7 +2241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/missing.html#missing-1",
+    "location": "manual/missing/#missing-1",
     "page": "Missing Values",
     "title": "Missing Values",
     "category": "section",
@@ -2249,7 +2249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/missing.html#Propagation-of-Missing-Values-1",
+    "location": "manual/missing/#Propagation-of-Missing-Values-1",
     "page": "Missing Values",
     "title": "Propagation of Missing Values",
     "category": "section",
@@ -2257,7 +2257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/missing.html#Equality-and-Comparison-Operators-1",
+    "location": "manual/missing/#Equality-and-Comparison-Operators-1",
     "page": "Missing Values",
     "title": "Equality and Comparison Operators",
     "category": "section",
@@ -2265,7 +2265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/missing.html#Logical-operators-1",
+    "location": "manual/missing/#Logical-operators-1",
     "page": "Missing Values",
     "title": "Logical operators",
     "category": "section",
@@ -2273,7 +2273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/missing.html#Control-Flow-and-Short-Circuiting-Operators-1",
+    "location": "manual/missing/#Control-Flow-and-Short-Circuiting-Operators-1",
     "page": "Missing Values",
     "title": "Control Flow and Short-Circuiting Operators",
     "category": "section",
@@ -2281,7 +2281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/missing.html#Arrays-With-Missing-Values-1",
+    "location": "manual/missing/#Arrays-With-Missing-Values-1",
     "page": "Missing Values",
     "title": "Arrays With Missing Values",
     "category": "section",
@@ -2289,7 +2289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/missing.html#Skipping-Missing-Values-1",
+    "location": "manual/missing/#Skipping-Missing-Values-1",
     "page": "Missing Values",
     "title": "Skipping Missing Values",
     "category": "section",
@@ -2297,7 +2297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/missing.html#Logical-Operations-on-Arrays-1",
+    "location": "manual/missing/#Logical-Operations-on-Arrays-1",
     "page": "Missing Values",
     "title": "Logical Operations on Arrays",
     "category": "section",
@@ -2305,7 +2305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/networking-and-streams.html#",
+    "location": "manual/networking-and-streams/#",
     "page": "Networking and Streams",
     "title": "Networking and Streams",
     "category": "page",
@@ -2313,7 +2313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/networking-and-streams.html#Networking-and-Streams-1",
+    "location": "manual/networking-and-streams/#Networking-and-Streams-1",
     "page": "Networking and Streams",
     "title": "Networking and Streams",
     "category": "section",
@@ -2321,7 +2321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/networking-and-streams.html#Basic-Stream-I/O-1",
+    "location": "manual/networking-and-streams/#Basic-Stream-I/O-1",
     "page": "Networking and Streams",
     "title": "Basic Stream I/O",
     "category": "section",
@@ -2329,7 +2329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/networking-and-streams.html#Text-I/O-1",
+    "location": "manual/networking-and-streams/#Text-I/O-1",
     "page": "Networking and Streams",
     "title": "Text I/O",
     "category": "section",
@@ -2337,7 +2337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/networking-and-streams.html#IO-Output-Contextual-Properties-1",
+    "location": "manual/networking-and-streams/#IO-Output-Contextual-Properties-1",
     "page": "Networking and Streams",
     "title": "IO Output Contextual Properties",
     "category": "section",
@@ -2345,7 +2345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/networking-and-streams.html#Working-with-Files-1",
+    "location": "manual/networking-and-streams/#Working-with-Files-1",
     "page": "Networking and Streams",
     "title": "Working with Files",
     "category": "section",
@@ -2353,7 +2353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/networking-and-streams.html#A-simple-TCP-example-1",
+    "location": "manual/networking-and-streams/#A-simple-TCP-example-1",
     "page": "Networking and Streams",
     "title": "A simple TCP example",
     "category": "section",
@@ -2361,7 +2361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/networking-and-streams.html#Resolving-IP-Addresses-1",
+    "location": "manual/networking-and-streams/#Resolving-IP-Addresses-1",
     "page": "Networking and Streams",
     "title": "Resolving IP Addresses",
     "category": "section",
@@ -2369,7 +2369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#",
+    "location": "manual/parallel-computing/#",
     "page": "Parallel Computing",
     "title": "Parallel Computing",
     "category": "page",
@@ -2377,7 +2377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Parallel-Computing-1",
+    "location": "manual/parallel-computing/#Parallel-Computing-1",
     "page": "Parallel Computing",
     "title": "Parallel Computing",
     "category": "section",
@@ -2385,7 +2385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Distributed-Memory-Parallelism-1",
+    "location": "manual/parallel-computing/#Distributed-Memory-Parallelism-1",
     "page": "Parallel Computing",
     "title": "Distributed Memory Parallelism",
     "category": "section",
@@ -2393,7 +2393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Code-Availability-and-Loading-Packages-1",
+    "location": "manual/parallel-computing/#Code-Availability-and-Loading-Packages-1",
     "page": "Parallel Computing",
     "title": "Code Availability and Loading Packages",
     "category": "section",
@@ -2401,7 +2401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Data-Movement-1",
+    "location": "manual/parallel-computing/#Data-Movement-1",
     "page": "Parallel Computing",
     "title": "Data Movement",
     "category": "section",
@@ -2409,7 +2409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Global-variables-1",
+    "location": "manual/parallel-computing/#Global-variables-1",
     "page": "Parallel Computing",
     "title": "Global variables",
     "category": "section",
@@ -2417,7 +2417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Parallel-Map-and-Loops-1",
+    "location": "manual/parallel-computing/#Parallel-Map-and-Loops-1",
     "page": "Parallel Computing",
     "title": "Parallel Map and Loops",
     "category": "section",
@@ -2425,7 +2425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Synchronization-With-Remote-References-1",
+    "location": "manual/parallel-computing/#Synchronization-With-Remote-References-1",
     "page": "Parallel Computing",
     "title": "Synchronization With Remote References",
     "category": "section",
@@ -2433,7 +2433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Scheduling-1",
+    "location": "manual/parallel-computing/#Scheduling-1",
     "page": "Parallel Computing",
     "title": "Scheduling",
     "category": "section",
@@ -2441,7 +2441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Channels-1",
+    "location": "manual/parallel-computing/#Channels-1",
     "page": "Parallel Computing",
     "title": "Channels",
     "category": "section",
@@ -2449,7 +2449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Remote-References-and-AbstractChannels-1",
+    "location": "manual/parallel-computing/#Remote-References-and-AbstractChannels-1",
     "page": "Parallel Computing",
     "title": "Remote References and AbstractChannels",
     "category": "section",
@@ -2457,7 +2457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Channels-and-RemoteChannels-1",
+    "location": "manual/parallel-computing/#Channels-and-RemoteChannels-1",
     "page": "Parallel Computing",
     "title": "Channels and RemoteChannels",
     "category": "section",
@@ -2465,7 +2465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Remote-References-and-Distributed-Garbage-Collection-1",
+    "location": "manual/parallel-computing/#Remote-References-and-Distributed-Garbage-Collection-1",
     "page": "Parallel Computing",
     "title": "Remote References and Distributed Garbage Collection",
     "category": "section",
@@ -2473,7 +2473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#man-shared-arrays-1",
+    "location": "manual/parallel-computing/#man-shared-arrays-1",
     "page": "Parallel Computing",
     "title": "Shared Arrays",
     "category": "section",
@@ -2481,7 +2481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Shared-Arrays-and-Distributed-Garbage-Collection-1",
+    "location": "manual/parallel-computing/#Shared-Arrays-and-Distributed-Garbage-Collection-1",
     "page": "Parallel Computing",
     "title": "Shared Arrays and Distributed Garbage Collection",
     "category": "section",
@@ -2489,7 +2489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#ClusterManagers-1",
+    "location": "manual/parallel-computing/#ClusterManagers-1",
     "page": "Parallel Computing",
     "title": "ClusterManagers",
     "category": "section",
@@ -2497,7 +2497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Cluster-Managers-with-Custom-Transports-1",
+    "location": "manual/parallel-computing/#Cluster-Managers-with-Custom-Transports-1",
     "page": "Parallel Computing",
     "title": "Cluster Managers with Custom Transports",
     "category": "section",
@@ -2505,7 +2505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Network-Requirements-for-LocalManager-and-SSHManager-1",
+    "location": "manual/parallel-computing/#Network-Requirements-for-LocalManager-and-SSHManager-1",
     "page": "Parallel Computing",
     "title": "Network Requirements for LocalManager and SSHManager",
     "category": "section",
@@ -2513,7 +2513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Cluster-Cookie-1",
+    "location": "manual/parallel-computing/#Cluster-Cookie-1",
     "page": "Parallel Computing",
     "title": "Cluster Cookie",
     "category": "section",
@@ -2521,7 +2521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Specifying-Network-Topology-(Experimental)-1",
+    "location": "manual/parallel-computing/#Specifying-Network-Topology-(Experimental)-1",
     "page": "Parallel Computing",
     "title": "Specifying Network Topology (Experimental)",
     "category": "section",
@@ -2529,7 +2529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Multi-Threading-(Experimental)-1",
+    "location": "manual/parallel-computing/#Multi-Threading-(Experimental)-1",
     "page": "Parallel Computing",
     "title": "Multi-Threading (Experimental)",
     "category": "section",
@@ -2537,7 +2537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#Setup-1",
+    "location": "manual/parallel-computing/#Setup-1",
     "page": "Parallel Computing",
     "title": "Setup",
     "category": "section",
@@ -2545,7 +2545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#The-@threads-Macro-1",
+    "location": "manual/parallel-computing/#The-@threads-Macro-1",
     "page": "Parallel Computing",
     "title": "The @threads Macro",
     "category": "section",
@@ -2553,7 +2553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/parallel-computing.html#@threadcall-(Experimental)-1",
+    "location": "manual/parallel-computing/#@threadcall-(Experimental)-1",
     "page": "Parallel Computing",
     "title": "@threadcall (Experimental)",
     "category": "section",
@@ -2561,7 +2561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/running-external-programs.html#",
+    "location": "manual/running-external-programs/#",
     "page": "Running External Programs",
     "title": "Running External Programs",
     "category": "page",
@@ -2569,7 +2569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/running-external-programs.html#Running-External-Programs-1",
+    "location": "manual/running-external-programs/#Running-External-Programs-1",
     "page": "Running External Programs",
     "title": "Running External Programs",
     "category": "section",
@@ -2577,7 +2577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/running-external-programs.html#command-interpolation-1",
+    "location": "manual/running-external-programs/#command-interpolation-1",
     "page": "Running External Programs",
     "title": "Interpolation",
     "category": "section",
@@ -2585,7 +2585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/running-external-programs.html#Quoting-1",
+    "location": "manual/running-external-programs/#Quoting-1",
     "page": "Running External Programs",
     "title": "Quoting",
     "category": "section",
@@ -2593,7 +2593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/running-external-programs.html#Pipelines-1",
+    "location": "manual/running-external-programs/#Pipelines-1",
     "page": "Running External Programs",
     "title": "Pipelines",
     "category": "section",
@@ -2601,7 +2601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/running-external-programs.html#Avoiding-Deadlock-in-Pipelines-1",
+    "location": "manual/running-external-programs/#Avoiding-Deadlock-in-Pipelines-1",
     "page": "Running External Programs",
     "title": "Avoiding Deadlock in Pipelines",
     "category": "section",
@@ -2609,7 +2609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/running-external-programs.html#Complex-Example-1",
+    "location": "manual/running-external-programs/#Complex-Example-1",
     "page": "Running External Programs",
     "title": "Complex Example",
     "category": "section",
@@ -2617,7 +2617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#",
+    "location": "manual/calling-c-and-fortran-code/#",
     "page": "Calling C and Fortran Code",
     "title": "Calling C and Fortran Code",
     "category": "page",
@@ -2625,7 +2625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Calling-C-and-Fortran-Code-1",
+    "location": "manual/calling-c-and-fortran-code/#Calling-C-and-Fortran-Code-1",
     "page": "Calling C and Fortran Code",
     "title": "Calling C and Fortran Code",
     "category": "section",
@@ -2633,7 +2633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Creating-C-Compatible-Julia-Function-Pointers-1",
+    "location": "manual/calling-c-and-fortran-code/#Creating-C-Compatible-Julia-Function-Pointers-1",
     "page": "Calling C and Fortran Code",
     "title": "Creating C-Compatible Julia Function Pointers",
     "category": "section",
@@ -2641,7 +2641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Mapping-C-Types-to-Julia-1",
+    "location": "manual/calling-c-and-fortran-code/#Mapping-C-Types-to-Julia-1",
     "page": "Calling C and Fortran Code",
     "title": "Mapping C Types to Julia",
     "category": "section",
@@ -2649,7 +2649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Auto-conversion:-1",
+    "location": "manual/calling-c-and-fortran-code/#Auto-conversion:-1",
     "page": "Calling C and Fortran Code",
     "title": "Auto-conversion:",
     "category": "section",
@@ -2657,7 +2657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Type-Correspondences:-1",
+    "location": "manual/calling-c-and-fortran-code/#Type-Correspondences:-1",
     "page": "Calling C and Fortran Code",
     "title": "Type Correspondences:",
     "category": "section",
@@ -2665,7 +2665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Bits-Types:-1",
+    "location": "manual/calling-c-and-fortran-code/#Bits-Types:-1",
     "page": "Calling C and Fortran Code",
     "title": "Bits Types:",
     "category": "section",
@@ -2673,7 +2673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Struct-Type-correspondences-1",
+    "location": "manual/calling-c-and-fortran-code/#Struct-Type-correspondences-1",
     "page": "Calling C and Fortran Code",
     "title": "Struct Type correspondences",
     "category": "section",
@@ -2681,7 +2681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Type-Parameters-1",
+    "location": "manual/calling-c-and-fortran-code/#Type-Parameters-1",
     "page": "Calling C and Fortran Code",
     "title": "Type Parameters",
     "category": "section",
@@ -2689,7 +2689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#SIMD-Values-1",
+    "location": "manual/calling-c-and-fortran-code/#SIMD-Values-1",
     "page": "Calling C and Fortran Code",
     "title": "SIMD Values",
     "category": "section",
@@ -2697,7 +2697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Memory-Ownership-1",
+    "location": "manual/calling-c-and-fortran-code/#Memory-Ownership-1",
     "page": "Calling C and Fortran Code",
     "title": "Memory Ownership",
     "category": "section",
@@ -2705,7 +2705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#When-to-use-T,-Ptr{T}-and-Ref{T}-1",
+    "location": "manual/calling-c-and-fortran-code/#When-to-use-T,-Ptr{T}-and-Ref{T}-1",
     "page": "Calling C and Fortran Code",
     "title": "When to use T, Ptr{T} and Ref{T}",
     "category": "section",
@@ -2713,7 +2713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Mapping-C-Functions-to-Julia-1",
+    "location": "manual/calling-c-and-fortran-code/#Mapping-C-Functions-to-Julia-1",
     "page": "Calling C and Fortran Code",
     "title": "Mapping C Functions to Julia",
     "category": "section",
@@ -2721,7 +2721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#ccall-/-@cfunction-argument-translation-guide-1",
+    "location": "manual/calling-c-and-fortran-code/#ccall-/-@cfunction-argument-translation-guide-1",
     "page": "Calling C and Fortran Code",
     "title": "ccall / @cfunction argument translation guide",
     "category": "section",
@@ -2729,7 +2729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#ccall-/-@cfunction-return-type-translation-guide-1",
+    "location": "manual/calling-c-and-fortran-code/#ccall-/-@cfunction-return-type-translation-guide-1",
     "page": "Calling C and Fortran Code",
     "title": "ccall / @cfunction return type translation guide",
     "category": "section",
@@ -2737,7 +2737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Passing-Pointers-for-Modifying-Inputs-1",
+    "location": "manual/calling-c-and-fortran-code/#Passing-Pointers-for-Modifying-Inputs-1",
     "page": "Calling C and Fortran Code",
     "title": "Passing Pointers for Modifying Inputs",
     "category": "section",
@@ -2745,7 +2745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Special-Reference-Syntax-for-ccall-(deprecated):-1",
+    "location": "manual/calling-c-and-fortran-code/#Special-Reference-Syntax-for-ccall-(deprecated):-1",
     "page": "Calling C and Fortran Code",
     "title": "Special Reference Syntax for ccall (deprecated):",
     "category": "section",
@@ -2753,7 +2753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Some-Examples-of-C-Wrappers-1",
+    "location": "manual/calling-c-and-fortran-code/#Some-Examples-of-C-Wrappers-1",
     "page": "Calling C and Fortran Code",
     "title": "Some Examples of C Wrappers",
     "category": "section",
@@ -2761,7 +2761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Garbage-Collection-Safety-1",
+    "location": "manual/calling-c-and-fortran-code/#Garbage-Collection-Safety-1",
     "page": "Calling C and Fortran Code",
     "title": "Garbage Collection Safety",
     "category": "section",
@@ -2769,7 +2769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Non-constant-Function-Specifications-1",
+    "location": "manual/calling-c-and-fortran-code/#Non-constant-Function-Specifications-1",
     "page": "Calling C and Fortran Code",
     "title": "Non-constant Function Specifications",
     "category": "section",
@@ -2777,7 +2777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Indirect-Calls-1",
+    "location": "manual/calling-c-and-fortran-code/#Indirect-Calls-1",
     "page": "Calling C and Fortran Code",
     "title": "Indirect Calls",
     "category": "section",
@@ -2785,7 +2785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Closure-cfunctions-1",
+    "location": "manual/calling-c-and-fortran-code/#Closure-cfunctions-1",
     "page": "Calling C and Fortran Code",
     "title": "Closure cfunctions",
     "category": "section",
@@ -2793,7 +2793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Closing-a-Library-1",
+    "location": "manual/calling-c-and-fortran-code/#Closing-a-Library-1",
     "page": "Calling C and Fortran Code",
     "title": "Closing a Library",
     "category": "section",
@@ -2801,7 +2801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Calling-Convention-1",
+    "location": "manual/calling-c-and-fortran-code/#Calling-Convention-1",
     "page": "Calling C and Fortran Code",
     "title": "Calling Convention",
     "category": "section",
@@ -2809,7 +2809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Accessing-Global-Variables-1",
+    "location": "manual/calling-c-and-fortran-code/#Accessing-Global-Variables-1",
     "page": "Calling C and Fortran Code",
     "title": "Accessing Global Variables",
     "category": "section",
@@ -2817,7 +2817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Accessing-Data-through-a-Pointer-1",
+    "location": "manual/calling-c-and-fortran-code/#Accessing-Data-through-a-Pointer-1",
     "page": "Calling C and Fortran Code",
     "title": "Accessing Data through a Pointer",
     "category": "section",
@@ -2825,7 +2825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#Thread-safety-1",
+    "location": "manual/calling-c-and-fortran-code/#Thread-safety-1",
     "page": "Calling C and Fortran Code",
     "title": "Thread-safety",
     "category": "section",
@@ -2833,7 +2833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#More-About-Callbacks-1",
+    "location": "manual/calling-c-and-fortran-code/#More-About-Callbacks-1",
     "page": "Calling C and Fortran Code",
     "title": "More About Callbacks",
     "category": "section",
@@ -2841,7 +2841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/calling-c-and-fortran-code.html#C-1",
+    "location": "manual/calling-c-and-fortran-code/#C-1",
     "page": "Calling C and Fortran Code",
     "title": "C++",
     "category": "section",
@@ -2849,7 +2849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/handling-operating-system-variation.html#",
+    "location": "manual/handling-operating-system-variation/#",
     "page": "Handling Operating System Variation",
     "title": "Handling Operating System Variation",
     "category": "page",
@@ -2857,7 +2857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/handling-operating-system-variation.html#Handling-Operating-System-Variation-1",
+    "location": "manual/handling-operating-system-variation/#Handling-Operating-System-Variation-1",
     "page": "Handling Operating System Variation",
     "title": "Handling Operating System Variation",
     "category": "section",
@@ -2865,7 +2865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#",
+    "location": "manual/environment-variables/#",
     "page": "Environment Variables",
     "title": "Environment Variables",
     "category": "page",
@@ -2873,7 +2873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#Environment-Variables-1",
+    "location": "manual/environment-variables/#Environment-Variables-1",
     "page": "Environment Variables",
     "title": "Environment Variables",
     "category": "section",
@@ -2881,7 +2881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#File-locations-1",
+    "location": "manual/environment-variables/#File-locations-1",
     "page": "Environment Variables",
     "title": "File locations",
     "category": "section",
@@ -2889,7 +2889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_BINDIR-1",
+    "location": "manual/environment-variables/#JULIA_BINDIR-1",
     "page": "Environment Variables",
     "title": "JULIA_BINDIR",
     "category": "section",
@@ -2897,7 +2897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_LOAD_PATH-1",
+    "location": "manual/environment-variables/#JULIA_LOAD_PATH-1",
     "page": "Environment Variables",
     "title": "JULIA_LOAD_PATH",
     "category": "section",
@@ -2905,7 +2905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_HISTORY-1",
+    "location": "manual/environment-variables/#JULIA_HISTORY-1",
     "page": "Environment Variables",
     "title": "JULIA_HISTORY",
     "category": "section",
@@ -2913,7 +2913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_PKGRESOLVE_ACCURACY-1",
+    "location": "manual/environment-variables/#JULIA_PKGRESOLVE_ACCURACY-1",
     "page": "Environment Variables",
     "title": "JULIA_PKGRESOLVE_ACCURACY",
     "category": "section",
@@ -2921,7 +2921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#External-applications-1",
+    "location": "manual/environment-variables/#External-applications-1",
     "page": "Environment Variables",
     "title": "External applications",
     "category": "section",
@@ -2929,7 +2929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_SHELL-1",
+    "location": "manual/environment-variables/#JULIA_SHELL-1",
     "page": "Environment Variables",
     "title": "JULIA_SHELL",
     "category": "section",
@@ -2937,7 +2937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_EDITOR-1",
+    "location": "manual/environment-variables/#JULIA_EDITOR-1",
     "page": "Environment Variables",
     "title": "JULIA_EDITOR",
     "category": "section",
@@ -2945,7 +2945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#Parallelization-1",
+    "location": "manual/environment-variables/#Parallelization-1",
     "page": "Environment Variables",
     "title": "Parallelization",
     "category": "section",
@@ -2953,7 +2953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_CPU_CORES-1",
+    "location": "manual/environment-variables/#JULIA_CPU_CORES-1",
     "page": "Environment Variables",
     "title": "JULIA_CPU_CORES",
     "category": "section",
@@ -2961,7 +2961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_WORKER_TIMEOUT-1",
+    "location": "manual/environment-variables/#JULIA_WORKER_TIMEOUT-1",
     "page": "Environment Variables",
     "title": "JULIA_WORKER_TIMEOUT",
     "category": "section",
@@ -2969,7 +2969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_NUM_THREADS-1",
+    "location": "manual/environment-variables/#JULIA_NUM_THREADS-1",
     "page": "Environment Variables",
     "title": "JULIA_NUM_THREADS",
     "category": "section",
@@ -2977,7 +2977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_THREAD_SLEEP_THRESHOLD-1",
+    "location": "manual/environment-variables/#JULIA_THREAD_SLEEP_THRESHOLD-1",
     "page": "Environment Variables",
     "title": "JULIA_THREAD_SLEEP_THRESHOLD",
     "category": "section",
@@ -2985,7 +2985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_EXCLUSIVE-1",
+    "location": "manual/environment-variables/#JULIA_EXCLUSIVE-1",
     "page": "Environment Variables",
     "title": "JULIA_EXCLUSIVE",
     "category": "section",
@@ -2993,7 +2993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#REPL-formatting-1",
+    "location": "manual/environment-variables/#REPL-formatting-1",
     "page": "Environment Variables",
     "title": "REPL formatting",
     "category": "section",
@@ -3001,7 +3001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_ERROR_COLOR-1",
+    "location": "manual/environment-variables/#JULIA_ERROR_COLOR-1",
     "page": "Environment Variables",
     "title": "JULIA_ERROR_COLOR",
     "category": "section",
@@ -3009,7 +3009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_WARN_COLOR-1",
+    "location": "manual/environment-variables/#JULIA_WARN_COLOR-1",
     "page": "Environment Variables",
     "title": "JULIA_WARN_COLOR",
     "category": "section",
@@ -3017,7 +3017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_INFO_COLOR-1",
+    "location": "manual/environment-variables/#JULIA_INFO_COLOR-1",
     "page": "Environment Variables",
     "title": "JULIA_INFO_COLOR",
     "category": "section",
@@ -3025,7 +3025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_INPUT_COLOR-1",
+    "location": "manual/environment-variables/#JULIA_INPUT_COLOR-1",
     "page": "Environment Variables",
     "title": "JULIA_INPUT_COLOR",
     "category": "section",
@@ -3033,7 +3033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_ANSWER_COLOR-1",
+    "location": "manual/environment-variables/#JULIA_ANSWER_COLOR-1",
     "page": "Environment Variables",
     "title": "JULIA_ANSWER_COLOR",
     "category": "section",
@@ -3041,7 +3041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_STACKFRAME_LINEINFO_COLOR-1",
+    "location": "manual/environment-variables/#JULIA_STACKFRAME_LINEINFO_COLOR-1",
     "page": "Environment Variables",
     "title": "JULIA_STACKFRAME_LINEINFO_COLOR",
     "category": "section",
@@ -3049,7 +3049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_STACKFRAME_FUNCTION_COLOR-1",
+    "location": "manual/environment-variables/#JULIA_STACKFRAME_FUNCTION_COLOR-1",
     "page": "Environment Variables",
     "title": "JULIA_STACKFRAME_FUNCTION_COLOR",
     "category": "section",
@@ -3057,7 +3057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#Debugging-and-profiling-1",
+    "location": "manual/environment-variables/#Debugging-and-profiling-1",
     "page": "Environment Variables",
     "title": "Debugging and profiling",
     "category": "section",
@@ -3065,7 +3065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_GC_ALLOC_POOL,-JULIA_GC_ALLOC_OTHER,-JULIA_GC_ALLOC_PRINT-1",
+    "location": "manual/environment-variables/#JULIA_GC_ALLOC_POOL,-JULIA_GC_ALLOC_OTHER,-JULIA_GC_ALLOC_PRINT-1",
     "page": "Environment Variables",
     "title": "JULIA_GC_ALLOC_POOL, JULIA_GC_ALLOC_OTHER, JULIA_GC_ALLOC_PRINT",
     "category": "section",
@@ -3073,7 +3073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_GC_NO_GENERATIONAL-1",
+    "location": "manual/environment-variables/#JULIA_GC_NO_GENERATIONAL-1",
     "page": "Environment Variables",
     "title": "JULIA_GC_NO_GENERATIONAL",
     "category": "section",
@@ -3081,7 +3081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_GC_WAIT_FOR_DEBUGGER-1",
+    "location": "manual/environment-variables/#JULIA_GC_WAIT_FOR_DEBUGGER-1",
     "page": "Environment Variables",
     "title": "JULIA_GC_WAIT_FOR_DEBUGGER",
     "category": "section",
@@ -3089,7 +3089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#ENABLE_JITPROFILING-1",
+    "location": "manual/environment-variables/#ENABLE_JITPROFILING-1",
     "page": "Environment Variables",
     "title": "ENABLE_JITPROFILING",
     "category": "section",
@@ -3097,7 +3097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_LLVM_ARGS-1",
+    "location": "manual/environment-variables/#JULIA_LLVM_ARGS-1",
     "page": "Environment Variables",
     "title": "JULIA_LLVM_ARGS",
     "category": "section",
@@ -3105,7 +3105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/environment-variables.html#JULIA_DEBUG_LOADING-1",
+    "location": "manual/environment-variables/#JULIA_DEBUG_LOADING-1",
     "page": "Environment Variables",
     "title": "JULIA_DEBUG_LOADING",
     "category": "section",
@@ -3113,7 +3113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#",
+    "location": "manual/embedding/#",
     "page": "Embedding Julia",
     "title": "Embedding Julia",
     "category": "page",
@@ -3121,7 +3121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Embedding-Julia-1",
+    "location": "manual/embedding/#Embedding-Julia-1",
     "page": "Embedding Julia",
     "title": "Embedding Julia",
     "category": "section",
@@ -3129,7 +3129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#High-Level-Embedding-1",
+    "location": "manual/embedding/#High-Level-Embedding-1",
     "page": "Embedding Julia",
     "title": "High-Level Embedding",
     "category": "section",
@@ -3137,7 +3137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Using-julia-config-to-automatically-determine-build-parameters-1",
+    "location": "manual/embedding/#Using-julia-config-to-automatically-determine-build-parameters-1",
     "page": "Embedding Julia",
     "title": "Using julia-config to automatically determine build parameters",
     "category": "section",
@@ -3145,7 +3145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Example-1",
+    "location": "manual/embedding/#Example-1",
     "page": "Embedding Julia",
     "title": "Example",
     "category": "section",
@@ -3153,7 +3153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#On-the-command-line-1",
+    "location": "manual/embedding/#On-the-command-line-1",
     "page": "Embedding Julia",
     "title": "On the command line",
     "category": "section",
@@ -3161,7 +3161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Use-in-Makefiles-1",
+    "location": "manual/embedding/#Use-in-Makefiles-1",
     "page": "Embedding Julia",
     "title": "Use in Makefiles",
     "category": "section",
@@ -3169,7 +3169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Converting-Types-1",
+    "location": "manual/embedding/#Converting-Types-1",
     "page": "Embedding Julia",
     "title": "Converting Types",
     "category": "section",
@@ -3177,7 +3177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Calling-Julia-Functions-1",
+    "location": "manual/embedding/#Calling-Julia-Functions-1",
     "page": "Embedding Julia",
     "title": "Calling Julia Functions",
     "category": "section",
@@ -3185,7 +3185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Memory-Management-1",
+    "location": "manual/embedding/#Memory-Management-1",
     "page": "Embedding Julia",
     "title": "Memory Management",
     "category": "section",
@@ -3193,7 +3193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Manipulating-the-Garbage-Collector-1",
+    "location": "manual/embedding/#Manipulating-the-Garbage-Collector-1",
     "page": "Embedding Julia",
     "title": "Manipulating the Garbage Collector",
     "category": "section",
@@ -3201,7 +3201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Working-with-Arrays-1",
+    "location": "manual/embedding/#Working-with-Arrays-1",
     "page": "Embedding Julia",
     "title": "Working with Arrays",
     "category": "section",
@@ -3209,7 +3209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Accessing-Returned-Arrays-1",
+    "location": "manual/embedding/#Accessing-Returned-Arrays-1",
     "page": "Embedding Julia",
     "title": "Accessing Returned Arrays",
     "category": "section",
@@ -3217,7 +3217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Multidimensional-Arrays-1",
+    "location": "manual/embedding/#Multidimensional-Arrays-1",
     "page": "Embedding Julia",
     "title": "Multidimensional Arrays",
     "category": "section",
@@ -3225,7 +3225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Exceptions-1",
+    "location": "manual/embedding/#Exceptions-1",
     "page": "Embedding Julia",
     "title": "Exceptions",
     "category": "section",
@@ -3233,7 +3233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/embedding.html#Throwing-Julia-Exceptions-1",
+    "location": "manual/embedding/#Throwing-Julia-Exceptions-1",
     "page": "Embedding Julia",
     "title": "Throwing Julia Exceptions",
     "category": "section",
@@ -3241,7 +3241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/code-loading.html#",
+    "location": "manual/code-loading/#",
     "page": "Code Loading",
     "title": "Code Loading",
     "category": "page",
@@ -3249,7 +3249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/code-loading.html#Code-Loading-1",
+    "location": "manual/code-loading/#Code-Loading-1",
     "page": "Code Loading",
     "title": "Code Loading",
     "category": "section",
@@ -3257,7 +3257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/code-loading.html#Federation-of-packages-1",
+    "location": "manual/code-loading/#Federation-of-packages-1",
     "page": "Code Loading",
     "title": "Federation of packages",
     "category": "section",
@@ -3265,7 +3265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/code-loading.html#Environments-1",
+    "location": "manual/code-loading/#Environments-1",
     "page": "Code Loading",
     "title": "Environments",
     "category": "section",
@@ -3273,7 +3273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/code-loading.html#Project-environments-1",
+    "location": "manual/code-loading/#Project-environments-1",
     "page": "Code Loading",
     "title": "Project environments",
     "category": "section",
@@ -3281,7 +3281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/code-loading.html#Package-directories-1",
+    "location": "manual/code-loading/#Package-directories-1",
     "page": "Code Loading",
     "title": "Package directories",
     "category": "section",
@@ -3289,7 +3289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/code-loading.html#Environment-stacks-1",
+    "location": "manual/code-loading/#Environment-stacks-1",
     "page": "Code Loading",
     "title": "Environment stacks",
     "category": "section",
@@ -3297,7 +3297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/code-loading.html#Conclusion-1",
+    "location": "manual/code-loading/#Conclusion-1",
     "page": "Code Loading",
     "title": "Conclusion",
     "category": "section",
@@ -3305,7 +3305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/profile.html#",
+    "location": "manual/profile/#",
     "page": "Profiling",
     "title": "Profiling",
     "category": "page",
@@ -3313,7 +3313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/profile.html#Profiling-1",
+    "location": "manual/profile/#Profiling-1",
     "page": "Profiling",
     "title": "Profiling",
     "category": "section",
@@ -3321,7 +3321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/profile.html#Basic-usage-1",
+    "location": "manual/profile/#Basic-usage-1",
     "page": "Profiling",
     "title": "Basic usage",
     "category": "section",
@@ -3329,7 +3329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/profile.html#Accumulation-and-clearing-1",
+    "location": "manual/profile/#Accumulation-and-clearing-1",
     "page": "Profiling",
     "title": "Accumulation and clearing",
     "category": "section",
@@ -3337,7 +3337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/profile.html#Options-for-controlling-the-display-of-profile-results-1",
+    "location": "manual/profile/#Options-for-controlling-the-display-of-profile-results-1",
     "page": "Profiling",
     "title": "Options for controlling the display of profile results",
     "category": "section",
@@ -3345,7 +3345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/profile.html#Configuration-1",
+    "location": "manual/profile/#Configuration-1",
     "page": "Profiling",
     "title": "Configuration",
     "category": "section",
@@ -3353,7 +3353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/profile.html#Memory-allocation-analysis-1",
+    "location": "manual/profile/#Memory-allocation-analysis-1",
     "page": "Profiling",
     "title": "Memory allocation analysis",
     "category": "section",
@@ -3361,7 +3361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/stacktraces.html#",
+    "location": "manual/stacktraces/#",
     "page": "Stack Traces",
     "title": "Stack Traces",
     "category": "page",
@@ -3369,7 +3369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/stacktraces.html#Stack-Traces-1",
+    "location": "manual/stacktraces/#Stack-Traces-1",
     "page": "Stack Traces",
     "title": "Stack Traces",
     "category": "section",
@@ -3377,7 +3377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/stacktraces.html#Viewing-a-stack-trace-1",
+    "location": "manual/stacktraces/#Viewing-a-stack-trace-1",
     "page": "Stack Traces",
     "title": "Viewing a stack trace",
     "category": "section",
@@ -3385,7 +3385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/stacktraces.html#Extracting-useful-information-1",
+    "location": "manual/stacktraces/#Extracting-useful-information-1",
     "page": "Stack Traces",
     "title": "Extracting useful information",
     "category": "section",
@@ -3393,7 +3393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/stacktraces.html#Error-handling-1",
+    "location": "manual/stacktraces/#Error-handling-1",
     "page": "Stack Traces",
     "title": "Error handling",
     "category": "section",
@@ -3401,7 +3401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/stacktraces.html#Comparison-with-[backtrace](@ref)-1",
+    "location": "manual/stacktraces/#Comparison-with-[backtrace](@ref)-1",
     "page": "Stack Traces",
     "title": "Comparison with backtrace",
     "category": "section",
@@ -3409,7 +3409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#",
+    "location": "manual/performance-tips/#",
     "page": "Performance Tips",
     "title": "Performance Tips",
     "category": "page",
@@ -3417,7 +3417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#man-performance-tips-1",
+    "location": "manual/performance-tips/#man-performance-tips-1",
     "page": "Performance Tips",
     "title": "Performance Tips",
     "category": "section",
@@ -3425,7 +3425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Avoid-global-variables-1",
+    "location": "manual/performance-tips/#Avoid-global-variables-1",
     "page": "Performance Tips",
     "title": "Avoid global variables",
     "category": "section",
@@ -3433,7 +3433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Measure-performance-with-[@time](@ref)-and-pay-attention-to-memory-allocation-1",
+    "location": "manual/performance-tips/#Measure-performance-with-[@time](@ref)-and-pay-attention-to-memory-allocation-1",
     "page": "Performance Tips",
     "title": "Measure performance with @time and pay attention to memory allocation",
     "category": "section",
@@ -3441,7 +3441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#tools-1",
+    "location": "manual/performance-tips/#tools-1",
     "page": "Performance Tips",
     "title": "Tools",
     "category": "section",
@@ -3449,7 +3449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Avoid-containers-with-abstract-type-parameters-1",
+    "location": "manual/performance-tips/#Avoid-containers-with-abstract-type-parameters-1",
     "page": "Performance Tips",
     "title": "Avoid containers with abstract type parameters",
     "category": "section",
@@ -3457,7 +3457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Type-declarations-1",
+    "location": "manual/performance-tips/#Type-declarations-1",
     "page": "Performance Tips",
     "title": "Type declarations",
     "category": "section",
@@ -3465,7 +3465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Avoid-fields-with-abstract-type-1",
+    "location": "manual/performance-tips/#Avoid-fields-with-abstract-type-1",
     "page": "Performance Tips",
     "title": "Avoid fields with abstract type",
     "category": "section",
@@ -3473,7 +3473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Avoid-fields-with-abstract-containers-1",
+    "location": "manual/performance-tips/#Avoid-fields-with-abstract-containers-1",
     "page": "Performance Tips",
     "title": "Avoid fields with abstract containers",
     "category": "section",
@@ -3481,7 +3481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Annotate-values-taken-from-untyped-locations-1",
+    "location": "manual/performance-tips/#Annotate-values-taken-from-untyped-locations-1",
     "page": "Performance Tips",
     "title": "Annotate values taken from untyped locations",
     "category": "section",
@@ -3489,7 +3489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Declare-types-of-keyword-arguments-1",
+    "location": "manual/performance-tips/#Declare-types-of-keyword-arguments-1",
     "page": "Performance Tips",
     "title": "Declare types of keyword arguments",
     "category": "section",
@@ -3497,7 +3497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Break-functions-into-multiple-definitions-1",
+    "location": "manual/performance-tips/#Break-functions-into-multiple-definitions-1",
     "page": "Performance Tips",
     "title": "Break functions into multiple definitions",
     "category": "section",
@@ -3505,7 +3505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Write-\"type-stable\"-functions-1",
+    "location": "manual/performance-tips/#Write-\"type-stable\"-functions-1",
     "page": "Performance Tips",
     "title": "Write \"type-stable\" functions",
     "category": "section",
@@ -3513,7 +3513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Avoid-changing-the-type-of-a-variable-1",
+    "location": "manual/performance-tips/#Avoid-changing-the-type-of-a-variable-1",
     "page": "Performance Tips",
     "title": "Avoid changing the type of a variable",
     "category": "section",
@@ -3521,7 +3521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#kernal-functions-1",
+    "location": "manual/performance-tips/#kernal-functions-1",
     "page": "Performance Tips",
     "title": "Separate kernel functions (aka, function barriers)",
     "category": "section",
@@ -3529,7 +3529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Types-with-values-as-parameters-1",
+    "location": "manual/performance-tips/#Types-with-values-as-parameters-1",
     "page": "Performance Tips",
     "title": "Types with values-as-parameters",
     "category": "section",
@@ -3537,7 +3537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#The-dangers-of-abusing-multiple-dispatch-(aka,-more-on-types-with-values-as-parameters)-1",
+    "location": "manual/performance-tips/#The-dangers-of-abusing-multiple-dispatch-(aka,-more-on-types-with-values-as-parameters)-1",
     "page": "Performance Tips",
     "title": "The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)",
     "category": "section",
@@ -3545,7 +3545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Access-arrays-in-memory-order,-along-columns-1",
+    "location": "manual/performance-tips/#Access-arrays-in-memory-order,-along-columns-1",
     "page": "Performance Tips",
     "title": "Access arrays in memory order, along columns",
     "category": "section",
@@ -3553,7 +3553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Pre-allocating-outputs-1",
+    "location": "manual/performance-tips/#Pre-allocating-outputs-1",
     "page": "Performance Tips",
     "title": "Pre-allocating outputs",
     "category": "section",
@@ -3561,7 +3561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#More-dots:-Fuse-vectorized-operations-1",
+    "location": "manual/performance-tips/#More-dots:-Fuse-vectorized-operations-1",
     "page": "Performance Tips",
     "title": "More dots: Fuse vectorized operations",
     "category": "section",
@@ -3569,7 +3569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Consider-using-views-for-slices-1",
+    "location": "manual/performance-tips/#Consider-using-views-for-slices-1",
     "page": "Performance Tips",
     "title": "Consider using views for slices",
     "category": "section",
@@ -3577,7 +3577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Copying-data-is-not-always-bad-1",
+    "location": "manual/performance-tips/#Copying-data-is-not-always-bad-1",
     "page": "Performance Tips",
     "title": "Copying data is not always bad",
     "category": "section",
@@ -3585,7 +3585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Avoid-string-interpolation-for-I/O-1",
+    "location": "manual/performance-tips/#Avoid-string-interpolation-for-I/O-1",
     "page": "Performance Tips",
     "title": "Avoid string interpolation for I/O",
     "category": "section",
@@ -3593,7 +3593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Optimize-network-I/O-during-parallel-execution-1",
+    "location": "manual/performance-tips/#Optimize-network-I/O-during-parallel-execution-1",
     "page": "Performance Tips",
     "title": "Optimize network I/O during parallel execution",
     "category": "section",
@@ -3601,7 +3601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Fix-deprecation-warnings-1",
+    "location": "manual/performance-tips/#Fix-deprecation-warnings-1",
     "page": "Performance Tips",
     "title": "Fix deprecation warnings",
     "category": "section",
@@ -3609,7 +3609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Tweaks-1",
+    "location": "manual/performance-tips/#Tweaks-1",
     "page": "Performance Tips",
     "title": "Tweaks",
     "category": "section",
@@ -3617,7 +3617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#man-performance-annotations-1",
+    "location": "manual/performance-tips/#man-performance-annotations-1",
     "page": "Performance Tips",
     "title": "Performance Annotations",
     "category": "section",
@@ -3625,7 +3625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#Treat-Subnormal-Numbers-as-Zeros-1",
+    "location": "manual/performance-tips/#Treat-Subnormal-Numbers-as-Zeros-1",
     "page": "Performance Tips",
     "title": "Treat Subnormal Numbers as Zeros",
     "category": "section",
@@ -3633,7 +3633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips.html#man-code-warntype-1",
+    "location": "manual/performance-tips/#man-code-warntype-1",
     "page": "Performance Tips",
     "title": "@code_warntype",
     "category": "section",
@@ -3641,7 +3641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/workflow-tips.html#",
+    "location": "manual/workflow-tips/#",
     "page": "Workflow Tips",
     "title": "Workflow Tips",
     "category": "page",
@@ -3649,7 +3649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/workflow-tips.html#man-workflow-tips-1",
+    "location": "manual/workflow-tips/#man-workflow-tips-1",
     "page": "Workflow Tips",
     "title": "Workflow Tips",
     "category": "section",
@@ -3657,7 +3657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/workflow-tips.html#REPL-based-workflow-1",
+    "location": "manual/workflow-tips/#REPL-based-workflow-1",
     "page": "Workflow Tips",
     "title": "REPL-based workflow",
     "category": "section",
@@ -3665,7 +3665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/workflow-tips.html#A-basic-editor/REPL-workflow-1",
+    "location": "manual/workflow-tips/#A-basic-editor/REPL-workflow-1",
     "page": "Workflow Tips",
     "title": "A basic editor/REPL workflow",
     "category": "section",
@@ -3673,7 +3673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/workflow-tips.html#Simplify-initialization-1",
+    "location": "manual/workflow-tips/#Simplify-initialization-1",
     "page": "Workflow Tips",
     "title": "Simplify initialization",
     "category": "section",
@@ -3681,7 +3681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/workflow-tips.html#Browser-based-workflow-1",
+    "location": "manual/workflow-tips/#Browser-based-workflow-1",
     "page": "Workflow Tips",
     "title": "Browser-based workflow",
     "category": "section",
@@ -3689,7 +3689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#",
+    "location": "manual/style-guide/#",
     "page": "Style Guide",
     "title": "Style Guide",
     "category": "page",
@@ -3697,7 +3697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Style-Guide-1",
+    "location": "manual/style-guide/#Style-Guide-1",
     "page": "Style Guide",
     "title": "Style Guide",
     "category": "section",
@@ -3705,7 +3705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Write-functions,-not-just-scripts-1",
+    "location": "manual/style-guide/#Write-functions,-not-just-scripts-1",
     "page": "Style Guide",
     "title": "Write functions, not just scripts",
     "category": "section",
@@ -3713,7 +3713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Avoid-writing-overly-specific-types-1",
+    "location": "manual/style-guide/#Avoid-writing-overly-specific-types-1",
     "page": "Style Guide",
     "title": "Avoid writing overly-specific types",
     "category": "section",
@@ -3721,7 +3721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Handle-excess-argument-diversity-in-the-caller-1",
+    "location": "manual/style-guide/#Handle-excess-argument-diversity-in-the-caller-1",
     "page": "Style Guide",
     "title": "Handle excess argument diversity in the caller",
     "category": "section",
@@ -3729,7 +3729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Append-!-to-names-of-functions-that-modify-their-arguments-1",
+    "location": "manual/style-guide/#Append-!-to-names-of-functions-that-modify-their-arguments-1",
     "page": "Style Guide",
     "title": "Append ! to names of functions that modify their arguments",
     "category": "section",
@@ -3737,7 +3737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Avoid-strange-type-Unions-1",
+    "location": "manual/style-guide/#Avoid-strange-type-Unions-1",
     "page": "Style Guide",
     "title": "Avoid strange type Unions",
     "category": "section",
@@ -3745,7 +3745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Avoid-type-Unions-in-fields-1",
+    "location": "manual/style-guide/#Avoid-type-Unions-in-fields-1",
     "page": "Style Guide",
     "title": "Avoid type Unions in fields",
     "category": "section",
@@ -3753,7 +3753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Avoid-elaborate-container-types-1",
+    "location": "manual/style-guide/#Avoid-elaborate-container-types-1",
     "page": "Style Guide",
     "title": "Avoid elaborate container types",
     "category": "section",
@@ -3761,7 +3761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Use-naming-conventions-consistent-with-Julia\'s-base/-1",
+    "location": "manual/style-guide/#Use-naming-conventions-consistent-with-Julia\'s-base/-1",
     "page": "Style Guide",
     "title": "Use naming conventions consistent with Julia\'s base/",
     "category": "section",
@@ -3769,7 +3769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Write-functions-with-argument-ordering-similar-to-Julia\'s-Base-1",
+    "location": "manual/style-guide/#Write-functions-with-argument-ordering-similar-to-Julia\'s-Base-1",
     "page": "Style Guide",
     "title": "Write functions with argument ordering similar to Julia\'s Base",
     "category": "section",
@@ -3777,7 +3777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Don\'t-overuse-try-catch-1",
+    "location": "manual/style-guide/#Don\'t-overuse-try-catch-1",
     "page": "Style Guide",
     "title": "Don\'t overuse try-catch",
     "category": "section",
@@ -3785,7 +3785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Don\'t-parenthesize-conditions-1",
+    "location": "manual/style-guide/#Don\'t-parenthesize-conditions-1",
     "page": "Style Guide",
     "title": "Don\'t parenthesize conditions",
     "category": "section",
@@ -3793,7 +3793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Don\'t-overuse-...-1",
+    "location": "manual/style-guide/#Don\'t-overuse-...-1",
     "page": "Style Guide",
     "title": "Don\'t overuse ...",
     "category": "section",
@@ -3801,7 +3801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Don\'t-use-unnecessary-static-parameters-1",
+    "location": "manual/style-guide/#Don\'t-use-unnecessary-static-parameters-1",
     "page": "Style Guide",
     "title": "Don\'t use unnecessary static parameters",
     "category": "section",
@@ -3809,7 +3809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Avoid-confusion-about-whether-something-is-an-instance-or-a-type-1",
+    "location": "manual/style-guide/#Avoid-confusion-about-whether-something-is-an-instance-or-a-type-1",
     "page": "Style Guide",
     "title": "Avoid confusion about whether something is an instance or a type",
     "category": "section",
@@ -3817,7 +3817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Don\'t-overuse-macros-1",
+    "location": "manual/style-guide/#Don\'t-overuse-macros-1",
     "page": "Style Guide",
     "title": "Don\'t overuse macros",
     "category": "section",
@@ -3825,7 +3825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Don\'t-expose-unsafe-operations-at-the-interface-level-1",
+    "location": "manual/style-guide/#Don\'t-expose-unsafe-operations-at-the-interface-level-1",
     "page": "Style Guide",
     "title": "Don\'t expose unsafe operations at the interface level",
     "category": "section",
@@ -3833,7 +3833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Don\'t-overload-methods-of-base-container-types-1",
+    "location": "manual/style-guide/#Don\'t-overload-methods-of-base-container-types-1",
     "page": "Style Guide",
     "title": "Don\'t overload methods of base container types",
     "category": "section",
@@ -3841,7 +3841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Avoid-type-piracy-1",
+    "location": "manual/style-guide/#Avoid-type-piracy-1",
     "page": "Style Guide",
     "title": "Avoid type piracy",
     "category": "section",
@@ -3849,7 +3849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Be-careful-with-type-equality-1",
+    "location": "manual/style-guide/#Be-careful-with-type-equality-1",
     "page": "Style Guide",
     "title": "Be careful with type equality",
     "category": "section",
@@ -3857,7 +3857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Do-not-write-x-f(x)-1",
+    "location": "manual/style-guide/#Do-not-write-x-f(x)-1",
     "page": "Style Guide",
     "title": "Do not write x->f(x)",
     "category": "section",
@@ -3865,7 +3865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/style-guide.html#Avoid-using-floats-for-numeric-literals-in-generic-code-when-possible-1",
+    "location": "manual/style-guide/#Avoid-using-floats-for-numeric-literals-in-generic-code-when-possible-1",
     "page": "Style Guide",
     "title": "Avoid using floats for numeric literals in generic code when possible",
     "category": "section",
@@ -3873,7 +3873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#",
+    "location": "manual/faq/#",
     "page": "Frequently Asked Questions",
     "title": "Frequently Asked Questions",
     "category": "page",
@@ -3881,7 +3881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Frequently-Asked-Questions-1",
+    "location": "manual/faq/#Frequently-Asked-Questions-1",
     "page": "Frequently Asked Questions",
     "title": "Frequently Asked Questions",
     "category": "section",
@@ -3889,7 +3889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Sessions-and-the-REPL-1",
+    "location": "manual/faq/#Sessions-and-the-REPL-1",
     "page": "Frequently Asked Questions",
     "title": "Sessions and the REPL",
     "category": "section",
@@ -3897,7 +3897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#How-do-I-delete-an-object-in-memory?-1",
+    "location": "manual/faq/#How-do-I-delete-an-object-in-memory?-1",
     "page": "Frequently Asked Questions",
     "title": "How do I delete an object in memory?",
     "category": "section",
@@ -3905,7 +3905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#How-can-I-modify-the-declaration-of-a-type-in-my-session?-1",
+    "location": "manual/faq/#How-can-I-modify-the-declaration-of-a-type-in-my-session?-1",
     "page": "Frequently Asked Questions",
     "title": "How can I modify the declaration of a type in my session?",
     "category": "section",
@@ -3913,7 +3913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Functions-1",
+    "location": "manual/faq/#Functions-1",
     "page": "Frequently Asked Questions",
     "title": "Functions",
     "category": "section",
@@ -3921,7 +3921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#I-passed-an-argument-x-to-a-function,-modified-it-inside-that-function,-but-on-the-outside,-the-variable-x-is-still-unchanged.-Why?-1",
+    "location": "manual/faq/#I-passed-an-argument-x-to-a-function,-modified-it-inside-that-function,-but-on-the-outside,-the-variable-x-is-still-unchanged.-Why?-1",
     "page": "Frequently Asked Questions",
     "title": "I passed an argument x to a function, modified it inside that function, but on the outside, the variable x is still unchanged. Why?",
     "category": "section",
@@ -3929,7 +3929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Can-I-use-using-or-import-inside-a-function?-1",
+    "location": "manual/faq/#Can-I-use-using-or-import-inside-a-function?-1",
     "page": "Frequently Asked Questions",
     "title": "Can I use using or import inside a function?",
     "category": "section",
@@ -3937,7 +3937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#What-does-the-...-operator-do?-1",
+    "location": "manual/faq/#What-does-the-...-operator-do?-1",
     "page": "Frequently Asked Questions",
     "title": "What does the ... operator do?",
     "category": "section",
@@ -3945,7 +3945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#The-two-uses-of-the-...-operator:-slurping-and-splatting-1",
+    "location": "manual/faq/#The-two-uses-of-the-...-operator:-slurping-and-splatting-1",
     "page": "Frequently Asked Questions",
     "title": "The two uses of the ... operator: slurping and splatting",
     "category": "section",
@@ -3953,7 +3953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#...-combines-many-arguments-into-one-argument-in-function-definitions-1",
+    "location": "manual/faq/#...-combines-many-arguments-into-one-argument-in-function-definitions-1",
     "page": "Frequently Asked Questions",
     "title": "... combines many arguments into one argument in function definitions",
     "category": "section",
@@ -3961,7 +3961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#...-splits-one-argument-into-many-different-arguments-in-function-calls-1",
+    "location": "manual/faq/#...-splits-one-argument-into-many-different-arguments-in-function-calls-1",
     "page": "Frequently Asked Questions",
     "title": "... splits one argument into many different arguments in function calls",
     "category": "section",
@@ -3969,7 +3969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#What-is-the-return-value-of-an-assignment?-1",
+    "location": "manual/faq/#What-is-the-return-value-of-an-assignment?-1",
     "page": "Frequently Asked Questions",
     "title": "What is the return value of an assignment?",
     "category": "section",
@@ -3977,7 +3977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Types,-type-declarations,-and-constructors-1",
+    "location": "manual/faq/#Types,-type-declarations,-and-constructors-1",
     "page": "Frequently Asked Questions",
     "title": "Types, type declarations, and constructors",
     "category": "section",
@@ -3985,7 +3985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#man-type-stability-1",
+    "location": "manual/faq/#man-type-stability-1",
     "page": "Frequently Asked Questions",
     "title": "What does \"type-stable\" mean?",
     "category": "section",
@@ -3993,7 +3993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#faq-domain-errors-1",
+    "location": "manual/faq/#faq-domain-errors-1",
     "page": "Frequently Asked Questions",
     "title": "Why does Julia give a DomainError for certain seemingly-sensible operations?",
     "category": "section",
@@ -4001,7 +4001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Why-does-Julia-use-native-machine-integer-arithmetic?-1",
+    "location": "manual/faq/#Why-does-Julia-use-native-machine-integer-arithmetic?-1",
     "page": "Frequently Asked Questions",
     "title": "Why does Julia use native machine integer arithmetic?",
     "category": "section",
@@ -4009,7 +4009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#What-are-the-possible-causes-of-an-UndefVarError-during-remote-execution?-1",
+    "location": "manual/faq/#What-are-the-possible-causes-of-an-UndefVarError-during-remote-execution?-1",
     "page": "Frequently Asked Questions",
     "title": "What are the possible causes of an UndefVarError during remote execution?",
     "category": "section",
@@ -4017,7 +4017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Packages-and-Modules-1",
+    "location": "manual/faq/#Packages-and-Modules-1",
     "page": "Frequently Asked Questions",
     "title": "Packages and Modules",
     "category": "section",
@@ -4025,7 +4025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#What-is-the-difference-between-\"using\"-and-\"import\"?-1",
+    "location": "manual/faq/#What-is-the-difference-between-\"using\"-and-\"import\"?-1",
     "page": "Frequently Asked Questions",
     "title": "What is the difference between \"using\" and \"import\"?",
     "category": "section",
@@ -4033,7 +4033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Nothingness-and-missing-values-1",
+    "location": "manual/faq/#Nothingness-and-missing-values-1",
     "page": "Frequently Asked Questions",
     "title": "Nothingness and missing values",
     "category": "section",
@@ -4041,7 +4041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#How-does-\"null\"-or-\"nothingness\"-work-in-Julia?-1",
+    "location": "manual/faq/#How-does-\"null\"-or-\"nothingness\"-work-in-Julia?-1",
     "page": "Frequently Asked Questions",
     "title": "How does \"null\" or \"nothingness\" work in Julia?",
     "category": "section",
@@ -4049,7 +4049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Memory-1",
+    "location": "manual/faq/#Memory-1",
     "page": "Frequently Asked Questions",
     "title": "Memory",
     "category": "section",
@@ -4057,7 +4057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Why-does-x-y-allocate-memory-when-x-and-y-are-arrays?-1",
+    "location": "manual/faq/#Why-does-x-y-allocate-memory-when-x-and-y-are-arrays?-1",
     "page": "Frequently Asked Questions",
     "title": "Why does x += y allocate memory when x and y are arrays?",
     "category": "section",
@@ -4065,7 +4065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Asynchronous-IO-and-concurrent-synchronous-writes-1",
+    "location": "manual/faq/#Asynchronous-IO-and-concurrent-synchronous-writes-1",
     "page": "Frequently Asked Questions",
     "title": "Asynchronous IO and concurrent synchronous writes",
     "category": "section",
@@ -4073,7 +4073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Why-do-concurrent-writes-to-the-same-stream-result-in-inter-mixed-output?-1",
+    "location": "manual/faq/#Why-do-concurrent-writes-to-the-same-stream-result-in-inter-mixed-output?-1",
     "page": "Frequently Asked Questions",
     "title": "Why do concurrent writes to the same stream result in inter-mixed output?",
     "category": "section",
@@ -4081,7 +4081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Julia-Releases-1",
+    "location": "manual/faq/#Julia-Releases-1",
     "page": "Frequently Asked Questions",
     "title": "Julia Releases",
     "category": "section",
@@ -4089,7 +4089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#Do-I-want-to-use-a-release,-beta,-or-nightly-version-of-Julia?-1",
+    "location": "manual/faq/#Do-I-want-to-use-a-release,-beta,-or-nightly-version-of-Julia?-1",
     "page": "Frequently Asked Questions",
     "title": "Do I want to use a release, beta, or nightly version of Julia?",
     "category": "section",
@@ -4097,7 +4097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq.html#When-are-deprecated-functions-removed?-1",
+    "location": "manual/faq/#When-are-deprecated-functions-removed?-1",
     "page": "Frequently Asked Questions",
     "title": "When are deprecated functions removed?",
     "category": "section",
@@ -4105,7 +4105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/noteworthy-differences.html#",
+    "location": "manual/noteworthy-differences/#",
     "page": "Noteworthy Differences from other Languages",
     "title": "Noteworthy Differences from other Languages",
     "category": "page",
@@ -4113,7 +4113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/noteworthy-differences.html#Noteworthy-Differences-from-other-Languages-1",
+    "location": "manual/noteworthy-differences/#Noteworthy-Differences-from-other-Languages-1",
     "page": "Noteworthy Differences from other Languages",
     "title": "Noteworthy Differences from other Languages",
     "category": "section",
@@ -4121,7 +4121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/noteworthy-differences.html#Noteworthy-differences-from-MATLAB-1",
+    "location": "manual/noteworthy-differences/#Noteworthy-differences-from-MATLAB-1",
     "page": "Noteworthy Differences from other Languages",
     "title": "Noteworthy differences from MATLAB",
     "category": "section",
@@ -4129,7 +4129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/noteworthy-differences.html#Noteworthy-differences-from-R-1",
+    "location": "manual/noteworthy-differences/#Noteworthy-differences-from-R-1",
     "page": "Noteworthy Differences from other Languages",
     "title": "Noteworthy differences from R",
     "category": "section",
@@ -4137,7 +4137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/noteworthy-differences.html#Noteworthy-differences-from-Python-1",
+    "location": "manual/noteworthy-differences/#Noteworthy-differences-from-Python-1",
     "page": "Noteworthy Differences from other Languages",
     "title": "Noteworthy differences from Python",
     "category": "section",
@@ -4145,7 +4145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/noteworthy-differences.html#Noteworthy-differences-from-C/C-1",
+    "location": "manual/noteworthy-differences/#Noteworthy-differences-from-C/C-1",
     "page": "Noteworthy Differences from other Languages",
     "title": "Noteworthy differences from C/C++",
     "category": "section",
@@ -4153,7 +4153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/unicode-input.html#",
+    "location": "manual/unicode-input/#",
     "page": "Unicode Input",
     "title": "Unicode Input",
     "category": "page",
@@ -4161,7 +4161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/unicode-input.html#Unicode-Input-1",
+    "location": "manual/unicode-input/#Unicode-Input-1",
     "page": "Unicode Input",
     "title": "Unicode Input",
     "category": "section",
@@ -4169,7 +4169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#",
+    "location": "base/base/#",
     "page": "Essentials",
     "title": "Essentials",
     "category": "page",
@@ -4177,7 +4177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Essentials-1",
+    "location": "base/base/#Essentials-1",
     "page": "Essentials",
     "title": "Essentials",
     "category": "section",
@@ -4185,7 +4185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Introduction-1",
+    "location": "base/base/#Introduction-1",
     "page": "Essentials",
     "title": "Introduction",
     "category": "section",
@@ -4193,7 +4193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.exit",
+    "location": "base/base/#Base.exit",
     "page": "Essentials",
     "title": "Base.exit",
     "category": "function",
@@ -4201,7 +4201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.atexit",
+    "location": "base/base/#Base.atexit",
     "page": "Essentials",
     "title": "Base.atexit",
     "category": "function",
@@ -4209,7 +4209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isinteractive",
+    "location": "base/base/#Base.isinteractive",
     "page": "Essentials",
     "title": "Base.isinteractive",
     "category": "function",
@@ -4217,7 +4217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.summarysize",
+    "location": "base/base/#Base.summarysize",
     "page": "Essentials",
     "title": "Base.summarysize",
     "category": "function",
@@ -4225,7 +4225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.clipboard-Tuple{Any}",
+    "location": "base/base/#Base.clipboard-Tuple{Any}",
     "page": "Essentials",
     "title": "Base.clipboard",
     "category": "method",
@@ -4233,7 +4233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.clipboard-Tuple{}",
+    "location": "base/base/#Base.clipboard-Tuple{}",
     "page": "Essentials",
     "title": "Base.clipboard",
     "category": "method",
@@ -4241,7 +4241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.require",
+    "location": "base/base/#Base.require",
     "page": "Essentials",
     "title": "Base.require",
     "category": "function",
@@ -4249,7 +4249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.compilecache",
+    "location": "base/base/#Base.compilecache",
     "page": "Essentials",
     "title": "Base.compilecache",
     "category": "function",
@@ -4257,7 +4257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.__precompile__",
+    "location": "base/base/#Base.__precompile__",
     "page": "Essentials",
     "title": "Base.__precompile__",
     "category": "function",
@@ -4265,7 +4265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.include",
+    "location": "base/base/#Base.include",
     "page": "Essentials",
     "title": "Base.include",
     "category": "function",
@@ -4273,7 +4273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.MainInclude.include",
+    "location": "base/base/#Base.MainInclude.include",
     "page": "Essentials",
     "title": "Base.MainInclude.include",
     "category": "function",
@@ -4281,7 +4281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.include_string",
+    "location": "base/base/#Base.include_string",
     "page": "Essentials",
     "title": "Base.include_string",
     "category": "function",
@@ -4289,7 +4289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.include_dependency",
+    "location": "base/base/#Base.include_dependency",
     "page": "Essentials",
     "title": "Base.include_dependency",
     "category": "function",
@@ -4297,7 +4297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.which-Tuple{Any,Any}",
+    "location": "base/base/#Base.which-Tuple{Any,Any}",
     "page": "Essentials",
     "title": "Base.which",
     "category": "method",
@@ -4305,7 +4305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.methods",
+    "location": "base/base/#Base.methods",
     "page": "Essentials",
     "title": "Base.methods",
     "category": "function",
@@ -4313,7 +4313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@show",
+    "location": "base/base/#Base.@show",
     "page": "Essentials",
     "title": "Base.@show",
     "category": "macro",
@@ -4321,7 +4321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#ans",
+    "location": "base/base/#ans",
     "page": "Essentials",
     "title": "ans",
     "category": "keyword",
@@ -4329,7 +4329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Getting-Around-1",
+    "location": "base/base/#Getting-Around-1",
     "page": "Essentials",
     "title": "Getting Around",
     "category": "section",
@@ -4337,7 +4337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#module",
+    "location": "base/base/#module",
     "page": "Essentials",
     "title": "module",
     "category": "keyword",
@@ -4345,7 +4345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#export",
+    "location": "base/base/#export",
     "page": "Essentials",
     "title": "export",
     "category": "keyword",
@@ -4353,7 +4353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#import",
+    "location": "base/base/#import",
     "page": "Essentials",
     "title": "import",
     "category": "keyword",
@@ -4361,7 +4361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#using",
+    "location": "base/base/#using",
     "page": "Essentials",
     "title": "using",
     "category": "keyword",
@@ -4369,7 +4369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#baremodule",
+    "location": "base/base/#baremodule",
     "page": "Essentials",
     "title": "baremodule",
     "category": "keyword",
@@ -4377,7 +4377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#function",
+    "location": "base/base/#function",
     "page": "Essentials",
     "title": "function",
     "category": "keyword",
@@ -4385,7 +4385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#macro",
+    "location": "base/base/#macro",
     "page": "Essentials",
     "title": "macro",
     "category": "keyword",
@@ -4393,7 +4393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#return",
+    "location": "base/base/#return",
     "page": "Essentials",
     "title": "return",
     "category": "keyword",
@@ -4401,7 +4401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#do",
+    "location": "base/base/#do",
     "page": "Essentials",
     "title": "do",
     "category": "keyword",
@@ -4409,7 +4409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#begin",
+    "location": "base/base/#begin",
     "page": "Essentials",
     "title": "begin",
     "category": "keyword",
@@ -4417,7 +4417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#end",
+    "location": "base/base/#end",
     "page": "Essentials",
     "title": "end",
     "category": "keyword",
@@ -4425,7 +4425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#let",
+    "location": "base/base/#let",
     "page": "Essentials",
     "title": "let",
     "category": "keyword",
@@ -4433,7 +4433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#if",
+    "location": "base/base/#if",
     "page": "Essentials",
     "title": "if",
     "category": "keyword",
@@ -4441,7 +4441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#for",
+    "location": "base/base/#for",
     "page": "Essentials",
     "title": "for",
     "category": "keyword",
@@ -4449,7 +4449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#while",
+    "location": "base/base/#while",
     "page": "Essentials",
     "title": "while",
     "category": "keyword",
@@ -4457,7 +4457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#break",
+    "location": "base/base/#break",
     "page": "Essentials",
     "title": "break",
     "category": "keyword",
@@ -4465,7 +4465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#continue",
+    "location": "base/base/#continue",
     "page": "Essentials",
     "title": "continue",
     "category": "keyword",
@@ -4473,7 +4473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#try",
+    "location": "base/base/#try",
     "page": "Essentials",
     "title": "try",
     "category": "keyword",
@@ -4481,7 +4481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#finally",
+    "location": "base/base/#finally",
     "page": "Essentials",
     "title": "finally",
     "category": "keyword",
@@ -4489,7 +4489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#quote",
+    "location": "base/base/#quote",
     "page": "Essentials",
     "title": "quote",
     "category": "keyword",
@@ -4497,7 +4497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#local",
+    "location": "base/base/#local",
     "page": "Essentials",
     "title": "local",
     "category": "keyword",
@@ -4505,7 +4505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#global",
+    "location": "base/base/#global",
     "page": "Essentials",
     "title": "global",
     "category": "keyword",
@@ -4513,7 +4513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#const",
+    "location": "base/base/#const",
     "page": "Essentials",
     "title": "const",
     "category": "keyword",
@@ -4521,7 +4521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#struct",
+    "location": "base/base/#struct",
     "page": "Essentials",
     "title": "struct",
     "category": "keyword",
@@ -4529,7 +4529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#mutable struct",
+    "location": "base/base/#mutable struct",
     "page": "Essentials",
     "title": "mutable struct",
     "category": "keyword",
@@ -4537,7 +4537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#abstract type",
+    "location": "base/base/#abstract type",
     "page": "Essentials",
     "title": "abstract type",
     "category": "keyword",
@@ -4545,7 +4545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#primitive type",
+    "location": "base/base/#primitive type",
     "page": "Essentials",
     "title": "primitive type",
     "category": "keyword",
@@ -4553,7 +4553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#...",
+    "location": "base/base/#...",
     "page": "Essentials",
     "title": "...",
     "category": "keyword",
@@ -4561,7 +4561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#;",
+    "location": "base/base/#;",
     "page": "Essentials",
     "title": ";",
     "category": "keyword",
@@ -4569,7 +4569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Keywords-1",
+    "location": "base/base/#Keywords-1",
     "page": "Essentials",
     "title": "Keywords",
     "category": "section",
@@ -4577,7 +4577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base",
+    "location": "base/base/#Base",
     "page": "Essentials",
     "title": "Base",
     "category": "keyword",
@@ -4585,7 +4585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Broadcast",
+    "location": "base/base/#Base.Broadcast",
     "page": "Essentials",
     "title": "Base.Broadcast",
     "category": "module",
@@ -4593,7 +4593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Docs",
+    "location": "base/base/#Base.Docs",
     "page": "Essentials",
     "title": "Base.Docs",
     "category": "module",
@@ -4601,7 +4601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Iterators",
+    "location": "base/base/#Base.Iterators",
     "page": "Essentials",
     "title": "Base.Iterators",
     "category": "module",
@@ -4609,7 +4609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Libc",
+    "location": "base/base/#Base.Libc",
     "page": "Essentials",
     "title": "Base.Libc",
     "category": "module",
@@ -4617,7 +4617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Meta",
+    "location": "base/base/#Base.Meta",
     "page": "Essentials",
     "title": "Base.Meta",
     "category": "module",
@@ -4625,7 +4625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.StackTraces",
+    "location": "base/base/#Base.StackTraces",
     "page": "Essentials",
     "title": "Base.StackTraces",
     "category": "module",
@@ -4633,7 +4633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Sys",
+    "location": "base/base/#Base.Sys",
     "page": "Essentials",
     "title": "Base.Sys",
     "category": "module",
@@ -4641,7 +4641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Threads",
+    "location": "base/base/#Base.Threads",
     "page": "Essentials",
     "title": "Base.Threads",
     "category": "module",
@@ -4649,7 +4649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.GC",
+    "location": "base/base/#Base.GC",
     "page": "Essentials",
     "title": "Base.GC",
     "category": "module",
@@ -4657,7 +4657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base-Modules-1",
+    "location": "base/base/#Base-Modules-1",
     "page": "Essentials",
     "title": "Base Modules",
     "category": "section",
@@ -4665,7 +4665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.:===",
+    "location": "base/base/#Core.:===",
     "page": "Essentials",
     "title": "Core.:===",
     "category": "function",
@@ -4673,7 +4673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.isa",
+    "location": "base/base/#Core.isa",
     "page": "Essentials",
     "title": "Core.isa",
     "category": "function",
@@ -4681,7 +4681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isequal",
+    "location": "base/base/#Base.isequal",
     "page": "Essentials",
     "title": "Base.isequal",
     "category": "function",
@@ -4689,7 +4689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isless",
+    "location": "base/base/#Base.isless",
     "page": "Essentials",
     "title": "Base.isless",
     "category": "function",
@@ -4697,7 +4697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.ifelse",
+    "location": "base/base/#Core.ifelse",
     "page": "Essentials",
     "title": "Core.ifelse",
     "category": "function",
@@ -4705,7 +4705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.typeassert",
+    "location": "base/base/#Core.typeassert",
     "page": "Essentials",
     "title": "Core.typeassert",
     "category": "function",
@@ -4713,7 +4713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.typeof",
+    "location": "base/base/#Core.typeof",
     "page": "Essentials",
     "title": "Core.typeof",
     "category": "function",
@@ -4721,7 +4721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.tuple",
+    "location": "base/base/#Core.tuple",
     "page": "Essentials",
     "title": "Core.tuple",
     "category": "function",
@@ -4729,7 +4729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.ntuple",
+    "location": "base/base/#Base.ntuple",
     "page": "Essentials",
     "title": "Base.ntuple",
     "category": "function",
@@ -4737,7 +4737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.objectid",
+    "location": "base/base/#Base.objectid",
     "page": "Essentials",
     "title": "Base.objectid",
     "category": "function",
@@ -4745,7 +4745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.hash",
+    "location": "base/base/#Base.hash",
     "page": "Essentials",
     "title": "Base.hash",
     "category": "function",
@@ -4753,7 +4753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.finalizer",
+    "location": "base/base/#Base.finalizer",
     "page": "Essentials",
     "title": "Base.finalizer",
     "category": "function",
@@ -4761,7 +4761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.finalize",
+    "location": "base/base/#Base.finalize",
     "page": "Essentials",
     "title": "Base.finalize",
     "category": "function",
@@ -4769,7 +4769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.copy",
+    "location": "base/base/#Base.copy",
     "page": "Essentials",
     "title": "Base.copy",
     "category": "function",
@@ -4777,7 +4777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.deepcopy",
+    "location": "base/base/#Base.deepcopy",
     "page": "Essentials",
     "title": "Base.deepcopy",
     "category": "function",
@@ -4785,7 +4785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.getproperty",
+    "location": "base/base/#Base.getproperty",
     "page": "Essentials",
     "title": "Base.getproperty",
     "category": "function",
@@ -4793,7 +4793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.setproperty!",
+    "location": "base/base/#Base.setproperty!",
     "page": "Essentials",
     "title": "Base.setproperty!",
     "category": "function",
@@ -4801,7 +4801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.propertynames",
+    "location": "base/base/#Base.propertynames",
     "page": "Essentials",
     "title": "Base.propertynames",
     "category": "function",
@@ -4809,7 +4809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.getfield",
+    "location": "base/base/#Core.getfield",
     "page": "Essentials",
     "title": "Core.getfield",
     "category": "function",
@@ -4817,7 +4817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.setfield!",
+    "location": "base/base/#Core.setfield!",
     "page": "Essentials",
     "title": "Core.setfield!",
     "category": "function",
@@ -4825,7 +4825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.isdefined",
+    "location": "base/base/#Core.isdefined",
     "page": "Essentials",
     "title": "Core.isdefined",
     "category": "function",
@@ -4833,7 +4833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@isdefined",
+    "location": "base/base/#Base.@isdefined",
     "page": "Essentials",
     "title": "Base.@isdefined",
     "category": "macro",
@@ -4841,7 +4841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.convert",
+    "location": "base/base/#Base.convert",
     "page": "Essentials",
     "title": "Base.convert",
     "category": "function",
@@ -4849,7 +4849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.promote",
+    "location": "base/base/#Base.promote",
     "page": "Essentials",
     "title": "Base.promote",
     "category": "function",
@@ -4857,7 +4857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.oftype",
+    "location": "base/base/#Base.oftype",
     "page": "Essentials",
     "title": "Base.oftype",
     "category": "function",
@@ -4865,7 +4865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.widen",
+    "location": "base/base/#Base.widen",
     "page": "Essentials",
     "title": "Base.widen",
     "category": "function",
@@ -4873,7 +4873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.identity",
+    "location": "base/base/#Base.identity",
     "page": "Essentials",
     "title": "Base.identity",
     "category": "function",
@@ -4881,7 +4881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#All-Objects-1",
+    "location": "base/base/#All-Objects-1",
     "page": "Essentials",
     "title": "All Objects",
     "category": "section",
@@ -4889,7 +4889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Properties-of-Types-1",
+    "location": "base/base/#Properties-of-Types-1",
     "page": "Essentials",
     "title": "Properties of Types",
     "category": "section",
@@ -4897,7 +4897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.supertype",
+    "location": "base/base/#Base.supertype",
     "page": "Essentials",
     "title": "Base.supertype",
     "category": "function",
@@ -4905,7 +4905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.:<:",
+    "location": "base/base/#Core.:<:",
     "page": "Essentials",
     "title": "Core.:<:",
     "category": "function",
@@ -4913,7 +4913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.:>:",
+    "location": "base/base/#Base.:>:",
     "page": "Essentials",
     "title": "Base.:>:",
     "category": "function",
@@ -4921,7 +4921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.typejoin",
+    "location": "base/base/#Base.typejoin",
     "page": "Essentials",
     "title": "Base.typejoin",
     "category": "function",
@@ -4929,7 +4929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.typeintersect",
+    "location": "base/base/#Base.typeintersect",
     "page": "Essentials",
     "title": "Base.typeintersect",
     "category": "function",
@@ -4937,7 +4937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.promote_type",
+    "location": "base/base/#Base.promote_type",
     "page": "Essentials",
     "title": "Base.promote_type",
     "category": "function",
@@ -4945,7 +4945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.promote_rule",
+    "location": "base/base/#Base.promote_rule",
     "page": "Essentials",
     "title": "Base.promote_rule",
     "category": "function",
@@ -4953,7 +4953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isdispatchtuple",
+    "location": "base/base/#Base.isdispatchtuple",
     "page": "Essentials",
     "title": "Base.isdispatchtuple",
     "category": "function",
@@ -4961,7 +4961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Type-relations-1",
+    "location": "base/base/#Type-relations-1",
     "page": "Essentials",
     "title": "Type relations",
     "category": "section",
@@ -4969,7 +4969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isimmutable",
+    "location": "base/base/#Base.isimmutable",
     "page": "Essentials",
     "title": "Base.isimmutable",
     "category": "function",
@@ -4977,7 +4977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isabstracttype",
+    "location": "base/base/#Base.isabstracttype",
     "page": "Essentials",
     "title": "Base.isabstracttype",
     "category": "function",
@@ -4985,7 +4985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isprimitivetype",
+    "location": "base/base/#Base.isprimitivetype",
     "page": "Essentials",
     "title": "Base.isprimitivetype",
     "category": "function",
@@ -4993,7 +4993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isstructtype",
+    "location": "base/base/#Base.isstructtype",
     "page": "Essentials",
     "title": "Base.isstructtype",
     "category": "function",
@@ -5001,7 +5001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.nameof-Tuple{DataType}",
+    "location": "base/base/#Base.nameof-Tuple{DataType}",
     "page": "Essentials",
     "title": "Base.nameof",
     "category": "method",
@@ -5009,7 +5009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.fieldnames",
+    "location": "base/base/#Base.fieldnames",
     "page": "Essentials",
     "title": "Base.fieldnames",
     "category": "function",
@@ -5017,7 +5017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.fieldname",
+    "location": "base/base/#Base.fieldname",
     "page": "Essentials",
     "title": "Base.fieldname",
     "category": "function",
@@ -5025,7 +5025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Declared-structure-1",
+    "location": "base/base/#Declared-structure-1",
     "page": "Essentials",
     "title": "Declared structure",
     "category": "section",
@@ -5033,7 +5033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.sizeof-Tuple{Type}",
+    "location": "base/base/#Base.sizeof-Tuple{Type}",
     "page": "Essentials",
     "title": "Base.sizeof",
     "category": "method",
@@ -5041,7 +5041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isconcretetype",
+    "location": "base/base/#Base.isconcretetype",
     "page": "Essentials",
     "title": "Base.isconcretetype",
     "category": "function",
@@ -5049,7 +5049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isbits",
+    "location": "base/base/#Base.isbits",
     "page": "Essentials",
     "title": "Base.isbits",
     "category": "function",
@@ -5057,7 +5057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isbitstype",
+    "location": "base/base/#Base.isbitstype",
     "page": "Essentials",
     "title": "Base.isbitstype",
     "category": "function",
@@ -5065,7 +5065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.fieldtype",
+    "location": "base/base/#Core.fieldtype",
     "page": "Essentials",
     "title": "Core.fieldtype",
     "category": "function",
@@ -5073,7 +5073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.fieldcount",
+    "location": "base/base/#Base.fieldcount",
     "page": "Essentials",
     "title": "Base.fieldcount",
     "category": "function",
@@ -5081,7 +5081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.fieldoffset",
+    "location": "base/base/#Base.fieldoffset",
     "page": "Essentials",
     "title": "Base.fieldoffset",
     "category": "function",
@@ -5089,7 +5089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.datatype_alignment",
+    "location": "base/base/#Base.datatype_alignment",
     "page": "Essentials",
     "title": "Base.datatype_alignment",
     "category": "function",
@@ -5097,7 +5097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.datatype_haspadding",
+    "location": "base/base/#Base.datatype_haspadding",
     "page": "Essentials",
     "title": "Base.datatype_haspadding",
     "category": "function",
@@ -5105,7 +5105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.datatype_pointerfree",
+    "location": "base/base/#Base.datatype_pointerfree",
     "page": "Essentials",
     "title": "Base.datatype_pointerfree",
     "category": "function",
@@ -5113,7 +5113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Memory-layout-1",
+    "location": "base/base/#Memory-layout-1",
     "page": "Essentials",
     "title": "Memory layout",
     "category": "section",
@@ -5121,7 +5121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.typemin",
+    "location": "base/base/#Base.typemin",
     "page": "Essentials",
     "title": "Base.typemin",
     "category": "function",
@@ -5129,7 +5129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.typemax",
+    "location": "base/base/#Base.typemax",
     "page": "Essentials",
     "title": "Base.typemax",
     "category": "function",
@@ -5137,7 +5137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.realmin",
+    "location": "base/base/#Base.realmin",
     "page": "Essentials",
     "title": "Base.realmin",
     "category": "function",
@@ -5145,7 +5145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.realmax",
+    "location": "base/base/#Base.realmax",
     "page": "Essentials",
     "title": "Base.realmax",
     "category": "function",
@@ -5153,7 +5153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.maxintfloat",
+    "location": "base/base/#Base.maxintfloat",
     "page": "Essentials",
     "title": "Base.maxintfloat",
     "category": "function",
@@ -5161,7 +5161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.eps-Tuple{Type{#s39} where #s39<:AbstractFloat}",
+    "location": "base/base/#Base.eps-Tuple{Type{#s39} where #s39<:AbstractFloat}",
     "page": "Essentials",
     "title": "Base.eps",
     "category": "method",
@@ -5169,7 +5169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.eps-Tuple{AbstractFloat}",
+    "location": "base/base/#Base.eps-Tuple{AbstractFloat}",
     "page": "Essentials",
     "title": "Base.eps",
     "category": "method",
@@ -5177,7 +5177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.instances",
+    "location": "base/base/#Base.instances",
     "page": "Essentials",
     "title": "Base.instances",
     "category": "function",
@@ -5185,7 +5185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Special-values-1",
+    "location": "base/base/#Special-values-1",
     "page": "Essentials",
     "title": "Special values",
     "category": "section",
@@ -5193,7 +5193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.Any",
+    "location": "base/base/#Core.Any",
     "page": "Essentials",
     "title": "Core.Any",
     "category": "type",
@@ -5201,7 +5201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.Union",
+    "location": "base/base/#Core.Union",
     "page": "Essentials",
     "title": "Core.Union",
     "category": "type",
@@ -5209,7 +5209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Union{}",
+    "location": "base/base/#Union{}",
     "page": "Essentials",
     "title": "Union{}",
     "category": "keyword",
@@ -5217,7 +5217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.UnionAll",
+    "location": "base/base/#Core.UnionAll",
     "page": "Essentials",
     "title": "Core.UnionAll",
     "category": "type",
@@ -5225,7 +5225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.Tuple",
+    "location": "base/base/#Core.Tuple",
     "page": "Essentials",
     "title": "Core.Tuple",
     "category": "type",
@@ -5233,7 +5233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.NamedTuple",
+    "location": "base/base/#Core.NamedTuple",
     "page": "Essentials",
     "title": "Core.NamedTuple",
     "category": "type",
@@ -5241,7 +5241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Val",
+    "location": "base/base/#Base.Val",
     "page": "Essentials",
     "title": "Base.Val",
     "category": "type",
@@ -5249,7 +5249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.Vararg",
+    "location": "base/base/#Core.Vararg",
     "page": "Essentials",
     "title": "Core.Vararg",
     "category": "type",
@@ -5257,7 +5257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.Nothing",
+    "location": "base/base/#Core.Nothing",
     "page": "Essentials",
     "title": "Core.Nothing",
     "category": "type",
@@ -5265,7 +5265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Some",
+    "location": "base/base/#Base.Some",
     "page": "Essentials",
     "title": "Base.Some",
     "category": "type",
@@ -5273,7 +5273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Enums.@enum",
+    "location": "base/base/#Base.Enums.@enum",
     "page": "Essentials",
     "title": "Base.Enums.@enum",
     "category": "macro",
@@ -5281,7 +5281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Special-Types-1",
+    "location": "base/base/#Special-Types-1",
     "page": "Essentials",
     "title": "Special Types",
     "category": "section",
@@ -5289,7 +5289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.Function",
+    "location": "base/base/#Core.Function",
     "page": "Essentials",
     "title": "Core.Function",
     "category": "type",
@@ -5297,7 +5297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.hasmethod",
+    "location": "base/base/#Base.hasmethod",
     "page": "Essentials",
     "title": "Base.hasmethod",
     "category": "function",
@@ -5305,7 +5305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.applicable",
+    "location": "base/base/#Core.applicable",
     "page": "Essentials",
     "title": "Core.applicable",
     "category": "function",
@@ -5313,7 +5313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.invoke",
+    "location": "base/base/#Core.invoke",
     "page": "Essentials",
     "title": "Core.invoke",
     "category": "function",
@@ -5321,7 +5321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.invokelatest",
+    "location": "base/base/#Base.invokelatest",
     "page": "Essentials",
     "title": "Base.invokelatest",
     "category": "function",
@@ -5329,7 +5329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#new",
+    "location": "base/base/#new",
     "page": "Essentials",
     "title": "new",
     "category": "keyword",
@@ -5337,7 +5337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.:|>",
+    "location": "base/base/#Base.:|>",
     "page": "Essentials",
     "title": "Base.:|>",
     "category": "function",
@@ -5345,7 +5345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.:∘",
+    "location": "base/base/#Base.:∘",
     "page": "Essentials",
     "title": "Base.:∘",
     "category": "function",
@@ -5353,7 +5353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Generic-Functions-1",
+    "location": "base/base/#Generic-Functions-1",
     "page": "Essentials",
     "title": "Generic Functions",
     "category": "section",
@@ -5361,7 +5361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.eval",
+    "location": "base/base/#Core.eval",
     "page": "Essentials",
     "title": "Core.eval",
     "category": "function",
@@ -5369,7 +5369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.MainInclude.eval",
+    "location": "base/base/#Base.MainInclude.eval",
     "page": "Essentials",
     "title": "Base.MainInclude.eval",
     "category": "function",
@@ -5377,7 +5377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@eval",
+    "location": "base/base/#Base.@eval",
     "page": "Essentials",
     "title": "Base.@eval",
     "category": "macro",
@@ -5385,7 +5385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.evalfile",
+    "location": "base/base/#Base.evalfile",
     "page": "Essentials",
     "title": "Base.evalfile",
     "category": "function",
@@ -5393,7 +5393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.esc",
+    "location": "base/base/#Base.esc",
     "page": "Essentials",
     "title": "Base.esc",
     "category": "function",
@@ -5401,7 +5401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@inbounds",
+    "location": "base/base/#Base.@inbounds",
     "page": "Essentials",
     "title": "Base.@inbounds",
     "category": "macro",
@@ -5409,7 +5409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@boundscheck",
+    "location": "base/base/#Base.@boundscheck",
     "page": "Essentials",
     "title": "Base.@boundscheck",
     "category": "macro",
@@ -5417,7 +5417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@inline",
+    "location": "base/base/#Base.@inline",
     "page": "Essentials",
     "title": "Base.@inline",
     "category": "macro",
@@ -5425,7 +5425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@noinline",
+    "location": "base/base/#Base.@noinline",
     "page": "Essentials",
     "title": "Base.@noinline",
     "category": "macro",
@@ -5433,7 +5433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@nospecialize",
+    "location": "base/base/#Base.@nospecialize",
     "page": "Essentials",
     "title": "Base.@nospecialize",
     "category": "macro",
@@ -5441,7 +5441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.gensym",
+    "location": "base/base/#Base.gensym",
     "page": "Essentials",
     "title": "Base.gensym",
     "category": "function",
@@ -5449,7 +5449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@gensym",
+    "location": "base/base/#Base.@gensym",
     "page": "Essentials",
     "title": "Base.@gensym",
     "category": "macro",
@@ -5457,7 +5457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@goto",
+    "location": "base/base/#Base.@goto",
     "page": "Essentials",
     "title": "Base.@goto",
     "category": "macro",
@@ -5465,7 +5465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@label",
+    "location": "base/base/#Base.@label",
     "page": "Essentials",
     "title": "Base.@label",
     "category": "macro",
@@ -5473,7 +5473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@polly",
+    "location": "base/base/#Base.@polly",
     "page": "Essentials",
     "title": "Base.@polly",
     "category": "macro",
@@ -5481,7 +5481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Syntax-1",
+    "location": "base/base/#Syntax-1",
     "page": "Essentials",
     "title": "Syntax",
     "category": "section",
@@ -5489,7 +5489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Missing",
+    "location": "base/base/#Base.Missing",
     "page": "Essentials",
     "title": "Base.Missing",
     "category": "type",
@@ -5497,7 +5497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.missing",
+    "location": "base/base/#Base.missing",
     "page": "Essentials",
     "title": "Base.missing",
     "category": "constant",
@@ -5505,7 +5505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.coalesce",
+    "location": "base/base/#Base.coalesce",
     "page": "Essentials",
     "title": "Base.coalesce",
     "category": "function",
@@ -5513,7 +5513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.ismissing",
+    "location": "base/base/#Base.ismissing",
     "page": "Essentials",
     "title": "Base.ismissing",
     "category": "function",
@@ -5521,7 +5521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.skipmissing",
+    "location": "base/base/#Base.skipmissing",
     "page": "Essentials",
     "title": "Base.skipmissing",
     "category": "function",
@@ -5529,7 +5529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Missing-Values-1",
+    "location": "base/base/#Missing-Values-1",
     "page": "Essentials",
     "title": "Missing Values",
     "category": "section",
@@ -5537,7 +5537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.run",
+    "location": "base/base/#Base.run",
     "page": "Essentials",
     "title": "Base.run",
     "category": "function",
@@ -5545,7 +5545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.devnull",
+    "location": "base/base/#Base.devnull",
     "page": "Essentials",
     "title": "Base.devnull",
     "category": "constant",
@@ -5553,7 +5553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.success",
+    "location": "base/base/#Base.success",
     "page": "Essentials",
     "title": "Base.success",
     "category": "function",
@@ -5561,7 +5561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.process_running",
+    "location": "base/base/#Base.process_running",
     "page": "Essentials",
     "title": "Base.process_running",
     "category": "function",
@@ -5569,7 +5569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.process_exited",
+    "location": "base/base/#Base.process_exited",
     "page": "Essentials",
     "title": "Base.process_exited",
     "category": "function",
@@ -5577,7 +5577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.kill-Tuple{Base.Process,Integer}",
+    "location": "base/base/#Base.kill-Tuple{Base.Process,Integer}",
     "page": "Essentials",
     "title": "Base.kill",
     "category": "method",
@@ -5585,7 +5585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Sys.set_process_title",
+    "location": "base/base/#Base.Sys.set_process_title",
     "page": "Essentials",
     "title": "Base.Sys.set_process_title",
     "category": "function",
@@ -5593,7 +5593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Sys.get_process_title",
+    "location": "base/base/#Base.Sys.get_process_title",
     "page": "Essentials",
     "title": "Base.Sys.get_process_title",
     "category": "function",
@@ -5601,7 +5601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.readandwrite",
+    "location": "base/base/#Base.readandwrite",
     "page": "Essentials",
     "title": "Base.readandwrite",
     "category": "function",
@@ -5609,7 +5609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.ignorestatus",
+    "location": "base/base/#Base.ignorestatus",
     "page": "Essentials",
     "title": "Base.ignorestatus",
     "category": "function",
@@ -5617,7 +5617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.detach",
+    "location": "base/base/#Base.detach",
     "page": "Essentials",
     "title": "Base.detach",
     "category": "function",
@@ -5625,7 +5625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Cmd",
+    "location": "base/base/#Base.Cmd",
     "page": "Essentials",
     "title": "Base.Cmd",
     "category": "type",
@@ -5633,7 +5633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.setenv",
+    "location": "base/base/#Base.setenv",
     "page": "Essentials",
     "title": "Base.setenv",
     "category": "function",
@@ -5641,7 +5641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.withenv",
+    "location": "base/base/#Base.withenv",
     "page": "Essentials",
     "title": "Base.withenv",
     "category": "function",
@@ -5649,7 +5649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.pipeline-Tuple{Any,Any,Any,Vararg{Any,N} where N}",
+    "location": "base/base/#Base.pipeline-Tuple{Any,Any,Any,Vararg{Any,N} where N}",
     "page": "Essentials",
     "title": "Base.pipeline",
     "category": "method",
@@ -5657,7 +5657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.pipeline-Tuple{Base.AbstractCmd}",
+    "location": "base/base/#Base.pipeline-Tuple{Base.AbstractCmd}",
     "page": "Essentials",
     "title": "Base.pipeline",
     "category": "method",
@@ -5665,7 +5665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Libc.gethostname",
+    "location": "base/base/#Base.Libc.gethostname",
     "page": "Essentials",
     "title": "Base.Libc.gethostname",
     "category": "function",
@@ -5673,7 +5673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Libc.getpid",
+    "location": "base/base/#Base.Libc.getpid",
     "page": "Essentials",
     "title": "Base.Libc.getpid",
     "category": "function",
@@ -5681,7 +5681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Libc.time-Tuple{}",
+    "location": "base/base/#Base.Libc.time-Tuple{}",
     "page": "Essentials",
     "title": "Base.Libc.time",
     "category": "method",
@@ -5689,7 +5689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.time_ns",
+    "location": "base/base/#Base.time_ns",
     "page": "Essentials",
     "title": "Base.time_ns",
     "category": "function",
@@ -5697,7 +5697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@time",
+    "location": "base/base/#Base.@time",
     "page": "Essentials",
     "title": "Base.@time",
     "category": "macro",
@@ -5705,7 +5705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@timev",
+    "location": "base/base/#Base.@timev",
     "page": "Essentials",
     "title": "Base.@timev",
     "category": "macro",
@@ -5713,7 +5713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@timed",
+    "location": "base/base/#Base.@timed",
     "page": "Essentials",
     "title": "Base.@timed",
     "category": "macro",
@@ -5721,7 +5721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@elapsed",
+    "location": "base/base/#Base.@elapsed",
     "page": "Essentials",
     "title": "Base.@elapsed",
     "category": "macro",
@@ -5729,7 +5729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@allocated",
+    "location": "base/base/#Base.@allocated",
     "page": "Essentials",
     "title": "Base.@allocated",
     "category": "macro",
@@ -5737,7 +5737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.EnvDict",
+    "location": "base/base/#Base.EnvDict",
     "page": "Essentials",
     "title": "Base.EnvDict",
     "category": "type",
@@ -5745,7 +5745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.ENV",
+    "location": "base/base/#Base.ENV",
     "page": "Essentials",
     "title": "Base.ENV",
     "category": "constant",
@@ -5753,7 +5753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Sys.isunix",
+    "location": "base/base/#Base.Sys.isunix",
     "page": "Essentials",
     "title": "Base.Sys.isunix",
     "category": "function",
@@ -5761,7 +5761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Sys.isapple",
+    "location": "base/base/#Base.Sys.isapple",
     "page": "Essentials",
     "title": "Base.Sys.isapple",
     "category": "function",
@@ -5769,7 +5769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Sys.islinux",
+    "location": "base/base/#Base.Sys.islinux",
     "page": "Essentials",
     "title": "Base.Sys.islinux",
     "category": "function",
@@ -5777,7 +5777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Sys.isbsd",
+    "location": "base/base/#Base.Sys.isbsd",
     "page": "Essentials",
     "title": "Base.Sys.isbsd",
     "category": "function",
@@ -5785,7 +5785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Sys.iswindows",
+    "location": "base/base/#Base.Sys.iswindows",
     "page": "Essentials",
     "title": "Base.Sys.iswindows",
     "category": "function",
@@ -5793,7 +5793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Sys.windows_version",
+    "location": "base/base/#Base.Sys.windows_version",
     "page": "Essentials",
     "title": "Base.Sys.windows_version",
     "category": "function",
@@ -5801,7 +5801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@static",
+    "location": "base/base/#Base.@static",
     "page": "Essentials",
     "title": "Base.@static",
     "category": "macro",
@@ -5809,7 +5809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#System-1",
+    "location": "base/base/#System-1",
     "page": "Essentials",
     "title": "System",
     "category": "section",
@@ -5817,7 +5817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.VersionNumber",
+    "location": "base/base/#Base.VersionNumber",
     "page": "Essentials",
     "title": "Base.VersionNumber",
     "category": "type",
@@ -5825,7 +5825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@v_str",
+    "location": "base/base/#Base.@v_str",
     "page": "Essentials",
     "title": "Base.@v_str",
     "category": "macro",
@@ -5833,7 +5833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Versioning-1",
+    "location": "base/base/#Versioning-1",
     "page": "Essentials",
     "title": "Versioning",
     "category": "section",
@@ -5841,7 +5841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.error",
+    "location": "base/base/#Base.error",
     "page": "Essentials",
     "title": "Base.error",
     "category": "function",
@@ -5849,7 +5849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.throw",
+    "location": "base/base/#Core.throw",
     "page": "Essentials",
     "title": "Core.throw",
     "category": "function",
@@ -5857,7 +5857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.rethrow",
+    "location": "base/base/#Base.rethrow",
     "page": "Essentials",
     "title": "Base.rethrow",
     "category": "function",
@@ -5865,7 +5865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.backtrace",
+    "location": "base/base/#Base.backtrace",
     "page": "Essentials",
     "title": "Base.backtrace",
     "category": "function",
@@ -5873,7 +5873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.catch_backtrace",
+    "location": "base/base/#Base.catch_backtrace",
     "page": "Essentials",
     "title": "Base.catch_backtrace",
     "category": "function",
@@ -5881,7 +5881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@assert",
+    "location": "base/base/#Base.@assert",
     "page": "Essentials",
     "title": "Base.@assert",
     "category": "macro",
@@ -5889,7 +5889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.ArgumentError",
+    "location": "base/base/#Core.ArgumentError",
     "page": "Essentials",
     "title": "Core.ArgumentError",
     "category": "type",
@@ -5897,7 +5897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.AssertionError",
+    "location": "base/base/#Core.AssertionError",
     "page": "Essentials",
     "title": "Core.AssertionError",
     "category": "type",
@@ -5905,7 +5905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.BoundsError",
+    "location": "base/base/#Core.BoundsError",
     "page": "Essentials",
     "title": "Core.BoundsError",
     "category": "type",
@@ -5913,7 +5913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.DimensionMismatch",
+    "location": "base/base/#Base.DimensionMismatch",
     "page": "Essentials",
     "title": "Base.DimensionMismatch",
     "category": "type",
@@ -5921,7 +5921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.DivideError",
+    "location": "base/base/#Core.DivideError",
     "page": "Essentials",
     "title": "Core.DivideError",
     "category": "type",
@@ -5929,7 +5929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.DomainError",
+    "location": "base/base/#Core.DomainError",
     "page": "Essentials",
     "title": "Core.DomainError",
     "category": "type",
@@ -5937,7 +5937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.EOFError",
+    "location": "base/base/#Base.EOFError",
     "page": "Essentials",
     "title": "Base.EOFError",
     "category": "type",
@@ -5945,7 +5945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.ErrorException",
+    "location": "base/base/#Core.ErrorException",
     "page": "Essentials",
     "title": "Core.ErrorException",
     "category": "type",
@@ -5953,7 +5953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.InexactError",
+    "location": "base/base/#Core.InexactError",
     "page": "Essentials",
     "title": "Core.InexactError",
     "category": "type",
@@ -5961,7 +5961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.InterruptException",
+    "location": "base/base/#Core.InterruptException",
     "page": "Essentials",
     "title": "Core.InterruptException",
     "category": "type",
@@ -5969,7 +5969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.KeyError",
+    "location": "base/base/#Base.KeyError",
     "page": "Essentials",
     "title": "Base.KeyError",
     "category": "type",
@@ -5977,7 +5977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.LoadError",
+    "location": "base/base/#Core.LoadError",
     "page": "Essentials",
     "title": "Core.LoadError",
     "category": "type",
@@ -5985,7 +5985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.MethodError",
+    "location": "base/base/#Core.MethodError",
     "page": "Essentials",
     "title": "Core.MethodError",
     "category": "type",
@@ -5993,7 +5993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.MissingException",
+    "location": "base/base/#Base.MissingException",
     "page": "Essentials",
     "title": "Base.MissingException",
     "category": "type",
@@ -6001,7 +6001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.OutOfMemoryError",
+    "location": "base/base/#Core.OutOfMemoryError",
     "page": "Essentials",
     "title": "Core.OutOfMemoryError",
     "category": "type",
@@ -6009,7 +6009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.ReadOnlyMemoryError",
+    "location": "base/base/#Core.ReadOnlyMemoryError",
     "page": "Essentials",
     "title": "Core.ReadOnlyMemoryError",
     "category": "type",
@@ -6017,7 +6017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.OverflowError",
+    "location": "base/base/#Core.OverflowError",
     "page": "Essentials",
     "title": "Core.OverflowError",
     "category": "type",
@@ -6025,7 +6025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.StackOverflowError",
+    "location": "base/base/#Core.StackOverflowError",
     "page": "Essentials",
     "title": "Core.StackOverflowError",
     "category": "type",
@@ -6033,7 +6033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.SystemError",
+    "location": "base/base/#Base.SystemError",
     "page": "Essentials",
     "title": "Base.SystemError",
     "category": "type",
@@ -6041,7 +6041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.TypeError",
+    "location": "base/base/#Core.TypeError",
     "page": "Essentials",
     "title": "Core.TypeError",
     "category": "type",
@@ -6049,7 +6049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.UndefKeywordError",
+    "location": "base/base/#Core.UndefKeywordError",
     "page": "Essentials",
     "title": "Core.UndefKeywordError",
     "category": "type",
@@ -6057,7 +6057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.UndefRefError",
+    "location": "base/base/#Core.UndefRefError",
     "page": "Essentials",
     "title": "Core.UndefRefError",
     "category": "type",
@@ -6065,7 +6065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.UndefVarError",
+    "location": "base/base/#Core.UndefVarError",
     "page": "Essentials",
     "title": "Core.UndefVarError",
     "category": "type",
@@ -6073,7 +6073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.StringIndexError",
+    "location": "base/base/#Base.StringIndexError",
     "page": "Essentials",
     "title": "Base.StringIndexError",
     "category": "type",
@@ -6081,7 +6081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.InitError",
+    "location": "base/base/#Core.InitError",
     "page": "Essentials",
     "title": "Core.InitError",
     "category": "type",
@@ -6089,7 +6089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.retry",
+    "location": "base/base/#Base.retry",
     "page": "Essentials",
     "title": "Base.retry",
     "category": "function",
@@ -6097,7 +6097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.ExponentialBackOff",
+    "location": "base/base/#Base.ExponentialBackOff",
     "page": "Essentials",
     "title": "Base.ExponentialBackOff",
     "category": "type",
@@ -6105,7 +6105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Errors-1",
+    "location": "base/base/#Errors-1",
     "page": "Essentials",
     "title": "Errors",
     "category": "section",
@@ -6113,7 +6113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Timer-Tuple{Function,Real}",
+    "location": "base/base/#Base.Timer-Tuple{Function,Real}",
     "page": "Essentials",
     "title": "Base.Timer",
     "category": "method",
@@ -6121,7 +6121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Timer",
+    "location": "base/base/#Base.Timer",
     "page": "Essentials",
     "title": "Base.Timer",
     "category": "type",
@@ -6129,7 +6129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.AsyncCondition",
+    "location": "base/base/#Base.AsyncCondition",
     "page": "Essentials",
     "title": "Base.AsyncCondition",
     "category": "type",
@@ -6137,7 +6137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.AsyncCondition-Tuple{Function}",
+    "location": "base/base/#Base.AsyncCondition-Tuple{Function}",
     "page": "Essentials",
     "title": "Base.AsyncCondition",
     "category": "method",
@@ -6145,7 +6145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Events-1",
+    "location": "base/base/#Events-1",
     "page": "Essentials",
     "title": "Events",
     "category": "section",
@@ -6153,7 +6153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.nameof-Tuple{Module}",
+    "location": "base/base/#Base.nameof-Tuple{Module}",
     "page": "Essentials",
     "title": "Base.nameof",
     "category": "method",
@@ -6161,7 +6161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.parentmodule",
+    "location": "base/base/#Base.parentmodule",
     "page": "Essentials",
     "title": "Base.parentmodule",
     "category": "function",
@@ -6169,7 +6169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.moduleroot",
+    "location": "base/base/#Base.moduleroot",
     "page": "Essentials",
     "title": "Base.moduleroot",
     "category": "function",
@@ -6177,7 +6177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@__MODULE__",
+    "location": "base/base/#Base.@__MODULE__",
     "page": "Essentials",
     "title": "Base.@__MODULE__",
     "category": "macro",
@@ -6185,7 +6185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.fullname",
+    "location": "base/base/#Base.fullname",
     "page": "Essentials",
     "title": "Base.fullname",
     "category": "function",
@@ -6193,7 +6193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.names",
+    "location": "base/base/#Base.names",
     "page": "Essentials",
     "title": "Base.names",
     "category": "function",
@@ -6201,7 +6201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Core.nfields",
+    "location": "base/base/#Core.nfields",
     "page": "Essentials",
     "title": "Core.nfields",
     "category": "function",
@@ -6209,7 +6209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.isconst",
+    "location": "base/base/#Base.isconst",
     "page": "Essentials",
     "title": "Base.isconst",
     "category": "function",
@@ -6217,7 +6217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.nameof-Tuple{Function}",
+    "location": "base/base/#Base.nameof-Tuple{Function}",
     "page": "Essentials",
     "title": "Base.nameof",
     "category": "method",
@@ -6225,7 +6225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.functionloc-Tuple{Any,Any}",
+    "location": "base/base/#Base.functionloc-Tuple{Any,Any}",
     "page": "Essentials",
     "title": "Base.functionloc",
     "category": "method",
@@ -6233,7 +6233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.functionloc-Tuple{Method}",
+    "location": "base/base/#Base.functionloc-Tuple{Method}",
     "page": "Essentials",
     "title": "Base.functionloc",
     "category": "method",
@@ -6241,7 +6241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Reflection-1",
+    "location": "base/base/#Reflection-1",
     "page": "Essentials",
     "title": "Reflection",
     "category": "section",
@@ -6249,7 +6249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.GC.gc",
+    "location": "base/base/#Base.GC.gc",
     "page": "Essentials",
     "title": "Base.GC.gc",
     "category": "function",
@@ -6257,7 +6257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.GC.enable",
+    "location": "base/base/#Base.GC.enable",
     "page": "Essentials",
     "title": "Base.GC.enable",
     "category": "function",
@@ -6265,7 +6265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.GC.@preserve",
+    "location": "base/base/#Base.GC.@preserve",
     "page": "Essentials",
     "title": "Base.GC.@preserve",
     "category": "macro",
@@ -6273,7 +6273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Meta.lower",
+    "location": "base/base/#Base.Meta.lower",
     "page": "Essentials",
     "title": "Base.Meta.lower",
     "category": "function",
@@ -6281,7 +6281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Meta.@lower",
+    "location": "base/base/#Base.Meta.@lower",
     "page": "Essentials",
     "title": "Base.Meta.@lower",
     "category": "macro",
@@ -6289,7 +6289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Meta.parse-Tuple{AbstractString,Int64}",
+    "location": "base/base/#Base.Meta.parse-Tuple{AbstractString,Int64}",
     "page": "Essentials",
     "title": "Base.Meta.parse",
     "category": "method",
@@ -6297,7 +6297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Meta.parse-Tuple{AbstractString}",
+    "location": "base/base/#Base.Meta.parse-Tuple{AbstractString}",
     "page": "Essentials",
     "title": "Base.Meta.parse",
     "category": "method",
@@ -6305,7 +6305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.Meta.ParseError",
+    "location": "base/base/#Base.Meta.ParseError",
     "page": "Essentials",
     "title": "Base.Meta.ParseError",
     "category": "type",
@@ -6313,7 +6313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.macroexpand",
+    "location": "base/base/#Base.macroexpand",
     "page": "Essentials",
     "title": "Base.macroexpand",
     "category": "function",
@@ -6321,7 +6321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@macroexpand",
+    "location": "base/base/#Base.@macroexpand",
     "page": "Essentials",
     "title": "Base.@macroexpand",
     "category": "macro",
@@ -6329,7 +6329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.@macroexpand1",
+    "location": "base/base/#Base.@macroexpand1",
     "page": "Essentials",
     "title": "Base.@macroexpand1",
     "category": "macro",
@@ -6337,7 +6337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.code_lowered",
+    "location": "base/base/#Base.code_lowered",
     "page": "Essentials",
     "title": "Base.code_lowered",
     "category": "function",
@@ -6345,7 +6345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.code_typed",
+    "location": "base/base/#Base.code_typed",
     "page": "Essentials",
     "title": "Base.code_typed",
     "category": "function",
@@ -6353,7 +6353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Base.precompile",
+    "location": "base/base/#Base.precompile",
     "page": "Essentials",
     "title": "Base.precompile",
     "category": "function",
@@ -6361,7 +6361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/base.html#Internals-1",
+    "location": "base/base/#Internals-1",
     "page": "Essentials",
     "title": "Internals",
     "category": "section",
@@ -6369,7 +6369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#",
+    "location": "base/collections/#",
     "page": "Collections and Data Structures",
     "title": "Collections and Data Structures",
     "category": "page",
@@ -6377,7 +6377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Collections-and-Data-Structures-1",
+    "location": "base/collections/#Collections-and-Data-Structures-1",
     "page": "Collections and Data Structures",
     "title": "Collections and Data Structures",
     "category": "section",
@@ -6385,7 +6385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.iterate",
+    "location": "base/collections/#Base.iterate",
     "page": "Collections and Data Structures",
     "title": "Base.iterate",
     "category": "function",
@@ -6393,7 +6393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.IteratorSize",
+    "location": "base/collections/#Base.IteratorSize",
     "page": "Collections and Data Structures",
     "title": "Base.IteratorSize",
     "category": "type",
@@ -6401,7 +6401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.IteratorEltype",
+    "location": "base/collections/#Base.IteratorEltype",
     "page": "Collections and Data Structures",
     "title": "Base.IteratorEltype",
     "category": "type",
@@ -6409,7 +6409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#lib-collections-iteration-1",
+    "location": "base/collections/#lib-collections-iteration-1",
     "page": "Collections and Data Structures",
     "title": "Iteration",
     "category": "section",
@@ -6417,7 +6417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.isempty",
+    "location": "base/collections/#Base.isempty",
     "page": "Collections and Data Structures",
     "title": "Base.isempty",
     "category": "function",
@@ -6425,7 +6425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.empty!",
+    "location": "base/collections/#Base.empty!",
     "page": "Collections and Data Structures",
     "title": "Base.empty!",
     "category": "function",
@@ -6433,7 +6433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.length",
+    "location": "base/collections/#Base.length",
     "page": "Collections and Data Structures",
     "title": "Base.length",
     "category": "function",
@@ -6441,7 +6441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#General-Collections-1",
+    "location": "base/collections/#General-Collections-1",
     "page": "Collections and Data Structures",
     "title": "General Collections",
     "category": "section",
@@ -6449,7 +6449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.in",
+    "location": "base/collections/#Base.in",
     "page": "Collections and Data Structures",
     "title": "Base.in",
     "category": "function",
@@ -6457,7 +6457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.:∉",
+    "location": "base/collections/#Base.:∉",
     "page": "Collections and Data Structures",
     "title": "Base.:∉",
     "category": "function",
@@ -6465,7 +6465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.eltype",
+    "location": "base/collections/#Base.eltype",
     "page": "Collections and Data Structures",
     "title": "Base.eltype",
     "category": "function",
@@ -6473,7 +6473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.indexin",
+    "location": "base/collections/#Base.indexin",
     "page": "Collections and Data Structures",
     "title": "Base.indexin",
     "category": "function",
@@ -6481,7 +6481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.unique",
+    "location": "base/collections/#Base.unique",
     "page": "Collections and Data Structures",
     "title": "Base.unique",
     "category": "function",
@@ -6489,7 +6489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.unique!",
+    "location": "base/collections/#Base.unique!",
     "page": "Collections and Data Structures",
     "title": "Base.unique!",
     "category": "function",
@@ -6497,7 +6497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.allunique",
+    "location": "base/collections/#Base.allunique",
     "page": "Collections and Data Structures",
     "title": "Base.allunique",
     "category": "function",
@@ -6505,7 +6505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.reduce-Tuple{Any,Any,Any}",
+    "location": "base/collections/#Base.reduce-Tuple{Any,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.reduce",
     "category": "method",
@@ -6513,7 +6513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.reduce-Tuple{Any,Any}",
+    "location": "base/collections/#Base.reduce-Tuple{Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.reduce",
     "category": "method",
@@ -6521,7 +6521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.foldl-Tuple{Any,Any,Any}",
+    "location": "base/collections/#Base.foldl-Tuple{Any,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.foldl",
     "category": "method",
@@ -6529,7 +6529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.foldl-Tuple{Any,Any}",
+    "location": "base/collections/#Base.foldl-Tuple{Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.foldl",
     "category": "method",
@@ -6537,7 +6537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.foldr-Tuple{Any,Any,Any}",
+    "location": "base/collections/#Base.foldr-Tuple{Any,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.foldr",
     "category": "method",
@@ -6545,7 +6545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.foldr-Tuple{Any,Any}",
+    "location": "base/collections/#Base.foldr-Tuple{Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.foldr",
     "category": "method",
@@ -6553,7 +6553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.maximum",
+    "location": "base/collections/#Base.maximum",
     "page": "Collections and Data Structures",
     "title": "Base.maximum",
     "category": "function",
@@ -6561,7 +6561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.maximum!",
+    "location": "base/collections/#Base.maximum!",
     "page": "Collections and Data Structures",
     "title": "Base.maximum!",
     "category": "function",
@@ -6569,7 +6569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.minimum",
+    "location": "base/collections/#Base.minimum",
     "page": "Collections and Data Structures",
     "title": "Base.minimum",
     "category": "function",
@@ -6577,7 +6577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.minimum!",
+    "location": "base/collections/#Base.minimum!",
     "page": "Collections and Data Structures",
     "title": "Base.minimum!",
     "category": "function",
@@ -6585,7 +6585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.extrema-Tuple{Any}",
+    "location": "base/collections/#Base.extrema-Tuple{Any}",
     "page": "Collections and Data Structures",
     "title": "Base.extrema",
     "category": "method",
@@ -6593,7 +6593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.extrema-Tuple{AbstractArray,Any}",
+    "location": "base/collections/#Base.extrema-Tuple{AbstractArray,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.extrema",
     "category": "method",
@@ -6601,7 +6601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.argmax",
+    "location": "base/collections/#Base.argmax",
     "page": "Collections and Data Structures",
     "title": "Base.argmax",
     "category": "function",
@@ -6609,7 +6609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.argmin",
+    "location": "base/collections/#Base.argmin",
     "page": "Collections and Data Structures",
     "title": "Base.argmin",
     "category": "function",
@@ -6617,7 +6617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.findmax",
+    "location": "base/collections/#Base.findmax",
     "page": "Collections and Data Structures",
     "title": "Base.findmax",
     "category": "function",
@@ -6625,7 +6625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.findmin",
+    "location": "base/collections/#Base.findmin",
     "page": "Collections and Data Structures",
     "title": "Base.findmin",
     "category": "function",
@@ -6633,7 +6633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.findmax!",
+    "location": "base/collections/#Base.findmax!",
     "page": "Collections and Data Structures",
     "title": "Base.findmax!",
     "category": "function",
@@ -6641,7 +6641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.findmin!",
+    "location": "base/collections/#Base.findmin!",
     "page": "Collections and Data Structures",
     "title": "Base.findmin!",
     "category": "function",
@@ -6649,7 +6649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.sum",
+    "location": "base/collections/#Base.sum",
     "page": "Collections and Data Structures",
     "title": "Base.sum",
     "category": "function",
@@ -6657,7 +6657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.sum!",
+    "location": "base/collections/#Base.sum!",
     "page": "Collections and Data Structures",
     "title": "Base.sum!",
     "category": "function",
@@ -6665,7 +6665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.prod",
+    "location": "base/collections/#Base.prod",
     "page": "Collections and Data Structures",
     "title": "Base.prod",
     "category": "function",
@@ -6673,7 +6673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.prod!",
+    "location": "base/collections/#Base.prod!",
     "page": "Collections and Data Structures",
     "title": "Base.prod!",
     "category": "function",
@@ -6681,7 +6681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.any-Tuple{Any}",
+    "location": "base/collections/#Base.any-Tuple{Any}",
     "page": "Collections and Data Structures",
     "title": "Base.any",
     "category": "method",
@@ -6689,7 +6689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.any-Tuple{AbstractArray,Any}",
+    "location": "base/collections/#Base.any-Tuple{AbstractArray,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.any",
     "category": "method",
@@ -6697,7 +6697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.any!",
+    "location": "base/collections/#Base.any!",
     "page": "Collections and Data Structures",
     "title": "Base.any!",
     "category": "function",
@@ -6705,7 +6705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.all-Tuple{Any}",
+    "location": "base/collections/#Base.all-Tuple{Any}",
     "page": "Collections and Data Structures",
     "title": "Base.all",
     "category": "method",
@@ -6713,7 +6713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.all-Tuple{AbstractArray,Any}",
+    "location": "base/collections/#Base.all-Tuple{AbstractArray,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.all",
     "category": "method",
@@ -6721,7 +6721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.all!",
+    "location": "base/collections/#Base.all!",
     "page": "Collections and Data Structures",
     "title": "Base.all!",
     "category": "function",
@@ -6729,7 +6729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.count",
+    "location": "base/collections/#Base.count",
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "function",
@@ -6737,7 +6737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.any-Tuple{Any,Any}",
+    "location": "base/collections/#Base.any-Tuple{Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.any",
     "category": "method",
@@ -6745,7 +6745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.all-Tuple{Any,Any}",
+    "location": "base/collections/#Base.all-Tuple{Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.all",
     "category": "method",
@@ -6753,7 +6753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.foreach",
+    "location": "base/collections/#Base.foreach",
     "page": "Collections and Data Structures",
     "title": "Base.foreach",
     "category": "function",
@@ -6761,7 +6761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.map",
+    "location": "base/collections/#Base.map",
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "function",
@@ -6769,7 +6769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.map!",
+    "location": "base/collections/#Base.map!",
     "page": "Collections and Data Structures",
     "title": "Base.map!",
     "category": "function",
@@ -6777,7 +6777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.mapreduce-NTuple{4,Any}",
+    "location": "base/collections/#Base.mapreduce-NTuple{4,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.mapreduce",
     "category": "method",
@@ -6785,7 +6785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.mapreduce-Tuple{Any,Any,Any}",
+    "location": "base/collections/#Base.mapreduce-Tuple{Any,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.mapreduce",
     "category": "method",
@@ -6793,7 +6793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.mapfoldl-NTuple{4,Any}",
+    "location": "base/collections/#Base.mapfoldl-NTuple{4,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.mapfoldl",
     "category": "method",
@@ -6801,7 +6801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.mapfoldl-Tuple{Any,Any,Any}",
+    "location": "base/collections/#Base.mapfoldl-Tuple{Any,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.mapfoldl",
     "category": "method",
@@ -6809,7 +6809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.mapfoldr-NTuple{4,Any}",
+    "location": "base/collections/#Base.mapfoldr-NTuple{4,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.mapfoldr",
     "category": "method",
@@ -6817,7 +6817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.mapfoldr-Tuple{Any,Any,Any}",
+    "location": "base/collections/#Base.mapfoldr-Tuple{Any,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.mapfoldr",
     "category": "method",
@@ -6825,7 +6825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.first",
+    "location": "base/collections/#Base.first",
     "page": "Collections and Data Structures",
     "title": "Base.first",
     "category": "function",
@@ -6833,7 +6833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.last",
+    "location": "base/collections/#Base.last",
     "page": "Collections and Data Structures",
     "title": "Base.last",
     "category": "function",
@@ -6841,7 +6841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.step",
+    "location": "base/collections/#Base.step",
     "page": "Collections and Data Structures",
     "title": "Base.step",
     "category": "function",
@@ -6849,7 +6849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.collect-Tuple{Any}",
+    "location": "base/collections/#Base.collect-Tuple{Any}",
     "page": "Collections and Data Structures",
     "title": "Base.collect",
     "category": "method",
@@ -6857,7 +6857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.collect-Tuple{Type,Any}",
+    "location": "base/collections/#Base.collect-Tuple{Type,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.collect",
     "category": "method",
@@ -6865,7 +6865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.filter",
+    "location": "base/collections/#Base.filter",
     "page": "Collections and Data Structures",
     "title": "Base.filter",
     "category": "function",
@@ -6873,7 +6873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.filter!",
+    "location": "base/collections/#Base.filter!",
     "page": "Collections and Data Structures",
     "title": "Base.filter!",
     "category": "function",
@@ -6881,7 +6881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.replace-Tuple{Any,Vararg{Pair,N} where N}",
+    "location": "base/collections/#Base.replace-Tuple{Any,Vararg{Pair,N} where N}",
     "page": "Collections and Data Structures",
     "title": "Base.replace",
     "category": "method",
@@ -6889,7 +6889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.replace-Tuple{Union{Function, Type},Any,Any}",
+    "location": "base/collections/#Base.replace-Tuple{Union{Function, Type},Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.replace",
     "category": "method",
@@ -6897,7 +6897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.replace-Tuple{Union{Function, Type},Any}",
+    "location": "base/collections/#Base.replace-Tuple{Union{Function, Type},Any}",
     "page": "Collections and Data Structures",
     "title": "Base.replace",
     "category": "method",
@@ -6905,7 +6905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.replace!",
+    "location": "base/collections/#Base.replace!",
     "page": "Collections and Data Structures",
     "title": "Base.replace!",
     "category": "function",
@@ -6913,7 +6913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Iterable-Collections-1",
+    "location": "base/collections/#Iterable-Collections-1",
     "page": "Collections and Data Structures",
     "title": "Iterable Collections",
     "category": "section",
@@ -6921,7 +6921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.getindex",
+    "location": "base/collections/#Base.getindex",
     "page": "Collections and Data Structures",
     "title": "Base.getindex",
     "category": "function",
@@ -6929,7 +6929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.setindex!",
+    "location": "base/collections/#Base.setindex!",
     "page": "Collections and Data Structures",
     "title": "Base.setindex!",
     "category": "function",
@@ -6937,7 +6937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.firstindex",
+    "location": "base/collections/#Base.firstindex",
     "page": "Collections and Data Structures",
     "title": "Base.firstindex",
     "category": "function",
@@ -6945,7 +6945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.lastindex",
+    "location": "base/collections/#Base.lastindex",
     "page": "Collections and Data Structures",
     "title": "Base.lastindex",
     "category": "function",
@@ -6953,7 +6953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Indexable-Collections-1",
+    "location": "base/collections/#Indexable-Collections-1",
     "page": "Collections and Data Structures",
     "title": "Indexable Collections",
     "category": "section",
@@ -6961,7 +6961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.Dict",
+    "location": "base/collections/#Base.Dict",
     "page": "Collections and Data Structures",
     "title": "Base.Dict",
     "category": "type",
@@ -6969,7 +6969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.IdDict",
+    "location": "base/collections/#Base.IdDict",
     "page": "Collections and Data Structures",
     "title": "Base.IdDict",
     "category": "type",
@@ -6977,7 +6977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.WeakKeyDict",
+    "location": "base/collections/#Base.WeakKeyDict",
     "page": "Collections and Data Structures",
     "title": "Base.WeakKeyDict",
     "category": "type",
@@ -6985,7 +6985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.ImmutableDict",
+    "location": "base/collections/#Base.ImmutableDict",
     "page": "Collections and Data Structures",
     "title": "Base.ImmutableDict",
     "category": "type",
@@ -6993,7 +6993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.haskey",
+    "location": "base/collections/#Base.haskey",
     "page": "Collections and Data Structures",
     "title": "Base.haskey",
     "category": "function",
@@ -7001,7 +7001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.get-Tuple{Any,Any,Any}",
+    "location": "base/collections/#Base.get-Tuple{Any,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.get",
     "category": "method",
@@ -7009,7 +7009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.get",
+    "location": "base/collections/#Base.get",
     "page": "Collections and Data Structures",
     "title": "Base.get",
     "category": "function",
@@ -7017,7 +7017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.get!-Tuple{Any,Any,Any}",
+    "location": "base/collections/#Base.get!-Tuple{Any,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.get!",
     "category": "method",
@@ -7025,7 +7025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.get!-Tuple{Function,Any,Any}",
+    "location": "base/collections/#Base.get!-Tuple{Function,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.get!",
     "category": "method",
@@ -7033,7 +7033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.getkey",
+    "location": "base/collections/#Base.getkey",
     "page": "Collections and Data Structures",
     "title": "Base.getkey",
     "category": "function",
@@ -7041,7 +7041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.delete!",
+    "location": "base/collections/#Base.delete!",
     "page": "Collections and Data Structures",
     "title": "Base.delete!",
     "category": "function",
@@ -7049,7 +7049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.pop!-Tuple{Any,Any,Any}",
+    "location": "base/collections/#Base.pop!-Tuple{Any,Any,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.pop!",
     "category": "method",
@@ -7057,7 +7057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.keys",
+    "location": "base/collections/#Base.keys",
     "page": "Collections and Data Structures",
     "title": "Base.keys",
     "category": "function",
@@ -7065,7 +7065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.values",
+    "location": "base/collections/#Base.values",
     "page": "Collections and Data Structures",
     "title": "Base.values",
     "category": "function",
@@ -7073,7 +7073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.pairs",
+    "location": "base/collections/#Base.pairs",
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "function",
@@ -7081,7 +7081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.merge",
+    "location": "base/collections/#Base.merge",
     "page": "Collections and Data Structures",
     "title": "Base.merge",
     "category": "function",
@@ -7089,7 +7089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.merge!-Tuple{AbstractDict,Vararg{AbstractDict,N} where N}",
+    "location": "base/collections/#Base.merge!-Tuple{AbstractDict,Vararg{AbstractDict,N} where N}",
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "method",
@@ -7097,7 +7097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.merge!-Tuple{Function,AbstractDict,Vararg{AbstractDict,N} where N}",
+    "location": "base/collections/#Base.merge!-Tuple{Function,AbstractDict,Vararg{AbstractDict,N} where N}",
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "method",
@@ -7105,7 +7105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.sizehint!",
+    "location": "base/collections/#Base.sizehint!",
     "page": "Collections and Data Structures",
     "title": "Base.sizehint!",
     "category": "function",
@@ -7113,7 +7113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.keytype",
+    "location": "base/collections/#Base.keytype",
     "page": "Collections and Data Structures",
     "title": "Base.keytype",
     "category": "function",
@@ -7121,7 +7121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.valtype",
+    "location": "base/collections/#Base.valtype",
     "page": "Collections and Data Structures",
     "title": "Base.valtype",
     "category": "function",
@@ -7129,7 +7129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Dictionaries-1",
+    "location": "base/collections/#Dictionaries-1",
     "page": "Collections and Data Structures",
     "title": "Dictionaries",
     "category": "section",
@@ -7137,7 +7137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.Set",
+    "location": "base/collections/#Base.Set",
     "page": "Collections and Data Structures",
     "title": "Base.Set",
     "category": "type",
@@ -7145,7 +7145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.BitSet",
+    "location": "base/collections/#Base.BitSet",
     "page": "Collections and Data Structures",
     "title": "Base.BitSet",
     "category": "type",
@@ -7153,7 +7153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.union",
+    "location": "base/collections/#Base.union",
     "page": "Collections and Data Structures",
     "title": "Base.union",
     "category": "function",
@@ -7161,7 +7161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.union!",
+    "location": "base/collections/#Base.union!",
     "page": "Collections and Data Structures",
     "title": "Base.union!",
     "category": "function",
@@ -7169,7 +7169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.intersect",
+    "location": "base/collections/#Base.intersect",
     "page": "Collections and Data Structures",
     "title": "Base.intersect",
     "category": "function",
@@ -7177,7 +7177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.setdiff",
+    "location": "base/collections/#Base.setdiff",
     "page": "Collections and Data Structures",
     "title": "Base.setdiff",
     "category": "function",
@@ -7185,7 +7185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.setdiff!",
+    "location": "base/collections/#Base.setdiff!",
     "page": "Collections and Data Structures",
     "title": "Base.setdiff!",
     "category": "function",
@@ -7193,7 +7193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.symdiff",
+    "location": "base/collections/#Base.symdiff",
     "page": "Collections and Data Structures",
     "title": "Base.symdiff",
     "category": "function",
@@ -7201,7 +7201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.symdiff!",
+    "location": "base/collections/#Base.symdiff!",
     "page": "Collections and Data Structures",
     "title": "Base.symdiff!",
     "category": "function",
@@ -7209,7 +7209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.intersect!",
+    "location": "base/collections/#Base.intersect!",
     "page": "Collections and Data Structures",
     "title": "Base.intersect!",
     "category": "function",
@@ -7217,7 +7217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.issubset",
+    "location": "base/collections/#Base.issubset",
     "page": "Collections and Data Structures",
     "title": "Base.issubset",
     "category": "function",
@@ -7225,7 +7225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.:⊈",
+    "location": "base/collections/#Base.:⊈",
     "page": "Collections and Data Structures",
     "title": "Base.:⊈",
     "category": "function",
@@ -7233,7 +7233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.:⊊",
+    "location": "base/collections/#Base.:⊊",
     "page": "Collections and Data Structures",
     "title": "Base.:⊊",
     "category": "function",
@@ -7241,7 +7241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.issetequal",
+    "location": "base/collections/#Base.issetequal",
     "page": "Collections and Data Structures",
     "title": "Base.issetequal",
     "category": "function",
@@ -7249,7 +7249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Set-Like-Collections-1",
+    "location": "base/collections/#Set-Like-Collections-1",
     "page": "Collections and Data Structures",
     "title": "Set-Like Collections",
     "category": "section",
@@ -7257,7 +7257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.push!",
+    "location": "base/collections/#Base.push!",
     "page": "Collections and Data Structures",
     "title": "Base.push!",
     "category": "function",
@@ -7265,7 +7265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.pop!",
+    "location": "base/collections/#Base.pop!",
     "page": "Collections and Data Structures",
     "title": "Base.pop!",
     "category": "function",
@@ -7273,7 +7273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.pushfirst!",
+    "location": "base/collections/#Base.pushfirst!",
     "page": "Collections and Data Structures",
     "title": "Base.pushfirst!",
     "category": "function",
@@ -7281,7 +7281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.popfirst!",
+    "location": "base/collections/#Base.popfirst!",
     "page": "Collections and Data Structures",
     "title": "Base.popfirst!",
     "category": "function",
@@ -7289,7 +7289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.insert!",
+    "location": "base/collections/#Base.insert!",
     "page": "Collections and Data Structures",
     "title": "Base.insert!",
     "category": "function",
@@ -7297,7 +7297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.deleteat!",
+    "location": "base/collections/#Base.deleteat!",
     "page": "Collections and Data Structures",
     "title": "Base.deleteat!",
     "category": "function",
@@ -7305,7 +7305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.splice!",
+    "location": "base/collections/#Base.splice!",
     "page": "Collections and Data Structures",
     "title": "Base.splice!",
     "category": "function",
@@ -7313,7 +7313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.resize!",
+    "location": "base/collections/#Base.resize!",
     "page": "Collections and Data Structures",
     "title": "Base.resize!",
     "category": "function",
@@ -7321,7 +7321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.append!",
+    "location": "base/collections/#Base.append!",
     "page": "Collections and Data Structures",
     "title": "Base.append!",
     "category": "function",
@@ -7329,7 +7329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.prepend!",
+    "location": "base/collections/#Base.prepend!",
     "page": "Collections and Data Structures",
     "title": "Base.prepend!",
     "category": "function",
@@ -7337,7 +7337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Dequeues-1",
+    "location": "base/collections/#Dequeues-1",
     "page": "Collections and Data Structures",
     "title": "Dequeues",
     "category": "section",
@@ -7345,7 +7345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.Pair",
+    "location": "base/collections/#Base.Pair",
     "page": "Collections and Data Structures",
     "title": "Base.Pair",
     "category": "type",
@@ -7353,7 +7353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Base.Iterators.Pairs",
+    "location": "base/collections/#Base.Iterators.Pairs",
     "page": "Collections and Data Structures",
     "title": "Base.Iterators.Pairs",
     "category": "type",
@@ -7361,7 +7361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/collections.html#Utility-Collections-1",
+    "location": "base/collections/#Utility-Collections-1",
     "page": "Collections and Data Structures",
     "title": "Utility Collections",
     "category": "section",
@@ -7369,7 +7369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#",
+    "location": "base/math/#",
     "page": "Mathematics",
     "title": "Mathematics",
     "category": "page",
@@ -7377,7 +7377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Mathematics-1",
+    "location": "base/math/#Mathematics-1",
     "page": "Mathematics",
     "title": "Mathematics",
     "category": "section",
@@ -7385,7 +7385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:--Tuple{Any}",
+    "location": "base/math/#Base.:--Tuple{Any}",
     "page": "Mathematics",
     "title": "Base.:-",
     "category": "method",
@@ -7393,15 +7393,15 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:+",
+    "location": "base/math/#Base.:+",
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
-    "location": "base/math.html#Base.:--Tuple{Any,Any}",
+    "location": "base/math/#Base.:--Tuple{Any,Any}",
     "page": "Mathematics",
     "title": "Base.:-",
     "category": "method",
@@ -7409,7 +7409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:*-Tuple{Any,Vararg{Any,N} where N}",
+    "location": "base/math/#Base.:*-Tuple{Any,Vararg{Any,N} where N}",
     "page": "Mathematics",
     "title": "Base.:*",
     "category": "method",
@@ -7417,7 +7417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:/",
+    "location": "base/math/#Base.:/",
     "page": "Mathematics",
     "title": "Base.:/",
     "category": "function",
@@ -7425,7 +7425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:\\-Tuple{Any,Any}",
+    "location": "base/math/#Base.:\\-Tuple{Any,Any}",
     "page": "Mathematics",
     "title": "Base.:\\",
     "category": "method",
@@ -7433,7 +7433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:^-Tuple{Number,Number}",
+    "location": "base/math/#Base.:^-Tuple{Number,Number}",
     "page": "Mathematics",
     "title": "Base.:^",
     "category": "method",
@@ -7441,7 +7441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.fma",
+    "location": "base/math/#Base.fma",
     "page": "Mathematics",
     "title": "Base.fma",
     "category": "function",
@@ -7449,7 +7449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.muladd",
+    "location": "base/math/#Base.muladd",
     "page": "Mathematics",
     "title": "Base.muladd",
     "category": "function",
@@ -7457,7 +7457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.inv-Tuple{Number}",
+    "location": "base/math/#Base.inv-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.inv",
     "category": "method",
@@ -7465,7 +7465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.div",
+    "location": "base/math/#Base.div",
     "page": "Mathematics",
     "title": "Base.div",
     "category": "function",
@@ -7473,7 +7473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.fld",
+    "location": "base/math/#Base.fld",
     "page": "Mathematics",
     "title": "Base.fld",
     "category": "function",
@@ -7481,7 +7481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.cld",
+    "location": "base/math/#Base.cld",
     "page": "Mathematics",
     "title": "Base.cld",
     "category": "function",
@@ -7489,7 +7489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.mod",
+    "location": "base/math/#Base.mod",
     "page": "Mathematics",
     "title": "Base.mod",
     "category": "function",
@@ -7497,7 +7497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.rem",
+    "location": "base/math/#Base.rem",
     "page": "Mathematics",
     "title": "Base.rem",
     "category": "function",
@@ -7505,7 +7505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.rem2pi",
+    "location": "base/math/#Base.Math.rem2pi",
     "page": "Mathematics",
     "title": "Base.Math.rem2pi",
     "category": "function",
@@ -7513,7 +7513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.mod2pi",
+    "location": "base/math/#Base.Math.mod2pi",
     "page": "Mathematics",
     "title": "Base.Math.mod2pi",
     "category": "function",
@@ -7521,7 +7521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.divrem",
+    "location": "base/math/#Base.divrem",
     "page": "Mathematics",
     "title": "Base.divrem",
     "category": "function",
@@ -7529,7 +7529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.fldmod",
+    "location": "base/math/#Base.fldmod",
     "page": "Mathematics",
     "title": "Base.fldmod",
     "category": "function",
@@ -7537,7 +7537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.fld1",
+    "location": "base/math/#Base.fld1",
     "page": "Mathematics",
     "title": "Base.fld1",
     "category": "function",
@@ -7545,7 +7545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.mod1",
+    "location": "base/math/#Base.mod1",
     "page": "Mathematics",
     "title": "Base.mod1",
     "category": "function",
@@ -7553,7 +7553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.fldmod1",
+    "location": "base/math/#Base.fldmod1",
     "page": "Mathematics",
     "title": "Base.fldmod1",
     "category": "function",
@@ -7561,7 +7561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.://",
+    "location": "base/math/#Base.://",
     "page": "Mathematics",
     "title": "Base.://",
     "category": "function",
@@ -7569,7 +7569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.rationalize",
+    "location": "base/math/#Base.rationalize",
     "page": "Mathematics",
     "title": "Base.rationalize",
     "category": "function",
@@ -7577,7 +7577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.numerator",
+    "location": "base/math/#Base.numerator",
     "page": "Mathematics",
     "title": "Base.numerator",
     "category": "function",
@@ -7585,7 +7585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.denominator",
+    "location": "base/math/#Base.denominator",
     "page": "Mathematics",
     "title": "Base.denominator",
     "category": "function",
@@ -7593,7 +7593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:<<",
+    "location": "base/math/#Base.:<<",
     "page": "Mathematics",
     "title": "Base.:<<",
     "category": "function",
@@ -7601,7 +7601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:>>",
+    "location": "base/math/#Base.:>>",
     "page": "Mathematics",
     "title": "Base.:>>",
     "category": "function",
@@ -7609,7 +7609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:>>>",
+    "location": "base/math/#Base.:>>>",
     "page": "Mathematics",
     "title": "Base.:>>>",
     "category": "function",
@@ -7617,7 +7617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.::",
+    "location": "base/math/#Base.::",
     "page": "Mathematics",
     "title": "Base.::",
     "category": "function",
@@ -7625,7 +7625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.range",
+    "location": "base/math/#Base.range",
     "page": "Mathematics",
     "title": "Base.range",
     "category": "function",
@@ -7633,7 +7633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.OneTo",
+    "location": "base/math/#Base.OneTo",
     "page": "Mathematics",
     "title": "Base.OneTo",
     "category": "type",
@@ -7641,7 +7641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.StepRangeLen",
+    "location": "base/math/#Base.StepRangeLen",
     "page": "Mathematics",
     "title": "Base.StepRangeLen",
     "category": "type",
@@ -7649,7 +7649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:==",
+    "location": "base/math/#Base.:==",
     "page": "Mathematics",
     "title": "Base.:==",
     "category": "function",
@@ -7657,7 +7657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:!=",
+    "location": "base/math/#Base.:!=",
     "page": "Mathematics",
     "title": "Base.:!=",
     "category": "function",
@@ -7665,7 +7665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:!==",
+    "location": "base/math/#Base.:!==",
     "page": "Mathematics",
     "title": "Base.:!==",
     "category": "function",
@@ -7673,7 +7673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:<",
+    "location": "base/math/#Base.:<",
     "page": "Mathematics",
     "title": "Base.:<",
     "category": "function",
@@ -7681,7 +7681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:<=",
+    "location": "base/math/#Base.:<=",
     "page": "Mathematics",
     "title": "Base.:<=",
     "category": "function",
@@ -7689,7 +7689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:>",
+    "location": "base/math/#Base.:>",
     "page": "Mathematics",
     "title": "Base.:>",
     "category": "function",
@@ -7697,7 +7697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:>=",
+    "location": "base/math/#Base.:>=",
     "page": "Mathematics",
     "title": "Base.:>=",
     "category": "function",
@@ -7705,7 +7705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.cmp",
+    "location": "base/math/#Base.cmp",
     "page": "Mathematics",
     "title": "Base.cmp",
     "category": "function",
@@ -7713,7 +7713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:~",
+    "location": "base/math/#Base.:~",
     "page": "Mathematics",
     "title": "Base.:~",
     "category": "function",
@@ -7721,7 +7721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:&",
+    "location": "base/math/#Base.:&",
     "page": "Mathematics",
     "title": "Base.:&",
     "category": "function",
@@ -7729,7 +7729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:|",
+    "location": "base/math/#Base.:|",
     "page": "Mathematics",
     "title": "Base.:|",
     "category": "function",
@@ -7737,7 +7737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.xor",
+    "location": "base/math/#Base.xor",
     "page": "Mathematics",
     "title": "Base.xor",
     "category": "function",
@@ -7745,7 +7745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.:!",
+    "location": "base/math/#Base.:!",
     "page": "Mathematics",
     "title": "Base.:!",
     "category": "function",
@@ -7753,7 +7753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#&&",
+    "location": "base/math/#&&",
     "page": "Mathematics",
     "title": "&&",
     "category": "keyword",
@@ -7761,7 +7761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#||",
+    "location": "base/math/#||",
     "page": "Mathematics",
     "title": "||",
     "category": "keyword",
@@ -7769,7 +7769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#math-ops-1",
+    "location": "base/math/#math-ops-1",
     "page": "Mathematics",
     "title": "Mathematical Operators",
     "category": "section",
@@ -7777,7 +7777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.isapprox",
+    "location": "base/math/#Base.isapprox",
     "page": "Mathematics",
     "title": "Base.isapprox",
     "category": "function",
@@ -7785,7 +7785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.sin-Tuple{Number}",
+    "location": "base/math/#Base.sin-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.sin",
     "category": "method",
@@ -7793,7 +7793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.cos-Tuple{Number}",
+    "location": "base/math/#Base.cos-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.cos",
     "category": "method",
@@ -7801,7 +7801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.sincos-Tuple{Float64}",
+    "location": "base/math/#Base.Math.sincos-Tuple{Float64}",
     "page": "Mathematics",
     "title": "Base.Math.sincos",
     "category": "method",
@@ -7809,7 +7809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.tan-Tuple{Number}",
+    "location": "base/math/#Base.tan-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.tan",
     "category": "method",
@@ -7817,7 +7817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.sind",
+    "location": "base/math/#Base.Math.sind",
     "page": "Mathematics",
     "title": "Base.Math.sind",
     "category": "function",
@@ -7825,7 +7825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.cosd",
+    "location": "base/math/#Base.Math.cosd",
     "page": "Mathematics",
     "title": "Base.Math.cosd",
     "category": "function",
@@ -7833,7 +7833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.tand",
+    "location": "base/math/#Base.Math.tand",
     "page": "Mathematics",
     "title": "Base.Math.tand",
     "category": "function",
@@ -7841,7 +7841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.sinpi",
+    "location": "base/math/#Base.Math.sinpi",
     "page": "Mathematics",
     "title": "Base.Math.sinpi",
     "category": "function",
@@ -7849,7 +7849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.cospi",
+    "location": "base/math/#Base.Math.cospi",
     "page": "Mathematics",
     "title": "Base.Math.cospi",
     "category": "function",
@@ -7857,7 +7857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.sinh-Tuple{Number}",
+    "location": "base/math/#Base.sinh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.sinh",
     "category": "method",
@@ -7865,7 +7865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.cosh-Tuple{Number}",
+    "location": "base/math/#Base.cosh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.cosh",
     "category": "method",
@@ -7873,7 +7873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.tanh-Tuple{Number}",
+    "location": "base/math/#Base.tanh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.tanh",
     "category": "method",
@@ -7881,7 +7881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.asin-Tuple{Number}",
+    "location": "base/math/#Base.asin-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.asin",
     "category": "method",
@@ -7889,7 +7889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.acos-Tuple{Number}",
+    "location": "base/math/#Base.acos-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.acos",
     "category": "method",
@@ -7897,7 +7897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.atan-Tuple{Number}",
+    "location": "base/math/#Base.atan-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.atan",
     "category": "method",
@@ -7905,7 +7905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.atan2",
+    "location": "base/math/#Base.Math.atan2",
     "page": "Mathematics",
     "title": "Base.Math.atan2",
     "category": "function",
@@ -7913,7 +7913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.asind",
+    "location": "base/math/#Base.Math.asind",
     "page": "Mathematics",
     "title": "Base.Math.asind",
     "category": "function",
@@ -7921,7 +7921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.acosd",
+    "location": "base/math/#Base.Math.acosd",
     "page": "Mathematics",
     "title": "Base.Math.acosd",
     "category": "function",
@@ -7929,7 +7929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.atand",
+    "location": "base/math/#Base.Math.atand",
     "page": "Mathematics",
     "title": "Base.Math.atand",
     "category": "function",
@@ -7937,7 +7937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.sec-Tuple{Number}",
+    "location": "base/math/#Base.Math.sec-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.sec",
     "category": "method",
@@ -7945,7 +7945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.csc-Tuple{Number}",
+    "location": "base/math/#Base.Math.csc-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.csc",
     "category": "method",
@@ -7953,7 +7953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.cot-Tuple{Number}",
+    "location": "base/math/#Base.Math.cot-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.cot",
     "category": "method",
@@ -7961,7 +7961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.secd",
+    "location": "base/math/#Base.Math.secd",
     "page": "Mathematics",
     "title": "Base.Math.secd",
     "category": "function",
@@ -7969,7 +7969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.cscd",
+    "location": "base/math/#Base.Math.cscd",
     "page": "Mathematics",
     "title": "Base.Math.cscd",
     "category": "function",
@@ -7977,7 +7977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.cotd",
+    "location": "base/math/#Base.Math.cotd",
     "page": "Mathematics",
     "title": "Base.Math.cotd",
     "category": "function",
@@ -7985,7 +7985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.asec-Tuple{Number}",
+    "location": "base/math/#Base.Math.asec-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.asec",
     "category": "method",
@@ -7993,7 +7993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.acsc-Tuple{Number}",
+    "location": "base/math/#Base.Math.acsc-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.acsc",
     "category": "method",
@@ -8001,7 +8001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.acot-Tuple{Number}",
+    "location": "base/math/#Base.Math.acot-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.acot",
     "category": "method",
@@ -8009,7 +8009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.asecd",
+    "location": "base/math/#Base.Math.asecd",
     "page": "Mathematics",
     "title": "Base.Math.asecd",
     "category": "function",
@@ -8017,7 +8017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.acscd",
+    "location": "base/math/#Base.Math.acscd",
     "page": "Mathematics",
     "title": "Base.Math.acscd",
     "category": "function",
@@ -8025,7 +8025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.acotd",
+    "location": "base/math/#Base.Math.acotd",
     "page": "Mathematics",
     "title": "Base.Math.acotd",
     "category": "function",
@@ -8033,7 +8033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.sech-Tuple{Number}",
+    "location": "base/math/#Base.Math.sech-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.sech",
     "category": "method",
@@ -8041,7 +8041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.csch-Tuple{Number}",
+    "location": "base/math/#Base.Math.csch-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.csch",
     "category": "method",
@@ -8049,7 +8049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.coth-Tuple{Number}",
+    "location": "base/math/#Base.Math.coth-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.coth",
     "category": "method",
@@ -8057,7 +8057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.asinh-Tuple{Number}",
+    "location": "base/math/#Base.asinh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.asinh",
     "category": "method",
@@ -8065,7 +8065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.acosh-Tuple{Number}",
+    "location": "base/math/#Base.acosh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.acosh",
     "category": "method",
@@ -8073,7 +8073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.atanh-Tuple{Number}",
+    "location": "base/math/#Base.atanh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.atanh",
     "category": "method",
@@ -8081,7 +8081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.asech-Tuple{Number}",
+    "location": "base/math/#Base.Math.asech-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.asech",
     "category": "method",
@@ -8089,7 +8089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.acsch-Tuple{Number}",
+    "location": "base/math/#Base.Math.acsch-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.acsch",
     "category": "method",
@@ -8097,7 +8097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.acoth-Tuple{Number}",
+    "location": "base/math/#Base.Math.acoth-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.acoth",
     "category": "method",
@@ -8105,7 +8105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.sinc",
+    "location": "base/math/#Base.Math.sinc",
     "page": "Mathematics",
     "title": "Base.Math.sinc",
     "category": "function",
@@ -8113,7 +8113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.cosc",
+    "location": "base/math/#Base.Math.cosc",
     "page": "Mathematics",
     "title": "Base.Math.cosc",
     "category": "function",
@@ -8121,7 +8121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.deg2rad",
+    "location": "base/math/#Base.Math.deg2rad",
     "page": "Mathematics",
     "title": "Base.Math.deg2rad",
     "category": "function",
@@ -8129,7 +8129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.rad2deg",
+    "location": "base/math/#Base.Math.rad2deg",
     "page": "Mathematics",
     "title": "Base.Math.rad2deg",
     "category": "function",
@@ -8137,7 +8137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.hypot",
+    "location": "base/math/#Base.Math.hypot",
     "page": "Mathematics",
     "title": "Base.Math.hypot",
     "category": "function",
@@ -8145,7 +8145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.log-Tuple{Number}",
+    "location": "base/math/#Base.log-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.log",
     "category": "method",
@@ -8153,7 +8153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.log-Tuple{Number,Number}",
+    "location": "base/math/#Base.log-Tuple{Number,Number}",
     "page": "Mathematics",
     "title": "Base.log",
     "category": "method",
@@ -8161,7 +8161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.log2",
+    "location": "base/math/#Base.log2",
     "page": "Mathematics",
     "title": "Base.log2",
     "category": "function",
@@ -8169,7 +8169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.log10",
+    "location": "base/math/#Base.log10",
     "page": "Mathematics",
     "title": "Base.log10",
     "category": "function",
@@ -8177,7 +8177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.log1p",
+    "location": "base/math/#Base.log1p",
     "page": "Mathematics",
     "title": "Base.log1p",
     "category": "function",
@@ -8185,7 +8185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.frexp",
+    "location": "base/math/#Base.Math.frexp",
     "page": "Mathematics",
     "title": "Base.Math.frexp",
     "category": "function",
@@ -8193,7 +8193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.exp-Tuple{Float64}",
+    "location": "base/math/#Base.exp-Tuple{Float64}",
     "page": "Mathematics",
     "title": "Base.exp",
     "category": "method",
@@ -8201,7 +8201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.exp2",
+    "location": "base/math/#Base.exp2",
     "page": "Mathematics",
     "title": "Base.exp2",
     "category": "function",
@@ -8209,7 +8209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.exp10",
+    "location": "base/math/#Base.exp10",
     "page": "Mathematics",
     "title": "Base.exp10",
     "category": "function",
@@ -8217,7 +8217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.ldexp",
+    "location": "base/math/#Base.Math.ldexp",
     "page": "Mathematics",
     "title": "Base.Math.ldexp",
     "category": "function",
@@ -8225,7 +8225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.modf",
+    "location": "base/math/#Base.Math.modf",
     "page": "Mathematics",
     "title": "Base.Math.modf",
     "category": "function",
@@ -8233,7 +8233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.expm1",
+    "location": "base/math/#Base.expm1",
     "page": "Mathematics",
     "title": "Base.expm1",
     "category": "function",
@@ -8241,7 +8241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.round-Tuple{Type,Any}",
+    "location": "base/math/#Base.round-Tuple{Type,Any}",
     "page": "Mathematics",
     "title": "Base.round",
     "category": "method",
@@ -8249,7 +8249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Rounding.RoundingMode",
+    "location": "base/math/#Base.Rounding.RoundingMode",
     "page": "Mathematics",
     "title": "Base.Rounding.RoundingMode",
     "category": "type",
@@ -8257,7 +8257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Rounding.RoundNearest",
+    "location": "base/math/#Base.Rounding.RoundNearest",
     "page": "Mathematics",
     "title": "Base.Rounding.RoundNearest",
     "category": "constant",
@@ -8265,7 +8265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Rounding.RoundNearestTiesAway",
+    "location": "base/math/#Base.Rounding.RoundNearestTiesAway",
     "page": "Mathematics",
     "title": "Base.Rounding.RoundNearestTiesAway",
     "category": "constant",
@@ -8273,7 +8273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Rounding.RoundNearestTiesUp",
+    "location": "base/math/#Base.Rounding.RoundNearestTiesUp",
     "page": "Mathematics",
     "title": "Base.Rounding.RoundNearestTiesUp",
     "category": "constant",
@@ -8281,7 +8281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Rounding.RoundToZero",
+    "location": "base/math/#Base.Rounding.RoundToZero",
     "page": "Mathematics",
     "title": "Base.Rounding.RoundToZero",
     "category": "constant",
@@ -8289,7 +8289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Rounding.RoundUp",
+    "location": "base/math/#Base.Rounding.RoundUp",
     "page": "Mathematics",
     "title": "Base.Rounding.RoundUp",
     "category": "constant",
@@ -8297,7 +8297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Rounding.RoundDown",
+    "location": "base/math/#Base.Rounding.RoundDown",
     "page": "Mathematics",
     "title": "Base.Rounding.RoundDown",
     "category": "constant",
@@ -8305,7 +8305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.round-Tuple{Complex{#s39} where #s39<:AbstractFloat,RoundingMode,RoundingMode}",
+    "location": "base/math/#Base.round-Tuple{Complex{#s39} where #s39<:AbstractFloat,RoundingMode,RoundingMode}",
     "page": "Mathematics",
     "title": "Base.round",
     "category": "method",
@@ -8313,7 +8313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.ceil",
+    "location": "base/math/#Base.ceil",
     "page": "Mathematics",
     "title": "Base.ceil",
     "category": "function",
@@ -8321,7 +8321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.floor",
+    "location": "base/math/#Base.floor",
     "page": "Mathematics",
     "title": "Base.floor",
     "category": "function",
@@ -8329,7 +8329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.trunc",
+    "location": "base/math/#Base.trunc",
     "page": "Mathematics",
     "title": "Base.trunc",
     "category": "function",
@@ -8337,7 +8337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.unsafe_trunc",
+    "location": "base/math/#Base.unsafe_trunc",
     "page": "Mathematics",
     "title": "Base.unsafe_trunc",
     "category": "function",
@@ -8345,7 +8345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.min",
+    "location": "base/math/#Base.min",
     "page": "Mathematics",
     "title": "Base.min",
     "category": "function",
@@ -8353,7 +8353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.max",
+    "location": "base/math/#Base.max",
     "page": "Mathematics",
     "title": "Base.max",
     "category": "function",
@@ -8361,7 +8361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.minmax",
+    "location": "base/math/#Base.minmax",
     "page": "Mathematics",
     "title": "Base.minmax",
     "category": "function",
@@ -8369,7 +8369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.clamp",
+    "location": "base/math/#Base.Math.clamp",
     "page": "Mathematics",
     "title": "Base.Math.clamp",
     "category": "function",
@@ -8377,7 +8377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.clamp!",
+    "location": "base/math/#Base.Math.clamp!",
     "page": "Mathematics",
     "title": "Base.Math.clamp!",
     "category": "function",
@@ -8385,7 +8385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.abs",
+    "location": "base/math/#Base.abs",
     "page": "Mathematics",
     "title": "Base.abs",
     "category": "function",
@@ -8393,7 +8393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_abs",
+    "location": "base/math/#Base.Checked.checked_abs",
     "page": "Mathematics",
     "title": "Base.Checked.checked_abs",
     "category": "function",
@@ -8401,7 +8401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_neg",
+    "location": "base/math/#Base.Checked.checked_neg",
     "page": "Mathematics",
     "title": "Base.Checked.checked_neg",
     "category": "function",
@@ -8409,7 +8409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_add",
+    "location": "base/math/#Base.Checked.checked_add",
     "page": "Mathematics",
     "title": "Base.Checked.checked_add",
     "category": "function",
@@ -8417,7 +8417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_sub",
+    "location": "base/math/#Base.Checked.checked_sub",
     "page": "Mathematics",
     "title": "Base.Checked.checked_sub",
     "category": "function",
@@ -8425,7 +8425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_mul",
+    "location": "base/math/#Base.Checked.checked_mul",
     "page": "Mathematics",
     "title": "Base.Checked.checked_mul",
     "category": "function",
@@ -8433,7 +8433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_div",
+    "location": "base/math/#Base.Checked.checked_div",
     "page": "Mathematics",
     "title": "Base.Checked.checked_div",
     "category": "function",
@@ -8441,7 +8441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_rem",
+    "location": "base/math/#Base.Checked.checked_rem",
     "page": "Mathematics",
     "title": "Base.Checked.checked_rem",
     "category": "function",
@@ -8449,7 +8449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_fld",
+    "location": "base/math/#Base.Checked.checked_fld",
     "page": "Mathematics",
     "title": "Base.Checked.checked_fld",
     "category": "function",
@@ -8457,7 +8457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_mod",
+    "location": "base/math/#Base.Checked.checked_mod",
     "page": "Mathematics",
     "title": "Base.Checked.checked_mod",
     "category": "function",
@@ -8465,7 +8465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.checked_cld",
+    "location": "base/math/#Base.Checked.checked_cld",
     "page": "Mathematics",
     "title": "Base.Checked.checked_cld",
     "category": "function",
@@ -8473,7 +8473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.add_with_overflow",
+    "location": "base/math/#Base.Checked.add_with_overflow",
     "page": "Mathematics",
     "title": "Base.Checked.add_with_overflow",
     "category": "function",
@@ -8481,7 +8481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.sub_with_overflow",
+    "location": "base/math/#Base.Checked.sub_with_overflow",
     "page": "Mathematics",
     "title": "Base.Checked.sub_with_overflow",
     "category": "function",
@@ -8489,7 +8489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Checked.mul_with_overflow",
+    "location": "base/math/#Base.Checked.mul_with_overflow",
     "page": "Mathematics",
     "title": "Base.Checked.mul_with_overflow",
     "category": "function",
@@ -8497,7 +8497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.abs2",
+    "location": "base/math/#Base.abs2",
     "page": "Mathematics",
     "title": "Base.abs2",
     "category": "function",
@@ -8505,7 +8505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.copysign",
+    "location": "base/math/#Base.copysign",
     "page": "Mathematics",
     "title": "Base.copysign",
     "category": "function",
@@ -8513,7 +8513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.sign",
+    "location": "base/math/#Base.sign",
     "page": "Mathematics",
     "title": "Base.sign",
     "category": "function",
@@ -8521,7 +8521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.signbit",
+    "location": "base/math/#Base.signbit",
     "page": "Mathematics",
     "title": "Base.signbit",
     "category": "function",
@@ -8529,7 +8529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.flipsign",
+    "location": "base/math/#Base.flipsign",
     "page": "Mathematics",
     "title": "Base.flipsign",
     "category": "function",
@@ -8537,7 +8537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.sqrt-Tuple{Real}",
+    "location": "base/math/#Base.sqrt-Tuple{Real}",
     "page": "Mathematics",
     "title": "Base.sqrt",
     "category": "method",
@@ -8545,7 +8545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.isqrt",
+    "location": "base/math/#Base.isqrt",
     "page": "Mathematics",
     "title": "Base.isqrt",
     "category": "function",
@@ -8553,7 +8553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.cbrt",
+    "location": "base/math/#Base.Math.cbrt",
     "page": "Mathematics",
     "title": "Base.Math.cbrt",
     "category": "function",
@@ -8561,7 +8561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.real-Tuple{Complex}",
+    "location": "base/math/#Base.real-Tuple{Complex}",
     "page": "Mathematics",
     "title": "Base.real",
     "category": "method",
@@ -8569,7 +8569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.imag",
+    "location": "base/math/#Base.imag",
     "page": "Mathematics",
     "title": "Base.imag",
     "category": "function",
@@ -8577,7 +8577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.reim",
+    "location": "base/math/#Base.reim",
     "page": "Mathematics",
     "title": "Base.reim",
     "category": "function",
@@ -8585,7 +8585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.conj",
+    "location": "base/math/#Base.conj",
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "function",
@@ -8593,7 +8593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.angle",
+    "location": "base/math/#Base.angle",
     "page": "Mathematics",
     "title": "Base.angle",
     "category": "function",
@@ -8601,7 +8601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.cis",
+    "location": "base/math/#Base.cis",
     "page": "Mathematics",
     "title": "Base.cis",
     "category": "function",
@@ -8609,7 +8609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.binomial",
+    "location": "base/math/#Base.binomial",
     "page": "Mathematics",
     "title": "Base.binomial",
     "category": "function",
@@ -8617,7 +8617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.factorial",
+    "location": "base/math/#Base.factorial",
     "page": "Mathematics",
     "title": "Base.factorial",
     "category": "function",
@@ -8625,7 +8625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.gcd",
+    "location": "base/math/#Base.gcd",
     "page": "Mathematics",
     "title": "Base.gcd",
     "category": "function",
@@ -8633,7 +8633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.lcm",
+    "location": "base/math/#Base.lcm",
     "page": "Mathematics",
     "title": "Base.lcm",
     "category": "function",
@@ -8641,7 +8641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.gcdx",
+    "location": "base/math/#Base.gcdx",
     "page": "Mathematics",
     "title": "Base.gcdx",
     "category": "function",
@@ -8649,7 +8649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.ispow2",
+    "location": "base/math/#Base.ispow2",
     "page": "Mathematics",
     "title": "Base.ispow2",
     "category": "function",
@@ -8657,7 +8657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.nextpow2",
+    "location": "base/math/#Base.nextpow2",
     "page": "Mathematics",
     "title": "Base.nextpow2",
     "category": "function",
@@ -8665,7 +8665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.prevpow2",
+    "location": "base/math/#Base.prevpow2",
     "page": "Mathematics",
     "title": "Base.prevpow2",
     "category": "function",
@@ -8673,7 +8673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.nextpow",
+    "location": "base/math/#Base.nextpow",
     "page": "Mathematics",
     "title": "Base.nextpow",
     "category": "function",
@@ -8681,7 +8681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.prevpow",
+    "location": "base/math/#Base.prevpow",
     "page": "Mathematics",
     "title": "Base.prevpow",
     "category": "function",
@@ -8689,7 +8689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.nextprod",
+    "location": "base/math/#Base.nextprod",
     "page": "Mathematics",
     "title": "Base.nextprod",
     "category": "function",
@@ -8697,7 +8697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.invmod",
+    "location": "base/math/#Base.invmod",
     "page": "Mathematics",
     "title": "Base.invmod",
     "category": "function",
@@ -8705,7 +8705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.powermod",
+    "location": "base/math/#Base.powermod",
     "page": "Mathematics",
     "title": "Base.powermod",
     "category": "function",
@@ -8713,7 +8713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.gamma",
+    "location": "base/math/#Base.Math.gamma",
     "page": "Mathematics",
     "title": "Base.Math.gamma",
     "category": "function",
@@ -8721,7 +8721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.lgamma",
+    "location": "base/math/#Base.Math.lgamma",
     "page": "Mathematics",
     "title": "Base.Math.lgamma",
     "category": "function",
@@ -8729,7 +8729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.lfact",
+    "location": "base/math/#Base.Math.lfact",
     "page": "Mathematics",
     "title": "Base.Math.lfact",
     "category": "function",
@@ -8737,7 +8737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.beta",
+    "location": "base/math/#Base.Math.beta",
     "page": "Mathematics",
     "title": "Base.Math.beta",
     "category": "function",
@@ -8745,7 +8745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.lbeta",
+    "location": "base/math/#Base.Math.lbeta",
     "page": "Mathematics",
     "title": "Base.Math.lbeta",
     "category": "function",
@@ -8753,7 +8753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.ndigits",
+    "location": "base/math/#Base.ndigits",
     "page": "Mathematics",
     "title": "Base.ndigits",
     "category": "function",
@@ -8761,7 +8761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.widemul",
+    "location": "base/math/#Base.widemul",
     "page": "Mathematics",
     "title": "Base.widemul",
     "category": "function",
@@ -8769,7 +8769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.Math.@evalpoly",
+    "location": "base/math/#Base.Math.@evalpoly",
     "page": "Mathematics",
     "title": "Base.Math.@evalpoly",
     "category": "macro",
@@ -8777,7 +8777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.FastMath.@fastmath",
+    "location": "base/math/#Base.FastMath.@fastmath",
     "page": "Mathematics",
     "title": "Base.FastMath.@fastmath",
     "category": "macro",
@@ -8785,7 +8785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Mathematical-Functions-1",
+    "location": "base/math/#Mathematical-Functions-1",
     "page": "Mathematics",
     "title": "Mathematical Functions",
     "category": "section",
@@ -8793,7 +8793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.mean",
+    "location": "base/math/#Base.mean",
     "page": "Mathematics",
     "title": "Base.mean",
     "category": "function",
@@ -8801,7 +8801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.mean!",
+    "location": "base/math/#Base.mean!",
     "page": "Mathematics",
     "title": "Base.mean!",
     "category": "function",
@@ -8809,7 +8809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.middle",
+    "location": "base/math/#Base.middle",
     "page": "Mathematics",
     "title": "Base.middle",
     "category": "function",
@@ -8817,7 +8817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.median",
+    "location": "base/math/#Base.median",
     "page": "Mathematics",
     "title": "Base.median",
     "category": "function",
@@ -8825,7 +8825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.median!",
+    "location": "base/math/#Base.median!",
     "page": "Mathematics",
     "title": "Base.median!",
     "category": "function",
@@ -8833,7 +8833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.quantile",
+    "location": "base/math/#Base.quantile",
     "page": "Mathematics",
     "title": "Base.quantile",
     "category": "function",
@@ -8841,7 +8841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Base.quantile!",
+    "location": "base/math/#Base.quantile!",
     "page": "Mathematics",
     "title": "Base.quantile!",
     "category": "function",
@@ -8849,7 +8849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/math.html#Statistics-1",
+    "location": "base/math/#Statistics-1",
     "page": "Mathematics",
     "title": "Statistics",
     "category": "section",
@@ -8857,7 +8857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#",
+    "location": "base/numbers/#",
     "page": "Numbers",
     "title": "Numbers",
     "category": "page",
@@ -8865,7 +8865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#lib-numbers-1",
+    "location": "base/numbers/#lib-numbers-1",
     "page": "Numbers",
     "title": "Numbers",
     "category": "section",
@@ -8873,7 +8873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Standard-Numeric-Types-1",
+    "location": "base/numbers/#Standard-Numeric-Types-1",
     "page": "Numbers",
     "title": "Standard Numeric Types",
     "category": "section",
@@ -8881,7 +8881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Number",
+    "location": "base/numbers/#Core.Number",
     "page": "Numbers",
     "title": "Core.Number",
     "category": "type",
@@ -8889,7 +8889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Real",
+    "location": "base/numbers/#Core.Real",
     "page": "Numbers",
     "title": "Core.Real",
     "category": "type",
@@ -8897,7 +8897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.AbstractFloat",
+    "location": "base/numbers/#Core.AbstractFloat",
     "page": "Numbers",
     "title": "Core.AbstractFloat",
     "category": "type",
@@ -8905,7 +8905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Integer",
+    "location": "base/numbers/#Core.Integer",
     "page": "Numbers",
     "title": "Core.Integer",
     "category": "type",
@@ -8913,7 +8913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Signed",
+    "location": "base/numbers/#Core.Signed",
     "page": "Numbers",
     "title": "Core.Signed",
     "category": "type",
@@ -8921,7 +8921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Unsigned",
+    "location": "base/numbers/#Core.Unsigned",
     "page": "Numbers",
     "title": "Core.Unsigned",
     "category": "type",
@@ -8929,7 +8929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.AbstractIrrational",
+    "location": "base/numbers/#Base.AbstractIrrational",
     "page": "Numbers",
     "title": "Base.AbstractIrrational",
     "category": "type",
@@ -8937,7 +8937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Abstract-number-types-1",
+    "location": "base/numbers/#Abstract-number-types-1",
     "page": "Numbers",
     "title": "Abstract number types",
     "category": "section",
@@ -8945,7 +8945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Float16",
+    "location": "base/numbers/#Core.Float16",
     "page": "Numbers",
     "title": "Core.Float16",
     "category": "type",
@@ -8953,7 +8953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Float32",
+    "location": "base/numbers/#Core.Float32",
     "page": "Numbers",
     "title": "Core.Float32",
     "category": "type",
@@ -8961,7 +8961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Float64",
+    "location": "base/numbers/#Core.Float64",
     "page": "Numbers",
     "title": "Core.Float64",
     "category": "type",
@@ -8969,7 +8969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MPFR.BigFloat",
+    "location": "base/numbers/#Base.MPFR.BigFloat",
     "page": "Numbers",
     "title": "Base.MPFR.BigFloat",
     "category": "type",
@@ -8977,7 +8977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Bool",
+    "location": "base/numbers/#Core.Bool",
     "page": "Numbers",
     "title": "Core.Bool",
     "category": "type",
@@ -8985,7 +8985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Int8",
+    "location": "base/numbers/#Core.Int8",
     "page": "Numbers",
     "title": "Core.Int8",
     "category": "type",
@@ -8993,7 +8993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.UInt8",
+    "location": "base/numbers/#Core.UInt8",
     "page": "Numbers",
     "title": "Core.UInt8",
     "category": "type",
@@ -9001,7 +9001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Int16",
+    "location": "base/numbers/#Core.Int16",
     "page": "Numbers",
     "title": "Core.Int16",
     "category": "type",
@@ -9009,7 +9009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.UInt16",
+    "location": "base/numbers/#Core.UInt16",
     "page": "Numbers",
     "title": "Core.UInt16",
     "category": "type",
@@ -9017,7 +9017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Int32",
+    "location": "base/numbers/#Core.Int32",
     "page": "Numbers",
     "title": "Core.Int32",
     "category": "type",
@@ -9025,7 +9025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.UInt32",
+    "location": "base/numbers/#Core.UInt32",
     "page": "Numbers",
     "title": "Core.UInt32",
     "category": "type",
@@ -9033,7 +9033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Int64",
+    "location": "base/numbers/#Core.Int64",
     "page": "Numbers",
     "title": "Core.Int64",
     "category": "type",
@@ -9041,7 +9041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.UInt64",
+    "location": "base/numbers/#Core.UInt64",
     "page": "Numbers",
     "title": "Core.UInt64",
     "category": "type",
@@ -9049,7 +9049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Int128",
+    "location": "base/numbers/#Core.Int128",
     "page": "Numbers",
     "title": "Core.Int128",
     "category": "type",
@@ -9057,7 +9057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.UInt128",
+    "location": "base/numbers/#Core.UInt128",
     "page": "Numbers",
     "title": "Core.UInt128",
     "category": "type",
@@ -9065,7 +9065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.GMP.BigInt",
+    "location": "base/numbers/#Base.GMP.BigInt",
     "page": "Numbers",
     "title": "Base.GMP.BigInt",
     "category": "type",
@@ -9073,7 +9073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Complex",
+    "location": "base/numbers/#Base.Complex",
     "page": "Numbers",
     "title": "Base.Complex",
     "category": "type",
@@ -9081,7 +9081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Rational",
+    "location": "base/numbers/#Base.Rational",
     "page": "Numbers",
     "title": "Base.Rational",
     "category": "type",
@@ -9089,7 +9089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Irrational",
+    "location": "base/numbers/#Base.Irrational",
     "page": "Numbers",
     "title": "Base.Irrational",
     "category": "type",
@@ -9097,7 +9097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Concrete-number-types-1",
+    "location": "base/numbers/#Concrete-number-types-1",
     "page": "Numbers",
     "title": "Concrete number types",
     "category": "section",
@@ -9105,7 +9105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.digits",
+    "location": "base/numbers/#Base.digits",
     "page": "Numbers",
     "title": "Base.digits",
     "category": "function",
@@ -9113,7 +9113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.digits!",
+    "location": "base/numbers/#Base.digits!",
     "page": "Numbers",
     "title": "Base.digits!",
     "category": "function",
@@ -9121,7 +9121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.bitstring",
+    "location": "base/numbers/#Base.bitstring",
     "page": "Numbers",
     "title": "Base.bitstring",
     "category": "function",
@@ -9129,7 +9129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.parse",
+    "location": "base/numbers/#Base.parse",
     "page": "Numbers",
     "title": "Base.parse",
     "category": "function",
@@ -9137,7 +9137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.tryparse",
+    "location": "base/numbers/#Base.tryparse",
     "page": "Numbers",
     "title": "Base.tryparse",
     "category": "function",
@@ -9145,7 +9145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.big",
+    "location": "base/numbers/#Base.big",
     "page": "Numbers",
     "title": "Base.big",
     "category": "function",
@@ -9153,7 +9153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.signed",
+    "location": "base/numbers/#Base.signed",
     "page": "Numbers",
     "title": "Base.signed",
     "category": "function",
@@ -9161,7 +9161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.unsigned",
+    "location": "base/numbers/#Base.unsigned",
     "page": "Numbers",
     "title": "Base.unsigned",
     "category": "function",
@@ -9169,7 +9169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.float-Tuple{Any}",
+    "location": "base/numbers/#Base.float-Tuple{Any}",
     "page": "Numbers",
     "title": "Base.float",
     "category": "method",
@@ -9177,7 +9177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Math.significand",
+    "location": "base/numbers/#Base.Math.significand",
     "page": "Numbers",
     "title": "Base.Math.significand",
     "category": "function",
@@ -9185,7 +9185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Math.exponent",
+    "location": "base/numbers/#Base.Math.exponent",
     "page": "Numbers",
     "title": "Base.Math.exponent",
     "category": "function",
@@ -9193,7 +9193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.complex-Tuple{Complex}",
+    "location": "base/numbers/#Base.complex-Tuple{Complex}",
     "page": "Numbers",
     "title": "Base.complex",
     "category": "method",
@@ -9201,7 +9201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.bswap",
+    "location": "base/numbers/#Base.bswap",
     "page": "Numbers",
     "title": "Base.bswap",
     "category": "function",
@@ -9209,7 +9209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.hex2bytes",
+    "location": "base/numbers/#Base.hex2bytes",
     "page": "Numbers",
     "title": "Base.hex2bytes",
     "category": "function",
@@ -9217,7 +9217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.hex2bytes!",
+    "location": "base/numbers/#Base.hex2bytes!",
     "page": "Numbers",
     "title": "Base.hex2bytes!",
     "category": "function",
@@ -9225,7 +9225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.bytes2hex",
+    "location": "base/numbers/#Base.bytes2hex",
     "page": "Numbers",
     "title": "Base.bytes2hex",
     "category": "function",
@@ -9233,7 +9233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Data-Formats-1",
+    "location": "base/numbers/#Data-Formats-1",
     "page": "Numbers",
     "title": "Data Formats",
     "category": "section",
@@ -9241,7 +9241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.one",
+    "location": "base/numbers/#Base.one",
     "page": "Numbers",
     "title": "Base.one",
     "category": "function",
@@ -9249,7 +9249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.oneunit",
+    "location": "base/numbers/#Base.oneunit",
     "page": "Numbers",
     "title": "Base.oneunit",
     "category": "function",
@@ -9257,7 +9257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.zero",
+    "location": "base/numbers/#Base.zero",
     "page": "Numbers",
     "title": "Base.zero",
     "category": "function",
@@ -9265,7 +9265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.im",
+    "location": "base/numbers/#Base.im",
     "page": "Numbers",
     "title": "Base.im",
     "category": "constant",
@@ -9273,7 +9273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MathConstants.pi",
+    "location": "base/numbers/#Base.MathConstants.pi",
     "page": "Numbers",
     "title": "Base.MathConstants.pi",
     "category": "constant",
@@ -9281,7 +9281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MathConstants.ℯ",
+    "location": "base/numbers/#Base.MathConstants.ℯ",
     "page": "Numbers",
     "title": "Base.MathConstants.ℯ",
     "category": "constant",
@@ -9289,7 +9289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MathConstants.catalan",
+    "location": "base/numbers/#Base.MathConstants.catalan",
     "page": "Numbers",
     "title": "Base.MathConstants.catalan",
     "category": "constant",
@@ -9297,7 +9297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MathConstants.eulergamma",
+    "location": "base/numbers/#Base.MathConstants.eulergamma",
     "page": "Numbers",
     "title": "Base.MathConstants.eulergamma",
     "category": "constant",
@@ -9305,7 +9305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MathConstants.golden",
+    "location": "base/numbers/#Base.MathConstants.golden",
     "page": "Numbers",
     "title": "Base.MathConstants.golden",
     "category": "constant",
@@ -9313,7 +9313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Inf",
+    "location": "base/numbers/#Base.Inf",
     "page": "Numbers",
     "title": "Base.Inf",
     "category": "constant",
@@ -9321,7 +9321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Inf32",
+    "location": "base/numbers/#Base.Inf32",
     "page": "Numbers",
     "title": "Base.Inf32",
     "category": "constant",
@@ -9329,7 +9329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Inf16",
+    "location": "base/numbers/#Base.Inf16",
     "page": "Numbers",
     "title": "Base.Inf16",
     "category": "constant",
@@ -9337,7 +9337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.NaN",
+    "location": "base/numbers/#Base.NaN",
     "page": "Numbers",
     "title": "Base.NaN",
     "category": "constant",
@@ -9345,7 +9345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.NaN32",
+    "location": "base/numbers/#Base.NaN32",
     "page": "Numbers",
     "title": "Base.NaN32",
     "category": "constant",
@@ -9353,7 +9353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.NaN16",
+    "location": "base/numbers/#Base.NaN16",
     "page": "Numbers",
     "title": "Base.NaN16",
     "category": "constant",
@@ -9361,7 +9361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.issubnormal",
+    "location": "base/numbers/#Base.issubnormal",
     "page": "Numbers",
     "title": "Base.issubnormal",
     "category": "function",
@@ -9369,7 +9369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.isfinite",
+    "location": "base/numbers/#Base.isfinite",
     "page": "Numbers",
     "title": "Base.isfinite",
     "category": "function",
@@ -9377,7 +9377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.isinf",
+    "location": "base/numbers/#Base.isinf",
     "page": "Numbers",
     "title": "Base.isinf",
     "category": "function",
@@ -9385,7 +9385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.isnan",
+    "location": "base/numbers/#Base.isnan",
     "page": "Numbers",
     "title": "Base.isnan",
     "category": "function",
@@ -9393,7 +9393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.iszero",
+    "location": "base/numbers/#Base.iszero",
     "page": "Numbers",
     "title": "Base.iszero",
     "category": "function",
@@ -9401,7 +9401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.isone",
+    "location": "base/numbers/#Base.isone",
     "page": "Numbers",
     "title": "Base.isone",
     "category": "function",
@@ -9409,7 +9409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.nextfloat",
+    "location": "base/numbers/#Base.nextfloat",
     "page": "Numbers",
     "title": "Base.nextfloat",
     "category": "function",
@@ -9417,7 +9417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.prevfloat",
+    "location": "base/numbers/#Base.prevfloat",
     "page": "Numbers",
     "title": "Base.prevfloat",
     "category": "function",
@@ -9425,7 +9425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.isinteger",
+    "location": "base/numbers/#Base.isinteger",
     "page": "Numbers",
     "title": "Base.isinteger",
     "category": "function",
@@ -9433,7 +9433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.isreal",
+    "location": "base/numbers/#Base.isreal",
     "page": "Numbers",
     "title": "Base.isreal",
     "category": "function",
@@ -9441,7 +9441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Float32-Tuple{Any}",
+    "location": "base/numbers/#Core.Float32-Tuple{Any}",
     "page": "Numbers",
     "title": "Core.Float32",
     "category": "method",
@@ -9449,7 +9449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Core.Float64-Tuple{Any}",
+    "location": "base/numbers/#Core.Float64-Tuple{Any}",
     "page": "Numbers",
     "title": "Core.Float64",
     "category": "method",
@@ -9457,7 +9457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.GMP.BigInt-Tuple{Any}",
+    "location": "base/numbers/#Base.GMP.BigInt-Tuple{Any}",
     "page": "Numbers",
     "title": "Base.GMP.BigInt",
     "category": "method",
@@ -9465,7 +9465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MPFR.BigFloat-Tuple{Any}",
+    "location": "base/numbers/#Base.MPFR.BigFloat-Tuple{Any}",
     "page": "Numbers",
     "title": "Base.MPFR.BigFloat",
     "category": "method",
@@ -9473,7 +9473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Rounding.rounding",
+    "location": "base/numbers/#Base.Rounding.rounding",
     "page": "Numbers",
     "title": "Base.Rounding.rounding",
     "category": "function",
@@ -9481,7 +9481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Rounding.setrounding-Tuple{Type,Any}",
+    "location": "base/numbers/#Base.Rounding.setrounding-Tuple{Type,Any}",
     "page": "Numbers",
     "title": "Base.Rounding.setrounding",
     "category": "method",
@@ -9489,7 +9489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Rounding.setrounding-Tuple{Function,Type,RoundingMode}",
+    "location": "base/numbers/#Base.Rounding.setrounding-Tuple{Function,Type,RoundingMode}",
     "page": "Numbers",
     "title": "Base.Rounding.setrounding",
     "category": "method",
@@ -9497,7 +9497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Rounding.get_zero_subnormals",
+    "location": "base/numbers/#Base.Rounding.get_zero_subnormals",
     "page": "Numbers",
     "title": "Base.Rounding.get_zero_subnormals",
     "category": "function",
@@ -9505,7 +9505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.Rounding.set_zero_subnormals",
+    "location": "base/numbers/#Base.Rounding.set_zero_subnormals",
     "page": "Numbers",
     "title": "Base.Rounding.set_zero_subnormals",
     "category": "function",
@@ -9513,7 +9513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#General-Number-Functions-and-Constants-1",
+    "location": "base/numbers/#General-Number-Functions-and-Constants-1",
     "page": "Numbers",
     "title": "General Number Functions and Constants",
     "category": "section",
@@ -9521,7 +9521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.count_ones",
+    "location": "base/numbers/#Base.count_ones",
     "page": "Numbers",
     "title": "Base.count_ones",
     "category": "function",
@@ -9529,7 +9529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.count_zeros",
+    "location": "base/numbers/#Base.count_zeros",
     "page": "Numbers",
     "title": "Base.count_zeros",
     "category": "function",
@@ -9537,7 +9537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.leading_zeros",
+    "location": "base/numbers/#Base.leading_zeros",
     "page": "Numbers",
     "title": "Base.leading_zeros",
     "category": "function",
@@ -9545,7 +9545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.leading_ones",
+    "location": "base/numbers/#Base.leading_ones",
     "page": "Numbers",
     "title": "Base.leading_ones",
     "category": "function",
@@ -9553,7 +9553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.trailing_zeros",
+    "location": "base/numbers/#Base.trailing_zeros",
     "page": "Numbers",
     "title": "Base.trailing_zeros",
     "category": "function",
@@ -9561,7 +9561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.trailing_ones",
+    "location": "base/numbers/#Base.trailing_ones",
     "page": "Numbers",
     "title": "Base.trailing_ones",
     "category": "function",
@@ -9569,7 +9569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.isodd",
+    "location": "base/numbers/#Base.isodd",
     "page": "Numbers",
     "title": "Base.isodd",
     "category": "function",
@@ -9577,7 +9577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.iseven",
+    "location": "base/numbers/#Base.iseven",
     "page": "Numbers",
     "title": "Base.iseven",
     "category": "function",
@@ -9585,7 +9585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Integers-1",
+    "location": "base/numbers/#Integers-1",
     "page": "Numbers",
     "title": "Integers",
     "category": "section",
@@ -9593,7 +9593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.precision",
+    "location": "base/numbers/#Base.precision",
     "page": "Numbers",
     "title": "Base.precision",
     "category": "function",
@@ -9601,7 +9601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.precision-Tuple{Type{BigFloat}}",
+    "location": "base/numbers/#Base.precision-Tuple{Type{BigFloat}}",
     "page": "Numbers",
     "title": "Base.precision",
     "category": "method",
@@ -9609,7 +9609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MPFR.setprecision",
+    "location": "base/numbers/#Base.MPFR.setprecision",
     "page": "Numbers",
     "title": "Base.MPFR.setprecision",
     "category": "function",
@@ -9617,7 +9617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MPFR.BigFloat-Tuple{Any,Int64}",
+    "location": "base/numbers/#Base.MPFR.BigFloat-Tuple{Any,Int64}",
     "page": "Numbers",
     "title": "Base.MPFR.BigFloat",
     "category": "method",
@@ -9625,7 +9625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MPFR.BigFloat-Tuple{Union{AbstractFloat, Integer, String},RoundingMode}",
+    "location": "base/numbers/#Base.MPFR.BigFloat-Tuple{Union{AbstractFloat, Integer, String},RoundingMode}",
     "page": "Numbers",
     "title": "Base.MPFR.BigFloat",
     "category": "method",
@@ -9633,7 +9633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MPFR.BigFloat-Tuple{Any,Int64,RoundingMode}",
+    "location": "base/numbers/#Base.MPFR.BigFloat-Tuple{Any,Int64,RoundingMode}",
     "page": "Numbers",
     "title": "Base.MPFR.BigFloat",
     "category": "method",
@@ -9641,7 +9641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#Base.MPFR.BigFloat-Tuple{String}",
+    "location": "base/numbers/#Base.MPFR.BigFloat-Tuple{String}",
     "page": "Numbers",
     "title": "Base.MPFR.BigFloat",
     "category": "method",
@@ -9649,7 +9649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/numbers.html#BigFloats-1",
+    "location": "base/numbers/#BigFloats-1",
     "page": "Numbers",
     "title": "BigFloats",
     "category": "section",
@@ -9657,7 +9657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#",
+    "location": "base/strings/#",
     "page": "Strings",
     "title": "Strings",
     "category": "page",
@@ -9665,7 +9665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Core.AbstractChar",
+    "location": "base/strings/#Core.AbstractChar",
     "page": "Strings",
     "title": "Core.AbstractChar",
     "category": "type",
@@ -9673,7 +9673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Core.Char",
+    "location": "base/strings/#Core.Char",
     "page": "Strings",
     "title": "Core.Char",
     "category": "type",
@@ -9681,7 +9681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.codepoint",
+    "location": "base/strings/#Base.codepoint",
     "page": "Strings",
     "title": "Base.codepoint",
     "category": "function",
@@ -9689,7 +9689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.length-Tuple{AbstractString}",
+    "location": "base/strings/#Base.length-Tuple{AbstractString}",
     "page": "Strings",
     "title": "Base.length",
     "category": "method",
@@ -9697,7 +9697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.sizeof-Tuple{AbstractString}",
+    "location": "base/strings/#Base.sizeof-Tuple{AbstractString}",
     "page": "Strings",
     "title": "Base.sizeof",
     "category": "method",
@@ -9705,7 +9705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.:*-Tuple{Union{AbstractChar, AbstractString},Vararg{Union{AbstractChar, AbstractString},N} where N}",
+    "location": "base/strings/#Base.:*-Tuple{Union{AbstractChar, AbstractString},Vararg{Union{AbstractChar, AbstractString},N} where N}",
     "page": "Strings",
     "title": "Base.:*",
     "category": "method",
@@ -9713,7 +9713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.:^-Tuple{AbstractString,Integer}",
+    "location": "base/strings/#Base.:^-Tuple{AbstractString,Integer}",
     "page": "Strings",
     "title": "Base.:^",
     "category": "method",
@@ -9721,7 +9721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.string",
+    "location": "base/strings/#Base.string",
     "page": "Strings",
     "title": "Base.string",
     "category": "function",
@@ -9729,7 +9729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.repeat-Tuple{AbstractString,Integer}",
+    "location": "base/strings/#Base.repeat-Tuple{AbstractString,Integer}",
     "page": "Strings",
     "title": "Base.repeat",
     "category": "method",
@@ -9737,7 +9737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.repeat-Tuple{AbstractChar,Integer}",
+    "location": "base/strings/#Base.repeat-Tuple{AbstractChar,Integer}",
     "page": "Strings",
     "title": "Base.repeat",
     "category": "method",
@@ -9745,7 +9745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.repr-Tuple{Any}",
+    "location": "base/strings/#Base.repr-Tuple{Any}",
     "page": "Strings",
     "title": "Base.repr",
     "category": "method",
@@ -9753,7 +9753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Core.String-Tuple{AbstractString}",
+    "location": "base/strings/#Core.String-Tuple{AbstractString}",
     "page": "Strings",
     "title": "Core.String",
     "category": "method",
@@ -9761,7 +9761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.SubString",
+    "location": "base/strings/#Base.SubString",
     "page": "Strings",
     "title": "Base.SubString",
     "category": "type",
@@ -9769,7 +9769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.transcode",
+    "location": "base/strings/#Base.transcode",
     "page": "Strings",
     "title": "Base.transcode",
     "category": "function",
@@ -9777,7 +9777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.unsafe_string",
+    "location": "base/strings/#Base.unsafe_string",
     "page": "Strings",
     "title": "Base.unsafe_string",
     "category": "function",
@@ -9785,7 +9785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.ncodeunits-Tuple{AbstractString}",
+    "location": "base/strings/#Base.ncodeunits-Tuple{AbstractString}",
     "page": "Strings",
     "title": "Base.ncodeunits",
     "category": "method",
@@ -9793,7 +9793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.codeunit",
+    "location": "base/strings/#Base.codeunit",
     "page": "Strings",
     "title": "Base.codeunit",
     "category": "function",
@@ -9801,7 +9801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.codeunits",
+    "location": "base/strings/#Base.codeunits",
     "page": "Strings",
     "title": "Base.codeunits",
     "category": "function",
@@ -9809,7 +9809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.ascii",
+    "location": "base/strings/#Base.ascii",
     "page": "Strings",
     "title": "Base.ascii",
     "category": "function",
@@ -9817,7 +9817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.@r_str",
+    "location": "base/strings/#Base.@r_str",
     "page": "Strings",
     "title": "Base.@r_str",
     "category": "macro",
@@ -9825,7 +9825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.@raw_str",
+    "location": "base/strings/#Base.@raw_str",
     "page": "Strings",
     "title": "Base.@raw_str",
     "category": "macro",
@@ -9833,7 +9833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Docs.@html_str",
+    "location": "base/strings/#Base.Docs.@html_str",
     "page": "Strings",
     "title": "Base.Docs.@html_str",
     "category": "macro",
@@ -9841,7 +9841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Docs.@text_str",
+    "location": "base/strings/#Base.Docs.@text_str",
     "page": "Strings",
     "title": "Base.Docs.@text_str",
     "category": "macro",
@@ -9849,7 +9849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.isvalid-Tuple{Any}",
+    "location": "base/strings/#Base.isvalid-Tuple{Any}",
     "page": "Strings",
     "title": "Base.isvalid",
     "category": "method",
@@ -9857,7 +9857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.isvalid-Tuple{Any,Any}",
+    "location": "base/strings/#Base.isvalid-Tuple{Any,Any}",
     "page": "Strings",
     "title": "Base.isvalid",
     "category": "method",
@@ -9865,7 +9865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.isvalid-Tuple{AbstractString,Integer}",
+    "location": "base/strings/#Base.isvalid-Tuple{AbstractString,Integer}",
     "page": "Strings",
     "title": "Base.isvalid",
     "category": "method",
@@ -9873,7 +9873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.match",
+    "location": "base/strings/#Base.match",
     "page": "Strings",
     "title": "Base.match",
     "category": "function",
@@ -9881,7 +9881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.eachmatch",
+    "location": "base/strings/#Base.eachmatch",
     "page": "Strings",
     "title": "Base.eachmatch",
     "category": "function",
@@ -9889,7 +9889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.isless-Tuple{AbstractString,AbstractString}",
+    "location": "base/strings/#Base.isless-Tuple{AbstractString,AbstractString}",
     "page": "Strings",
     "title": "Base.isless",
     "category": "method",
@@ -9897,7 +9897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.:==-Tuple{AbstractString,AbstractString}",
+    "location": "base/strings/#Base.:==-Tuple{AbstractString,AbstractString}",
     "page": "Strings",
     "title": "Base.:==",
     "category": "method",
@@ -9905,7 +9905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.cmp-Tuple{AbstractString,AbstractString}",
+    "location": "base/strings/#Base.cmp-Tuple{AbstractString,AbstractString}",
     "page": "Strings",
     "title": "Base.cmp",
     "category": "method",
@@ -9913,7 +9913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.lpad",
+    "location": "base/strings/#Base.lpad",
     "page": "Strings",
     "title": "Base.lpad",
     "category": "function",
@@ -9921,7 +9921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.rpad",
+    "location": "base/strings/#Base.rpad",
     "page": "Strings",
     "title": "Base.rpad",
     "category": "function",
@@ -9929,7 +9929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.findfirst-Tuple{AbstractString,AbstractString}",
+    "location": "base/strings/#Base.findfirst-Tuple{AbstractString,AbstractString}",
     "page": "Strings",
     "title": "Base.findfirst",
     "category": "method",
@@ -9937,7 +9937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.findnext-Tuple{AbstractString,AbstractString,Integer}",
+    "location": "base/strings/#Base.findnext-Tuple{AbstractString,AbstractString,Integer}",
     "page": "Strings",
     "title": "Base.findnext",
     "category": "method",
@@ -9945,7 +9945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.findlast-Tuple{AbstractString,AbstractString}",
+    "location": "base/strings/#Base.findlast-Tuple{AbstractString,AbstractString}",
     "page": "Strings",
     "title": "Base.findlast",
     "category": "method",
@@ -9953,7 +9953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.findprev-Tuple{AbstractString,AbstractString,Integer}",
+    "location": "base/strings/#Base.findprev-Tuple{AbstractString,AbstractString,Integer}",
     "page": "Strings",
     "title": "Base.findprev",
     "category": "method",
@@ -9961,7 +9961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.occursin",
+    "location": "base/strings/#Base.occursin",
     "page": "Strings",
     "title": "Base.occursin",
     "category": "function",
@@ -9969,7 +9969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.reverse-Tuple{Union{SubString{String}, String}}",
+    "location": "base/strings/#Base.reverse-Tuple{Union{SubString{String}, String}}",
     "page": "Strings",
     "title": "Base.reverse",
     "category": "method",
@@ -9977,7 +9977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.replace-Tuple{AbstractString,Pair}",
+    "location": "base/strings/#Base.replace-Tuple{AbstractString,Pair}",
     "page": "Strings",
     "title": "Base.replace",
     "category": "method",
@@ -9985,7 +9985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.split",
+    "location": "base/strings/#Base.split",
     "page": "Strings",
     "title": "Base.split",
     "category": "function",
@@ -9993,7 +9993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.rsplit",
+    "location": "base/strings/#Base.rsplit",
     "page": "Strings",
     "title": "Base.rsplit",
     "category": "function",
@@ -10001,7 +10001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.strip",
+    "location": "base/strings/#Base.strip",
     "page": "Strings",
     "title": "Base.strip",
     "category": "function",
@@ -10009,7 +10009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.lstrip",
+    "location": "base/strings/#Base.lstrip",
     "page": "Strings",
     "title": "Base.lstrip",
     "category": "function",
@@ -10017,7 +10017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.rstrip",
+    "location": "base/strings/#Base.rstrip",
     "page": "Strings",
     "title": "Base.rstrip",
     "category": "function",
@@ -10025,7 +10025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.startswith",
+    "location": "base/strings/#Base.startswith",
     "page": "Strings",
     "title": "Base.startswith",
     "category": "function",
@@ -10033,7 +10033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.endswith",
+    "location": "base/strings/#Base.endswith",
     "page": "Strings",
     "title": "Base.endswith",
     "category": "function",
@@ -10041,7 +10041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.first-Tuple{AbstractString,Integer}",
+    "location": "base/strings/#Base.first-Tuple{AbstractString,Integer}",
     "page": "Strings",
     "title": "Base.first",
     "category": "method",
@@ -10049,7 +10049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.last-Tuple{AbstractString,Integer}",
+    "location": "base/strings/#Base.last-Tuple{AbstractString,Integer}",
     "page": "Strings",
     "title": "Base.last",
     "category": "method",
@@ -10057,7 +10057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.uppercase",
+    "location": "base/strings/#Base.Unicode.uppercase",
     "page": "Strings",
     "title": "Base.Unicode.uppercase",
     "category": "function",
@@ -10065,7 +10065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.lowercase",
+    "location": "base/strings/#Base.Unicode.lowercase",
     "page": "Strings",
     "title": "Base.Unicode.lowercase",
     "category": "function",
@@ -10073,7 +10073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.titlecase",
+    "location": "base/strings/#Base.Unicode.titlecase",
     "page": "Strings",
     "title": "Base.Unicode.titlecase",
     "category": "function",
@@ -10081,7 +10081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.uppercasefirst",
+    "location": "base/strings/#Base.Unicode.uppercasefirst",
     "page": "Strings",
     "title": "Base.Unicode.uppercasefirst",
     "category": "function",
@@ -10089,7 +10089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.lowercasefirst",
+    "location": "base/strings/#Base.Unicode.lowercasefirst",
     "page": "Strings",
     "title": "Base.Unicode.lowercasefirst",
     "category": "function",
@@ -10097,7 +10097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.join",
+    "location": "base/strings/#Base.join",
     "page": "Strings",
     "title": "Base.join",
     "category": "function",
@@ -10105,7 +10105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.chop",
+    "location": "base/strings/#Base.chop",
     "page": "Strings",
     "title": "Base.chop",
     "category": "function",
@@ -10113,7 +10113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.chomp",
+    "location": "base/strings/#Base.chomp",
     "page": "Strings",
     "title": "Base.chomp",
     "category": "function",
@@ -10121,7 +10121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.thisind",
+    "location": "base/strings/#Base.thisind",
     "page": "Strings",
     "title": "Base.thisind",
     "category": "function",
@@ -10129,7 +10129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.nextind",
+    "location": "base/strings/#Base.nextind",
     "page": "Strings",
     "title": "Base.nextind",
     "category": "function",
@@ -10137,7 +10137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.prevind",
+    "location": "base/strings/#Base.prevind",
     "page": "Strings",
     "title": "Base.prevind",
     "category": "function",
@@ -10145,7 +10145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.textwidth",
+    "location": "base/strings/#Base.Unicode.textwidth",
     "page": "Strings",
     "title": "Base.Unicode.textwidth",
     "category": "function",
@@ -10153,7 +10153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.isascii",
+    "location": "base/strings/#Base.isascii",
     "page": "Strings",
     "title": "Base.isascii",
     "category": "function",
@@ -10161,7 +10161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.iscntrl",
+    "location": "base/strings/#Base.Unicode.iscntrl",
     "page": "Strings",
     "title": "Base.Unicode.iscntrl",
     "category": "function",
@@ -10169,7 +10169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.isdigit",
+    "location": "base/strings/#Base.Unicode.isdigit",
     "page": "Strings",
     "title": "Base.Unicode.isdigit",
     "category": "function",
@@ -10177,7 +10177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.isletter",
+    "location": "base/strings/#Base.Unicode.isletter",
     "page": "Strings",
     "title": "Base.Unicode.isletter",
     "category": "function",
@@ -10185,7 +10185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.islowercase",
+    "location": "base/strings/#Base.Unicode.islowercase",
     "page": "Strings",
     "title": "Base.Unicode.islowercase",
     "category": "function",
@@ -10193,7 +10193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.isnumeric",
+    "location": "base/strings/#Base.Unicode.isnumeric",
     "page": "Strings",
     "title": "Base.Unicode.isnumeric",
     "category": "function",
@@ -10201,7 +10201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.isprint",
+    "location": "base/strings/#Base.Unicode.isprint",
     "page": "Strings",
     "title": "Base.Unicode.isprint",
     "category": "function",
@@ -10209,7 +10209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.ispunct",
+    "location": "base/strings/#Base.Unicode.ispunct",
     "page": "Strings",
     "title": "Base.Unicode.ispunct",
     "category": "function",
@@ -10217,7 +10217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.isspace",
+    "location": "base/strings/#Base.Unicode.isspace",
     "page": "Strings",
     "title": "Base.Unicode.isspace",
     "category": "function",
@@ -10225,7 +10225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.isuppercase",
+    "location": "base/strings/#Base.Unicode.isuppercase",
     "page": "Strings",
     "title": "Base.Unicode.isuppercase",
     "category": "function",
@@ -10233,7 +10233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.Unicode.isxdigit",
+    "location": "base/strings/#Base.Unicode.isxdigit",
     "page": "Strings",
     "title": "Base.Unicode.isxdigit",
     "category": "function",
@@ -10241,7 +10241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Core.Symbol",
+    "location": "base/strings/#Core.Symbol",
     "page": "Strings",
     "title": "Core.Symbol",
     "category": "type",
@@ -10249,7 +10249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.escape_string",
+    "location": "base/strings/#Base.escape_string",
     "page": "Strings",
     "title": "Base.escape_string",
     "category": "function",
@@ -10257,7 +10257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#Base.unescape_string",
+    "location": "base/strings/#Base.unescape_string",
     "page": "Strings",
     "title": "Base.unescape_string",
     "category": "function",
@@ -10265,7 +10265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/strings.html#lib-strings-1",
+    "location": "base/strings/#lib-strings-1",
     "page": "Strings",
     "title": "Strings",
     "category": "section",
@@ -10273,7 +10273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#",
+    "location": "base/arrays/#",
     "page": "Arrays",
     "title": "Arrays",
     "category": "page",
@@ -10281,7 +10281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#lib-arrays-1",
+    "location": "base/arrays/#lib-arrays-1",
     "page": "Arrays",
     "title": "Arrays",
     "category": "section",
@@ -10289,7 +10289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Core.AbstractArray",
+    "location": "base/arrays/#Core.AbstractArray",
     "page": "Arrays",
     "title": "Core.AbstractArray",
     "category": "type",
@@ -10297,7 +10297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.AbstractVector",
+    "location": "base/arrays/#Base.AbstractVector",
     "page": "Arrays",
     "title": "Base.AbstractVector",
     "category": "type",
@@ -10305,7 +10305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.AbstractMatrix",
+    "location": "base/arrays/#Base.AbstractMatrix",
     "page": "Arrays",
     "title": "Base.AbstractMatrix",
     "category": "type",
@@ -10313,7 +10313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.AbstractVecOrMat",
+    "location": "base/arrays/#Base.AbstractVecOrMat",
     "page": "Arrays",
     "title": "Base.AbstractVecOrMat",
     "category": "constant",
@@ -10321,7 +10321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Core.Array",
+    "location": "base/arrays/#Core.Array",
     "page": "Arrays",
     "title": "Core.Array",
     "category": "type",
@@ -10329,7 +10329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Core.Array-Tuple{UndefInitializer,Any}",
+    "location": "base/arrays/#Core.Array-Tuple{UndefInitializer,Any}",
     "page": "Arrays",
     "title": "Core.Array",
     "category": "method",
@@ -10337,7 +10337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Core.Array-Tuple{Nothing,Any}",
+    "location": "base/arrays/#Core.Array-Tuple{Nothing,Any}",
     "page": "Arrays",
     "title": "Core.Array",
     "category": "method",
@@ -10345,7 +10345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Core.Array-Tuple{Missing,Any}",
+    "location": "base/arrays/#Core.Array-Tuple{Missing,Any}",
     "page": "Arrays",
     "title": "Core.Array",
     "category": "method",
@@ -10353,7 +10353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Core.UndefInitializer",
+    "location": "base/arrays/#Core.UndefInitializer",
     "page": "Arrays",
     "title": "Core.UndefInitializer",
     "category": "type",
@@ -10361,7 +10361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Core.undef",
+    "location": "base/arrays/#Core.undef",
     "page": "Arrays",
     "title": "Core.undef",
     "category": "constant",
@@ -10369,7 +10369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Vector",
+    "location": "base/arrays/#Base.Vector",
     "page": "Arrays",
     "title": "Base.Vector",
     "category": "type",
@@ -10377,7 +10377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Vector-Tuple{UndefInitializer,Any}",
+    "location": "base/arrays/#Base.Vector-Tuple{UndefInitializer,Any}",
     "page": "Arrays",
     "title": "Base.Vector",
     "category": "method",
@@ -10385,7 +10385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Vector-Tuple{Nothing,Any}",
+    "location": "base/arrays/#Base.Vector-Tuple{Nothing,Any}",
     "page": "Arrays",
     "title": "Base.Vector",
     "category": "method",
@@ -10393,7 +10393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Vector-Tuple{Missing,Any}",
+    "location": "base/arrays/#Base.Vector-Tuple{Missing,Any}",
     "page": "Arrays",
     "title": "Base.Vector",
     "category": "method",
@@ -10401,7 +10401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Matrix",
+    "location": "base/arrays/#Base.Matrix",
     "page": "Arrays",
     "title": "Base.Matrix",
     "category": "type",
@@ -10409,7 +10409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Matrix-Tuple{UndefInitializer,Any,Any}",
+    "location": "base/arrays/#Base.Matrix-Tuple{UndefInitializer,Any,Any}",
     "page": "Arrays",
     "title": "Base.Matrix",
     "category": "method",
@@ -10417,7 +10417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Matrix-Tuple{Nothing,Any,Any}",
+    "location": "base/arrays/#Base.Matrix-Tuple{Nothing,Any,Any}",
     "page": "Arrays",
     "title": "Base.Matrix",
     "category": "method",
@@ -10425,7 +10425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Matrix-Tuple{Missing,Any,Any}",
+    "location": "base/arrays/#Base.Matrix-Tuple{Missing,Any,Any}",
     "page": "Arrays",
     "title": "Base.Matrix",
     "category": "method",
@@ -10433,7 +10433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.VecOrMat",
+    "location": "base/arrays/#Base.VecOrMat",
     "page": "Arrays",
     "title": "Base.VecOrMat",
     "category": "constant",
@@ -10441,7 +10441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.getindex-Tuple{Type,Vararg{Any,N} where N}",
+    "location": "base/arrays/#Base.getindex-Tuple{Type,Vararg{Any,N} where N}",
     "page": "Arrays",
     "title": "Base.getindex",
     "category": "method",
@@ -10449,7 +10449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.zeros",
+    "location": "base/arrays/#Base.zeros",
     "page": "Arrays",
     "title": "Base.zeros",
     "category": "function",
@@ -10457,7 +10457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.ones",
+    "location": "base/arrays/#Base.ones",
     "page": "Arrays",
     "title": "Base.ones",
     "category": "function",
@@ -10465,7 +10465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.BitArray",
+    "location": "base/arrays/#Base.BitArray",
     "page": "Arrays",
     "title": "Base.BitArray",
     "category": "type",
@@ -10473,7 +10473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.BitArray-Tuple{UndefInitializer,Vararg{Integer,N} where N}",
+    "location": "base/arrays/#Base.BitArray-Tuple{UndefInitializer,Vararg{Integer,N} where N}",
     "page": "Arrays",
     "title": "Base.BitArray",
     "category": "method",
@@ -10481,7 +10481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.BitArray-Tuple{Any}",
+    "location": "base/arrays/#Base.BitArray-Tuple{Any}",
     "page": "Arrays",
     "title": "Base.BitArray",
     "category": "method",
@@ -10489,7 +10489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.trues",
+    "location": "base/arrays/#Base.trues",
     "page": "Arrays",
     "title": "Base.trues",
     "category": "function",
@@ -10497,7 +10497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.falses",
+    "location": "base/arrays/#Base.falses",
     "page": "Arrays",
     "title": "Base.falses",
     "category": "function",
@@ -10505,7 +10505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.fill",
+    "location": "base/arrays/#Base.fill",
     "page": "Arrays",
     "title": "Base.fill",
     "category": "function",
@@ -10513,7 +10513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.fill!",
+    "location": "base/arrays/#Base.fill!",
     "page": "Arrays",
     "title": "Base.fill!",
     "category": "function",
@@ -10521,7 +10521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.similar",
+    "location": "base/arrays/#Base.similar",
     "page": "Arrays",
     "title": "Base.similar",
     "category": "function",
@@ -10529,7 +10529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Constructors-and-Types-1",
+    "location": "base/arrays/#Constructors-and-Types-1",
     "page": "Arrays",
     "title": "Constructors and Types",
     "category": "section",
@@ -10537,7 +10537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.ndims",
+    "location": "base/arrays/#Base.ndims",
     "page": "Arrays",
     "title": "Base.ndims",
     "category": "function",
@@ -10545,7 +10545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.size",
+    "location": "base/arrays/#Base.size",
     "page": "Arrays",
     "title": "Base.size",
     "category": "function",
@@ -10553,7 +10553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.axes-Tuple{Any}",
+    "location": "base/arrays/#Base.axes-Tuple{Any}",
     "page": "Arrays",
     "title": "Base.axes",
     "category": "method",
@@ -10561,7 +10561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.axes-Tuple{AbstractArray,Any}",
+    "location": "base/arrays/#Base.axes-Tuple{AbstractArray,Any}",
     "page": "Arrays",
     "title": "Base.axes",
     "category": "method",
@@ -10569,7 +10569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.length-Tuple{AbstractArray}",
+    "location": "base/arrays/#Base.length-Tuple{AbstractArray}",
     "page": "Arrays",
     "title": "Base.length",
     "category": "method",
@@ -10577,7 +10577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.eachindex",
+    "location": "base/arrays/#Base.eachindex",
     "page": "Arrays",
     "title": "Base.eachindex",
     "category": "function",
@@ -10585,7 +10585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.IndexStyle",
+    "location": "base/arrays/#Base.IndexStyle",
     "page": "Arrays",
     "title": "Base.IndexStyle",
     "category": "type",
@@ -10593,7 +10593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.conj!",
+    "location": "base/arrays/#Base.conj!",
     "page": "Arrays",
     "title": "Base.conj!",
     "category": "function",
@@ -10601,7 +10601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.stride",
+    "location": "base/arrays/#Base.stride",
     "page": "Arrays",
     "title": "Base.stride",
     "category": "function",
@@ -10609,7 +10609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.strides",
+    "location": "base/arrays/#Base.strides",
     "page": "Arrays",
     "title": "Base.strides",
     "category": "function",
@@ -10617,7 +10617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Basic-functions-1",
+    "location": "base/arrays/#Basic-functions-1",
     "page": "Arrays",
     "title": "Basic functions",
     "category": "section",
@@ -10625,7 +10625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Broadcast.broadcast",
+    "location": "base/arrays/#Base.Broadcast.broadcast",
     "page": "Arrays",
     "title": "Base.Broadcast.broadcast",
     "category": "function",
@@ -10633,7 +10633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Broadcast.broadcast!",
+    "location": "base/arrays/#Base.Broadcast.broadcast!",
     "page": "Arrays",
     "title": "Base.Broadcast.broadcast!",
     "category": "function",
@@ -10641,7 +10641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Broadcast.@__dot__",
+    "location": "base/arrays/#Base.Broadcast.@__dot__",
     "page": "Arrays",
     "title": "Base.Broadcast.@__dot__",
     "category": "macro",
@@ -10649,7 +10649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Broadcast.BroadcastStyle",
+    "location": "base/arrays/#Base.Broadcast.BroadcastStyle",
     "page": "Arrays",
     "title": "Base.Broadcast.BroadcastStyle",
     "category": "type",
@@ -10657,7 +10657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Broadcast.broadcast_axes",
+    "location": "base/arrays/#Base.Broadcast.broadcast_axes",
     "page": "Arrays",
     "title": "Base.Broadcast.broadcast_axes",
     "category": "function",
@@ -10665,7 +10665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Broadcast.AbstractArrayStyle",
+    "location": "base/arrays/#Base.Broadcast.AbstractArrayStyle",
     "page": "Arrays",
     "title": "Base.Broadcast.AbstractArrayStyle",
     "category": "type",
@@ -10673,7 +10673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Broadcast.ArrayStyle",
+    "location": "base/arrays/#Base.Broadcast.ArrayStyle",
     "page": "Arrays",
     "title": "Base.Broadcast.ArrayStyle",
     "category": "type",
@@ -10681,7 +10681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Broadcast.DefaultArrayStyle",
+    "location": "base/arrays/#Base.Broadcast.DefaultArrayStyle",
     "page": "Arrays",
     "title": "Base.Broadcast.DefaultArrayStyle",
     "category": "type",
@@ -10689,7 +10689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Broadcast.broadcastable",
+    "location": "base/arrays/#Base.Broadcast.broadcastable",
     "page": "Arrays",
     "title": "Base.Broadcast.broadcastable",
     "category": "function",
@@ -10697,7 +10697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Broadcast-and-vectorization-1",
+    "location": "base/arrays/#Broadcast-and-vectorization-1",
     "page": "Arrays",
     "title": "Broadcast and vectorization",
     "category": "section",
@@ -10705,7 +10705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.getindex-Tuple{AbstractArray,Vararg{Any,N} where N}",
+    "location": "base/arrays/#Base.getindex-Tuple{AbstractArray,Vararg{Any,N} where N}",
     "page": "Arrays",
     "title": "Base.getindex",
     "category": "method",
@@ -10713,7 +10713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.setindex!-Tuple{AbstractArray,Any,Vararg{Any,N} where N}",
+    "location": "base/arrays/#Base.setindex!-Tuple{AbstractArray,Any,Vararg{Any,N} where N}",
     "page": "Arrays",
     "title": "Base.setindex!",
     "category": "method",
@@ -10721,7 +10721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.copyto!-Tuple{AbstractArray,CartesianIndices,AbstractArray,CartesianIndices}",
+    "location": "base/arrays/#Base.copyto!-Tuple{AbstractArray,CartesianIndices,AbstractArray,CartesianIndices}",
     "page": "Arrays",
     "title": "Base.copyto!",
     "category": "method",
@@ -10729,7 +10729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.isassigned",
+    "location": "base/arrays/#Base.isassigned",
     "page": "Arrays",
     "title": "Base.isassigned",
     "category": "function",
@@ -10737,7 +10737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.Colon",
+    "location": "base/arrays/#Base.Colon",
     "page": "Arrays",
     "title": "Base.Colon",
     "category": "type",
@@ -10745,7 +10745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.IteratorsMD.CartesianIndex",
+    "location": "base/arrays/#Base.IteratorsMD.CartesianIndex",
     "page": "Arrays",
     "title": "Base.IteratorsMD.CartesianIndex",
     "category": "type",
@@ -10753,7 +10753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.IteratorsMD.CartesianIndices",
+    "location": "base/arrays/#Base.IteratorsMD.CartesianIndices",
     "page": "Arrays",
     "title": "Base.IteratorsMD.CartesianIndices",
     "category": "type",
@@ -10761,7 +10761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.LinearIndices",
+    "location": "base/arrays/#Base.LinearIndices",
     "page": "Arrays",
     "title": "Base.LinearIndices",
     "category": "type",
@@ -10769,7 +10769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.to_indices",
+    "location": "base/arrays/#Base.to_indices",
     "page": "Arrays",
     "title": "Base.to_indices",
     "category": "function",
@@ -10777,7 +10777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.checkbounds",
+    "location": "base/arrays/#Base.checkbounds",
     "page": "Arrays",
     "title": "Base.checkbounds",
     "category": "function",
@@ -10785,7 +10785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.checkindex",
+    "location": "base/arrays/#Base.checkindex",
     "page": "Arrays",
     "title": "Base.checkindex",
     "category": "function",
@@ -10793,7 +10793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Indexing-and-assignment-1",
+    "location": "base/arrays/#Indexing-and-assignment-1",
     "page": "Arrays",
     "title": "Indexing and assignment",
     "category": "section",
@@ -10801,7 +10801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.view",
+    "location": "base/arrays/#Base.view",
     "page": "Arrays",
     "title": "Base.view",
     "category": "function",
@@ -10809,7 +10809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.@view",
+    "location": "base/arrays/#Base.@view",
     "page": "Arrays",
     "title": "Base.@view",
     "category": "macro",
@@ -10817,7 +10817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.@views",
+    "location": "base/arrays/#Base.@views",
     "page": "Arrays",
     "title": "Base.@views",
     "category": "macro",
@@ -10825,7 +10825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.parent",
+    "location": "base/arrays/#Base.parent",
     "page": "Arrays",
     "title": "Base.parent",
     "category": "function",
@@ -10833,7 +10833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.parentindices",
+    "location": "base/arrays/#Base.parentindices",
     "page": "Arrays",
     "title": "Base.parentindices",
     "category": "function",
@@ -10841,7 +10841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.selectdim",
+    "location": "base/arrays/#Base.selectdim",
     "page": "Arrays",
     "title": "Base.selectdim",
     "category": "function",
@@ -10849,7 +10849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.reinterpret",
+    "location": "base/arrays/#Base.reinterpret",
     "page": "Arrays",
     "title": "Base.reinterpret",
     "category": "function",
@@ -10857,7 +10857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.reshape",
+    "location": "base/arrays/#Base.reshape",
     "page": "Arrays",
     "title": "Base.reshape",
     "category": "function",
@@ -10865,7 +10865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.squeeze",
+    "location": "base/arrays/#Base.squeeze",
     "page": "Arrays",
     "title": "Base.squeeze",
     "category": "function",
@@ -10873,7 +10873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.vec",
+    "location": "base/arrays/#Base.vec",
     "page": "Arrays",
     "title": "Base.vec",
     "category": "function",
@@ -10881,7 +10881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Views-(SubArrays-and-other-view-types)-1",
+    "location": "base/arrays/#Views-(SubArrays-and-other-view-types)-1",
     "page": "Arrays",
     "title": "Views (SubArrays and other view types)",
     "category": "section",
@@ -10889,7 +10889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.cat",
+    "location": "base/arrays/#Base.cat",
     "page": "Arrays",
     "title": "Base.cat",
     "category": "function",
@@ -10897,7 +10897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.vcat",
+    "location": "base/arrays/#Base.vcat",
     "page": "Arrays",
     "title": "Base.vcat",
     "category": "function",
@@ -10905,7 +10905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.hcat",
+    "location": "base/arrays/#Base.hcat",
     "page": "Arrays",
     "title": "Base.hcat",
     "category": "function",
@@ -10913,7 +10913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.hvcat",
+    "location": "base/arrays/#Base.hvcat",
     "page": "Arrays",
     "title": "Base.hvcat",
     "category": "function",
@@ -10921,7 +10921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.vect",
+    "location": "base/arrays/#Base.vect",
     "page": "Arrays",
     "title": "Base.vect",
     "category": "function",
@@ -10929,7 +10929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.circshift",
+    "location": "base/arrays/#Base.circshift",
     "page": "Arrays",
     "title": "Base.circshift",
     "category": "function",
@@ -10937,7 +10937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.circshift!",
+    "location": "base/arrays/#Base.circshift!",
     "page": "Arrays",
     "title": "Base.circshift!",
     "category": "function",
@@ -10945,7 +10945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.circcopy!",
+    "location": "base/arrays/#Base.circcopy!",
     "page": "Arrays",
     "title": "Base.circcopy!",
     "category": "function",
@@ -10953,7 +10953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findall-Tuple{Any}",
+    "location": "base/arrays/#Base.findall-Tuple{Any}",
     "page": "Arrays",
     "title": "Base.findall",
     "category": "method",
@@ -10961,7 +10961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findall-Tuple{Function,Any}",
+    "location": "base/arrays/#Base.findall-Tuple{Function,Any}",
     "page": "Arrays",
     "title": "Base.findall",
     "category": "method",
@@ -10969,7 +10969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findfirst-Tuple{Any}",
+    "location": "base/arrays/#Base.findfirst-Tuple{Any}",
     "page": "Arrays",
     "title": "Base.findfirst",
     "category": "method",
@@ -10977,7 +10977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findfirst-Tuple{Function,Any}",
+    "location": "base/arrays/#Base.findfirst-Tuple{Function,Any}",
     "page": "Arrays",
     "title": "Base.findfirst",
     "category": "method",
@@ -10985,7 +10985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findlast-Tuple{Any}",
+    "location": "base/arrays/#Base.findlast-Tuple{Any}",
     "page": "Arrays",
     "title": "Base.findlast",
     "category": "method",
@@ -10993,7 +10993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findlast-Tuple{Function,Any}",
+    "location": "base/arrays/#Base.findlast-Tuple{Function,Any}",
     "page": "Arrays",
     "title": "Base.findlast",
     "category": "method",
@@ -11001,7 +11001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findnext-Tuple{Any,Integer}",
+    "location": "base/arrays/#Base.findnext-Tuple{Any,Integer}",
     "page": "Arrays",
     "title": "Base.findnext",
     "category": "method",
@@ -11009,7 +11009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findnext-Tuple{Function,Any,Integer}",
+    "location": "base/arrays/#Base.findnext-Tuple{Function,Any,Integer}",
     "page": "Arrays",
     "title": "Base.findnext",
     "category": "method",
@@ -11017,7 +11017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findprev-Tuple{Any,Integer}",
+    "location": "base/arrays/#Base.findprev-Tuple{Any,Integer}",
     "page": "Arrays",
     "title": "Base.findprev",
     "category": "method",
@@ -11025,7 +11025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.findprev-Tuple{Function,Any,Integer}",
+    "location": "base/arrays/#Base.findprev-Tuple{Function,Any,Integer}",
     "page": "Arrays",
     "title": "Base.findprev",
     "category": "method",
@@ -11033,7 +11033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.permutedims",
+    "location": "base/arrays/#Base.permutedims",
     "page": "Arrays",
     "title": "Base.permutedims",
     "category": "function",
@@ -11041,7 +11041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.permutedims!",
+    "location": "base/arrays/#Base.permutedims!",
     "page": "Arrays",
     "title": "Base.permutedims!",
     "category": "function",
@@ -11049,7 +11049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.PermutedDimsArrays.PermutedDimsArray",
+    "location": "base/arrays/#Base.PermutedDimsArrays.PermutedDimsArray",
     "page": "Arrays",
     "title": "Base.PermutedDimsArrays.PermutedDimsArray",
     "category": "type",
@@ -11057,7 +11057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.promote_shape",
+    "location": "base/arrays/#Base.promote_shape",
     "page": "Arrays",
     "title": "Base.promote_shape",
     "category": "function",
@@ -11065,7 +11065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Concatenation-and-permutation-1",
+    "location": "base/arrays/#Concatenation-and-permutation-1",
     "page": "Arrays",
     "title": "Concatenation and permutation",
     "category": "section",
@@ -11073,7 +11073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.accumulate",
+    "location": "base/arrays/#Base.accumulate",
     "page": "Arrays",
     "title": "Base.accumulate",
     "category": "function",
@@ -11081,7 +11081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.accumulate!",
+    "location": "base/arrays/#Base.accumulate!",
     "page": "Arrays",
     "title": "Base.accumulate!",
     "category": "function",
@@ -11089,7 +11089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.cumprod",
+    "location": "base/arrays/#Base.cumprod",
     "page": "Arrays",
     "title": "Base.cumprod",
     "category": "function",
@@ -11097,7 +11097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.cumprod!",
+    "location": "base/arrays/#Base.cumprod!",
     "page": "Arrays",
     "title": "Base.cumprod!",
     "category": "function",
@@ -11105,7 +11105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.cumsum",
+    "location": "base/arrays/#Base.cumsum",
     "page": "Arrays",
     "title": "Base.cumsum",
     "category": "function",
@@ -11113,7 +11113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.cumsum!",
+    "location": "base/arrays/#Base.cumsum!",
     "page": "Arrays",
     "title": "Base.cumsum!",
     "category": "function",
@@ -11121,7 +11121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.diff",
+    "location": "base/arrays/#Base.diff",
     "page": "Arrays",
     "title": "Base.diff",
     "category": "function",
@@ -11129,7 +11129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.repeat",
+    "location": "base/arrays/#Base.repeat",
     "page": "Arrays",
     "title": "Base.repeat",
     "category": "function",
@@ -11137,7 +11137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.rot180",
+    "location": "base/arrays/#Base.rot180",
     "page": "Arrays",
     "title": "Base.rot180",
     "category": "function",
@@ -11145,7 +11145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.rotl90",
+    "location": "base/arrays/#Base.rotl90",
     "page": "Arrays",
     "title": "Base.rotl90",
     "category": "function",
@@ -11153,7 +11153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.rotr90",
+    "location": "base/arrays/#Base.rotr90",
     "page": "Arrays",
     "title": "Base.rotr90",
     "category": "function",
@@ -11161,7 +11161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.mapslices",
+    "location": "base/arrays/#Base.mapslices",
     "page": "Arrays",
     "title": "Base.mapslices",
     "category": "function",
@@ -11169,7 +11169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Array-functions-1",
+    "location": "base/arrays/#Array-functions-1",
     "page": "Arrays",
     "title": "Array functions",
     "category": "section",
@@ -11177,7 +11177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.invperm",
+    "location": "base/arrays/#Base.invperm",
     "page": "Arrays",
     "title": "Base.invperm",
     "category": "function",
@@ -11185,7 +11185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.isperm",
+    "location": "base/arrays/#Base.isperm",
     "page": "Arrays",
     "title": "Base.isperm",
     "category": "function",
@@ -11193,7 +11193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.permute!-Tuple{Any,AbstractArray{T,1} where T}",
+    "location": "base/arrays/#Base.permute!-Tuple{Any,AbstractArray{T,1} where T}",
     "page": "Arrays",
     "title": "Base.permute!",
     "category": "method",
@@ -11201,7 +11201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.invpermute!",
+    "location": "base/arrays/#Base.invpermute!",
     "page": "Arrays",
     "title": "Base.invpermute!",
     "category": "function",
@@ -11209,7 +11209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.reverse-Tuple{AbstractArray{T,1} where T}",
+    "location": "base/arrays/#Base.reverse-Tuple{AbstractArray{T,1} where T}",
     "page": "Arrays",
     "title": "Base.reverse",
     "category": "method",
@@ -11217,7 +11217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.reverseind",
+    "location": "base/arrays/#Base.reverseind",
     "page": "Arrays",
     "title": "Base.reverseind",
     "category": "function",
@@ -11225,7 +11225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Base.reverse!",
+    "location": "base/arrays/#Base.reverse!",
     "page": "Arrays",
     "title": "Base.reverse!",
     "category": "function",
@@ -11233,7 +11233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/arrays.html#Combinatorics-1",
+    "location": "base/arrays/#Combinatorics-1",
     "page": "Arrays",
     "title": "Combinatorics",
     "category": "section",
@@ -11241,7 +11241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#",
+    "location": "base/parallel/#",
     "page": "Tasks",
     "title": "Tasks",
     "category": "page",
@@ -11249,7 +11249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Core.Task",
+    "location": "base/parallel/#Core.Task",
     "page": "Tasks",
     "title": "Core.Task",
     "category": "type",
@@ -11257,7 +11257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.current_task",
+    "location": "base/parallel/#Base.current_task",
     "page": "Tasks",
     "title": "Base.current_task",
     "category": "function",
@@ -11265,7 +11265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.istaskdone",
+    "location": "base/parallel/#Base.istaskdone",
     "page": "Tasks",
     "title": "Base.istaskdone",
     "category": "function",
@@ -11273,7 +11273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.istaskstarted",
+    "location": "base/parallel/#Base.istaskstarted",
     "page": "Tasks",
     "title": "Base.istaskstarted",
     "category": "function",
@@ -11281,7 +11281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.yield",
+    "location": "base/parallel/#Base.yield",
     "page": "Tasks",
     "title": "Base.yield",
     "category": "function",
@@ -11289,7 +11289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.yieldto",
+    "location": "base/parallel/#Base.yieldto",
     "page": "Tasks",
     "title": "Base.yieldto",
     "category": "function",
@@ -11297,7 +11297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.task_local_storage-Tuple{Any}",
+    "location": "base/parallel/#Base.task_local_storage-Tuple{Any}",
     "page": "Tasks",
     "title": "Base.task_local_storage",
     "category": "method",
@@ -11305,7 +11305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.task_local_storage-Tuple{Any,Any}",
+    "location": "base/parallel/#Base.task_local_storage-Tuple{Any,Any}",
     "page": "Tasks",
     "title": "Base.task_local_storage",
     "category": "method",
@@ -11313,7 +11313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.task_local_storage-Tuple{Function,Any,Any}",
+    "location": "base/parallel/#Base.task_local_storage-Tuple{Function,Any,Any}",
     "page": "Tasks",
     "title": "Base.task_local_storage",
     "category": "method",
@@ -11321,7 +11321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.Condition",
+    "location": "base/parallel/#Base.Condition",
     "page": "Tasks",
     "title": "Base.Condition",
     "category": "type",
@@ -11329,7 +11329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.notify",
+    "location": "base/parallel/#Base.notify",
     "page": "Tasks",
     "title": "Base.notify",
     "category": "function",
@@ -11337,7 +11337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.schedule",
+    "location": "base/parallel/#Base.schedule",
     "page": "Tasks",
     "title": "Base.schedule",
     "category": "function",
@@ -11345,7 +11345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.@task",
+    "location": "base/parallel/#Base.@task",
     "page": "Tasks",
     "title": "Base.@task",
     "category": "macro",
@@ -11353,7 +11353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.sleep",
+    "location": "base/parallel/#Base.sleep",
     "page": "Tasks",
     "title": "Base.sleep",
     "category": "function",
@@ -11361,7 +11361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.Channel",
+    "location": "base/parallel/#Base.Channel",
     "page": "Tasks",
     "title": "Base.Channel",
     "category": "type",
@@ -11369,7 +11369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.put!-Tuple{Channel,Any}",
+    "location": "base/parallel/#Base.put!-Tuple{Channel,Any}",
     "page": "Tasks",
     "title": "Base.put!",
     "category": "method",
@@ -11377,7 +11377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.take!-Tuple{Channel}",
+    "location": "base/parallel/#Base.take!-Tuple{Channel}",
     "page": "Tasks",
     "title": "Base.take!",
     "category": "method",
@@ -11385,7 +11385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.isready-Tuple{Channel}",
+    "location": "base/parallel/#Base.isready-Tuple{Channel}",
     "page": "Tasks",
     "title": "Base.isready",
     "category": "method",
@@ -11393,7 +11393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.fetch-Tuple{Channel}",
+    "location": "base/parallel/#Base.fetch-Tuple{Channel}",
     "page": "Tasks",
     "title": "Base.fetch",
     "category": "method",
@@ -11401,7 +11401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.close-Tuple{Channel}",
+    "location": "base/parallel/#Base.close-Tuple{Channel}",
     "page": "Tasks",
     "title": "Base.close",
     "category": "method",
@@ -11409,7 +11409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.bind-Tuple{Channel,Task}",
+    "location": "base/parallel/#Base.bind-Tuple{Channel,Task}",
     "page": "Tasks",
     "title": "Base.bind",
     "category": "method",
@@ -11417,7 +11417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.asyncmap",
+    "location": "base/parallel/#Base.asyncmap",
     "page": "Tasks",
     "title": "Base.asyncmap",
     "category": "function",
@@ -11425,7 +11425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Base.asyncmap!",
+    "location": "base/parallel/#Base.asyncmap!",
     "page": "Tasks",
     "title": "Base.asyncmap!",
     "category": "function",
@@ -11433,7 +11433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/parallel.html#Tasks-1",
+    "location": "base/parallel/#Tasks-1",
     "page": "Tasks",
     "title": "Tasks",
     "category": "section",
@@ -11441,7 +11441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#",
+    "location": "base/multi-threading/#",
     "page": "Multi-Threading",
     "title": "Multi-Threading",
     "category": "page",
@@ -11449,7 +11449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.threadid",
+    "location": "base/multi-threading/#Base.Threads.threadid",
     "page": "Multi-Threading",
     "title": "Base.Threads.threadid",
     "category": "function",
@@ -11457,7 +11457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.nthreads",
+    "location": "base/multi-threading/#Base.Threads.nthreads",
     "page": "Multi-Threading",
     "title": "Base.Threads.nthreads",
     "category": "function",
@@ -11465,7 +11465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.@threads",
+    "location": "base/multi-threading/#Base.Threads.@threads",
     "page": "Multi-Threading",
     "title": "Base.Threads.@threads",
     "category": "macro",
@@ -11473,7 +11473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.Atomic",
+    "location": "base/multi-threading/#Base.Threads.Atomic",
     "page": "Multi-Threading",
     "title": "Base.Threads.Atomic",
     "category": "type",
@@ -11481,7 +11481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_cas!",
+    "location": "base/multi-threading/#Base.Threads.atomic_cas!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_cas!",
     "category": "function",
@@ -11489,7 +11489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_xchg!",
+    "location": "base/multi-threading/#Base.Threads.atomic_xchg!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_xchg!",
     "category": "function",
@@ -11497,7 +11497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_add!",
+    "location": "base/multi-threading/#Base.Threads.atomic_add!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_add!",
     "category": "function",
@@ -11505,7 +11505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_sub!",
+    "location": "base/multi-threading/#Base.Threads.atomic_sub!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_sub!",
     "category": "function",
@@ -11513,7 +11513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_and!",
+    "location": "base/multi-threading/#Base.Threads.atomic_and!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_and!",
     "category": "function",
@@ -11521,7 +11521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_nand!",
+    "location": "base/multi-threading/#Base.Threads.atomic_nand!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_nand!",
     "category": "function",
@@ -11529,7 +11529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_or!",
+    "location": "base/multi-threading/#Base.Threads.atomic_or!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_or!",
     "category": "function",
@@ -11537,7 +11537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_xor!",
+    "location": "base/multi-threading/#Base.Threads.atomic_xor!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_xor!",
     "category": "function",
@@ -11545,7 +11545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_max!",
+    "location": "base/multi-threading/#Base.Threads.atomic_max!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_max!",
     "category": "function",
@@ -11553,7 +11553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_min!",
+    "location": "base/multi-threading/#Base.Threads.atomic_min!",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_min!",
     "category": "function",
@@ -11561,7 +11561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.atomic_fence",
+    "location": "base/multi-threading/#Base.Threads.atomic_fence",
     "page": "Multi-Threading",
     "title": "Base.Threads.atomic_fence",
     "category": "function",
@@ -11569,7 +11569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Multi-Threading-1",
+    "location": "base/multi-threading/#Multi-Threading-1",
     "page": "Multi-Threading",
     "title": "Multi-Threading",
     "category": "section",
@@ -11577,7 +11577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.@threadcall",
+    "location": "base/multi-threading/#Base.@threadcall",
     "page": "Multi-Threading",
     "title": "Base.@threadcall",
     "category": "macro",
@@ -11585,7 +11585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#ccall-using-a-threadpool-(Experimental)-1",
+    "location": "base/multi-threading/#ccall-using-a-threadpool-(Experimental)-1",
     "page": "Multi-Threading",
     "title": "ccall using a threadpool (Experimental)",
     "category": "section",
@@ -11593,7 +11593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.AbstractLock",
+    "location": "base/multi-threading/#Base.Threads.AbstractLock",
     "page": "Multi-Threading",
     "title": "Base.Threads.AbstractLock",
     "category": "type",
@@ -11601,7 +11601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.lock",
+    "location": "base/multi-threading/#Base.lock",
     "page": "Multi-Threading",
     "title": "Base.lock",
     "category": "function",
@@ -11609,7 +11609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.unlock",
+    "location": "base/multi-threading/#Base.unlock",
     "page": "Multi-Threading",
     "title": "Base.unlock",
     "category": "function",
@@ -11617,7 +11617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.trylock",
+    "location": "base/multi-threading/#Base.trylock",
     "page": "Multi-Threading",
     "title": "Base.trylock",
     "category": "function",
@@ -11625,7 +11625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.islocked",
+    "location": "base/multi-threading/#Base.islocked",
     "page": "Multi-Threading",
     "title": "Base.islocked",
     "category": "function",
@@ -11633,7 +11633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.ReentrantLock",
+    "location": "base/multi-threading/#Base.ReentrantLock",
     "page": "Multi-Threading",
     "title": "Base.ReentrantLock",
     "category": "type",
@@ -11641,7 +11641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.Mutex",
+    "location": "base/multi-threading/#Base.Threads.Mutex",
     "page": "Multi-Threading",
     "title": "Base.Threads.Mutex",
     "category": "type",
@@ -11649,7 +11649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.SpinLock",
+    "location": "base/multi-threading/#Base.Threads.SpinLock",
     "page": "Multi-Threading",
     "title": "Base.Threads.SpinLock",
     "category": "type",
@@ -11657,7 +11657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Threads.RecursiveSpinLock",
+    "location": "base/multi-threading/#Base.Threads.RecursiveSpinLock",
     "page": "Multi-Threading",
     "title": "Base.Threads.RecursiveSpinLock",
     "category": "type",
@@ -11665,7 +11665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.Semaphore",
+    "location": "base/multi-threading/#Base.Semaphore",
     "page": "Multi-Threading",
     "title": "Base.Semaphore",
     "category": "type",
@@ -11673,7 +11673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.acquire",
+    "location": "base/multi-threading/#Base.acquire",
     "page": "Multi-Threading",
     "title": "Base.acquire",
     "category": "function",
@@ -11681,7 +11681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Base.release",
+    "location": "base/multi-threading/#Base.release",
     "page": "Multi-Threading",
     "title": "Base.release",
     "category": "function",
@@ -11689,7 +11689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/multi-threading.html#Synchronization-Primitives-1",
+    "location": "base/multi-threading/#Synchronization-Primitives-1",
     "page": "Multi-Threading",
     "title": "Synchronization Primitives",
     "category": "section",
@@ -11697,7 +11697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#",
+    "location": "base/constants/#",
     "page": "Constants",
     "title": "Constants",
     "category": "page",
@@ -11705,7 +11705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Core.nothing",
+    "location": "base/constants/#Core.nothing",
     "page": "Constants",
     "title": "Core.nothing",
     "category": "constant",
@@ -11713,7 +11713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.PROGRAM_FILE",
+    "location": "base/constants/#Base.PROGRAM_FILE",
     "page": "Constants",
     "title": "Base.PROGRAM_FILE",
     "category": "constant",
@@ -11721,7 +11721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.ARGS",
+    "location": "base/constants/#Base.ARGS",
     "page": "Constants",
     "title": "Base.ARGS",
     "category": "constant",
@@ -11729,7 +11729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.C_NULL",
+    "location": "base/constants/#Base.C_NULL",
     "page": "Constants",
     "title": "Base.C_NULL",
     "category": "constant",
@@ -11737,7 +11737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.VERSION",
+    "location": "base/constants/#Base.VERSION",
     "page": "Constants",
     "title": "Base.VERSION",
     "category": "constant",
@@ -11745,7 +11745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.LOAD_PATH",
+    "location": "base/constants/#Base.LOAD_PATH",
     "page": "Constants",
     "title": "Base.LOAD_PATH",
     "category": "constant",
@@ -11753,7 +11753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.Sys.BINDIR",
+    "location": "base/constants/#Base.Sys.BINDIR",
     "page": "Constants",
     "title": "Base.Sys.BINDIR",
     "category": "constant",
@@ -11761,7 +11761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.Sys.CPU_CORES",
+    "location": "base/constants/#Base.Sys.CPU_CORES",
     "page": "Constants",
     "title": "Base.Sys.CPU_CORES",
     "category": "constant",
@@ -11769,7 +11769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.Sys.WORD_SIZE",
+    "location": "base/constants/#Base.Sys.WORD_SIZE",
     "page": "Constants",
     "title": "Base.Sys.WORD_SIZE",
     "category": "constant",
@@ -11777,7 +11777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.Sys.KERNEL",
+    "location": "base/constants/#Base.Sys.KERNEL",
     "page": "Constants",
     "title": "Base.Sys.KERNEL",
     "category": "constant",
@@ -11785,7 +11785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.Sys.ARCH",
+    "location": "base/constants/#Base.Sys.ARCH",
     "page": "Constants",
     "title": "Base.Sys.ARCH",
     "category": "constant",
@@ -11793,7 +11793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#Base.Sys.MACHINE",
+    "location": "base/constants/#Base.Sys.MACHINE",
     "page": "Constants",
     "title": "Base.Sys.MACHINE",
     "category": "constant",
@@ -11801,7 +11801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/constants.html#lib-constants-1",
+    "location": "base/constants/#lib-constants-1",
     "page": "Constants",
     "title": "Constants",
     "category": "section",
@@ -11809,7 +11809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#",
+    "location": "base/file/#",
     "page": "Filesystem",
     "title": "Filesystem",
     "category": "page",
@@ -11817,7 +11817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.pwd",
+    "location": "base/file/#Base.Filesystem.pwd",
     "page": "Filesystem",
     "title": "Base.Filesystem.pwd",
     "category": "function",
@@ -11825,7 +11825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.cd-Tuple{AbstractString}",
+    "location": "base/file/#Base.Filesystem.cd-Tuple{AbstractString}",
     "page": "Filesystem",
     "title": "Base.Filesystem.cd",
     "category": "method",
@@ -11833,7 +11833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.cd-Tuple{Function}",
+    "location": "base/file/#Base.Filesystem.cd-Tuple{Function}",
     "page": "Filesystem",
     "title": "Base.Filesystem.cd",
     "category": "method",
@@ -11841,7 +11841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.readdir",
+    "location": "base/file/#Base.Filesystem.readdir",
     "page": "Filesystem",
     "title": "Base.Filesystem.readdir",
     "category": "function",
@@ -11849,7 +11849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.walkdir",
+    "location": "base/file/#Base.Filesystem.walkdir",
     "page": "Filesystem",
     "title": "Base.Filesystem.walkdir",
     "category": "function",
@@ -11857,7 +11857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.mkdir",
+    "location": "base/file/#Base.Filesystem.mkdir",
     "page": "Filesystem",
     "title": "Base.Filesystem.mkdir",
     "category": "function",
@@ -11865,7 +11865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.mkpath",
+    "location": "base/file/#Base.Filesystem.mkpath",
     "page": "Filesystem",
     "title": "Base.Filesystem.mkpath",
     "category": "function",
@@ -11873,7 +11873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.symlink",
+    "location": "base/file/#Base.Filesystem.symlink",
     "page": "Filesystem",
     "title": "Base.Filesystem.symlink",
     "category": "function",
@@ -11881,7 +11881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.readlink",
+    "location": "base/file/#Base.Filesystem.readlink",
     "page": "Filesystem",
     "title": "Base.Filesystem.readlink",
     "category": "function",
@@ -11889,7 +11889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.chmod",
+    "location": "base/file/#Base.Filesystem.chmod",
     "page": "Filesystem",
     "title": "Base.Filesystem.chmod",
     "category": "function",
@@ -11897,7 +11897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.chown",
+    "location": "base/file/#Base.Filesystem.chown",
     "page": "Filesystem",
     "title": "Base.Filesystem.chown",
     "category": "function",
@@ -11905,7 +11905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.stat",
+    "location": "base/file/#Base.stat",
     "page": "Filesystem",
     "title": "Base.stat",
     "category": "function",
@@ -11913,7 +11913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.lstat",
+    "location": "base/file/#Base.Filesystem.lstat",
     "page": "Filesystem",
     "title": "Base.Filesystem.lstat",
     "category": "function",
@@ -11921,7 +11921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.ctime",
+    "location": "base/file/#Base.Filesystem.ctime",
     "page": "Filesystem",
     "title": "Base.Filesystem.ctime",
     "category": "function",
@@ -11929,7 +11929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.mtime",
+    "location": "base/file/#Base.Filesystem.mtime",
     "page": "Filesystem",
     "title": "Base.Filesystem.mtime",
     "category": "function",
@@ -11937,7 +11937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.filemode",
+    "location": "base/file/#Base.Filesystem.filemode",
     "page": "Filesystem",
     "title": "Base.Filesystem.filemode",
     "category": "function",
@@ -11945,7 +11945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.filesize",
+    "location": "base/file/#Base.Filesystem.filesize",
     "page": "Filesystem",
     "title": "Base.Filesystem.filesize",
     "category": "function",
@@ -11953,7 +11953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.uperm",
+    "location": "base/file/#Base.Filesystem.uperm",
     "page": "Filesystem",
     "title": "Base.Filesystem.uperm",
     "category": "function",
@@ -11961,7 +11961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.gperm",
+    "location": "base/file/#Base.Filesystem.gperm",
     "page": "Filesystem",
     "title": "Base.Filesystem.gperm",
     "category": "function",
@@ -11969,7 +11969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.operm",
+    "location": "base/file/#Base.Filesystem.operm",
     "page": "Filesystem",
     "title": "Base.Filesystem.operm",
     "category": "function",
@@ -11977,7 +11977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.cp",
+    "location": "base/file/#Base.Filesystem.cp",
     "page": "Filesystem",
     "title": "Base.Filesystem.cp",
     "category": "function",
@@ -11985,7 +11985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.download",
+    "location": "base/file/#Base.download",
     "page": "Filesystem",
     "title": "Base.download",
     "category": "function",
@@ -11993,7 +11993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.mv",
+    "location": "base/file/#Base.Filesystem.mv",
     "page": "Filesystem",
     "title": "Base.Filesystem.mv",
     "category": "function",
@@ -12001,7 +12001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.rm",
+    "location": "base/file/#Base.Filesystem.rm",
     "page": "Filesystem",
     "title": "Base.Filesystem.rm",
     "category": "function",
@@ -12009,7 +12009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.touch",
+    "location": "base/file/#Base.Filesystem.touch",
     "page": "Filesystem",
     "title": "Base.Filesystem.touch",
     "category": "function",
@@ -12017,7 +12017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.tempname",
+    "location": "base/file/#Base.Filesystem.tempname",
     "page": "Filesystem",
     "title": "Base.Filesystem.tempname",
     "category": "function",
@@ -12025,7 +12025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.tempdir",
+    "location": "base/file/#Base.Filesystem.tempdir",
     "page": "Filesystem",
     "title": "Base.Filesystem.tempdir",
     "category": "function",
@@ -12033,7 +12033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.mktemp-Tuple{Any}",
+    "location": "base/file/#Base.Filesystem.mktemp-Tuple{Any}",
     "page": "Filesystem",
     "title": "Base.Filesystem.mktemp",
     "category": "method",
@@ -12041,7 +12041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.mktemp-Tuple{Function,Any}",
+    "location": "base/file/#Base.Filesystem.mktemp-Tuple{Function,Any}",
     "page": "Filesystem",
     "title": "Base.Filesystem.mktemp",
     "category": "method",
@@ -12049,7 +12049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.mktempdir-Tuple{Any}",
+    "location": "base/file/#Base.Filesystem.mktempdir-Tuple{Any}",
     "page": "Filesystem",
     "title": "Base.Filesystem.mktempdir",
     "category": "method",
@@ -12057,7 +12057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.mktempdir-Tuple{Function,Any}",
+    "location": "base/file/#Base.Filesystem.mktempdir-Tuple{Function,Any}",
     "page": "Filesystem",
     "title": "Base.Filesystem.mktempdir",
     "category": "method",
@@ -12065,7 +12065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.isblockdev",
+    "location": "base/file/#Base.Filesystem.isblockdev",
     "page": "Filesystem",
     "title": "Base.Filesystem.isblockdev",
     "category": "function",
@@ -12073,7 +12073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.ischardev",
+    "location": "base/file/#Base.Filesystem.ischardev",
     "page": "Filesystem",
     "title": "Base.Filesystem.ischardev",
     "category": "function",
@@ -12081,7 +12081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.isdir",
+    "location": "base/file/#Base.Filesystem.isdir",
     "page": "Filesystem",
     "title": "Base.Filesystem.isdir",
     "category": "function",
@@ -12089,7 +12089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.isfifo",
+    "location": "base/file/#Base.Filesystem.isfifo",
     "page": "Filesystem",
     "title": "Base.Filesystem.isfifo",
     "category": "function",
@@ -12097,7 +12097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.isfile",
+    "location": "base/file/#Base.Filesystem.isfile",
     "page": "Filesystem",
     "title": "Base.Filesystem.isfile",
     "category": "function",
@@ -12105,7 +12105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.islink",
+    "location": "base/file/#Base.Filesystem.islink",
     "page": "Filesystem",
     "title": "Base.Filesystem.islink",
     "category": "function",
@@ -12113,7 +12113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.ismount",
+    "location": "base/file/#Base.Filesystem.ismount",
     "page": "Filesystem",
     "title": "Base.Filesystem.ismount",
     "category": "function",
@@ -12121,7 +12121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.ispath",
+    "location": "base/file/#Base.Filesystem.ispath",
     "page": "Filesystem",
     "title": "Base.Filesystem.ispath",
     "category": "function",
@@ -12129,7 +12129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.issetgid",
+    "location": "base/file/#Base.Filesystem.issetgid",
     "page": "Filesystem",
     "title": "Base.Filesystem.issetgid",
     "category": "function",
@@ -12137,7 +12137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.issetuid",
+    "location": "base/file/#Base.Filesystem.issetuid",
     "page": "Filesystem",
     "title": "Base.Filesystem.issetuid",
     "category": "function",
@@ -12145,7 +12145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.issocket",
+    "location": "base/file/#Base.Filesystem.issocket",
     "page": "Filesystem",
     "title": "Base.Filesystem.issocket",
     "category": "function",
@@ -12153,7 +12153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.issticky",
+    "location": "base/file/#Base.Filesystem.issticky",
     "page": "Filesystem",
     "title": "Base.Filesystem.issticky",
     "category": "function",
@@ -12161,7 +12161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.homedir",
+    "location": "base/file/#Base.Filesystem.homedir",
     "page": "Filesystem",
     "title": "Base.Filesystem.homedir",
     "category": "function",
@@ -12169,7 +12169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.dirname",
+    "location": "base/file/#Base.Filesystem.dirname",
     "page": "Filesystem",
     "title": "Base.Filesystem.dirname",
     "category": "function",
@@ -12177,7 +12177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.basename",
+    "location": "base/file/#Base.Filesystem.basename",
     "page": "Filesystem",
     "title": "Base.Filesystem.basename",
     "category": "function",
@@ -12185,7 +12185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.@__FILE__",
+    "location": "base/file/#Base.@__FILE__",
     "page": "Filesystem",
     "title": "Base.@__FILE__",
     "category": "macro",
@@ -12193,7 +12193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.@__DIR__",
+    "location": "base/file/#Base.@__DIR__",
     "page": "Filesystem",
     "title": "Base.@__DIR__",
     "category": "macro",
@@ -12201,7 +12201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.@__LINE__",
+    "location": "base/file/#Base.@__LINE__",
     "page": "Filesystem",
     "title": "Base.@__LINE__",
     "category": "macro",
@@ -12209,7 +12209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.isabspath",
+    "location": "base/file/#Base.Filesystem.isabspath",
     "page": "Filesystem",
     "title": "Base.Filesystem.isabspath",
     "category": "function",
@@ -12217,7 +12217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.isdirpath",
+    "location": "base/file/#Base.Filesystem.isdirpath",
     "page": "Filesystem",
     "title": "Base.Filesystem.isdirpath",
     "category": "function",
@@ -12225,7 +12225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.joinpath",
+    "location": "base/file/#Base.Filesystem.joinpath",
     "page": "Filesystem",
     "title": "Base.Filesystem.joinpath",
     "category": "function",
@@ -12233,7 +12233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.abspath",
+    "location": "base/file/#Base.Filesystem.abspath",
     "page": "Filesystem",
     "title": "Base.Filesystem.abspath",
     "category": "function",
@@ -12241,7 +12241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.normpath",
+    "location": "base/file/#Base.Filesystem.normpath",
     "page": "Filesystem",
     "title": "Base.Filesystem.normpath",
     "category": "function",
@@ -12249,7 +12249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.realpath",
+    "location": "base/file/#Base.Filesystem.realpath",
     "page": "Filesystem",
     "title": "Base.Filesystem.realpath",
     "category": "function",
@@ -12257,7 +12257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.relpath",
+    "location": "base/file/#Base.Filesystem.relpath",
     "page": "Filesystem",
     "title": "Base.Filesystem.relpath",
     "category": "function",
@@ -12265,7 +12265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.expanduser",
+    "location": "base/file/#Base.Filesystem.expanduser",
     "page": "Filesystem",
     "title": "Base.Filesystem.expanduser",
     "category": "function",
@@ -12273,7 +12273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.splitdir",
+    "location": "base/file/#Base.Filesystem.splitdir",
     "page": "Filesystem",
     "title": "Base.Filesystem.splitdir",
     "category": "function",
@@ -12281,7 +12281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.splitdrive",
+    "location": "base/file/#Base.Filesystem.splitdrive",
     "page": "Filesystem",
     "title": "Base.Filesystem.splitdrive",
     "category": "function",
@@ -12289,7 +12289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Base.Filesystem.splitext",
+    "location": "base/file/#Base.Filesystem.splitext",
     "page": "Filesystem",
     "title": "Base.Filesystem.splitext",
     "category": "function",
@@ -12297,7 +12297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/file.html#Filesystem-1",
+    "location": "base/file/#Filesystem-1",
     "page": "Filesystem",
     "title": "Filesystem",
     "category": "section",
@@ -12305,7 +12305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#",
+    "location": "base/io-network/#",
     "page": "I/O and Network",
     "title": "I/O and Network",
     "category": "page",
@@ -12313,7 +12313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#I/O-and-Network-1",
+    "location": "base/io-network/#I/O-and-Network-1",
     "page": "I/O and Network",
     "title": "I/O and Network",
     "category": "section",
@@ -12321,7 +12321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.stdout",
+    "location": "base/io-network/#Base.stdout",
     "page": "I/O and Network",
     "title": "Base.stdout",
     "category": "constant",
@@ -12329,7 +12329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.stderr",
+    "location": "base/io-network/#Base.stderr",
     "page": "I/O and Network",
     "title": "Base.stderr",
     "category": "constant",
@@ -12337,7 +12337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.stdin",
+    "location": "base/io-network/#Base.stdin",
     "page": "I/O and Network",
     "title": "Base.stdin",
     "category": "constant",
@@ -12345,7 +12345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.open",
+    "location": "base/io-network/#Base.open",
     "page": "I/O and Network",
     "title": "Base.open",
     "category": "function",
@@ -12353,7 +12353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.IOBuffer",
+    "location": "base/io-network/#Base.IOBuffer",
     "page": "I/O and Network",
     "title": "Base.IOBuffer",
     "category": "type",
@@ -12361,7 +12361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.take!-Tuple{Base.GenericIOBuffer}",
+    "location": "base/io-network/#Base.take!-Tuple{Base.GenericIOBuffer}",
     "page": "I/O and Network",
     "title": "Base.take!",
     "category": "method",
@@ -12369,7 +12369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.fdio",
+    "location": "base/io-network/#Base.fdio",
     "page": "I/O and Network",
     "title": "Base.fdio",
     "category": "function",
@@ -12377,7 +12377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.flush",
+    "location": "base/io-network/#Base.flush",
     "page": "I/O and Network",
     "title": "Base.flush",
     "category": "function",
@@ -12385,7 +12385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.close",
+    "location": "base/io-network/#Base.close",
     "page": "I/O and Network",
     "title": "Base.close",
     "category": "function",
@@ -12393,7 +12393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.write",
+    "location": "base/io-network/#Base.write",
     "page": "I/O and Network",
     "title": "Base.write",
     "category": "function",
@@ -12401,7 +12401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.read",
+    "location": "base/io-network/#Base.read",
     "page": "I/O and Network",
     "title": "Base.read",
     "category": "function",
@@ -12409,7 +12409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.read!",
+    "location": "base/io-network/#Base.read!",
     "page": "I/O and Network",
     "title": "Base.read!",
     "category": "function",
@@ -12417,7 +12417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.readbytes!",
+    "location": "base/io-network/#Base.readbytes!",
     "page": "I/O and Network",
     "title": "Base.readbytes!",
     "category": "function",
@@ -12425,7 +12425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.unsafe_read",
+    "location": "base/io-network/#Base.unsafe_read",
     "page": "I/O and Network",
     "title": "Base.unsafe_read",
     "category": "function",
@@ -12433,7 +12433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.unsafe_write",
+    "location": "base/io-network/#Base.unsafe_write",
     "page": "I/O and Network",
     "title": "Base.unsafe_write",
     "category": "function",
@@ -12441,7 +12441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.position",
+    "location": "base/io-network/#Base.position",
     "page": "I/O and Network",
     "title": "Base.position",
     "category": "function",
@@ -12449,7 +12449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.seek",
+    "location": "base/io-network/#Base.seek",
     "page": "I/O and Network",
     "title": "Base.seek",
     "category": "function",
@@ -12457,7 +12457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.seekstart",
+    "location": "base/io-network/#Base.seekstart",
     "page": "I/O and Network",
     "title": "Base.seekstart",
     "category": "function",
@@ -12465,7 +12465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.seekend",
+    "location": "base/io-network/#Base.seekend",
     "page": "I/O and Network",
     "title": "Base.seekend",
     "category": "function",
@@ -12473,7 +12473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.skip",
+    "location": "base/io-network/#Base.skip",
     "page": "I/O and Network",
     "title": "Base.skip",
     "category": "function",
@@ -12481,7 +12481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.mark",
+    "location": "base/io-network/#Base.mark",
     "page": "I/O and Network",
     "title": "Base.mark",
     "category": "function",
@@ -12489,7 +12489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.unmark",
+    "location": "base/io-network/#Base.unmark",
     "page": "I/O and Network",
     "title": "Base.unmark",
     "category": "function",
@@ -12497,7 +12497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.reset",
+    "location": "base/io-network/#Base.reset",
     "page": "I/O and Network",
     "title": "Base.reset",
     "category": "function",
@@ -12505,7 +12505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.ismarked",
+    "location": "base/io-network/#Base.ismarked",
     "page": "I/O and Network",
     "title": "Base.ismarked",
     "category": "function",
@@ -12513,7 +12513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.eof",
+    "location": "base/io-network/#Base.eof",
     "page": "I/O and Network",
     "title": "Base.eof",
     "category": "function",
@@ -12521,7 +12521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.isreadonly",
+    "location": "base/io-network/#Base.isreadonly",
     "page": "I/O and Network",
     "title": "Base.isreadonly",
     "category": "function",
@@ -12529,7 +12529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.iswritable",
+    "location": "base/io-network/#Base.iswritable",
     "page": "I/O and Network",
     "title": "Base.iswritable",
     "category": "function",
@@ -12537,7 +12537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.isreadable",
+    "location": "base/io-network/#Base.isreadable",
     "page": "I/O and Network",
     "title": "Base.isreadable",
     "category": "function",
@@ -12545,7 +12545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.isopen",
+    "location": "base/io-network/#Base.isopen",
     "page": "I/O and Network",
     "title": "Base.isopen",
     "category": "function",
@@ -12553,7 +12553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Grisu.print_shortest",
+    "location": "base/io-network/#Base.Grisu.print_shortest",
     "page": "I/O and Network",
     "title": "Base.Grisu.print_shortest",
     "category": "function",
@@ -12561,7 +12561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.fd",
+    "location": "base/io-network/#Base.fd",
     "page": "I/O and Network",
     "title": "Base.fd",
     "category": "function",
@@ -12569,7 +12569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.redirect_stdout",
+    "location": "base/io-network/#Base.redirect_stdout",
     "page": "I/O and Network",
     "title": "Base.redirect_stdout",
     "category": "function",
@@ -12577,7 +12577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.redirect_stdout-Tuple{Function,Any}",
+    "location": "base/io-network/#Base.redirect_stdout-Tuple{Function,Any}",
     "page": "I/O and Network",
     "title": "Base.redirect_stdout",
     "category": "method",
@@ -12585,7 +12585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.redirect_stderr",
+    "location": "base/io-network/#Base.redirect_stderr",
     "page": "I/O and Network",
     "title": "Base.redirect_stderr",
     "category": "function",
@@ -12593,7 +12593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.redirect_stderr-Tuple{Function,Any}",
+    "location": "base/io-network/#Base.redirect_stderr-Tuple{Function,Any}",
     "page": "I/O and Network",
     "title": "Base.redirect_stderr",
     "category": "method",
@@ -12601,7 +12601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.redirect_stdin",
+    "location": "base/io-network/#Base.redirect_stdin",
     "page": "I/O and Network",
     "title": "Base.redirect_stdin",
     "category": "function",
@@ -12609,7 +12609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.redirect_stdin-Tuple{Function,Any}",
+    "location": "base/io-network/#Base.redirect_stdin-Tuple{Function,Any}",
     "page": "I/O and Network",
     "title": "Base.redirect_stdin",
     "category": "method",
@@ -12617,7 +12617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.readchomp",
+    "location": "base/io-network/#Base.readchomp",
     "page": "I/O and Network",
     "title": "Base.readchomp",
     "category": "function",
@@ -12625,7 +12625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.truncate",
+    "location": "base/io-network/#Base.truncate",
     "page": "I/O and Network",
     "title": "Base.truncate",
     "category": "function",
@@ -12633,7 +12633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.skipchars",
+    "location": "base/io-network/#Base.skipchars",
     "page": "I/O and Network",
     "title": "Base.skipchars",
     "category": "function",
@@ -12641,7 +12641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.countlines",
+    "location": "base/io-network/#Base.countlines",
     "page": "I/O and Network",
     "title": "Base.countlines",
     "category": "function",
@@ -12649,7 +12649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.PipeBuffer",
+    "location": "base/io-network/#Base.PipeBuffer",
     "page": "I/O and Network",
     "title": "Base.PipeBuffer",
     "category": "function",
@@ -12657,7 +12657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.readavailable",
+    "location": "base/io-network/#Base.readavailable",
     "page": "I/O and Network",
     "title": "Base.readavailable",
     "category": "function",
@@ -12665,7 +12665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.IOContext",
+    "location": "base/io-network/#Base.IOContext",
     "page": "I/O and Network",
     "title": "Base.IOContext",
     "category": "type",
@@ -12673,7 +12673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.IOContext-Tuple{IO,Pair}",
+    "location": "base/io-network/#Base.IOContext-Tuple{IO,Pair}",
     "page": "I/O and Network",
     "title": "Base.IOContext",
     "category": "method",
@@ -12681,7 +12681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.IOContext-Tuple{IO,IOContext}",
+    "location": "base/io-network/#Base.IOContext-Tuple{IO,IOContext}",
     "page": "I/O and Network",
     "title": "Base.IOContext",
     "category": "method",
@@ -12689,7 +12689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#General-I/O-1",
+    "location": "base/io-network/#General-I/O-1",
     "page": "I/O and Network",
     "title": "General I/O",
     "category": "section",
@@ -12697,7 +12697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.show-Tuple{Any}",
+    "location": "base/io-network/#Base.show-Tuple{Any}",
     "page": "I/O and Network",
     "title": "Base.show",
     "category": "method",
@@ -12705,7 +12705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.summary",
+    "location": "base/io-network/#Base.summary",
     "page": "I/O and Network",
     "title": "Base.summary",
     "category": "function",
@@ -12713,7 +12713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.print",
+    "location": "base/io-network/#Base.print",
     "page": "I/O and Network",
     "title": "Base.print",
     "category": "function",
@@ -12721,7 +12721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.println",
+    "location": "base/io-network/#Base.println",
     "page": "I/O and Network",
     "title": "Base.println",
     "category": "function",
@@ -12729,7 +12729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.printstyled",
+    "location": "base/io-network/#Base.printstyled",
     "page": "I/O and Network",
     "title": "Base.printstyled",
     "category": "function",
@@ -12737,7 +12737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.sprint",
+    "location": "base/io-network/#Base.sprint",
     "page": "I/O and Network",
     "title": "Base.sprint",
     "category": "function",
@@ -12745,7 +12745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.showerror",
+    "location": "base/io-network/#Base.showerror",
     "page": "I/O and Network",
     "title": "Base.showerror",
     "category": "function",
@@ -12753,7 +12753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.dump",
+    "location": "base/io-network/#Base.dump",
     "page": "I/O and Network",
     "title": "Base.dump",
     "category": "function",
@@ -12761,7 +12761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Meta.@dump",
+    "location": "base/io-network/#Base.Meta.@dump",
     "page": "I/O and Network",
     "title": "Base.Meta.@dump",
     "category": "macro",
@@ -12769,7 +12769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.readline",
+    "location": "base/io-network/#Base.readline",
     "page": "I/O and Network",
     "title": "Base.readline",
     "category": "function",
@@ -12777,7 +12777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.readuntil",
+    "location": "base/io-network/#Base.readuntil",
     "page": "I/O and Network",
     "title": "Base.readuntil",
     "category": "function",
@@ -12785,7 +12785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.readlines",
+    "location": "base/io-network/#Base.readlines",
     "page": "I/O and Network",
     "title": "Base.readlines",
     "category": "function",
@@ -12793,7 +12793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.eachline",
+    "location": "base/io-network/#Base.eachline",
     "page": "I/O and Network",
     "title": "Base.eachline",
     "category": "function",
@@ -12801,7 +12801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.displaysize",
+    "location": "base/io-network/#Base.displaysize",
     "page": "I/O and Network",
     "title": "Base.displaysize",
     "category": "function",
@@ -12809,7 +12809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Text-I/O-1",
+    "location": "base/io-network/#Text-I/O-1",
     "page": "I/O and Network",
     "title": "Text I/O",
     "category": "section",
@@ -12817,7 +12817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Multimedia.display",
+    "location": "base/io-network/#Base.Multimedia.display",
     "page": "I/O and Network",
     "title": "Base.Multimedia.display",
     "category": "function",
@@ -12825,7 +12825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Multimedia.redisplay",
+    "location": "base/io-network/#Base.Multimedia.redisplay",
     "page": "I/O and Network",
     "title": "Base.Multimedia.redisplay",
     "category": "function",
@@ -12833,7 +12833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Multimedia.displayable",
+    "location": "base/io-network/#Base.Multimedia.displayable",
     "page": "I/O and Network",
     "title": "Base.Multimedia.displayable",
     "category": "function",
@@ -12841,7 +12841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.show-Tuple{Any,Any,Any}",
+    "location": "base/io-network/#Base.show-Tuple{Any,Any,Any}",
     "page": "I/O and Network",
     "title": "Base.show",
     "category": "method",
@@ -12849,7 +12849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Multimedia.showable",
+    "location": "base/io-network/#Base.Multimedia.showable",
     "page": "I/O and Network",
     "title": "Base.Multimedia.showable",
     "category": "function",
@@ -12857,7 +12857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.repr-Tuple{MIME,Any}",
+    "location": "base/io-network/#Base.repr-Tuple{MIME,Any}",
     "page": "I/O and Network",
     "title": "Base.repr",
     "category": "method",
@@ -12865,7 +12865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Multimedia.pushdisplay",
+    "location": "base/io-network/#Base.Multimedia.pushdisplay",
     "page": "I/O and Network",
     "title": "Base.Multimedia.pushdisplay",
     "category": "function",
@@ -12873,7 +12873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Multimedia.popdisplay",
+    "location": "base/io-network/#Base.Multimedia.popdisplay",
     "page": "I/O and Network",
     "title": "Base.Multimedia.popdisplay",
     "category": "function",
@@ -12881,7 +12881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Multimedia.TextDisplay",
+    "location": "base/io-network/#Base.Multimedia.TextDisplay",
     "page": "I/O and Network",
     "title": "Base.Multimedia.TextDisplay",
     "category": "type",
@@ -12889,7 +12889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.Multimedia.istextmime",
+    "location": "base/io-network/#Base.Multimedia.istextmime",
     "page": "I/O and Network",
     "title": "Base.Multimedia.istextmime",
     "category": "function",
@@ -12897,7 +12897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Multimedia-I/O-1",
+    "location": "base/io-network/#Multimedia-I/O-1",
     "page": "I/O and Network",
     "title": "Multimedia I/O",
     "category": "section",
@@ -12905,7 +12905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.bytesavailable",
+    "location": "base/io-network/#Base.bytesavailable",
     "page": "I/O and Network",
     "title": "Base.bytesavailable",
     "category": "function",
@@ -12913,7 +12913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.ntoh",
+    "location": "base/io-network/#Base.ntoh",
     "page": "I/O and Network",
     "title": "Base.ntoh",
     "category": "function",
@@ -12921,7 +12921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.hton",
+    "location": "base/io-network/#Base.hton",
     "page": "I/O and Network",
     "title": "Base.hton",
     "category": "function",
@@ -12929,7 +12929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.ltoh",
+    "location": "base/io-network/#Base.ltoh",
     "page": "I/O and Network",
     "title": "Base.ltoh",
     "category": "function",
@@ -12937,7 +12937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.htol",
+    "location": "base/io-network/#Base.htol",
     "page": "I/O and Network",
     "title": "Base.htol",
     "category": "function",
@@ -12945,7 +12945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Base.ENDIAN_BOM",
+    "location": "base/io-network/#Base.ENDIAN_BOM",
     "page": "I/O and Network",
     "title": "Base.ENDIAN_BOM",
     "category": "constant",
@@ -12953,7 +12953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/io-network.html#Network-I/O-1",
+    "location": "base/io-network/#Network-I/O-1",
     "page": "I/O and Network",
     "title": "Network I/O",
     "category": "section",
@@ -12961,7 +12961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/punctuation.html#",
+    "location": "base/punctuation/#",
     "page": "Punctuation",
     "title": "Punctuation",
     "category": "page",
@@ -12969,7 +12969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/punctuation.html#Punctuation-1",
+    "location": "base/punctuation/#Punctuation-1",
     "page": "Punctuation",
     "title": "Punctuation",
     "category": "section",
@@ -12977,7 +12977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#",
+    "location": "base/sort/#",
     "page": "Sorting and Related Functions",
     "title": "Sorting and Related Functions",
     "category": "page",
@@ -12985,7 +12985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Sorting-and-Related-Functions-1",
+    "location": "base/sort/#Sorting-and-Related-Functions-1",
     "page": "Sorting and Related Functions",
     "title": "Sorting and Related Functions",
     "category": "section",
@@ -12993,7 +12993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.sort!",
+    "location": "base/sort/#Base.sort!",
     "page": "Sorting and Related Functions",
     "title": "Base.sort!",
     "category": "function",
@@ -13001,7 +13001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.sort",
+    "location": "base/sort/#Base.sort",
     "page": "Sorting and Related Functions",
     "title": "Base.sort",
     "category": "function",
@@ -13009,7 +13009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.sortperm",
+    "location": "base/sort/#Base.sortperm",
     "page": "Sorting and Related Functions",
     "title": "Base.sortperm",
     "category": "function",
@@ -13017,7 +13017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.sortperm!",
+    "location": "base/sort/#Base.Sort.sortperm!",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.sortperm!",
     "category": "function",
@@ -13025,7 +13025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.sortrows",
+    "location": "base/sort/#Base.Sort.sortrows",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.sortrows",
     "category": "function",
@@ -13033,7 +13033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.sortcols",
+    "location": "base/sort/#Base.Sort.sortcols",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.sortcols",
     "category": "function",
@@ -13041,7 +13041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Sorting-Functions-1",
+    "location": "base/sort/#Sorting-Functions-1",
     "page": "Sorting and Related Functions",
     "title": "Sorting Functions",
     "category": "section",
@@ -13049,7 +13049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.issorted",
+    "location": "base/sort/#Base.issorted",
     "page": "Sorting and Related Functions",
     "title": "Base.issorted",
     "category": "function",
@@ -13057,7 +13057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.searchsorted",
+    "location": "base/sort/#Base.Sort.searchsorted",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.searchsorted",
     "category": "function",
@@ -13065,7 +13065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.searchsortedfirst",
+    "location": "base/sort/#Base.Sort.searchsortedfirst",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.searchsortedfirst",
     "category": "function",
@@ -13073,7 +13073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.searchsortedlast",
+    "location": "base/sort/#Base.Sort.searchsortedlast",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.searchsortedlast",
     "category": "function",
@@ -13081,7 +13081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.partialsort!",
+    "location": "base/sort/#Base.Sort.partialsort!",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.partialsort!",
     "category": "function",
@@ -13089,7 +13089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.partialsort",
+    "location": "base/sort/#Base.Sort.partialsort",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.partialsort",
     "category": "function",
@@ -13097,7 +13097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.partialsortperm",
+    "location": "base/sort/#Base.Sort.partialsortperm",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.partialsortperm",
     "category": "function",
@@ -13105,7 +13105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Base.Sort.partialsortperm!",
+    "location": "base/sort/#Base.Sort.partialsortperm!",
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.partialsortperm!",
     "category": "function",
@@ -13113,7 +13113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Order-Related-Functions-1",
+    "location": "base/sort/#Order-Related-Functions-1",
     "page": "Sorting and Related Functions",
     "title": "Order-Related Functions",
     "category": "section",
@@ -13121,7 +13121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/sort.html#Sorting-Algorithms-1",
+    "location": "base/sort/#Sorting-Algorithms-1",
     "page": "Sorting and Related Functions",
     "title": "Sorting Algorithms",
     "category": "section",
@@ -13129,7 +13129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#",
+    "location": "base/iterators/#",
     "page": "Iteration utilities",
     "title": "Iteration utilities",
     "category": "page",
@@ -13137,7 +13137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.Stateful",
+    "location": "base/iterators/#Base.Iterators.Stateful",
     "page": "Iteration utilities",
     "title": "Base.Iterators.Stateful",
     "category": "type",
@@ -13145,7 +13145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.zip",
+    "location": "base/iterators/#Base.Iterators.zip",
     "page": "Iteration utilities",
     "title": "Base.Iterators.zip",
     "category": "function",
@@ -13153,7 +13153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.enumerate",
+    "location": "base/iterators/#Base.Iterators.enumerate",
     "page": "Iteration utilities",
     "title": "Base.Iterators.enumerate",
     "category": "function",
@@ -13161,7 +13161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.rest",
+    "location": "base/iterators/#Base.Iterators.rest",
     "page": "Iteration utilities",
     "title": "Base.Iterators.rest",
     "category": "function",
@@ -13169,7 +13169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.countfrom",
+    "location": "base/iterators/#Base.Iterators.countfrom",
     "page": "Iteration utilities",
     "title": "Base.Iterators.countfrom",
     "category": "function",
@@ -13177,7 +13177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.take",
+    "location": "base/iterators/#Base.Iterators.take",
     "page": "Iteration utilities",
     "title": "Base.Iterators.take",
     "category": "function",
@@ -13185,7 +13185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.drop",
+    "location": "base/iterators/#Base.Iterators.drop",
     "page": "Iteration utilities",
     "title": "Base.Iterators.drop",
     "category": "function",
@@ -13193,7 +13193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.cycle",
+    "location": "base/iterators/#Base.Iterators.cycle",
     "page": "Iteration utilities",
     "title": "Base.Iterators.cycle",
     "category": "function",
@@ -13201,7 +13201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.repeated",
+    "location": "base/iterators/#Base.Iterators.repeated",
     "page": "Iteration utilities",
     "title": "Base.Iterators.repeated",
     "category": "function",
@@ -13209,7 +13209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.product",
+    "location": "base/iterators/#Base.Iterators.product",
     "page": "Iteration utilities",
     "title": "Base.Iterators.product",
     "category": "function",
@@ -13217,7 +13217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.flatten",
+    "location": "base/iterators/#Base.Iterators.flatten",
     "page": "Iteration utilities",
     "title": "Base.Iterators.flatten",
     "category": "function",
@@ -13225,7 +13225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.partition",
+    "location": "base/iterators/#Base.Iterators.partition",
     "page": "Iteration utilities",
     "title": "Base.Iterators.partition",
     "category": "function",
@@ -13233,7 +13233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.filter",
+    "location": "base/iterators/#Base.Iterators.filter",
     "page": "Iteration utilities",
     "title": "Base.Iterators.filter",
     "category": "function",
@@ -13241,7 +13241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Base.Iterators.reverse",
+    "location": "base/iterators/#Base.Iterators.reverse",
     "page": "Iteration utilities",
     "title": "Base.Iterators.reverse",
     "category": "function",
@@ -13249,7 +13249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/iterators.html#Iteration-utilities-1",
+    "location": "base/iterators/#Iteration-utilities-1",
     "page": "Iteration utilities",
     "title": "Iteration utilities",
     "category": "section",
@@ -13257,7 +13257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#",
+    "location": "base/c/#",
     "page": "C Interface",
     "title": "C Interface",
     "category": "page",
@@ -13265,7 +13265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#ccall",
+    "location": "base/c/#ccall",
     "page": "C Interface",
     "title": "ccall",
     "category": "keyword",
@@ -13273,7 +13273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Core.Intrinsics.cglobal",
+    "location": "base/c/#Core.Intrinsics.cglobal",
     "page": "C Interface",
     "title": "Core.Intrinsics.cglobal",
     "category": "function",
@@ -13281,7 +13281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.@cfunction",
+    "location": "base/c/#Base.@cfunction",
     "page": "C Interface",
     "title": "Base.@cfunction",
     "category": "macro",
@@ -13289,7 +13289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.unsafe_convert",
+    "location": "base/c/#Base.unsafe_convert",
     "page": "C Interface",
     "title": "Base.unsafe_convert",
     "category": "function",
@@ -13297,7 +13297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.cconvert",
+    "location": "base/c/#Base.cconvert",
     "page": "C Interface",
     "title": "Base.cconvert",
     "category": "function",
@@ -13305,7 +13305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.unsafe_load",
+    "location": "base/c/#Base.unsafe_load",
     "page": "C Interface",
     "title": "Base.unsafe_load",
     "category": "function",
@@ -13313,7 +13313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.unsafe_store!",
+    "location": "base/c/#Base.unsafe_store!",
     "page": "C Interface",
     "title": "Base.unsafe_store!",
     "category": "function",
@@ -13321,7 +13321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.unsafe_copyto!-Union{Tuple{T}, Tuple{Ptr{T},Ptr{T},Any}} where T",
+    "location": "base/c/#Base.unsafe_copyto!-Union{Tuple{T}, Tuple{Ptr{T},Ptr{T},Any}} where T",
     "page": "C Interface",
     "title": "Base.unsafe_copyto!",
     "category": "method",
@@ -13329,7 +13329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.unsafe_copyto!-Union{Tuple{T}, Tuple{Array{T,N} where N,Any,Array{T,N} where N,Any,Any}} where T",
+    "location": "base/c/#Base.unsafe_copyto!-Union{Tuple{T}, Tuple{Array{T,N} where N,Any,Array{T,N} where N,Any,Any}} where T",
     "page": "C Interface",
     "title": "Base.unsafe_copyto!",
     "category": "method",
@@ -13337,7 +13337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.copyto!",
+    "location": "base/c/#Base.copyto!",
     "page": "C Interface",
     "title": "Base.copyto!",
     "category": "function",
@@ -13345,7 +13345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.pointer",
+    "location": "base/c/#Base.pointer",
     "page": "C Interface",
     "title": "Base.pointer",
     "category": "function",
@@ -13353,7 +13353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.unsafe_wrap-Union{Tuple{N}, Tuple{T}, Tuple{Union{Type{Array}, Type{Array{T,N} where N}, Type{Array{T,N}}},Ptr{T},Tuple{Vararg{Int64,N}}}} where N where T",
+    "location": "base/c/#Base.unsafe_wrap-Union{Tuple{N}, Tuple{T}, Tuple{Union{Type{Array}, Type{Array{T,N} where N}, Type{Array{T,N}}},Ptr{T},Tuple{Vararg{Int64,N}}}} where N where T",
     "page": "C Interface",
     "title": "Base.unsafe_wrap",
     "category": "method",
@@ -13361,7 +13361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.pointer_from_objref",
+    "location": "base/c/#Base.pointer_from_objref",
     "page": "C Interface",
     "title": "Base.pointer_from_objref",
     "category": "function",
@@ -13369,7 +13369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.unsafe_pointer_to_objref",
+    "location": "base/c/#Base.unsafe_pointer_to_objref",
     "page": "C Interface",
     "title": "Base.unsafe_pointer_to_objref",
     "category": "function",
@@ -13377,7 +13377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.disable_sigint",
+    "location": "base/c/#Base.disable_sigint",
     "page": "C Interface",
     "title": "Base.disable_sigint",
     "category": "function",
@@ -13385,7 +13385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.reenable_sigint",
+    "location": "base/c/#Base.reenable_sigint",
     "page": "C Interface",
     "title": "Base.reenable_sigint",
     "category": "function",
@@ -13393,7 +13393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.systemerror",
+    "location": "base/c/#Base.systemerror",
     "page": "C Interface",
     "title": "Base.systemerror",
     "category": "function",
@@ -13401,7 +13401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Core.Ptr",
+    "location": "base/c/#Core.Ptr",
     "page": "C Interface",
     "title": "Core.Ptr",
     "category": "type",
@@ -13409,7 +13409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Core.Ref",
+    "location": "base/c/#Core.Ref",
     "page": "C Interface",
     "title": "Core.Ref",
     "category": "type",
@@ -13417,7 +13417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cchar",
+    "location": "base/c/#Base.Cchar",
     "page": "C Interface",
     "title": "Base.Cchar",
     "category": "type",
@@ -13425,7 +13425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cuchar",
+    "location": "base/c/#Base.Cuchar",
     "page": "C Interface",
     "title": "Base.Cuchar",
     "category": "type",
@@ -13433,7 +13433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cshort",
+    "location": "base/c/#Base.Cshort",
     "page": "C Interface",
     "title": "Base.Cshort",
     "category": "type",
@@ -13441,7 +13441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cushort",
+    "location": "base/c/#Base.Cushort",
     "page": "C Interface",
     "title": "Base.Cushort",
     "category": "type",
@@ -13449,7 +13449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cint",
+    "location": "base/c/#Base.Cint",
     "page": "C Interface",
     "title": "Base.Cint",
     "category": "type",
@@ -13457,7 +13457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cuint",
+    "location": "base/c/#Base.Cuint",
     "page": "C Interface",
     "title": "Base.Cuint",
     "category": "type",
@@ -13465,7 +13465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Clong",
+    "location": "base/c/#Base.Clong",
     "page": "C Interface",
     "title": "Base.Clong",
     "category": "type",
@@ -13473,7 +13473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Culong",
+    "location": "base/c/#Base.Culong",
     "page": "C Interface",
     "title": "Base.Culong",
     "category": "type",
@@ -13481,7 +13481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Clonglong",
+    "location": "base/c/#Base.Clonglong",
     "page": "C Interface",
     "title": "Base.Clonglong",
     "category": "type",
@@ -13489,7 +13489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Culonglong",
+    "location": "base/c/#Base.Culonglong",
     "page": "C Interface",
     "title": "Base.Culonglong",
     "category": "type",
@@ -13497,7 +13497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cintmax_t",
+    "location": "base/c/#Base.Cintmax_t",
     "page": "C Interface",
     "title": "Base.Cintmax_t",
     "category": "type",
@@ -13505,7 +13505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cuintmax_t",
+    "location": "base/c/#Base.Cuintmax_t",
     "page": "C Interface",
     "title": "Base.Cuintmax_t",
     "category": "type",
@@ -13513,7 +13513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Csize_t",
+    "location": "base/c/#Base.Csize_t",
     "page": "C Interface",
     "title": "Base.Csize_t",
     "category": "type",
@@ -13521,7 +13521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cssize_t",
+    "location": "base/c/#Base.Cssize_t",
     "page": "C Interface",
     "title": "Base.Cssize_t",
     "category": "type",
@@ -13529,7 +13529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cptrdiff_t",
+    "location": "base/c/#Base.Cptrdiff_t",
     "page": "C Interface",
     "title": "Base.Cptrdiff_t",
     "category": "type",
@@ -13537,7 +13537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cwchar_t",
+    "location": "base/c/#Base.Cwchar_t",
     "page": "C Interface",
     "title": "Base.Cwchar_t",
     "category": "type",
@@ -13545,7 +13545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cfloat",
+    "location": "base/c/#Base.Cfloat",
     "page": "C Interface",
     "title": "Base.Cfloat",
     "category": "type",
@@ -13553,7 +13553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Base.Cdouble",
+    "location": "base/c/#Base.Cdouble",
     "page": "C Interface",
     "title": "Base.Cdouble",
     "category": "type",
@@ -13561,7 +13561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#C-Interface-1",
+    "location": "base/c/#C-Interface-1",
     "page": "C Interface",
     "title": "C Interface",
     "category": "section",
@@ -13569,7 +13569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#Core.Intrinsics.llvmcall",
+    "location": "base/c/#Core.Intrinsics.llvmcall",
     "page": "C Interface",
     "title": "Core.Intrinsics.llvmcall",
     "category": "function",
@@ -13577,7 +13577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/c.html#LLVM-Interface-1",
+    "location": "base/c/#LLVM-Interface-1",
     "page": "C Interface",
     "title": "LLVM Interface",
     "category": "section",
@@ -13585,7 +13585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#",
+    "location": "base/libc/#",
     "page": "C Standard Library",
     "title": "C Standard Library",
     "category": "page",
@@ -13593,7 +13593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.malloc",
+    "location": "base/libc/#Base.Libc.malloc",
     "page": "C Standard Library",
     "title": "Base.Libc.malloc",
     "category": "function",
@@ -13601,7 +13601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.calloc",
+    "location": "base/libc/#Base.Libc.calloc",
     "page": "C Standard Library",
     "title": "Base.Libc.calloc",
     "category": "function",
@@ -13609,7 +13609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.realloc",
+    "location": "base/libc/#Base.Libc.realloc",
     "page": "C Standard Library",
     "title": "Base.Libc.realloc",
     "category": "function",
@@ -13617,7 +13617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.free",
+    "location": "base/libc/#Base.Libc.free",
     "page": "C Standard Library",
     "title": "Base.Libc.free",
     "category": "function",
@@ -13625,7 +13625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.errno",
+    "location": "base/libc/#Base.Libc.errno",
     "page": "C Standard Library",
     "title": "Base.Libc.errno",
     "category": "function",
@@ -13633,7 +13633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.strerror",
+    "location": "base/libc/#Base.Libc.strerror",
     "page": "C Standard Library",
     "title": "Base.Libc.strerror",
     "category": "function",
@@ -13641,7 +13641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.GetLastError",
+    "location": "base/libc/#Base.Libc.GetLastError",
     "page": "C Standard Library",
     "title": "Base.Libc.GetLastError",
     "category": "function",
@@ -13649,7 +13649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.FormatMessage",
+    "location": "base/libc/#Base.Libc.FormatMessage",
     "page": "C Standard Library",
     "title": "Base.Libc.FormatMessage",
     "category": "function",
@@ -13657,7 +13657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.time-Tuple{Base.Libc.TmStruct}",
+    "location": "base/libc/#Base.Libc.time-Tuple{Base.Libc.TmStruct}",
     "page": "C Standard Library",
     "title": "Base.Libc.time",
     "category": "method",
@@ -13665,7 +13665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.strftime",
+    "location": "base/libc/#Base.Libc.strftime",
     "page": "C Standard Library",
     "title": "Base.Libc.strftime",
     "category": "function",
@@ -13673,7 +13673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.strptime",
+    "location": "base/libc/#Base.Libc.strptime",
     "page": "C Standard Library",
     "title": "Base.Libc.strptime",
     "category": "function",
@@ -13681,7 +13681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.TmStruct",
+    "location": "base/libc/#Base.Libc.TmStruct",
     "page": "C Standard Library",
     "title": "Base.Libc.TmStruct",
     "category": "type",
@@ -13689,7 +13689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#Base.Libc.flush_cstdio",
+    "location": "base/libc/#Base.Libc.flush_cstdio",
     "page": "C Standard Library",
     "title": "Base.Libc.flush_cstdio",
     "category": "function",
@@ -13697,7 +13697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/libc.html#C-Standard-Library-1",
+    "location": "base/libc/#C-Standard-Library-1",
     "page": "C Standard Library",
     "title": "C Standard Library",
     "category": "section",
@@ -13705,7 +13705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/stacktraces.html#",
+    "location": "base/stacktraces/#",
     "page": "StackTraces",
     "title": "StackTraces",
     "category": "page",
@@ -13713,7 +13713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/stacktraces.html#Base.StackTraces.StackFrame",
+    "location": "base/stacktraces/#Base.StackTraces.StackFrame",
     "page": "StackTraces",
     "title": "Base.StackTraces.StackFrame",
     "category": "type",
@@ -13721,7 +13721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/stacktraces.html#Base.StackTraces.StackTrace",
+    "location": "base/stacktraces/#Base.StackTraces.StackTrace",
     "page": "StackTraces",
     "title": "Base.StackTraces.StackTrace",
     "category": "type",
@@ -13729,7 +13729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/stacktraces.html#Base.StackTraces.stacktrace",
+    "location": "base/stacktraces/#Base.StackTraces.stacktrace",
     "page": "StackTraces",
     "title": "Base.StackTraces.stacktrace",
     "category": "function",
@@ -13737,7 +13737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/stacktraces.html#Base.StackTraces.lookup",
+    "location": "base/stacktraces/#Base.StackTraces.lookup",
     "page": "StackTraces",
     "title": "Base.StackTraces.lookup",
     "category": "function",
@@ -13745,7 +13745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/stacktraces.html#Base.StackTraces.remove_frames!",
+    "location": "base/stacktraces/#Base.StackTraces.remove_frames!",
     "page": "StackTraces",
     "title": "Base.StackTraces.remove_frames!",
     "category": "function",
@@ -13753,7 +13753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/stacktraces.html#StackTraces-1",
+    "location": "base/stacktraces/#StackTraces-1",
     "page": "StackTraces",
     "title": "StackTraces",
     "category": "section",
@@ -13761,7 +13761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/simd-types.html#",
+    "location": "base/simd-types/#",
     "page": "SIMD Support",
     "title": "SIMD Support",
     "category": "page",
@@ -13769,7 +13769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "base/simd-types.html#SIMD-Support-1",
+    "location": "base/simd-types/#SIMD-Support-1",
     "page": "SIMD Support",
     "title": "SIMD Support",
     "category": "section",
@@ -13777,7 +13777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Base64.html#",
+    "location": "stdlib/Base64/#",
     "page": "Base64",
     "title": "Base64",
     "category": "page",
@@ -13785,7 +13785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Base64.html#Base64.Base64EncodePipe",
+    "location": "stdlib/Base64/#Base64.Base64EncodePipe",
     "page": "Base64",
     "title": "Base64.Base64EncodePipe",
     "category": "type",
@@ -13793,7 +13793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Base64.html#Base64.base64encode",
+    "location": "stdlib/Base64/#Base64.base64encode",
     "page": "Base64",
     "title": "Base64.base64encode",
     "category": "function",
@@ -13801,7 +13801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Base64.html#Base64.Base64DecodePipe",
+    "location": "stdlib/Base64/#Base64.Base64DecodePipe",
     "page": "Base64",
     "title": "Base64.Base64DecodePipe",
     "category": "type",
@@ -13809,7 +13809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Base64.html#Base64.base64decode",
+    "location": "stdlib/Base64/#Base64.base64decode",
     "page": "Base64",
     "title": "Base64.base64decode",
     "category": "function",
@@ -13817,7 +13817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Base64.html#Base64.stringmime",
+    "location": "stdlib/Base64/#Base64.stringmime",
     "page": "Base64",
     "title": "Base64.stringmime",
     "category": "function",
@@ -13825,7 +13825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Base64.html#Base64-1",
+    "location": "stdlib/Base64/#Base64-1",
     "page": "Base64",
     "title": "Base64",
     "category": "section",
@@ -13833,7 +13833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/CRC32c.html#",
+    "location": "stdlib/CRC32c/#",
     "page": "CRC32c",
     "title": "CRC32c",
     "category": "page",
@@ -13841,7 +13841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/CRC32c.html#CRC32c.crc32c",
+    "location": "stdlib/CRC32c/#CRC32c.crc32c",
     "page": "CRC32c",
     "title": "CRC32c.crc32c",
     "category": "function",
@@ -13849,7 +13849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/CRC32c.html#CRC32c.crc32c-Tuple{IO,Integer,UInt32}",
+    "location": "stdlib/CRC32c/#CRC32c.crc32c-Tuple{IO,Integer,UInt32}",
     "page": "CRC32c",
     "title": "CRC32c.crc32c",
     "category": "method",
@@ -13857,7 +13857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/CRC32c.html#CRC32c-1",
+    "location": "stdlib/CRC32c/#CRC32c-1",
     "page": "CRC32c",
     "title": "CRC32c",
     "category": "section",
@@ -13865,7 +13865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#",
+    "location": "stdlib/Dates/#",
     "page": "Dates",
     "title": "Dates",
     "category": "page",
@@ -13873,7 +13873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates-1",
+    "location": "stdlib/Dates/#Dates-1",
     "page": "Dates",
     "title": "Dates",
     "category": "section",
@@ -13881,7 +13881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Constructors-1",
+    "location": "stdlib/Dates/#Constructors-1",
     "page": "Dates",
     "title": "Constructors",
     "category": "section",
@@ -13889,7 +13889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Durations/Comparisons-1",
+    "location": "stdlib/Dates/#Durations/Comparisons-1",
     "page": "Dates",
     "title": "Durations/Comparisons",
     "category": "section",
@@ -13897,7 +13897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Accessor-Functions-1",
+    "location": "stdlib/Dates/#Accessor-Functions-1",
     "page": "Dates",
     "title": "Accessor Functions",
     "category": "section",
@@ -13905,7 +13905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Query-Functions-1",
+    "location": "stdlib/Dates/#Query-Functions-1",
     "page": "Dates",
     "title": "Query Functions",
     "category": "section",
@@ -13913,7 +13913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#TimeType-Period-Arithmetic-1",
+    "location": "stdlib/Dates/#TimeType-Period-Arithmetic-1",
     "page": "Dates",
     "title": "TimeType-Period Arithmetic",
     "category": "section",
@@ -13921,7 +13921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Adjuster-Functions-1",
+    "location": "stdlib/Dates/#Adjuster-Functions-1",
     "page": "Dates",
     "title": "Adjuster Functions",
     "category": "section",
@@ -13929,7 +13929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Period-Types-1",
+    "location": "stdlib/Dates/#Period-Types-1",
     "page": "Dates",
     "title": "Period Types",
     "category": "section",
@@ -13937,7 +13937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Rounding-1",
+    "location": "stdlib/Dates/#Rounding-1",
     "page": "Dates",
     "title": "Rounding",
     "category": "section",
@@ -13945,7 +13945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Rounding-Epoch-1",
+    "location": "stdlib/Dates/#Rounding-Epoch-1",
     "page": "Dates",
     "title": "Rounding Epoch",
     "category": "section",
@@ -13953,7 +13953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#stdlib-dates-api-1",
+    "location": "stdlib/Dates/#stdlib-dates-api-1",
     "page": "Dates",
     "title": "API reference",
     "category": "section",
@@ -13961,7 +13961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Period",
+    "location": "stdlib/Dates/#Dates.Period",
     "page": "Dates",
     "title": "Dates.Period",
     "category": "type",
@@ -13969,7 +13969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.CompoundPeriod",
+    "location": "stdlib/Dates/#Dates.CompoundPeriod",
     "page": "Dates",
     "title": "Dates.CompoundPeriod",
     "category": "type",
@@ -13977,7 +13977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Instant",
+    "location": "stdlib/Dates/#Dates.Instant",
     "page": "Dates",
     "title": "Dates.Instant",
     "category": "type",
@@ -13985,7 +13985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.UTInstant",
+    "location": "stdlib/Dates/#Dates.UTInstant",
     "page": "Dates",
     "title": "Dates.UTInstant",
     "category": "type",
@@ -13993,7 +13993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.TimeType",
+    "location": "stdlib/Dates/#Dates.TimeType",
     "page": "Dates",
     "title": "Dates.TimeType",
     "category": "type",
@@ -14001,7 +14001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.DateTime",
+    "location": "stdlib/Dates/#Dates.DateTime",
     "page": "Dates",
     "title": "Dates.DateTime",
     "category": "type",
@@ -14009,7 +14009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Date",
+    "location": "stdlib/Dates/#Dates.Date",
     "page": "Dates",
     "title": "Dates.Date",
     "category": "type",
@@ -14017,7 +14017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Time",
+    "location": "stdlib/Dates/#Dates.Time",
     "page": "Dates",
     "title": "Dates.Time",
     "category": "type",
@@ -14025,7 +14025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates-and-Time-Types-1",
+    "location": "stdlib/Dates/#Dates-and-Time-Types-1",
     "page": "Dates",
     "title": "Dates and Time Types",
     "category": "section",
@@ -14033,7 +14033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.DateTime-NTuple{7,Int64}",
+    "location": "stdlib/Dates/#Dates.DateTime-NTuple{7,Int64}",
     "page": "Dates",
     "title": "Dates.DateTime",
     "category": "method",
@@ -14041,7 +14041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.DateTime-Tuple{Period}",
+    "location": "stdlib/Dates/#Dates.DateTime-Tuple{Period}",
     "page": "Dates",
     "title": "Dates.DateTime",
     "category": "method",
@@ -14049,7 +14049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.DateTime-Tuple{Function,Vararg{Any,N} where N}",
+    "location": "stdlib/Dates/#Dates.DateTime-Tuple{Function,Vararg{Any,N} where N}",
     "page": "Dates",
     "title": "Dates.DateTime",
     "category": "method",
@@ -14057,7 +14057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.DateTime-Tuple{TimeType}",
+    "location": "stdlib/Dates/#Dates.DateTime-Tuple{TimeType}",
     "page": "Dates",
     "title": "Dates.DateTime",
     "category": "method",
@@ -14065,7 +14065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.DateTime-Tuple{AbstractString,AbstractString}",
+    "location": "stdlib/Dates/#Dates.DateTime-Tuple{AbstractString,AbstractString}",
     "page": "Dates",
     "title": "Dates.DateTime",
     "category": "method",
@@ -14073,7 +14073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.format",
+    "location": "stdlib/Dates/#Dates.format",
     "page": "Dates",
     "title": "Dates.format",
     "category": "function",
@@ -14081,7 +14081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.DateFormat",
+    "location": "stdlib/Dates/#Dates.DateFormat",
     "page": "Dates",
     "title": "Dates.DateFormat",
     "category": "type",
@@ -14089,7 +14089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.@dateformat_str",
+    "location": "stdlib/Dates/#Dates.@dateformat_str",
     "page": "Dates",
     "title": "Dates.@dateformat_str",
     "category": "macro",
@@ -14097,7 +14097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.DateTime-Tuple{AbstractString,DateFormat}",
+    "location": "stdlib/Dates/#Dates.DateTime-Tuple{AbstractString,DateFormat}",
     "page": "Dates",
     "title": "Dates.DateTime",
     "category": "method",
@@ -14105,7 +14105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Date-Tuple{Int64,Int64,Int64}",
+    "location": "stdlib/Dates/#Dates.Date-Tuple{Int64,Int64,Int64}",
     "page": "Dates",
     "title": "Dates.Date",
     "category": "method",
@@ -14113,7 +14113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Date-Tuple{Period}",
+    "location": "stdlib/Dates/#Dates.Date-Tuple{Period}",
     "page": "Dates",
     "title": "Dates.Date",
     "category": "method",
@@ -14121,7 +14121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Date-Tuple{Function,Any,Any,Any}",
+    "location": "stdlib/Dates/#Dates.Date-Tuple{Function,Any,Any,Any}",
     "page": "Dates",
     "title": "Dates.Date",
     "category": "method",
@@ -14129,7 +14129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Date-Tuple{TimeType}",
+    "location": "stdlib/Dates/#Dates.Date-Tuple{TimeType}",
     "page": "Dates",
     "title": "Dates.Date",
     "category": "method",
@@ -14137,7 +14137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Date-Tuple{AbstractString,AbstractString}",
+    "location": "stdlib/Dates/#Dates.Date-Tuple{AbstractString,AbstractString}",
     "page": "Dates",
     "title": "Dates.Date",
     "category": "method",
@@ -14145,7 +14145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Date-Tuple{AbstractString,DateFormat}",
+    "location": "stdlib/Dates/#Dates.Date-Tuple{AbstractString,DateFormat}",
     "page": "Dates",
     "title": "Dates.Date",
     "category": "method",
@@ -14153,7 +14153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Time-NTuple{5,Int64}",
+    "location": "stdlib/Dates/#Dates.Time-NTuple{5,Int64}",
     "page": "Dates",
     "title": "Dates.Time",
     "category": "method",
@@ -14161,7 +14161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Time-Tuple{TimePeriod}",
+    "location": "stdlib/Dates/#Dates.Time-Tuple{TimePeriod}",
     "page": "Dates",
     "title": "Dates.Time",
     "category": "method",
@@ -14169,7 +14169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Time-Tuple{Function,Vararg{Any,N} where N}",
+    "location": "stdlib/Dates/#Dates.Time-Tuple{Function,Vararg{Any,N} where N}",
     "page": "Dates",
     "title": "Dates.Time",
     "category": "method",
@@ -14177,7 +14177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Time-Tuple{DateTime}",
+    "location": "stdlib/Dates/#Dates.Time-Tuple{DateTime}",
     "page": "Dates",
     "title": "Dates.Time",
     "category": "method",
@@ -14185,7 +14185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.now-Tuple{}",
+    "location": "stdlib/Dates/#Dates.now-Tuple{}",
     "page": "Dates",
     "title": "Dates.now",
     "category": "method",
@@ -14193,7 +14193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.now-Tuple{Type{UTC}}",
+    "location": "stdlib/Dates/#Dates.now-Tuple{Type{UTC}}",
     "page": "Dates",
     "title": "Dates.now",
     "category": "method",
@@ -14201,7 +14201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Base.eps",
+    "location": "stdlib/Dates/#Base.eps",
     "page": "Dates",
     "title": "Base.eps",
     "category": "function",
@@ -14209,7 +14209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates-Functions-1",
+    "location": "stdlib/Dates/#Dates-Functions-1",
     "page": "Dates",
     "title": "Dates Functions",
     "category": "section",
@@ -14217,7 +14217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.year",
+    "location": "stdlib/Dates/#Dates.year",
     "page": "Dates",
     "title": "Dates.year",
     "category": "function",
@@ -14225,7 +14225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.month",
+    "location": "stdlib/Dates/#Dates.month",
     "page": "Dates",
     "title": "Dates.month",
     "category": "function",
@@ -14233,7 +14233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.week",
+    "location": "stdlib/Dates/#Dates.week",
     "page": "Dates",
     "title": "Dates.week",
     "category": "function",
@@ -14241,7 +14241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.day",
+    "location": "stdlib/Dates/#Dates.day",
     "page": "Dates",
     "title": "Dates.day",
     "category": "function",
@@ -14249,7 +14249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.hour",
+    "location": "stdlib/Dates/#Dates.hour",
     "page": "Dates",
     "title": "Dates.hour",
     "category": "function",
@@ -14257,7 +14257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.minute",
+    "location": "stdlib/Dates/#Dates.minute",
     "page": "Dates",
     "title": "Dates.minute",
     "category": "function",
@@ -14265,7 +14265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.second",
+    "location": "stdlib/Dates/#Dates.second",
     "page": "Dates",
     "title": "Dates.second",
     "category": "function",
@@ -14273,7 +14273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.millisecond",
+    "location": "stdlib/Dates/#Dates.millisecond",
     "page": "Dates",
     "title": "Dates.millisecond",
     "category": "function",
@@ -14281,7 +14281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.microsecond",
+    "location": "stdlib/Dates/#Dates.microsecond",
     "page": "Dates",
     "title": "Dates.microsecond",
     "category": "function",
@@ -14289,7 +14289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.nanosecond",
+    "location": "stdlib/Dates/#Dates.nanosecond",
     "page": "Dates",
     "title": "Dates.nanosecond",
     "category": "function",
@@ -14297,7 +14297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Year-Tuple{TimeType}",
+    "location": "stdlib/Dates/#Dates.Year-Tuple{TimeType}",
     "page": "Dates",
     "title": "Dates.Year",
     "category": "method",
@@ -14305,7 +14305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Month-Tuple{TimeType}",
+    "location": "stdlib/Dates/#Dates.Month-Tuple{TimeType}",
     "page": "Dates",
     "title": "Dates.Month",
     "category": "method",
@@ -14313,7 +14313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Week-Tuple{TimeType}",
+    "location": "stdlib/Dates/#Dates.Week-Tuple{TimeType}",
     "page": "Dates",
     "title": "Dates.Week",
     "category": "method",
@@ -14321,7 +14321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Day-Tuple{TimeType}",
+    "location": "stdlib/Dates/#Dates.Day-Tuple{TimeType}",
     "page": "Dates",
     "title": "Dates.Day",
     "category": "method",
@@ -14329,7 +14329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Hour-Tuple{DateTime}",
+    "location": "stdlib/Dates/#Dates.Hour-Tuple{DateTime}",
     "page": "Dates",
     "title": "Dates.Hour",
     "category": "method",
@@ -14337,7 +14337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Minute-Tuple{DateTime}",
+    "location": "stdlib/Dates/#Dates.Minute-Tuple{DateTime}",
     "page": "Dates",
     "title": "Dates.Minute",
     "category": "method",
@@ -14345,7 +14345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Second-Tuple{DateTime}",
+    "location": "stdlib/Dates/#Dates.Second-Tuple{DateTime}",
     "page": "Dates",
     "title": "Dates.Second",
     "category": "method",
@@ -14353,7 +14353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Millisecond-Tuple{DateTime}",
+    "location": "stdlib/Dates/#Dates.Millisecond-Tuple{DateTime}",
     "page": "Dates",
     "title": "Dates.Millisecond",
     "category": "method",
@@ -14361,7 +14361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Microsecond-Tuple{Time}",
+    "location": "stdlib/Dates/#Dates.Microsecond-Tuple{Time}",
     "page": "Dates",
     "title": "Dates.Microsecond",
     "category": "method",
@@ -14369,7 +14369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Nanosecond-Tuple{Time}",
+    "location": "stdlib/Dates/#Dates.Nanosecond-Tuple{Time}",
     "page": "Dates",
     "title": "Dates.Nanosecond",
     "category": "method",
@@ -14377,7 +14377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.yearmonth",
+    "location": "stdlib/Dates/#Dates.yearmonth",
     "page": "Dates",
     "title": "Dates.yearmonth",
     "category": "function",
@@ -14385,7 +14385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.monthday",
+    "location": "stdlib/Dates/#Dates.monthday",
     "page": "Dates",
     "title": "Dates.monthday",
     "category": "function",
@@ -14393,7 +14393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.yearmonthday",
+    "location": "stdlib/Dates/#Dates.yearmonthday",
     "page": "Dates",
     "title": "Dates.yearmonthday",
     "category": "function",
@@ -14401,7 +14401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Accessor-Functions-2",
+    "location": "stdlib/Dates/#Accessor-Functions-2",
     "page": "Dates",
     "title": "Accessor Functions",
     "category": "section",
@@ -14409,7 +14409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.dayname",
+    "location": "stdlib/Dates/#Dates.dayname",
     "page": "Dates",
     "title": "Dates.dayname",
     "category": "function",
@@ -14417,7 +14417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.dayabbr",
+    "location": "stdlib/Dates/#Dates.dayabbr",
     "page": "Dates",
     "title": "Dates.dayabbr",
     "category": "function",
@@ -14425,7 +14425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.dayofweek",
+    "location": "stdlib/Dates/#Dates.dayofweek",
     "page": "Dates",
     "title": "Dates.dayofweek",
     "category": "function",
@@ -14433,7 +14433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.dayofmonth",
+    "location": "stdlib/Dates/#Dates.dayofmonth",
     "page": "Dates",
     "title": "Dates.dayofmonth",
     "category": "function",
@@ -14441,7 +14441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.dayofweekofmonth",
+    "location": "stdlib/Dates/#Dates.dayofweekofmonth",
     "page": "Dates",
     "title": "Dates.dayofweekofmonth",
     "category": "function",
@@ -14449,7 +14449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.daysofweekinmonth",
+    "location": "stdlib/Dates/#Dates.daysofweekinmonth",
     "page": "Dates",
     "title": "Dates.daysofweekinmonth",
     "category": "function",
@@ -14457,7 +14457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.monthname",
+    "location": "stdlib/Dates/#Dates.monthname",
     "page": "Dates",
     "title": "Dates.monthname",
     "category": "function",
@@ -14465,7 +14465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.monthabbr",
+    "location": "stdlib/Dates/#Dates.monthabbr",
     "page": "Dates",
     "title": "Dates.monthabbr",
     "category": "function",
@@ -14473,7 +14473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.daysinmonth",
+    "location": "stdlib/Dates/#Dates.daysinmonth",
     "page": "Dates",
     "title": "Dates.daysinmonth",
     "category": "function",
@@ -14481,7 +14481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.isleapyear",
+    "location": "stdlib/Dates/#Dates.isleapyear",
     "page": "Dates",
     "title": "Dates.isleapyear",
     "category": "function",
@@ -14489,7 +14489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.dayofyear",
+    "location": "stdlib/Dates/#Dates.dayofyear",
     "page": "Dates",
     "title": "Dates.dayofyear",
     "category": "function",
@@ -14497,7 +14497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.daysinyear",
+    "location": "stdlib/Dates/#Dates.daysinyear",
     "page": "Dates",
     "title": "Dates.daysinyear",
     "category": "function",
@@ -14505,7 +14505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.quarterofyear",
+    "location": "stdlib/Dates/#Dates.quarterofyear",
     "page": "Dates",
     "title": "Dates.quarterofyear",
     "category": "function",
@@ -14513,7 +14513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.dayofquarter",
+    "location": "stdlib/Dates/#Dates.dayofquarter",
     "page": "Dates",
     "title": "Dates.dayofquarter",
     "category": "function",
@@ -14521,7 +14521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Query-Functions-2",
+    "location": "stdlib/Dates/#Query-Functions-2",
     "page": "Dates",
     "title": "Query Functions",
     "category": "section",
@@ -14529,7 +14529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Base.trunc-Tuple{TimeType,Type{Period}}",
+    "location": "stdlib/Dates/#Base.trunc-Tuple{TimeType,Type{Period}}",
     "page": "Dates",
     "title": "Base.trunc",
     "category": "method",
@@ -14537,7 +14537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.firstdayofweek",
+    "location": "stdlib/Dates/#Dates.firstdayofweek",
     "page": "Dates",
     "title": "Dates.firstdayofweek",
     "category": "function",
@@ -14545,7 +14545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.lastdayofweek",
+    "location": "stdlib/Dates/#Dates.lastdayofweek",
     "page": "Dates",
     "title": "Dates.lastdayofweek",
     "category": "function",
@@ -14553,7 +14553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.firstdayofmonth",
+    "location": "stdlib/Dates/#Dates.firstdayofmonth",
     "page": "Dates",
     "title": "Dates.firstdayofmonth",
     "category": "function",
@@ -14561,7 +14561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.lastdayofmonth",
+    "location": "stdlib/Dates/#Dates.lastdayofmonth",
     "page": "Dates",
     "title": "Dates.lastdayofmonth",
     "category": "function",
@@ -14569,7 +14569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.firstdayofyear",
+    "location": "stdlib/Dates/#Dates.firstdayofyear",
     "page": "Dates",
     "title": "Dates.firstdayofyear",
     "category": "function",
@@ -14577,7 +14577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.lastdayofyear",
+    "location": "stdlib/Dates/#Dates.lastdayofyear",
     "page": "Dates",
     "title": "Dates.lastdayofyear",
     "category": "function",
@@ -14585,7 +14585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.firstdayofquarter",
+    "location": "stdlib/Dates/#Dates.firstdayofquarter",
     "page": "Dates",
     "title": "Dates.firstdayofquarter",
     "category": "function",
@@ -14593,7 +14593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.lastdayofquarter",
+    "location": "stdlib/Dates/#Dates.lastdayofquarter",
     "page": "Dates",
     "title": "Dates.lastdayofquarter",
     "category": "function",
@@ -14601,7 +14601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.tonext-Tuple{TimeType,Int64}",
+    "location": "stdlib/Dates/#Dates.tonext-Tuple{TimeType,Int64}",
     "page": "Dates",
     "title": "Dates.tonext",
     "category": "method",
@@ -14609,7 +14609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.toprev-Tuple{TimeType,Int64}",
+    "location": "stdlib/Dates/#Dates.toprev-Tuple{TimeType,Int64}",
     "page": "Dates",
     "title": "Dates.toprev",
     "category": "method",
@@ -14617,7 +14617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.tofirst",
+    "location": "stdlib/Dates/#Dates.tofirst",
     "page": "Dates",
     "title": "Dates.tofirst",
     "category": "function",
@@ -14625,7 +14625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.tolast",
+    "location": "stdlib/Dates/#Dates.tolast",
     "page": "Dates",
     "title": "Dates.tolast",
     "category": "function",
@@ -14633,7 +14633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.tonext-Tuple{Function,TimeType}",
+    "location": "stdlib/Dates/#Dates.tonext-Tuple{Function,TimeType}",
     "page": "Dates",
     "title": "Dates.tonext",
     "category": "method",
@@ -14641,7 +14641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.toprev-Tuple{Function,TimeType}",
+    "location": "stdlib/Dates/#Dates.toprev-Tuple{Function,TimeType}",
     "page": "Dates",
     "title": "Dates.toprev",
     "category": "method",
@@ -14649,7 +14649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Adjuster-Functions-2",
+    "location": "stdlib/Dates/#Adjuster-Functions-2",
     "page": "Dates",
     "title": "Adjuster Functions",
     "category": "section",
@@ -14657,7 +14657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.Period-Tuple{Any}",
+    "location": "stdlib/Dates/#Dates.Period-Tuple{Any}",
     "page": "Dates",
     "title": "Dates.Period",
     "category": "method",
@@ -14665,7 +14665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.CompoundPeriod-Tuple{Array{#s39,1} where #s39<:Period}",
+    "location": "stdlib/Dates/#Dates.CompoundPeriod-Tuple{Array{#s39,1} where #s39<:Period}",
     "page": "Dates",
     "title": "Dates.CompoundPeriod",
     "category": "method",
@@ -14673,7 +14673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.default",
+    "location": "stdlib/Dates/#Dates.default",
     "page": "Dates",
     "title": "Dates.default",
     "category": "function",
@@ -14681,7 +14681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Periods-1",
+    "location": "stdlib/Dates/#Periods-1",
     "page": "Dates",
     "title": "Periods",
     "category": "section",
@@ -14689,7 +14689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Base.floor-Tuple{TimeType,Period}",
+    "location": "stdlib/Dates/#Base.floor-Tuple{TimeType,Period}",
     "page": "Dates",
     "title": "Base.floor",
     "category": "method",
@@ -14697,7 +14697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Base.ceil-Tuple{TimeType,Period}",
+    "location": "stdlib/Dates/#Base.ceil-Tuple{TimeType,Period}",
     "page": "Dates",
     "title": "Base.ceil",
     "category": "method",
@@ -14705,7 +14705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Base.round-Tuple{TimeType,Period,RoundingMode{:NearestTiesUp}}",
+    "location": "stdlib/Dates/#Base.round-Tuple{TimeType,Period,RoundingMode{:NearestTiesUp}}",
     "page": "Dates",
     "title": "Base.round",
     "category": "method",
@@ -14713,7 +14713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Base.floor-Union{Tuple{T}, Tuple{Union{Day, Week, TimePeriod},T}} where T<:Union{Day, Week, TimePeriod}",
+    "location": "stdlib/Dates/#Base.floor-Union{Tuple{T}, Tuple{Union{Day, Week, TimePeriod},T}} where T<:Union{Day, Week, TimePeriod}",
     "page": "Dates",
     "title": "Base.floor",
     "category": "method",
@@ -14721,7 +14721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Base.ceil-Tuple{Union{Day, Week, TimePeriod},Union{Day, Week, TimePeriod}}",
+    "location": "stdlib/Dates/#Base.ceil-Tuple{Union{Day, Week, TimePeriod},Union{Day, Week, TimePeriod}}",
     "page": "Dates",
     "title": "Base.ceil",
     "category": "method",
@@ -14729,7 +14729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Base.round-Tuple{Union{Day, Week, TimePeriod},Union{Day, Week, TimePeriod},RoundingMode{:NearestTiesUp}}",
+    "location": "stdlib/Dates/#Base.round-Tuple{Union{Day, Week, TimePeriod},Union{Day, Week, TimePeriod},RoundingMode{:NearestTiesUp}}",
     "page": "Dates",
     "title": "Base.round",
     "category": "method",
@@ -14737,7 +14737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.floorceil",
+    "location": "stdlib/Dates/#Dates.floorceil",
     "page": "Dates",
     "title": "Dates.floorceil",
     "category": "function",
@@ -14745,7 +14745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.epochdays2date",
+    "location": "stdlib/Dates/#Dates.epochdays2date",
     "page": "Dates",
     "title": "Dates.epochdays2date",
     "category": "function",
@@ -14753,7 +14753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.epochms2datetime",
+    "location": "stdlib/Dates/#Dates.epochms2datetime",
     "page": "Dates",
     "title": "Dates.epochms2datetime",
     "category": "function",
@@ -14761,7 +14761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.date2epochdays",
+    "location": "stdlib/Dates/#Dates.date2epochdays",
     "page": "Dates",
     "title": "Dates.date2epochdays",
     "category": "function",
@@ -14769,7 +14769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.datetime2epochms",
+    "location": "stdlib/Dates/#Dates.datetime2epochms",
     "page": "Dates",
     "title": "Dates.datetime2epochms",
     "category": "function",
@@ -14777,7 +14777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Rounding-Functions-1",
+    "location": "stdlib/Dates/#Rounding-Functions-1",
     "page": "Dates",
     "title": "Rounding Functions",
     "category": "section",
@@ -14785,7 +14785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.today",
+    "location": "stdlib/Dates/#Dates.today",
     "page": "Dates",
     "title": "Dates.today",
     "category": "function",
@@ -14793,7 +14793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.unix2datetime",
+    "location": "stdlib/Dates/#Dates.unix2datetime",
     "page": "Dates",
     "title": "Dates.unix2datetime",
     "category": "function",
@@ -14801,7 +14801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.datetime2unix",
+    "location": "stdlib/Dates/#Dates.datetime2unix",
     "page": "Dates",
     "title": "Dates.datetime2unix",
     "category": "function",
@@ -14809,7 +14809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.julian2datetime",
+    "location": "stdlib/Dates/#Dates.julian2datetime",
     "page": "Dates",
     "title": "Dates.julian2datetime",
     "category": "function",
@@ -14817,7 +14817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.datetime2julian",
+    "location": "stdlib/Dates/#Dates.datetime2julian",
     "page": "Dates",
     "title": "Dates.datetime2julian",
     "category": "function",
@@ -14825,7 +14825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.rata2datetime",
+    "location": "stdlib/Dates/#Dates.rata2datetime",
     "page": "Dates",
     "title": "Dates.rata2datetime",
     "category": "function",
@@ -14833,7 +14833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Dates.datetime2rata",
+    "location": "stdlib/Dates/#Dates.datetime2rata",
     "page": "Dates",
     "title": "Dates.datetime2rata",
     "category": "function",
@@ -14841,7 +14841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Conversion-Functions-1",
+    "location": "stdlib/Dates/#Conversion-Functions-1",
     "page": "Dates",
     "title": "Conversion Functions",
     "category": "section",
@@ -14849,7 +14849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Dates.html#Constants-1",
+    "location": "stdlib/Dates/#Constants-1",
     "page": "Dates",
     "title": "Constants",
     "category": "section",
@@ -14857,7 +14857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/DelimitedFiles.html#",
+    "location": "stdlib/DelimitedFiles/#",
     "page": "Delimited Files",
     "title": "Delimited Files",
     "category": "page",
@@ -14865,7 +14865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/DelimitedFiles.html#DelimitedFiles.readdlm-Tuple{Any,AbstractChar,Type,AbstractChar}",
+    "location": "stdlib/DelimitedFiles/#DelimitedFiles.readdlm-Tuple{Any,AbstractChar,Type,AbstractChar}",
     "page": "Delimited Files",
     "title": "DelimitedFiles.readdlm",
     "category": "method",
@@ -14873,7 +14873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/DelimitedFiles.html#DelimitedFiles.readdlm-Tuple{Any,AbstractChar,AbstractChar}",
+    "location": "stdlib/DelimitedFiles/#DelimitedFiles.readdlm-Tuple{Any,AbstractChar,AbstractChar}",
     "page": "Delimited Files",
     "title": "DelimitedFiles.readdlm",
     "category": "method",
@@ -14881,7 +14881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/DelimitedFiles.html#DelimitedFiles.readdlm-Tuple{Any,AbstractChar,Type}",
+    "location": "stdlib/DelimitedFiles/#DelimitedFiles.readdlm-Tuple{Any,AbstractChar,Type}",
     "page": "Delimited Files",
     "title": "DelimitedFiles.readdlm",
     "category": "method",
@@ -14889,7 +14889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/DelimitedFiles.html#DelimitedFiles.readdlm-Tuple{Any,AbstractChar}",
+    "location": "stdlib/DelimitedFiles/#DelimitedFiles.readdlm-Tuple{Any,AbstractChar}",
     "page": "Delimited Files",
     "title": "DelimitedFiles.readdlm",
     "category": "method",
@@ -14897,7 +14897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/DelimitedFiles.html#DelimitedFiles.readdlm-Tuple{Any,Type}",
+    "location": "stdlib/DelimitedFiles/#DelimitedFiles.readdlm-Tuple{Any,Type}",
     "page": "Delimited Files",
     "title": "DelimitedFiles.readdlm",
     "category": "method",
@@ -14905,7 +14905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/DelimitedFiles.html#DelimitedFiles.readdlm-Tuple{Any}",
+    "location": "stdlib/DelimitedFiles/#DelimitedFiles.readdlm-Tuple{Any}",
     "page": "Delimited Files",
     "title": "DelimitedFiles.readdlm",
     "category": "method",
@@ -14913,7 +14913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/DelimitedFiles.html#DelimitedFiles.writedlm",
+    "location": "stdlib/DelimitedFiles/#DelimitedFiles.writedlm",
     "page": "Delimited Files",
     "title": "DelimitedFiles.writedlm",
     "category": "function",
@@ -14921,7 +14921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/DelimitedFiles.html#Delimited-Files-1",
+    "location": "stdlib/DelimitedFiles/#Delimited-Files-1",
     "page": "Delimited Files",
     "title": "Delimited Files",
     "category": "section",
@@ -14929,7 +14929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#",
+    "location": "stdlib/Distributed/#",
     "page": "Distributed Computing",
     "title": "Distributed Computing",
     "category": "page",
@@ -14937,7 +14937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.addprocs",
+    "location": "stdlib/Distributed/#Distributed.addprocs",
     "page": "Distributed Computing",
     "title": "Distributed.addprocs",
     "category": "function",
@@ -14945,7 +14945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.nprocs",
+    "location": "stdlib/Distributed/#Distributed.nprocs",
     "page": "Distributed Computing",
     "title": "Distributed.nprocs",
     "category": "function",
@@ -14953,7 +14953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.nworkers",
+    "location": "stdlib/Distributed/#Distributed.nworkers",
     "page": "Distributed Computing",
     "title": "Distributed.nworkers",
     "category": "function",
@@ -14961,7 +14961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.procs-Tuple{}",
+    "location": "stdlib/Distributed/#Distributed.procs-Tuple{}",
     "page": "Distributed Computing",
     "title": "Distributed.procs",
     "category": "method",
@@ -14969,7 +14969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.procs-Tuple{Integer}",
+    "location": "stdlib/Distributed/#Distributed.procs-Tuple{Integer}",
     "page": "Distributed Computing",
     "title": "Distributed.procs",
     "category": "method",
@@ -14977,7 +14977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.workers",
+    "location": "stdlib/Distributed/#Distributed.workers",
     "page": "Distributed Computing",
     "title": "Distributed.workers",
     "category": "function",
@@ -14985,7 +14985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.rmprocs",
+    "location": "stdlib/Distributed/#Distributed.rmprocs",
     "page": "Distributed Computing",
     "title": "Distributed.rmprocs",
     "category": "function",
@@ -14993,7 +14993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.interrupt",
+    "location": "stdlib/Distributed/#Distributed.interrupt",
     "page": "Distributed Computing",
     "title": "Distributed.interrupt",
     "category": "function",
@@ -15001,7 +15001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.myid",
+    "location": "stdlib/Distributed/#Distributed.myid",
     "page": "Distributed Computing",
     "title": "Distributed.myid",
     "category": "function",
@@ -15009,7 +15009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.pmap",
+    "location": "stdlib/Distributed/#Distributed.pmap",
     "page": "Distributed Computing",
     "title": "Distributed.pmap",
     "category": "function",
@@ -15017,7 +15017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.RemoteException",
+    "location": "stdlib/Distributed/#Distributed.RemoteException",
     "page": "Distributed Computing",
     "title": "Distributed.RemoteException",
     "category": "type",
@@ -15025,7 +15025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.Future",
+    "location": "stdlib/Distributed/#Distributed.Future",
     "page": "Distributed Computing",
     "title": "Distributed.Future",
     "category": "type",
@@ -15033,7 +15033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.RemoteChannel",
+    "location": "stdlib/Distributed/#Distributed.RemoteChannel",
     "page": "Distributed Computing",
     "title": "Distributed.RemoteChannel",
     "category": "type",
@@ -15041,15 +15041,15 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.wait",
+    "location": "stdlib/Distributed/#Base.wait",
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
+    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.fetch-Tuple{Any}",
+    "location": "stdlib/Distributed/#Base.fetch-Tuple{Any}",
     "page": "Distributed Computing",
     "title": "Base.fetch",
     "category": "method",
@@ -15057,7 +15057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remotecall-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Distributed.remotecall-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Distributed.remotecall",
     "category": "method",
@@ -15065,7 +15065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remotecall_wait-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Distributed.remotecall_wait-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Distributed.remotecall_wait",
     "category": "method",
@@ -15073,7 +15073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remotecall_fetch-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Distributed.remotecall_fetch-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Distributed.remotecall_fetch",
     "category": "method",
@@ -15081,7 +15081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remote_do-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Distributed.remote_do-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Distributed.remote_do",
     "category": "method",
@@ -15089,7 +15089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.put!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Base.put!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Base.put!",
     "category": "method",
@@ -15097,7 +15097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.put!-Tuple{Future,Any}",
+    "location": "stdlib/Distributed/#Base.put!-Tuple{Future,Any}",
     "page": "Distributed Computing",
     "title": "Base.put!",
     "category": "method",
@@ -15105,7 +15105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.take!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Base.take!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Base.take!",
     "category": "method",
@@ -15113,7 +15113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.isready-Tuple{RemoteChannel,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Base.isready-Tuple{RemoteChannel,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Base.isready",
     "category": "method",
@@ -15121,7 +15121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.isready-Tuple{Future}",
+    "location": "stdlib/Distributed/#Base.isready-Tuple{Future}",
     "page": "Distributed Computing",
     "title": "Base.isready",
     "category": "method",
@@ -15129,7 +15129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.WorkerPool",
+    "location": "stdlib/Distributed/#Distributed.WorkerPool",
     "page": "Distributed Computing",
     "title": "Distributed.WorkerPool",
     "category": "type",
@@ -15137,7 +15137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.CachingPool",
+    "location": "stdlib/Distributed/#Distributed.CachingPool",
     "page": "Distributed Computing",
     "title": "Distributed.CachingPool",
     "category": "type",
@@ -15145,7 +15145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.default_worker_pool",
+    "location": "stdlib/Distributed/#Distributed.default_worker_pool",
     "page": "Distributed Computing",
     "title": "Distributed.default_worker_pool",
     "category": "function",
@@ -15153,7 +15153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.clear!-Tuple{CachingPool}",
+    "location": "stdlib/Distributed/#Distributed.clear!-Tuple{CachingPool}",
     "page": "Distributed Computing",
     "title": "Distributed.clear!",
     "category": "method",
@@ -15161,7 +15161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remote",
+    "location": "stdlib/Distributed/#Distributed.remote",
     "page": "Distributed Computing",
     "title": "Distributed.remote",
     "category": "function",
@@ -15169,7 +15169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remotecall-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Distributed.remotecall-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Distributed.remotecall",
     "category": "method",
@@ -15177,7 +15177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remotecall_wait-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Distributed.remotecall_wait-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Distributed.remotecall_wait",
     "category": "method",
@@ -15185,7 +15185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remotecall_fetch-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Distributed.remotecall_fetch-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Distributed.remotecall_fetch",
     "category": "method",
@@ -15193,7 +15193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remote_do-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
+    "location": "stdlib/Distributed/#Distributed.remote_do-Tuple{Any,AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Distributed Computing",
     "title": "Distributed.remote_do",
     "category": "method",
@@ -15201,7 +15201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.timedwait",
+    "location": "stdlib/Distributed/#Base.timedwait",
     "page": "Distributed Computing",
     "title": "Base.timedwait",
     "category": "function",
@@ -15209,7 +15209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.@spawn",
+    "location": "stdlib/Distributed/#Distributed.@spawn",
     "page": "Distributed Computing",
     "title": "Distributed.@spawn",
     "category": "macro",
@@ -15217,7 +15217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.@spawnat",
+    "location": "stdlib/Distributed/#Distributed.@spawnat",
     "page": "Distributed Computing",
     "title": "Distributed.@spawnat",
     "category": "macro",
@@ -15225,7 +15225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.@fetch",
+    "location": "stdlib/Distributed/#Distributed.@fetch",
     "page": "Distributed Computing",
     "title": "Distributed.@fetch",
     "category": "macro",
@@ -15233,7 +15233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.@fetchfrom",
+    "location": "stdlib/Distributed/#Distributed.@fetchfrom",
     "page": "Distributed Computing",
     "title": "Distributed.@fetchfrom",
     "category": "macro",
@@ -15241,7 +15241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.@async",
+    "location": "stdlib/Distributed/#Base.@async",
     "page": "Distributed Computing",
     "title": "Base.@async",
     "category": "macro",
@@ -15249,7 +15249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.@sync",
+    "location": "stdlib/Distributed/#Base.@sync",
     "page": "Distributed Computing",
     "title": "Base.@sync",
     "category": "macro",
@@ -15257,7 +15257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.@distributed",
+    "location": "stdlib/Distributed/#Distributed.@distributed",
     "page": "Distributed Computing",
     "title": "Distributed.@distributed",
     "category": "macro",
@@ -15265,7 +15265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.@everywhere",
+    "location": "stdlib/Distributed/#Distributed.@everywhere",
     "page": "Distributed Computing",
     "title": "Distributed.@everywhere",
     "category": "macro",
@@ -15273,7 +15273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.clear!-Tuple{Any,Any}",
+    "location": "stdlib/Distributed/#Distributed.clear!-Tuple{Any,Any}",
     "page": "Distributed Computing",
     "title": "Distributed.clear!",
     "category": "method",
@@ -15281,7 +15281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.remoteref_id",
+    "location": "stdlib/Distributed/#Distributed.remoteref_id",
     "page": "Distributed Computing",
     "title": "Distributed.remoteref_id",
     "category": "function",
@@ -15289,7 +15289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.channel_from_id",
+    "location": "stdlib/Distributed/#Distributed.channel_from_id",
     "page": "Distributed Computing",
     "title": "Distributed.channel_from_id",
     "category": "function",
@@ -15297,7 +15297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.worker_id_from_socket",
+    "location": "stdlib/Distributed/#Distributed.worker_id_from_socket",
     "page": "Distributed Computing",
     "title": "Distributed.worker_id_from_socket",
     "category": "function",
@@ -15305,7 +15305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.cluster_cookie-Tuple{}",
+    "location": "stdlib/Distributed/#Distributed.cluster_cookie-Tuple{}",
     "page": "Distributed Computing",
     "title": "Distributed.cluster_cookie",
     "category": "method",
@@ -15313,7 +15313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.cluster_cookie-Tuple{Any}",
+    "location": "stdlib/Distributed/#Distributed.cluster_cookie-Tuple{Any}",
     "page": "Distributed Computing",
     "title": "Distributed.cluster_cookie",
     "category": "method",
@@ -15321,7 +15321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed-Computing-1",
+    "location": "stdlib/Distributed/#Distributed-Computing-1",
     "page": "Distributed Computing",
     "title": "Distributed Computing",
     "category": "section",
@@ -15329,7 +15329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.launch",
+    "location": "stdlib/Distributed/#Distributed.launch",
     "page": "Distributed Computing",
     "title": "Distributed.launch",
     "category": "function",
@@ -15337,7 +15337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.manage",
+    "location": "stdlib/Distributed/#Distributed.manage",
     "page": "Distributed Computing",
     "title": "Distributed.manage",
     "category": "function",
@@ -15345,7 +15345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Base.kill-Tuple{ClusterManager,Int64,WorkerConfig}",
+    "location": "stdlib/Distributed/#Base.kill-Tuple{ClusterManager,Int64,WorkerConfig}",
     "page": "Distributed Computing",
     "title": "Base.kill",
     "category": "method",
@@ -15353,7 +15353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Sockets.connect-Tuple{ClusterManager,Int64,WorkerConfig}",
+    "location": "stdlib/Distributed/#Sockets.connect-Tuple{ClusterManager,Int64,WorkerConfig}",
     "page": "Distributed Computing",
     "title": "Sockets.connect",
     "category": "method",
@@ -15361,7 +15361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.init_worker",
+    "location": "stdlib/Distributed/#Distributed.init_worker",
     "page": "Distributed Computing",
     "title": "Distributed.init_worker",
     "category": "function",
@@ -15369,7 +15369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.start_worker",
+    "location": "stdlib/Distributed/#Distributed.start_worker",
     "page": "Distributed Computing",
     "title": "Distributed.start_worker",
     "category": "function",
@@ -15377,7 +15377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Distributed.process_messages",
+    "location": "stdlib/Distributed/#Distributed.process_messages",
     "page": "Distributed Computing",
     "title": "Distributed.process_messages",
     "category": "function",
@@ -15385,7 +15385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Distributed.html#Cluster-Manager-Interface-1",
+    "location": "stdlib/Distributed/#Cluster-Manager-Interface-1",
     "page": "Distributed Computing",
     "title": "Cluster Manager Interface",
     "category": "section",
@@ -15393,7 +15393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/FileWatching.html#",
+    "location": "stdlib/FileWatching/#",
     "page": "File Events",
     "title": "File Events",
     "category": "page",
@@ -15401,7 +15401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/FileWatching.html#FileWatching.poll_fd",
+    "location": "stdlib/FileWatching/#FileWatching.poll_fd",
     "page": "File Events",
     "title": "FileWatching.poll_fd",
     "category": "function",
@@ -15409,7 +15409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/FileWatching.html#FileWatching.poll_file",
+    "location": "stdlib/FileWatching/#FileWatching.poll_file",
     "page": "File Events",
     "title": "FileWatching.poll_file",
     "category": "function",
@@ -15417,7 +15417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/FileWatching.html#FileWatching.watch_file",
+    "location": "stdlib/FileWatching/#FileWatching.watch_file",
     "page": "File Events",
     "title": "FileWatching.watch_file",
     "category": "function",
@@ -15425,7 +15425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/FileWatching.html#FileWatching.watch_folder",
+    "location": "stdlib/FileWatching/#FileWatching.watch_folder",
     "page": "File Events",
     "title": "FileWatching.watch_folder",
     "category": "function",
@@ -15433,7 +15433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/FileWatching.html#FileWatching.unwatch_folder",
+    "location": "stdlib/FileWatching/#FileWatching.unwatch_folder",
     "page": "File Events",
     "title": "FileWatching.unwatch_folder",
     "category": "function",
@@ -15441,7 +15441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/FileWatching.html#lib-filewatching-1",
+    "location": "stdlib/FileWatching/#lib-filewatching-1",
     "page": "File Events",
     "title": "File Events",
     "category": "section",
@@ -15449,7 +15449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#",
+    "location": "stdlib/InteractiveUtils/#",
     "page": "Interactive Utilities",
     "title": "Interactive Utilities",
     "category": "page",
@@ -15457,7 +15457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#Base.Docs.apropos",
+    "location": "stdlib/InteractiveUtils/#Base.Docs.apropos",
     "page": "Interactive Utilities",
     "title": "Base.Docs.apropos",
     "category": "function",
@@ -15465,7 +15465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.varinfo",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.varinfo",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.varinfo",
     "category": "function",
@@ -15473,7 +15473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.versioninfo",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.versioninfo",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.versioninfo",
     "category": "function",
@@ -15481,7 +15481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.methodswith",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.methodswith",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.methodswith",
     "category": "function",
@@ -15489,7 +15489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.subtypes",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.subtypes",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.subtypes",
     "category": "function",
@@ -15497,7 +15497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.edit-Tuple{AbstractString,Integer}",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.edit-Tuple{AbstractString,Integer}",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.edit",
     "category": "method",
@@ -15505,7 +15505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.edit-Tuple{Any}",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.edit-Tuple{Any}",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.edit",
     "category": "method",
@@ -15513,7 +15513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.@edit",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@edit",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.@edit",
     "category": "macro",
@@ -15521,7 +15521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.less-Tuple{AbstractString}",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.less-Tuple{AbstractString}",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.less",
     "category": "method",
@@ -15529,7 +15529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.less-Tuple{Any}",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.less-Tuple{Any}",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.less",
     "category": "method",
@@ -15537,7 +15537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.@less",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@less",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.@less",
     "category": "macro",
@@ -15545,7 +15545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.@which",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@which",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.@which",
     "category": "macro",
@@ -15553,7 +15553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.@functionloc",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@functionloc",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.@functionloc",
     "category": "macro",
@@ -15561,7 +15561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.@code_lowered",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_lowered",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.@code_lowered",
     "category": "macro",
@@ -15569,7 +15569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.@code_typed",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_typed",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.@code_typed",
     "category": "macro",
@@ -15577,7 +15577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.code_warntype",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.code_warntype",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.code_warntype",
     "category": "function",
@@ -15585,7 +15585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.@code_warntype",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_warntype",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.@code_warntype",
     "category": "macro",
@@ -15593,7 +15593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.code_llvm",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.code_llvm",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.code_llvm",
     "category": "function",
@@ -15601,7 +15601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.@code_llvm",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_llvm",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.@code_llvm",
     "category": "macro",
@@ -15609,7 +15609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.code_native",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.code_native",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.code_native",
     "category": "function",
@@ -15617,7 +15617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#InteractiveUtils.@code_native",
+    "location": "stdlib/InteractiveUtils/#InteractiveUtils.@code_native",
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.@code_native",
     "category": "macro",
@@ -15625,7 +15625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/InteractiveUtils.html#Interactive-Utilities-1",
+    "location": "stdlib/InteractiveUtils/#Interactive-Utilities-1",
     "page": "Interactive Utilities",
     "title": "Interactive Utilities",
     "category": "section",
@@ -15633,7 +15633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/IterativeEigensolvers.html#",
+    "location": "stdlib/IterativeEigensolvers/#",
     "page": "Iterative Eigensolvers",
     "title": "Iterative Eigensolvers",
     "category": "page",
@@ -15641,7 +15641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/IterativeEigensolvers.html#IterativeEigensolvers.eigs-Tuple{Any}",
+    "location": "stdlib/IterativeEigensolvers/#IterativeEigensolvers.eigs-Tuple{Any}",
     "page": "Iterative Eigensolvers",
     "title": "IterativeEigensolvers.eigs",
     "category": "method",
@@ -15649,7 +15649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/IterativeEigensolvers.html#IterativeEigensolvers.eigs-Tuple{Any,Any}",
+    "location": "stdlib/IterativeEigensolvers/#IterativeEigensolvers.eigs-Tuple{Any,Any}",
     "page": "Iterative Eigensolvers",
     "title": "IterativeEigensolvers.eigs",
     "category": "method",
@@ -15657,7 +15657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/IterativeEigensolvers.html#IterativeEigensolvers.svds",
+    "location": "stdlib/IterativeEigensolvers/#IterativeEigensolvers.svds",
     "page": "Iterative Eigensolvers",
     "title": "IterativeEigensolvers.svds",
     "category": "function",
@@ -15665,7 +15665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/IterativeEigensolvers.html#lib-itereigen-1",
+    "location": "stdlib/IterativeEigensolvers/#lib-itereigen-1",
     "page": "Iterative Eigensolvers",
     "title": "Iterative Eigensolvers",
     "category": "section",
@@ -15673,7 +15673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#",
+    "location": "stdlib/LibGit2/#",
     "page": "LibGit2",
     "title": "LibGit2",
     "category": "page",
@@ -15681,7 +15681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2-1",
+    "location": "stdlib/LibGit2/#LibGit2-1",
     "page": "LibGit2",
     "title": "LibGit2",
     "category": "section",
@@ -15689,7 +15689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.Buffer",
+    "location": "stdlib/LibGit2/#LibGit2.Buffer",
     "page": "LibGit2",
     "title": "LibGit2.Buffer",
     "category": "type",
@@ -15697,7 +15697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.CheckoutOptions",
+    "location": "stdlib/LibGit2/#LibGit2.CheckoutOptions",
     "page": "LibGit2",
     "title": "LibGit2.CheckoutOptions",
     "category": "type",
@@ -15705,7 +15705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.CloneOptions",
+    "location": "stdlib/LibGit2/#LibGit2.CloneOptions",
     "page": "LibGit2",
     "title": "LibGit2.CloneOptions",
     "category": "type",
@@ -15713,7 +15713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.DescribeOptions",
+    "location": "stdlib/LibGit2/#LibGit2.DescribeOptions",
     "page": "LibGit2",
     "title": "LibGit2.DescribeOptions",
     "category": "type",
@@ -15721,7 +15721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.DescribeFormatOptions",
+    "location": "stdlib/LibGit2/#LibGit2.DescribeFormatOptions",
     "page": "LibGit2",
     "title": "LibGit2.DescribeFormatOptions",
     "category": "type",
@@ -15729,7 +15729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.DiffDelta",
+    "location": "stdlib/LibGit2/#LibGit2.DiffDelta",
     "page": "LibGit2",
     "title": "LibGit2.DiffDelta",
     "category": "type",
@@ -15737,7 +15737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.DiffFile",
+    "location": "stdlib/LibGit2/#LibGit2.DiffFile",
     "page": "LibGit2",
     "title": "LibGit2.DiffFile",
     "category": "type",
@@ -15745,7 +15745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.DiffOptionsStruct",
+    "location": "stdlib/LibGit2/#LibGit2.DiffOptionsStruct",
     "page": "LibGit2",
     "title": "LibGit2.DiffOptionsStruct",
     "category": "type",
@@ -15753,7 +15753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.FetchHead",
+    "location": "stdlib/LibGit2/#LibGit2.FetchHead",
     "page": "LibGit2",
     "title": "LibGit2.FetchHead",
     "category": "type",
@@ -15761,7 +15761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.FetchOptions",
+    "location": "stdlib/LibGit2/#LibGit2.FetchOptions",
     "page": "LibGit2",
     "title": "LibGit2.FetchOptions",
     "category": "type",
@@ -15769,7 +15769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitAnnotated",
+    "location": "stdlib/LibGit2/#LibGit2.GitAnnotated",
     "page": "LibGit2",
     "title": "LibGit2.GitAnnotated",
     "category": "type",
@@ -15777,7 +15777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitBlame",
+    "location": "stdlib/LibGit2/#LibGit2.GitBlame",
     "page": "LibGit2",
     "title": "LibGit2.GitBlame",
     "category": "type",
@@ -15785,7 +15785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitBlob",
+    "location": "stdlib/LibGit2/#LibGit2.GitBlob",
     "page": "LibGit2",
     "title": "LibGit2.GitBlob",
     "category": "type",
@@ -15793,7 +15793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitCommit",
+    "location": "stdlib/LibGit2/#LibGit2.GitCommit",
     "page": "LibGit2",
     "title": "LibGit2.GitCommit",
     "category": "type",
@@ -15801,7 +15801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitHash",
+    "location": "stdlib/LibGit2/#LibGit2.GitHash",
     "page": "LibGit2",
     "title": "LibGit2.GitHash",
     "category": "type",
@@ -15809,7 +15809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitObject",
+    "location": "stdlib/LibGit2/#LibGit2.GitObject",
     "page": "LibGit2",
     "title": "LibGit2.GitObject",
     "category": "type",
@@ -15817,7 +15817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitRemote",
+    "location": "stdlib/LibGit2/#LibGit2.GitRemote",
     "page": "LibGit2",
     "title": "LibGit2.GitRemote",
     "category": "type",
@@ -15825,7 +15825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitRemoteAnon",
+    "location": "stdlib/LibGit2/#LibGit2.GitRemoteAnon",
     "page": "LibGit2",
     "title": "LibGit2.GitRemoteAnon",
     "category": "function",
@@ -15833,7 +15833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitRepo",
+    "location": "stdlib/LibGit2/#LibGit2.GitRepo",
     "page": "LibGit2",
     "title": "LibGit2.GitRepo",
     "category": "type",
@@ -15841,7 +15841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitRepoExt",
+    "location": "stdlib/LibGit2/#LibGit2.GitRepoExt",
     "page": "LibGit2",
     "title": "LibGit2.GitRepoExt",
     "category": "function",
@@ -15849,7 +15849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitRevWalker",
+    "location": "stdlib/LibGit2/#LibGit2.GitRevWalker",
     "page": "LibGit2",
     "title": "LibGit2.GitRevWalker",
     "category": "type",
@@ -15857,7 +15857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitShortHash",
+    "location": "stdlib/LibGit2/#LibGit2.GitShortHash",
     "page": "LibGit2",
     "title": "LibGit2.GitShortHash",
     "category": "type",
@@ -15865,7 +15865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitSignature",
+    "location": "stdlib/LibGit2/#LibGit2.GitSignature",
     "page": "LibGit2",
     "title": "LibGit2.GitSignature",
     "category": "type",
@@ -15873,7 +15873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitStatus",
+    "location": "stdlib/LibGit2/#LibGit2.GitStatus",
     "page": "LibGit2",
     "title": "LibGit2.GitStatus",
     "category": "type",
@@ -15881,7 +15881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitTag",
+    "location": "stdlib/LibGit2/#LibGit2.GitTag",
     "page": "LibGit2",
     "title": "LibGit2.GitTag",
     "category": "type",
@@ -15889,7 +15889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitTree",
+    "location": "stdlib/LibGit2/#LibGit2.GitTree",
     "page": "LibGit2",
     "title": "LibGit2.GitTree",
     "category": "type",
@@ -15897,7 +15897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.IndexEntry",
+    "location": "stdlib/LibGit2/#LibGit2.IndexEntry",
     "page": "LibGit2",
     "title": "LibGit2.IndexEntry",
     "category": "type",
@@ -15905,7 +15905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.IndexTime",
+    "location": "stdlib/LibGit2/#LibGit2.IndexTime",
     "page": "LibGit2",
     "title": "LibGit2.IndexTime",
     "category": "type",
@@ -15913,7 +15913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.BlameOptions",
+    "location": "stdlib/LibGit2/#LibGit2.BlameOptions",
     "page": "LibGit2",
     "title": "LibGit2.BlameOptions",
     "category": "type",
@@ -15921,7 +15921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.MergeOptions",
+    "location": "stdlib/LibGit2/#LibGit2.MergeOptions",
     "page": "LibGit2",
     "title": "LibGit2.MergeOptions",
     "category": "type",
@@ -15929,7 +15929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.ProxyOptions",
+    "location": "stdlib/LibGit2/#LibGit2.ProxyOptions",
     "page": "LibGit2",
     "title": "LibGit2.ProxyOptions",
     "category": "type",
@@ -15937,7 +15937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.PushOptions",
+    "location": "stdlib/LibGit2/#LibGit2.PushOptions",
     "page": "LibGit2",
     "title": "LibGit2.PushOptions",
     "category": "type",
@@ -15945,7 +15945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.RebaseOperation",
+    "location": "stdlib/LibGit2/#LibGit2.RebaseOperation",
     "page": "LibGit2",
     "title": "LibGit2.RebaseOperation",
     "category": "type",
@@ -15953,7 +15953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.RebaseOptions",
+    "location": "stdlib/LibGit2/#LibGit2.RebaseOptions",
     "page": "LibGit2",
     "title": "LibGit2.RebaseOptions",
     "category": "type",
@@ -15961,7 +15961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.RemoteCallbacks",
+    "location": "stdlib/LibGit2/#LibGit2.RemoteCallbacks",
     "page": "LibGit2",
     "title": "LibGit2.RemoteCallbacks",
     "category": "type",
@@ -15969,7 +15969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.SignatureStruct",
+    "location": "stdlib/LibGit2/#LibGit2.SignatureStruct",
     "page": "LibGit2",
     "title": "LibGit2.SignatureStruct",
     "category": "type",
@@ -15977,7 +15977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.StatusEntry",
+    "location": "stdlib/LibGit2/#LibGit2.StatusEntry",
     "page": "LibGit2",
     "title": "LibGit2.StatusEntry",
     "category": "type",
@@ -15985,7 +15985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.StatusOptions",
+    "location": "stdlib/LibGit2/#LibGit2.StatusOptions",
     "page": "LibGit2",
     "title": "LibGit2.StatusOptions",
     "category": "type",
@@ -15993,7 +15993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.StrArrayStruct",
+    "location": "stdlib/LibGit2/#LibGit2.StrArrayStruct",
     "page": "LibGit2",
     "title": "LibGit2.StrArrayStruct",
     "category": "type",
@@ -16001,7 +16001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.TimeStruct",
+    "location": "stdlib/LibGit2/#LibGit2.TimeStruct",
     "page": "LibGit2",
     "title": "LibGit2.TimeStruct",
     "category": "type",
@@ -16009,7 +16009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.add!",
+    "location": "stdlib/LibGit2/#LibGit2.add!",
     "page": "LibGit2",
     "title": "LibGit2.add!",
     "category": "function",
@@ -16017,7 +16017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.add_fetch!",
+    "location": "stdlib/LibGit2/#LibGit2.add_fetch!",
     "page": "LibGit2",
     "title": "LibGit2.add_fetch!",
     "category": "function",
@@ -16025,7 +16025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.add_push!",
+    "location": "stdlib/LibGit2/#LibGit2.add_push!",
     "page": "LibGit2",
     "title": "LibGit2.add_push!",
     "category": "function",
@@ -16033,7 +16033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.addblob!",
+    "location": "stdlib/LibGit2/#LibGit2.addblob!",
     "page": "LibGit2",
     "title": "LibGit2.addblob!",
     "category": "function",
@@ -16041,7 +16041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.author",
+    "location": "stdlib/LibGit2/#LibGit2.author",
     "page": "LibGit2",
     "title": "LibGit2.author",
     "category": "function",
@@ -16049,7 +16049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.authors",
+    "location": "stdlib/LibGit2/#LibGit2.authors",
     "page": "LibGit2",
     "title": "LibGit2.authors",
     "category": "function",
@@ -16057,7 +16057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.branch",
+    "location": "stdlib/LibGit2/#LibGit2.branch",
     "page": "LibGit2",
     "title": "LibGit2.branch",
     "category": "function",
@@ -16065,7 +16065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.branch!",
+    "location": "stdlib/LibGit2/#LibGit2.branch!",
     "page": "LibGit2",
     "title": "LibGit2.branch!",
     "category": "function",
@@ -16073,7 +16073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.checkout!",
+    "location": "stdlib/LibGit2/#LibGit2.checkout!",
     "page": "LibGit2",
     "title": "LibGit2.checkout!",
     "category": "function",
@@ -16081,7 +16081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.clone",
+    "location": "stdlib/LibGit2/#LibGit2.clone",
     "page": "LibGit2",
     "title": "LibGit2.clone",
     "category": "function",
@@ -16089,7 +16089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.commit",
+    "location": "stdlib/LibGit2/#LibGit2.commit",
     "page": "LibGit2",
     "title": "LibGit2.commit",
     "category": "function",
@@ -16097,7 +16097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.committer",
+    "location": "stdlib/LibGit2/#LibGit2.committer",
     "page": "LibGit2",
     "title": "LibGit2.committer",
     "category": "function",
@@ -16105,7 +16105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.count",
+    "location": "stdlib/LibGit2/#LibGit2.count",
     "page": "LibGit2",
     "title": "LibGit2.count",
     "category": "function",
@@ -16113,7 +16113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.counthunks",
+    "location": "stdlib/LibGit2/#LibGit2.counthunks",
     "page": "LibGit2",
     "title": "LibGit2.counthunks",
     "category": "function",
@@ -16121,7 +16121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.create_branch",
+    "location": "stdlib/LibGit2/#LibGit2.create_branch",
     "page": "LibGit2",
     "title": "LibGit2.create_branch",
     "category": "function",
@@ -16129,7 +16129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.credentials_callback",
+    "location": "stdlib/LibGit2/#LibGit2.credentials_callback",
     "page": "LibGit2",
     "title": "LibGit2.credentials_callback",
     "category": "function",
@@ -16137,7 +16137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.credentials_cb",
+    "location": "stdlib/LibGit2/#LibGit2.credentials_cb",
     "page": "LibGit2",
     "title": "LibGit2.credentials_cb",
     "category": "function",
@@ -16145,7 +16145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.default_signature",
+    "location": "stdlib/LibGit2/#LibGit2.default_signature",
     "page": "LibGit2",
     "title": "LibGit2.default_signature",
     "category": "function",
@@ -16153,7 +16153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.delete_branch",
+    "location": "stdlib/LibGit2/#LibGit2.delete_branch",
     "page": "LibGit2",
     "title": "LibGit2.delete_branch",
     "category": "function",
@@ -16161,7 +16161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.diff_files",
+    "location": "stdlib/LibGit2/#LibGit2.diff_files",
     "page": "LibGit2",
     "title": "LibGit2.diff_files",
     "category": "function",
@@ -16169,7 +16169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.entryid",
+    "location": "stdlib/LibGit2/#LibGit2.entryid",
     "page": "LibGit2",
     "title": "LibGit2.entryid",
     "category": "function",
@@ -16177,7 +16177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.entrytype",
+    "location": "stdlib/LibGit2/#LibGit2.entrytype",
     "page": "LibGit2",
     "title": "LibGit2.entrytype",
     "category": "function",
@@ -16185,7 +16185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.fetch",
+    "location": "stdlib/LibGit2/#LibGit2.fetch",
     "page": "LibGit2",
     "title": "LibGit2.fetch",
     "category": "function",
@@ -16193,7 +16193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.fetchheads",
+    "location": "stdlib/LibGit2/#LibGit2.fetchheads",
     "page": "LibGit2",
     "title": "LibGit2.fetchheads",
     "category": "function",
@@ -16201,7 +16201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.fetch_refspecs",
+    "location": "stdlib/LibGit2/#LibGit2.fetch_refspecs",
     "page": "LibGit2",
     "title": "LibGit2.fetch_refspecs",
     "category": "function",
@@ -16209,7 +16209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.fetchhead_foreach_cb",
+    "location": "stdlib/LibGit2/#LibGit2.fetchhead_foreach_cb",
     "page": "LibGit2",
     "title": "LibGit2.fetchhead_foreach_cb",
     "category": "function",
@@ -16217,7 +16217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.merge_base",
+    "location": "stdlib/LibGit2/#LibGit2.merge_base",
     "page": "LibGit2",
     "title": "LibGit2.merge_base",
     "category": "function",
@@ -16225,7 +16225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.merge!-Tuple{GitRepo}",
+    "location": "stdlib/LibGit2/#LibGit2.merge!-Tuple{GitRepo}",
     "page": "LibGit2",
     "title": "LibGit2.merge!",
     "category": "method",
@@ -16233,7 +16233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.merge!-Tuple{GitRepo,Array{LibGit2.GitAnnotated,1}}",
+    "location": "stdlib/LibGit2/#LibGit2.merge!-Tuple{GitRepo,Array{LibGit2.GitAnnotated,1}}",
     "page": "LibGit2",
     "title": "LibGit2.merge!",
     "category": "method",
@@ -16241,7 +16241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.merge!-Tuple{GitRepo,Array{LibGit2.GitAnnotated,1},Bool}",
+    "location": "stdlib/LibGit2/#LibGit2.merge!-Tuple{GitRepo,Array{LibGit2.GitAnnotated,1},Bool}",
     "page": "LibGit2",
     "title": "LibGit2.merge!",
     "category": "method",
@@ -16249,7 +16249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.ffmerge!",
+    "location": "stdlib/LibGit2/#LibGit2.ffmerge!",
     "page": "LibGit2",
     "title": "LibGit2.ffmerge!",
     "category": "function",
@@ -16257,7 +16257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.fullname",
+    "location": "stdlib/LibGit2/#LibGit2.fullname",
     "page": "LibGit2",
     "title": "LibGit2.fullname",
     "category": "function",
@@ -16265,7 +16265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.features",
+    "location": "stdlib/LibGit2/#LibGit2.features",
     "page": "LibGit2",
     "title": "LibGit2.features",
     "category": "function",
@@ -16273,7 +16273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.filename",
+    "location": "stdlib/LibGit2/#LibGit2.filename",
     "page": "LibGit2",
     "title": "LibGit2.filename",
     "category": "function",
@@ -16281,7 +16281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.filemode",
+    "location": "stdlib/LibGit2/#LibGit2.filemode",
     "page": "LibGit2",
     "title": "LibGit2.filemode",
     "category": "function",
@@ -16289,7 +16289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.gitdir",
+    "location": "stdlib/LibGit2/#LibGit2.gitdir",
     "page": "LibGit2",
     "title": "LibGit2.gitdir",
     "category": "function",
@@ -16297,7 +16297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.git_url",
+    "location": "stdlib/LibGit2/#LibGit2.git_url",
     "page": "LibGit2",
     "title": "LibGit2.git_url",
     "category": "function",
@@ -16305,7 +16305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.@githash_str",
+    "location": "stdlib/LibGit2/#LibGit2.@githash_str",
     "page": "LibGit2",
     "title": "LibGit2.@githash_str",
     "category": "macro",
@@ -16313,7 +16313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.head",
+    "location": "stdlib/LibGit2/#LibGit2.head",
     "page": "LibGit2",
     "title": "LibGit2.head",
     "category": "function",
@@ -16321,7 +16321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.head!",
+    "location": "stdlib/LibGit2/#LibGit2.head!",
     "page": "LibGit2",
     "title": "LibGit2.head!",
     "category": "function",
@@ -16329,7 +16329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.head_oid",
+    "location": "stdlib/LibGit2/#LibGit2.head_oid",
     "page": "LibGit2",
     "title": "LibGit2.head_oid",
     "category": "function",
@@ -16337,7 +16337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.headname",
+    "location": "stdlib/LibGit2/#LibGit2.headname",
     "page": "LibGit2",
     "title": "LibGit2.headname",
     "category": "function",
@@ -16345,7 +16345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.init",
+    "location": "stdlib/LibGit2/#LibGit2.init",
     "page": "LibGit2",
     "title": "LibGit2.init",
     "category": "function",
@@ -16353,7 +16353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.is_ancestor_of",
+    "location": "stdlib/LibGit2/#LibGit2.is_ancestor_of",
     "page": "LibGit2",
     "title": "LibGit2.is_ancestor_of",
     "category": "function",
@@ -16361,7 +16361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.isbinary",
+    "location": "stdlib/LibGit2/#LibGit2.isbinary",
     "page": "LibGit2",
     "title": "LibGit2.isbinary",
     "category": "function",
@@ -16369,7 +16369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.iscommit",
+    "location": "stdlib/LibGit2/#LibGit2.iscommit",
     "page": "LibGit2",
     "title": "LibGit2.iscommit",
     "category": "function",
@@ -16377,7 +16377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.isdiff",
+    "location": "stdlib/LibGit2/#LibGit2.isdiff",
     "page": "LibGit2",
     "title": "LibGit2.isdiff",
     "category": "function",
@@ -16385,7 +16385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.isdirty",
+    "location": "stdlib/LibGit2/#LibGit2.isdirty",
     "page": "LibGit2",
     "title": "LibGit2.isdirty",
     "category": "function",
@@ -16393,7 +16393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.isorphan",
+    "location": "stdlib/LibGit2/#LibGit2.isorphan",
     "page": "LibGit2",
     "title": "LibGit2.isorphan",
     "category": "function",
@@ -16401,7 +16401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.isset",
+    "location": "stdlib/LibGit2/#LibGit2.isset",
     "page": "LibGit2",
     "title": "LibGit2.isset",
     "category": "function",
@@ -16409,7 +16409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.iszero",
+    "location": "stdlib/LibGit2/#LibGit2.iszero",
     "page": "LibGit2",
     "title": "LibGit2.iszero",
     "category": "function",
@@ -16417,7 +16417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.lookup_branch",
+    "location": "stdlib/LibGit2/#LibGit2.lookup_branch",
     "page": "LibGit2",
     "title": "LibGit2.lookup_branch",
     "category": "function",
@@ -16425,7 +16425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.map",
+    "location": "stdlib/LibGit2/#LibGit2.map",
     "page": "LibGit2",
     "title": "LibGit2.map",
     "category": "function",
@@ -16433,7 +16433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.mirror_callback",
+    "location": "stdlib/LibGit2/#LibGit2.mirror_callback",
     "page": "LibGit2",
     "title": "LibGit2.mirror_callback",
     "category": "function",
@@ -16441,7 +16441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.mirror_cb",
+    "location": "stdlib/LibGit2/#LibGit2.mirror_cb",
     "page": "LibGit2",
     "title": "LibGit2.mirror_cb",
     "category": "function",
@@ -16449,7 +16449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.message",
+    "location": "stdlib/LibGit2/#LibGit2.message",
     "page": "LibGit2",
     "title": "LibGit2.message",
     "category": "function",
@@ -16457,7 +16457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.merge_analysis",
+    "location": "stdlib/LibGit2/#LibGit2.merge_analysis",
     "page": "LibGit2",
     "title": "LibGit2.merge_analysis",
     "category": "function",
@@ -16465,7 +16465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.name",
+    "location": "stdlib/LibGit2/#LibGit2.name",
     "page": "LibGit2",
     "title": "LibGit2.name",
     "category": "function",
@@ -16473,7 +16473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.need_update",
+    "location": "stdlib/LibGit2/#LibGit2.need_update",
     "page": "LibGit2",
     "title": "LibGit2.need_update",
     "category": "function",
@@ -16481,7 +16481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.objtype",
+    "location": "stdlib/LibGit2/#LibGit2.objtype",
     "page": "LibGit2",
     "title": "LibGit2.objtype",
     "category": "function",
@@ -16489,7 +16489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.path",
+    "location": "stdlib/LibGit2/#LibGit2.path",
     "page": "LibGit2",
     "title": "LibGit2.path",
     "category": "function",
@@ -16497,7 +16497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.peel",
+    "location": "stdlib/LibGit2/#LibGit2.peel",
     "page": "LibGit2",
     "title": "LibGit2.peel",
     "category": "function",
@@ -16505,7 +16505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.posixpath",
+    "location": "stdlib/LibGit2/#LibGit2.posixpath",
     "page": "LibGit2",
     "title": "LibGit2.posixpath",
     "category": "function",
@@ -16513,7 +16513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.push",
+    "location": "stdlib/LibGit2/#LibGit2.push",
     "page": "LibGit2",
     "title": "LibGit2.push",
     "category": "function",
@@ -16521,7 +16521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.push!-Tuple{LibGit2.GitRevWalker,LibGit2.GitHash}",
+    "location": "stdlib/LibGit2/#LibGit2.push!-Tuple{LibGit2.GitRevWalker,LibGit2.GitHash}",
     "page": "LibGit2",
     "title": "LibGit2.push!",
     "category": "method",
@@ -16529,7 +16529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.push_head!",
+    "location": "stdlib/LibGit2/#LibGit2.push_head!",
     "page": "LibGit2",
     "title": "LibGit2.push_head!",
     "category": "function",
@@ -16537,7 +16537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.push_refspecs",
+    "location": "stdlib/LibGit2/#LibGit2.push_refspecs",
     "page": "LibGit2",
     "title": "LibGit2.push_refspecs",
     "category": "function",
@@ -16545,7 +16545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.raw",
+    "location": "stdlib/LibGit2/#LibGit2.raw",
     "page": "LibGit2",
     "title": "LibGit2.raw",
     "category": "function",
@@ -16553,7 +16553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.read_tree!",
+    "location": "stdlib/LibGit2/#LibGit2.read_tree!",
     "page": "LibGit2",
     "title": "LibGit2.read_tree!",
     "category": "function",
@@ -16561,7 +16561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.rebase!",
+    "location": "stdlib/LibGit2/#LibGit2.rebase!",
     "page": "LibGit2",
     "title": "LibGit2.rebase!",
     "category": "function",
@@ -16569,7 +16569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.ref_list",
+    "location": "stdlib/LibGit2/#LibGit2.ref_list",
     "page": "LibGit2",
     "title": "LibGit2.ref_list",
     "category": "function",
@@ -16577,7 +16577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.reftype",
+    "location": "stdlib/LibGit2/#LibGit2.reftype",
     "page": "LibGit2",
     "title": "LibGit2.reftype",
     "category": "function",
@@ -16585,7 +16585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.remotes",
+    "location": "stdlib/LibGit2/#LibGit2.remotes",
     "page": "LibGit2",
     "title": "LibGit2.remotes",
     "category": "function",
@@ -16593,7 +16593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.remove!",
+    "location": "stdlib/LibGit2/#LibGit2.remove!",
     "page": "LibGit2",
     "title": "LibGit2.remove!",
     "category": "function",
@@ -16601,7 +16601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.reset",
+    "location": "stdlib/LibGit2/#LibGit2.reset",
     "page": "LibGit2",
     "title": "LibGit2.reset",
     "category": "function",
@@ -16609,7 +16609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.reset!",
+    "location": "stdlib/LibGit2/#LibGit2.reset!",
     "page": "LibGit2",
     "title": "LibGit2.reset!",
     "category": "function",
@@ -16617,7 +16617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.restore",
+    "location": "stdlib/LibGit2/#LibGit2.restore",
     "page": "LibGit2",
     "title": "LibGit2.restore",
     "category": "function",
@@ -16625,7 +16625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.revcount",
+    "location": "stdlib/LibGit2/#LibGit2.revcount",
     "page": "LibGit2",
     "title": "LibGit2.revcount",
     "category": "function",
@@ -16633,7 +16633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.set_remote_url",
+    "location": "stdlib/LibGit2/#LibGit2.set_remote_url",
     "page": "LibGit2",
     "title": "LibGit2.set_remote_url",
     "category": "function",
@@ -16641,7 +16641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.shortname",
+    "location": "stdlib/LibGit2/#LibGit2.shortname",
     "page": "LibGit2",
     "title": "LibGit2.shortname",
     "category": "function",
@@ -16649,7 +16649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.snapshot",
+    "location": "stdlib/LibGit2/#LibGit2.snapshot",
     "page": "LibGit2",
     "title": "LibGit2.snapshot",
     "category": "function",
@@ -16657,7 +16657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.status",
+    "location": "stdlib/LibGit2/#LibGit2.status",
     "page": "LibGit2",
     "title": "LibGit2.status",
     "category": "function",
@@ -16665,7 +16665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.stage",
+    "location": "stdlib/LibGit2/#LibGit2.stage",
     "page": "LibGit2",
     "title": "LibGit2.stage",
     "category": "function",
@@ -16673,7 +16673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.tag_create",
+    "location": "stdlib/LibGit2/#LibGit2.tag_create",
     "page": "LibGit2",
     "title": "LibGit2.tag_create",
     "category": "function",
@@ -16681,7 +16681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.tag_delete",
+    "location": "stdlib/LibGit2/#LibGit2.tag_delete",
     "page": "LibGit2",
     "title": "LibGit2.tag_delete",
     "category": "function",
@@ -16689,7 +16689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.tag_list",
+    "location": "stdlib/LibGit2/#LibGit2.tag_list",
     "page": "LibGit2",
     "title": "LibGit2.tag_list",
     "category": "function",
@@ -16697,7 +16697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.target",
+    "location": "stdlib/LibGit2/#LibGit2.target",
     "page": "LibGit2",
     "title": "LibGit2.target",
     "category": "function",
@@ -16705,7 +16705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.toggle",
+    "location": "stdlib/LibGit2/#LibGit2.toggle",
     "page": "LibGit2",
     "title": "LibGit2.toggle",
     "category": "function",
@@ -16713,7 +16713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.transact",
+    "location": "stdlib/LibGit2/#LibGit2.transact",
     "page": "LibGit2",
     "title": "LibGit2.transact",
     "category": "function",
@@ -16721,7 +16721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.treewalk",
+    "location": "stdlib/LibGit2/#LibGit2.treewalk",
     "page": "LibGit2",
     "title": "LibGit2.treewalk",
     "category": "function",
@@ -16729,7 +16729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.upstream",
+    "location": "stdlib/LibGit2/#LibGit2.upstream",
     "page": "LibGit2",
     "title": "LibGit2.upstream",
     "category": "function",
@@ -16737,7 +16737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.update!",
+    "location": "stdlib/LibGit2/#LibGit2.update!",
     "page": "LibGit2",
     "title": "LibGit2.update!",
     "category": "function",
@@ -16745,7 +16745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.url",
+    "location": "stdlib/LibGit2/#LibGit2.url",
     "page": "LibGit2",
     "title": "LibGit2.url",
     "category": "function",
@@ -16753,7 +16753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.version",
+    "location": "stdlib/LibGit2/#LibGit2.version",
     "page": "LibGit2",
     "title": "LibGit2.version",
     "category": "function",
@@ -16761,7 +16761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.with",
+    "location": "stdlib/LibGit2/#LibGit2.with",
     "page": "LibGit2",
     "title": "LibGit2.with",
     "category": "function",
@@ -16769,7 +16769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.with_warn",
+    "location": "stdlib/LibGit2/#LibGit2.with_warn",
     "page": "LibGit2",
     "title": "LibGit2.with_warn",
     "category": "function",
@@ -16777,7 +16777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.workdir",
+    "location": "stdlib/LibGit2/#LibGit2.workdir",
     "page": "LibGit2",
     "title": "LibGit2.workdir",
     "category": "function",
@@ -16785,7 +16785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.GitObject-Tuple{LibGit2.GitTreeEntry}",
+    "location": "stdlib/LibGit2/#LibGit2.GitObject-Tuple{LibGit2.GitTreeEntry}",
     "page": "LibGit2",
     "title": "LibGit2.GitObject",
     "category": "method",
@@ -16793,7 +16793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.UserPasswordCredential",
+    "location": "stdlib/LibGit2/#LibGit2.UserPasswordCredential",
     "page": "LibGit2",
     "title": "LibGit2.UserPasswordCredential",
     "category": "type",
@@ -16801,7 +16801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.SSHCredential",
+    "location": "stdlib/LibGit2/#LibGit2.SSHCredential",
     "page": "LibGit2",
     "title": "LibGit2.SSHCredential",
     "category": "type",
@@ -16809,7 +16809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.isfilled",
+    "location": "stdlib/LibGit2/#LibGit2.isfilled",
     "page": "LibGit2",
     "title": "LibGit2.isfilled",
     "category": "function",
@@ -16817,7 +16817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.CachedCredentials",
+    "location": "stdlib/LibGit2/#LibGit2.CachedCredentials",
     "page": "LibGit2",
     "title": "LibGit2.CachedCredentials",
     "category": "type",
@@ -16825,7 +16825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.CredentialPayload",
+    "location": "stdlib/LibGit2/#LibGit2.CredentialPayload",
     "page": "LibGit2",
     "title": "LibGit2.CredentialPayload",
     "category": "type",
@@ -16833,7 +16833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.approve",
+    "location": "stdlib/LibGit2/#LibGit2.approve",
     "page": "LibGit2",
     "title": "LibGit2.approve",
     "category": "function",
@@ -16841,7 +16841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#LibGit2.reject",
+    "location": "stdlib/LibGit2/#LibGit2.reject",
     "page": "LibGit2",
     "title": "LibGit2.reject",
     "category": "function",
@@ -16849,7 +16849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LibGit2.html#Functionality-1",
+    "location": "stdlib/LibGit2/#Functionality-1",
     "page": "LibGit2",
     "title": "Functionality",
     "category": "section",
@@ -16857,7 +16857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#",
+    "location": "stdlib/Libdl/#",
     "page": "Dynamic Linker",
     "title": "Dynamic Linker",
     "category": "page",
@@ -16865,7 +16865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Libdl.dlopen",
+    "location": "stdlib/Libdl/#Libdl.dlopen",
     "page": "Dynamic Linker",
     "title": "Libdl.dlopen",
     "category": "function",
@@ -16873,7 +16873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Libdl.dlopen_e",
+    "location": "stdlib/Libdl/#Libdl.dlopen_e",
     "page": "Dynamic Linker",
     "title": "Libdl.dlopen_e",
     "category": "function",
@@ -16881,7 +16881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Libdl.RTLD_NOW",
+    "location": "stdlib/Libdl/#Libdl.RTLD_NOW",
     "page": "Dynamic Linker",
     "title": "Libdl.RTLD_NOW",
     "category": "constant",
@@ -16889,7 +16889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Libdl.dlsym",
+    "location": "stdlib/Libdl/#Libdl.dlsym",
     "page": "Dynamic Linker",
     "title": "Libdl.dlsym",
     "category": "function",
@@ -16897,7 +16897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Libdl.dlsym_e",
+    "location": "stdlib/Libdl/#Libdl.dlsym_e",
     "page": "Dynamic Linker",
     "title": "Libdl.dlsym_e",
     "category": "function",
@@ -16905,7 +16905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Libdl.dlclose",
+    "location": "stdlib/Libdl/#Libdl.dlclose",
     "page": "Dynamic Linker",
     "title": "Libdl.dlclose",
     "category": "function",
@@ -16913,7 +16913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Libdl.dlext",
+    "location": "stdlib/Libdl/#Libdl.dlext",
     "page": "Dynamic Linker",
     "title": "Libdl.dlext",
     "category": "constant",
@@ -16921,7 +16921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Libdl.find_library",
+    "location": "stdlib/Libdl/#Libdl.find_library",
     "page": "Dynamic Linker",
     "title": "Libdl.find_library",
     "category": "function",
@@ -16929,7 +16929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Base.DL_LOAD_PATH",
+    "location": "stdlib/Libdl/#Base.DL_LOAD_PATH",
     "page": "Dynamic Linker",
     "title": "Base.DL_LOAD_PATH",
     "category": "constant",
@@ -16937,7 +16937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Libdl.html#Dynamic-Linker-1",
+    "location": "stdlib/Libdl/#Dynamic-Linker-1",
     "page": "Dynamic Linker",
     "title": "Dynamic Linker",
     "category": "section",
@@ -16945,7 +16945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#",
+    "location": "stdlib/LinearAlgebra/#",
     "page": "Linear Algebra",
     "title": "Linear Algebra",
     "category": "page",
@@ -16953,7 +16953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Linear-Algebra-1",
+    "location": "stdlib/LinearAlgebra/#Linear-Algebra-1",
     "page": "Linear Algebra",
     "title": "Linear Algebra",
     "category": "section",
@@ -16961,7 +16961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Special-matrices-1",
+    "location": "stdlib/LinearAlgebra/#Special-matrices-1",
     "page": "Linear Algebra",
     "title": "Special matrices",
     "category": "section",
@@ -16969,7 +16969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Elementary-operations-1",
+    "location": "stdlib/LinearAlgebra/#Elementary-operations-1",
     "page": "Linear Algebra",
     "title": "Elementary operations",
     "category": "section",
@@ -16977,7 +16977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Matrix-factorizations-1",
+    "location": "stdlib/LinearAlgebra/#Matrix-factorizations-1",
     "page": "Linear Algebra",
     "title": "Matrix factorizations",
     "category": "section",
@@ -16985,7 +16985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#The-uniform-scaling-operator-1",
+    "location": "stdlib/LinearAlgebra/#The-uniform-scaling-operator-1",
     "page": "Linear Algebra",
     "title": "The uniform scaling operator",
     "category": "section",
@@ -16993,7 +16993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#man-linalg-factorizations-1",
+    "location": "stdlib/LinearAlgebra/#man-linalg-factorizations-1",
     "page": "Linear Algebra",
     "title": "Matrix factorizations",
     "category": "section",
@@ -17001,7 +17001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.:*-Tuple{AbstractArray{T,2} where T,AbstractArray{T,2} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.:*-Tuple{AbstractArray{T,2} where T,AbstractArray{T,2} where T}",
     "page": "Linear Algebra",
     "title": "Base.:*",
     "category": "method",
@@ -17009,7 +17009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.:\\-Tuple{AbstractArray{T,2} where T,Union{AbstractArray{T,1}, AbstractArray{T,2}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.:\\-Tuple{AbstractArray{T,2} where T,Union{AbstractArray{T,1}, AbstractArray{T,2}} where T}",
     "page": "Linear Algebra",
     "title": "Base.:\\",
     "category": "method",
@@ -17017,7 +17017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.dot",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.dot",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.dot",
     "category": "function",
@@ -17025,7 +17025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.vecdot",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.vecdot",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.vecdot",
     "category": "function",
@@ -17033,7 +17033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.cross",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.cross",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.cross",
     "category": "function",
@@ -17041,7 +17041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.factorize",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.factorize",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.factorize",
     "category": "function",
@@ -17049,7 +17049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.Diagonal",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Diagonal",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.Diagonal",
     "category": "type",
@@ -17057,7 +17057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.Bidiagonal",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Bidiagonal",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.Bidiagonal",
     "category": "type",
@@ -17065,7 +17065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.SymTridiagonal",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.SymTridiagonal",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.SymTridiagonal",
     "category": "type",
@@ -17073,7 +17073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.Tridiagonal",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Tridiagonal",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.Tridiagonal",
     "category": "type",
@@ -17081,7 +17081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.Symmetric",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Symmetric",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.Symmetric",
     "category": "type",
@@ -17089,7 +17089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.Hermitian",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Hermitian",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.Hermitian",
     "category": "type",
@@ -17097,7 +17097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LowerTriangular",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LowerTriangular",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LowerTriangular",
     "category": "type",
@@ -17105,7 +17105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.UpperTriangular",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.UpperTriangular",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.UpperTriangular",
     "category": "type",
@@ -17113,7 +17113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.UniformScaling",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.UniformScaling",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.UniformScaling",
     "category": "type",
@@ -17121,7 +17121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lu",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lu",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lu",
     "category": "function",
@@ -17129,7 +17129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lu!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lu!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lu!",
     "category": "function",
@@ -17137,7 +17137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.chol",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.chol",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.chol",
     "category": "function",
@@ -17145,7 +17145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.cholesky",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.cholesky",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.cholesky",
     "category": "function",
@@ -17153,7 +17153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.cholesky!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.cholesky!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.cholesky!",
     "category": "function",
@@ -17161,7 +17161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lowrankupdate",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lowrankupdate",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lowrankupdate",
     "category": "function",
@@ -17169,7 +17169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lowrankdowndate",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lowrankdowndate",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lowrankdowndate",
     "category": "function",
@@ -17177,7 +17177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lowrankupdate!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lowrankupdate!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lowrankupdate!",
     "category": "function",
@@ -17185,7 +17185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lowrankdowndate!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lowrankdowndate!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lowrankdowndate!",
     "category": "function",
@@ -17193,7 +17193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.ldlt",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ldlt",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.ldlt",
     "category": "function",
@@ -17201,7 +17201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.ldlt!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ldlt!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.ldlt!",
     "category": "function",
@@ -17209,7 +17209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.qr",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.qr",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.qr",
     "category": "function",
@@ -17217,7 +17217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.qr!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.qr!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.qr!",
     "category": "function",
@@ -17225,7 +17225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.QR",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.QR",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.QR",
     "category": "type",
@@ -17233,7 +17233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.QRCompactWY",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.QRCompactWY",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.QRCompactWY",
     "category": "type",
@@ -17241,7 +17241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.QRPivoted",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.QRPivoted",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.QRPivoted",
     "category": "type",
@@ -17249,7 +17249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lq!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lq!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lq!",
     "category": "function",
@@ -17257,7 +17257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lq",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lq",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lq",
     "category": "function",
@@ -17265,7 +17265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.bunchkaufman",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.bunchkaufman",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.bunchkaufman",
     "category": "function",
@@ -17273,7 +17273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.bunchkaufman!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.bunchkaufman!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.bunchkaufman!",
     "category": "function",
@@ -17281,7 +17281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.eigvals",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigvals",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.eigvals",
     "category": "function",
@@ -17289,7 +17289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.eigvals!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigvals!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.eigvals!",
     "category": "function",
@@ -17297,7 +17297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.eigmax",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigmax",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.eigmax",
     "category": "function",
@@ -17305,7 +17305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.eigmin",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigmin",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.eigmin",
     "category": "function",
@@ -17313,7 +17313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.eigvecs",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigvecs",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.eigvecs",
     "category": "function",
@@ -17321,7 +17321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.eigen",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigen",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.eigen",
     "category": "function",
@@ -17329,7 +17329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.eigen!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.eigen!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.eigen!",
     "category": "function",
@@ -17337,7 +17337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.hessenberg",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.hessenberg",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.hessenberg",
     "category": "function",
@@ -17345,7 +17345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.hessenberg!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.hessenberg!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.hessenberg!",
     "category": "function",
@@ -17353,7 +17353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.schur!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.schur!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.schur!",
     "category": "function",
@@ -17361,7 +17361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.schur",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.schur",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.schur",
     "category": "function",
@@ -17369,7 +17369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.ordschur",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ordschur",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.ordschur",
     "category": "function",
@@ -17377,7 +17377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.ordschur!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ordschur!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.ordschur!",
     "category": "function",
@@ -17385,7 +17385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.svd",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.svd",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.svd",
     "category": "function",
@@ -17393,7 +17393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.svd!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.svd!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.svd!",
     "category": "function",
@@ -17401,7 +17401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.svdvals",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.svdvals",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.svdvals",
     "category": "function",
@@ -17409,7 +17409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.svdvals!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.svdvals!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.svdvals!",
     "category": "function",
@@ -17417,7 +17417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.Givens",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.Givens",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.Givens",
     "category": "type",
@@ -17425,7 +17425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.givens",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.givens",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.givens",
     "category": "function",
@@ -17433,7 +17433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.triu",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.triu",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.triu",
     "category": "function",
@@ -17441,7 +17441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.triu!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.triu!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.triu!",
     "category": "function",
@@ -17449,7 +17449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.tril",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.tril",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.tril",
     "category": "function",
@@ -17457,7 +17457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.tril!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.tril!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.tril!",
     "category": "function",
@@ -17465,7 +17465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.diagind",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.diagind",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.diagind",
     "category": "function",
@@ -17473,7 +17473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.diag",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.diag",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.diag",
     "category": "function",
@@ -17481,7 +17481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.diagm",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.diagm",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.diagm",
     "category": "function",
@@ -17489,7 +17489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.rank",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.rank",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.rank",
     "category": "function",
@@ -17497,7 +17497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.norm",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.norm",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.norm",
     "category": "function",
@@ -17505,7 +17505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.vecnorm",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.vecnorm",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.vecnorm",
     "category": "function",
@@ -17513,7 +17513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.normalize!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.normalize!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.normalize!",
     "category": "function",
@@ -17521,7 +17521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.normalize",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.normalize",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.normalize",
     "category": "function",
@@ -17529,7 +17529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.cond",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.cond",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.cond",
     "category": "function",
@@ -17537,7 +17537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.condskeel",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.condskeel",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.condskeel",
     "category": "function",
@@ -17545,7 +17545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.tr",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.tr",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.tr",
     "category": "function",
@@ -17553,7 +17553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.det",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.det",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.det",
     "category": "function",
@@ -17561,7 +17561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.logdet",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.logdet",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.logdet",
     "category": "function",
@@ -17569,7 +17569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.logabsdet",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.logabsdet",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.logabsdet",
     "category": "function",
@@ -17577,7 +17577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.inv-Tuple{AbstractArray{T,2} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.inv-Tuple{AbstractArray{T,2} where T}",
     "page": "Linear Algebra",
     "title": "Base.inv",
     "category": "method",
@@ -17585,7 +17585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.pinv",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.pinv",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.pinv",
     "category": "function",
@@ -17593,7 +17593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.nullspace",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.nullspace",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.nullspace",
     "category": "function",
@@ -17601,7 +17601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.kron",
+    "location": "stdlib/LinearAlgebra/#Base.kron",
     "page": "Linear Algebra",
     "title": "Base.kron",
     "category": "function",
@@ -17609,7 +17609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.exp-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Union{Complex{Float32}, Complex{Float64}, Float32, Float64}}",
+    "location": "stdlib/LinearAlgebra/#Base.exp-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Union{Complex{Float32}, Complex{Float64}, Float32, Float64}}",
     "page": "Linear Algebra",
     "title": "Base.exp",
     "category": "method",
@@ -17617,7 +17617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.log-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.log-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.log",
     "category": "method",
@@ -17625,7 +17625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.sqrt-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
+    "location": "stdlib/LinearAlgebra/#Base.sqrt-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
     "page": "Linear Algebra",
     "title": "Base.sqrt",
     "category": "method",
@@ -17633,7 +17633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.cos-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
+    "location": "stdlib/LinearAlgebra/#Base.cos-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
     "page": "Linear Algebra",
     "title": "Base.cos",
     "category": "method",
@@ -17641,7 +17641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.sin-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
+    "location": "stdlib/LinearAlgebra/#Base.sin-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
     "page": "Linear Algebra",
     "title": "Base.sin",
     "category": "method",
@@ -17649,7 +17649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.sincos-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.sincos-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
     "page": "Linear Algebra",
     "title": "Base.Math.sincos",
     "category": "method",
@@ -17657,7 +17657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.tan-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
+    "location": "stdlib/LinearAlgebra/#Base.tan-Tuple{Union{DenseArray{#s39,2}, Base.ReinterpretArray{#s39,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{#s39,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{#s39,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where #s39<:Real}",
     "page": "Linear Algebra",
     "title": "Base.tan",
     "category": "method",
@@ -17665,7 +17665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.sec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.sec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.sec",
     "category": "method",
@@ -17673,7 +17673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.csc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.csc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.csc",
     "category": "method",
@@ -17681,7 +17681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.cot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.cot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.cot",
     "category": "method",
@@ -17689,7 +17689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.cosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.cosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.cosh",
     "category": "method",
@@ -17697,7 +17697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.sinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.sinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.sinh",
     "category": "method",
@@ -17705,7 +17705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.tanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.tanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.tanh",
     "category": "method",
@@ -17713,7 +17713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.sech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.sech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.sech",
     "category": "method",
@@ -17721,7 +17721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.csch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.csch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.csch",
     "category": "method",
@@ -17729,7 +17729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.coth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.coth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.coth",
     "category": "method",
@@ -17737,7 +17737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.acos-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.acos-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.acos",
     "category": "method",
@@ -17745,7 +17745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.asin-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.asin-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.asin",
     "category": "method",
@@ -17753,7 +17753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.atan-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.atan-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.atan",
     "category": "method",
@@ -17761,7 +17761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.asec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.asec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.asec",
     "category": "method",
@@ -17769,7 +17769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.acsc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.acsc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.acsc",
     "category": "method",
@@ -17777,7 +17777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.acot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.acot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.acot",
     "category": "method",
@@ -17785,7 +17785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.acosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.acosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.acosh",
     "category": "method",
@@ -17793,7 +17793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.asinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.asinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.asinh",
     "category": "method",
@@ -17801,7 +17801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.atanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.atanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.atanh",
     "category": "method",
@@ -17809,7 +17809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.asech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.asech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.asech",
     "category": "method",
@@ -17817,7 +17817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.acsch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.acsch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.acsch",
     "category": "method",
@@ -17825,7 +17825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.Math.acoth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
+    "location": "stdlib/LinearAlgebra/#Base.Math.acoth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray}, SubArray{T,2,A,I,L} where L where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{Base.ReinterpretArray{T,N,S,A} where S where A<:Union{SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, SubArray{T,N,A,I,true} where I<:Tuple{AbstractUnitRange,Vararg{Any,N} where N} where A<:DenseArray where N where T, DenseArray} where N where T, DenseArray}} where T}",
     "page": "Linear Algebra",
     "title": "Base.Math.acoth",
     "category": "method",
@@ -17833,7 +17833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lyap",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lyap",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lyap",
     "category": "function",
@@ -17841,7 +17841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.sylvester",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.sylvester",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.sylvester",
     "category": "function",
@@ -17849,7 +17849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.issuccess",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.issuccess",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.issuccess",
     "category": "function",
@@ -17857,7 +17857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.issymmetric",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.issymmetric",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.issymmetric",
     "category": "function",
@@ -17865,7 +17865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.isposdef",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.isposdef",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.isposdef",
     "category": "function",
@@ -17873,7 +17873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.isposdef!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.isposdef!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.isposdef!",
     "category": "function",
@@ -17881,7 +17881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.istril",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.istril",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.istril",
     "category": "function",
@@ -17889,7 +17889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.istriu",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.istriu",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.istriu",
     "category": "function",
@@ -17897,7 +17897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.isdiag",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.isdiag",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.isdiag",
     "category": "function",
@@ -17905,7 +17905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.ishermitian",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ishermitian",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.ishermitian",
     "category": "function",
@@ -17913,7 +17913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.transpose",
+    "location": "stdlib/LinearAlgebra/#Base.transpose",
     "page": "Linear Algebra",
     "title": "Base.transpose",
     "category": "function",
@@ -17921,7 +17921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.transpose!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.transpose!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.transpose!",
     "category": "function",
@@ -17929,7 +17929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.adjoint",
+    "location": "stdlib/LinearAlgebra/#Base.adjoint",
     "page": "Linear Algebra",
     "title": "Base.adjoint",
     "category": "function",
@@ -17937,7 +17937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.adjoint!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.adjoint!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.adjoint!",
     "category": "function",
@@ -17945,7 +17945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Base.copy-Tuple{Union{Adjoint, Transpose}}",
+    "location": "stdlib/LinearAlgebra/#Base.copy-Tuple{Union{Adjoint, Transpose}}",
     "page": "Linear Algebra",
     "title": "Base.copy",
     "category": "method",
@@ -17953,7 +17953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.stride1",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.stride1",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.stride1",
     "category": "function",
@@ -17961,7 +17961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.checksquare",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.checksquare",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.checksquare",
     "category": "function",
@@ -17969,7 +17969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Standard-Functions-1",
+    "location": "stdlib/LinearAlgebra/#Standard-Functions-1",
     "page": "Linear Algebra",
     "title": "Standard Functions",
     "category": "section",
@@ -17977,7 +17977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.mul!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.mul!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.mul!",
     "category": "function",
@@ -17985,7 +17985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.lmul!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.lmul!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.lmul!",
     "category": "function",
@@ -17993,7 +17993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.rmul!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.rmul!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.rmul!",
     "category": "function",
@@ -18001,7 +18001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.ldiv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.ldiv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.ldiv!",
     "category": "function",
@@ -18009,7 +18009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.rdiv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.rdiv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.rdiv!",
     "category": "function",
@@ -18017,7 +18017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#Low-level-matrix-operations-1",
+    "location": "stdlib/LinearAlgebra/#Low-level-matrix-operations-1",
     "page": "Linear Algebra",
     "title": "Low-level matrix operations",
     "category": "section",
@@ -18025,7 +18025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#BLAS-Functions-1",
+    "location": "stdlib/LinearAlgebra/#BLAS-Functions-1",
     "page": "Linear Algebra",
     "title": "BLAS Functions",
     "category": "section",
@@ -18033,7 +18033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#stdlib-blas-chars-1",
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-chars-1",
     "page": "Linear Algebra",
     "title": "BLAS Character Arguments",
     "category": "section",
@@ -18041,7 +18041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#stdlib-blas-side-1",
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-side-1",
     "page": "Linear Algebra",
     "title": "Multplication Order",
     "category": "section",
@@ -18049,7 +18049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#stdlib-blas-uplo-1",
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-uplo-1",
     "page": "Linear Algebra",
     "title": "Triangle Referencing",
     "category": "section",
@@ -18057,7 +18057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#stdlib-blas-trans-1",
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-trans-1",
     "page": "Linear Algebra",
     "title": "Transposition Operation",
     "category": "section",
@@ -18065,7 +18065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS",
     "category": "module",
@@ -18073,7 +18073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.dotu",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.dotu",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.dotu",
     "category": "function",
@@ -18081,7 +18081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.dotc",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.dotc",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.dotc",
     "category": "function",
@@ -18089,7 +18089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.blascopy!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.blascopy!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.blascopy!",
     "category": "function",
@@ -18097,7 +18097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.nrm2",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.nrm2",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.nrm2",
     "category": "function",
@@ -18105,7 +18105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.asum",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.asum",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.asum",
     "category": "function",
@@ -18113,7 +18113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.axpy!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.axpy!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.axpy!",
     "category": "function",
@@ -18121,7 +18121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.scal!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.scal!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.scal!",
     "category": "function",
@@ -18129,7 +18129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.scal",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.scal",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.scal",
     "category": "function",
@@ -18137,7 +18137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.ger!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.ger!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.ger!",
     "category": "function",
@@ -18145,7 +18145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.syr!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.syr!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.syr!",
     "category": "function",
@@ -18153,7 +18153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.syrk!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.syrk!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.syrk!",
     "category": "function",
@@ -18161,7 +18161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.syrk",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.syrk",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.syrk",
     "category": "function",
@@ -18169,7 +18169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.her!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.her!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.her!",
     "category": "function",
@@ -18177,7 +18177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.herk!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.herk!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.herk!",
     "category": "function",
@@ -18185,7 +18185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.herk",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.herk",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.herk",
     "category": "function",
@@ -18193,7 +18193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.gbmv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gbmv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.gbmv!",
     "category": "function",
@@ -18201,7 +18201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.gbmv",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gbmv",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.gbmv",
     "category": "function",
@@ -18209,7 +18209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.sbmv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.sbmv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.sbmv!",
     "category": "function",
@@ -18217,7 +18217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.sbmv-NTuple{5,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.sbmv-NTuple{5,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.sbmv",
     "category": "method",
@@ -18225,7 +18225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.sbmv-NTuple{4,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.sbmv-NTuple{4,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.sbmv",
     "category": "method",
@@ -18233,7 +18233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.gemm!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemm!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.gemm!",
     "category": "function",
@@ -18241,7 +18241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.gemm-NTuple{5,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemm-NTuple{5,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.gemm",
     "category": "method",
@@ -18249,7 +18249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.gemm-NTuple{4,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemm-NTuple{4,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.gemm",
     "category": "method",
@@ -18257,7 +18257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.gemv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.gemv!",
     "category": "function",
@@ -18265,7 +18265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.gemv-NTuple{4,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemv-NTuple{4,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.gemv",
     "category": "method",
@@ -18273,7 +18273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.gemv-Tuple{Any,Any,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.gemv-Tuple{Any,Any,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.gemv",
     "category": "method",
@@ -18281,7 +18281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.symm!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symm!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.symm!",
     "category": "function",
@@ -18289,7 +18289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.symm-NTuple{5,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symm-NTuple{5,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.symm",
     "category": "method",
@@ -18297,7 +18297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.symm-NTuple{4,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symm-NTuple{4,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.symm",
     "category": "method",
@@ -18305,7 +18305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.symv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.symv!",
     "category": "function",
@@ -18313,7 +18313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.symv-NTuple{4,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symv-NTuple{4,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.symv",
     "category": "method",
@@ -18321,7 +18321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.symv-Tuple{Any,Any,Any}",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.symv-Tuple{Any,Any,Any}",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.symv",
     "category": "method",
@@ -18329,7 +18329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.trmm!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trmm!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.trmm!",
     "category": "function",
@@ -18337,7 +18337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.trmm",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trmm",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.trmm",
     "category": "function",
@@ -18345,7 +18345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.trsm!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trsm!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.trsm!",
     "category": "function",
@@ -18353,7 +18353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.trsm",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trsm",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.trsm",
     "category": "function",
@@ -18361,7 +18361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.trmv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trmv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.trmv!",
     "category": "function",
@@ -18369,7 +18369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.trmv",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trmv",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.trmv",
     "category": "function",
@@ -18377,7 +18377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.trsv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trsv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.trsv!",
     "category": "function",
@@ -18385,7 +18385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.trsv",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.trsv",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.trsv",
     "category": "function",
@@ -18393,7 +18393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.BLAS.set_num_threads",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.BLAS.set_num_threads",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.BLAS.set_num_threads",
     "category": "function",
@@ -18401,7 +18401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.I",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.I",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.I",
     "category": "constant",
@@ -18409,7 +18409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#stdlib-blas-diag-1",
+    "location": "stdlib/LinearAlgebra/#stdlib-blas-diag-1",
     "page": "Linear Algebra",
     "title": "Unit Diagonal",
     "category": "section",
@@ -18417,7 +18417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK",
     "category": "module",
@@ -18425,7 +18425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gbtrf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gbtrf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gbtrf!",
     "category": "function",
@@ -18433,7 +18433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gbtrs!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gbtrs!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gbtrs!",
     "category": "function",
@@ -18441,7 +18441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gebal!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gebal!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gebal!",
     "category": "function",
@@ -18449,7 +18449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gebak!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gebak!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gebak!",
     "category": "function",
@@ -18457,7 +18457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gebrd!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gebrd!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gebrd!",
     "category": "function",
@@ -18465,7 +18465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gelqf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gelqf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gelqf!",
     "category": "function",
@@ -18473,7 +18473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.geqlf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqlf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.geqlf!",
     "category": "function",
@@ -18481,7 +18481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.geqrf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqrf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.geqrf!",
     "category": "function",
@@ -18489,7 +18489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.geqp3!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqp3!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.geqp3!",
     "category": "function",
@@ -18497,7 +18497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gerqf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gerqf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gerqf!",
     "category": "function",
@@ -18505,7 +18505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.geqrt!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqrt!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.geqrt!",
     "category": "function",
@@ -18513,7 +18513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.geqrt3!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geqrt3!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.geqrt3!",
     "category": "function",
@@ -18521,7 +18521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.getrf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.getrf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.getrf!",
     "category": "function",
@@ -18529,7 +18529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.tzrzf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.tzrzf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.tzrzf!",
     "category": "function",
@@ -18537,7 +18537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.ormrz!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormrz!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.ormrz!",
     "category": "function",
@@ -18545,7 +18545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gels!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gels!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gels!",
     "category": "function",
@@ -18553,7 +18553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gesv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gesv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gesv!",
     "category": "function",
@@ -18561,7 +18561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.getrs!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.getrs!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.getrs!",
     "category": "function",
@@ -18569,7 +18569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.getri!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.getri!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.getri!",
     "category": "function",
@@ -18577,7 +18577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gesvx!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gesvx!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gesvx!",
     "category": "function",
@@ -18585,7 +18585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gelsd!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gelsd!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gelsd!",
     "category": "function",
@@ -18593,7 +18593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gelsy!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gelsy!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gelsy!",
     "category": "function",
@@ -18601,7 +18601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gglse!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gglse!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gglse!",
     "category": "function",
@@ -18609,7 +18609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.geev!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geev!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.geev!",
     "category": "function",
@@ -18617,7 +18617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gesdd!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gesdd!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gesdd!",
     "category": "function",
@@ -18625,7 +18625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gesvd!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gesvd!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gesvd!",
     "category": "function",
@@ -18633,7 +18633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.ggsvd!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ggsvd!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.ggsvd!",
     "category": "function",
@@ -18641,7 +18641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.ggsvd3!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ggsvd3!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.ggsvd3!",
     "category": "function",
@@ -18649,7 +18649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.geevx!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.geevx!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.geevx!",
     "category": "function",
@@ -18657,7 +18657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.ggev!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ggev!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.ggev!",
     "category": "function",
@@ -18665,7 +18665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gtsv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gtsv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gtsv!",
     "category": "function",
@@ -18673,7 +18673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gttrf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gttrf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gttrf!",
     "category": "function",
@@ -18681,7 +18681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gttrs!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gttrs!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gttrs!",
     "category": "function",
@@ -18689,7 +18689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.orglq!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orglq!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.orglq!",
     "category": "function",
@@ -18697,7 +18697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.orgqr!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orgqr!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.orgqr!",
     "category": "function",
@@ -18705,7 +18705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.orgql!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orgql!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.orgql!",
     "category": "function",
@@ -18713,7 +18713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.orgrq!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orgrq!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.orgrq!",
     "category": "function",
@@ -18721,7 +18721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.ormlq!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormlq!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.ormlq!",
     "category": "function",
@@ -18729,7 +18729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.ormqr!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormqr!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.ormqr!",
     "category": "function",
@@ -18737,7 +18737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.ormql!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormql!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.ormql!",
     "category": "function",
@@ -18745,7 +18745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.ormrq!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ormrq!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.ormrq!",
     "category": "function",
@@ -18753,7 +18753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gemqrt!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gemqrt!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gemqrt!",
     "category": "function",
@@ -18761,7 +18761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.posv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.posv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.posv!",
     "category": "function",
@@ -18769,7 +18769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.potrf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.potrf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.potrf!",
     "category": "function",
@@ -18777,7 +18777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.potri!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.potri!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.potri!",
     "category": "function",
@@ -18785,7 +18785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.potrs!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.potrs!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.potrs!",
     "category": "function",
@@ -18793,7 +18793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.pstrf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.pstrf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.pstrf!",
     "category": "function",
@@ -18801,7 +18801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.ptsv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.ptsv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.ptsv!",
     "category": "function",
@@ -18809,7 +18809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.pttrf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.pttrf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.pttrf!",
     "category": "function",
@@ -18817,7 +18817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.pttrs!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.pttrs!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.pttrs!",
     "category": "function",
@@ -18825,7 +18825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.trtri!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trtri!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.trtri!",
     "category": "function",
@@ -18833,7 +18833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.trtrs!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trtrs!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.trtrs!",
     "category": "function",
@@ -18841,7 +18841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.trcon!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trcon!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.trcon!",
     "category": "function",
@@ -18849,7 +18849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.trevc!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trevc!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.trevc!",
     "category": "function",
@@ -18857,7 +18857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.trrfs!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trrfs!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.trrfs!",
     "category": "function",
@@ -18865,7 +18865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.stev!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.stev!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.stev!",
     "category": "function",
@@ -18873,7 +18873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.stebz!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.stebz!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.stebz!",
     "category": "function",
@@ -18881,7 +18881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.stegr!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.stegr!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.stegr!",
     "category": "function",
@@ -18889,7 +18889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.stein!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.stein!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.stein!",
     "category": "function",
@@ -18897,7 +18897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.syconv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.syconv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.syconv!",
     "category": "function",
@@ -18905,7 +18905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.sysv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sysv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.sysv!",
     "category": "function",
@@ -18913,7 +18913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.sytrf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sytrf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.sytrf!",
     "category": "function",
@@ -18921,7 +18921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.sytri!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sytri!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.sytri!",
     "category": "function",
@@ -18929,7 +18929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.sytrs!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sytrs!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.sytrs!",
     "category": "function",
@@ -18937,7 +18937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.hesv!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.hesv!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.hesv!",
     "category": "function",
@@ -18945,7 +18945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.hetrf!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.hetrf!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.hetrf!",
     "category": "function",
@@ -18953,7 +18953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.hetri!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.hetri!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.hetri!",
     "category": "function",
@@ -18961,7 +18961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.hetrs!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.hetrs!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.hetrs!",
     "category": "function",
@@ -18969,7 +18969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.syev!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.syev!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.syev!",
     "category": "function",
@@ -18977,7 +18977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.syevr!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.syevr!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.syevr!",
     "category": "function",
@@ -18985,7 +18985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.sygvd!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.sygvd!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.sygvd!",
     "category": "function",
@@ -18993,7 +18993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.bdsqr!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.bdsqr!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.bdsqr!",
     "category": "function",
@@ -19001,7 +19001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.bdsdc!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.bdsdc!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.bdsdc!",
     "category": "function",
@@ -19009,7 +19009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gecon!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gecon!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gecon!",
     "category": "function",
@@ -19017,7 +19017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gehrd!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gehrd!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gehrd!",
     "category": "function",
@@ -19025,7 +19025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.orghr!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.orghr!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.orghr!",
     "category": "function",
@@ -19033,7 +19033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gees!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gees!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gees!",
     "category": "function",
@@ -19041,7 +19041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.gges!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.gges!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.gges!",
     "category": "function",
@@ -19049,7 +19049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.trexc!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trexc!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.trexc!",
     "category": "function",
@@ -19057,7 +19057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.trsen!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trsen!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.trsen!",
     "category": "function",
@@ -19065,7 +19065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.tgsen!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.tgsen!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.tgsen!",
     "category": "function",
@@ -19073,7 +19073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LinearAlgebra.LAPACK.trsyl!",
+    "location": "stdlib/LinearAlgebra/#LinearAlgebra.LAPACK.trsyl!",
     "page": "Linear Algebra",
     "title": "LinearAlgebra.LAPACK.trsyl!",
     "category": "function",
@@ -19081,7 +19081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/LinearAlgebra.html#LAPACK-Functions-1",
+    "location": "stdlib/LinearAlgebra/#LAPACK-Functions-1",
     "page": "Linear Algebra",
     "title": "LAPACK Functions",
     "category": "section",
@@ -19089,7 +19089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#",
+    "location": "stdlib/Logging/#",
     "page": "Logging",
     "title": "Logging",
     "category": "page",
@@ -19097,7 +19097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Logging-1",
+    "location": "stdlib/Logging/#Logging-1",
     "page": "Logging",
     "title": "Logging",
     "category": "section",
@@ -19105,7 +19105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Log-event-structure-1",
+    "location": "stdlib/Logging/#Log-event-structure-1",
     "page": "Logging",
     "title": "Log event structure",
     "category": "section",
@@ -19113,7 +19113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Processing-log-events-1",
+    "location": "stdlib/Logging/#Processing-log-events-1",
     "page": "Logging",
     "title": "Processing log events",
     "category": "section",
@@ -19121,7 +19121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Loggers-1",
+    "location": "stdlib/Logging/#Loggers-1",
     "page": "Logging",
     "title": "Loggers",
     "category": "section",
@@ -19129,7 +19129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Early-filtering-and-message-handling-1",
+    "location": "stdlib/Logging/#Early-filtering-and-message-handling-1",
     "page": "Logging",
     "title": "Early filtering and message handling",
     "category": "section",
@@ -19137,7 +19137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Testing-log-events-1",
+    "location": "stdlib/Logging/#Testing-log-events-1",
     "page": "Logging",
     "title": "Testing log events",
     "category": "section",
@@ -19145,7 +19145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Environment-variables-1",
+    "location": "stdlib/Logging/#Environment-variables-1",
     "page": "Logging",
     "title": "Environment variables",
     "category": "section",
@@ -19153,7 +19153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Reference-1",
+    "location": "stdlib/Logging/#Reference-1",
     "page": "Logging",
     "title": "Reference",
     "category": "section",
@@ -19161,7 +19161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.@logmsg",
+    "location": "stdlib/Logging/#Base.CoreLogging.@logmsg",
     "page": "Logging",
     "title": "Base.CoreLogging.@logmsg",
     "category": "macro",
@@ -19169,7 +19169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.LogLevel",
+    "location": "stdlib/Logging/#Base.CoreLogging.LogLevel",
     "page": "Logging",
     "title": "Base.CoreLogging.LogLevel",
     "category": "type",
@@ -19177,7 +19177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Creating-events-1",
+    "location": "stdlib/Logging/#Creating-events-1",
     "page": "Logging",
     "title": "Creating events",
     "category": "section",
@@ -19185,7 +19185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.AbstractLogger",
+    "location": "stdlib/Logging/#Base.CoreLogging.AbstractLogger",
     "page": "Logging",
     "title": "Base.CoreLogging.AbstractLogger",
     "category": "type",
@@ -19193,7 +19193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.handle_message",
+    "location": "stdlib/Logging/#Base.CoreLogging.handle_message",
     "page": "Logging",
     "title": "Base.CoreLogging.handle_message",
     "category": "function",
@@ -19201,7 +19201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.shouldlog",
+    "location": "stdlib/Logging/#Base.CoreLogging.shouldlog",
     "page": "Logging",
     "title": "Base.CoreLogging.shouldlog",
     "category": "function",
@@ -19209,7 +19209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.min_enabled_level",
+    "location": "stdlib/Logging/#Base.CoreLogging.min_enabled_level",
     "page": "Logging",
     "title": "Base.CoreLogging.min_enabled_level",
     "category": "function",
@@ -19217,7 +19217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.catch_exceptions",
+    "location": "stdlib/Logging/#Base.CoreLogging.catch_exceptions",
     "page": "Logging",
     "title": "Base.CoreLogging.catch_exceptions",
     "category": "function",
@@ -19225,7 +19225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.disable_logging",
+    "location": "stdlib/Logging/#Base.CoreLogging.disable_logging",
     "page": "Logging",
     "title": "Base.CoreLogging.disable_logging",
     "category": "function",
@@ -19233,7 +19233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#AbstractLogger-interface-1",
+    "location": "stdlib/Logging/#AbstractLogger-interface-1",
     "page": "Logging",
     "title": "Processing events with AbstractLogger",
     "category": "section",
@@ -19241,7 +19241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.global_logger",
+    "location": "stdlib/Logging/#Base.CoreLogging.global_logger",
     "page": "Logging",
     "title": "Base.CoreLogging.global_logger",
     "category": "function",
@@ -19249,7 +19249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.with_logger",
+    "location": "stdlib/Logging/#Base.CoreLogging.with_logger",
     "page": "Logging",
     "title": "Base.CoreLogging.with_logger",
     "category": "function",
@@ -19257,7 +19257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.current_logger",
+    "location": "stdlib/Logging/#Base.CoreLogging.current_logger",
     "page": "Logging",
     "title": "Base.CoreLogging.current_logger",
     "category": "function",
@@ -19265,7 +19265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.NullLogger",
+    "location": "stdlib/Logging/#Base.CoreLogging.NullLogger",
     "page": "Logging",
     "title": "Base.CoreLogging.NullLogger",
     "category": "type",
@@ -19273,7 +19273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Logging.ConsoleLogger",
+    "location": "stdlib/Logging/#Logging.ConsoleLogger",
     "page": "Logging",
     "title": "Logging.ConsoleLogger",
     "category": "type",
@@ -19281,7 +19281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Base.CoreLogging.SimpleLogger",
+    "location": "stdlib/Logging/#Base.CoreLogging.SimpleLogger",
     "page": "Logging",
     "title": "Base.CoreLogging.SimpleLogger",
     "category": "type",
@@ -19289,7 +19289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Logging.html#Using-Loggers-1",
+    "location": "stdlib/Logging/#Using-Loggers-1",
     "page": "Logging",
     "title": "Using Loggers",
     "category": "section",
@@ -19297,7 +19297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Markdown.html#",
+    "location": "stdlib/Markdown/#",
     "page": "Markdown",
     "title": "Markdown",
     "category": "page",
@@ -19305,7 +19305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Markdown.html#Markdown-1",
+    "location": "stdlib/Markdown/#Markdown-1",
     "page": "Markdown",
     "title": "Markdown",
     "category": "section",
@@ -19313,7 +19313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Mmap.html#",
+    "location": "stdlib/Mmap/#",
     "page": "Memory-mapped I/O",
     "title": "Memory-mapped I/O",
     "category": "page",
@@ -19321,7 +19321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Mmap.html#Mmap.Anonymous",
+    "location": "stdlib/Mmap/#Mmap.Anonymous",
     "page": "Memory-mapped I/O",
     "title": "Mmap.Anonymous",
     "category": "type",
@@ -19329,7 +19329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Mmap.html#Mmap.mmap",
+    "location": "stdlib/Mmap/#Mmap.mmap",
     "page": "Memory-mapped I/O",
     "title": "Mmap.mmap",
     "category": "function",
@@ -19337,7 +19337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Mmap.html#Mmap.sync!",
+    "location": "stdlib/Mmap/#Mmap.sync!",
     "page": "Memory-mapped I/O",
     "title": "Mmap.sync!",
     "category": "function",
@@ -19345,7 +19345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Mmap.html#Memory-mapped-I/O-1",
+    "location": "stdlib/Mmap/#Memory-mapped-I/O-1",
     "page": "Memory-mapped I/O",
     "title": "Memory-mapped I/O",
     "category": "section",
@@ -19353,7 +19353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#",
+    "location": "stdlib/Pkg/#",
     "page": "Pkg",
     "title": "Pkg",
     "category": "page",
@@ -19361,7 +19361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Pkg-1",
+    "location": "stdlib/Pkg/#Pkg-1",
     "page": "Pkg",
     "title": "Pkg",
     "category": "section",
@@ -19369,7 +19369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Introduction-1",
+    "location": "stdlib/Pkg/#Introduction-1",
     "page": "Pkg",
     "title": "Introduction",
     "category": "section",
@@ -19377,7 +19377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Glossary-1",
+    "location": "stdlib/Pkg/#Glossary-1",
     "page": "Pkg",
     "title": "Glossary",
     "category": "section",
@@ -19385,7 +19385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Getting-Started-1",
+    "location": "stdlib/Pkg/#Getting-Started-1",
     "page": "Pkg",
     "title": "Getting Started",
     "category": "section",
@@ -19393,7 +19393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Adding-packages-to-the-project-1",
+    "location": "stdlib/Pkg/#Adding-packages-to-the-project-1",
     "page": "Pkg",
     "title": "Adding packages to the project",
     "category": "section",
@@ -19401,7 +19401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Developing-packages-1",
+    "location": "stdlib/Pkg/#Developing-packages-1",
     "page": "Pkg",
     "title": "Developing packages",
     "category": "section",
@@ -19409,7 +19409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Updating-dependencies-1",
+    "location": "stdlib/Pkg/#Updating-dependencies-1",
     "page": "Pkg",
     "title": "Updating dependencies",
     "category": "section",
@@ -19417,7 +19417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Precompiling-the-project-1",
+    "location": "stdlib/Pkg/#Precompiling-the-project-1",
     "page": "Pkg",
     "title": "Precompiling the project",
     "category": "section",
@@ -19425,7 +19425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Preview-mode-1",
+    "location": "stdlib/Pkg/#Preview-mode-1",
     "page": "Pkg",
     "title": "Preview mode",
     "category": "section",
@@ -19433,7 +19433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Pkg.html#Using-someone-elses-project-1",
+    "location": "stdlib/Pkg/#Using-someone-elses-project-1",
     "page": "Pkg",
     "title": "Using someone elses project",
     "category": "section",
@@ -19441,7 +19441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Printf.html#",
+    "location": "stdlib/Printf/#",
     "page": "Printf",
     "title": "Printf",
     "category": "page",
@@ -19449,7 +19449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Printf.html#Printf.@printf",
+    "location": "stdlib/Printf/#Printf.@printf",
     "page": "Printf",
     "title": "Printf.@printf",
     "category": "macro",
@@ -19457,7 +19457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Printf.html#Printf.@sprintf",
+    "location": "stdlib/Printf/#Printf.@sprintf",
     "page": "Printf",
     "title": "Printf.@sprintf",
     "category": "macro",
@@ -19465,7 +19465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Printf.html#Printf-1",
+    "location": "stdlib/Printf/#Printf-1",
     "page": "Printf",
     "title": "Printf",
     "category": "section",
@@ -19473,7 +19473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#",
+    "location": "stdlib/Profile/#",
     "page": "Profiling",
     "title": "Profiling",
     "category": "page",
@@ -19481,7 +19481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#Profile.@profile",
+    "location": "stdlib/Profile/#Profile.@profile",
     "page": "Profiling",
     "title": "Profile.@profile",
     "category": "macro",
@@ -19489,7 +19489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#Profile.clear",
+    "location": "stdlib/Profile/#Profile.clear",
     "page": "Profiling",
     "title": "Profile.clear",
     "category": "function",
@@ -19497,7 +19497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#Profile.print",
+    "location": "stdlib/Profile/#Profile.print",
     "page": "Profiling",
     "title": "Profile.print",
     "category": "function",
@@ -19505,7 +19505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#Profile.init",
+    "location": "stdlib/Profile/#Profile.init",
     "page": "Profiling",
     "title": "Profile.init",
     "category": "function",
@@ -19513,7 +19513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#Profile.fetch",
+    "location": "stdlib/Profile/#Profile.fetch",
     "page": "Profiling",
     "title": "Profile.fetch",
     "category": "function",
@@ -19521,7 +19521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#Profile.retrieve",
+    "location": "stdlib/Profile/#Profile.retrieve",
     "page": "Profiling",
     "title": "Profile.retrieve",
     "category": "function",
@@ -19529,7 +19529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#Profile.callers",
+    "location": "stdlib/Profile/#Profile.callers",
     "page": "Profiling",
     "title": "Profile.callers",
     "category": "function",
@@ -19537,7 +19537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#Profile.clear_malloc_data",
+    "location": "stdlib/Profile/#Profile.clear_malloc_data",
     "page": "Profiling",
     "title": "Profile.clear_malloc_data",
     "category": "function",
@@ -19545,7 +19545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Profile.html#lib-profiling-1",
+    "location": "stdlib/Profile/#lib-profiling-1",
     "page": "Profiling",
     "title": "Profiling",
     "category": "section",
@@ -19553,7 +19553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#",
+    "location": "stdlib/REPL/#",
     "page": "The Julia REPL",
     "title": "The Julia REPL",
     "category": "page",
@@ -19561,7 +19561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#The-Julia-REPL-1",
+    "location": "stdlib/REPL/#The-Julia-REPL-1",
     "page": "The Julia REPL",
     "title": "The Julia REPL",
     "category": "section",
@@ -19569,7 +19569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#The-different-prompt-modes-1",
+    "location": "stdlib/REPL/#The-different-prompt-modes-1",
     "page": "The Julia REPL",
     "title": "The different prompt modes",
     "category": "section",
@@ -19577,7 +19577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#The-Julian-mode-1",
+    "location": "stdlib/REPL/#The-Julian-mode-1",
     "page": "The Julia REPL",
     "title": "The Julian mode",
     "category": "section",
@@ -19585,7 +19585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Help-mode-1",
+    "location": "stdlib/REPL/#Help-mode-1",
     "page": "The Julia REPL",
     "title": "Help mode",
     "category": "section",
@@ -19593,7 +19593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#man-shell-mode-1",
+    "location": "stdlib/REPL/#man-shell-mode-1",
     "page": "The Julia REPL",
     "title": "Shell mode",
     "category": "section",
@@ -19601,7 +19601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Search-modes-1",
+    "location": "stdlib/REPL/#Search-modes-1",
     "page": "The Julia REPL",
     "title": "Search modes",
     "category": "section",
@@ -19609,7 +19609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Key-bindings-1",
+    "location": "stdlib/REPL/#Key-bindings-1",
     "page": "The Julia REPL",
     "title": "Key bindings",
     "category": "section",
@@ -19617,7 +19617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Customizing-keybindings-1",
+    "location": "stdlib/REPL/#Customizing-keybindings-1",
     "page": "The Julia REPL",
     "title": "Customizing keybindings",
     "category": "section",
@@ -19625,7 +19625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Tab-completion-1",
+    "location": "stdlib/REPL/#Tab-completion-1",
     "page": "The Julia REPL",
     "title": "Tab completion",
     "category": "section",
@@ -19633,7 +19633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Customizing-Colors-1",
+    "location": "stdlib/REPL/#Customizing-Colors-1",
     "page": "The Julia REPL",
     "title": "Customizing Colors",
     "category": "section",
@@ -19641,7 +19641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#TerminalMenus-1",
+    "location": "stdlib/REPL/#TerminalMenus-1",
     "page": "The Julia REPL",
     "title": "TerminalMenus",
     "category": "section",
@@ -19649,7 +19649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Examples-1",
+    "location": "stdlib/REPL/#Examples-1",
     "page": "The Julia REPL",
     "title": "Examples",
     "category": "section",
@@ -19657,7 +19657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#RadioMenu-1",
+    "location": "stdlib/REPL/#RadioMenu-1",
     "page": "The Julia REPL",
     "title": "RadioMenu",
     "category": "section",
@@ -19665,7 +19665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#MultiSelectMenu-1",
+    "location": "stdlib/REPL/#MultiSelectMenu-1",
     "page": "The Julia REPL",
     "title": "MultiSelectMenu",
     "category": "section",
@@ -19673,7 +19673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Customization-/-Configuation-1",
+    "location": "stdlib/REPL/#Customization-/-Configuation-1",
     "page": "The Julia REPL",
     "title": "Customization / Configuation",
     "category": "section",
@@ -19681,7 +19681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Arguments-1",
+    "location": "stdlib/REPL/#Arguments-1",
     "page": "The Julia REPL",
     "title": "Arguments",
     "category": "section",
@@ -19689,7 +19689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Examples-2",
+    "location": "stdlib/REPL/#Examples-2",
     "page": "The Julia REPL",
     "title": "Examples",
     "category": "section",
@@ -19697,7 +19697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#Base.atreplinit",
+    "location": "stdlib/REPL/#Base.atreplinit",
     "page": "The Julia REPL",
     "title": "Base.atreplinit",
     "category": "function",
@@ -19705,7 +19705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/REPL.html#References-1",
+    "location": "stdlib/REPL/#References-1",
     "page": "The Julia REPL",
     "title": "References",
     "category": "section",
@@ -19713,7 +19713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#",
+    "location": "stdlib/Random/#",
     "page": "Random Numbers",
     "title": "Random Numbers",
     "category": "page",
@@ -19721,7 +19721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.srand",
+    "location": "stdlib/Random/#Random.srand",
     "page": "Random Numbers",
     "title": "Random.srand",
     "category": "function",
@@ -19729,7 +19729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.MersenneTwister",
+    "location": "stdlib/Random/#Random.MersenneTwister",
     "page": "Random Numbers",
     "title": "Random.MersenneTwister",
     "category": "type",
@@ -19737,7 +19737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.RandomDevice",
+    "location": "stdlib/Random/#Random.RandomDevice",
     "page": "Random Numbers",
     "title": "Random.RandomDevice",
     "category": "type",
@@ -19745,7 +19745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Base.rand",
+    "location": "stdlib/Random/#Base.rand",
     "page": "Random Numbers",
     "title": "Base.rand",
     "category": "function",
@@ -19753,7 +19753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.rand!",
+    "location": "stdlib/Random/#Random.rand!",
     "page": "Random Numbers",
     "title": "Random.rand!",
     "category": "function",
@@ -19761,7 +19761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.bitrand",
+    "location": "stdlib/Random/#Random.bitrand",
     "page": "Random Numbers",
     "title": "Random.bitrand",
     "category": "function",
@@ -19769,7 +19769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Base.randn",
+    "location": "stdlib/Random/#Base.randn",
     "page": "Random Numbers",
     "title": "Base.randn",
     "category": "function",
@@ -19777,7 +19777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randn!",
+    "location": "stdlib/Random/#Random.randn!",
     "page": "Random Numbers",
     "title": "Random.randn!",
     "category": "function",
@@ -19785,7 +19785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randexp",
+    "location": "stdlib/Random/#Random.randexp",
     "page": "Random Numbers",
     "title": "Random.randexp",
     "category": "function",
@@ -19793,7 +19793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randexp!",
+    "location": "stdlib/Random/#Random.randexp!",
     "page": "Random Numbers",
     "title": "Random.randexp!",
     "category": "function",
@@ -19801,7 +19801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randjump",
+    "location": "stdlib/Random/#Random.randjump",
     "page": "Random Numbers",
     "title": "Random.randjump",
     "category": "function",
@@ -19809,7 +19809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randstring",
+    "location": "stdlib/Random/#Random.randstring",
     "page": "Random Numbers",
     "title": "Random.randstring",
     "category": "function",
@@ -19817,7 +19817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randsubseq",
+    "location": "stdlib/Random/#Random.randsubseq",
     "page": "Random Numbers",
     "title": "Random.randsubseq",
     "category": "function",
@@ -19825,7 +19825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randsubseq!",
+    "location": "stdlib/Random/#Random.randsubseq!",
     "page": "Random Numbers",
     "title": "Random.randsubseq!",
     "category": "function",
@@ -19833,7 +19833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randperm",
+    "location": "stdlib/Random/#Random.randperm",
     "page": "Random Numbers",
     "title": "Random.randperm",
     "category": "function",
@@ -19841,7 +19841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randperm!",
+    "location": "stdlib/Random/#Random.randperm!",
     "page": "Random Numbers",
     "title": "Random.randperm!",
     "category": "function",
@@ -19849,7 +19849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randcycle",
+    "location": "stdlib/Random/#Random.randcycle",
     "page": "Random Numbers",
     "title": "Random.randcycle",
     "category": "function",
@@ -19857,7 +19857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.randcycle!",
+    "location": "stdlib/Random/#Random.randcycle!",
     "page": "Random Numbers",
     "title": "Random.randcycle!",
     "category": "function",
@@ -19865,7 +19865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.shuffle",
+    "location": "stdlib/Random/#Random.shuffle",
     "page": "Random Numbers",
     "title": "Random.shuffle",
     "category": "function",
@@ -19873,7 +19873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random.shuffle!",
+    "location": "stdlib/Random/#Random.shuffle!",
     "page": "Random Numbers",
     "title": "Random.shuffle!",
     "category": "function",
@@ -19881,7 +19881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Random.html#Random-Numbers-1",
+    "location": "stdlib/Random/#Random-Numbers-1",
     "page": "Random Numbers",
     "title": "Random Numbers",
     "category": "section",
@@ -19889,7 +19889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SHA.html#",
+    "location": "stdlib/SHA/#",
     "page": "SHA",
     "title": "SHA",
     "category": "page",
@@ -19897,7 +19897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SHA.html#SHA-1",
+    "location": "stdlib/SHA/#SHA-1",
     "page": "SHA",
     "title": "SHA",
     "category": "section",
@@ -19905,7 +19905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Serialization.html#",
+    "location": "stdlib/Serialization/#",
     "page": "Serialization",
     "title": "Serialization",
     "category": "page",
@@ -19913,7 +19913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Serialization.html#Serialization.serialize",
+    "location": "stdlib/Serialization/#Serialization.serialize",
     "page": "Serialization",
     "title": "Serialization.serialize",
     "category": "function",
@@ -19921,7 +19921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Serialization.html#Serialization.deserialize",
+    "location": "stdlib/Serialization/#Serialization.deserialize",
     "page": "Serialization",
     "title": "Serialization.deserialize",
     "category": "function",
@@ -19929,7 +19929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Serialization.html#Serialization.writeheader",
+    "location": "stdlib/Serialization/#Serialization.writeheader",
     "page": "Serialization",
     "title": "Serialization.writeheader",
     "category": "function",
@@ -19937,7 +19937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Serialization.html#Serialization-1",
+    "location": "stdlib/Serialization/#Serialization-1",
     "page": "Serialization",
     "title": "Serialization",
     "category": "section",
@@ -19945,7 +19945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SharedArrays.html#",
+    "location": "stdlib/SharedArrays/#",
     "page": "Shared Arrays",
     "title": "Shared Arrays",
     "category": "page",
@@ -19953,7 +19953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SharedArrays.html#SharedArrays.SharedArray",
+    "location": "stdlib/SharedArrays/#SharedArrays.SharedArray",
     "page": "Shared Arrays",
     "title": "SharedArrays.SharedArray",
     "category": "type",
@@ -19961,7 +19961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SharedArrays.html#Distributed.procs-Tuple{SharedArray}",
+    "location": "stdlib/SharedArrays/#Distributed.procs-Tuple{SharedArray}",
     "page": "Shared Arrays",
     "title": "Distributed.procs",
     "category": "method",
@@ -19969,7 +19969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SharedArrays.html#SharedArrays.sdata",
+    "location": "stdlib/SharedArrays/#SharedArrays.sdata",
     "page": "Shared Arrays",
     "title": "SharedArrays.sdata",
     "category": "function",
@@ -19977,7 +19977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SharedArrays.html#SharedArrays.indexpids",
+    "location": "stdlib/SharedArrays/#SharedArrays.indexpids",
     "page": "Shared Arrays",
     "title": "SharedArrays.indexpids",
     "category": "function",
@@ -19985,7 +19985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SharedArrays.html#SharedArrays.localindices",
+    "location": "stdlib/SharedArrays/#SharedArrays.localindices",
     "page": "Shared Arrays",
     "title": "SharedArrays.localindices",
     "category": "function",
@@ -19993,7 +19993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SharedArrays.html#Shared-Arrays-1",
+    "location": "stdlib/SharedArrays/#Shared-Arrays-1",
     "page": "Shared Arrays",
     "title": "Shared Arrays",
     "category": "section",
@@ -20001,7 +20001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#",
+    "location": "stdlib/Sockets/#",
     "page": "Sockets",
     "title": "Sockets",
     "category": "page",
@@ -20009,7 +20009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.connect-Tuple{TCPSocket,Integer}",
+    "location": "stdlib/Sockets/#Sockets.connect-Tuple{TCPSocket,Integer}",
     "page": "Sockets",
     "title": "Sockets.connect",
     "category": "method",
@@ -20017,7 +20017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.connect-Tuple{AbstractString}",
+    "location": "stdlib/Sockets/#Sockets.connect-Tuple{AbstractString}",
     "page": "Sockets",
     "title": "Sockets.connect",
     "category": "method",
@@ -20025,7 +20025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.listen-Tuple{Any}",
+    "location": "stdlib/Sockets/#Sockets.listen-Tuple{Any}",
     "page": "Sockets",
     "title": "Sockets.listen",
     "category": "method",
@@ -20033,7 +20033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.listen-Tuple{AbstractString}",
+    "location": "stdlib/Sockets/#Sockets.listen-Tuple{AbstractString}",
     "page": "Sockets",
     "title": "Sockets.listen",
     "category": "method",
@@ -20041,7 +20041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.getaddrinfo",
+    "location": "stdlib/Sockets/#Sockets.getaddrinfo",
     "page": "Sockets",
     "title": "Sockets.getaddrinfo",
     "category": "function",
@@ -20049,7 +20049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.getipaddr",
+    "location": "stdlib/Sockets/#Sockets.getipaddr",
     "page": "Sockets",
     "title": "Sockets.getipaddr",
     "category": "function",
@@ -20057,7 +20057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.getalladdrinfo",
+    "location": "stdlib/Sockets/#Sockets.getalladdrinfo",
     "page": "Sockets",
     "title": "Sockets.getalladdrinfo",
     "category": "function",
@@ -20065,7 +20065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.getnameinfo",
+    "location": "stdlib/Sockets/#Sockets.getnameinfo",
     "page": "Sockets",
     "title": "Sockets.getnameinfo",
     "category": "function",
@@ -20073,7 +20073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.getsockname",
+    "location": "stdlib/Sockets/#Sockets.getsockname",
     "page": "Sockets",
     "title": "Sockets.getsockname",
     "category": "function",
@@ -20081,7 +20081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.getpeername",
+    "location": "stdlib/Sockets/#Sockets.getpeername",
     "page": "Sockets",
     "title": "Sockets.getpeername",
     "category": "function",
@@ -20089,7 +20089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.IPv4",
+    "location": "stdlib/Sockets/#Sockets.IPv4",
     "page": "Sockets",
     "title": "Sockets.IPv4",
     "category": "type",
@@ -20097,7 +20097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.IPv6",
+    "location": "stdlib/Sockets/#Sockets.IPv6",
     "page": "Sockets",
     "title": "Sockets.IPv6",
     "category": "type",
@@ -20105,7 +20105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.TCPSocket",
+    "location": "stdlib/Sockets/#Sockets.TCPSocket",
     "page": "Sockets",
     "title": "Sockets.TCPSocket",
     "category": "type",
@@ -20113,7 +20113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.UDPSocket",
+    "location": "stdlib/Sockets/#Sockets.UDPSocket",
     "page": "Sockets",
     "title": "Sockets.UDPSocket",
     "category": "type",
@@ -20121,7 +20121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.accept",
+    "location": "stdlib/Sockets/#Sockets.accept",
     "page": "Sockets",
     "title": "Sockets.accept",
     "category": "function",
@@ -20129,7 +20129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.listenany",
+    "location": "stdlib/Sockets/#Sockets.listenany",
     "page": "Sockets",
     "title": "Sockets.listenany",
     "category": "function",
@@ -20137,15 +20137,15 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Base.bind",
+    "location": "stdlib/Sockets/#Base.bind",
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
+    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.send",
+    "location": "stdlib/Sockets/#Sockets.send",
     "page": "Sockets",
     "title": "Sockets.send",
     "category": "function",
@@ -20153,7 +20153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.recv",
+    "location": "stdlib/Sockets/#Sockets.recv",
     "page": "Sockets",
     "title": "Sockets.recv",
     "category": "function",
@@ -20161,7 +20161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.recvfrom",
+    "location": "stdlib/Sockets/#Sockets.recvfrom",
     "page": "Sockets",
     "title": "Sockets.recvfrom",
     "category": "function",
@@ -20169,7 +20169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets.setopt",
+    "location": "stdlib/Sockets/#Sockets.setopt",
     "page": "Sockets",
     "title": "Sockets.setopt",
     "category": "function",
@@ -20177,7 +20177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Sockets.html#Sockets-1",
+    "location": "stdlib/Sockets/#Sockets-1",
     "page": "Sockets",
     "title": "Sockets",
     "category": "section",
@@ -20185,7 +20185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#",
+    "location": "stdlib/SparseArrays/#",
     "page": "Sparse Arrays",
     "title": "Sparse Arrays",
     "category": "page",
@@ -20193,7 +20193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#Sparse-Arrays-1",
+    "location": "stdlib/SparseArrays/#Sparse-Arrays-1",
     "page": "Sparse Arrays",
     "title": "Sparse Arrays",
     "category": "section",
@@ -20201,7 +20201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#man-csc-1",
+    "location": "stdlib/SparseArrays/#man-csc-1",
     "page": "Sparse Arrays",
     "title": "Compressed Sparse Column (CSC) Sparse Matrix Storage",
     "category": "section",
@@ -20209,7 +20209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#Sparse-Vector-Storage-1",
+    "location": "stdlib/SparseArrays/#Sparse-Vector-Storage-1",
     "page": "Sparse Arrays",
     "title": "Sparse Vector Storage",
     "category": "section",
@@ -20217,7 +20217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#Sparse-Vector-and-Matrix-Constructors-1",
+    "location": "stdlib/SparseArrays/#Sparse-Vector-and-Matrix-Constructors-1",
     "page": "Sparse Arrays",
     "title": "Sparse Vector and Matrix Constructors",
     "category": "section",
@@ -20225,7 +20225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#Sparse-matrix-operations-1",
+    "location": "stdlib/SparseArrays/#Sparse-matrix-operations-1",
     "page": "Sparse Arrays",
     "title": "Sparse matrix operations",
     "category": "section",
@@ -20233,7 +20233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#Correspondence-of-dense-and-sparse-methods-1",
+    "location": "stdlib/SparseArrays/#Correspondence-of-dense-and-sparse-methods-1",
     "page": "Sparse Arrays",
     "title": "Correspondence of dense and sparse methods",
     "category": "section",
@@ -20241,7 +20241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.SparseVector",
+    "location": "stdlib/SparseArrays/#SparseArrays.SparseVector",
     "page": "Sparse Arrays",
     "title": "SparseArrays.SparseVector",
     "category": "type",
@@ -20249,7 +20249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.SparseMatrixCSC",
+    "location": "stdlib/SparseArrays/#SparseArrays.SparseMatrixCSC",
     "page": "Sparse Arrays",
     "title": "SparseArrays.SparseMatrixCSC",
     "category": "type",
@@ -20257,7 +20257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.sparse",
+    "location": "stdlib/SparseArrays/#SparseArrays.sparse",
     "page": "Sparse Arrays",
     "title": "SparseArrays.sparse",
     "category": "function",
@@ -20265,7 +20265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.sparsevec",
+    "location": "stdlib/SparseArrays/#SparseArrays.sparsevec",
     "page": "Sparse Arrays",
     "title": "SparseArrays.sparsevec",
     "category": "function",
@@ -20273,7 +20273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.issparse",
+    "location": "stdlib/SparseArrays/#SparseArrays.issparse",
     "page": "Sparse Arrays",
     "title": "SparseArrays.issparse",
     "category": "function",
@@ -20281,7 +20281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.nnz",
+    "location": "stdlib/SparseArrays/#SparseArrays.nnz",
     "page": "Sparse Arrays",
     "title": "SparseArrays.nnz",
     "category": "function",
@@ -20289,7 +20289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.findnz",
+    "location": "stdlib/SparseArrays/#SparseArrays.findnz",
     "page": "Sparse Arrays",
     "title": "SparseArrays.findnz",
     "category": "function",
@@ -20297,7 +20297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.spzeros",
+    "location": "stdlib/SparseArrays/#SparseArrays.spzeros",
     "page": "Sparse Arrays",
     "title": "SparseArrays.spzeros",
     "category": "function",
@@ -20305,7 +20305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.spdiagm",
+    "location": "stdlib/SparseArrays/#SparseArrays.spdiagm",
     "page": "Sparse Arrays",
     "title": "SparseArrays.spdiagm",
     "category": "function",
@@ -20313,7 +20313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.blockdiag",
+    "location": "stdlib/SparseArrays/#SparseArrays.blockdiag",
     "page": "Sparse Arrays",
     "title": "SparseArrays.blockdiag",
     "category": "function",
@@ -20321,7 +20321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.sprand",
+    "location": "stdlib/SparseArrays/#SparseArrays.sprand",
     "page": "Sparse Arrays",
     "title": "SparseArrays.sprand",
     "category": "function",
@@ -20329,7 +20329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.sprandn",
+    "location": "stdlib/SparseArrays/#SparseArrays.sprandn",
     "page": "Sparse Arrays",
     "title": "SparseArrays.sprandn",
     "category": "function",
@@ -20337,7 +20337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.nonzeros",
+    "location": "stdlib/SparseArrays/#SparseArrays.nonzeros",
     "page": "Sparse Arrays",
     "title": "SparseArrays.nonzeros",
     "category": "function",
@@ -20345,7 +20345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.rowvals",
+    "location": "stdlib/SparseArrays/#SparseArrays.rowvals",
     "page": "Sparse Arrays",
     "title": "SparseArrays.rowvals",
     "category": "function",
@@ -20353,7 +20353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.nzrange",
+    "location": "stdlib/SparseArrays/#SparseArrays.nzrange",
     "page": "Sparse Arrays",
     "title": "SparseArrays.nzrange",
     "category": "function",
@@ -20361,7 +20361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.dropzeros!",
+    "location": "stdlib/SparseArrays/#SparseArrays.dropzeros!",
     "page": "Sparse Arrays",
     "title": "SparseArrays.dropzeros!",
     "category": "function",
@@ -20369,7 +20369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.dropzeros",
+    "location": "stdlib/SparseArrays/#SparseArrays.dropzeros",
     "page": "Sparse Arrays",
     "title": "SparseArrays.dropzeros",
     "category": "function",
@@ -20377,7 +20377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#SparseArrays.permute",
+    "location": "stdlib/SparseArrays/#SparseArrays.permute",
     "page": "Sparse Arrays",
     "title": "SparseArrays.permute",
     "category": "function",
@@ -20385,7 +20385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#Base.permute!-Union{Tuple{Tq}, Tuple{Tp}, Tuple{Ti}, Tuple{Tv}, Tuple{SparseMatrixCSC{Tv,Ti},SparseMatrixCSC{Tv,Ti},AbstractArray{Tp,1},AbstractArray{Tq,1}}} where Tq<:Integer where Tp<:Integer where Ti where Tv",
+    "location": "stdlib/SparseArrays/#Base.permute!-Union{Tuple{Tq}, Tuple{Tp}, Tuple{Ti}, Tuple{Tv}, Tuple{SparseMatrixCSC{Tv,Ti},SparseMatrixCSC{Tv,Ti},AbstractArray{Tp,1},AbstractArray{Tq,1}}} where Tq<:Integer where Tp<:Integer where Ti where Tv",
     "page": "Sparse Arrays",
     "title": "Base.permute!",
     "category": "method",
@@ -20393,7 +20393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/SparseArrays.html#stdlib-sparse-arrays-1",
+    "location": "stdlib/SparseArrays/#stdlib-sparse-arrays-1",
     "page": "Sparse Arrays",
     "title": "Sparse Arrays",
     "category": "section",
@@ -20401,7 +20401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#",
+    "location": "stdlib/Test/#",
     "page": "Unit Testing",
     "title": "Unit Testing",
     "category": "page",
@@ -20409,7 +20409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Unit-Testing-1",
+    "location": "stdlib/Test/#Unit-Testing-1",
     "page": "Unit Testing",
     "title": "Unit Testing",
     "category": "section",
@@ -20417,7 +20417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Base.runtests",
+    "location": "stdlib/Test/#Base.runtests",
     "page": "Unit Testing",
     "title": "Base.runtests",
     "category": "function",
@@ -20425,7 +20425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Testing-Base-Julia-1",
+    "location": "stdlib/Test/#Testing-Base-Julia-1",
     "page": "Unit Testing",
     "title": "Testing Base Julia",
     "category": "section",
@@ -20433,7 +20433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@test",
+    "location": "stdlib/Test/#Test.@test",
     "page": "Unit Testing",
     "title": "Test.@test",
     "category": "macro",
@@ -20441,7 +20441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@test_throws",
+    "location": "stdlib/Test/#Test.@test_throws",
     "page": "Unit Testing",
     "title": "Test.@test_throws",
     "category": "macro",
@@ -20449,7 +20449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Basic-Unit-Tests-1",
+    "location": "stdlib/Test/#Basic-Unit-Tests-1",
     "page": "Unit Testing",
     "title": "Basic Unit Tests",
     "category": "section",
@@ -20457,7 +20457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@testset",
+    "location": "stdlib/Test/#Test.@testset",
     "page": "Unit Testing",
     "title": "Test.@testset",
     "category": "macro",
@@ -20465,7 +20465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Working-with-Test-Sets-1",
+    "location": "stdlib/Test/#Working-with-Test-Sets-1",
     "page": "Unit Testing",
     "title": "Working with Test Sets",
     "category": "section",
@@ -20473,7 +20473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@inferred",
+    "location": "stdlib/Test/#Test.@inferred",
     "page": "Unit Testing",
     "title": "Test.@inferred",
     "category": "macro",
@@ -20481,7 +20481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@test_logs",
+    "location": "stdlib/Test/#Test.@test_logs",
     "page": "Unit Testing",
     "title": "Test.@test_logs",
     "category": "macro",
@@ -20489,7 +20489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@test_deprecated",
+    "location": "stdlib/Test/#Test.@test_deprecated",
     "page": "Unit Testing",
     "title": "Test.@test_deprecated",
     "category": "macro",
@@ -20497,7 +20497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@test_warn",
+    "location": "stdlib/Test/#Test.@test_warn",
     "page": "Unit Testing",
     "title": "Test.@test_warn",
     "category": "macro",
@@ -20505,7 +20505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@test_nowarn",
+    "location": "stdlib/Test/#Test.@test_nowarn",
     "page": "Unit Testing",
     "title": "Test.@test_nowarn",
     "category": "macro",
@@ -20513,7 +20513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Other-Test-Macros-1",
+    "location": "stdlib/Test/#Other-Test-Macros-1",
     "page": "Unit Testing",
     "title": "Other Test Macros",
     "category": "section",
@@ -20521,7 +20521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@test_broken",
+    "location": "stdlib/Test/#Test.@test_broken",
     "page": "Unit Testing",
     "title": "Test.@test_broken",
     "category": "macro",
@@ -20529,7 +20529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.@test_skip",
+    "location": "stdlib/Test/#Test.@test_skip",
     "page": "Unit Testing",
     "title": "Test.@test_skip",
     "category": "macro",
@@ -20537,7 +20537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Broken-Tests-1",
+    "location": "stdlib/Test/#Broken-Tests-1",
     "page": "Unit Testing",
     "title": "Broken Tests",
     "category": "section",
@@ -20545,7 +20545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.record",
+    "location": "stdlib/Test/#Test.record",
     "page": "Unit Testing",
     "title": "Test.record",
     "category": "function",
@@ -20553,7 +20553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.finish",
+    "location": "stdlib/Test/#Test.finish",
     "page": "Unit Testing",
     "title": "Test.finish",
     "category": "function",
@@ -20561,7 +20561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.get_testset",
+    "location": "stdlib/Test/#Test.get_testset",
     "page": "Unit Testing",
     "title": "Test.get_testset",
     "category": "function",
@@ -20569,7 +20569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Test.get_testset_depth",
+    "location": "stdlib/Test/#Test.get_testset_depth",
     "page": "Unit Testing",
     "title": "Test.get_testset_depth",
     "category": "function",
@@ -20577,7 +20577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Test.html#Creating-Custom-AbstractTestSet-Types-1",
+    "location": "stdlib/Test/#Creating-Custom-AbstractTestSet-Types-1",
     "page": "Unit Testing",
     "title": "Creating Custom AbstractTestSet Types",
     "category": "section",
@@ -20585,7 +20585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/UUIDs.html#",
+    "location": "stdlib/UUIDs/#",
     "page": "UUIDs",
     "title": "UUIDs",
     "category": "page",
@@ -20593,7 +20593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/UUIDs.html#UUIDs.uuid1",
+    "location": "stdlib/UUIDs/#UUIDs.uuid1",
     "page": "UUIDs",
     "title": "UUIDs.uuid1",
     "category": "function",
@@ -20601,7 +20601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/UUIDs.html#UUIDs.uuid4",
+    "location": "stdlib/UUIDs/#UUIDs.uuid4",
     "page": "UUIDs",
     "title": "UUIDs.uuid4",
     "category": "function",
@@ -20609,7 +20609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/UUIDs.html#UUIDs.uuid_version",
+    "location": "stdlib/UUIDs/#UUIDs.uuid_version",
     "page": "UUIDs",
     "title": "UUIDs.uuid_version",
     "category": "function",
@@ -20617,7 +20617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/UUIDs.html#UUIDs-1",
+    "location": "stdlib/UUIDs/#UUIDs-1",
     "page": "UUIDs",
     "title": "UUIDs",
     "category": "section",
@@ -20625,7 +20625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Unicode.html#",
+    "location": "stdlib/Unicode/#",
     "page": "Unicode",
     "title": "Unicode",
     "category": "page",
@@ -20633,7 +20633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Unicode.html#Unicode.isassigned",
+    "location": "stdlib/Unicode/#Unicode.isassigned",
     "page": "Unicode",
     "title": "Unicode.isassigned",
     "category": "function",
@@ -20641,7 +20641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Unicode.html#Unicode.normalize",
+    "location": "stdlib/Unicode/#Unicode.normalize",
     "page": "Unicode",
     "title": "Unicode.normalize",
     "category": "function",
@@ -20649,7 +20649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Unicode.html#Unicode.graphemes",
+    "location": "stdlib/Unicode/#Unicode.graphemes",
     "page": "Unicode",
     "title": "Unicode.graphemes",
     "category": "function",
@@ -20657,7 +20657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/Unicode.html#Unicode-1",
+    "location": "stdlib/Unicode/#Unicode-1",
     "page": "Unicode",
     "title": "Unicode",
     "category": "section",
@@ -20665,7 +20665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/reflection.html#",
+    "location": "devdocs/reflection/#",
     "page": "Reflection and introspection",
     "title": "Reflection and introspection",
     "category": "page",
@@ -20673,7 +20673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/reflection.html#Reflection-and-introspection-1",
+    "location": "devdocs/reflection/#Reflection-and-introspection-1",
     "page": "Reflection and introspection",
     "title": "Reflection and introspection",
     "category": "section",
@@ -20681,7 +20681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/reflection.html#Module-bindings-1",
+    "location": "devdocs/reflection/#Module-bindings-1",
     "page": "Reflection and introspection",
     "title": "Module bindings",
     "category": "section",
@@ -20689,7 +20689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/reflection.html#DataType-fields-1",
+    "location": "devdocs/reflection/#DataType-fields-1",
     "page": "Reflection and introspection",
     "title": "DataType fields",
     "category": "section",
@@ -20697,7 +20697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/reflection.html#Subtypes-1",
+    "location": "devdocs/reflection/#Subtypes-1",
     "page": "Reflection and introspection",
     "title": "Subtypes",
     "category": "section",
@@ -20705,7 +20705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/reflection.html#DataType-layout-1",
+    "location": "devdocs/reflection/#DataType-layout-1",
     "page": "Reflection and introspection",
     "title": "DataType layout",
     "category": "section",
@@ -20713,7 +20713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/reflection.html#Function-methods-1",
+    "location": "devdocs/reflection/#Function-methods-1",
     "page": "Reflection and introspection",
     "title": "Function methods",
     "category": "section",
@@ -20721,7 +20721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/reflection.html#Expansion-and-lowering-1",
+    "location": "devdocs/reflection/#Expansion-and-lowering-1",
     "page": "Reflection and introspection",
     "title": "Expansion and lowering",
     "category": "section",
@@ -20729,7 +20729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/reflection.html#Intermediate-and-compiled-representations-1",
+    "location": "devdocs/reflection/#Intermediate-and-compiled-representations-1",
     "page": "Reflection and introspection",
     "title": "Intermediate and compiled representations",
     "category": "section",
@@ -20737,7 +20737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/init.html#",
+    "location": "devdocs/init/#",
     "page": "Initialization of the Julia runtime",
     "title": "Initialization of the Julia runtime",
     "category": "page",
@@ -20745,7 +20745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/init.html#Initialization-of-the-Julia-runtime-1",
+    "location": "devdocs/init/#Initialization-of-the-Julia-runtime-1",
     "page": "Initialization of the Julia runtime",
     "title": "Initialization of the Julia runtime",
     "category": "section",
@@ -20753,7 +20753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/init.html#main()-1",
+    "location": "devdocs/init/#main()-1",
     "page": "Initialization of the Julia runtime",
     "title": "main()",
     "category": "section",
@@ -20761,7 +20761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/init.html#julia_init()-1",
+    "location": "devdocs/init/#julia_init()-1",
     "page": "Initialization of the Julia runtime",
     "title": "julia_init()",
     "category": "section",
@@ -20769,7 +20769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/init.html#true_main()-1",
+    "location": "devdocs/init/#true_main()-1",
     "page": "Initialization of the Julia runtime",
     "title": "true_main()",
     "category": "section",
@@ -20777,7 +20777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/init.html#Base._start-1",
+    "location": "devdocs/init/#Base._start-1",
     "page": "Initialization of the Julia runtime",
     "title": "Base._start",
     "category": "section",
@@ -20785,7 +20785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/init.html#Base.eval-1",
+    "location": "devdocs/init/#Base.eval-1",
     "page": "Initialization of the Julia runtime",
     "title": "Base.eval",
     "category": "section",
@@ -20793,7 +20793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/init.html#jl*atexit*hook()-1",
+    "location": "devdocs/init/#jl*atexit*hook()-1",
     "page": "Initialization of the Julia runtime",
     "title": "jlatexithook()",
     "category": "section",
@@ -20801,7 +20801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/init.html#julia_save()-1",
+    "location": "devdocs/init/#julia_save()-1",
     "page": "Initialization of the Julia runtime",
     "title": "julia_save()",
     "category": "section",
@@ -20809,7 +20809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#",
+    "location": "devdocs/ast/#",
     "page": "Julia ASTs",
     "title": "Julia ASTs",
     "category": "page",
@@ -20817,7 +20817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Julia-ASTs-1",
+    "location": "devdocs/ast/#Julia-ASTs-1",
     "page": "Julia ASTs",
     "title": "Julia ASTs",
     "category": "section",
@@ -20825,7 +20825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Lowered-form-1",
+    "location": "devdocs/ast/#Lowered-form-1",
     "page": "Julia ASTs",
     "title": "Lowered form",
     "category": "section",
@@ -20833,7 +20833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Expr-types-1",
+    "location": "devdocs/ast/#Expr-types-1",
     "page": "Julia ASTs",
     "title": "Expr types",
     "category": "section",
@@ -20841,7 +20841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Method-1",
+    "location": "devdocs/ast/#Method-1",
     "page": "Julia ASTs",
     "title": "Method",
     "category": "section",
@@ -20849,7 +20849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#MethodInstance-1",
+    "location": "devdocs/ast/#MethodInstance-1",
     "page": "Julia ASTs",
     "title": "MethodInstance",
     "category": "section",
@@ -20857,7 +20857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#CodeInfo-1",
+    "location": "devdocs/ast/#CodeInfo-1",
     "page": "Julia ASTs",
     "title": "CodeInfo",
     "category": "section",
@@ -20865,7 +20865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Surface-syntax-AST-1",
+    "location": "devdocs/ast/#Surface-syntax-AST-1",
     "page": "Julia ASTs",
     "title": "Surface syntax AST",
     "category": "section",
@@ -20873,7 +20873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Calls-1",
+    "location": "devdocs/ast/#Calls-1",
     "page": "Julia ASTs",
     "title": "Calls",
     "category": "section",
@@ -20881,7 +20881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Operators-1",
+    "location": "devdocs/ast/#Operators-1",
     "page": "Julia ASTs",
     "title": "Operators",
     "category": "section",
@@ -20889,7 +20889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Bracketed-forms-1",
+    "location": "devdocs/ast/#Bracketed-forms-1",
     "page": "Julia ASTs",
     "title": "Bracketed forms",
     "category": "section",
@@ -20897,7 +20897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Macros-1",
+    "location": "devdocs/ast/#Macros-1",
     "page": "Julia ASTs",
     "title": "Macros",
     "category": "section",
@@ -20905,7 +20905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Strings-1",
+    "location": "devdocs/ast/#Strings-1",
     "page": "Julia ASTs",
     "title": "Strings",
     "category": "section",
@@ -20913,7 +20913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Imports-and-such-1",
+    "location": "devdocs/ast/#Imports-and-such-1",
     "page": "Julia ASTs",
     "title": "Imports and such",
     "category": "section",
@@ -20921,7 +20921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Numbers-1",
+    "location": "devdocs/ast/#Numbers-1",
     "page": "Julia ASTs",
     "title": "Numbers",
     "category": "section",
@@ -20929,7 +20929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Block-forms-1",
+    "location": "devdocs/ast/#Block-forms-1",
     "page": "Julia ASTs",
     "title": "Block forms",
     "category": "section",
@@ -20937,7 +20937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Quote-expressions-1",
+    "location": "devdocs/ast/#Quote-expressions-1",
     "page": "Julia ASTs",
     "title": "Quote expressions",
     "category": "section",
@@ -20945,7 +20945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/ast.html#Line-numbers-1",
+    "location": "devdocs/ast/#Line-numbers-1",
     "page": "Julia ASTs",
     "title": "Line numbers",
     "category": "section",
@@ -20953,7 +20953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#",
+    "location": "devdocs/types/#",
     "page": "More about types",
     "title": "More about types",
     "category": "page",
@@ -20961,7 +20961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#More-about-types-1",
+    "location": "devdocs/types/#More-about-types-1",
     "page": "More about types",
     "title": "More about types",
     "category": "section",
@@ -20969,7 +20969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#Types-and-sets-(and-Any-and-Union{}/Bottom)-1",
+    "location": "devdocs/types/#Types-and-sets-(and-Any-and-Union{}/Bottom)-1",
     "page": "More about types",
     "title": "Types and sets (and Any and Union{}/Bottom)",
     "category": "section",
@@ -20977,7 +20977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#UnionAll-types-1",
+    "location": "devdocs/types/#UnionAll-types-1",
     "page": "More about types",
     "title": "UnionAll types",
     "category": "section",
@@ -20985,7 +20985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#Free-variables-1",
+    "location": "devdocs/types/#Free-variables-1",
     "page": "More about types",
     "title": "Free variables",
     "category": "section",
@@ -20993,7 +20993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#TypeNames-1",
+    "location": "devdocs/types/#TypeNames-1",
     "page": "More about types",
     "title": "TypeNames",
     "category": "section",
@@ -21001,7 +21001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#Tuple-types-1",
+    "location": "devdocs/types/#Tuple-types-1",
     "page": "More about types",
     "title": "Tuple types",
     "category": "section",
@@ -21009,7 +21009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#Diagonal-types-1",
+    "location": "devdocs/types/#Diagonal-types-1",
     "page": "More about types",
     "title": "Diagonal types",
     "category": "section",
@@ -21017,7 +21017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#Subtyping-diagonal-variables-1",
+    "location": "devdocs/types/#Subtyping-diagonal-variables-1",
     "page": "More about types",
     "title": "Subtyping diagonal variables",
     "category": "section",
@@ -21025,7 +21025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#Introduction-to-the-internal-machinery-1",
+    "location": "devdocs/types/#Introduction-to-the-internal-machinery-1",
     "page": "More about types",
     "title": "Introduction to the internal machinery",
     "category": "section",
@@ -21033,7 +21033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/types.html#Subtyping-and-method-sorting-1",
+    "location": "devdocs/types/#Subtyping-and-method-sorting-1",
     "page": "More about types",
     "title": "Subtyping and method sorting",
     "category": "section",
@@ -21041,7 +21041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/object.html#",
+    "location": "devdocs/object/#",
     "page": "Memory layout of Julia Objects",
     "title": "Memory layout of Julia Objects",
     "category": "page",
@@ -21049,7 +21049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/object.html#Memory-layout-of-Julia-Objects-1",
+    "location": "devdocs/object/#Memory-layout-of-Julia-Objects-1",
     "page": "Memory layout of Julia Objects",
     "title": "Memory layout of Julia Objects",
     "category": "section",
@@ -21057,7 +21057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/object.html#Object-layout-(jl*value*t)-1",
+    "location": "devdocs/object/#Object-layout-(jl*value*t)-1",
     "page": "Memory layout of Julia Objects",
     "title": "Object layout (jlvaluet)",
     "category": "section",
@@ -21065,7 +21065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/object.html#Garbage-collector-mark-bits-1",
+    "location": "devdocs/object/#Garbage-collector-mark-bits-1",
     "page": "Memory layout of Julia Objects",
     "title": "Garbage collector mark bits",
     "category": "section",
@@ -21073,7 +21073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/object.html#Object-allocation-1",
+    "location": "devdocs/object/#Object-allocation-1",
     "page": "Memory layout of Julia Objects",
     "title": "Object allocation",
     "category": "section",
@@ -21081,7 +21081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/eval.html#",
+    "location": "devdocs/eval/#",
     "page": "Eval of Julia code",
     "title": "Eval of Julia code",
     "category": "page",
@@ -21089,7 +21089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/eval.html#Eval-of-Julia-code-1",
+    "location": "devdocs/eval/#Eval-of-Julia-code-1",
     "page": "Eval of Julia code",
     "title": "Eval of Julia code",
     "category": "section",
@@ -21097,7 +21097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/eval.html#Julia-Execution-1",
+    "location": "devdocs/eval/#Julia-Execution-1",
     "page": "Eval of Julia code",
     "title": "Julia Execution",
     "category": "section",
@@ -21105,7 +21105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/eval.html#dev-parsing-1",
+    "location": "devdocs/eval/#dev-parsing-1",
     "page": "Eval of Julia code",
     "title": "Parsing",
     "category": "section",
@@ -21113,7 +21113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/eval.html#dev-macro-expansion-1",
+    "location": "devdocs/eval/#dev-macro-expansion-1",
     "page": "Eval of Julia code",
     "title": "Macro Expansion",
     "category": "section",
@@ -21121,7 +21121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/eval.html#dev-type-inference-1",
+    "location": "devdocs/eval/#dev-type-inference-1",
     "page": "Eval of Julia code",
     "title": "Type Inference",
     "category": "section",
@@ -21129,7 +21129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/eval.html#dev-codegen-1",
+    "location": "devdocs/eval/#dev-codegen-1",
     "page": "Eval of Julia code",
     "title": "JIT Code Generation",
     "category": "section",
@@ -21137,7 +21137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/eval.html#dev-sysimg-1",
+    "location": "devdocs/eval/#dev-sysimg-1",
     "page": "Eval of Julia code",
     "title": "System Image",
     "category": "section",
@@ -21145,7 +21145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/callconv.html#",
+    "location": "devdocs/callconv/#",
     "page": "Calling Conventions",
     "title": "Calling Conventions",
     "category": "page",
@@ -21153,7 +21153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/callconv.html#Calling-Conventions-1",
+    "location": "devdocs/callconv/#Calling-Conventions-1",
     "page": "Calling Conventions",
     "title": "Calling Conventions",
     "category": "section",
@@ -21161,7 +21161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/callconv.html#Julia-Native-Calling-Convention-1",
+    "location": "devdocs/callconv/#Julia-Native-Calling-Convention-1",
     "page": "Calling Conventions",
     "title": "Julia Native Calling Convention",
     "category": "section",
@@ -21169,7 +21169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/callconv.html#JL-Call-Convention-1",
+    "location": "devdocs/callconv/#JL-Call-Convention-1",
     "page": "Calling Conventions",
     "title": "JL Call Convention",
     "category": "section",
@@ -21177,7 +21177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/callconv.html#C-ABI-1",
+    "location": "devdocs/callconv/#C-ABI-1",
     "page": "Calling Conventions",
     "title": "C ABI",
     "category": "section",
@@ -21185,7 +21185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/compiler.html#",
+    "location": "devdocs/compiler/#",
     "page": "High-level Overview of the Native-Code Generation Process",
     "title": "High-level Overview of the Native-Code Generation Process",
     "category": "page",
@@ -21193,7 +21193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/compiler.html#High-level-Overview-of-the-Native-Code-Generation-Process-1",
+    "location": "devdocs/compiler/#High-level-Overview-of-the-Native-Code-Generation-Process-1",
     "page": "High-level Overview of the Native-Code Generation Process",
     "title": "High-level Overview of the Native-Code Generation Process",
     "category": "section",
@@ -21201,7 +21201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/compiler.html#Representation-of-Pointers-1",
+    "location": "devdocs/compiler/#Representation-of-Pointers-1",
     "page": "High-level Overview of the Native-Code Generation Process",
     "title": "Representation of Pointers",
     "category": "section",
@@ -21209,7 +21209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/compiler.html#Representation-of-Intermediate-Values-1",
+    "location": "devdocs/compiler/#Representation-of-Intermediate-Values-1",
     "page": "High-level Overview of the Native-Code Generation Process",
     "title": "Representation of Intermediate Values",
     "category": "section",
@@ -21217,7 +21217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/compiler.html#Union-representation-1",
+    "location": "devdocs/compiler/#Union-representation-1",
     "page": "High-level Overview of the Native-Code Generation Process",
     "title": "Union representation",
     "category": "section",
@@ -21225,7 +21225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/compiler.html#Specialized-Calling-Convention-Signature-Representation-1",
+    "location": "devdocs/compiler/#Specialized-Calling-Convention-Signature-Representation-1",
     "page": "High-level Overview of the Native-Code Generation Process",
     "title": "Specialized Calling Convention Signature Representation",
     "category": "section",
@@ -21233,7 +21233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#",
+    "location": "devdocs/functions/#",
     "page": "Julia Functions",
     "title": "Julia Functions",
     "category": "page",
@@ -21241,7 +21241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Julia-Functions-1",
+    "location": "devdocs/functions/#Julia-Functions-1",
     "page": "Julia Functions",
     "title": "Julia Functions",
     "category": "section",
@@ -21249,7 +21249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Method-Tables-1",
+    "location": "devdocs/functions/#Method-Tables-1",
     "page": "Julia Functions",
     "title": "Method Tables",
     "category": "section",
@@ -21257,7 +21257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Function-calls-1",
+    "location": "devdocs/functions/#Function-calls-1",
     "page": "Julia Functions",
     "title": "Function calls",
     "category": "section",
@@ -21265,7 +21265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Adding-methods-1",
+    "location": "devdocs/functions/#Adding-methods-1",
     "page": "Julia Functions",
     "title": "Adding methods",
     "category": "section",
@@ -21273,7 +21273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Creating-generic-functions-1",
+    "location": "devdocs/functions/#Creating-generic-functions-1",
     "page": "Julia Functions",
     "title": "Creating generic functions",
     "category": "section",
@@ -21281,7 +21281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Closures-1",
+    "location": "devdocs/functions/#Closures-1",
     "page": "Julia Functions",
     "title": "Closures",
     "category": "section",
@@ -21289,7 +21289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Constructors-1",
+    "location": "devdocs/functions/#Constructors-1",
     "page": "Julia Functions",
     "title": "Constructors",
     "category": "section",
@@ -21297,7 +21297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Builtins-1",
+    "location": "devdocs/functions/#Builtins-1",
     "page": "Julia Functions",
     "title": "Builtins",
     "category": "section",
@@ -21305,7 +21305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Keyword-arguments-1",
+    "location": "devdocs/functions/#Keyword-arguments-1",
     "page": "Julia Functions",
     "title": "Keyword arguments",
     "category": "section",
@@ -21313,7 +21313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/functions.html#Compiler-efficiency-issues-1",
+    "location": "devdocs/functions/#Compiler-efficiency-issues-1",
     "page": "Julia Functions",
     "title": "Compiler efficiency issues",
     "category": "section",
@@ -21321,7 +21321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#",
+    "location": "devdocs/cartesian/#",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian",
     "category": "page",
@@ -21329,7 +21329,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian-1",
+    "location": "devdocs/cartesian/#Base.Cartesian-1",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian",
     "category": "section",
@@ -21337,7 +21337,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Principles-of-usage-1",
+    "location": "devdocs/cartesian/#Principles-of-usage-1",
     "page": "Base.Cartesian",
     "title": "Principles of usage",
     "category": "section",
@@ -21345,7 +21345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Basic-syntax-1",
+    "location": "devdocs/cartesian/#Basic-syntax-1",
     "page": "Base.Cartesian",
     "title": "Basic syntax",
     "category": "section",
@@ -21353,7 +21353,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Supplying-the-number-of-expressions-1",
+    "location": "devdocs/cartesian/#Supplying-the-number-of-expressions-1",
     "page": "Base.Cartesian",
     "title": "Supplying the number of expressions",
     "category": "section",
@@ -21361,7 +21361,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Anonymous-function-expressions-as-macro-arguments-1",
+    "location": "devdocs/cartesian/#Anonymous-function-expressions-as-macro-arguments-1",
     "page": "Base.Cartesian",
     "title": "Anonymous-function expressions as macro arguments",
     "category": "section",
@@ -21369,7 +21369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian.@nloops",
+    "location": "devdocs/cartesian/#Base.Cartesian.@nloops",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nloops",
     "category": "macro",
@@ -21377,7 +21377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian.@nref",
+    "location": "devdocs/cartesian/#Base.Cartesian.@nref",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nref",
     "category": "macro",
@@ -21385,7 +21385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian.@nextract",
+    "location": "devdocs/cartesian/#Base.Cartesian.@nextract",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nextract",
     "category": "macro",
@@ -21393,7 +21393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian.@nexprs",
+    "location": "devdocs/cartesian/#Base.Cartesian.@nexprs",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nexprs",
     "category": "macro",
@@ -21401,7 +21401,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian.@ncall",
+    "location": "devdocs/cartesian/#Base.Cartesian.@ncall",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@ncall",
     "category": "macro",
@@ -21409,7 +21409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian.@ntuple",
+    "location": "devdocs/cartesian/#Base.Cartesian.@ntuple",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@ntuple",
     "category": "macro",
@@ -21417,7 +21417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian.@nall",
+    "location": "devdocs/cartesian/#Base.Cartesian.@nall",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nall",
     "category": "macro",
@@ -21425,7 +21425,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian.@nany",
+    "location": "devdocs/cartesian/#Base.Cartesian.@nany",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nany",
     "category": "macro",
@@ -21433,7 +21433,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#Base.Cartesian.@nif",
+    "location": "devdocs/cartesian/#Base.Cartesian.@nif",
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nif",
     "category": "macro",
@@ -21441,7 +21441,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/cartesian.html#dev-cartesian-reference-1",
+    "location": "devdocs/cartesian/#dev-cartesian-reference-1",
     "page": "Base.Cartesian",
     "title": "Macro reference",
     "category": "section",
@@ -21449,7 +21449,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/meta.html#",
+    "location": "devdocs/meta/#",
     "page": "Talking to the compiler (the :meta mechanism)",
     "title": "Talking to the compiler (the :meta mechanism)",
     "category": "page",
@@ -21457,7 +21457,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/meta.html#Talking-to-the-compiler-(the-:meta-mechanism)-1",
+    "location": "devdocs/meta/#Talking-to-the-compiler-(the-:meta-mechanism)-1",
     "page": "Talking to the compiler (the :meta mechanism)",
     "title": "Talking to the compiler (the :meta mechanism)",
     "category": "section",
@@ -21465,7 +21465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/subarrays.html#",
+    "location": "devdocs/subarrays/#",
     "page": "SubArrays",
     "title": "SubArrays",
     "category": "page",
@@ -21473,7 +21473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/subarrays.html#SubArrays-1",
+    "location": "devdocs/subarrays/#SubArrays-1",
     "page": "SubArrays",
     "title": "SubArrays",
     "category": "section",
@@ -21481,7 +21481,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/subarrays.html#Indexing:-cartesian-vs.-linear-indexing-1",
+    "location": "devdocs/subarrays/#Indexing:-cartesian-vs.-linear-indexing-1",
     "page": "SubArrays",
     "title": "Indexing: cartesian vs. linear indexing",
     "category": "section",
@@ -21489,7 +21489,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/subarrays.html#Index-replacement-1",
+    "location": "devdocs/subarrays/#Index-replacement-1",
     "page": "SubArrays",
     "title": "Index replacement",
     "category": "section",
@@ -21497,7 +21497,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/subarrays.html#SubArray-design-1",
+    "location": "devdocs/subarrays/#SubArray-design-1",
     "page": "SubArrays",
     "title": "SubArray design",
     "category": "section",
@@ -21505,7 +21505,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/subarrays.html#Type-parameters-and-fields-1",
+    "location": "devdocs/subarrays/#Type-parameters-and-fields-1",
     "page": "SubArrays",
     "title": "Type parameters and fields",
     "category": "section",
@@ -21513,7 +21513,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/subarrays.html#Index-translation-1",
+    "location": "devdocs/subarrays/#Index-translation-1",
     "page": "SubArrays",
     "title": "Index translation",
     "category": "section",
@@ -21521,7 +21521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/subarrays.html#Linear-indexing-1",
+    "location": "devdocs/subarrays/#Linear-indexing-1",
     "page": "SubArrays",
     "title": "Linear indexing",
     "category": "section",
@@ -21529,7 +21529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/subarrays.html#A-few-details-1",
+    "location": "devdocs/subarrays/#A-few-details-1",
     "page": "SubArrays",
     "title": "A few details",
     "category": "section",
@@ -21537,7 +21537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sysimg.html#",
+    "location": "devdocs/sysimg/#",
     "page": "System Image Building",
     "title": "System Image Building",
     "category": "page",
@@ -21545,7 +21545,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sysimg.html#System-Image-Building-1",
+    "location": "devdocs/sysimg/#System-Image-Building-1",
     "page": "System Image Building",
     "title": "System Image Building",
     "category": "section",
@@ -21553,7 +21553,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sysimg.html#Main.BuildSysImg.build_sysimg",
+    "location": "devdocs/sysimg/#Main.BuildSysImg.build_sysimg",
     "page": "System Image Building",
     "title": "Main.BuildSysImg.build_sysimg",
     "category": "function",
@@ -21561,7 +21561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sysimg.html#Building-the-Julia-system-image-1",
+    "location": "devdocs/sysimg/#Building-the-Julia-system-image-1",
     "page": "System Image Building",
     "title": "Building the Julia system image",
     "category": "section",
@@ -21569,7 +21569,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sysimg.html#System-image-optimized-for-multiple-microarchitectures-1",
+    "location": "devdocs/sysimg/#System-image-optimized-for-multiple-microarchitectures-1",
     "page": "System Image Building",
     "title": "System image optimized for multiple microarchitectures",
     "category": "section",
@@ -21577,7 +21577,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sysimg.html#Specifying-multiple-system-image-targets-1",
+    "location": "devdocs/sysimg/#Specifying-multiple-system-image-targets-1",
     "page": "System Image Building",
     "title": "Specifying multiple system image targets",
     "category": "section",
@@ -21585,7 +21585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sysimg.html#Implementation-overview-1",
+    "location": "devdocs/sysimg/#Implementation-overview-1",
     "page": "System Image Building",
     "title": "Implementation overview",
     "category": "section",
@@ -21593,7 +21593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#",
+    "location": "devdocs/llvm/#",
     "page": "Working with LLVM",
     "title": "Working with LLVM",
     "category": "page",
@@ -21601,7 +21601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Working-with-LLVM-1",
+    "location": "devdocs/llvm/#Working-with-LLVM-1",
     "page": "Working with LLVM",
     "title": "Working with LLVM",
     "category": "section",
@@ -21609,7 +21609,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Overview-of-Julia-to-LLVM-Interface-1",
+    "location": "devdocs/llvm/#Overview-of-Julia-to-LLVM-Interface-1",
     "page": "Working with LLVM",
     "title": "Overview of Julia to LLVM Interface",
     "category": "section",
@@ -21617,7 +21617,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Alias-Analysis-1",
+    "location": "devdocs/llvm/#Alias-Analysis-1",
     "page": "Working with LLVM",
     "title": "Alias Analysis",
     "category": "section",
@@ -21625,7 +21625,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Building-Julia-with-a-different-version-of-LLVM-1",
+    "location": "devdocs/llvm/#Building-Julia-with-a-different-version-of-LLVM-1",
     "page": "Working with LLVM",
     "title": "Building Julia with a different version of LLVM",
     "category": "section",
@@ -21633,7 +21633,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Passing-options-to-LLVM-1",
+    "location": "devdocs/llvm/#Passing-options-to-LLVM-1",
     "page": "Working with LLVM",
     "title": "Passing options to LLVM",
     "category": "section",
@@ -21641,7 +21641,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Debugging-LLVM-transformations-in-isolation-1",
+    "location": "devdocs/llvm/#Debugging-LLVM-transformations-in-isolation-1",
     "page": "Working with LLVM",
     "title": "Debugging LLVM transformations in isolation",
     "category": "section",
@@ -21649,7 +21649,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Improving-LLVM-optimizations-for-Julia-1",
+    "location": "devdocs/llvm/#Improving-LLVM-optimizations-for-Julia-1",
     "page": "Working with LLVM",
     "title": "Improving LLVM optimizations for Julia",
     "category": "section",
@@ -21657,7 +21657,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#The-jlcall-calling-convention-1",
+    "location": "devdocs/llvm/#The-jlcall-calling-convention-1",
     "page": "Working with LLVM",
     "title": "The jlcall calling convention",
     "category": "section",
@@ -21665,7 +21665,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#GC-root-placement-1",
+    "location": "devdocs/llvm/#GC-root-placement-1",
     "page": "Working with LLVM",
     "title": "GC root placement",
     "category": "section",
@@ -21673,7 +21673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Representation-1",
+    "location": "devdocs/llvm/#Representation-1",
     "page": "Working with LLVM",
     "title": "Representation",
     "category": "section",
@@ -21681,7 +21681,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Invariants-1",
+    "location": "devdocs/llvm/#Invariants-1",
     "page": "Working with LLVM",
     "title": "Invariants",
     "category": "section",
@@ -21689,7 +21689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Supporting-ccall-1",
+    "location": "devdocs/llvm/#Supporting-ccall-1",
     "page": "Working with LLVM",
     "title": "Supporting ccall",
     "category": "section",
@@ -21697,7 +21697,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Supporting-pointer*from*objref-1",
+    "location": "devdocs/llvm/#Supporting-pointer*from*objref-1",
     "page": "Working with LLVM",
     "title": "Supporting pointerfromobjref",
     "category": "section",
@@ -21705,7 +21705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/llvm.html#Keeping-values-alive-in-the-absence-of-uses-1",
+    "location": "devdocs/llvm/#Keeping-values-alive-in-the-absence-of-uses-1",
     "page": "Working with LLVM",
     "title": "Keeping values alive in the absence of uses",
     "category": "section",
@@ -21713,7 +21713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/stdio.html#",
+    "location": "devdocs/stdio/#",
     "page": "printf() and stdio in the Julia runtime",
     "title": "printf() and stdio in the Julia runtime",
     "category": "page",
@@ -21721,7 +21721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/stdio.html#printf()-and-stdio-in-the-Julia-runtime-1",
+    "location": "devdocs/stdio/#printf()-and-stdio-in-the-Julia-runtime-1",
     "page": "printf() and stdio in the Julia runtime",
     "title": "printf() and stdio in the Julia runtime",
     "category": "section",
@@ -21729,7 +21729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/stdio.html#Libuv-wrappers-for-stdio-1",
+    "location": "devdocs/stdio/#Libuv-wrappers-for-stdio-1",
     "page": "printf() and stdio in the Julia runtime",
     "title": "Libuv wrappers for stdio",
     "category": "section",
@@ -21737,7 +21737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/stdio.html#Interface-between-JL_STD*-and-Julia-code-1",
+    "location": "devdocs/stdio/#Interface-between-JL_STD*-and-Julia-code-1",
     "page": "printf() and stdio in the Julia runtime",
     "title": "Interface between JL_STD* and Julia code",
     "category": "section",
@@ -21745,7 +21745,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/stdio.html#printf()-during-initialization-1",
+    "location": "devdocs/stdio/#printf()-during-initialization-1",
     "page": "printf() and stdio in the Julia runtime",
     "title": "printf() during initialization",
     "category": "section",
@@ -21753,7 +21753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/stdio.html#Legacy-ios.c-library-1",
+    "location": "devdocs/stdio/#Legacy-ios.c-library-1",
     "page": "printf() and stdio in the Julia runtime",
     "title": "Legacy ios.c library",
     "category": "section",
@@ -21761,7 +21761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/boundscheck.html#",
+    "location": "devdocs/boundscheck/#",
     "page": "Bounds checking",
     "title": "Bounds checking",
     "category": "page",
@@ -21769,7 +21769,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/boundscheck.html#Bounds-checking-1",
+    "location": "devdocs/boundscheck/#Bounds-checking-1",
     "page": "Bounds checking",
     "title": "Bounds checking",
     "category": "section",
@@ -21777,7 +21777,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/boundscheck.html#Eliding-bounds-checks-1",
+    "location": "devdocs/boundscheck/#Eliding-bounds-checks-1",
     "page": "Bounds checking",
     "title": "Eliding bounds checks",
     "category": "section",
@@ -21785,7 +21785,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/boundscheck.html#Propagating-inbounds-1",
+    "location": "devdocs/boundscheck/#Propagating-inbounds-1",
     "page": "Bounds checking",
     "title": "Propagating inbounds",
     "category": "section",
@@ -21793,7 +21793,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/boundscheck.html#The-bounds-checking-call-hierarchy-1",
+    "location": "devdocs/boundscheck/#The-bounds-checking-call-hierarchy-1",
     "page": "Bounds checking",
     "title": "The bounds checking call hierarchy",
     "category": "section",
@@ -21801,7 +21801,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/locks.html#",
+    "location": "devdocs/locks/#",
     "page": "Proper maintenance and care of multi-threading locks",
     "title": "Proper maintenance and care of multi-threading locks",
     "category": "page",
@@ -21809,7 +21809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/locks.html#Proper-maintenance-and-care-of-multi-threading-locks-1",
+    "location": "devdocs/locks/#Proper-maintenance-and-care-of-multi-threading-locks-1",
     "page": "Proper maintenance and care of multi-threading locks",
     "title": "Proper maintenance and care of multi-threading locks",
     "category": "section",
@@ -21817,7 +21817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/locks.html#Locks-1",
+    "location": "devdocs/locks/#Locks-1",
     "page": "Proper maintenance and care of multi-threading locks",
     "title": "Locks",
     "category": "section",
@@ -21825,7 +21825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/locks.html#Broken-Locks-1",
+    "location": "devdocs/locks/#Broken-Locks-1",
     "page": "Proper maintenance and care of multi-threading locks",
     "title": "Broken Locks",
     "category": "section",
@@ -21833,7 +21833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/locks.html#Shared-Global-Data-Structures-1",
+    "location": "devdocs/locks/#Shared-Global-Data-Structures-1",
     "page": "Proper maintenance and care of multi-threading locks",
     "title": "Shared Global Data Structures",
     "category": "section",
@@ -21841,7 +21841,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#",
+    "location": "devdocs/offset-arrays/#",
     "page": "Arrays with custom indices",
     "title": "Arrays with custom indices",
     "category": "page",
@@ -21849,7 +21849,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#man-custom-indices-1",
+    "location": "devdocs/offset-arrays/#man-custom-indices-1",
     "page": "Arrays with custom indices",
     "title": "Arrays with custom indices",
     "category": "section",
@@ -21857,7 +21857,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Generalizing-existing-code-1",
+    "location": "devdocs/offset-arrays/#Generalizing-existing-code-1",
     "page": "Arrays with custom indices",
     "title": "Generalizing existing code",
     "category": "section",
@@ -21865,7 +21865,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Background-1",
+    "location": "devdocs/offset-arrays/#Background-1",
     "page": "Arrays with custom indices",
     "title": "Background",
     "category": "section",
@@ -21873,7 +21873,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Using-axes-for-bounds-checks-and-loop-iteration-1",
+    "location": "devdocs/offset-arrays/#Using-axes-for-bounds-checks-and-loop-iteration-1",
     "page": "Arrays with custom indices",
     "title": "Using axes for bounds checks and loop iteration",
     "category": "section",
@@ -21881,7 +21881,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Linear-indexing-(LinearIndices)-1",
+    "location": "devdocs/offset-arrays/#Linear-indexing-(LinearIndices)-1",
     "page": "Arrays with custom indices",
     "title": "Linear indexing (LinearIndices)",
     "category": "section",
@@ -21889,7 +21889,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Allocating-storage-using-generalizations-of-similar-1",
+    "location": "devdocs/offset-arrays/#Allocating-storage-using-generalizations-of-similar-1",
     "page": "Arrays with custom indices",
     "title": "Allocating storage using generalizations of similar",
     "category": "section",
@@ -21897,7 +21897,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Deprecations-1",
+    "location": "devdocs/offset-arrays/#Deprecations-1",
     "page": "Arrays with custom indices",
     "title": "Deprecations",
     "category": "section",
@@ -21905,7 +21905,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Writing-custom-array-types-with-non-1-indexing-1",
+    "location": "devdocs/offset-arrays/#Writing-custom-array-types-with-non-1-indexing-1",
     "page": "Arrays with custom indices",
     "title": "Writing custom array types with non-1 indexing",
     "category": "section",
@@ -21913,7 +21913,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Do-**not**-implement-size-or-length-1",
+    "location": "devdocs/offset-arrays/#Do-**not**-implement-size-or-length-1",
     "page": "Arrays with custom indices",
     "title": "Do not implement size or length",
     "category": "section",
@@ -21921,7 +21921,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Do-**not**-annotate-bounds-checks-1",
+    "location": "devdocs/offset-arrays/#Do-**not**-annotate-bounds-checks-1",
     "page": "Arrays with custom indices",
     "title": "Do not annotate bounds checks",
     "category": "section",
@@ -21929,7 +21929,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Custom-AbstractUnitRange-types-1",
+    "location": "devdocs/offset-arrays/#Custom-AbstractUnitRange-types-1",
     "page": "Arrays with custom indices",
     "title": "Custom AbstractUnitRange types",
     "category": "section",
@@ -21937,7 +21937,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Specializing-axes-1",
+    "location": "devdocs/offset-arrays/#Specializing-axes-1",
     "page": "Arrays with custom indices",
     "title": "Specializing axes",
     "category": "section",
@@ -21945,7 +21945,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Specializing-similar-1",
+    "location": "devdocs/offset-arrays/#Specializing-similar-1",
     "page": "Arrays with custom indices",
     "title": "Specializing similar",
     "category": "section",
@@ -21953,7 +21953,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Specializing-reshape-1",
+    "location": "devdocs/offset-arrays/#Specializing-reshape-1",
     "page": "Arrays with custom indices",
     "title": "Specializing reshape",
     "category": "section",
@@ -21961,7 +21961,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/offset-arrays.html#Summary-1",
+    "location": "devdocs/offset-arrays/#Summary-1",
     "page": "Arrays with custom indices",
     "title": "Summary",
     "category": "section",
@@ -21969,7 +21969,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/require.html#",
+    "location": "devdocs/require/#",
     "page": "Module loading",
     "title": "Module loading",
     "category": "page",
@@ -21977,7 +21977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/require.html#Module-loading-1",
+    "location": "devdocs/require/#Module-loading-1",
     "page": "Module loading",
     "title": "Module loading",
     "category": "section",
@@ -21985,7 +21985,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/require.html#Experimental-features-1",
+    "location": "devdocs/require/#Experimental-features-1",
     "page": "Module loading",
     "title": "Experimental features",
     "category": "section",
@@ -21993,7 +21993,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/require.html#Module-loading-callbacks-1",
+    "location": "devdocs/require/#Module-loading-callbacks-1",
     "page": "Module loading",
     "title": "Module loading callbacks",
     "category": "section",
@@ -22001,7 +22001,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/inference.html#",
+    "location": "devdocs/inference/#",
     "page": "Inference",
     "title": "Inference",
     "category": "page",
@@ -22009,7 +22009,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/inference.html#Inference-1",
+    "location": "devdocs/inference/#Inference-1",
     "page": "Inference",
     "title": "Inference",
     "category": "section",
@@ -22017,7 +22017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/inference.html#How-inference-works-1",
+    "location": "devdocs/inference/#How-inference-works-1",
     "page": "Inference",
     "title": "How inference works",
     "category": "section",
@@ -22025,7 +22025,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/inference.html#Debugging-compiler.jl-1",
+    "location": "devdocs/inference/#Debugging-compiler.jl-1",
     "page": "Inference",
     "title": "Debugging compiler.jl",
     "category": "section",
@@ -22033,7 +22033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/inference.html#The-inlining-algorithm-(inline_worthy)-1",
+    "location": "devdocs/inference/#The-inlining-algorithm-(inline_worthy)-1",
     "page": "Inference",
     "title": "The inlining algorithm (inline_worthy)",
     "category": "section",
@@ -22041,7 +22041,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/backtraces.html#",
+    "location": "devdocs/backtraces/#",
     "page": "Reporting and analyzing crashes (segfaults)",
     "title": "Reporting and analyzing crashes (segfaults)",
     "category": "page",
@@ -22049,7 +22049,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/backtraces.html#Reporting-and-analyzing-crashes-(segfaults)-1",
+    "location": "devdocs/backtraces/#Reporting-and-analyzing-crashes-(segfaults)-1",
     "page": "Reporting and analyzing crashes (segfaults)",
     "title": "Reporting and analyzing crashes (segfaults)",
     "category": "section",
@@ -22057,7 +22057,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/backtraces.html#dev-version-info-1",
+    "location": "devdocs/backtraces/#dev-version-info-1",
     "page": "Reporting and analyzing crashes (segfaults)",
     "title": "Version/Environment info",
     "category": "section",
@@ -22065,7 +22065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/backtraces.html#Segfaults-during-bootstrap-(sysimg.jl)-1",
+    "location": "devdocs/backtraces/#Segfaults-during-bootstrap-(sysimg.jl)-1",
     "page": "Reporting and analyzing crashes (segfaults)",
     "title": "Segfaults during bootstrap (sysimg.jl)",
     "category": "section",
@@ -22073,7 +22073,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/backtraces.html#Segfaults-when-running-a-script-1",
+    "location": "devdocs/backtraces/#Segfaults-when-running-a-script-1",
     "page": "Reporting and analyzing crashes (segfaults)",
     "title": "Segfaults when running a script",
     "category": "section",
@@ -22081,7 +22081,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/backtraces.html#Errors-during-Julia-startup-1",
+    "location": "devdocs/backtraces/#Errors-during-Julia-startup-1",
     "page": "Reporting and analyzing crashes (segfaults)",
     "title": "Errors during Julia startup",
     "category": "section",
@@ -22089,7 +22089,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/backtraces.html#Glossary-1",
+    "location": "devdocs/backtraces/#Glossary-1",
     "page": "Reporting and analyzing crashes (segfaults)",
     "title": "Glossary",
     "category": "section",
@@ -22097,7 +22097,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#",
+    "location": "devdocs/debuggingtips/#",
     "page": "gdb debugging tips",
     "title": "gdb debugging tips",
     "category": "page",
@@ -22105,7 +22105,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#gdb-debugging-tips-1",
+    "location": "devdocs/debuggingtips/#gdb-debugging-tips-1",
     "page": "gdb debugging tips",
     "title": "gdb debugging tips",
     "category": "section",
@@ -22113,7 +22113,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Displaying-Julia-variables-1",
+    "location": "devdocs/debuggingtips/#Displaying-Julia-variables-1",
     "page": "gdb debugging tips",
     "title": "Displaying Julia variables",
     "category": "section",
@@ -22121,7 +22121,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Useful-Julia-variables-for-Inspecting-1",
+    "location": "devdocs/debuggingtips/#Useful-Julia-variables-for-Inspecting-1",
     "page": "gdb debugging tips",
     "title": "Useful Julia variables for Inspecting",
     "category": "section",
@@ -22129,7 +22129,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Useful-Julia-functions-for-Inspecting-those-variables-1",
+    "location": "devdocs/debuggingtips/#Useful-Julia-functions-for-Inspecting-those-variables-1",
     "page": "gdb debugging tips",
     "title": "Useful Julia functions for Inspecting those variables",
     "category": "section",
@@ -22137,7 +22137,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Inserting-breakpoints-for-inspection-from-gdb-1",
+    "location": "devdocs/debuggingtips/#Inserting-breakpoints-for-inspection-from-gdb-1",
     "page": "gdb debugging tips",
     "title": "Inserting breakpoints for inspection from gdb",
     "category": "section",
@@ -22145,7 +22145,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Inserting-breakpoints-upon-certain-conditions-1",
+    "location": "devdocs/debuggingtips/#Inserting-breakpoints-upon-certain-conditions-1",
     "page": "gdb debugging tips",
     "title": "Inserting breakpoints upon certain conditions",
     "category": "section",
@@ -22153,7 +22153,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Loading-a-particular-file-1",
+    "location": "devdocs/debuggingtips/#Loading-a-particular-file-1",
     "page": "gdb debugging tips",
     "title": "Loading a particular file",
     "category": "section",
@@ -22161,7 +22161,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Calling-a-particular-method-1",
+    "location": "devdocs/debuggingtips/#Calling-a-particular-method-1",
     "page": "gdb debugging tips",
     "title": "Calling a particular method",
     "category": "section",
@@ -22169,7 +22169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Dealing-with-signals-1",
+    "location": "devdocs/debuggingtips/#Dealing-with-signals-1",
     "page": "gdb debugging tips",
     "title": "Dealing with signals",
     "category": "section",
@@ -22177,7 +22177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Debugging-during-Julia\'s-build-process-(bootstrap)-1",
+    "location": "devdocs/debuggingtips/#Debugging-during-Julia\'s-build-process-(bootstrap)-1",
     "page": "gdb debugging tips",
     "title": "Debugging during Julia\'s build process (bootstrap)",
     "category": "section",
@@ -22185,7 +22185,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Debugging-precompilation-errors-1",
+    "location": "devdocs/debuggingtips/#Debugging-precompilation-errors-1",
     "page": "gdb debugging tips",
     "title": "Debugging precompilation errors",
     "category": "section",
@@ -22193,7 +22193,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/debuggingtips.html#Mozilla\'s-Record-and-Replay-Framework-(rr)-1",
+    "location": "devdocs/debuggingtips/#Mozilla\'s-Record-and-Replay-Framework-(rr)-1",
     "page": "gdb debugging tips",
     "title": "Mozilla\'s Record and Replay Framework (rr)",
     "category": "section",
@@ -22201,7 +22201,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/valgrind.html#",
+    "location": "devdocs/valgrind/#",
     "page": "Using Valgrind with Julia",
     "title": "Using Valgrind with Julia",
     "category": "page",
@@ -22209,7 +22209,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/valgrind.html#Using-Valgrind-with-Julia-1",
+    "location": "devdocs/valgrind/#Using-Valgrind-with-Julia-1",
     "page": "Using Valgrind with Julia",
     "title": "Using Valgrind with Julia",
     "category": "section",
@@ -22217,7 +22217,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/valgrind.html#General-considerations-1",
+    "location": "devdocs/valgrind/#General-considerations-1",
     "page": "Using Valgrind with Julia",
     "title": "General considerations",
     "category": "section",
@@ -22225,7 +22225,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/valgrind.html#Suppressions-1",
+    "location": "devdocs/valgrind/#Suppressions-1",
     "page": "Using Valgrind with Julia",
     "title": "Suppressions",
     "category": "section",
@@ -22233,7 +22233,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/valgrind.html#Running-the-Julia-test-suite-under-Valgrind-1",
+    "location": "devdocs/valgrind/#Running-the-Julia-test-suite-under-Valgrind-1",
     "page": "Using Valgrind with Julia",
     "title": "Running the Julia test suite under Valgrind",
     "category": "section",
@@ -22241,7 +22241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/valgrind.html#Caveats-1",
+    "location": "devdocs/valgrind/#Caveats-1",
     "page": "Using Valgrind with Julia",
     "title": "Caveats",
     "category": "section",
@@ -22249,7 +22249,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sanitizers.html#",
+    "location": "devdocs/sanitizers/#",
     "page": "Sanitizer support",
     "title": "Sanitizer support",
     "category": "page",
@@ -22257,7 +22257,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sanitizers.html#Sanitizer-support-1",
+    "location": "devdocs/sanitizers/#Sanitizer-support-1",
     "page": "Sanitizer support",
     "title": "Sanitizer support",
     "category": "section",
@@ -22265,7 +22265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sanitizers.html#General-considerations-1",
+    "location": "devdocs/sanitizers/#General-considerations-1",
     "page": "Sanitizer support",
     "title": "General considerations",
     "category": "section",
@@ -22273,7 +22273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sanitizers.html#Address-Sanitizer-(ASAN)-1",
+    "location": "devdocs/sanitizers/#Address-Sanitizer-(ASAN)-1",
     "page": "Sanitizer support",
     "title": "Address Sanitizer (ASAN)",
     "category": "section",
@@ -22281,7 +22281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/sanitizers.html#Memory-Sanitizer-(MSAN)-1",
+    "location": "devdocs/sanitizers/#Memory-Sanitizer-(MSAN)-1",
     "page": "Sanitizer support",
     "title": "Memory Sanitizer (MSAN)",
     "category": "section",
