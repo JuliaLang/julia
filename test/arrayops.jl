@@ -469,6 +469,11 @@ end
     @test A23994[5] isa Float64
     @test A23994[6] isa Rational{Int}
 end
+@testset "cat issue #27326" begin
+    @test [Int; 1] == [Int, 1]
+    @test [Int 1] == reshape([Int, 1], 1, :)
+    @test [Int 1; String 2] == reshape([Int, String, 1, 2], 2, 2)
+end
 @testset "end" begin
     X = [ i+2j for i=1:5, j=1:5 ]
     @test X[end,end] == 15
