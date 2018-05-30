@@ -67,8 +67,9 @@ end
 """
     @r_str -> Regex
 
-Construct a regex, such as `r"^[a-z]*\$"`. The regex also accepts one or more flags, listed
-after the ending quote, to change its behaviour:
+Construct a regex, such as `r"^[a-z]*\$"`, without interpolation and unescaping (except for
+quotation mark `"` which still has to be escaped). The regex also accepts one or more flags,
+listed after the ending quote, to change its behaviour:
 
 - `i` enables case-insensitive matching
 - `m` treats the `^` and `\$` tokens as matching the start and end of individual lines, as
