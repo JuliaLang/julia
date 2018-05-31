@@ -131,7 +131,7 @@ end
 import Base: Ac_mul_B, At_mul_B
 import Base: A_mul_Bc, A_mul_Bt, Ac_mul_Bc, At_mul_Bt
 import Base: At_ldiv_B, Ac_ldiv_B
-import LinearAlgebra: A_mul_B!, Ac_mul_B!, At_mul_B!, A_ldiv_B!
+import LinearAlgebra: A_mul_B!, Ac_mul_B!, At_mul_B!, A_ldiv_B!, A_rdiv_Bt!
 import LinearAlgebra: At_ldiv_B!, Ac_ldiv_B!, A_rdiv_B!, A_rdiv_Bc!, mul!, ldiv!, rdiv!
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/sparse/linalg.jl, to deprecate
