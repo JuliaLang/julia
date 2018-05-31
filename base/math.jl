@@ -199,14 +199,14 @@ ERROR: DomainError with log:
 -2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
- [...]
+[...]
 
 julia> log(2, -3)
 ERROR: DomainError with log:
 -3.0 will only return a complex result if called with a complex argument. Try -3.0(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
- [...]
+[...]
 ```
 
 !!! note
@@ -424,7 +424,7 @@ ERROR: DomainError with -2.0:
 NaN result for non-NaN input.
 Stacktrace:
  [1] nan_dom_err at ./math.jl:325 [inlined]
- [...]
+[...]
 ```
 """
 log2(x)
@@ -448,7 +448,7 @@ ERROR: DomainError with -2.0:
 NaN result for non-NaN input.
 Stacktrace:
  [1] nan_dom_err at ./math.jl:325 [inlined]
- [...]
+[...]
 ```
 """
 log10(x)
@@ -472,7 +472,7 @@ ERROR: DomainError with log1p:
 -2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
- [...]
+[...]
 ```
 """
 log1p(x)
@@ -505,7 +505,7 @@ ERROR: DomainError with -8.1e+01:
 NaN result for non-NaN input.
 Stacktrace:
  [1] sqrt(::BigFloat) at ./mpfr.jl:501
- [...]
+[...]
 
 julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
