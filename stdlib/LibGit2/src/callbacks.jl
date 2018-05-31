@@ -169,7 +169,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     end
 
     return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
-                 (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
+                 (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Ptr{UInt8}),
                  libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
 end
 
@@ -187,9 +187,8 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     if p.use_git_helpers && (!revised || !isfilled(cred))
         git_cred = GitCredential(p.config, p.url)
 
-        # Use `deepcopy` to ensure zeroing the `git_cred` doesn't also zero the `cred`s copy
-        cred.user = deepcopy(something(git_cred.username, ""))
-        cred.pass = deepcopy(something(git_cred.password, ""))
+        cred.user = something(git_cred.username, "")
+        cred.pass = something(git_cred.password, "")
         shred!(git_cred)
         revised = true
 
@@ -228,7 +227,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     end
 
     return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
-                 (Ptr{Ptr{Cvoid}}, Cstring, Cstring),
+                 (Ptr{Ptr{Cvoid}}, Cstring, Ptr{UInt8}),
                  libgit2credptr, cred.user, cred.pass)
 end
 

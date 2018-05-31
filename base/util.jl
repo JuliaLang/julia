@@ -441,42 +441,34 @@ will always be called.
 """
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
-securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
+securezero!(s::Union{String,Cstring}) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 if Sys.iswindows()
-function getpass(prompt::AbstractString)::SecureString
+function getpass(prompt::AbstractString)
     print(prompt)
     flush(stdout)
-    p = Vector{UInt8}(undef, 128) # mimic Unix getpass in ignoring more than 128-char passwords
-                          # (also avoids any potential memory copies arising from push!)
-    try
-        plen = 0
-        while true
-            c = ccall(:_getch, UInt8, ())
-            if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
-                break # EOF or return
-            elseif c == 0x00 || c == 0xe0
-                ccall(:_getch, UInt8, ()) # ignore function/arrow keys
-            elseif c == UInt8('\b') && plen > 0
-                plen -= 1 # delete last character on backspace
-            elseif !iscntrl(Char(c)) && plen < 128
-                p[plen += 1] = c
-            end
+    s = SecureString()
+    plen = 0
+    while true
+        c = ccall(:_getch, UInt8, ())
+        if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
+            break # EOF or return
+        elseif c == 0x00 || c == 0xe0
+            ccall(:_getch, UInt8, ()) # ignore function/arrow keys
+        elseif c == UInt8('\b') && plen > 0
+            plen -= 1 # delete last character on backspace
+        elseif !iscntrl(Char(c)) && plen < 128
+            write(s, c)
         end
-        return unsafe_string(pointer(p), plen) # use unsafe_string rather than String(p[1:plen])
-                                               # to be absolutely certain we never make an extra copy
-    finally
-        securezero!(p)
     end
-
-    return ""
+    return  s
 end
 else
-function getpass(prompt::AbstractString)::SecureString
-    unsafe_string(ccall(:getpass, Cstring, (Cstring,), prompt))
+function getpass(prompt::AbstractString)
+    SecureString(ccall(:getpass, Cstring, (Cstring,), prompt))
 end
 end
 

@@ -1193,9 +1193,9 @@ isfilled(::AbstractCredential)
 
 "Credential that support only `user` and `password` parameters"
 mutable struct UserPasswordCredential <: AbstractCredential
-    user::SecureString
+    user::AbstractString
     pass::SecureString
-    function UserPasswordCredential(user::AbstractString="", pass::AbstractString="")
+    function UserPasswordCredential(user::AbstractString="", pass::Union{AbstractString, SecureString}="")
         new(user, pass)
     end
 
@@ -1211,7 +1211,6 @@ mutable struct UserPasswordCredential <: AbstractCredential
 end
 
 function shred!(cred::UserPasswordCredential)
-    shred!(cred.user)
     shred!(cred.pass)
     return cred
 end
@@ -1226,12 +1225,13 @@ end
 
 "SSH credential type"
 mutable struct SSHCredential <: AbstractCredential
-    user::SecureString
+    user::AbstractString
     pass::SecureString
-    prvkey::SecureString
-    pubkey::SecureString
-    function SSHCredential(user::AbstractString="", pass::AbstractString="",
-                           prvkey::AbstractString="", pubkey::AbstractString="")
+    # Paths to private keys
+    prvkey::AbstractString
+    pubkey::AbstractString
+    function SSHCredential(user="", pass="",
+                           prvkey="", pubkey="")
         new(user, pass, prvkey, pubkey)
     end
 
@@ -1248,10 +1248,7 @@ mutable struct SSHCredential <: AbstractCredential
 end
 
 function shred!(cred::SSHCredential)
-    shred!(cred.user)
     shred!(cred.pass)
-    shred!(cred.prvkey)
-    shred!(cred.pubkey)
     return cred
 end
 

@@ -7,10 +7,10 @@ Git credential information used in communication with git credential helpers. Th
 named using the [input/output key specification](https://git-scm.com/docs/git-credential#IOFMT).
 """
 mutable struct GitCredential
-    protocol::Union{SecureString, Nothing}
-    host::Union{SecureString, Nothing}
-    path::Union{SecureString, Nothing}
-    username::Union{SecureString, Nothing}
+    protocol::Union{AbstractString, Nothing}
+    host::Union{AbstractString, Nothing}
+    path::Union{AbstractString, Nothing}
+    username::Union{AbstractString, Nothing}
     password::Union{SecureString, Nothing}
     use_http_path::Bool
 
@@ -28,30 +28,21 @@ function GitCredential(cfg::GitConfig, url::AbstractString)
     fill!(cfg, parse(GitCredential, url))
 end
 
-function GitCredential(cred::UserPasswordCredential, url::AbstractString)
-    git_cred = parse(GitCredential, url)
-    git_cred.username = SecureString(cred.user)
-    git_cred.password = SecureString(cred.pass)
-    return git_cred
-end
+GitCredential(cred::UserPasswordCredential, url::AbstractString) = parse(GitCredential, url)
+
+Base.:(==)(c1::GitCredential, c2::GitCredential) = (c1.protocol, c1.host, c1.path, c1.username, c1.password, c1.use_http_path) ==
+                                                   (c2.protocol, c2.host, c2.path, c2.username, c2.password, c2.use_http_path)
+Base.hash(cred::GitCredential, h::UInt) = hash(GitCredential, hash((cred.protocol, cred.host, cred.path, cred.username, cred.password, cred.use_http_path), h))
 
 function shred!(cred::GitCredential)
-    cred.protocol !== nothing && shred!(cred.protocol)
-    cred.host !== nothing && shred!(cred.host)
-    cred.path !== nothing && shred!(cred.path)
-    cred.username !== nothing && shred!(cred.username)
+    cred.protocol !== nothing && (cred.protocol = nothing)
+    cred.host !== nothing && (cred.host = nothing)
+    cred.path !== nothing && (cred.path = nothing)
+    cred.username !== nothing && (cred.username = nothing)
     cred.password !== nothing && shred!(cred.password)
     return cred
 end
 
-function Base.:(==)(a::GitCredential, b::GitCredential)
-    isequal(a.protocol, b.protocol) &&
-    isequal(a.host, b.host) &&
-    isequal(a.path, b.path) &&
-    isequal(a.username, b.username) &&
-    isequal(a.password, b.password) &&
-    a.use_http_path == b.use_http_path
-end
 
 """
     ismatch(url, git_cred) -> Bool
@@ -97,19 +88,27 @@ function Base.copy!(a::GitCredential, b::GitCredential)
 end
 
 function Base.write(io::IO, cred::GitCredential)
-    cred.protocol !== nothing && println(io, "protocol=", cred.protocol)
-    cred.host !== nothing && println(io, "host=", cred.host)
-    cred.path !== nothing && cred.use_http_path && println(io, "path=", cred.path)
-    cred.username !== nothing && println(io, "username=", cred.username)
-    cred.password !== nothing && println(io, "password=", cred.password)
+    cred.protocol !== nothing && write(io, "protocol=", cred.protocol, '\n')
+    cred.host !== nothing && write(io, "host=", cred.host, '\n')
+    cred.path !== nothing && cred.use_http_path && write(io, "path=", cred.path, '\n')
+    cred.username !== nothing && write(io, "username=", cred.username, '\n')
+    cred.password !== nothing && write(io, "password=", cred.password, '\n')
     nothing
 end
 
 function Base.read!(io::IO, cred::GitCredential)
     # https://git-scm.com/docs/git-credential#IOFMT
     while !eof(io)
-        key, value = split(readline(io), '=')
-
+        key = readuntil(io, '=')
+        if key == "password"
+            value = SecureString()
+            while !eof(io) && (c = read(io, UInt8)) != UInt8('\n')
+                write(value, c)
+            end
+            seek(value, 0)
+        else
+            value = readuntil(io, '\n')
+        end
         if key == "url"
             # Any components which are missing from the URL will be set to empty
             # https://git-scm.com/docs/git-credential#git-credential-codeurlcode
@@ -117,8 +116,8 @@ function Base.read!(io::IO, cred::GitCredential)
             copy!(cred, parse(GitCredential, value))
         else
             field = getproperty(cred, Symbol(key))
-            field !== nothing && shred!(field)
-            setproperty!(cred, Symbol(key), String(value))
+            field !== nothing && Symbol(key) == :password && shred!(field)
+            setproperty!(cred, Symbol(key), value)
         end
     end
 
