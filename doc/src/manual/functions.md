@@ -174,7 +174,7 @@ To support this convention, the REPL does not print anything for it:
 
 ```jldoctest
 julia> nothing
- 
+
 ```
 
 There are two possible shortened forms for the `return nothing` expression.
