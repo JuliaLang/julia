@@ -59,6 +59,7 @@ end
 Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
 
+# Examples
 ```jldoctest
 julia> a1() = sum(i for i in 1:1000);
 
@@ -91,6 +92,7 @@ current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 
 Determine whether a task has exited.
 
+# Examples
 ```jldoctest
 julia> a2() = sum(i for i in 1:1000);
 
@@ -114,6 +116,7 @@ istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
 
 Determine whether a task has started executing.
 
+# Examples
 ```jldoctest
 julia> a3() = sum(i for i in 1:1000);
 

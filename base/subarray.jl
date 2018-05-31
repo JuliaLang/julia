@@ -105,6 +105,7 @@ given indices instead of making a copy.  Calling [`getindex`](@ref) or
 [`setindex!`](@ref) on the returned `SubArray` computes the
 indices to the parent array on the fly without checking bounds.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:

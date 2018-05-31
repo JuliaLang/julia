@@ -80,6 +80,7 @@ end
 Check two array shapes for compatibility, allowing trailing singleton dimensions, and return
 whichever shape has more dimensions.
 
+# Examples
 ```jldoctest
 julia> a = fill(1, (3,4,1,1,1));
 
