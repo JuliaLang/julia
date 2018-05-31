@@ -45,11 +45,11 @@ function shred!(cred::GitCredential)
 end
 
 function Base.:(==)(a::GitCredential, b::GitCredential)
-    isequal(a.protocol, b.protocol) &&
-    isequal(a.host, b.host) &&
-    isequal(a.path, b.path) &&
-    isequal(a.username, b.username) &&
-    isequal(a.password, b.password) &&
+    a.protocol == b.protocol &&
+    a.host == b.host &&
+    a.path == b.path &&
+    a.username == b.username &&
+    a.password == b.password &&
     a.use_http_path == b.use_http_path
 end
 
