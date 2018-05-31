@@ -1199,14 +1199,16 @@ end
 function timeit(n, reps)
     x = rand(Float32,n)
     y = rand(Float32,n)
-    s = zero(Float64)
+    s1 = zero(Float64)
+    s2 = zero(Float64)
     time = @elapsed for j in 1:reps
-        s+=inner(x,y)
+        s1+=inner(x,y)
     end
     println("GFlop/sec        = ",2.0*n*reps/time*1E-9)
     time = @elapsed for j in 1:reps
-        s+=innersimd(x,y)
+        s2+=innersimd(x,y)
     end
+    @assert isapprox(s1,s2,rtol=1e-6) # Float32 precision
     println("GFlop/sec (SIMD) = ",2.0*n*reps/time*1E-9)
 end
 
