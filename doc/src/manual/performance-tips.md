@@ -1513,29 +1513,27 @@ The following examples may help you interpret expressions marked as containing n
 Consider the following example that defines two inner functions:
 ```julia
 function abmult(r::Int)
-    if r >= 0
-        f = x -> x * r
-    else
+    if r < 0
         r = -r
-        f = x -> x * r
     end
+    f = x -> x * r
     return f
 end
 ```
 
 Function `abmult` returns a function `f` that multiplies its argument by
-the absolute value of `r`. The two inner functions are called
-"closures". Besides closures, inner functions are also used by the
+the absolute value of `r`. The inner function assigned to `f` is called a
+"closure". Inner functions are also used by the
 language for `do`-blocks and for generator expressions.
 
-This style of code presents performance challenges for the language
-for the following reason. When the parser observes occurrences of
-inner functions, it emits lower-level code in which the inner
-function is pulled out as an object living at global scope. Captured
-variables from the enclosing scope such as `r` must therefore also be moved into
-objects with global scope in order to be accessible to the inner
-function.  This is because the language specifies that `r` in the
-inner scope must be identical to `r` in the outer scope even if the
+This style of code presents performance challenges for the language.
+The parser, when translating it into lower-level instructions,
+substantially reorganizes the above code by extracting the
+inner function to a separate code block.  "Captured" variables such as `r`
+that are shared by inner functions and their enclosing scope are
+also extracted into a heap-allocated "box" accessible to both inner and
+outer functions because the language specifies that `r` in the
+inner scope must be identical to `r` in the outer scope even after the
 outer scope (or another inner function) modifies `r`.
 
 The discussion in the preceding paragraph referred to the "parser", that is, the phase
@@ -1544,10 +1542,10 @@ as opposed to the later phase when it is first invoked. The parser does not "kno
 `Int` is a fixed type, or that the statement `r = -r` tranforms an `Int` to another `Int`.
 The magic of type inference takes place in the later phase of compilation.
 
-Thus, the parser does not know that `r` has a fixed type (`Int`)
-nor that `r` does not change value once the inner function is created.  Therefore,
-it must create a "box" (a heap allocation) for `r`, and furthermore, the
-box holds an object with an abstract type such as `Any`, which
+Thus, the parser does not know that `r` has a fixed type (`Int`).
+nor that `r` does not change value once the inner function is created (so that
+the box is unneeded).  Therefore, the parser emits code for
+box that holds an object with an abstract type such as `Any`, which
 requires run-time type dispatch for each occurrence of `r`.  This can be
 verified by applying `@code_warntype` to the above function.  Both the boxing
 and the run-time type dispatch can cause loss of performance.
@@ -1558,38 +1556,36 @@ it is known that a captured variable does not change its type, then this can
 be declared explicitly with a type annotation (on the variable, not the
 right-hand side):
 ```julia
-function abmult(r0::Int)
+function abmult2(r0::Int)
     r::Int = r0
-    if r >= 0
-        f = x -> x * r
-    else
+    if r < 0
         r = -r
-        f = x -> x * r
     end
+    f = x -> x * r
     return f
 end
 ```
 The type annotation partially recovers lost performance due to capturing because
 the parser can associate a concrete type to the object in the box.
-Second, if the captured variable does not need to be boxed (because it
+Going further, if the captured variable does not need to be boxed at all (because it
 will not be reassigned after the closure is created), this can be indicated
 with `let` blocks as follows.
 ```julia
 function abmult3(r::Int)
-    f = if r >= 0
-        let r = r
+    if r < 0
+        r = -r
+    end
+    f = let r = r
             x -> x * r
-        end
-    else
-        let r = -r
-            x -> x * r
-        end
     end
     return f
 end
 ```
-Each `let` block creates a new variable `r` whose scope is only the
+A `let` block creates a new variable `r` whose scope is only the
 inner function. The second technique recovers full language performance
 in the presence of captured variables. Note that this is a rapidly
 evolving aspect of the compiler, and it is likely that future releases
 will not require this degree of programmer annotation to attain peformance.
+In the mean time, some user-contributed packages like
+[FastClosures](https://github.com/c42f/FastClosures.jl) automate the
+insertion of `let` statements as in `abmult3`.
