@@ -214,6 +214,10 @@ Language changes
 
   * `…` (`\dots`) and `⁝` (`\tricolon`) are now parsed as binary operators ([#26262]).
 
+  * Assignment syntax (`a=b`) inside square bracket expressions (e.g. `A[...]`, `[x, y]`)
+    is deprecated. It will likely be reclaimed in a later version for passing keyword
+    arguments. Note this does not affect updating operators like `+=` ([#25631]).
+
 Breaking changes
 ----------------
 
