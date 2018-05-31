@@ -1510,7 +1510,7 @@ The following examples may help you interpret expressions marked as containing n
 
 ## [Performance of captured variable](@id man-performance-captured)
 
-Consider the following example that defines two inner functions:
+Consider the following example that defines an inner function:
 ```julia
 function abmult(r::Int)
     if r < 0
@@ -1581,7 +1581,7 @@ function abmult3(r::Int)
     return f
 end
 ```
-A `let` block creates a new variable `r` whose scope is only the
+The `let` block creates a new variable `r` whose scope is only the
 inner function. The second technique recovers full language performance
 in the presence of captured variables. Note that this is a rapidly
 evolving aspect of the compiler, and it is likely that future releases
