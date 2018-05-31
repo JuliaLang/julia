@@ -736,9 +736,11 @@ endif
 
 # Set MARCH-specific flags
 ifneq ($(MARCH),)
+ifneq ($(USEICC),1)
 CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
 FC += -march=$(MARCH)
+endif
 JULIA_CPU_TARGET ?= $(MARCH)
 ifeq ($(OS),Darwin)
 # on Darwin, the standalone `as` program doesn't know
