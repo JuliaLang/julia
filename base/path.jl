@@ -155,7 +155,7 @@ See also: [`basename`](@ref)
 Get the file name part of a path.
 
 # Examples
- ```jldoctest
+```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
 ```
