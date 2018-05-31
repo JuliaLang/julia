@@ -187,7 +187,7 @@ Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log(4,8)
 1.5
 
@@ -199,14 +199,14 @@ ERROR: DomainError with log:
 -2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
- ...
+ [...]
 
 julia> log(2, -3)
 ERROR: DomainError with log:
 -3.0 will only return a complex result if called with a complex argument. Try -3.0(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
- ...
+ [...]
 ```
 
 !!! note
@@ -412,7 +412,7 @@ Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negativ
 [`Real`](@ref) arguments.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log2(4)
 2.0
 
@@ -424,7 +424,7 @@ ERROR: DomainError with -2.0:
 NaN result for non-NaN input.
 Stacktrace:
  [1] nan_dom_err at ./math.jl:325 [inlined]
- ...
+ [...]
 ```
 """
 log2(x)
@@ -436,7 +436,7 @@ Compute the logarithm of `x` to base 10.
 Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log10(100)
 2.0
 
@@ -448,7 +448,7 @@ ERROR: DomainError with -2.0:
 NaN result for non-NaN input.
 Stacktrace:
  [1] nan_dom_err at ./math.jl:325 [inlined]
- ...
+ [...]
 ```
 """
 log10(x)
@@ -460,7 +460,7 @@ Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@
 arguments less than -1.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log1p(-0.5)
 -0.6931471805599453
 
@@ -472,7 +472,7 @@ ERROR: DomainError with log1p:
 -2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
- ...
+ [...]
 ```
 """
 log1p(x)
@@ -496,7 +496,7 @@ Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) a
 Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> sqrt(big(81))
 9.0
 
@@ -505,7 +505,7 @@ ERROR: DomainError with -8.1e+01:
 NaN result for non-NaN input.
 Stacktrace:
  [1] sqrt(::BigFloat) at ./mpfr.jl:501
- ...
+ [...]
 
 julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
@@ -519,7 +519,7 @@ sqrt(x::Real) = sqrt(float(x))
 Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = 10^10;
 
 julia> hypot(a, a)
