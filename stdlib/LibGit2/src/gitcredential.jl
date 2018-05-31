@@ -7,11 +7,11 @@ Git credential information used in communication with git credential helpers. Th
 named using the [input/output key specification](https://git-scm.com/docs/git-credential#IOFMT).
 """
 mutable struct GitCredential
-    protocol::Union{String, Nothing}
-    host::Union{String, Nothing}
-    path::Union{String, Nothing}
-    username::Union{String, Nothing}
-    password::Union{String, Nothing}
+    protocol::Union{SecureString, Nothing}
+    host::Union{SecureString, Nothing}
+    path::Union{SecureString, Nothing}
+    username::Union{SecureString, Nothing}
+    password::Union{SecureString, Nothing}
     use_http_path::Bool
 
     function GitCredential(
@@ -20,9 +20,7 @@ mutable struct GitCredential
             path::Union{AbstractString, Nothing}=nothing,
             username::Union{AbstractString, Nothing}=nothing,
             password::Union{AbstractString, Nothing}=nothing)
-        c = new(protocol, host, path, username, password, true)
-        finalizer(securezero!, c)
-        return c
+        new(protocol, host, path, username, password, true)
     end
 end
 
@@ -32,17 +30,17 @@ end
 
 function GitCredential(cred::UserPasswordCredential, url::AbstractString)
     git_cred = parse(GitCredential, url)
-    git_cred.username = deepcopy(cred.user)
-    git_cred.password = deepcopy(cred.pass)
+    git_cred.username = SecureString(cred.user)
+    git_cred.password = SecureString(cred.pass)
     return git_cred
 end
 
-function securezero!(cred::GitCredential)
-    cred.protocol !== nothing && securezero!(cred.protocol)
-    cred.host !== nothing && securezero!(cred.host)
-    cred.path !== nothing && securezero!(cred.path)
-    cred.username !== nothing && securezero!(cred.username)
-    cred.password !== nothing && securezero!(cred.password)
+function shred!(cred::GitCredential)
+    cred.protocol !== nothing && shred!(cred.protocol)
+    cred.host !== nothing && shred!(cred.host)
+    cred.path !== nothing && shred!(cred.path)
+    cred.username !== nothing && shred!(cred.username)
+    cred.password !== nothing && shred!(cred.password)
     return cred
 end
 
@@ -90,12 +88,11 @@ function Base.parse(::Type{GitCredential}, url::AbstractString)
 end
 
 function Base.copy!(a::GitCredential, b::GitCredential)
-    # Note: deepcopy calls avoid issues with securezero!
-    a.protocol = deepcopy(b.protocol)
-    a.host = deepcopy(b.host)
-    a.path = deepcopy(b.path)
-    a.username = deepcopy(b.username)
-    a.password = deepcopy(b.password)
+    a.protocol = b.protocol
+    a.host = b.host
+    a.path = b.path
+    a.username = b.username
+    a.password = b.password
     return a
 end
 
@@ -116,9 +113,12 @@ function Base.read!(io::IO, cred::GitCredential)
         if key == "url"
             # Any components which are missing from the URL will be set to empty
             # https://git-scm.com/docs/git-credential#git-credential-codeurlcode
+            shred!(cred)
             copy!(cred, parse(GitCredential, value))
         else
-            Base.setproperty!(cred, Symbol(key), String(value))
+            field = getproperty(cred, Symbol(key))
+            field !== nothing && shred!(field)
+            setproperty!(cred, Symbol(key), String(value))
         end
     end
 
@@ -283,7 +283,7 @@ function approve(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractStri
         approve(helper, git_cred)
     end
 
-    securezero!(git_cred)
+    shred!(git_cred)
     nothing
 end
 
@@ -295,6 +295,6 @@ function reject(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractStrin
         reject(helper, git_cred)
     end
 
-    securezero!(git_cred)
+    shred!(git_cred)
     nothing
 end

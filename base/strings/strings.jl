@@ -9,3 +9,4 @@ import .Unicode: textwidth, islowercase, isuppercase, isletter, isdigit, isnumer
 
 include("strings/util.jl")
 include("strings/io.jl")
+include("strings/secure.jl")
