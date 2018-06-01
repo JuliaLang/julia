@@ -50,6 +50,7 @@ in which case its length is computed such that its product with all
 the specified dimensions is equal to the length of the original array
 `A`. The total number of elements must not change.
 
+# Examples
 ```jldoctest
 julia> A = Vector(1:16)
 16-element Array{Int64,1}:

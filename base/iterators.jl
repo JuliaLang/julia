@@ -473,7 +473,7 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
-# Example
+# Examples
 ```jldoctest
 julia> (a, rest) = Iterators.peel("abc");
 
@@ -992,7 +992,7 @@ iteration can be resumed from the same spot by continuing to iterate over the
 same iterator object (in contrast, an immutable iterator would restart from the
 beginning).
 
-# Example:
+# Examples
 ```jldoctest
 julia> a = Iterators.Stateful("abcdef");
 

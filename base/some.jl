@@ -48,7 +48,6 @@ if any. Otherwise throw an error.
 Arguments of type [`Some`](@ref) are unwrapped.
 
 # Examples
-
 ```jldoctest
 julia> something(nothing, 1)
 1

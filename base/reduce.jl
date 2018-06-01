@@ -80,6 +80,7 @@ end
 Like [`reduce`](@ref), but with guaranteed left associativity. `v0` will be used
 exactly once.
 
+# Examples
 ```jldoctest
 julia> foldl(=>, 0, 1:4)
 (((0=>1)=>2)=>3) => 4
@@ -93,6 +94,7 @@ foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
 Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In general, this
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
+# Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
 ((1=>2)=>3) => 4
@@ -148,6 +150,7 @@ end
 Like [`reduce`](@ref), but with guaranteed right associativity. `v0` will be used
 exactly once.
 
+# Examples
 ```jldoctest
 julia> foldr(=>, 0, 1:4)
 1 => (2=>(3=>(4=>0)))
@@ -161,6 +164,7 @@ foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
 Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In general, this
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
+# Examples
 ```jldoctest
 julia> foldr(=>, 1:4)
 1 => (2=>(3=>4))
@@ -222,6 +226,7 @@ collections. It is unspecified whether `v0` is used for non-empty collections.
 map(f, itr))`, but will in general execute faster since no intermediate collection needs to
 be created. See documentation for [`reduce`](@ref) and [`map`](@ref).
 
+# Examples
 ```jldoctest
 julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
 14
@@ -390,6 +395,7 @@ Like `reduce(op, v0, itr)`. This cannot be used with empty collections, except f
 special cases (e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can
 determine the neutral element of `op`.
 
+# Examples
 ```jldoctest
 julia> reduce(*, [2; 3; 4])
 24
@@ -411,6 +417,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> sum(abs2, [2; 3; 4])
 29
@@ -442,6 +449,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> sum(1:20)
 210
@@ -460,6 +468,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> prod(abs2, [2; 3; 4])
 576
@@ -476,6 +485,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> prod(1:20)
 2432902008176640000
@@ -507,6 +517,7 @@ minimum(f::Callable, a) = mapreduce(f, min, a)
 
 Returns the largest element in a collection.
 
+# Examples
 ```jldoctest
 julia> maximum(-20.5:10)
 9.5
@@ -522,6 +533,7 @@ maximum(a) = mapreduce(identity, max, a)
 
 Returns the smallest element in a collection.
 
+# Examples
 ```jldoctest
 julia> minimum(-20.5:10)
 -20.5
@@ -542,6 +554,7 @@ extrema(x::Real) = (x, x)
 
 Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
 
+# Examples
 ```jldoctest
 julia> extrema(2:10)
 (2, 10)
@@ -577,6 +590,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
@@ -611,6 +625,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
@@ -647,6 +662,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
 true
@@ -694,6 +710,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
 true
@@ -759,6 +776,7 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
+# Examples
 ```jldoctest
 julia> a = 1:3:20
 1:3:19
@@ -810,6 +828,7 @@ Count the number of elements in `itr` for which predicate `p` returns `true`.
 If `p` is omitted, counts the number of `true` elements in `itr` (which
 should be a collection of boolean values).
 
+# Examples
 ```jldoctest
 julia> count(i->(4<=i<=6), [2,3,4,5,6])
 3
