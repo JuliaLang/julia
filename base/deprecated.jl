@@ -323,11 +323,11 @@ end
 @deprecate cat_t(::Type{Val{N}}, ::Type{T}, A, B) where {N,T} cat_t(T, A, B, dims=Val(N)) false
 @deprecate reshape(A::AbstractArray, ::Type{Val{N}}) where {N} reshape(A, Val(N))
 
-# Issue #
+# Issue #27100
 @deprecate cat(dims, As...) cat(As..., dims=dims)
 @deprecate cat_t(dims, ::Type{T}, As...) where {T}  cat_t(T, As...; dims=dims) false
-# Disambiguate
-cat_t(::Type{T}, ::Type{S}, As...; dims=dims) where {T,S} = _cat_t(T, S, As...; dims=dims)
+# Disambiguate — this isn't deprecated but it needs to be supported
+cat_t(::Type{T}, ::Type{S}, As...; dims=dims) where {T,S} = _cat_t(dims, T, S, As...)
 
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
