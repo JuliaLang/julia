@@ -1706,6 +1706,8 @@ end
 
 @eval @deprecate $(Symbol("@schedule")) $(Symbol("@async"))
 
+@deprecate_moved linreg "StatsBase"
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

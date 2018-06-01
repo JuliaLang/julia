@@ -1248,6 +1248,8 @@ Deprecated or removed
 
   * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.
 
+  * `linreg` has been moved to the package StatsBase ([#27152]).
+
   * `setrounding` has been deprecated for `Float32` and `Float64`, as the behaviour was too unreliable ([#26935]).
 
 Command-line option changes
@@ -1581,6 +1583,7 @@ Command-line option changes
 [#27075]: https://github.com/JuliaLang/julia/issues/27075
 [#27100]: https://github.com/JuliaLang/julia/issues/27100
 [#27121]: https://github.com/JuliaLang/julia/issues/27121
+[#27152]: https://github.com/JuliaLang/julia/issues/27152
 [#27159]: https://github.com/JuliaLang/julia/issues/27159
 [#27164]: https://github.com/JuliaLang/julia/issues/27164
 [#27189]: https://github.com/JuliaLang/julia/issues/27189
