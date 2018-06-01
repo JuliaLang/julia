@@ -4,7 +4,6 @@ module Terminals
 
 export
     AbstractTerminal,
-    TextTerminal,
     UnixTerminal,
     TerminalBuffer,
     TTYTerminal,
@@ -38,63 +37,59 @@ import Base:
 
 abstract type AbstractTerminal <: Base.AbstractPipe end
 
-## TextTerminal ##
-
-abstract type TextTerminal <: AbstractTerminal end
-
 # Terminal interface:
-pipe_reader(::TextTerminal) = error("Unimplemented")
-pipe_writer(::TextTerminal) = error("Unimplemented")
-displaysize(::TextTerminal) = error("Unimplemented")
-cmove(t::TextTerminal, x, y) = error("Unimplemented")
-getX(t::TextTerminal) = error("Unimplemented")
-getY(t::TextTerminal) = error("Unimplemented")
-pos(t::TextTerminal) = (getX(t), getY(t))
+pipe_reader(::AbstractTerminal) = error("Unimplemented")
+pipe_writer(::AbstractTerminal) = error("Unimplemented")
+displaysize(::AbstractTerminal) = error("Unimplemented")
+cmove(t::AbstractTerminal, x, y) = error("Unimplemented")
+getX(t::AbstractTerminal) = error("Unimplemented")
+getY(t::AbstractTerminal) = error("Unimplemented")
+pos(t::AbstractTerminal) = (getX(t), getY(t))
 
 # Relative moves (Absolute position fallbacks)
-cmove_up(t::TextTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
+cmove_up(t::AbstractTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
 cmove_up(t) = cmove_up(t, 1)
 
-cmove_down(t::TextTerminal, n) = cmove(getX(t), max(height(t), getY(t)+n))
+cmove_down(t::AbstractTerminal, n) = cmove(getX(t), max(height(t), getY(t)+n))
 cmove_down(t) = cmove_down(t, 1)
 
-cmove_left(t::TextTerminal, n) = cmove(max(1, getX(t)-n), getY(t))
+cmove_left(t::AbstractTerminal, n) = cmove(max(1, getX(t)-n), getY(t))
 cmove_left(t) = cmove_left(t, 1)
 
-cmove_right(t::TextTerminal, n) = cmove(max(width(t), getX(t)+n), getY(t))
+cmove_right(t::AbstractTerminal, n) = cmove(max(width(t), getX(t)+n), getY(t))
 cmove_right(t) = cmove_right(t, 1)
 
-cmove_line_up(t::TextTerminal, n) = cmove(1, max(1, getY(t)-n))
+cmove_line_up(t::AbstractTerminal, n) = cmove(1, max(1, getY(t)-n))
 cmove_line_up(t) = cmove_line_up(t, 1)
 
-cmove_line_down(t::TextTerminal, n) = cmove(1, max(height(t), getY(t)+n))
+cmove_line_down(t::AbstractTerminal, n) = cmove(1, max(height(t), getY(t)+n))
 cmove_line_down(t) = cmove_line_down(t, 1)
 
-cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
+cmove_col(t::AbstractTerminal, c) = cmove(c, getY(t))
 
 # Defaults
-hascolor(::TextTerminal) = false
+hascolor(::AbstractTerminal) = false
 
 # Utility Functions
-width(t::TextTerminal) = displaysize(t)[2]
-height(t::TextTerminal) = displaysize(t)[1]
+width(t::AbstractTerminal) = displaysize(t)[2]
+height(t::AbstractTerminal) = displaysize(t)[1]
 
 # For terminals with buffers
-flush(t::TextTerminal) = nothing
+flush(t::AbstractTerminal) = nothing
 
-clear(t::TextTerminal) = error("Unimplemented")
-clear_line(t::TextTerminal, row) = error("Unimplemented")
-clear_line(t::TextTerminal) = error("Unimplemented")
+clear(t::AbstractTerminal) = error("Unimplemented")
+clear_line(t::AbstractTerminal, row) = error("Unimplemented")
+clear_line(t::AbstractTerminal) = error("Unimplemented")
 
-raw!(t::TextTerminal, raw::Bool) = error("Unimplemented")
+raw!(t::AbstractTerminal, raw::Bool) = error("Unimplemented")
 
-beep(t::TextTerminal) = nothing
-enable_bracketed_paste(t::TextTerminal) = nothing
-disable_bracketed_paste(t::TextTerminal) = nothing
+beep(t::AbstractTerminal) = nothing
+enable_bracketed_paste(t::AbstractTerminal) = nothing
+disable_bracketed_paste(t::AbstractTerminal) = nothing
 
 ## UnixTerminal ##
 
-abstract type UnixTerminal <: TextTerminal end
+abstract type UnixTerminal <: AbstractTerminal end
 
 pipe_reader(t::UnixTerminal) = t.in_stream
 pipe_writer(t::UnixTerminal) = t.out_stream
@@ -166,6 +161,13 @@ else
         end
     end
 end
+
+"""
+    hascolor(t::AbstractTerminal)
+
+Return whether terminal `t` supports ANSI formatting codes
+"""
+hascolor
 
 # use cached value of have_color
 Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))

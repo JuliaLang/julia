@@ -191,7 +191,7 @@ end
 ## BasicREPL ##
 
 mutable struct BasicREPL <: AbstractREPL
-    terminal::TextTerminal
+    terminal::AbstractTerminal
     waserror::Bool
     BasicREPL(t) = new(t,false)
 end
@@ -295,7 +295,7 @@ const GlobalOptions = Options()
 ## LineEditREPL ##
 
 mutable struct LineEditREPL <: AbstractREPL
-    t::TextTerminal
+    t::AbstractTerminal
     hascolor::Bool
     prompt_color::String
     input_color::String
@@ -321,7 +321,7 @@ specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 
-LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
+LineEditREPL(t::AbstractTerminal, hascolor::Bool, envcolors::Bool=false) =
     LineEditREPL(t, hascolor,
         hascolor ? Base.text_colors[:green] : "",
         hascolor ? Base.input_color() : "",
@@ -1027,13 +1027,6 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     dopushdisplay && popdisplay(d)
 end
 
-if isdefined(Base, :banner_color)
-    banner(io, t) = banner(io, hascolor(t))
-    banner(io, x::Bool) = print(io, x ? Base.banner_color : Base.banner_plain)
-else
-    banner(io,t) = Base.banner(io)
-end
-
 ## StreamREPL ##
 
 mutable struct StreamREPL <: AbstractREPL
@@ -1106,15 +1099,15 @@ function ends_with_semicolon(line::AbstractString)
 end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
-    have_color = Base.have_color
-    banner(repl.stream, have_color)
+    Base.banner(repl.stream)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
     while !eof(repl.stream)
+        have_color = Base.have_color # TODO: get(repl.stream, :color, false)
         if have_color
-            print(repl.stream,repl.prompt_color)
+            print(repl.stream, repl.prompt_color)
         end
         print(repl.stream, "julia> ")
         if have_color
