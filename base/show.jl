@@ -633,8 +633,9 @@ end
 module IRShow
     const Compiler = Core.Compiler
     using Core.IR
+    import ..Base
     import .Base: IdSet
-    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument
+    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.show(io::IO, r::Compiler.StmtRange) = print(io, Compiler.first(r):Compiler.last(r))
     include("compiler/ssair/show.jl")

@@ -14,11 +14,9 @@ export quot,
 
 quot(ex) = Expr(:quote, ex)
 
-isexpr(ex::Expr, head)          = ex.head === head
-isexpr(ex::Expr, heads::Union{Set,Vector,Tuple}) = in(ex.head, heads)
-isexpr(ex,       head)          = false
-
-isexpr(ex,       head, n::Int)  = isexpr(ex, head) && length(ex.args) == n
+isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
+isexpr(@nospecialize(ex), heads::Union{Set,Vector,Tuple}) = isa(ex, Expr) && in(ex.head, heads)
+isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) == n
 
 
 # ---- show_sexpr: print an AST as an S-expression ----
