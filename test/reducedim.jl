@@ -151,7 +151,7 @@ end
     end
 
 end
-## findmin/findmax/minumum/maximum
+## findmin/findmax/minimum/maximum
 
 A = [1.0 5.0 6.0;
      5.0 2.0 4.0]
@@ -351,4 +351,10 @@ end
     @test eltype(result) === (T <: Base.SmallSigned ? Int :
                               T <: Base.SmallUnsigned ? UInt :
                               T)
+end
+
+@testset "argmin/argmax" begin
+    B = reshape(3^3:-1:1, (3, 3, 3))
+    @test B[argmax(B, dims=[2, 3])] == maximum(B, dims=[2, 3])
+    @test B[argmin(B, dims=[2, 3])] == minimum(B, dims=[2, 3])
 end

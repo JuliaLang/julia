@@ -806,3 +806,53 @@ function _findmax(A, region)
 end
 
 reducedim1(R, A) = _length(indices1(R)) == 1
+
+"""
+    argmin(A; dims) -> indices
+
+For an array input, return the indices of the minimum elements over the given dimensions.
+`NaN` is treated as less than all other values.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2; 3 4]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> argmin(A, dims=1)
+1×2 Array{CartesianIndex{2},2}:
+ CartesianIndex(1, 1)  CartesianIndex(1, 2)
+
+julia> argmin(A, dims=2)
+2×1 Array{CartesianIndex{2},2}:
+ CartesianIndex(1, 1)
+ CartesianIndex(2, 1)
+```
+"""
+argmin(A::AbstractArray; dims=:) = findmin(A; dims=dims)[2]
+
+"""
+    argmax(A; dims) -> indices
+
+For an array input, return the indices of the maximum elements over the given dimensions.
+`NaN` is treated as greater than all other values.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2; 3 4]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> argmax(A, dims=1)
+1×2 Array{CartesianIndex{2},2}:
+ CartesianIndex(2, 1)  CartesianIndex(2, 2)
+
+julia> argmax(A, dims=2)
+2×1 Array{CartesianIndex{2},2}:
+ CartesianIndex(1, 2)
+ CartesianIndex(2, 2)
+```
+"""
+argmax(A::AbstractArray; dims=:) = findmax(A; dims=dims)[2]
