@@ -376,7 +376,7 @@ const helps = Dict(
     the project file is summarized.
     """, CMD_GENERATE => md"""
 
-        create name
+        generate name
 
     Create a project called `name` in the current folder.
     """,
@@ -454,6 +454,7 @@ const helps = Dict(
     in the package directory. The option `--coverage` can be used to run the tests with
     coverage enabled.
     """, CMD_GC => md"""
+        gc
 
     Deletes packages that are not reached from any environment used within the last 6 weeks.
     """, CMD_INIT => md"""
