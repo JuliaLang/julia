@@ -671,11 +671,19 @@ where syntactic conflicts arise:
     `0` multiplied by the variable `xff`.
   * The floating-point literal expression `1e10` could be interpreted as the numeric literal `1` multiplied
     by the variable `e10`, and similarly with the equivalent `E` form.
+  * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
+    `1.5` multiplied by the variable `f22`.
 
-In both cases, we resolve the ambiguity in favor of interpretation as numeric literals:
+In all cases, we resolve the ambiguity in favor of interpretation as numeric literals:
 
   * Expressions starting with `0x` are always hexadecimal literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
+  * Expressions starting with a numeric literal followed by `f` are always 32-bit floating-point literals.
+
+Unlike `E`, which is equivalent to `e` in numeric literals for historical reasons, `F` is just another
+letter and does not behave like `f` in numeric literals. Hence, expressions starting with a numeric literal
+followed by `F` are interpreted as the numerical literal multiplied by a variable, which means that, for
+example, `1.5F22` is equal to `1.5 * F22`.
 
 ## Literal zero and one
 
