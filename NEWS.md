@@ -487,7 +487,7 @@ This section lists changes that do not have deprecation warnings.
   * `widen` on 8- and 16-bit integer types now widens to the platform word size (`Int`)
     instead of to a 32-bit type ([#26859]).
 
-  * `mv`,`cp`, `touch`, `mkdir`, `mkpath` now return the path that was created/modified
+  * `mv`,`cp`, `touch`, `mkdir`, `mkpath`, `chmod` and `chown` now return the path that was created/modified
     rather than `nothing` ([#27071]).
 
   * Regular expressions now default to UCP mode. Escape sequences such as `\w`
