@@ -339,16 +339,18 @@ const disable_text_style = AnyDict(
 
 # Create a docstring with an automatically generated list
 # of colors.
-available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
-const possible_formatting_symbols = [:normal, :bold, :default]
-available_text_colors = cat(
-    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
-    dims=1)
+let possible_formatting_symbols = [:normal, :bold, :default, :paragraph]
+    available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
+    available_text_colors = cat(
+        sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
+        sort!(setdiff(  available_text_colors, possible_formatting_symbols));
+        dims=1)
+global const available_text_colors_docstring =
+    string(join([string("`:", key, "`")
+                 for key in available_text_colors],
+                ",\n", ", or \n"))
+end
 
-const available_text_colors_docstring =
-    string(join([string("`:", key,"`")
-                 for key in available_text_colors], ",\n", ", or \n"))
 
 """Dictionary of color codes for the terminal.
 
@@ -391,7 +393,7 @@ end
 
 Print `xs` in a color specified as a symbol or integer, optionally in bold.
 
-`color` may take any of the values $(Base.available_text_colors_docstring)
+`color` may take any of the values $available_text_colors_docstring
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
 If the keyword `bold` is given as `true`, the result will be printed in bold.
 """

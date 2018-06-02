@@ -175,31 +175,26 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     end
 end
 
-# (Note that TTY and TTYTerminal io types have a :color property.)
-unwrapcontext(io::IO) = io, get(io,:color,false) ? ImmutableDict{Symbol,Any}(:color, true) : ImmutableDict{Symbol,Any}()
-unwrapcontext(io::IOContext) = io.io, io.dict
+IOContext(io::IOContext, dict::ImmutableDict) = typeof(io)(io.io, dict)
+IOContext(io::IO, dict::ImmutableDict) = IOContext{typeof(io)}(io, dict)
 
-function IOContext(io::IO, dict::ImmutableDict)
-    io0 = unwrapcontext(io)[1]
-    IOContext{typeof(io0)}(io0, dict)
-end
-
-convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)
+convert(::Type{IOContext}, io::IOContext) = io
+convert(::Type{IOContext}, io::IO) = IOContext(io, ImmutableDict{Symbol, Any}())
 
 # rename to IOContext when deprecation of `IOContext(io::IO; kws...)` is removed
 _IOContext(io::IO) = convert(IOContext, io)
 
-function IOContext(io::IO, KV::Pair)
-    io0, d = unwrapcontext(io)
-    IOContext(io0, ImmutableDict{Symbol,Any}(d, KV[1], KV[2]))
-end
+IOContext(io::IOContext, KV::Pair) = IOContext(io.io, ImmutableDict{Symbol, Any}(io.dict, KV[1], KV[2]))
+IOContext(io::IO, KV::Pair) = IOContext(io, ImmutableDict{Symbol, Any}(KV[1], KV[2]))
+
 
 """
     IOContext(io::IO, context::IOContext)
 
 Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
 """
-IOContext(io::IO, context::IO) = IOContext(unwrapcontext(io)[1], unwrapcontext(context)[2])
+IOContext(io::IO, context::IOContext) = IOContext(io, context.dict)
+IOContext(io::IO, context::IO) = _IOContext(io)
 
 """
     IOContext(io::IO, KV::Pair...)
@@ -906,9 +901,13 @@ const indent_width = 4
 
 is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 
-emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
-    printstyled(io, str; color=col, bold=true) :
-    print(io, uppercase(str))
+function emphasize(io, str::AbstractString, col = Base.error_color())
+    if get(io, :color, false)
+        printstyled(io, str; color=col, bold=true)
+    else
+        print(io, uppercase(str))
+    end
+end
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
 show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")

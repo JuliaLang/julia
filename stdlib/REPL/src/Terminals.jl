@@ -20,13 +20,12 @@ export
     end_keypad_transmit_mode,
     getX,
     getY,
-    hascolor,
+    supports_color,
     pos,
     raw!
 
 import Base:
     check_open, # stream.jl
-    displaysize,
     flush,
     pipe_reader,
     pipe_writer,
@@ -40,7 +39,6 @@ abstract type AbstractTerminal <: Base.AbstractPipe end
 # Terminal interface:
 pipe_reader(::AbstractTerminal) = error("Unimplemented")
 pipe_writer(::AbstractTerminal) = error("Unimplemented")
-displaysize(::AbstractTerminal) = error("Unimplemented")
 cmove(t::AbstractTerminal, x, y) = error("Unimplemented")
 getX(t::AbstractTerminal) = error("Unimplemented")
 getY(t::AbstractTerminal) = error("Unimplemented")
@@ -68,14 +66,14 @@ cmove_line_down(t) = cmove_line_down(t, 1)
 cmove_col(t::AbstractTerminal, c) = cmove(c, getY(t))
 
 # Defaults
-hascolor(::AbstractTerminal) = false
+supports_color(::AbstractTerminal) = false
 
 # Utility Functions
 width(t::AbstractTerminal) = displaysize(t)[2]
 height(t::AbstractTerminal) = displaysize(t)[1]
 
 # For terminals with buffers
-flush(t::AbstractTerminal) = nothing
+flush(t::AbstractTerminal) = flush(pipe_writer(t))
 
 clear(t::AbstractTerminal) = error("Unimplemented")
 clear_line(t::AbstractTerminal, row) = error("Unimplemented")
@@ -143,37 +141,45 @@ end
 @eval clear_line(t::UnixTerminal) = write(t.out_stream, $"\r$(CSI)0K")
 beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
-Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
-
-if Sys.iswindows()
-    hascolor(t::TTYTerminal) = true
-else
-    function hascolor(t::TTYTerminal)
-        startswith(t.term_type, "xterm") && return true
-        try
-            @static if Sys.KERNEL == :FreeBSD
-                return success(`tput AF 0`)
-            else
-                return success(`tput setaf 0`)
-            end
-        catch
-            return false
-        end
-    end
-end
-
 """
-    hascolor(t::AbstractTerminal)
+    supports_color(t::AbstractTerminal)
 
 Return whether terminal `t` supports ANSI formatting codes
 """
-hascolor
+supports_color(t::TTYTerminal) = supports_color(t.term_type)
 
-# use cached value of have_color
-Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))
-Base.haskey(t::TTYTerminal, key) = haskey(pipe_writer(t), key)
-Base.getindex(t::TTYTerminal, key) = getindex(pipe_writer(t), key)
-Base.get(t::TTYTerminal, key, default) = get(pipe_writer(t), key, default)
+function supports_color(term_type::String)
+    if isempty(term_type) || term_type == "dumb"
+        return false
+    end
+    @static if Sys.iswindows()
+        return true
+    else
+        startswith(term_type, "xterm") && return true # fast-path, because this is usually true
+        set_a_foreground = @static if Sys.KERNEL == :FreeBSD
+                "AF"
+            else
+                "setaf"
+            end
+        cmd = pipeline(`tput -T $term_type $set_a_foreground 0`, stderr=devnull)
+        return "$(CSI)30m" == try
+                read(cmd, String)
+            catch
+                ""
+            end
+    end
+end
+
+# pass through value of IOContext properties
+# Normally, `IOContext` should be the outermost wrapper,
+# However, the REPL module unfortunately constrains its type signatures to subtype AbstractTerminal
+Base.in(key_value::Pair, t::AbstractTerminal) = in(key_value, pipe_writer(t))
+Base.haskey(t::AbstractTerminal, key) = haskey(pipe_writer(t), key)
+Base.getindex(t::AbstractTerminal, key) = getindex(pipe_writer(t), key)
+Base.get(t::AbstractTerminal, key, default) = get(pipe_writer(t), key, default)
+Base.displaysize(t::AbstractTerminal) = displaysize(pipe_writer(t))
+Base.IOContext(t::AbstractTerminal, KV::Pair) = Base.IOContext(pipe_writer(t), KV)
+convert(::Type{IOContext}, io::AbstractTerminal) = convert(IOContext, pipe_writer(t))
 
 Base.peek(t::TTYTerminal) = Base.peek(t.in_stream)
 

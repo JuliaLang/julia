@@ -105,7 +105,7 @@ function display_error(io::IO, er, bt)
     showerror(IOContext(io, :limit => true), er, bt)
     println(io)
 end
-display_error(er, bt) = display_error(stderr, er, bt)
+display_error(er, bt) = display_error(IOContext(stderr, :color => have_color), er, bt)
 display_error(er) = display_error(er, [])
 
 function eval_user_input(@nospecialize(ast), show_value::Bool)
@@ -340,13 +340,17 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            color_set || (global have_color = REPL.Terminals.hascolor(term))
-            banner && REPL.banner(term)
+            color_set || (global have_color = REPL.Terminals.supports_color(term))
+            if have_color
+                term.out_stream = IOContext(term.out_stream, :color => true)
+                term.err_stream = IOContext(term.err_stream, :color => true)
+            end
+            banner && Base.banner(term)
             if term.term_type == "dumb"
                 active_repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
             else
-                active_repl = REPL.LineEditREPL(term, have_color, true)
+                active_repl = REPL.LineEditREPL(term, true)
                 active_repl.history_file = history_file
             end
             # Make sure any displays pushed in .julia/config/startup.jl ends up above the
