@@ -329,12 +329,12 @@ module TrickyArithmetic
     Base.promote_rule(T::Type{<:Union{A,B,C}}, ::Type{D{NT,DT}}) where {NT,DT} = D{promote_type(NT,T),DT}
     Base.promote_rule(::Type{D{NS,DS}}, ::Type{D{NT,DT}}) where {NS,DS,NT,DT} = D{promote_type(NS,NT),promote_type(DS,DT)}
 end
-@testset "lufact with type whose sum is another type" begin
+@testset "lu with type whose sum is another type" begin
     A = TrickyArithmetic.A[1 2; 3 4]
     ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
-    B = @inferred lufact(A)
+    B = @inferred lu(A)
     @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
-    C = @inferred lufact(A, Val(false))
+    C = @inferred lu(A, Val(false))
     @test C isa LinearAlgebra.LU{ElT,Matrix{ElT}}
 end
 
