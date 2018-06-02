@@ -946,10 +946,9 @@ function length(itr::PartitionIterator)
 end
 
 function iterate(itr::PartitionIterator{<:Vector}, state=1)
-    iterate(itr.c, state) === nothing && return nothing
-    l = state
-    r = min(state + itr.n-1, length(itr.c))
-    return view(itr.c, l:r), r + 1
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
