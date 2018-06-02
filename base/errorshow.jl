@@ -324,7 +324,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
 
     for (func, arg_types_param) in funcs
         for method in methods(func)
-            buf = IOBuffer()
+            buf = IOFormatBuffer()
             iob = IOContext(buf, io)
             tv = Any[]
             sig0 = method.sig
@@ -349,7 +349,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             print(iob, "(")
             t_i = copy(arg_types_param)
             right_matches = 0
-            for i = 1 : min(length(t_i), length(sig))
+            for i = 1:min(length(t_i), length(sig))
                 i > 1 && print(iob, ", ")
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
@@ -369,18 +369,18 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 if t_in === Union{}
                     if get(io, :color, false)
                         Base.with_output_color(Base.error_color(), iob) do iob
-                            print(iob, "::$sigstr")
+                            print(iob, "::", sigstr)
                         end
                     else
-                        print(iob, "!Matched::$sigstr")
+                        print(iob, "!Matched::", sigstr)
                     end
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
                     # signature then there will be a type intersect
                     t_i[i] = sig[i]
                 else
-                    right_matches += j==i ? 1 : 0
-                    print(iob, "::$sigstr")
+                    j == i && (right_matches += 1)
+                    print(iob, "::", sigstr)
                 end
             end
             special && right_matches == 0 && continue
@@ -446,7 +446,6 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 if ex.world < min_world(method)
                     print(iob, " (method too new to be called from this world context.)")
                 end
-                # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
             end
         end
@@ -465,7 +464,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     break
                 end
                 i += 1
-                print(io, String(take!(line[1])))
+                write(io, line[1])
             end
         end
     end

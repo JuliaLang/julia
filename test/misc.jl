@@ -76,7 +76,6 @@ end
 @test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting stderr.
 let
     redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
@@ -442,13 +441,14 @@ let buf_color = IOBuffer()
     @test String(take!(buf_color)) == "\e[31m\e[1mTwo\e[22m\e[39m\n\e[31m\e[1mlines\e[22m\e[39m"
 end
 
-if stdout isa Base.TTY
-    @test haskey(stdout, :color) == true
+let
+    @test haskey(stdout, :color) == false
     @test haskey(stdout, :bar) == false
-    @test (:color=>Base.have_color) in stdout
-    @test (:color=>!Base.have_color) ∉ stdout
-    @test stdout[:color] == get(stdout, :color, nothing) == Base.have_color
+    @test (:color=>true) ∉ stdout
+    @test (:color=>false) ∉ stdout
+    @test get(stdout, :color, nothing) === nothing
     @test get(stdout, :bar, nothing) === nothing
+    @test_throws KeyError stdout[:color]
     @test_throws KeyError stdout[:bar]
 end
 
@@ -471,6 +471,29 @@ let buf = IOBuffer()
     # Check that boldness is turned off
     printstyled(buf_color, "foo"; bold=true, color=:red)
     @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
+end
+
+let buf = IOBuffer()
+    Base.with_output_color(:red, IOContext(buf, :color => true)) do io; print(io, "red",
+        Base.text_colors[:underline], " underline")
+    Base.with_output_color(:blue, io) do io; print(io, " blue")
+    Base.with_output_color(:bold, io) do io; print(io, " bold")
+    Base.with_output_color(:green, io) do io; print(io, " green\ngreen")
+    end; print(io, " bold",
+        Base.text_colors[:underline], " underline")
+    end; print(io, " blue")
+    end; print(io, " red")
+    end
+    @test String(take!(buf)) == "\e[31mred\e[4m underline\e[34m blue\e[1m bold\e[32m green\e[22m\e[39m\n\e[32m\e[1mgreen\e[34m bold\e[4m underline\e[22m blue\e[31m red\e[39m"
+end
+
+let io = convert(IOContext, Base.IOFormatBuffer())
+    printstyled(io, "red", color = :red)
+    print(io, ", ")
+    printstyled(io, "blue", color = :blue)
+    buf = IOBuffer()
+    write(IOContext(buf, :color => true), io.io)
+    @test String(take!(buf)) == "\e[31mred\e[39m, \e[34mblue\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
