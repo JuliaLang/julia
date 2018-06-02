@@ -677,10 +677,8 @@ function grow_to!(dest, itr, st)
 end
 
 ## Iteration ##
-function iterate(A::Array, i=1)
-    @_propagate_inbounds_meta
-    i >= length(A) + 1 ? nothing : (A[i], i+1)
-end
+
+iterate(A::Array, i=1) = (i % UInt) - 1 < length(A) ? (@inbounds A[i], i + 1) : nothing
 
 ## Indexing: getindex ##
 
