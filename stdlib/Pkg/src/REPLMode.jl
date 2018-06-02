@@ -738,6 +738,7 @@ function do_init!(ctx::Context, tokens::Vector{Token})
 end
 
 function do_generate!(ctx::Context, tokens::Vector{Token})
+    isempty(tokens) && cmderror("`generate` requires a project name as an argument")
     local pkg
     while !isempty(tokens)
         token = popfirst!(tokens)
