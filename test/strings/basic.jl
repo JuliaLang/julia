@@ -555,7 +555,7 @@ mutable struct CharStr <: AbstractString
     chars::Vector{Char}
     CharStr(x) = new(collect(x))
 end
-Base.iterate(x::CharStr, i::Integer=1) = iterate(x.chars, i)
+Base.iterate(x::CharStr, state...) = iterate(x.chars, state...)
 Base.lastindex(x::CharStr) = lastindex(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
