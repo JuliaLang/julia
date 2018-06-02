@@ -125,7 +125,24 @@ function lu(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
     lu!(copy(A), pivot)
 end
 
-rationalop(x) = (x*x + x*x) / (x*x + x*x)
+function lutype(T::Type)
+    # In generic_lufact!, the elements of the lower part of the matrix are
+    # obtained using the division of two matrix elements. Hence their type can
+    # be different (e.g. the division of two types with the same unit is a type
+    # without unit).
+    # The elements of the upper part are obtained by U - U * L
+    # where U is an upper part element and L is a lower part element.
+    # Therefore, the types LT, UT should be invariant under the map:
+    # (LT, UT) -> begin
+    #     L = oneunit(UT) / oneunit(UT)
+    #     U = oneunit(UT) - oneunit(UT) * L
+    #     typeof(L), typeof(U)
+    # end
+    # The following should handle most cases
+    UT = typeof(oneunit(T) - oneunit(T) * (oneunit(T) / (oneunit(T) + zero(T))))
+    LT = typeof(oneunit(UT) / oneunit(UT))
+    S = promote_type(T, LT, UT)
+end
 
 # for all other types we must promote to a type which is stable under division
 """
@@ -193,14 +210,14 @@ true
 ```
 """
 function lu(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T
-    S = promote_op(rationalop, T)
+    S = lutype(T)
     AA = similar(A, S)
     copyto!(AA, A)
     lu!(AA, pivot)
 end
 # We can't assume an ordered field so we first try without pivoting
 function lu(A::AbstractMatrix{T}) where T
-    S = promote_op(rationalop, T)
+    S = lutype(T)
     AA = similar(A, S)
     copyto!(AA, A)
     F = lu!(AA, Val(false))

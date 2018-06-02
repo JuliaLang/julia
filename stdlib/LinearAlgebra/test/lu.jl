@@ -275,6 +275,7 @@ module TrickyArithmetic
     struct A
         x::Int
     end
+    A(a::A) = a
     Base.convert(::Type{A}, i::Int) = A(i)
     Base.zero(::Union{A, Type{A}}) = A(0)
     Base.one(::Union{A, Type{A}}) = A(1)
@@ -288,31 +289,46 @@ module TrickyArithmetic
     Base.zero(::Union{C, Type{C}}) = C(0)
     Base.one(::Union{C, Type{C}}) = C(1)
 
-    Base.:(*)(a::A, b::A) = B(a.x*b.x)
     Base.:(*)(x::Int, a::A) = B(x*a.x)
     Base.:(*)(a::A, x::Int) = B(a.x*x)
-    Base.:(*)(a::C, b::C) = C(a.x+b.x)
-    Base.:(+)(a::Union{B,C}, b::Union{B,C}) = C(a.x+b.x)
-    Base.:(-)(a::Union{B,C}, b::Union{B,C}) = C(a.x-b.x)
+    Base.:(*)(a::Union{A,B}, b::Union{A,B}) = B(a.x*b.x)
+    Base.:(*)(a::Union{A,B,C}, b::Union{A,B,C}) = C(a.x*b.x)
+    Base.:(+)(a::Union{A,B,C}, b::Union{A,B,C}) = C(a.x+b.x)
+    Base.:(-)(a::Union{A,B,C}, b::Union{A,B,C}) = C(a.x-b.x)
 
     struct D{NT, DT}
         n::NT
         d::DT
     end
     Base.zero(::Union{D{NT, DT}, Type{D{NT, DT}}}) where {NT, DT} = zero(NT) / one(DT)
-    Base.inv(a::D) = a.d / a.n
     Base.convert(::Type{D{NT, DT}}, a::Union{A, B, C}) where {NT, DT} = NT(a) / one(DT)
     #Base.convert(::Type{D{NT, DT}}, a::D) where {NT, DT} = NT(a.n) / DT(a.d)
 
     Base.:(*)(a::D, b::D) = (a.n*b.n) / (a.d*b.d)
+    Base.:(*)(a::D, b::Union{A,B,C}) = (a.n * b) / a.d
+    Base.:(*)(a::Union{A,B,C}, b::D) = b * a
+    Base.inv(a::Union{A,B,C}) = A(1) / a
+    Base.inv(a::D) = a.d / a.n
     Base.:(/)(a::Union{A,B,C}, b::Union{A,B,C}) = D(a, b)
     Base.:(/)(a::D, b::Union{A,B,C}) = a.n / (a.d*b)
     Base.:(/)(a::Union{A,B,C}, b::D) = (a*b.d) / b.n
     Base.:(+)(a::Union{A,B,C}, b::D) = (a*b.d+b.n) / b.d
-    Base.:(+)(b::D, a::Union{A,B,C}) = (b.n+b.d*a) / b.d
-    Base.:(-)(a::D, b::D) = (a.n*b.d-a.d*b.n) / (a.d*b.d)
-end
+    Base.:(+)(a::D, b::Union{A,B,C}) = b + a
+    Base.:(+)(a::D, b::D) = (a.n*b.d+a.d*b.n) / (a.d*b.d)
+    Base.:(-)(a::Union{A,B,C}) = typeof(a)(a.x)
+    Base.:(-)(a::D) = (-a.n) / a.d
+    Base.:(-)(a::Union{A,B,C,D}, b::Union{A,B,C,D}) = a + (-b)
 
+    Base.promote_rule(::Type{A}, ::Type{B}) = B
+    Base.promote_rule(::Type{B}, ::Type{A}) = B
+    Base.promote_rule(::Type{A}, ::Type{C}) = C
+    Base.promote_rule(::Type{C}, ::Type{A}) = C
+    Base.promote_rule(::Type{B}, ::Type{C}) = C
+    Base.promote_rule(::Type{C}, ::Type{B}) = C
+    Base.promote_rule(::Type{D{NT,DT}}, T::Type{<:Union{A,B,C}}) where {NT,DT} = D{promote_type(NT,T),DT}
+    Base.promote_rule(T::Type{<:Union{A,B,C}}, ::Type{D{NT,DT}}) where {NT,DT} = D{promote_type(NT,T),DT}
+    Base.promote_rule(::Type{D{NS,DS}}, ::Type{D{NT,DT}}) where {NS,DS,NT,DT} = D{promote_type(NS,NT),promote_type(DS,DT)}
+end
 @testset "lufact with type whose sum is another type" begin
     A = TrickyArithmetic.A[1 2; 3 4]
     ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
