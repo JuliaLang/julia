@@ -213,6 +213,8 @@ Language changes
     parser. ([#25564])
 
   * `…` (`\dots`) and `⁝` (`\tricolon`) are now parsed as binary operators ([#26262]).
+  
+  * `Base.IntSet` is renamed `Base.BitSet` and the old name is deprecated ([#24282]).
 
 Breaking changes
 ----------------
