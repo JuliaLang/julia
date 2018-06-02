@@ -565,12 +565,17 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
 end
 
 function write(io::IO, c::Char)
-    u = bswap(reinterpret(UInt32, c))
-    n = 1
-    while true
-        write(io, u % UInt8)
-        (u >>= 8) == 0 && return n
-        n += 1
+    v = reinterpret(UInt32, c)
+    u = hton(v) # BIG-endian
+    p = unsafe_convert(Ptr{Cvoid}, Ref{UInt32}(u))
+    if      v & 0x000000FF != 0
+        unsafe_write(io, p, 4)
+    elseif  v & 0x0000FFFF != 0
+        unsafe_write(io, p, 3)
+    elseif  v & 0x00FFFFFF != 0
+        unsafe_write(io, p, 2)
+    else
+        unsafe_write(io, p, 1)
     end
 end
 # write(io, ::AbstractChar) is not defined: implementations
