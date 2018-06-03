@@ -560,15 +560,15 @@ end
 diff(a::SparseMatrixCSC; dims::Integer) = dims==1 ? sparse_diff1(a) : sparse_diff2(a)
 
 ## norm and rank
-vecnorm(A::SparseMatrixCSC, p::Real=2) = vecnorm(view(A.nzval, 1:nnz(A)), p)
+norm(A::SparseMatrixCSC, p::Real=2) = norm(view(A.nzval, 1:nnz(A)), p)
 
-function norm(A::SparseMatrixCSC,p::Real=2)
+function opnorm(A::SparseMatrixCSC, p::Real=2)
     m, n = size(A)
     if m == 0 || n == 0 || isempty(A)
         return float(real(zero(eltype(A))))
     elseif m == 1 || n == 1
         # TODO: compute more efficiently using A.nzval directly
-        return norm(Array(A), p)
+        return opnorm(Array(A), p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
@@ -583,7 +583,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
             end
             return convert(Tnorm, nA)
         elseif p==2
-            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(Array(A)) or norm(A, p) where p=1 or Inf."))
+            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try opnorm(Array(A)) or opnorm(A, p) where p=1 or Inf."))
         elseif p==Inf
             rowSum = zeros(Tsum,m)
             for i=1:length(A.nzval)
@@ -592,7 +592,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
             return convert(Tnorm, maximum(rowSum))
         end
     end
-    throw(ArgumentError("invalid p-norm p=$p. Valid: 1, Inf"))
+    throw(ArgumentError("invalid operator p-norm p=$p. Valid: 1, Inf"))
 end
 
 # TODO rank
@@ -600,12 +600,12 @@ end
 # cond
 function cond(A::SparseMatrixCSC, p::Real=2)
     if p == 1
-        normAinv = normestinv(A)
-        normA = norm(A, 1)
+        normAinv = opnormestinv(A)
+        normA = opnorm(A, 1)
         return normA * normAinv
     elseif p == Inf
-        normAinv = normestinv(copy(A'))
-        normA = norm(A, Inf)
+        normAinv = opnormestinv(copy(A'))
+        normA = opnorm(A, Inf)
         return normA * normAinv
     elseif p == 2
         throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(Array(A), 2) instead"))
@@ -614,7 +614,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
     end
 end
 
-function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)))) where T
+function opnormestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)))) where T
     maxiter = 5
     # Check the input
     n = checksquare(A)

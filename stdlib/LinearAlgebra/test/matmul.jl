@@ -244,7 +244,7 @@ vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y)
             if n1 != n2
                 @test_throws DimensionMismatch d(1:n1, 1:n2)
             else
-                @test d(1:n1, 1:n2) ≈ vecnorm(1:n1)^2
+                @test d(1:n1, 1:n2) ≈ norm(1:n1)^2
             end
         end
     end

@@ -358,7 +358,7 @@ LinearAlgebra.diag
 LinearAlgebra.diagm
 LinearAlgebra.rank
 LinearAlgebra.norm
-LinearAlgebra.vecnorm
+LinearAlgebra.opnorm
 LinearAlgebra.normalize!
 LinearAlgebra.normalize
 LinearAlgebra.cond

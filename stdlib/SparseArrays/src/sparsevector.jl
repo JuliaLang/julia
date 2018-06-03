@@ -1320,7 +1320,7 @@ for f in [:sum, :maximum, :minimum], op in [:abs, :abs2]
     end
 end
 
-vecnorm(x::SparseVectorUnion, p::Real=2) = vecnorm(nonzeros(x), p)
+norm(x::SparseVectorUnion, p::Real=2) = norm(nonzeros(x), p)
 
 ### linalg.jl
 
