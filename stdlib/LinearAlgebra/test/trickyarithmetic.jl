@@ -27,6 +27,7 @@ module TrickyArithmetic
         n::NT
         d::DT
     end
+    D{NT, DT}(d::D{NT, DT}) where {NT, DT} = d # called by oneunit
     Base.zero(::Union{D{NT, DT}, Type{D{NT, DT}}}) where {NT, DT} = zero(NT) / one(DT)
     Base.one(::Union{D{NT, DT}, Type{D{NT, DT}}}) where {NT, DT} = one(NT) / one(DT)
     Base.convert(::Type{D{NT, DT}}, a::Union{A, B, C}) where {NT, DT} = NT(a) / one(DT)
