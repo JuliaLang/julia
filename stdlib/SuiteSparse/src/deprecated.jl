@@ -49,6 +49,7 @@ end
 
 # deprecate lufact to lu
 @eval SuiteSparse.UMFPACK begin
+    import LinearAlgebra: lufact
     @deprecate(lufact(A::SparseMatrixCSC), lu(A))
     @deprecate(lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}), lu(S))
     @deprecate(lufact(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes}, lu(A))
