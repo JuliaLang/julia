@@ -929,7 +929,7 @@ end
         @inferred sin(x)
         @inferred cos(x)
         @inferred norm(x)
-        @inferred vecnorm(x)
+        @inferred opnorm(x)
     end
 end
 
