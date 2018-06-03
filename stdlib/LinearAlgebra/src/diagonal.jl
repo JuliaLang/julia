@@ -271,6 +271,8 @@ mul!(out::AbstractVector, A::Transpose{<:Any,<:Diagonal}, in::AbstractVector) = 
 mul!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .* in
 mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= adjoint.(A.parent.diag) .* in
 mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::AbstractMatrix) = out .= transpose.(A.parent.diag) .* in
+mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, in::Adjoint{<:Any, <:AbstractMatrix}) = out .= adjoint.(A.parent.diag) .* in
+mul!(out::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, in::Transpose{<:Any,<:AbstractMatrix}) = out .= transpose.(A.parent.diag) .* in
 
 mul!(out::AbstractMatrix, A::Diagonal, in::Adjoint{<:Any,<:AbstractMatrix}) = out .= A.diag .* in
 mul!(out::AbstractMatrix, A::Diagonal, in::Transpose{<:Any,<:AbstractMatrix}) = out .= A.diag .* in
