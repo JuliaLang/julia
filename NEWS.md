@@ -213,8 +213,6 @@ Language changes
     parser. ([#25564])
 
   * `…` (`\dots`) and `⁝` (`\tricolon`) are now parsed as binary operators ([#26262]).
-  
-  * `Base.IntSet` is renamed `Base.BitSet` and the old name is deprecated ([#24282]).
 
 Breaking changes
 ----------------
@@ -1248,7 +1246,9 @@ Deprecated or removed
   * `isupper`, `islower`, `ucfirst` and `lcfirst` have been deprecated in favor of `isuppercase`,
     `islowercase`, `uppercasefirst` and `lowercasefirst`, respectively ([#26442]).
 
-  * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.
+  * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.  
+
+  * `Base.IntSet` has been deprecated in favor of `Base.BitSet` ([#24282]).
 
 Command-line option changes
 ---------------------------
