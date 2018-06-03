@@ -6170,3 +6170,16 @@ translate27368(name::Symbol) =
 translate27368(::Type{Val{name}}) where {name} =
     field27368(name)
 @test isa(translate27368(:name), Combinator27368)
+
+# issue #27365
+mutable struct foo27365
+    x::Float64
+    foo27365() = new()
+end
+
+function baz27365()
+    data = foo27365()
+    return data.x
+end
+
+@test isa(baz27365(), Float64)

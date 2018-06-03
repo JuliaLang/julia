@@ -696,6 +696,18 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             push!(fielddefuse[field].defs, use)
         end
         ok || continue
+        # Check that the defexpr has defined values for all the fields
+        # we're accessing. In the future, we may want to relax this,
+        # but we should come up with semantics for well defined semantics
+        # for uninitialized fields first.
+        for (fidx, du) in pairs(fielddefuse)
+            isempty(du.uses) && continue
+            if fidx + 1 > length(defexpr.args)
+                ok = false
+                break
+            end
+        end
+        ok || continue
         preserve_uses = IdDict{Int, Vector{Any}}((idx=>Any[] for idx in IdSet{Int}(defuse.ccall_preserve_uses)))
         # Everything accounted for. Go field by field and perform idf
         for (fidx, du) in pairs(fielddefuse)
