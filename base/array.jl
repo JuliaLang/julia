@@ -107,8 +107,17 @@ vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 """
     vect(X...)
 
-Create a Vector with element type computed from the promote_typeof of the argument,
+Create a [`Vector`](@ref) with element type computed from the `promote_typeof` of the argument,
 containing the argument list.
+
+# Examples
+```jldoctest
+julia> a = Base.vect(UInt8(1), 2.5, 1//2)
+3-element Array{Float64,1}:
+ 1.0
+ 2.5
+ 0.5
+```
 """
 function vect(X...)
     T = promote_typeof(X...)
@@ -127,7 +136,16 @@ asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1
 """
     Base.isbitsunion(::Type{T})
 
-Return whether a type is an "is-bits" Union type, meaning each type included in a Union is `isbitstype`.
+Return whether a type is an "is-bits" Union type, meaning each type included in a Union is [`isbitstype`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.isbitsunion(Union{Float64, UInt8})
+true
+
+julia> Base.isbitsunion(Union{Float64, String})
+false
+```
 """
 isbitsunion(u::Union) = ccall(:jl_array_store_unboxed, Cint, (Any,), u) == Cint(1)
 isbitsunion(x) = false
@@ -135,7 +153,16 @@ isbitsunion(x) = false
 """
     Base.bitsunionsize(U::Union)
 
-For a Union of `isbitstype` types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`
+For a `Union` of [`isbitstype`](@ref) types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`.
+
+# Examples
+```jldoctest
+julia> Base.bitsunionsize(Union{Float64, UInt8})
+0x0000000000000008
+
+julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
+0x0000000000000010
+```
 """
 function bitsunionsize(u::Union)
     sz = Ref{Csize_t}(0)
@@ -279,7 +306,6 @@ similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1)
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
-similar(::Type{T}, shape::Tuple) where {T<:Array}   = T(undef, to_shape(shape))
 
 # T[x...] constructs Array{T,1}
 """
@@ -521,9 +547,9 @@ end
 
 _collect_indices(::Tuple{}, A) = copyto!(Array{eltype(A),0}(undef), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copyto!(Array{eltype(A)}(undef, length.(indsA)), A)
+    copyto!(Array{eltype(A)}(undef, _length.(indsA)), A)
 function _collect_indices(indsA, A)
-    B = Array{eltype(A)}(undef, length.(indsA))
+    B = Array{eltype(A)}(undef, _length.(indsA))
     copyto!(B, CartesianIndices(axes(B)), A, CartesianIndices(indsA))
 end
 
@@ -842,7 +868,7 @@ themselves in another collection. The result is of the preceding example is equi
 """
 function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
-    n = length(itemindices)
+    n = _length(itemindices)
     _growend!(a, n)
     copyto!(a, length(a)-n+1, items, first(itemindices), n)
     return a
@@ -885,7 +911,7 @@ function prepend! end
 
 function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
-    n = length(itemindices)
+    n = _length(itemindices)
     _growbeg!(a, n)
     if a === items
         copyto!(a, 1, items, n+1, n)

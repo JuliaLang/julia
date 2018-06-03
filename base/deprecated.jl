@@ -293,12 +293,6 @@ deprecate(Base, :DSP, 2)
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
 
-# PR #21709
-@deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
-@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, dims=vardim, corrected=corrected)
-@deprecate cov(X::AbstractVector, Y::AbstractVector, corrected::Bool) cov(X, Y, corrected=corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, dims=vardim, corrected=corrected)
-
 # PR #22325
 # TODO: when this replace is removed from deprecated.jl:
 # 1) rename the function replace_new from strings/util.jl to replace
@@ -329,11 +323,11 @@ end
 @deprecate cat_t(::Type{Val{N}}, ::Type{T}, A, B) where {N,T} cat_t(T, A, B, dims=Val(N)) false
 @deprecate reshape(A::AbstractArray, ::Type{Val{N}}) where {N} reshape(A, Val(N))
 
-# Issue #
+# Issue #27100
 @deprecate cat(dims, As...) cat(As..., dims=dims)
 @deprecate cat_t(dims, ::Type{T}, As...) where {T}  cat_t(T, As...; dims=dims) false
-# Disambiguate
-cat_t(::Type{T}, ::Type{S}, As...; dims=dims) where {T,S} = _cat_t(T, S, As...; dims=dims)
+# Disambiguate — this isn't deprecated but it needs to be supported
+cat_t(::Type{T}, ::Type{S}, As...; dims=dims) where {T,S} = _cat_t(dims, T, S, As...)
 
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
@@ -724,7 +718,7 @@ function full(A::AbstractArray)
         "The no-op `full(A::AbstractArray)` fallback has been deprecated, and no more ",
         "specific `full` method for $(typeof(A)) exists. Furthermore, `full` in general ",
         "has been deprecated.\n\n",
-        "To replace `full(A)`, as appropriate consider dismabiguating with a concrete ",
+        "To replace `full(A)`, as appropriate consider disambiguating with a concrete ",
         "array constructor (e.g. `Array(A)`), with an abstract array constructor (e.g.`AbstractArray(A)`), ",
         "instead `convert`ing to an array type (e.g `convert(Array, A)`, `convert(AbstractArray, A)`), ",
         "or using another such operation that addresses your specific use case."),  :full)
@@ -736,10 +730,10 @@ end
 @deprecate charwidth textwidth
 
 @deprecate find(x::Number)            findall(!iszero, x)
-@deprecate findnext(A, v, i::Integer) coalesce(findnext(isequal(v), A, i), 0)
-@deprecate findfirst(A, v)            coalesce(findfirst(isequal(v), A), 0)
-@deprecate findprev(A, v, i::Integer) coalesce(findprev(isequal(v), A, i), 0)
-@deprecate findlast(A, v)             coalesce(findlast(isequal(v), A), 0)
+@deprecate findnext(A, v, i::Integer) something(findnext(isequal(v), A, i), 0)
+@deprecate findfirst(A, v)            something(findfirst(isequal(v), A), 0)
+@deprecate findprev(A, v, i::Integer) something(findprev(isequal(v), A, i), 0)
+@deprecate findlast(A, v)             something(findlast(isequal(v), A), 0)
 # to fix ambiguities introduced by deprecations
 findnext(pred::Function, A, i::Integer) = invoke(findnext, Tuple{Function, Any, Any}, pred, A, i)
 findprev(pred::Function, A, i::Integer) = invoke(findprev, Tuple{Function, Any, Any}, pred, A, i)
@@ -1144,13 +1138,35 @@ workspace() = error("`workspace()` is discontinued, consider Revise.jl for an al
 @deprecate_moved unsafe_get "Nullables"
 
 # sub2ind and ind2sub deprecation (PR #24715)
-@deprecate ind2sub(A::AbstractArray, ind) CartesianIndices(A)[ind]
-@deprecate ind2sub(::Tuple{}, ind::Integer) CartesianIndices()[ind]
-@deprecate ind2sub(dims::Tuple{Vararg{Integer,N}} where N, ind::Integer) CartesianIndices(dims)[ind]
-@deprecate ind2sub(inds::Tuple{Base.OneTo}, ind::Integer) CartesianIndices(inds)[ind]
-@deprecate ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer) CartesianIndices(inds)[ind]
-@deprecate ind2sub(inds::Tuple{Vararg{AbstractUnitRange,N}} where N, ind::Integer) CartesianIndices(inds)[ind]
-@deprecate ind2sub(inds::Union{DimsInteger{N},Indices{N}}  where N, ind::AbstractVector{<:Integer}) CartesianIndices(inds)[ind]
+_ind2sub_depwarn(x, y) = "`ind2sub($x, $y)` is deprecated, use `Tuple(CartesianIndices($x)[$y])` for a direct replacement. In many cases, the conversion to `Tuple` is not necessary."
+function ind2sub(A::AbstractArray, ind)
+    depwarn(_ind2sub_depwarn("A", "ind"), :ind2sub)
+    Tuple(CartesianIndices(A)[ind])
+end
+function ind2sub(::Tuple{}, ind::Integer)
+    depwarn(_ind2sub_depwarn("()", "ind"), :ind2sub)
+    Tuple(CartesianIndices(())[ind])
+end
+function ind2sub(dims::Tuple{Vararg{Integer,N}} where N, ind::Integer)
+    depwarn(_ind2sub_depwarn("dims", "ind"), :ind2sub)
+    Tuple(CartesianIndices(dims)[ind])
+end
+function ind2sub(inds::Tuple{Base.OneTo}, ind::Integer)
+    depwarn(_ind2sub_depwarn("inds", "ind"), :ind2sub)
+    Tuple(CartesianIndices(inds)[ind])
+end
+function ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer)
+    depwarn(_ind2sub_depwarn("inds", "ind"), :ind2sub)
+    Tuple(CartesianIndices(inds)[ind])
+end
+function ind2sub(inds::Tuple{Vararg{AbstractUnitRange,N}} where N, ind::Integer)
+    depwarn(_ind2sub_depwarn("inds", "ind"), :ind2sub)
+    Tuple(CartesianIndices(inds)[ind])
+end
+function ind2sub(inds::Union{DimsInteger{N},Indices{N}}  where N, ind::AbstractVector{<:Integer})
+    depwarn(_ind2sub_depwarn("inds", "ind"), :ind2sub)
+    Tuple(CartesianIndices(inds)[ind])
+end
 
 @deprecate sub2ind(A::AbstractArray, I...) LinearIndices(A)[I...]
 @deprecate sub2ind(dims::Tuple{}) LinearIndices(dims)[]
@@ -1223,47 +1239,47 @@ end
 @deprecate_binding HasOrder            Ordered
 @deprecate_binding ArithmeticOverflows ArithmeticWraps
 
-@deprecate search(str::Union{String,SubString}, re::Regex, idx::Integer) coalesce(findnext(re, str, idx), 0:-1)
-@deprecate search(s::AbstractString, r::Regex, idx::Integer) coalesce(findnext(r, s, idx), 0:-1)
-@deprecate search(s::AbstractString, r::Regex) coalesce(findfirst(r, s), 0:-1)
-@deprecate search(s::AbstractString, c::Char, i::Integer) coalesce(findnext(isequal(c), s, i), 0)
-@deprecate search(s::AbstractString, c::Char) coalesce(findfirst(isequal(c), s), 0)
-@deprecate search(a::ByteArray, b::Union{Int8,UInt8}, i::Integer) coalesce(findnext(isequal(b), a, i), 0)
-@deprecate search(a::ByteArray, b::Union{Int8,UInt8}) coalesce(findfirst(isequal(b), a), 0)
-@deprecate search(a::String, b::Union{Int8,UInt8}, i::Integer) coalesce(findnext(isequal(b), unsafe_wrap(Vector{UInt8}, a), i), 0)
-@deprecate search(a::String, b::Union{Int8,UInt8}) coalesce(findfirst(isequal(b), unsafe_wrap(Vector{UInt8}, a)), 0)
-@deprecate search(a::ByteArray, b::Char, i::Integer) coalesce(findnext(isequal(UInt8(b)), a, i), 0)
-@deprecate search(a::ByteArray, b::Char) coalesce(findfirst(isequal(UInt8(b)), a), 0)
+@deprecate search(str::Union{String,SubString}, re::Regex, idx::Integer) something(findnext(re, str, idx), 0:-1)
+@deprecate search(s::AbstractString, r::Regex, idx::Integer) something(findnext(r, s, idx), 0:-1)
+@deprecate search(s::AbstractString, r::Regex) something(findfirst(r, s), 0:-1)
+@deprecate search(s::AbstractString, c::Char, i::Integer) something(findnext(isequal(c), s, i), 0)
+@deprecate search(s::AbstractString, c::Char) something(findfirst(isequal(c), s), 0)
+@deprecate search(a::ByteArray, b::Union{Int8,UInt8}, i::Integer) something(findnext(isequal(b), a, i), 0)
+@deprecate search(a::ByteArray, b::Union{Int8,UInt8}) something(findfirst(isequal(b), a), 0)
+@deprecate search(a::String, b::Union{Int8,UInt8}, i::Integer) something(findnext(isequal(b), unsafe_wrap(Vector{UInt8}, a), i), 0)
+@deprecate search(a::String, b::Union{Int8,UInt8}) something(findfirst(isequal(b), unsafe_wrap(Vector{UInt8}, a)), 0)
+@deprecate search(a::ByteArray, b::Char, i::Integer) something(findnext(isequal(UInt8(b)), a, i), 0)
+@deprecate search(a::ByteArray, b::Char) something(findfirst(isequal(UInt8(b)), a), 0)
 
-@deprecate search(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) coalesce(findnext(in(c), s, i), 0)
-@deprecate search(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) coalesce(findfirst(in(c), s), 0)
-@deprecate search(s::AbstractString, t::AbstractString, i::Integer) coalesce(findnext(t, s, i), 0:-1)
-@deprecate search(s::AbstractString, t::AbstractString) coalesce(findfirst(t, s), 0:-1)
+@deprecate search(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) something(findnext(in(c), s, i), 0)
+@deprecate search(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) something(findfirst(in(c), s), 0)
+@deprecate search(s::AbstractString, t::AbstractString, i::Integer) something(findnext(t, s, i), 0:-1)
+@deprecate search(s::AbstractString, t::AbstractString) something(findfirst(t, s), 0:-1)
 
-@deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) coalesce(findprev(in(c), s, i), 0)
-@deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) coalesce(findlast(in(c), s), 0)
-@deprecate rsearch(s::AbstractString, t::AbstractString, i::Integer) coalesce(findprev(t, s, i), 0:-1)
-@deprecate rsearch(s::AbstractString, t::AbstractString) coalesce(findlast(t, s), 0:-1)
+@deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}, i::Integer) something(findprev(in(c), s, i), 0)
+@deprecate rsearch(s::AbstractString, c::Union{Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}) something(findlast(in(c), s), 0)
+@deprecate rsearch(s::AbstractString, t::AbstractString, i::Integer) something(findprev(t, s, i), 0:-1)
+@deprecate rsearch(s::AbstractString, t::AbstractString) something(findlast(t, s), 0:-1)
 
-@deprecate rsearch(str::Union{String,SubString}, re::Regex, idx::Integer) coalesce(findprev(re, str, idx), 0:-1)
-@deprecate rsearch(str::Union{String,SubString}, re::Regex) coalesce(findlast(re, str), 0:-1)
-@deprecate rsearch(s::AbstractString, r::Regex, idx::Integer) coalesce(findprev(r, s, idx), 0:-1)
-@deprecate rsearch(s::AbstractString, r::Regex) coalesce(findlast(r, s), 0:-1)
-@deprecate rsearch(s::AbstractString, c::Char, i::Integer) coalesce(findprev(isequal(c), s, i), 0)
-@deprecate rsearch(s::AbstractString, c::Char) coalesce(findlast(isequal(c), s), 0)
-@deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) coalesce(findprev(isequal(b), a, i), 0)
-@deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) coalesce(findprev(isequal(Char(b)), a, i), 0)
-@deprecate rsearch(a::ByteArray, b::Char, i::Integer = lastindex(a)) coalesce(findprev(isequal(UInt8(b)), a, i), 0)
+@deprecate rsearch(str::Union{String,SubString}, re::Regex, idx::Integer) something(findprev(re, str, idx), 0:-1)
+@deprecate rsearch(str::Union{String,SubString}, re::Regex) something(findlast(re, str), 0:-1)
+@deprecate rsearch(s::AbstractString, r::Regex, idx::Integer) something(findprev(r, s, idx), 0:-1)
+@deprecate rsearch(s::AbstractString, r::Regex) something(findlast(r, s), 0:-1)
+@deprecate rsearch(s::AbstractString, c::Char, i::Integer) something(findprev(isequal(c), s, i), 0)
+@deprecate rsearch(s::AbstractString, c::Char) something(findlast(isequal(c), s), 0)
+@deprecate rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) something(findprev(isequal(b), a, i), 0)
+@deprecate rsearch(a::String, b::Union{Int8,UInt8}, i::Integer = lastindex(a)) something(findprev(isequal(Char(b)), a, i), 0)
+@deprecate rsearch(a::ByteArray, b::Char, i::Integer = lastindex(a)) something(findprev(isequal(UInt8(b)), a, i), 0)
 
-@deprecate searchindex(s::AbstractString, t::AbstractString) first(coalesce(findfirst(t, s), 0:-1))
-@deprecate searchindex(s::AbstractString, t::AbstractString, i::Integer) first(coalesce(findnext(t, s, i), 0:-1))
-@deprecate rsearchindex(s::AbstractString, t::AbstractString) first(coalesce(findlast(t, s), 0:-1))
-@deprecate rsearchindex(s::AbstractString, t::AbstractString, i::Integer) first(coalesce(findprev(t, s, i), 0:-1))
+@deprecate searchindex(s::AbstractString, t::AbstractString) first(something(findfirst(t, s), 0:-1))
+@deprecate searchindex(s::AbstractString, t::AbstractString, i::Integer) first(something(findnext(t, s, i), 0:-1))
+@deprecate rsearchindex(s::AbstractString, t::AbstractString) first(something(findlast(t, s), 0:-1))
+@deprecate rsearchindex(s::AbstractString, t::AbstractString, i::Integer) first(something(findprev(t, s, i), 0:-1))
 
-@deprecate searchindex(s::AbstractString, c::Char) coalesce(findfirst(isequal(c), s), 0)
-@deprecate searchindex(s::AbstractString, c::Char, i::Integer) coalesce(findnext(isequal(c), s, i), 0)
-@deprecate rsearchindex(s::AbstractString, c::Char) coalesce(findlast(isequal(c), s), 0)
-@deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) coalesce(findprev(isequal(c), s, i), 0)
+@deprecate searchindex(s::AbstractString, c::Char) something(findfirst(isequal(c), s), 0)
+@deprecate searchindex(s::AbstractString, c::Char, i::Integer) something(findnext(isequal(c), s, i), 0)
+@deprecate rsearchindex(s::AbstractString, c::Char) something(findlast(isequal(c), s), 0)
+@deprecate rsearchindex(s::AbstractString, c::Char, i::Integer) something(findprev(isequal(c), s, i), 0)
 
 @deprecate ismatch(r::Regex, s::AbstractString) occursin(r, s)
 
@@ -1351,13 +1367,6 @@ export readandwrite
 @deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
 
 @deprecate mean(A::AbstractArray, dims)                              mean(A, dims=dims)
-@deprecate varm(A::AbstractArray, m::AbstractArray, dims; kwargs...) varm(A, m; kwargs..., dims=dims)
-@deprecate var(A::AbstractArray, dims; kwargs...)                    var(A; kwargs..., dims=dims)
-@deprecate std(A::AbstractArray, dims; kwargs...)                    std(A; kwargs..., dims=dims)
-@deprecate cov(X::AbstractMatrix, dim::Int; kwargs...)               cov(X; kwargs..., dims=dim)
-@deprecate cov(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int; kwargs...) cov(x, y; kwargs..., dims=dim)
-@deprecate cor(X::AbstractMatrix, dim::Int)                          cor(X, dims=dim)
-@deprecate cor(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int)   cor(x, y, dims=dim)
 @deprecate median(A::AbstractArray, dims; kwargs...)                 median(A; kwargs..., dims=dims)
 
 @deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
@@ -1672,6 +1681,20 @@ end
 @deprecate start(s::AbstractString) firstindex(s)
 @deprecate next(s::AbstractString, i::Integer) iterate(s, i)
 @deprecate done(s::AbstractString, i::Integer) i > ncodeunits(s)
+
+function Rounding.setrounding(::Type{T}, r::RoundingMode) where {T<:Union{Float32,Float64}}
+    depwarn("""`setrounding` for `Float32` and `Float64` has been deprecated, and will not be available in future versions.""", :setrounding)
+    Rounding.setrounding_raw(T, Rounding.to_fenv(r))
+end
+
+# #27140, #27152
+@deprecate_moved cor "StatsBase"
+@deprecate_moved cov "StatsBase"
+@deprecate_moved std "StatsBase"
+@deprecate_moved stdm "StatsBase"
+@deprecate_moved var "StatsBase"
+@deprecate_moved varm "StatsBase"
+@deprecate_moved linreg "StatsBase"
 
 # issue #27093
 # in src/jlfrontend.scm a call to `@deprecate` is generated for per-module `eval(m, x)`

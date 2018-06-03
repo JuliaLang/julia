@@ -213,9 +213,9 @@ end
 
 validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 
-is_valid_lvalue(x) = isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef)
+is_valid_lvalue(@nospecialize(x)) = isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef)
 
-function is_valid_argument(x)
+function is_valid_argument(@nospecialize(x))
     if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
         (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck, :copyast))) ||
         isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
@@ -227,7 +227,7 @@ function is_valid_argument(x)
              isa(x,LineNumberNode) || isa(x,NewvarNode))
 end
 
-function is_valid_rvalue(x)
+function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
     if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin)
         return true
@@ -235,6 +235,6 @@ function is_valid_rvalue(x)
     return false
 end
 
-is_valid_return(x) = is_valid_argument(x) || (isa(x,Expr) && x.head in (:new, :lambda))
+is_valid_return(@nospecialize(x)) = is_valid_argument(x) || (isa(x, Expr) && x.head in (:new, :lambda))
 
 is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag

@@ -473,7 +473,7 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
-# Example
+# Examples
 ```jldoctest
 julia> (a, rest) = Iterators.peel("abc");
 
@@ -663,7 +663,7 @@ end
     cycle(iter)
 
 An iterator that cycles through `iter` forever.
-N.B. if `iter` is empty, so is `cycle(iter)`.
+If `iter` is empty, so is `cycle(iter)`.
 
 # Examples
 ```jldoctest
@@ -981,18 +981,18 @@ There are several different ways to think about this iterator wrapper:
 
 1. It provides a mutable wrapper around an iterator and
    its iteration state.
-2. It turns an iterator-like abstraction into a Channel-like
+2. It turns an iterator-like abstraction into a `Channel`-like
    abstraction.
 3. It's an iterator that mutates to become its own rest iterator
    whenever an item is produced.
 
 `Stateful` provides the regular iterator interface. Like other mutable iterators
-(e.g. `Channel`), if iteration is stopped early (e.g. by a `break` in a `for` loop),
+(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a `break` in a `for` loop),
 iteration can be resumed from the same spot by continuing to iterate over the
 same iterator object (in contrast, an immutable iterator would restart from the
 beginning).
 
-# Example:
+# Examples
 ```jldoctest
 julia> a = Iterators.Stateful("abcdef");
 

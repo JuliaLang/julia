@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module REPLMode
 
 using Markdown
@@ -6,8 +8,8 @@ using UUIDs
 import REPL
 import REPL: LineEdit, REPLCompletions
 
-import ..devdir, ..print_first_command_header, ..API
-using ..Types, ..Display, ..Operations
+import ..devdir
+using ..Types, ..Display, ..Operations, ..API
 
 ############
 # Commands #
@@ -180,7 +182,6 @@ function tokenize(cmd::String)::Vector{Vector{Token}}
 end
 
 function tokenize!(words::Vector{<:AbstractString})::Vector{Token}
-    print_first_command_header()
     tokens = Token[]
     help_mode = false
     preview_mode = false
@@ -237,8 +238,8 @@ function do_cmd(repl::REPL.AbstractREPL, input::String; do_rethrow=false)
         if do_rethrow
             rethrow(err)
         end
-        if err isa CommandError
-            Base.display_error(repl.t.err_stream, ErrorException(err.msg), Ptr{Nothing}[])
+        if err isa CommandError || err isa ResolverError
+            Base.display_error(repl.t.err_stream, ErrorException(sprint(showerror, err)), Ptr{Nothing}[])
         else
             Base.display_error(repl.t.err_stream, err, Base.catch_backtrace())
         end

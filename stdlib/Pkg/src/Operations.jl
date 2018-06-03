@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module Operations
 
 using UUIDs
@@ -243,10 +245,12 @@ function deps_graph(ctx::Context, uuid_to_name::Dict{UUID,String}, reqs::Require
 
     for uuid in uuids
         uuid == uuid_julia && continue
-        uuid_to_name[uuid] = registered_name(ctx.env, uuid)
-        info = manifest_info(ctx.env, uuid)
-        info ≡ nothing && continue
-        uuid_to_name[UUID(info["uuid"])] = info["name"]
+        if !haskey(uuid_to_name, uuid)
+            uuid_to_name[uuid] = registered_name(ctx.env, uuid)
+            info = manifest_info(ctx.env, uuid)
+            info ≡ nothing && continue
+            uuid_to_name[UUID(info["uuid"])] = info["name"]
+        end
     end
 
     return Graph(all_versions, all_deps, all_compat, uuid_to_name, reqs, fixed, #=verbose=# ctx.graph_verbose)
@@ -557,10 +561,14 @@ end
 function find_stdlib_deps(ctx::Context, path::String)
     stdlib_deps = Dict{UUID, String}()
     regexps = [Regex("\\b(import|using)\\s+((\\w|\\.)+\\s*,\\s*)*$lib\\b") for lib in values(ctx.stdlibs)]
-    for (root, dirs, files) in walkdir(path)
+    for (root, dirs, files) in walkdir(path; onerror = x->nothing)
         for file in files
             endswith(file, ".jl") || continue
-            filecontent = read(joinpath(root, file), String)
+            filecontent = try read(joinpath(root, file), String)
+                catch e
+                    e isa SystemError || rethrow(e)
+                    ""
+                end
             for ((uuid, stdlib), r) in zip(ctx.stdlibs, regexps)
                 if occursin(r, filecontent)
                     stdlib_deps[uuid] = stdlib
@@ -777,7 +785,7 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         write_env(localctx, display_diff = false)
         will_resolve && build_versions(localctx, new)
         sep = Sys.iswindows() ? ';' : ':'
-        withenv(f, "JULIA_LOAD_PATH" => "$tmpdir$sep$(Types.stdlib_dir())")
+        withenv(f, "JULIA_LOAD_PATH" => "@$sep$tmpdir$sep$(Types.stdlib_dir())")
     end
 end
 

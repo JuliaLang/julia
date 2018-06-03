@@ -50,6 +50,7 @@ in which case its length is computed such that its product with all
 the specified dimensions is equal to the length of the original array
 `A`. The total number of elements must not change.
 
+# Examples
 ```jldoctest
 julia> A = Vector(1:16)
 16-element Array{Int64,1}:
@@ -91,7 +92,7 @@ julia> reshape(1:6, 2, 3)
 reshape
 
 reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
-reshape(parent::AbstractArray, shp::NeedsShaping) = reshape(parent, to_shape(shp))
+reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
@@ -101,14 +102,14 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape
 @inline function _reshape_uncolon(A, dims)
     @noinline throw1(dims) = throw(DimensionMismatch(string("new dimensions $(dims) ",
         "may have at most one omitted dimension specified by `Colon()`")))
-    @noinline throw2(A, dims) = throw(DimensionMismatch(string("array size $(length(A)) ",
+    @noinline throw2(A, dims) = throw(DimensionMismatch(string("array size $(_length(A)) ",
         "must be divisible by the product of the new dimensions $dims")))
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
     any(d -> d isa Colon, post) && throw1(dims)
-    sz, remainder = divrem(length(A), prod(pre)*prod(post))
+    sz, remainder = divrem(_length(A), prod(pre)*prod(post))
     remainder == 0 || throw2(A, dims)
-    (pre..., sz, post...)
+    (pre..., Int(sz), post...)
 end
 @inline _before_colon(dim::Any, tail...) =  (dim, _before_colon(tail...)...)
 @inline _before_colon(dim::Colon, tail...) = ()
@@ -123,8 +124,8 @@ end
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
-rdims_trailing(l, inds...) = length(l) * rdims_trailing(inds...)
-rdims_trailing(l) = length(l)
+rdims_trailing(l, inds...) = _length(l) * rdims_trailing(inds...)
+rdims_trailing(l) = _length(l)
 rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val(N)), inds)
 rdims(out::Tuple{}, inds::Tuple{}) = () # N == 0, M == 0
 rdims(out::Tuple{}, inds::Tuple{Any}) = ()
@@ -165,8 +166,8 @@ _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
     parent = p[1]
-    strds = front(size_to_strides(size(parent)..., 1))
-    strds1 = map(s->max(1,s), strds)  # for resizing empty arrays
+    strds = front(size_to_strides(map(_length, axes(parent))..., 1))
+    strds1 = map(s->max(1,Int(s)), strds)  # for resizing empty arrays
     mi = map(SignedMultiplicativeInverse, strds1)
     ReshapedArray(parent, dims, reverse(mi))
 end
@@ -192,12 +193,12 @@ elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
 dataids(A::ReshapedArray) = dataids(A.parent)
 
-@inline ind2sub_rs(::Tuple{}, i::Int) = i
-@inline ind2sub_rs(strds, i) = _ind2sub_rs(strds, i - 1)
-@inline _ind2sub_rs(::Tuple{}, ind) = (ind + 1,)
-@inline function _ind2sub_rs(strds, ind)
+@inline ind2sub_rs(ax, ::Tuple{}, i::Int) = i
+@inline ind2sub_rs(ax, strds, i) = _ind2sub_rs(ax, strds, i - 1)
+@inline _ind2sub_rs(ax, ::Tuple{}, ind) = (ind + first(ax[end]),)
+@inline function _ind2sub_rs(ax, strds, ind)
     d, r = divrem(ind, strds[1])
-    (_ind2sub_rs(tail(strds), r)..., d + 1)
+    (_ind2sub_rs(front(ax), tail(strds), r)..., d + first(ax[end]))
 end
 
 @inline function getindex(A::ReshapedArrayLF, index::Int)
@@ -217,7 +218,7 @@ end
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
     i = Base._sub2ind(size(A), indices...)
-    I = ind2sub_rs(A.mi, i)
+    I = ind2sub_rs(axes(A.parent), A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
 _unsafe_getindex_rs(A, i::Integer) = (@inbounds ret = A[i]; ret)
@@ -239,7 +240,7 @@ end
 end
 
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
-    @inbounds parent(A)[ind2sub_rs(A.mi, Base._sub2ind(size(A), indices...))...] = val
+    @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, Base._sub2ind(size(A), indices...))...] = val
     val
 end
 

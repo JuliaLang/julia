@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # SHA initial hash values and constants
 
 # Hash constant words K for SHA1

@@ -1,11 +1,11 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 if Pair != Base.Pair
 import Base: Base, IOContext, string, join, sprint
 IOContext(io::IO, KV::Pair) = IOContext(io, Base.Pair(KV[1], KV[2]))
 length(s::String) = Base.length(s)
 ^(s::String, i::Int) = Base.:^(s, i)
 end
-isexpr(e::Expr, s::Symbol) = e.head === s
-isexpr(@nospecialize(e), s::Symbol) = false
 
 function Base.show(io::IO, cfg::CFG)
     foreach(pairs(cfg.blocks)) do (idx, block)
@@ -232,7 +232,7 @@ function compute_ir_line_annotations(code::IRCode)
                         first_mismatch = nothing
                     end
                 end
-                last_depth = coalesce(first_mismatch, x+1)-1
+                last_depth = something(first_mismatch, x+1)-1
                 if min(depth, last_depth) > last_printed_depth
                     printing_depth = min(depth, last_printed_depth + 1)
                     last_printed_depth = printing_depth
@@ -372,7 +372,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             print_sep = true
         end
         floop = true
-        while !isempty(new_nodes_perm) && new_nodes[peek(new_nodes_perm)].pos == idx
+        while !isempty(new_nodes_perm) && new_nodes[Iterators.peek(new_nodes_perm)].pos == idx
             node_idx = popfirst!(new_nodes_perm)
             new_node = new_nodes[node_idx]
             node_idx += length(code.stmts)

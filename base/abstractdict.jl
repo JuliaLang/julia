@@ -39,7 +39,6 @@ end
 struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
     dict::T
 end
-KeySet(dict::AbstractDict) = KeySet{keytype(dict), typeof(dict)}(dict)
 
 struct ValueIterator{T<:AbstractDict}
     dict::T
@@ -675,6 +674,8 @@ copy(d::IdDict) = typeof(d)(d)
 
 get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
 
+in(@nospecialize(k), v::KeySet{<:Any,<:IdDict}) = get(v.dict, k, secret_table_token) !== secret_table_token
+
 # For some AbstractDict types, it is safe to implement filter!
 # by deleting keys during iteration.
 filter!(f, d::IdDict) = filter_in_one_pass!(f, d)
@@ -695,11 +696,11 @@ copy(s::IdSet) = typeof(s)(s)
 
 isempty(s::IdSet) = isempty(s.dict)
 length(s::IdSet)  = length(s.dict)
-in(x, s::IdSet) = haskey(s.dict, x)
-push!(s::IdSet, x) = (s.dict[x] = nothing; s)
-pop!(s::IdSet, x) = (pop!(s.dict, x); x)
-pop!(s::IdSet, x, deflt) = x in s ? pop!(s, x) : deflt
-delete!(s::IdSet, x) = (delete!(s.dict, x); s)
+in(@nospecialize(x), s::IdSet) = haskey(s.dict, x)
+push!(s::IdSet, @nospecialize(x)) = (s.dict[x] = nothing; s)
+pop!(s::IdSet, @nospecialize(x)) = (pop!(s.dict, x); x)
+pop!(s::IdSet, @nospecialize(x), @nospecialize(default)) = (x in s ? pop!(s, x) : default)
+delete!(s::IdSet, @nospecialize(x)) = (delete!(s.dict, x); s)
 
 sizehint!(s::IdSet, newsz) = (sizehint!(s.dict, newsz); s)
 empty!(s::IdSet) = (empty!(s.dict); s)

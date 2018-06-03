@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 @inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
 @eval Core.UpsilonNode() = $(Expr(:new, Core.UpsilonNode))
 Core.PhiNode() = Core.PhiNode(Any[], Any[])
@@ -51,6 +53,7 @@ struct CFG
     blocks::Vector{BasicBlock}
     index::Vector{Int}
 end
+copy(c::CFG) = CFG(copy(c.blocks), copy(c.index))
 
 function block_for_inst(index, inst)
     searchsortedfirst(index, inst, lt=(<=))
@@ -156,6 +159,7 @@ struct NewNode
     # The index into the line number table of this entry
     line::Int
 end
+copy(n::NewNode) = copy(n.pos, n.attach_after, n.typ, copy(n.node), n.line)
 
 struct IRCode
     stmts::Vector{Any}
@@ -178,6 +182,8 @@ struct IRCode
         return new(stmts, types, lines, flags, ir.argtypes, ir.linetable, cfg, new_nodes, ir.mod, ir.meta)
     end
 end
+copy(code::IRCode) = IRCode(code, copy(code.stmts), copy(code.types),
+    copy(code.lines), copy(code.flags), copy(code.cfg), copy(code.new_nodes))
 
 function getindex(x::IRCode, s::SSAValue)
     if s.id <= length(x.stmts)
@@ -201,6 +207,8 @@ end
 struct NewSSAValue
     id::Int
 end
+
+const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 
 mutable struct UseRef
     stmt::Any
@@ -423,6 +431,7 @@ mutable struct IncrementalCompact
     idx::Int
     result_idx::Int
     active_result_bb::Int
+    renamed_new_nodes::Bool
     function IncrementalCompact(code::IRCode)
         # Sort by position with attach after nodes affter regular ones
         perm = my_sortperm(Int[(code.new_nodes[i].pos*2 + Int(code.new_nodes[i].attach_after)) for i in 1:length(code.new_nodes)])
@@ -439,7 +448,7 @@ mutable struct IncrementalCompact
         pending_perm = Int[]
         return new(code, result, result_types, result_lines, result_flags, code.cfg.blocks, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, pending_nodes, pending_perm,
-            1, 1, 1)
+            1, 1, 1, false)
     end
 
     # For inlining
@@ -456,7 +465,7 @@ mutable struct IncrementalCompact
             parent.result_bbs, ssa_rename, parent.used_ssas,
             late_fixup, perm, 1,
             new_new_nodes, pending_nodes, pending_perm,
-            1, result_offset, parent.active_result_bb)
+            1, result_offset, parent.active_result_bb, false)
     end
 end
 
@@ -624,6 +633,12 @@ function getindex(view::TypesView, idx)
     isa(idx, SSAValue) && (idx = idx.id)
     if isa(view.ir, IncrementalCompact) && idx < view.ir.result_idx
         return view.ir.result_types[idx]
+    elseif isa(view.ir, IncrementalCompact) && view.ir.renamed_new_nodes
+        if idx <= length(view.ir.result_types)
+            return view.ir.result_types[idx]
+        else
+            return view.ir.new_new_nodes[idx - length(view.ir.result_types)].typ
+        end
     else
         ir = isa(view.ir, IncrementalCompact) ? view.ir.ir : view.ir
         if idx <= length(ir.types)
@@ -631,12 +646,6 @@ function getindex(view::TypesView, idx)
         else
             return ir.new_nodes[idx - length(ir.types)].typ
         end
-        ir = ir.ir
-    end
-    if idx <= length(ir.types)
-        return ir.types[idx]
-    else
-        return ir.new_nodes[idx - length(ir.types)].typ
     end
 end
 
@@ -877,7 +886,7 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     return false
 end
 
-function fixup_phinode_values!(compact, old_values)
+function fixup_phinode_values!(compact::IncrementalCompact, old_values::Vector{Any})
     values = Vector{Any}(undef, length(old_values))
     for i = 1:length(old_values)
         isassigned(old_values, i) || continue
@@ -895,7 +904,7 @@ function fixup_phinode_values!(compact, old_values)
     values
 end
 
-function fixup_node(compact, @nospecialize(stmt))
+function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
     if isa(stmt, PhiNode)
         return PhiNode(stmt.edges, fixup_phinode_values!(compact, stmt.values))
     elseif isa(stmt, PhiCNode)
@@ -915,7 +924,7 @@ function fixup_node(compact, @nospecialize(stmt))
     end
 end
 
-function just_fixup!(compact)
+function just_fixup!(compact::IncrementalCompact)
     for idx in compact.late_fixup
         stmt = compact.result[idx]
         new_stmt = fixup_node(compact, stmt)
@@ -932,7 +941,7 @@ function just_fixup!(compact)
     end
 end
 
-function simple_dce!(compact)
+function simple_dce!(compact::IncrementalCompact)
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
@@ -955,15 +964,17 @@ function non_dce_finish!(compact::IncrementalCompact)
     bb = compact.result_bbs[end]
     compact.result_bbs[end] = BasicBlock(bb,
                 StmtRange(first(bb.stmts), result_idx-1))
+    compact.renamed_new_nodes = true
+    nothing
 end
 
 function finish(compact::IncrementalCompact)
     non_dce_finish!(compact)
     simple_dce!(compact)
-    complete(compact)
+    return complete(compact)
 end
 
-function complete(compact)
+function complete(compact::IncrementalCompact)
     cfg = CFG(compact.result_bbs, Int[first(bb.stmts) for bb in compact.result_bbs[2:end]])
     return IRCode(compact.ir, compact.result, compact.result_types, compact.result_lines, compact.result_flags, cfg, compact.new_new_nodes)
 end
@@ -971,7 +982,7 @@ end
 function compact!(code::IRCode)
     compact = IncrementalCompact(code)
     # Just run through the iterator without any processing
-    foreach((args...)->nothing, compact)
+    foreach(x -> nothing, compact) # x isa Pair{Int, Any}
     return finish(compact)
 end
 
@@ -979,9 +990,9 @@ struct BBIdxIter
     ir::IRCode
 end
 
-bbidxiter(ir) = BBIdxIter(ir)
+bbidxiter(ir::IRCode) = BBIdxIter(ir)
 
-function iterate(x::BBIdxIter, (idx, bb)=(1, 1))
+function iterate(x::BBIdxIter, (idx, bb)::Tuple{Int, Int}=(1, 1))
     idx > length(x.ir.stmts) && return nothing
     active_bb = x.ir.cfg.blocks[bb]
     next_bb = bb

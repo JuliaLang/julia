@@ -348,6 +348,54 @@ x
 y
 ```
 
+Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
+treat any byte sequence as a `String`. In such situations a rule is that when parsing
+a sequence of code units from left to right characters are formed by the longest sequence of
+8-bit code units that matches the start of one of the following bit patterns
+(each `x` can be `0` or `1`):
+
+* `0xxxxxxx`;
+* `110xxxxx` `10xxxxxx`;
+* `1110xxxx` `10xxxxxx` `10xxxxxx`;
+* `11110xxx` `10xxxxxx` `10xxxxxx` `10xxxxxx`;
+* `10xxxxxx`;
+* `11111xxx`.
+
+In particular this implies that overlong and too high code unit sequences are accepted.
+This rule is best explained by an example:
+
+```julia-repl
+julia> s = "\xc0\xa0\xe2\x88\xe2|"
+"\xc0\xa0\xe2\x88\xe2|"
+
+julia> foreach(display, s)
+'\xc0\xa0': [overlong] ASCII/Unicode U+0020 (category Zs: Separator, space)
+'\xe2\x88': Malformed UTF-8 (category Ma: Malformed, bad data)
+'\xe2': Malformed UTF-8 (category Ma: Malformed, bad data)
+'|': ASCII/Unicode U+007c (category Sm: Symbol, math)
+
+julia> isvalid.(collect(s))
+4-element BitArray{1}:
+ false
+ false
+ false
+  true
+
+julia> s2 = "\xf7\xbf\xbf\xbf"
+"\U1fffff"
+
+julia> foreach(display, s2)
+'\U1fffff': Unicode U+1fffff (category In: Invalid, too high)
+```
+
+We can see that the first two code units in the string `s` form an overlong encoding of
+space character. It is invalid, but is accepted in a string as a single character.
+The next two code units form a valid start of a three-byte UTF-8 sequence. However, the fifth
+code unit `\xe2` is not its valid continuation. Therefore code units 3 and 4 are also
+interpreted as malformed characters in this string. Similarly code unit 5 forms a malformed
+character because `|` is not a valid continuation to it. Finally the string `s2` contains
+one too high code point.
+
 Julia uses the UTF-8 encoding by default, and support for new encodings can be added by packages.
 For example, the [LegacyStrings.jl](https://github.com/JuliaArchive/LegacyStrings.jl) package
 implements `UTF16String` and `UTF32String` types. Additional discussion of other encodings and
@@ -370,6 +418,34 @@ julia> whom = "world"
 julia> string(greet, ", ", whom, ".\n")
 "Hello, world.\n"
 ```
+
+A situation which is important to be aware of is when invalid UTF-8 strings are concatenated.
+In that case the resulting string may contain different characters than the input strings,
+and its number of characters may be lower than sum of numbers of characters
+of the concatenated strings, e.g.:
+
+```julia-repl
+julia> a, b = "\xe2\x88", "\x80"
+("\xe2\x88", "\x80")
+
+julia> c = a*b
+"∀"
+
+julia> collect.([a, b, c])
+3-element Array{Array{Char,1},1}:
+ ['\xe2\x88']
+ ['\x80']
+ ['∀']
+
+julia> length.([a, b, c])
+3-element Array{Int64,1}:
+ 1
+ 1
+ 1
+```
+
+This situation can happen only for invalid UTF-8 strings. For valid UTF-8 strings
+concatenation preserves all characters in strings and additivity of string lengths.
 
 Julia also provides `*` for string concatenation:
 
@@ -830,6 +906,27 @@ r"a+.*b+.*?d$"ims
 
 julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
 RegexMatch("angry,\nBad world")
+```
+
+The `r"..."` literal is constructed without interpolation and unescaping (except for
+quotation mark `"` which still has to be escaped). Here is an example
+showing the difference from standard string literals:
+
+```julia-repl
+julia> x = 10
+10
+
+julia> r"$x"
+r"$x"
+
+julia> "$x"
+"10"
+
+julia> r"\x"
+r"\x"
+
+julia> "\x"
+ERROR: syntax: invalid escape sequence
 ```
 
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient

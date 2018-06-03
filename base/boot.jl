@@ -452,11 +452,14 @@ import Core: CodeInfo, MethodInstance, GotoNode, LabelNode,
 end
 
 # docsystem basics
+const unescape = Symbol("hygienic-scope")
 macro doc(x...)
-    atdoc(__source__, __module__, x...)
+    docex = atdoc(__source__, __module__, x...)
+    isa(docex, Expr) && docex.head === :escape && return docex
+    return Expr(:escape, Expr(unescape, docex, typeof(atdoc).name.module))
 end
 macro __doc__(x)
-    Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
+    return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
 atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ

@@ -489,7 +489,7 @@ end
     pA = sparse(rand(3, 7))
 
     for arr in (se33, sA, pA)
-        for f in (sum, prod, minimum, maximum, var)
+        for f in (sum, prod, minimum, maximum)
             farr = Array(arr)
             @test f(arr) ≈ f(farr)
             @test f(arr, dims=1) ≈ f(farr, dims=1)
@@ -518,9 +518,8 @@ end
         @test prod(sparse(Int[])) === 1
         @test_throws ArgumentError minimum(sparse(Int[]))
         @test_throws ArgumentError maximum(sparse(Int[]))
-        @test var(sparse(Int[])) === NaN
 
-        for f in (sum, prod, var)
+        for f in (sum, prod)
             @test isequal(f(spzeros(0, 1), dims=1), f(Matrix{Int}(I, 0, 1), dims=1))
             @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
             @test isequal(f(spzeros(0, 1), dims=(1, 2)), f(Matrix{Int}(I, 0, 1), dims=(1, 2)))
@@ -1779,7 +1778,6 @@ end
     @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
     C, b = A[:, 1:4], fill(1., size(A, 1))
     @test !Base.USE_GPL_LIBS || factorize(C)\b ≈ Array(C)\b
-    @test_throws ErrorException chol(A)
     @test_throws ErrorException eigen(A)
     @test_throws ErrorException inv(A)
 end
@@ -2031,63 +2029,6 @@ end
     LinearAlgebra.fillstored!(A, 1)
     B = A[5:-1:1, 5:-1:1]
     @test issymmetric(B)
-end
-
-# Faster covariance function for sparse matrices
-# Prevents densifying the input matrix when subtracting the mean
-# Test against dense implementation
-# PR https://github.com/JuliaLang/julia/pull/22735
-# Part of this test needed to be hacked due to the treatment
-# of Inf in sparse matrix algebra
-# https://github.com/JuliaLang/julia/issues/22921
-# The issue will be resolved in
-# https://github.com/JuliaLang/julia/issues/22733
-@testset "optimizing sparse $elty covariance" for elty in (Float64, Complex{Float64})
-    n = 10
-    p = 5
-    np2 = div(n*p, 2)
-    nzvals, x_sparse = guardsrand(1) do
-        if elty <: Real
-            nzvals = randn(np2)
-        else
-            nzvals = complex.(randn(np2), randn(np2))
-        end
-        nzvals, sparse(rand(1:n, np2), rand(1:p, np2), nzvals, n, p)
-    end
-    x_dense  = convert(Matrix{elty}, x_sparse)
-    @testset "Test with no Infs and NaNs, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
-                                                                                 corrected in (true, false)
-        @test cov(x_sparse, dims=vardim, corrected=corrected) ≈
-              cov(x_dense , dims=vardim, corrected=corrected)
-    end
-
-    @testset "Test with $x11, vardim=$vardim, corrected=$corrected" for x11 in (NaN, Inf),
-                                                                     vardim in (1, 2),
-                                                                  corrected in (true, false)
-        x_sparse[1,1] = x11
-        x_dense[1 ,1] = x11
-
-        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
-        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
-        @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
-        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
-    end
-
-    @testset "Test with NaN and Inf, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
-                                                                            corrected in (true, false)
-        x_sparse[1,1] = Inf
-        x_dense[1 ,1] = Inf
-        x_sparse[2,1] = NaN
-        x_dense[2 ,1] = NaN
-
-        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
-        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
-        @test cov_sparse[(1 + vardim):end, (1 + vardim):end] ≈
-              cov_dense[ (1 + vardim):end, (1 + vardim):end]
-        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
-        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
-    end
 end
 
 @testset "similar should not alias the input sparse array" begin

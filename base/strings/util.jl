@@ -45,14 +45,35 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-# FIXME: check that end of `b` doesn't match a partial character in `a`
-startswith(a::String, b::String) = sizeof(a) ≥ sizeof(b) &&
-    ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0
+function startswith(a::Union{String, SubString{String}},
+                    b::Union{String, SubString{String}})
+    cub = ncodeunits(b)
+    if ncodeunits(a) < cub
+        false
+    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+                 pointer(a), pointer(b), sizeof(b)) == 0
+        nextind(a, cub) == cub + 1
+    else
+        false
+    end
+end
 
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) = length(a) ≥ length(b) &&
     ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0
 
-# TODO: fast endswith
+function endswith(a::Union{String, SubString{String}},
+                  b::Union{String, SubString{String}})
+    cub = ncodeunits(b)
+    astart = ncodeunits(a) - ncodeunits(b) + 1
+    if astart < 1
+        false
+    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+                 pointer(a, astart), pointer(b), sizeof(b)) == 0
+        thisind(a, astart) == astart
+    else
+        false
+    end
+end
 
 """
     chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
@@ -239,20 +260,20 @@ function rpad(
 end
 
 """
-    split(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
-    split(s::AbstractString, chars; limit::Integer=0, keepempty::Bool=true)
+    split(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    split(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 
-Return an array of substrings by splitting the given string on occurrences of the given
-character delimiters, which may be specified in any of the formats allowed by
-[`findnext`](@ref)'s first argument (i.e. as a string, regular expression or a function),
-or as a single character or collection of characters.
+Split `str` into an array of substrings on occurrences of the delimiter(s) `dlm`.  `dlm`
+can be any of the formats allowed by [`findnext`](@ref)'s first argument (i.e. as a
+string, regular expression or a function), or as a single character or collection of
+characters.
 
-If `chars` is omitted, it defaults to the set of all space characters.
+If `dlm` is omitted, it defaults to [`isspace`](@ref).
 
 The optional keyword arguments are:
  - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
-   a `chars` argument, `true` with a `chars` argument.
+   a `dlm` argument, `true` with a `dlm` argument.
 
 See also [`rsplit`](@ref).
 
@@ -297,7 +318,7 @@ end
 function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     i = 1 # firstindex(str)
     n = lastindex(str)
-    r = coalesce(findfirst(splitter,str), 0)
+    r = something(findfirst(splitter,str), 0)
     if r != 0:-1
         j, k = first(r), nextind(str,last(r))
         while 0 < j <= n && length(strs) != limit-1
@@ -308,7 +329,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, 
                 i = k
             end
             (k <= j) && (k = nextind(str,j))
-            r = coalesce(findnext(splitter,str,k), 0)
+            r = something(findnext(splitter,str,k), 0)
             r == 0:-1 && break
             j, k = first(r), nextind(str,last(r))
         end
@@ -322,7 +343,7 @@ end
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    split(str, _default_delims; limit=limit, keepempty=keepempty)
+    split(str, isspace; limit=limit, keepempty=keepempty)
 
 """
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
@@ -382,12 +403,12 @@ end
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     n = lastindex(str)
-    r = coalesce(findlast(splitter, str), 0)
+    r = something(findlast(splitter, str), 0)
     j, k = first(r), last(r)
     while j > 0 && k > 0 && length(strs) != limit-1
         (keepempty || k < n) && pushfirst!(strs, SubString(str,nextind(str,k),n))
         n = prevind(str, j)
-        r = coalesce(findprev(splitter,str,n), 0)
+        r = something(findprev(splitter,str,n), 0)
         j, k = first(r), last(r)
     end
     (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))
@@ -395,7 +416,7 @@ function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool,
 end
 rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    rsplit(str, _default_delims; limit=limit, keepempty=keepempty)
+    rsplit(str, isspace; limit=limit, keepempty=keepempty)
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
@@ -418,7 +439,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     n = 1
     e = lastindex(str)
     i = a = firstindex(str)
-    r = coalesce(findnext(pattern,str,i), 0)
+    r = something(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
@@ -433,7 +454,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
         else
             i = k = nextind(str, k)
         end
-        r = coalesce(findnext(pattern,str,k), 0)
+        r = something(findnext(pattern,str,k), 0)
         r == 0:-1 || n == count && break
         j, k = first(r), last(r)
         n += 1

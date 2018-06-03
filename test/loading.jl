@@ -148,9 +148,9 @@ end
                 this = Base.explicit_project_deps_get(project_file, "This")
                 that = Base.explicit_project_deps_get(project_file, "That")
                 # test that the correct answers are given
-                @test root == (coalesce(n, N+1) ≥ coalesce(d, N+1) ? false :
-                               coalesce(u, N+1) < coalesce(d, N+1) ? root_uuid : proj_uuid)
-                @test this == (coalesce(d, N+1) < coalesce(t, N+1) ≤ N ? this_uuid : false)
+                @test root == (something(n, N+1) ≥ something(d, N+1) ? false :
+                               something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
+                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : false)
                 @test that == false
             end
         end

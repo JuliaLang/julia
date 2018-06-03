@@ -3094,6 +3094,8 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
     for (size_t i = 0; i < nargs; ++i) {
         argv[i] = emit_expr(ctx, args[i + 1]);
+        if (argv[i].typ == jl_bottom_type)
+            return jl_cgval_t();
     }
 
     bool handled = false;
@@ -5477,6 +5479,9 @@ static std::unique_ptr<Module> emit_function(
                              funcName.str(), M);
         add_return_attr(f, Attribute::NonNull);
         f->addFnAttr("thunk");
+        // TODO: (if needsparams) add attributes: dereferenceable<sizeof(void*) * length(sp)>, readonly, nocapture
+        // TODO: add attributes: dereferenceable<sizeof(ft)>, readonly, nocapture - e.g. maybe_mark_argument_dereferenceable(Arg, argType);
+        // TODO: add attributes: dereferenceable<sizeof(void*) * nreq>, readonly, nocapture
         returninfo.decl = f;
         jl_init_function(f);
         declarations->functionObject = needsparams ? "jl_fptr_sparam" : "jl_fptr_args";
@@ -6610,6 +6615,9 @@ static std::unique_ptr<Module> emit_function(
             }
             if (!jl_is_uniontype(phiType) || !TindexN) {
                 if (VN) {
+                    // XXX: this code assumes that `val` is of type `phiType` statically,
+                    // that must be true dynamically, but we have not propagated that information here,
+                    // and thus this might generate invalid code
                     if (val.typ == (jl_value_t*)jl_bottom_type) {
                         V = undef_value_for_type(phiType, VN->getType());
                     }

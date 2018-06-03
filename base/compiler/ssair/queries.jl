@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
 Determine whether a statement is side-effect-free, i.e. may be removed if it has no uses.
 """
@@ -63,7 +65,7 @@ function abstract_eval_ssavalue(s::SSAValue, src::IncrementalCompact)
 end
 
 function compact_exprtype(compact::IncrementalCompact, @nospecialize(value))
-    if isa(value, Union{SSAValue, OldSSAValue, NewSSAValue})
+    if isa(value, AnySSAValue)
         return types(compact)[value]
     elseif isa(value, Argument)
         return compact.ir.argtypes[value.n]

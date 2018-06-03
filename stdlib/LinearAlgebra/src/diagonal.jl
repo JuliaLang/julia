@@ -45,7 +45,8 @@ julia> Diagonal(V)
  ⋅  2
 ```
 """
-Diagonal(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
+Diagonal(V::AbstractVector)
+
 Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
 Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
 
@@ -465,7 +466,7 @@ function svd(D::Diagonal{<:Number})
     return SVD(Up, S[piv], copy(Vp'))
 end
 
-# dismabiguation methods: * of Diagonal and Adj/Trans AbsVec
+# disambiguation methods: * of Diagonal and Adj/Trans AbsVec
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
 *(x::Adjoint{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))

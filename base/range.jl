@@ -359,6 +359,8 @@ isempty(r::LinRange) = length(r) == 0
     step(r)
 
 Get the step size of an `AbstractRange` object.
+
+# Examples
 ```jldoctest
 julia> step(1:10)
 1

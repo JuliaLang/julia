@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Trimmed-down code from Pkg2 with only the essential parts needed by loadmeta.jl
 
 module Pkg2

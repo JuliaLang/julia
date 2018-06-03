@@ -14,7 +14,7 @@ to generically build upon those behaviors.
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
 | `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
 | `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
-| `eltype(IterType)`             | `Any`                  | The type of the items returned by `next()`                                            |
+| `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                                            |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim...])`         | (*undefined*)          | The number of items in each dimension, if known                                       |
 
@@ -65,7 +65,6 @@ julia> struct Squares
        end
 
 julia> Base.iterate(S::Squares, state=1) = state > S.count ? nothing : (state*state, state+1)
-
 ```
 
 With only [`iterate`](@ref) definition, the `Squares` type is already pretty powerful.
@@ -84,17 +83,18 @@ julia> for i in Squares(7)
 49
 ```
 
-We can use many of the builtin methods that work with iterables, like [`in`](@ref), [`mean`](@ref) and [`std`](@ref):
+We can use many of the builtin methods that work with iterables, like [`in`](@ref),
+[`sum`](@ref) and [`mean`](@ref):
 
 ```jldoctest squaretype
 julia> 25 in Squares(10)
 true
 
+julia> sum(Squares(100))
+338350
+
 julia> mean(Squares(100))
 3383.5
-
-julia> std(Squares(100))
-3024.355854282583
 ```
 
 There are a few more methods we can extend to give Julia more information about this iterable

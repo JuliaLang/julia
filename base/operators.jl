@@ -8,6 +8,7 @@
 Subtype operator: returns `true` if and only if all values of type `T1` are
 also of type `T2`.
 
+# Examples
 ```jldoctest
 julia> Float64 <: AbstractFloat
 true
@@ -33,6 +34,7 @@ const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 Return the supertype of DataType `T`.
 
+# Examples
 ```jldoctest
 julia> supertype(Int32)
 Signed
@@ -227,7 +229,7 @@ julia> a ≢ a
 false
 ```
 """
-!==(x, y) = !(x === y)
+!==(@nospecialize(x), @nospecialize(y)) = !(x === y)
 const ≢ = !==
 
 """
@@ -242,6 +244,7 @@ New numeric types with a canonical partial order should implement this function 
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
 (x < y) | (x == y)
+
 # Examples
 ```jldoctest
 julia> 'a' < 'b'

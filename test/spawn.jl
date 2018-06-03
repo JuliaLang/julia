@@ -455,7 +455,7 @@ if Sys.isunix()
     let ps = Pipe[]
         ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
         try
-            for i = 1 : 100 * coalesce(ulimit_n, 1000)
+            for i = 1 : 100 * something(ulimit_n, 1000)
                 p = Pipe()
                 Base.link_pipe!(p)
                 push!(ps, p)
@@ -561,12 +561,12 @@ mktempdir() do dir
             @test Sys.which(foo_path) == realpath(foo_path)
 
             chmod(foo_path, 0o666)
-            @test_throws ErrorException Sys.which("foo")
-            @test_throws ErrorException Sys.which(foo_path)
+            @test Sys.which("foo") === nothing
+            @test Sys.which(foo_path) === nothing
         end
 
-        # Test that completely missing files also fail
-        @test_throws ErrorException Sys.which("this_is_not_a_command")
+        # Test that completely missing files also return nothing
+        @test Sys.which("this_is_not_a_command") === nothing
     end
 end
 

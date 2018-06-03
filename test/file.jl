@@ -79,10 +79,28 @@ if Sys.iswindows()
     @test filemode(file) & 0o777 == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
+    function get_umask()
+        umask = ccall(:umask, UInt32, (UInt32,), 0)
+        ccall(:umask, UInt32, (UInt32,), umask)
+        return umask
+    end
+
     mktempdir() do tmpdir
+        umask = get_umask()
         tmpfile=joinpath(tmpdir, "tempfile.txt")
+        tmpfile2=joinpath(tmpdir, "tempfile2.txt")
         touch(tmpfile)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
+        chmod(tmpfile, 0o777)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
         chmod(tmpfile, 0o707)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
         permissions=0o776

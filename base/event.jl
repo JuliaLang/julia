@@ -104,6 +104,7 @@ If a second argument `val` is provided, it will be passed to the task (via the r
 [`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
 
+# Examples
 ```jldoctest
 julia> a5() = sum(i for i in 1:1000);
 

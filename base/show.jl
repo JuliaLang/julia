@@ -633,8 +633,9 @@ end
 module IRShow
     const Compiler = Core.Compiler
     using Core.IR
+    import ..Base
     import .Base: IdSet
-    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument
+    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.show(io::IO, r::Compiler.StmtRange) = print(io, Compiler.first(r):Compiler.last(r))
     include("compiler/ssair/show.jl")
@@ -1845,7 +1846,9 @@ dims2string(d) = isempty(d) ? "0-dimensional" :
                  length(d) == 1 ? "$(d[1])-element" :
                  join(map(string,d), '×')
 
-inds2string(inds) = join(map(string,inds), '×')
+inds2string(inds) = join(map(_indsstring,inds), '×')
+_indsstring(i) = string(i)
+_indsstring(i::Slice) = string(i.indices)
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
 summary(io::IO, a::AbstractArray) = summary(io, a, axes(a))

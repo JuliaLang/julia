@@ -469,6 +469,11 @@ end
     @test A23994[5] isa Float64
     @test A23994[6] isa Rational{Int}
 end
+@testset "cat issue #27326" begin
+    @test [Int; 1] == [Int, 1]
+    @test [Int 1] == reshape([Int, 1], 1, :)
+    @test [Int 1; String 2] == reshape([Int, String, 1, 2], 2, 2)
+end
 @testset "end" begin
     X = [ i+2j for i=1:5, j=1:5 ]
     @test X[end,end] == 15
@@ -1344,8 +1349,8 @@ end
 
 @testset "pairs" begin
     A14 = [11 13; 12 14]
-    @test [a for (a,b) in pairs(IndexLinear(),    A14)] == reshape(1:4, 2, 2)
-    @test [a for (a,b) in pairs(IndexCartesian(), A14)] == Array(CartesianIndices(axes(A14)))
+    @test [a for (a,b) in pairs(IndexLinear(),    A14)] == LinearIndices(axes(A14)) == [1 3; 2 4]
+    @test [a for (a,b) in pairs(IndexCartesian(), A14)] == CartesianIndices(axes(A14)) == CartesianIndex.(1:2, reshape(1:2, 1, :))
     @test [b for (a,b) in pairs(IndexLinear(),    A14)] == A14
     @test [b for (a,b) in pairs(IndexCartesian(), A14)] == A14
 end
@@ -1705,7 +1710,7 @@ end
     @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
 
-    R = CartesianIndices((2:5, 3:5))
+    R = CartesianIndices(map(Base.Slice, (2:5, 3:5)))
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
     @test eltype(CartesianIndices{2}) <: CartesianIndex{2}
@@ -1729,9 +1734,6 @@ end
 
     @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
     @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
-
-    @test collect(CartesianIndices((3:5,-7:7))) == CartesianIndex.(3:5, reshape(-7:7, 1, :))
-    @test collect(CartesianIndices((3,-7:7))) == CartesianIndex.(3, reshape(-7:7, 1, :))
 end
 
 # All we really care about is that we have an optimized

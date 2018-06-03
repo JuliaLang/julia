@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function generate(path::String)
     dir, pkg = dirname(path), basename(path)
     isdir(path) && cmderror("$(abspath(path)) already exists")
@@ -47,10 +49,10 @@ function project(pkg::String, dir::String)
     genfile(pkg, dir, "Project.toml") do io
         print(io,
             """
+            authors = $authorstr
             name = "$pkg"
             uuid = "$(UUIDs.uuid1())"
             version = "0.1.0"
-            authors = $authorstr
 
             [deps]
             """

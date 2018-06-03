@@ -15,7 +15,7 @@ color_normal = text_colors[:normal]
 function repl_color(key, default)
     env_str = get(ENV, key, "")
     c = tryparse(Int, env_str)
-    c_conv = coalesce(c, Symbol(env_str))
+    c_conv = something(c, Symbol(env_str))
     haskey(text_colors, c_conv) ? c_conv : default
 end
 
@@ -33,6 +33,9 @@ stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bol
 function repl_cmd(cmd, out)
     shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
     shell_name = Base.basename(shell[1])
+
+    # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
+    cmd.exec .= expanduser.(cmd.exec)
 
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))

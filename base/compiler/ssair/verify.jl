@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
         arg isa String && return esc(:(println($arg)))
@@ -94,6 +96,9 @@ function verify_ir(ir::IRCode)
                         #"""
                         #error()
                     end
+                elseif isa(val, GlobalRef) || isa(val, Expr)
+                    @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
+                    error()
                 end
                 check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1)
             end

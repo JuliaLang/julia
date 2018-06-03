@@ -155,7 +155,7 @@ See also: [`basename`](@ref)
 Get the file name part of a path.
 
 # Examples
- ```jldoctest
+```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
 ```
@@ -381,8 +381,8 @@ function relpath(path::String, startpath::String = ".")
             break
         end
     end
-    pathpart = join(path_arr[i+1:coalesce(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
-    prefix_num = coalesce(findlast(x -> !isempty(x), start_arr), 0) - i - 1
+    pathpart = join(path_arr[i+1:something(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
+    prefix_num = something(findlast(x -> !isempty(x), start_arr), 0) - i - 1
     if prefix_num >= 0
         prefix = pardir * path_separator
         relpath_ = isempty(pathpart)     ?

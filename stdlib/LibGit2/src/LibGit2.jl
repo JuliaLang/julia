@@ -8,7 +8,7 @@ Interface to [libgit2](https://libgit2.github.com/).
 module LibGit2
 
 import Base: ==
-using Base: coalesce, notnothing
+using Base: something, notnothing
 using Base.Printf: @printf
 
 export with, GitRepo, GitConfig

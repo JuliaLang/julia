@@ -94,6 +94,7 @@ end
 
     @test split("a b c") == ["a","b","c"]
     @test split("a  b \t c\n") == ["a","b","c"]
+    @test split("α  β \u2009 γ\n") == ["α","β","γ"]
 
     @test split("a b c"; limit=2) == ["a","b c"]
     @test split("a  b \t c\n"; limit=3) == ["a","b","\t c\n"]

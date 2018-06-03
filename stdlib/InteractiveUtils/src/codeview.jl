@@ -2,7 +2,7 @@
 
 # displaying type warnings
 
-function code_warntype_legacy_ir(io::IO, ci::Core.CodeInfo, rettype)
+function code_warntype_legacy_ir(io::IO, src::Core.CodeInfo, rettype)
     function slots_used(ci, slotnames)
         used = falses(length(slotnames))
         scan_exprs!(used, ci.code)

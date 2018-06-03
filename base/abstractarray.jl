@@ -166,7 +166,7 @@ eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
 """
     eachindex(A...)
 
-Create an iterable object for visiting each index of an AbstractArray `A` in an efficient
+Create an iterable object for visiting each index of an `AbstractArray` `A` in an efficient
 manner. For array types that have opted into fast linear indexing (like `Array`), this is
 simply the range `1:length(A)`. For other array types, return a specialized Cartesian
 range to efficiently index into the array with indices specified for every dimension. For
@@ -345,7 +345,7 @@ size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
 
-function isassigned(a::AbstractArray, i::Int...)
+function isassigned(a::AbstractArray, i::Integer...)
     try
         a[i...]
         true
@@ -572,7 +572,12 @@ similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, 
 similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, to_shape(dims))
 similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, to_shape(dims))
 similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::NeedsShaping) where {T} = similar(a, T, to_shape(dims))
+# Similar supports specifying dims as either Integers or AbstractUnitRanges or any mixed combination
+# thereof. Ideally, we'd just convert Integers to OneTos and then call a canonical method with the axes,
+# but we don't want to require all AbstractArray subtypes to dispatch on Base.OneTo. So instead we
+# define this method to convert supported axes to Ints, with the expectation that an offset array
+# package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
+similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
 
@@ -607,8 +612,9 @@ indices of the result will match `A`.
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 """
-similar(::Type{T}, shape::Tuple) where {T} = T(to_shape(shape))
-similar(::Type{T}, dims::DimOrInd...) where {T} = similar(T, dims)
+similar(::Type{T}, dims::DimOrInd...) where {T<:AbstractArray} = similar(T, dims)
+similar(::Type{T}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
+similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
 """
     empty(v::AbstractVector, [eltype])
@@ -966,8 +972,24 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; _ind2sub(sz, i))
 
 """
     setindex!(A, X, inds...)
+    A[inds...] = X
 
 Store values from array `X` within some subset of `A` as specified by `inds`.
+The syntax `A[inds...] = X` is equivalent to `setindex!(A, X, inds...)`.
+
+# Examples
+```jldoctest
+julia> A = zeros(2,2);
+
+julia> setindex!(A, [10, 20], [1, 2]);
+
+julia> A[[3, 4]] = [30, 40];
+
+julia> A
+2×2 Array{Float64,2}:
+ 10.0  30.0
+ 20.0  40.0
+```
 """
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
@@ -1701,6 +1723,7 @@ end
 
 nextL(L, l::Integer) = L*l
 nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
+nextL(L, r::Slice) = L*unsafe_length(r.indices)
 offsetin(i, l::Integer) = i-1
 offsetin(i, r::AbstractUnitRange) = i-first(r)
 

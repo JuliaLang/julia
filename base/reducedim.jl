@@ -169,7 +169,7 @@ function check_reducedims(R, A)
     had_nonreduc = false
     for i = 1:ndims(A)
         Ri, Ai = axes(R, i), axes(A, i)
-        sRi, sAi = length(Ri), length(Ai)
+        sRi, sAi = _length(Ri), _length(Ai)
         if sRi == 1
             if sAi > 1
                 if had_nonreduc
@@ -431,6 +431,7 @@ Compute the maximum value of an array over the given dimensions. See also the
 [`max(a,b)`](@ref) function to take the maximum of two or more arguments,
 which can be applied elementwise to arrays via `max.(a,b)`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -804,4 +805,54 @@ function _findmax(A, region)
     end
 end
 
-reducedim1(R, A) = length(indices1(R)) == 1
+reducedim1(R, A) = _length(indices1(R)) == 1
+
+"""
+    argmin(A; dims) -> indices
+
+For an array input, return the indices of the minimum elements over the given dimensions.
+`NaN` is treated as less than all other values.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2; 3 4]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> argmin(A, dims=1)
+1×2 Array{CartesianIndex{2},2}:
+ CartesianIndex(1, 1)  CartesianIndex(1, 2)
+
+julia> argmin(A, dims=2)
+2×1 Array{CartesianIndex{2},2}:
+ CartesianIndex(1, 1)
+ CartesianIndex(2, 1)
+```
+"""
+argmin(A::AbstractArray; dims=:) = findmin(A; dims=dims)[2]
+
+"""
+    argmax(A; dims) -> indices
+
+For an array input, return the indices of the maximum elements over the given dimensions.
+`NaN` is treated as greater than all other values.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2; 3 4]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> argmax(A, dims=1)
+1×2 Array{CartesianIndex{2},2}:
+ CartesianIndex(2, 1)  CartesianIndex(2, 2)
+
+julia> argmax(A, dims=2)
+2×1 Array{CartesianIndex{2},2}:
+ CartesianIndex(1, 2)
+ CartesianIndex(2, 2)
+```
+"""
+argmax(A::AbstractArray; dims=:) = findmax(A; dims=dims)[2]

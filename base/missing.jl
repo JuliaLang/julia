@@ -19,7 +19,6 @@ showerror(io::IO, ex::MissingException) =
     print(io, "MissingException: ", ex.msg)
 
 
-
 nonmissingtype(::Type{Union{T, Missing}}) where {T} = T
 nonmissingtype(::Type{Missing}) = Union{}
 nonmissingtype(::Type{T}) where {T} = T
@@ -189,3 +188,30 @@ function Base.iterate(itr::SkipMissing, state...)
     end
     item, state
 end
+
+"""
+    coalesce(x, y...)
+
+Return the first value in the arguments which is not equal to [`missing`](@ref),
+if any. Otherwise return `missing`.
+
+# Examples
+
+```jldoctest
+julia> coalesce(missing, 1)
+1
+
+julia> coalesce(1, missing)
+1
+
+julia> coalesce(nothing, 1)  # returns `nothing`
+
+julia> coalesce(missing, missing)
+missing
+```
+"""
+function coalesce end
+
+coalesce() = missing
+coalesce(x::Missing, y...) = coalesce(y...)
+coalesce(x::Any, y...) = x

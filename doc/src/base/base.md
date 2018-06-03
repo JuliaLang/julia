@@ -185,6 +185,7 @@ Base.Val
 Core.Vararg
 Core.Nothing
 Base.Some
+Base.something
 Base.Enums.@enum
 ```
 

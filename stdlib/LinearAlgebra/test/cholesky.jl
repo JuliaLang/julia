@@ -20,7 +20,7 @@ end
 function factor_recreation_tests(a_U, a_L)
     c_U = cholesky(a_U)
     c_L = cholesky(a_L)
-    cl  = chol(a_L)
+    cl  = c_L.U
     ls = c_L.L
     @test Array(c_U) ≈ Array(c_L) ≈ a_U
     @test ls*ls' ≈ a_U
@@ -56,7 +56,6 @@ end
         # Test of symmetric pos. def. strided matrix
         apd  = a'*a
         @inferred cholesky(apd)
-        @inferred chol(apd)
         capd  = factorize(apd)
         r     = capd.U
         κ     = cond(apd, 1) #condition number
@@ -65,8 +64,6 @@ end
 
         @testset "throw for non-square input" begin
             A = rand(eltya, 2, 3)
-            @test_throws DimensionMismatch chol(A)
-            @test_throws DimensionMismatch LinearAlgebra.chol!(A)
             @test_throws DimensionMismatch cholesky(A)
             @test_throws DimensionMismatch cholesky!(A)
         end
@@ -87,9 +84,8 @@ end
         @test LinearAlgebra.issuccess(capd)
         @inferred(logdet(capd))
 
-        apos = apd[1,1]            # test chol(x::Number), needs x>0
+        apos = apd[1,1]
         @test all(x -> x ≈ √apos, cholesky(apos).factors)
-        @test_throws PosDefException chol(-one(eltya))
 
         # Test cholesky with Symmetric/Hermitian upper/lower
         apds  = Symmetric(apd)
@@ -116,9 +112,9 @@ end
             @test sprint((t, s) -> show(t, "text/plain", s), capdh) == "$(typeof(capdh))\nU factor:\n$ulstring"
         end
 
-        # test chol of 2x2 Strang matrix
+        # test cholesky of 2x2 Strang matrix
         S = Matrix{eltya}(SymTridiagonal([2, 2], [-1]))
-        @test Matrix(chol(S)) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
+        @test Matrix(cholesky(S).U) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
 
         # test extraction of factor and re-creating original matrix
         if eltya <: Real
@@ -265,8 +261,6 @@ end
     for A in (R, C)
         @test !LinearAlgebra.issuccess(cholesky(A))
         @test !LinearAlgebra.issuccess(cholesky!(copy(A)))
-        @test_throws PosDefException chol(A)
-        @test_throws PosDefException LinearAlgebra.chol!(copy(A))
     end
 end
 
