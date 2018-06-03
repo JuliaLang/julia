@@ -84,7 +84,7 @@ function getindex(A::HessenbergQ, i::Integer, j::Integer)
     x[i] = 1
     y = zeros(eltype(A), size(A, 2))
     y[j] = 1
-    return dot(x, lmul!(A, y))
+    return inner(x, lmul!(A, y))
 end
 
 ## reconstruct the original matrix

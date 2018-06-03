@@ -342,10 +342,10 @@ end
     realvec, realmat = [1, 2, 3], [1 2 3; 4 5 6; 7 8 9]
     complexvec, complexmat = [1im, 2, -3im], [1im 2 3; 4 5 -6im; 7im 8 9]
     # Adjoint/Transpose-vector * vector
-    @test Adjoint(realvec) * realvec == dot(realvec, realvec)
-    @test Transpose(realvec) * realvec == dot(realvec, realvec)
-    @test Adjoint(complexvec) * complexvec == dot(complexvec, complexvec)
-    @test Transpose(complexvec) * complexvec == dot(conj(complexvec), complexvec)
+    @test Adjoint(realvec) * realvec == inner(realvec, realvec)
+    @test Transpose(realvec) * realvec == inner(realvec, realvec)
+    @test Adjoint(complexvec) * complexvec == inner(complexvec, complexvec)
+    @test Transpose(complexvec) * complexvec == inner(conj(complexvec), complexvec)
     # vector * Adjoint/Transpose-vector
     @test realvec * Adjoint(realvec) == broadcast(*, realvec, reshape(realvec, (1, 3)))
     @test realvec * Transpose(realvec) == broadcast(*, realvec, reshape(realvec, (1, 3)))

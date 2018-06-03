@@ -4,12 +4,12 @@
 
 matprod(x, y) = x*y + x*y
 
-# Dot products
+# inner/dot products
 
-vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
-vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
+inner(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
+inner(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
+function inner(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
@@ -22,7 +22,7 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector
     GC.@preserve x y BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasComplex,TI<:Integer}
+function inner(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasComplex,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end

@@ -5,7 +5,7 @@
 ## BLAS cutoff threshold constants
 
 const SCAL_CUTOFF = 2048
-const DOT_CUTOFF = 128
+const INNER_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
 

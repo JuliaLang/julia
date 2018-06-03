@@ -12,7 +12,7 @@ import ..LinearAlgebra.BLAS.@blasfunc
 import ..LinearAlgebra: BlasFloat, BlasInt, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, checksquare
 
-using ..LinearAlgebra: triu, tril, dot
+using ..LinearAlgebra: triu, tril, inner
 
 using Base: iszero
 
@@ -1444,7 +1444,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
                     resize!(work, lwork)
                 end
             end
-            X, dot(view(c, n - p + 1:m), view(c, n - p + 1:m))
+            X, inner(view(c, n - p + 1:m), view(c, n - p + 1:m))
         end
     end
 end

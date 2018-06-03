@@ -615,56 +615,56 @@ opnorm(v::TransposeAbsVec) = norm(v.parent)
 
 norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
 
-function vecdot(x::AbstractArray, y::AbstractArray)
+function inner(x::AbstractArray, y::AbstractArray)
     lx = _length(x)
     if lx != _length(y)
         throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(_length(y))."))
     end
     if lx == 0
-        return dot(zero(eltype(x)), zero(eltype(y)))
+        return inner(zero(eltype(x)), zero(eltype(y)))
     end
-    s = zero(dot(first(x), first(y)))
+    s = zero(inner(first(x), first(y)))
     for (Ix, Iy) in zip(eachindex(x), eachindex(y))
-        @inbounds  s += dot(x[Ix], y[Iy])
+        @inbounds s += inner(x[Ix], y[Iy])
     end
     s
 end
 
 """
-    vecdot(x, y)
+    inner(x, y)
 
 For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
-any element type for which `dot` is defined), compute the Euclidean dot product (the sum of
-`dot(x[i],y[i])`) as if they were vectors.
+any element type for which `inner` is defined), compute the inner product (or dot product
+or scalar product, i.e. the sum of `inner(x[i],y[i])`) as if they were vectors.
 
 # Examples
 ```jldoctest
-julia> vecdot(1:5, 2:6)
+julia> inner(1:5, 2:6)
 70
 
 julia> x = fill(2., (5,5));
 
 julia> y = fill(3., (5,5));
 
-julia> vecdot(x, y)
+julia> inner(x, y)
 150.0
 ```
 """
-function vecdot(x, y) # arbitrary iterables
+function inner(x, y) # arbitrary iterables
     ix = iterate(x)
     iy = iterate(y)
     if ix === nothing
         if iy !== nothing
             throw(DimensionMismatch("x and y are of different lengths!"))
         end
-        return dot(zero(eltype(x)), zero(eltype(y)))
+        return inner(zero(eltype(x)), zero(eltype(y)))
     end
     if iy === nothing
         throw(DimensionMismatch("x and y are of different lengths!"))
     end
     (vx, xs) = ix
     (vy, ys) = iy
-    s = dot(vx, vy)
+    s = inner(vx, vy)
     while true
         ix = iterate(x, xs)
         iy = iterate(y, ys)
@@ -672,7 +672,7 @@ function vecdot(x, y) # arbitrary iterables
             break
         end
         (vx, xs), (vy, ys) = ix, iy
-        s += dot(vx, vy)
+        s += inner(vx, vy)
     end
     if !(iy == nothing && ix == nothing)
             throw(DimensionMismatch("x and y are of different lengths!"))
@@ -680,48 +680,45 @@ function vecdot(x, y) # arbitrary iterables
     return s
 end
 
-vecdot(x::Number, y::Number) = conj(x) * y
-
-dot(x::Number, y::Number) = vecdot(x, y)
+inner(x::Number, y::Number) = conj(x) * y
 
 """
+    inner(x,y)
     dot(x, y)
     ⋅(x,y)
 
-Compute the dot product between two vectors. For complex vectors, the first vector is conjugated.
-When the vectors have equal lengths, calling `dot` is semantically equivalent to `sum(vx'vy for (vx,vy) in zip(x, y))`.
+Compute the inner/dot product between two vectors. For complex vectors, the first
+vector is conjugated. When the vectors have equal lengths, calling `inner` is
+semantically equivalent to `sum(inner(vx,vy) for (vx,vy) in zip(x, y))`.
 
 # Examples
 ```jldoctest
-julia> dot([1; 1], [2; 3])
+julia> inner([1; 1], [2; 3])
 5
 
-julia> dot([im; im], [1; 1])
+julia> inner([im; im], [1; 1])
 0 - 2im
 ```
 """
-function dot(x::AbstractVector, y::AbstractVector)
+function inner(x::AbstractVector, y::AbstractVector)
     if length(x) != length(y)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(x)) and $(length(y))"))
+        throw(DimensionMismatch("inner product arguments have unequal lengths $(length(x)) and $(length(y))"))
     end
     ix = iterate(x)
     if ix === nothing
         # we only need to check the first vector, since equal lengths have been asserted
-        return zero(eltype(x))'zero(eltype(y))
+        return inner(zero(eltype(x)), zero(eltype(y)))
     end
     iy = iterate(y)
-    s = ix[1]'iy[1]
+    s = inner(ix[1], iy[1])
     ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
     while ix != nothing
-        s += ix[1]'iy[1]
+        s += inner(ix[1], iy[1])
         ix = iterate(x, ix[2])
         iy = iterate(y, iy[2])
     end
     return s
 end
-
-# Call optimized BLAS methods for vectors of numbers
-dot(x::AbstractVector{<:Number}, y::AbstractVector{<:Number}) = vecdot(x, y)
 
 
 ###########################################################################################
