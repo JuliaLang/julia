@@ -650,9 +650,12 @@ function getindex(view::TypesView, idx)
 end
 
 function getindex(view::TypesView, idx::NewSSAValue)
-    @assert isa(view.ir, IncrementalCompact)
-    compact = view.ir
-    compact.new_new_nodes[idx.id].typ
+    if isa(view.ir, IncrementalCompact)
+        compact = view.ir
+        compact.new_new_nodes[idx.id].typ
+    else
+        view.ir.new_nodes[idx.id].typ
+    end
 end
 
 function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int},

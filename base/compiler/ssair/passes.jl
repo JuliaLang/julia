@@ -103,7 +103,7 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks, du, phin
     end
 end
 
-function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#), pi_callback=(pi,idx)->nothing)
+function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#), pi_callback=(@nospecialize(pi),@nospecialize(idx))->false)
     while true
         if isa(defssa, OldSSAValue) && already_inserted(compact, defssa)
             rename = compact.ssa_rename[defssa.id]
@@ -115,7 +115,9 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
         end
         def = compact[defssa]
         if isa(def, PiNode)
-            pi_callback(def, defssa)
+            if pi_callback(def, defssa)
+                return defssa
+            end
             if isa(def.val, SSAValue)
                 if isa(defssa, OldSSAValue) && !already_inserted(compact, defssa)
                     defssa = OldSSAValue(def.val.id)
@@ -137,7 +139,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
 end
 
 function simple_walk_constraint(compact, defidx, typeconstraint = types(compact)[defidx])
-    callback = (pi, _)->isa(pi, PiNode) && (typeconstraint = typeintersect(typeconstraint, pi.typ))
+    callback = (@nospecialize(pi), _)->(isa(pi, PiNode) && (typeconstraint = typeintersect(typeconstraint, pi.typ)); false)
     def = simple_walk(compact, defidx, callback)
     def, typeconstraint
 end
@@ -450,7 +452,7 @@ function perform_lifting!(compact::IncrementalCompact,
                 end
                 lifted_val = lifted_val.x
                 if isa(lifted_val, Union{NewSSAValue, SSAValue, OldSSAValue})
-                    lifted_val = simple_walk(compact, lifted_val)
+                    lifted_val = simple_walk(compact, lifted_val, (_a, _b)->true)
                 end
                 push!(new_node.values, lifted_val)
             elseif isa(val, Union{NewSSAValue, SSAValue, OldSSAValue}) && val in keys(reverse_mapping)
@@ -544,7 +546,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             for (pidx, preserved_arg) in enumerate(old_preserves)
                 intermediaries = IdSet()
                 isa(preserved_arg, SSAValue) || continue
-                def = simple_walk(compact, preserved_arg, (pi, ssa)->push!(intermediaries, ssa.id))
+                def = simple_walk(compact, preserved_arg, (pi, ssa)->(push!(intermediaries, ssa.id); false))
                 isa(def, SSAValue) || continue
                 defidx = def.id
                 def = compact[defidx]
@@ -594,7 +596,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         if struct_typ.mutable
             isa(def, SSAValue) || continue
             intermediaries = IdSet()
-            def = simple_walk(compact, def, (pi, ssa)->push!(intermediaries, ssa.id))
+            def = simple_walk(compact, def, (pi, ssa)->(push!(intermediaries, ssa.id); false))
             # Mutable stuff here
             isa(def, SSAValue) || continue
             mid, defuse = get!(defuses, def.id, (IdSet{Int}(), SSADefUse()))

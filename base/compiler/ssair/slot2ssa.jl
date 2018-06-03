@@ -88,15 +88,15 @@ struct UndefToken
 end
 const undef_token = UndefToken()
 
-function new_to_regular(@nospecialize(stmt))
+function new_to_regular(@nospecialize(stmt), new_offset::Int)
     if isa(stmt, NewSSAValue)
-        return SSAValue(stmt.id)
+        return SSAValue(stmt.id + new_offset)
     end
     urs = userefs(stmt)
     for op in urs
         val = op[]
         if isa(val, NewSSAValue)
-            op[] = SSAValue(val.id)
+            op[] = SSAValue(val.id + new_offset)
         end
     end
     return urs[]
@@ -115,7 +115,7 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
     if isa(stmt, SlotNumber)
         return ssa
     elseif isa(stmt, TypedSlot)
-        return NewSSAValue(insert_node!(ir, idx, stmt.typ, PiNode(ssa, stmt.typ)).id)
+        return NewSSAValue(insert_node!(ir, idx, stmt.typ, PiNode(ssa, stmt.typ)).id - length(ir.stmts))
     end
 end
 
@@ -227,34 +227,87 @@ struct BlockLiveness
 end
 
 # Run iterated dominance frontier
+#
+# The algorithm we have here essentially follows LLVM, which itself is a
+# a cleaned up version of the linear-time algorithm described in
+#
+#  A Linear Time Algorithm for Placing phi-Nodes (by Sreedhar and Gao)
+#
+# The algorithm here, is quite straightforward. Suppose we have a CFG:
+#
+# A -> B -> D -> F
+#  \-> C -------/
+#
+# and a corresponding dominator tree:
+#
+# A
+# |- B - D
+# |- C
+# |- F
+#
+# Now, for every definition of our slot, we simply walk down the dominator
+# tree and look for any edges that leave the sub-domtree rooted by our definition.
+#
+# E.g. in our example above, if we have a definition in `B`, we look at its successors,
+#      which is only `D`, which is dominated by `B` and hence doesn't need a phi node.
+#      Then we descend down the subtree rooted at `B` and end up in `D`. `D` has a successor
+#      `F`, which is not part of the current subtree, (i.e. not dominated by `B`), so it
+#      needs a phi node.
+#
+# Now, the key insight of that algorithm is that we have two defs, in blocks `A` and `B`,
+# and `A` dominates `B`, then we do not need to recurse into `B`, because the set of
+# potential backedges from a subtree rooted at `B` (to outside the subtree) is a strict
+# subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
+# at `A`). Note however that this does not work the other way. Thus, the algorithm
+# needs to make sure that we always visit `B` before `A`.
 function idf(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
     # This should be a priority queue, but TODO - sorted array for now
     defs = liveness.def_bbs
     pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
     sort!(pq, by=x->x[2])
     phiblocks = Int[]
+    # This bitset makes sure we only add a phi node to a given block once.
     processed = BitSet()
+    # This bitset implements the `key insight` mentioned above. In particular, it prevents
+    # us from visiting a subtree that we have already visited before.
+    visited = BitSet()
     while !isempty(pq)
+        # We pop from the end of the array - i.e. the element with the highest level.
         node, level = pop!(pq)
         worklist = Int[]
-        visited = BitSet()
         push!(worklist, node)
         while !isempty(worklist)
             active = pop!(worklist)
             for succ in cfg.blocks[active].succs
+                # Check whether the current root (`node`) dominates succ.
+                # We are guaranteed that `node` dominates `active`, since
+                # we've arrived at `active` by following dominator tree edges.
+                # If `succ`'s level is less than or equal to that of `node`,
+                # it cannot possibly be dominated by `node`. On the other hand,
+                # since at this point we know that there is an edge from `node`'s
+                # subtree to `succ`, we know that if succ's level is greater than
+                # that of `node`, it must be dominated by `node`.
                 succ_level = domtree.nodes[succ].level
                 succ_level > level && continue
+                # We don't dominate succ. We need to place a phinode,
+                # unless liveness said otherwise.
                 succ in processed && continue
                 push!(processed, succ)
                 if !(succ in liveness.live_in_bbs)
                     continue
                 end
                 push!(phiblocks, succ)
+                # Basically: Consider the phi node we just added another
+                # def of this value. N.B.: This needs to retain the invariant that it
+                # is processed before any of its parents in the dom tree. This is guaranteed,
+                # because succ_level <= level, which is the greatest level we have currently
+                # processed. Thus, we have not yet processed any subtrees of level < succ_level.
                 if !(succ in defs)
                     push!(pq, (succ, succ_level))
                     sort!(pq, by=x->x[2])
                 end
             end
+            # Recurse down the current subtree
             for child in domtree.nodes[active].children
                 child in visited && continue
                 push!(visited, child)
@@ -496,7 +549,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
         end
         @assert !isa(typ, MaybeUndef)
         while isa(typ, DelayedTyp)
-            typ = ir.new_nodes[typ.phi.id - length(ir.stmts)].typ
+            typ = types(ir)[typ.phi::NewSSAValue]
         end
         new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
     end
@@ -524,7 +577,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
     end
 
     phi_slots = Vector{Int}[Vector{Int}() for _ = 1:length(ir.cfg.blocks)]
-    phi_nodes = Vector{Pair{Int,PhiNode}}[Vector{Pair{Int,PhiNode}}() for _ = 1:length(cfg.blocks)]
+    phi_nodes = Vector{Pair{NewSSAValue,PhiNode}}[Vector{Pair{NewSSAValue,PhiNode}}() for _ = 1:length(cfg.blocks)]
     phi_ssas = SSAValue[]
     phicnodes = IdDict{Int, Vector{Tuple{SlotNumber, NewSSAValue, PhiCNode}}}()
     for (_, exc) in catch_entry_blocks
@@ -562,7 +615,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                 # Create a PhiC node in the catch entry block and
                 # an upsilon node in the corresponding enter block
                 node = PhiCNode(Any[])
-                phic_ssa = NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, li), Union{}, node).id)
+                phic_ssa = NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, li), Union{}, node).id - length(ir.stmts))
                 push!(phicnodes[li], (SlotNumber(idx), phic_ssa, node))
                 # Inform IDF that we now have a def in the catch block
                 if !(li in live.def_bbs)
@@ -574,8 +627,8 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
-            ssa = insert_node!(ir, first_insert_for_bb(code, cfg, block), Union{}, node)
-            push!(phi_nodes[block], ssa.id=>node)
+            ssa = NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, block), Union{}, node).id - length(ir.stmts))
+            push!(phi_nodes[block], ssa=>node)
         end
         push!(left, idx)
     end
@@ -626,19 +679,18 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                 push!(node.values, incoming_val)
             end
             # TODO: Remove the next line, it shouldn't be necessary
-            push!(type_refine_phi, ssaval)
+            push!(type_refine_phi, ssaval.id)
             if isa(incoming_val, NewSSAValue)
-                push!(type_refine_phi, ssaval)
+                push!(type_refine_phi, ssaval.id)
             end
             typ = incoming_val == undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci)
-            new_node_id = ssaval - length(ir.stmts)
-            old_entry = ir.new_nodes[new_node_id]
+            old_entry = ir.new_nodes[ssaval.id]
             if isa(typ, DelayedTyp)
-                push!(type_refine_phi, ssaval)
+                push!(type_refine_phi, ssaval.id)
             end
             new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(old_entry.typ, typ)
-            ir.new_nodes[new_node_id] = NewNode(old_entry.pos, old_entry.attach_after, new_typ, node, old_entry.line)
-            incoming_vals[slot] = NewSSAValue(ssaval)
+            ir.new_nodes[ssaval.id] = NewNode(old_entry.pos, old_entry.attach_after, new_typ, node, old_entry.line)
+            incoming_vals[slot] = ssaval
         end
         (item in visited) && continue
         # Record phi_C nodes if necessary
@@ -656,7 +708,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                 typ = ivalundef ? MaybeUndef(Union{}) : ci.slottypes[slot_id(slot)]
                 push!(node.values,
                     NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item)+1,
-                                 typ, unode).id))
+                                 typ, unode).id - length(ir.stmts)))
             end
         end
         push!(visited, item)
@@ -696,7 +748,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                                 typ = MaybeUndef(Union{})
                             end
                             push!(phicnodes[exc][cidx][3].values,
-                                NewSSAValue(insert_node!(ir, idx, typ, node, true).id))
+                                NewSSAValue(insert_node!(ir, idx, typ, node, true).id - length(ir.stmts)))
                         end
                     end
                 end
@@ -719,12 +771,12 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
     # Convert into IRCode form
     new_code = ir.stmts
     ssavalmap = Any[SSAValue(-1) for _ in 1:(length(ci.ssavaluetypes)+1)]
-    types = Any[Any for _ in 1:length(new_code)]
+    result_types = Any[Any for _ in 1:length(new_code)]
     # Detect statement positions for assignments and construct array
     for (idx, stmt) in Iterators.enumerate(code)
         if isexpr(stmt, :(=)) && isa(stmt.args[1], SSAValue)
             ssavalmap[stmt.args[1].id + 1] = SSAValue(idx)
-            types[idx] = ci.ssavaluetypes[stmt.args[1].id + 1]
+            result_types[idx] = ci.ssavaluetypes[stmt.args[1].id + 1]
             stmt = stmt.args[2]
             if isa(stmt, PhiNode)
                 edges = Any[edge == 0 ? 0 : block_for_inst(cfg, edge) for edge in stmt.edges]
@@ -748,13 +800,13 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             new_typ = Union{}
             # TODO: This could just be the ones that depend on other phis
             push!(type_refine_phi, ssa.id)
-            new_idx = ssa.id - length(ir.stmts)
+            new_idx = ssa.id
             node = ir.new_nodes[new_idx]
             for i = 1:length(node.node.values)
                 orig_typ = typ = typ_for_val(node.node.values[i], ci)
                 @assert !isa(typ, MaybeUndef)
                 while isa(typ, DelayedTyp)
-                    typ = ir.new_nodes[typ.phi.id - length(ir.stmts)].typ
+                    typ = types(ir)[typ.phi::NewSSAValue]
                 end
                 new_typ = tmerge(new_typ, typ)
             end
@@ -767,8 +819,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
     changed = true
     while changed
         changed = false
-        for phi in type_refine_phi
-            new_idx = phi - length(ir.stmts)
+        for new_idx in type_refine_phi
             node = ir.new_nodes[new_idx]
             new_typ = recompute_type(node.node, ci, ir)
             if !(node.typ ⊑ new_typ) || !(new_typ ⊑ node.typ)
@@ -777,19 +828,19 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
             end
         end
     end
-    types = Any[isa(types[i], DelayedTyp) ? ir.new_nodes[types[i].phi.id - length(ir.stmts)].typ : types[i] for i in 1:length(types)]
+    result_types = Any[isa(result_types[i], DelayedTyp) ? types(ir)[result_types[i].phi::NewSSAValue] : result_types[i] for i in 1:length(result_types)]
     new_nodes = NewNode[let node = ir.new_nodes[i]
-            typ = isa(node.typ, DelayedTyp) ? ir.new_nodes[node.typ.phi.id - length(ir.stmts)].typ : node.typ
+            typ = isa(node.typ, DelayedTyp) ? types(ir)[node.typ.phi::NewSSAValue] : node.typ
             NewNode(node.pos, node.attach_after, typ, node.node, node.line)
         end for i in 1:length(ir.new_nodes)]
     # Renumber SSA values
-    new_code = Any[new_to_regular(renumber_ssa!(new_code[i], ssavalmap)) for i in 1:length(new_code)]
+    new_code = Any[new_to_regular(renumber_ssa!(new_code[i], ssavalmap), length(ir.stmts)) for i in 1:length(new_code)]
     new_nodes = NewNode[let node = new_nodes[i]
             NewNode(node.pos, node.attach_after, node.typ,
-            new_to_regular(renumber_ssa!(node.node, ssavalmap)),
+            new_to_regular(renumber_ssa!(node.node, ssavalmap), length(ir.stmts)),
             node.line)
         end for i in 1:length(new_nodes)]
-    ir = IRCode(ir, new_code, types, ir.lines, ir.flags, ir.cfg, new_nodes)
+    ir = IRCode(ir, new_code, result_types, ir.lines, ir.flags, ir.cfg, new_nodes)
     @timeit "domsort" ir = domsort_ssa!(ir, domtree)
     return ir
 end
