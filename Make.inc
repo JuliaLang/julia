@@ -539,10 +539,10 @@ endif
 # Allow the user to specify this in Make.user
 GCCPATH ?= $(LOCALBASE)/lib/gcc$(_GCCVER)
 
-LDFLAGS += -L$(build_libdir) -L$(GCCPATH) -Wl,-rpath,$(build_libdir) -Wl,-rpath,$(GCCPATH)
-
-# This ensures we get the right RPATH even if we're missing FFLAGS somewhere
-FC += -Wl,-rpath=$(GCCPATH)
+# We're going to copy over the libraries we need from GCCPATH into build_libdir, then
+# tell everyone to look for them there. At install time, the build_libdir added into
+# the RPATH here is removed by patchelf.
+LDFLAGS += -L$(build_libdir) -Wl,-rpath,$(build_libdir)
 
 endif # gfortran
 endif # FreeBSD
