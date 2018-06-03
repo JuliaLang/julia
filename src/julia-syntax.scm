@@ -2003,6 +2003,8 @@
           (let ((a    (cadr lhs))
                 (idxs (cddr lhs))
                 (rhs  (caddr e)))
+            (if (any assignment? idxs)
+                (syntax-deprecation "assignment inside indexing" "" #f))
             (let* ((reuse (and (pair? a)
                                (contains (lambda (x) (eq? x 'end))
                                          idxs)))
@@ -2061,6 +2063,8 @@
    'ref
    (lambda (e)
      (let ((args (cddr e)))
+       (if (any assignment? args)
+           (syntax-deprecation "assignment inside indexing" "" #f))
        (if (has-parameters? args)
            (error "unexpected semicolon in array expression")
            (expand-forms (partially-expand-ref e)))))
@@ -2069,6 +2073,8 @@
    (lambda (e)
      (if (has-parameters? (cddr e))
          (error (string "unexpected semicolon in \"" (deparse e) "\"")))
+     (if (any assignment? (cddr e))
+         (syntax-deprecation "assignment inside T{ }" "" #f))
      (let* ((p (extract-implicit-whereparams e))
             (curlyparams (car p))
             (whereparams (cdr p)))
@@ -2241,14 +2247,21 @@
    (lambda (e)
      (if (has-parameters? (cdr e))
          (error "unexpected semicolon in array expression"))
+     (if (any assignment? (cdr e))
+         (syntax-deprecation "assignment inside [ ]" "" #f))
      (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
-   (lambda (e) (expand-forms `(call (top hcat) ,@(cdr e))))
+   (lambda (e)
+     (if (any assignment? (cdr e))
+         (syntax-deprecation "assignment inside [ ]" "" #f))
+     (expand-forms `(call (top hcat) ,@(cdr e))))
 
    'vcat
    (lambda (e)
      (let ((a (cdr e)))
+       (if (any assignment? a)
+           (syntax-deprecation "assignment inside [ ]" "" #f))
        (if (has-parameters? a)
            (error "unexpected semicolon in array expression")
            (expand-forms
@@ -2267,12 +2280,17 @@
                 `(call (top vcat) ,@a))))))
 
    'typed_hcat
-   (lambda (e) (expand-forms `(call (top typed_hcat) ,@(cdr e))))
+   (lambda (e)
+     (if (any assignment? (cddr e))
+         (syntax-deprecation "assignment inside T[ ]" "" #f))
+     (expand-forms `(call (top typed_hcat) ,@(cdr e))))
 
    'typed_vcat
    (lambda (e)
      (let ((t (cadr e))
            (a (cddr e)))
+       (if (any assignment? (cddr e))
+           (syntax-deprecation "assignment inside T[ ]" "" #f))
        (expand-forms
         (if (any (lambda (x)
                    (and (pair? x) (eq? (car x) 'row)))
