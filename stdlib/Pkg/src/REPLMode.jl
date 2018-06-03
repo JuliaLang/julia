@@ -748,7 +748,7 @@ function do_generate!(ctx::Context, tokens::Vector{Token})
             cmderror("`generate` takes a name of the project to create")
         end
     end
-    API.generate(pkg)
+    API.generate(ctx, pkg)
 end
 
 function do_precompile!(ctx::Context, tokens::Vector{Token})
