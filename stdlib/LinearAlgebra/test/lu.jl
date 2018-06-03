@@ -301,6 +301,7 @@ module TrickyArithmetic
         d::DT
     end
     Base.zero(::Union{D{NT, DT}, Type{D{NT, DT}}}) where {NT, DT} = zero(NT) / one(DT)
+    Base.one(::Union{D{NT, DT}, Type{D{NT, DT}}}) where {NT, DT} = one(NT) / one(DT)
     Base.convert(::Type{D{NT, DT}}, a::Union{A, B, C}) where {NT, DT} = NT(a) / one(DT)
     #Base.convert(::Type{D{NT, DT}}, a::D) where {NT, DT} = NT(a.n) / DT(a.d)
 
