@@ -1246,7 +1246,7 @@ Deprecated or removed
   * `isupper`, `islower`, `ucfirst` and `lcfirst` have been deprecated in favor of `isuppercase`,
     `islowercase`, `uppercasefirst` and `lowercasefirst`, respectively ([#26442]).
 
-  * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.  
+  * `signif` has been deprecated in favor of the `sigdigits` keyword argument to `round`.
 
   * `Base.IntSet` has been deprecated in favor of `Base.BitSet` ([#24282]).
 
