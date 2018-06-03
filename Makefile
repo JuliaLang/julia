@@ -309,6 +309,19 @@ endif
 endif
 endif
 
+ifeq ($(OS),FreeBSD)
+define std_so
+julia-deps: | $$(build_libdir)/lib$(1).so
+$$(build_libdir)/lib$(1).so: | $$(build_libdir)
+	$$(INSTALL_M) $$(GCCPATH)/lib$(1).so* $$(build_libdir)
+JL_LIBS += $(1)
+endef
+
+$(eval $(call std_so,gfortran))
+$(eval $(call std_so,gcc_s))
+$(eval $(call std_so,quadmath))
+endif # FreeBSD
+
 ifeq ($(OS),WINNT)
 define std_dll
 julia-deps: | $$(build_bindir)/lib$(1).dll $$(build_depsbindir)/lib$(1).dll
@@ -415,6 +428,11 @@ endif
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
 	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia.$(SHLIB_EXT),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
 	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT),sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
+endif
+
+	# On FreeBSD, remove the build's libdir from each library's RPATH
+ifeq ($(OS),FreeBSD)
+	$(JULIAHOME)/contrib/fixup-rpath.sh $(build_depsbindir)/patchelf $(DESTDIR)$(libdir) $(build_libdir)
 endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
