@@ -79,6 +79,7 @@ export
     diag,
     diagind,
     diagm,
+    dot,
     eigen,
     eigen!,
     eigmax,
@@ -370,9 +371,6 @@ include("schur.jl")
 include("structuredbroadcast.jl")
 include("deprecated.jl")
 
-#TODO: This yields: error during bootstrap. LoadError("sysimg.jl", 213, ...)
-# const dot = inner
-# export dot
 const ⋅ = inner
 const × = cross
 export ⋅, ×

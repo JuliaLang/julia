@@ -720,6 +720,15 @@ function inner(x::AbstractVector, y::AbstractVector)
     return s
 end
 
+"""
+    inner(x,y)
+    dot(x, y)
+    ⋅(x,y)
+
+Compute the inner/dot product between `x` and `y`, see [`inner`](@ref).
+"""
+dot(x, y) = inner(x, y)
+
 
 ###########################################################################################
 
