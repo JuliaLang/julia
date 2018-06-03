@@ -718,7 +718,7 @@ function full(A::AbstractArray)
         "The no-op `full(A::AbstractArray)` fallback has been deprecated, and no more ",
         "specific `full` method for $(typeof(A)) exists. Furthermore, `full` in general ",
         "has been deprecated.\n\n",
-        "To replace `full(A)`, as appropriate consider dismabiguating with a concrete ",
+        "To replace `full(A)`, as appropriate consider disambiguating with a concrete ",
         "array constructor (e.g. `Array(A)`), with an abstract array constructor (e.g.`AbstractArray(A)`), ",
         "instead `convert`ing to an array type (e.g `convert(Array, A)`, `convert(AbstractArray, A)`), ",
         "or using another such operation that addresses your specific use case."),  :full)

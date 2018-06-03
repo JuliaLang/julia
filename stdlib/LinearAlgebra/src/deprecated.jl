@@ -632,7 +632,7 @@ pinv(v::RowVector, tol::Real=0) = rvadjoint(pinv(rvadjoint(v), tol))
 /(A::Matrix, B::RowVector) = rvadjoint(rvadjoint(B) \ adjoint(A))
 
 
-# dismabiguation methods
+# disambiguation methods
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RowVector}) = adjoint(A.parent) * B
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RowVector}) = A * rvtranspose(B.parent)
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RowVector}) = transpose(A.parent) * B

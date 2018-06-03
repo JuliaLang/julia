@@ -2443,20 +2443,20 @@ end
 
 factorize(A::AbstractTriangular) = A
 
-# dismabiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
+# disambiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
 *(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Ajd of AbstractTriangular)
+# disambiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Ajd of AbstractTriangular)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractTriangular}) = copy(A) * B
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Adj/Trans of AbsVec or AbsMat)
+# disambiguation methods: *(Adj/Trans of AbstractTriangular, Adj/Trans of AbsVec or AbsMat)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
-# dismabiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj/Trans of AbstractTriangular)
+# disambiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj/Trans of AbstractTriangular)
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractTriangular}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractTriangular}) = transpose(transpose(B) * transpose(A))
