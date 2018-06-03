@@ -669,6 +669,7 @@ end
 @test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
+@test occursin("cor", sprint(apropos, "pearson"))
 @test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
 using Profile
 @test occursin("Profile.print", sprint(apropos, "print"))

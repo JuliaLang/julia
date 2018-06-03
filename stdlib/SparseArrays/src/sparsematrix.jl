@@ -3489,6 +3489,67 @@ function hash(A::SparseMatrixCSC{T}, h::UInt) where T
     hashrun(0, length(A)-lastidx, h)  # Hash zeros at end
 end
 
+## Statistics
+
+# This is the function that does the reduction underlying var/std
+function Base.centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, means::AbstractArray) where {S,Tv,Ti}
+    lsiz = Base.check_reducedims(R,A)
+    size(means) == size(R) || error("size of means must match size of R")
+    isempty(R) || fill!(R, zero(S))
+    isempty(A) && return R
+
+    colptr = A.colptr
+    rowval = A.rowval
+    nzval = A.nzval
+    m = size(A, 1)
+    n = size(A, 2)
+
+    if size(R, 1) == size(R, 2) == 1
+        # Reduction along both columns and rows
+        R[1, 1] = Base.centralize_sumabs2(A, means[1])
+    elseif size(R, 1) == 1
+        # Reduction along rows
+        @inbounds for col = 1:n
+            mu = means[col]
+            r = convert(S, (m-colptr[col+1]+colptr[col])*abs2(mu))
+            @simd for j = colptr[col]:colptr[col+1]-1
+                r += abs2(nzval[j] - mu)
+            end
+            R[1, col] = r
+        end
+    elseif size(R, 2) == 1
+        # Reduction along columns
+        rownz = fill(convert(Ti, n), m)
+        @inbounds for col = 1:n
+            @simd for j = colptr[col]:colptr[col+1]-1
+                row = rowval[j]
+                R[row, 1] += abs2(nzval[j] - means[row])
+                rownz[row] -= 1
+            end
+        end
+        for i = 1:m
+            R[i, 1] += rownz[i]*abs2(means[i])
+        end
+    else
+        # Reduction along a dimension > 2
+        @inbounds for col = 1:n
+            lastrow = 0
+            @simd for j = colptr[col]:colptr[col+1]-1
+                row = rowval[j]
+                for i = lastrow+1:row-1
+                    R[i, col] = abs2(means[i, col])
+                end
+                R[row, col] = abs2(nzval[j] - means[row, col])
+                lastrow = row
+            end
+            for i = lastrow+1:m
+                R[i, col] = abs2(means[i, col])
+            end
+        end
+    end
+    return R
+end
+
 ## Uniform matrix arithmetic
 
 (+)(A::SparseMatrixCSC, J::UniformScaling) = A + sparse(J, size(A)...)
