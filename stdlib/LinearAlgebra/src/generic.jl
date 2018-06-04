@@ -701,8 +701,8 @@ julia> inner([im; im], [1; 1])
 ```
 """
 function inner(x::AbstractVector, y::AbstractVector)
-    if length(x) != length(y)
-        throw(DimensionMismatch("inner product arguments have unequal lengths $(length(x)) and $(length(y))"))
+    if length(LinearIndices(x)) != length(LinearIndices(y))
+        throw(DimensionMismatch("inner product arguments have unequal lengths $(length(LinearIndices(x))) and $(length(LinearIndices(y)))"))
     end
     ix = iterate(x)
     if ix === nothing
@@ -726,6 +726,15 @@ end
     ⋅(x,y)
 
 Compute the inner/dot product between `x` and `y`, see [`inner`](@ref).
+
+# Examples
+```jldoctest
+julia> dot([1; 1], [2; 3])
+5
+
+julia> dot([im; im], [1; 1])
+0 - 2im
+```
 """
 dot(x, y) = inner(x, y)
 
