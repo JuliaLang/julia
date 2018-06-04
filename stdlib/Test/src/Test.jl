@@ -524,6 +524,7 @@ Test Passed
 julia> @test_throws DimensionMismatch [1, 2, 3] + [1, 2]
 Test Passed
       Thrown: DimensionMismatch
+```
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
