@@ -102,19 +102,24 @@ mutable struct UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
     colptr::Vector{Ti}                  # 0-based column pointers
     rowval::Vector{Ti}                  # 0-based row indices
     nzval::Vector{Tv}
+    status::Int
 end
 
 Base.adjoint(F::UmfpackLU) = Adjoint(F)
 Base.transpose(F::UmfpackLU) = Transpose(F)
 
 """
-    lu(A::SparseMatrixCSC) -> F::UmfpackLU
+    lu(A::SparseMatrixCSC; check = true) -> F::UmfpackLU
 
 Compute the LU factorization of a sparse matrix `A`.
 
 For sparse `A` with real or complex element type, the return type of `F` is
 `UmfpackLU{Tv, Ti}`, with `Tv` = [`Float64`](@ref) or `ComplexF64` respectively and
 `Ti` is an integer type ([`Int32`](@ref) or [`Int64`](@ref)).
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
 
 The individual components of the factorization `F` can be accessed by indexing:
 
@@ -143,25 +148,30 @@ The relation between `F` and `A` is
     `ComplexF64` elements, `lu` converts `A` into a copy that is of type
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{ComplexF64}` as appropriate.
 """
-function lu(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
+function lu(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes}; check::Bool = true)
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
                     zerobased ? copy(S.rowval) : decrement(S.rowval),
-                    copy(S.nzval))
+                    copy(S.nzval), 0)
     finalizer(umfpack_free_symbolic, res)
     umfpack_numeric!(res)
+    check && (issuccess(res) || throw(LinearAlgebra.SingularException(0)))
+    return res
 end
-lu(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
-    lu(convert(SparseMatrixCSC{Float64,Ti}, A))
-lu(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti}) where {Ti<:UMFITypes} =
-    lu(convert(SparseMatrixCSC{ComplexF64,Ti}, A))
-lu(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat} =
+lu(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti};
+   check::Bool = true) where {Ti<:UMFITypes} =
+    lu(convert(SparseMatrixCSC{Float64,Ti}, A); check = check)
+lu(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32},Ti};
+   check::Bool = true) where {Ti<:UMFITypes} =
+    lu(convert(SparseMatrixCSC{ComplexF64,Ti}, A); check = check)
+lu(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
+   check::Bool = true) where {T<:AbstractFloat} =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
     "Try lu(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
     "sparse floating point LU using UMFPACK or lu(Array(A)) for generic ",
     "dense LU.")))
-lu(A::SparseMatrixCSC) = lu(float(A))
+lu(A::SparseMatrixCSC; check::Bool = true) = lu(float(A); check = check)
 
 
 size(F::UmfpackLU) = (F.m, F.n)
@@ -178,8 +188,8 @@ function size(F::UmfpackLU, dim::Integer)
 end
 
 function show(io::IO, F::UmfpackLU)
-    println(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
-    F.numeric != C_NULL && println(io, F.numeric)
+    print(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
+    F.numeric != C_NULL && print(io, '\n', F.numeric)
 end
 
 ## Wrappers for UMFPACK functions
@@ -236,6 +246,7 @@ for itype in UmfpackIndexTypes
                 umferror(status)
             end
             U.numeric = tmp[1]
+            U.status = status
             return U
         end
         function umfpack_numeric!(U::UmfpackLU{ComplexF64,$itype})
@@ -251,6 +262,7 @@ for itype in UmfpackIndexTypes
                 umferror(status)
             end
             U.numeric = tmp[1]
+            U.status = status
             return U
         end
         function solve!(x::StridedVector{Float64}, lu::UmfpackLU{Float64,$itype}, b::StridedVector{Float64}, typ::Integer)
@@ -387,7 +399,7 @@ function nnz(lu::UmfpackLU)
     return Int(lnz + unz)
 end
 
-det(A::SparseMatrixCSC) = det(lu(A))
+LinearAlgebra.issuccess(lu::UmfpackLU) = lu.status == UMFPACK_OK
 
 ### Solve with Factorization
 

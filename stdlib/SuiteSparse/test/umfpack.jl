@@ -1,14 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using SuiteSparse: increment!
+using LinearAlgebra: Adjoint, Transpose, SingularException
+
 @testset "UMFPACK wrappers" begin
     se33 = sparse(1.0I, 3, 3)
     do33 = fill(1., 3)
     @test isequal(se33 \ do33, do33)
 
     # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
-
-    using SuiteSparse: increment!
-    using LinearAlgebra: Adjoint, Transpose
 
     A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
                 increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
@@ -165,6 +165,13 @@
         @test LinearAlgebra.ldiv!(copy(X), luA, B) ≈ LinearAlgebra.ldiv!(copy(X), lufA, B)
         @test LinearAlgebra.ldiv!(copy(X), adjoint(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), adjoint(lufA), B)
         @test LinearAlgebra.ldiv!(copy(X), transpose(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), transpose(lufA), B)
+    end
+
+    @testset "singular matrix" begin
+        for A in sparse.((Float64[1 2; 0 0], ComplexF64[1 2; 0 0]))
+            @test_throws SingularException lu(A)
+            @test !issuccess(lu(A; check = false))
+        end
     end
 
 end
