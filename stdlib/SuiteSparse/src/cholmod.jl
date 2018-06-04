@@ -1367,18 +1367,20 @@ function fact_(A::Sparse{<:VTypes}, cm::Array{UInt8};
     return F
 end
 
-function cholesky!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
+function cholesky!(F::Factor{Tv}, A::Sparse{Tv};
+                   shift::Real=0.0, check::Bool = true) where Tv
     # Makes it an LLt
     unsafe_store!(common_final_ll[], 1)
 
     # Compute the numerical factorization
     factorize_p!(A, shift, F, common_struct)
 
+    check && (issuccess(F) || throw(LinearAlgebra.PosDefException(1)))
     return F
 end
 
 """
-    cholesky!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
+    cholesky!(F::Factor, A; shift = 0.0, check = true) -> CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic
 factorization `F`. `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/
@@ -1394,14 +1396,14 @@ See also [`cholesky`](@ref).
     as appropriate.
 """
 cholesky!(F::Factor, A::Union{SparseMatrixCSC{T},
-        SparseMatrixCSC{Complex{T}},
-        Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-        Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-        Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
-    shift = 0.0) where {T<:Real} =
-    cholesky!(F, Sparse(A); shift = shift)
+          SparseMatrixCSC{Complex{T}},
+          Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
+          Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+          Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+          shift = 0.0, check::Bool = true) where {T<:Real} =
+    cholesky!(F, Sparse(A); shift = shift, check = check)
 
-function cholesky(A::Sparse; shift::Real=0.0,
+function cholesky(A::Sparse; shift::Real=0.0, check::Bool = true,
     perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
 
     cm = defaults(common_struct)
@@ -1411,13 +1413,13 @@ function cholesky(A::Sparse; shift::Real=0.0,
     F = fact_(A, cm; perm = perm)
 
     # Compute the numerical factorization
-    cholesky!(F, A; shift = shift)
+    cholesky!(F, A; shift = shift, check = check)
 
     return F
 end
 
 """
-    cholesky(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
+    cholesky(A; shift = 0.0, check = true, perm = Int[]) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
@@ -1434,6 +1436,10 @@ using just `L` without accounting for `P` will give incorrect answers.
 To include the effects of permutation,
 it's typically preferable to extract "combined" factors like `PtL = F.PtL`
 (the equivalent of `P'*L`) and `LtP = F.UP` (the equivalent of `L'*P`).
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
 
 Setting the optional `shift` keyword argument computes the factorization of
 `A+shift*I` instead of `A`. If the `perm` argument is nonempty,
@@ -1456,7 +1462,8 @@ cholesky(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
     kws...) where {T<:Real} = cholesky(Sparse(A); kws...)
 
 
-function ldlt!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
+function ldlt!(F::Factor{Tv}, A::Sparse{Tv};
+               shift::Real=0.0, check::Bool = true) where Tv
     cm = defaults(common_struct)
     set_print_level(cm, 0)
 
@@ -1466,11 +1473,12 @@ function ldlt!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
 
+    check && (issuccess(F) || throw(LinearAlgebra.PosDefException(1)))
     return F
 end
 
 """
-    ldlt!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
+    ldlt!(F::Factor, A; shift = 0.0, check = true) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
@@ -1490,10 +1498,10 @@ ldlt!(F::Factor, A::Union{SparseMatrixCSC{T},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
     Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
     Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
-    shift = 0.0) where {T<:Real} =
-    ldlt!(F, Sparse(A), shift = shift)
+    shift = 0.0, check::Bool = true) where {T<:Real} =
+    ldlt!(F, Sparse(A), shift = shift, check = check)
 
-function ldlt(A::Sparse; shift::Real=0.0,
+function ldlt(A::Sparse; shift::Real=0.0, check::Bool = true,
     perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
 
     cm = defaults(common_struct)
@@ -1508,13 +1516,13 @@ function ldlt(A::Sparse; shift::Real=0.0,
     F = fact_(A, cm; perm = perm)
 
     # Compute the numerical factorization
-    ldlt!(F, A; shift = shift)
+    ldlt!(F, A; shift = shift, check = check)
 
     return F
 end
 
 """
-    ldlt(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+    ldlt(A; shift = 0.0, check = true, perm=Int[]) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse matrix `A`.
 `A` must be a [`SparseMatrixCSC`](@ref) or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
@@ -1532,6 +1540,10 @@ To include the effects of permutation, it is typically preferable to extract
 "combined" factors like `PtL = F.PtL` (the equivalent of
 `P'*L`) and `LtP = F.UP` (the equivalent of `L'*P`).
 The complete list of supported factors is `:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP`.
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
 
 Setting the optional `shift` keyword argument computes the factorization of
 `A+shift*I` instead of `A`. If the `perm` argument is nonempty,
@@ -1712,11 +1724,11 @@ const RealHermSymComplexHermF64SSL = Union{
     Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
     Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}
 function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
-    F = cholesky(A)
+    F = cholesky(A; check = false)
     if issuccess(F)
         return \(F, B)
     else
-        ldlt!(F, A)
+        ldlt!(F, A; check = false)
         if issuccess(F)
             return \(F, B)
         else
@@ -1726,11 +1738,11 @@ function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMat)
 end
 function \(adjA::Adjoint{<:Any,<:RealHermSymComplexHermF64SSL}, B::StridedVecOrMat)
     A = adjA.parent
-    F = cholesky(A)
+    F = cholesky(A; check = false)
     if issuccess(F)
         return \(adjoint(F), B)
     else
-        ldlt!(F, A)
+        ldlt!(F, A; check = false)
         if issuccess(F)
             return \(adjoint(F), B)
         else
@@ -1785,9 +1797,6 @@ function issuccess(F::Factor)
     s = unsafe_load(pointer(F))
     return s.minor == size(F, 1)
 end
-
-isposdef(A::Union{T, Hermitian{<:Any,T}, Symmetric{<:Any,T}} where T<:SparseMatrixCSC) =
-    ishermitian(A) && isposdef(cholesky(A))
 
 function isposdef(F::Factor)
     if issuccess(F)

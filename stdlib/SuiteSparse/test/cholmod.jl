@@ -4,6 +4,7 @@ using SuiteSparse.CHOLMOD
 using DelimitedFiles
 using Test
 using Serialization
+using LinearAlgebra: issuccess, PosDefException
 
 # CHOLMOD tests
 srand(123)
@@ -378,14 +379,14 @@ end
     C = A1 + copy(adjoint(A1))
     λmaxC = eigmax(Array(C))
     b = fill(1., size(A1, 1))
-    @test_throws LinearAlgebra.PosDefException cholesky(C - 2λmaxC*I)\b
-    @test_throws LinearAlgebra.PosDefException cholesky(C, shift=-2λmaxC)\b
-    @test_throws ArgumentError ldlt(C - C[1,1]*I)\b
-    @test_throws ArgumentError ldlt(C, shift=-real(C[1,1]))\b
-    @test !isposdef(cholesky(C - 2λmaxC*I))
-    @test !isposdef(cholesky(C, shift=-2λmaxC))
-    @test !LinearAlgebra.issuccess(ldlt(C - C[1,1]*I))
-    @test !LinearAlgebra.issuccess(ldlt(C, shift=-real(C[1,1])))
+    @test_throws PosDefException cholesky(C - 2λmaxC*I)
+    @test_throws PosDefException cholesky(C, shift=-2λmaxC)
+    @test_throws PosDefException ldlt(C - C[1,1]*I)
+    @test_throws PosDefException ldlt(C, shift=-real(C[1,1]))
+    @test !isposdef(cholesky(C - 2λmaxC*I; check = false))
+    @test !isposdef(cholesky(C, shift=-2λmaxC; check = false))
+    @test !issuccess(ldlt(C - C[1,1]*I; check = false))
+    @test !issuccess(ldlt(C, shift=-real(C[1,1]); check = false))
     F = cholesky(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -699,10 +700,10 @@ end
     s = unsafe_load(pointer(F))
     @test s.is_super == 0
     @test F\b ≈ fill(1., m+n)
-    F2 = cholesky(M)
-    @test !LinearAlgebra.issuccess(F2)
+    F2 = cholesky(M; check = false)
+    @test !issuccess(F2)
     ldlt!(F2, M)
-    @test LinearAlgebra.issuccess(F2)
+    @test issuccess(F2)
     @test F2\b ≈ fill(1., m+n)
 end
 
@@ -805,11 +806,32 @@ end
 @testset "Issue #22335" begin
     local A, F
     A = sparse(1.0I, 3, 3)
-    @test LinearAlgebra.issuccess(cholesky(A))
+    @test issuccess(cholesky(A))
     A[3, 3] = -1
-    F = cholesky(A)
-    @test !LinearAlgebra.issuccess(F)
-    @test LinearAlgebra.issuccess(ldlt!(F, A))
+    F = cholesky(A; check = false)
+    @test !issuccess(F)
+    @test issuccess(ldlt!(F, A))
     A[3, 3] = 1
     @test A[:, 3:-1:1]\fill(1., 3) == [1, 1, 1]
+end
+
+@testset "Non-positive definite matrices" begin
+    A = sparse(Float64[1 2; 2 1])
+    B = sparse(ComplexF64[1 2; 2 1])
+    for M in (A, B, Symmetric(A), Hermitian(B))
+        F = cholesky(M; check = false)
+        @test_throws PosDefException cholesky(M)
+        @test_throws PosDefException cholesky!(F, M)
+        @test !issuccess(cholesky(M; check = false))
+        @test !issuccess(cholesky!(F, M; check = false))
+    end
+    A = sparse(Float64[0 0; 0 0])
+    B = sparse(ComplexF64[0 0; 0 0])
+    for M in (A, B, Symmetric(A), Hermitian(B))
+        F = ldlt(M; check = false)
+        @test_throws PosDefException ldlt(M)
+        @test_throws PosDefException ldlt!(F, M)
+        @test !issuccess(ldlt(M; check = false))
+        @test !issuccess(ldlt!(F, M; check = false))
+    end
 end
