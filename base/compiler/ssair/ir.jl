@@ -914,6 +914,8 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
         return PhiCNode(fixup_phinode_values!(compact, stmt.values))
     elseif isa(stmt, NewSSAValue)
         return SSAValue(length(compact.result) + stmt.id)
+    elseif isa(stmt, OldSSAValue)
+        return compact.ssa_rename[stmt.id]
     else
         urs = userefs(stmt)
         urs === () && return stmt
@@ -921,6 +923,8 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
             val = ur[]
             if isa(val, NewSSAValue)
                 ur[] = SSAValue(length(compact.result) + val.id)
+            elseif isa(val, OldSSAValue)
+                ur[] = compact.ssa_rename[val.id]
             end
         end
         return urs[]
