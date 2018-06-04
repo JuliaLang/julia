@@ -213,6 +213,9 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     project_deps_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
+    if !ctx.preview && (Operations.any_package_not_installed(ctx) || !isfile(ctx.env.manifest_file))
+        Pkg.instantiate(ctx)
+    end
     Operations.test(ctx, pkgs; coverage=coverage)
     return
 end
@@ -370,6 +373,7 @@ build(pkgs::Vector{PackageSpec}) = build(Context(), pkgs)
 
 function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     Context!(ctx; kwargs...)
+
     ctx.preview && preview_info()
     if isempty(pkgs)
         if ctx.env.pkg !== nothing
@@ -387,6 +391,9 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     project_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
+    if !ctx.preview && (Operations.any_package_not_installed(ctx) || !isfile(ctx.env.manifest_file))
+        Pkg.instantiate(ctx)
+    end
     uuids = UUID[]
     _get_deps!(ctx, pkgs, uuids)
     length(uuids) == 0 && (@info("no packages to build"); return)

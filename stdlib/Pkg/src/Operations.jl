@@ -726,7 +726,11 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
     need_to_resolve = false
     is_project = Types.is_project(localctx.env, pkg)
 
-    if is_project
+    if is_project # testing the project itself
+        # the project might have changes made to it so need to resolve
+        need_to_resolve = true
+        # Since we will create a temp environment in another place we need to extract the project
+        # and put it in the Project as a normal `deps` entry and in the Manifest with a path.
         foreach(k->delete!(localctx.env.project, k), ("name", "uuid", "version"))
         localctx.env.pkg = nothing
         localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
@@ -734,13 +738,14 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
             "deps" => mainctx.env.project["deps"],
             "uuid" => string(pkg.uuid),
             "path" => dirname(localctx.env.project_file),
+            "version" => string(pkg.version)
         )]
     else
+        # Only put `pkg` and its deps in the temp project
         empty!(localctx.env.project["deps"])
         localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
         info = manifest_info(localctx.env, pkg.uuid)
         need_to_resolve |= haskey(info, "path")
-        deps = PackageSpec[]
         for (dpkg, duuid) in get(info, "deps", [])
             dinfo = manifest_info(localctx.env, UUID(duuid))
             dinfo === nothing || (need_to_resolve |= haskey(info, "path"))
@@ -748,10 +753,10 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         end
     end
 
-
     mktempdir() do tmpdir
         localctx.env.project_file = joinpath(tmpdir, "Project.toml")
         localctx.env.manifest_file = joinpath(tmpdir, "Manifest.toml")
+
         # Rewrite paths in Manifest since relative paths won't work here due to the temporary environment
         for (_, infos) in localctx.env.manifest
             info = infos[1]
@@ -759,9 +764,10 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
                 info["path"] = project_rel_path(mainctx, info["path"])
             end
         end
-        # If pkg has a test only dependency, definitely need to resolve!
+
         pkgs = PackageSpec[]
         if pkg.special_action == PKGSPEC_TESTED
+            # Find path to pkg being tested (exploit Base.locate_package instead?)
             if pkg.uuid in keys(localctx.stdlibs)
                 path = Types.stdlib_path(pkg.name)
             elseif Types.is_project_uuid(localctx.env, pkg.uuid)
@@ -770,6 +776,8 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
                 info = manifest_info(localctx.env, pkg.uuid)
                 path = haskey(info, "path") ? project_rel_path(localctx, info["path"]) : find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
             end
+
+            # Collect test/REQUIRE packages if they exist
             test_reqfile = joinpath(path, "test", "REQUIRE")
             if isfile(test_reqfile)
                 for r in Pkg2.Reqs.read(test_reqfile)
@@ -777,7 +785,6 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
                     pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
                     push!(pkgs, PackageSpec(pkg_name, vspec))
                 end
-                is_project && push!(pkgs, mainctx.env.pkg)
                 registry_resolve!(localctx.env, pkgs)
                 ensure_resolved(localctx.env, pkgs; registry=true)
                 add_or_develop(localctx, pkgs)
@@ -798,6 +805,17 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         sep = Sys.iswindows() ? ';' : ':'
         withenv(f, "JULIA_LOAD_PATH" => "@$sep$tmpdir$sep$(Types.stdlib_dir())")
     end
+end
+
+function any_package_not_installed(ctx)
+    for (pkg, infos) in ctx.env.manifest
+        for info in infos
+            if Base.locate_package(Base.PkgId(UUID(info["uuid"]), pkg)) === nothing
+                return true
+            end
+        end
+    end
+    return false
 end
 
 #########
@@ -831,13 +849,14 @@ end
 function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve=false)
     # collect builds for UUIDs with `deps/build.jl` files
     ctx.preview && (printpkgstyle(ctx, :Building, "skipping building in preview mode"); return)
-    builds = Tuple{UUID,String,Union{String,SHA1},String}[]
+    builds = Tuple{UUID,String,Union{String,SHA1},String, VersionNumber}[]
     for uuid in uuids
         uuid in keys(ctx.stdlibs) && continue
         if Types.is_project_uuid(ctx.env, uuid)
             path = dirname(ctx.env.project_file)
             hash_or_path = path
             name = ctx.env.pkg.name
+            version = ctx.env.pkg.version
         else
             info = manifest_info(ctx.env, uuid)
             name = info["name"]
@@ -850,17 +869,18 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
             else
                 cmderror("Could not find either `git-tree-sha1` or `path` for package $(pkg.name)")
             end
+            version = v"0.0"
         end
         ispath(path) || error("Build path for $name does not exist: $path")
         build_file = joinpath(path, "deps", "build.jl")
-        ispath(build_file) && push!(builds, (uuid, name, hash_or_path, build_file))
+        ispath(build_file) && push!(builds, (uuid, name, hash_or_path, build_file, version))
     end
     # toposort builds by dependencies
     order = dependency_order_uuids(ctx, map(first, builds))
     sort!(builds, by = build -> order[first(build)])
     max_name = isempty(builds) ? 0 : maximum(textwidth.([build[2] for build in builds]))
     # build each package verions in a child process
-    for (uuid, name, hash_or_path, build_file) in builds
+    for (uuid, name, hash_or_path, build_file, version) in builds
         log_file = splitext(build_file)[1] * ".log"
         printpkgstyle(ctx, :Building,
             rpad(name * " ", max_name + 1, "─") * "→ " * Types.pathrepr(ctx, log_file))
@@ -884,7 +904,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
             end ? Base.rm(log_file, force=true) :
                 @error("Error building `$name`; see log file for further info")
         end
-        with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid); might_need_to_resolve=might_need_to_resolve) do
+        with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid, version); might_need_to_resolve=might_need_to_resolve) do
             run_build()
         end
     end
@@ -1004,6 +1024,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec})
             append!(new_git, new)
         else
             if info !== nothing
+                pkg.uuid in keys(ctx.stdlibs) && continue
                 ver = VersionNumber(info["version"])
                 if level == UPLEVEL_FIXED
                     pkg.version = VersionNumber(info["version"])
@@ -1066,6 +1087,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
     for pkg in pkgs
         pkg.special_action = PKGSPEC_TESTED
         if Types.is_project_uuid(ctx.env, pkg.uuid)
+            pkg.version = ctx.env.pkg.version
             version_path = dirname(ctx.env.project_file)
         else
             info = manifest_info(ctx.env, pkg.uuid)

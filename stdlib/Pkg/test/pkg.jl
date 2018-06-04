@@ -270,6 +270,22 @@ end
     end
 end
 
+temp_pkg_dir() do project_path
+    @testset "test should instantiate" begin
+        mktempdir() do dir
+            cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
+            cd(joinpath(dir, "UnregisteredWithProject")) do
+                try
+                    pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                    Pkg.test()
+                finally
+                    popfirst!(LOAD_PATH)
+                end
+            end
+        end
+    end
+end
+
 include("repl.jl")
 
 end # module
