@@ -493,7 +493,7 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
                 # At the moment we will allow globalrefs in argument position, turn those into ssa values
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
-                    if isa(aexpr, GlobalRef)
+                    if isa(aexpr, GlobalRef) || isa(aexpr, Expr)
                         argexprs[aidx] = insert_node_here!(compact, aexpr, compact_exprtype(compact, aexpr), compact.result_lines[idx])
                     end
                 end
