@@ -215,13 +215,38 @@ Dict{Int64,Int64} with 3 entries:
   1 => 0
 ```
 """
-function merge!(combine::Function, d::AbstractDict, others::AbstractDict...)
+function merge!(combine::F, d::AbstractDict, others::AbstractDict...) where F<:Function
     for other in others
-        for (k,v) in other
-            d[k] = haskey(d, k) ? combine(d[k], v) : v
+        for kv in other
+            merge_kv!(combine, d, kv.first, kv.second)
         end
     end
     return d
+end
+
+"""
+    merge_kv!(combine, d::AbstractDict, k, v)
+
+Update d[k] = combine(d[k],v) is the key is present, and otherwise set d[k]=combine(v).
+
+# Examples
+```jldoctest
+julia> d1 = Dict(1 => 2, 3 => 4);
+
+julia> merge_kv!(+, d1, 2, 5);
+
+julia> merge_kv!(+, d1, 2, 6);
+
+julia> d1
+Dict{Int64,Int64} with 3 entries:
+  2 => 11
+  3 => 4
+  1 => 2
+```
+"""
+@inline function merge_kv!(combine::F, d::AbstractDict, k, v) where F<:Function
+    d[k] = haskey(d, k) ? combine(d[k], v) : combine(v)
+    d
 end
 
 """

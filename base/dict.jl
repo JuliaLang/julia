@@ -399,6 +399,27 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     return h
 end
 
+function merge_kv!(combine::F, h::Dict{K,V}, k, v) where {F<:Function,K,V}
+    key = convert(K, k)
+    if !isequal(key, k)
+        throw(ArgumentError("$(k) is not a valid key for type $K"))
+    end
+
+    index = ht_keyindex2!(h, key)
+
+    if index > 0
+        h.age += 1
+        @inbounds vold = h.vals[index]
+        @inbounds h.keys[index] = key
+        @inbounds h.vals[index] = convert(V,combine(vold,v))
+    else
+        @inbounds _setindex!(h, convert(V,combine(v)), key, -index)
+    end    
+
+    return h
+end
+
+
 """
     get!(collection, key, default)
 
