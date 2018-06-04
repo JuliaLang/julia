@@ -455,7 +455,7 @@ const helps = Dict(
     coverage enabled.
     """, CMD_GC => md"""
 
-    Deletes packages that are not reached from any environment used within the last 6 weeks.
+    Deletes packages that cannot be reached from any existing environment.
     """, CMD_INIT => md"""
 
         init
