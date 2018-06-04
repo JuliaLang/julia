@@ -9,10 +9,7 @@ size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
 size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
-
-macro assertnonsingular(A, info)
-   :($(esc(info)) == 0 ? $(esc(A)) : throw(SingularException($(esc(info)))))
-end
+checknonsingular(info) = info == 0 || throw(SingularException(info))
 
 """
     issuccess(F::Factorization)
@@ -25,7 +22,7 @@ julia> F = cholesky([1 0; 0 1]);
 julia> LinearAlgebra.issuccess(F)
 true
 
-julia> F = lu([1 0; 0 0]);
+julia> F = lu([1 0; 0 0]; check = false);
 
 julia> LinearAlgebra.issuccess(F)
 false

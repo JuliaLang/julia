@@ -1230,7 +1230,7 @@ function det(A::AbstractMatrix{T}) where T
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
     end
-    return det(lu(A))
+    return det(lu(A; check = false))
 end
 det(x::Number) = x
 

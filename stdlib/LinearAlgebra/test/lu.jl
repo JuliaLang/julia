@@ -56,11 +56,6 @@ dimg  = randn(n)/2
             # @test norm(F.vectors*Diagonal(F.values)/F.vectors - A) > 0.01
         end
     end
-    @testset "Singular LU" begin
-        lua = lu(zeros(eltya, 3, 3))
-        @test !LinearAlgebra.issuccess(lua)
-        @test sprint((t, s) -> show(t, "text/plain", s), lua) == "Failed factorization of type $(typeof(lua))"
-    end
     κ  = cond(a,1)
     @testset "(Automatic) Square LU decomposition" begin
         lua   = factorize(a)
@@ -172,7 +167,7 @@ dimg  = randn(n)/2
                 du[1] = zero(eltya)
                 dl[1] = zero(eltya)
                 zT = Tridiagonal(dl,dd,du)
-                @test !LinearAlgebra.issuccess(lu(zT))
+                @test !LinearAlgebra.issuccess(lu(zT; check = false))
             end
         end
         @testset "Thin LU" begin
@@ -191,6 +186,25 @@ dimg  = randn(n)/2
             @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
+end
+
+@testset "Singular matrices" for T in (Float64, ComplexF64)
+    A = T[1 2; 0 0]
+    @test_throws SingularException lu(A)
+    @test_throws SingularException lu!(copy(A))
+    @test_throws SingularException lu(A; check = true)
+    @test_throws SingularException lu!(copy(A); check = true)
+    @test !issuccess(lu(A; check = false))
+    @test !issuccess(lu!(copy(A); check = false))
+    @test_throws SingularException lu(A, Val(false))
+    @test_throws SingularException lu!(copy(A), Val(false))
+    @test_throws SingularException lu(A, Val(false); check = true)
+    @test_throws SingularException lu!(copy(A), Val(false); check = true)
+    @test !issuccess(lu(A, Val(false); check = false))
+    @test !issuccess(lu!(copy(A), Val(false); check = false))
+    F = lu(A; check = false)
+    @test sprint((io, x) -> show(io, "text/plain", x), F) ==
+        "Failed factorization of type $(typeof(F))"
 end
 
 @testset "conversion" begin

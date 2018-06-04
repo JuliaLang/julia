@@ -387,6 +387,8 @@ function nnz(lu::UmfpackLU)
     return Int(lnz + unz)
 end
 
+det(A::SparseMatrixCSC) = det(lu(A))
+
 ### Solve with Factorization
 
 import LinearAlgebra.ldiv!
