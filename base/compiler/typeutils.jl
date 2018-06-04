@@ -124,3 +124,20 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
     end
     return tunion
 end
+
+# unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
+# counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
+unioncomplexity(u::Union) = 1 + unioncomplexity(u.a) + unioncomplexity(u.b)
+function unioncomplexity(t::DataType)
+    t.name === Tuple.name || return 0
+    c = 0
+    for ti in t.parameters
+        ci = unioncomplexity(ti)
+        if ci > c
+            c = ci
+        end
+    end
+    return c
+end
+unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
+unioncomplexity(@nospecialize(x)) = 0
