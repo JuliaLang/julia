@@ -1786,6 +1786,9 @@ function issuccess(F::Factor)
     return s.minor == size(F, 1)
 end
 
+isposdef(A::Union{T, Hermitian{<:Any,T}, Symmetric{<:Any,T}} where T<:SparseMatrixCSC) =
+    ishermitian(A) && isposdef(cholesky(A))
+
 function isposdef(F::Factor)
     if issuccess(F)
         s = unsafe_load(pointer(F))

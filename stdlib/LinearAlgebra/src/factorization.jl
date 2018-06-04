@@ -8,9 +8,7 @@ eltype(::Type{<:Factorization{T}}) where {T} = T
 size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
 size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
-macro assertposdef(A, info)
-   :($(esc(info)) == 0 ? $(esc(A)) : throw(PosDefException($(esc(info)))))
-end
+checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
 
 macro assertnonsingular(A, info)
    :($(esc(info)) == 0 ? $(esc(A)) : throw(SingularException($(esc(info)))))
