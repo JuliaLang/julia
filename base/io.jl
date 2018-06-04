@@ -566,16 +566,18 @@ end
 
 function write(io::IO, c::Char)
     v = reinterpret(UInt32, c)
-    u = hton(v) # BIG-endian
-    p = unsafe_convert(Ptr{Cvoid}, Ref{UInt32}(u))
-    if      v & 0x000000FF != 0
-        unsafe_write(io, p, 4)
-    elseif  v & 0x0000FFFF != 0
-        unsafe_write(io, p, 3)
-    elseif  v & 0x00FFFFFF != 0
-        unsafe_write(io, p, 2)
-    else
-        unsafe_write(io, p, 1)
+    u = Ref{UInt32}(hton(v)) # BIG-endian
+    GC.@preserve u begin
+        p = unsafe_convert(Ptr{Cvoid}, u)
+        if      v & 0x000000FF != 0
+            unsafe_write(io, p, 4)
+        elseif  v & 0x0000FFFF != 0
+            unsafe_write(io, p, 3)
+        elseif  v & 0x00FFFFFF != 0
+            unsafe_write(io, p, 2)
+        else
+            unsafe_write(io, p, 1)
+        end
     end
 end
 # write(io, ::AbstractChar) is not defined: implementations
