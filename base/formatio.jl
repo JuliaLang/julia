@@ -262,3 +262,76 @@ end
 #    TODO: preserve `annotation` information, rather than eagerly rendering it
 #end
 #write(io::IOContext{IOFormatBuffer}, mark_io::IOFormatBuffer) = write(io.io, mark_io)
+
+# NOTE: I recommend wrapping this html output in:
+#   <div style="white-space: pre-wrap; font-family: monospace; unicode-bidi: embed">
+# since `print` functions typically expect white-space (and mono-spacing) to be significant
+#
+#const default_html_tags = Dict{Symbol, Tuple{String, String}}([
+#    :black         => ("<span style='color:black'>", "</span>"),
+#    :red           => ("<span style='color:darkred'>", "</span>"),
+#    :green         => ("<span style='color:lightgreen'>", "</span>"),
+#    :yellow        => ("<span style='color:gold'>", "</span>"),
+#    :blue          => ("<span style='color:lightblue'>", "</span>"),
+#    :magenta       => ("<span style='color:purple'>", "</span>"),
+#    :cyan          => ("<span style='color:lightcyan'>", "</span>"),
+#    :white         => ("<span style='color:white'>", "</span>"),
+#    # "bright" colors
+#    :light_black   => ("<span style='color:gray'>", "</span>"), # gray
+#    :light_red     => ("<span style='color:red'>", "</span>"),
+#    :light_green   => ("<span style='color:green'>", "</span>"),
+#    :light_yellow  => ("<span style='color:yellow'>", "</span>"),
+#    :light_blue    => ("<span style='color:blue'>", "</span>"),
+#    :light_magenta => ("<span style='color:magenta'>", "</span>"),
+#    :light_cyan    => ("<span style='color:cyan'>", "</span>"),
+#    # special
+#    :default       => ("<span style='color:initial'>", "</span>"),
+#    :normal        => ("<span style='color:initial;font-weight:initial;text-decoration:initial;font-style:initial'>", "</span>"),
+#    # formats
+#    :bold          => ("<b>", "</b>"),
+#    :italic        => ("<i>", "</i>"),
+#    :underline     => ("<u>", "</u>"),
+#    :blink         => ("<blink>", "</blink>"),
+#    # :reverse       => ("<span style='color:inherit(background-color);background-color:inherit(color)'>", "</span>"), # TODO: is this possible?
+#    :hidden        => ("<span style='display:none'>", "</span>"), # not exactly right: it should still take render space but just not be visible
+#    ])
+#function apply_html_format(mark_io::IOFormatBuffer, html_tags::typeof(default_html_tags)=default_html_tags)
+#    pop!(mark_io, 1)
+#    out = mark_io.buf.data
+#    copy = UInt8[]
+#    sizehint!(copy, length(out))
+#    nextid = 1
+#    end_pos = Int[]
+#    end_tag = String[]
+#    for i in 1:length(out)
+#        # record all of the spans that start on this byte
+#        while nextid <= length(mark_io.starts) && (mark_io.starts[nextid] == i)
+#            fmt = mark_io.annotation[nextid]
+#            # determine what effect this formatting command will have
+#            tag = get(html_tags, fmt, nothing)
+#            if tag !== nothing
+#                append!(copy, codeunits(tag[1]))
+#                push!(end_pos, mark_io.ends[nextid])
+#                push!(end_tag, tag[2])
+#            end
+#            nextid += 1
+#        end
+#        byte = out[i]
+#        if byte == UInt8('&')
+#            append!(copy, codeunits("&amp;"))
+#        elseif byte == UInt8('>')
+#            append!(copy, codeunits("&gt;"))
+#        elseif byte == UInt8('<')
+#            append!(copy, codeunits("&lt;"))
+#        else
+#            push!(copy, byte)
+#        end
+#        # terminate all of the spans that end on this byte
+#        while !isempty(end_pos) && (end_pos[end] == i)
+#            pop!(end_pos)
+#            fmt = pop!(end_tag)
+#            append!(copy, fmt)
+#        end
+#    end
+#    return copy
+#end
