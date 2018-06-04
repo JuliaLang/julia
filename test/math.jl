@@ -443,6 +443,20 @@ end
           0.00169495384841964531409376316336552555952269360134349446910im)
 end
 
+@testset "lbinomial" begin
+    lbfixed(n) = k -> lbinomial(n, k)
+    blbfixed(n) = k -> log(binomial(BigInt(n), BigInt(k)))
+    @test lbinomial(10, -1) == -Inf
+    @test lbinomial(10, 11) == -Inf
+    @test lbinomial(10,  0) == 0.0
+    @test lbinomial(10, 10) == 0.0
+
+    @test lbinomial(10,  1)    ≈ log(10)
+    @test lbinomial(-6, 10)    ≈ log(binomial(-6, 10))
+    @test lbinomial(-6, 11)    ≈ log(abs(binomial(-6, 11)))
+    @test lbfixed(200).(0:200) ≈ blbfixed(200).(0:200)
+end
+
 # useful test functions for relative error, which differ from isapprox (≈)
 # in that relerrc separately looks at the real and imaginary parts
 relerr(z, x) = z == x ? 0.0 : abs(z - x) / abs(x)

@@ -155,3 +155,25 @@ Natural logarithm of the absolute value of the [`beta`](@ref)
 function ``\\log(|\\operatorname{B}(x,y)|)``.
 """
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
+
+"""
+    lbinomial(n, k) = log(abs(binomial(n, k)))
+
+Accurate natural logarithm of the absolute value of the [`binomial`](@ref)
+coefficient `binomial(n, k)` for large `n` and `k` near `n/2`.
+"""
+function lbinomial(n::T, k::T) where {T<:Integer}
+    S = float(T)
+    (k < 0) && return typemin(S)
+    if n < 0
+       n = -n + k - 1
+    end
+    k > n && return typemin(S)
+    (k == 0 || k == n) && return zero(S)
+    (k == 1) && return log(abs(n))
+    if k > (n>>1)
+       k = n - k
+    end
+    -log1p(n) - lbeta(n - k + one(T), k + one(T))
+end
+lbinomial(n::Integer, k::Integer) = lbinomial(promote(n, k)...)

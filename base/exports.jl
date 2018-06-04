@@ -352,6 +352,7 @@ export
 # specfun
     beta,
     lbeta,
+    lbinomial,
 
 # arrays
     axes,
