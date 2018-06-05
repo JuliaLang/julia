@@ -1687,6 +1687,9 @@ function Rounding.setrounding(::Type{T}, r::RoundingMode) where {T<:Union{Float3
     Rounding.setrounding_raw(T, Rounding.to_fenv(r))
 end
 
+# PR #25168
+@deprecate ipermute!(a, p::AbstractVector) invpermute!(a, p)
+
 # #27140, #27152
 @deprecate_moved cor "StatsBase"
 @deprecate_moved cov "StatsBase"
