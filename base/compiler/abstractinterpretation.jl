@@ -370,7 +370,7 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
     elseif tti0 <: Array
         return Any[Vararg{eltype(tti0)}]
     else
-        return Any[abstract_iteration(typ, vtypes, sv)]
+        return abstract_iteration(typ, vtypes, sv)
     end
 end
 
@@ -378,20 +378,35 @@ end
 function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
     tm = _topmod(sv)
     if !isdefined(tm, :iterate) || !isconst(tm, :iterate)
-        return Vararg{Any}
+        return Any[Vararg{Any}]
     end
     iteratef = getfield(tm, :iterate)
     stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype], vtypes, sv)
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
-    stateordonet === Bottom && return Bottom
+    stateordonet === Bottom && return Any[Bottom]
     valtype = statetype = Bottom
-    while valtype !== Any
+    ret = Any[]
+    stateordonet = widenconst(stateordonet)
+    while !(Nothing <: stateordonet) && length(ret) < sv.params.MAX_TUPLETYPE_LEN
+        if !isa(stateordonet, DataType) || !(stateordonet <: Tuple) || isvatuple(stateordonet) || length(stateordonet.parameters) != 2
+            break
+        end
+        valtype = stateordonet.parameters[1]
+        statetype = stateordonet.parameters[2]
+        push!(ret, valtype)
+        stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype, statetype], vtypes, sv)
         stateordonet = widenconst(stateordonet)
-        nounion = Nothing <: stateordonet ? typesubtract(stateordonet, Nothing) : stateordonet
+    end
+    if stateordonet === Nothing
+        return ret
+    end
+    while valtype !== Any
+        nounion = typesubtract(stateordonet, Nothing)
         if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
-            return Vararg{Any}
+            valtype = Any
+            break
         end
         if nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype
             break
@@ -399,8 +414,10 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
         stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype, statetype], vtypes, sv)
+        stateordonet = widenconst(stateordonet)
     end
-    return Vararg{valtype}
+    push!(ret, Vararg{valtype})
+    return ret
 end
 
 # do apply(af, fargs...), where af is a function value
