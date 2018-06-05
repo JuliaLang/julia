@@ -28,7 +28,7 @@ and a `julia>` prompt.
 
 ### The Julian mode
 
-The REPL has four main modes of operation. The first and most common is the Julian prompt. It
+The REPL has five main modes of operation. The first and most common is the Julian prompt. It
 is the default mode of operation; each new line initially starts with `julia>`. It is here that
 you can enter Julia expressions. Hitting return or enter after a complete expression has been
 entered will evaluate the entry and show the result of the last expression.
@@ -109,6 +109,12 @@ julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
 hello
 ```
+
+### Pkg mode
+
+The Package manager mode accepts specialized commands for loading and updating packages.  It is entered
+by pressing the `]` key at the Julian REPL prompt and exited by pressing CTRL-C.  The prompt for this
+mode is `pkg>`.  It is documented in the Pkg (Package Manager) chapter of the standard library manual.
 
 ### Search modes
 
