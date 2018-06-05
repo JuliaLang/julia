@@ -44,8 +44,6 @@ runtests(){
     export JULIA_CPU_CORES=$MAKE_JOBS_NUMBER
 
     ./usr/bin/julia --check-bounds=yes test/runtests.jl all
-    ./usr/bin/julia --check-bounds=yes test/runtests.jl \
-        LibGit2/online OldPkg/pkg Pkg/pkg download
 }
 
 test-embedding(){
