@@ -498,10 +498,8 @@ ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Floa
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
 simply exposes it to the programmer. The Julia compiler is able to generate efficient code in the
-presence of `Union` types with a small number of types[^smallunion], by generating specialized code
+presence of `Union` types with a small number of types [^1], by generating specialized code
 in separate branches for each possible type.
-
-[^smallunion]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.
 
 A particularly useful case of a `Union` type is `Union{T, Nothing}`, where `T` can be any type and
 [`Nothing`](@ref) is the singleton type whose only instance is the object `nothing`. This pattern
@@ -1414,3 +1412,5 @@ It's worth noting that it's extremely easy to mis-use parametric "value" types, 
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
  In particular, you would never want to write actual code as illustrated above.  For more information
 about the proper (and improper) uses of `Val`, please read the more extensive discussion in [the performance tips](@ref man-performance-tips).
+
+[^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.
