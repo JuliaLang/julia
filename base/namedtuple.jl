@@ -190,14 +190,14 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
 end
 
 # a version of `in` for the older world these generated functions run in
-@pure function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+@unsafe_pure function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     for y in itr
         y === x && return true
     end
     return false
 end
 
-@pure function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+@unsafe_pure function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     names = Symbol[an...]
     for n in bn
         if !sym_in(n, an)
@@ -207,7 +207,7 @@ end
     (names...,)
 end
 
-@pure function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
+@unsafe_pure function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
     bn = _nt_names(b)
     Tuple{Any[ fieldtype(sym_in(n, bn) ? b : a, n) for n in names ]...}
 end
@@ -274,7 +274,7 @@ haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
 get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = haskey(nt, key) ? getfield(nt, key) : default
 get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) ? getfield(nt, key) : f()
 
-@pure function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+@unsafe_pure function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     names = Symbol[]
     for n in an
         if !sym_in(n, bn)

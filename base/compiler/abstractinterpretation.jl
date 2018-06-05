@@ -721,11 +721,11 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         rty = abstract_call(<:, fargs, argtypes, vtypes, sv)
         return rty
     elseif length(argtypes) == 2 && isa(argtypes[2], Const) && isa(argtypes[2].val, SimpleVector) && istopfunction(f, :length)
-        # mark length(::SimpleVector) as @pure
+        # mark length(::SimpleVector) as pure
         return Const(length(argtypes[2].val))
     elseif length(argtypes) == 3 && isa(argtypes[2], Const) && isa(argtypes[3], Const) &&
             isa(argtypes[2].val, SimpleVector) && isa(argtypes[3].val, Int) && istopfunction(f, :getindex)
-        # mark getindex(::SimpleVector, i::Int) as @pure
+        # mark getindex(::SimpleVector, i::Int) as pure
         svecval = argtypes[2].val::SimpleVector
         idx = argtypes[3].val::Int
         if 1 <= idx <= length(svecval) && isassigned(svecval, idx)

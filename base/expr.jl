@@ -213,7 +213,7 @@ mutable global state.
 Use with caution, incorrect `@pure` annotation of a function may introduce
 hard to identify bugs. Double check for calls to generic functions.
 """
-macro pure(ex)
+macro unsafe_pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
 

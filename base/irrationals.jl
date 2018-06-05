@@ -29,7 +29,7 @@ AbstractFloat(x::AbstractIrrational) = Float64(x)
 Float16(x::AbstractIrrational) = Float16(Float32(x))
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
-@pure function Rational{T}(x::AbstractIrrational) where T<:Integer
+@unsafe_pure function Rational{T}(x::AbstractIrrational) where T<:Integer
     o = precision(BigFloat)
     p = 256
     while true
@@ -45,7 +45,7 @@ Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 end
 (::Type{Rational{BigInt}})(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(Rational{BigInt}, x) instead"))
 
-@pure function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
+@unsafe_pure function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
     setprecision(BigFloat, 256) do
         T(BigFloat(x), r)
     end
@@ -87,11 +87,11 @@ end
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
 # Irrational vs Rational
-@pure function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
+@unsafe_pure function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
     return rationalize(T, big(x), tol=tol)
 end
-@pure function lessrational(rx::Rational{<:Integer}, x::AbstractIrrational)
-    # an @pure version of `<` for determining if the rationalization of
+@unsafe_pure function lessrational(rx::Rational{<:Integer}, x::AbstractIrrational)
+    # an @unsafe_pure version of `<` for determining if the rationalization of
     # an irrational number required rounding up or down
     return rx < big(x)
 end
