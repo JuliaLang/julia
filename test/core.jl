@@ -6235,3 +6235,8 @@ function f27597(y)
 end
 @test f27597([1]) == [1]
 @test f27597([]) == 1:0
+
+# issue #22291
+wrap22291(ind) = (ind...,)
+@test @inferred(wrap22291(1)) == (1,)
+@test @inferred(wrap22291((1, 2))) == (1, 2)
