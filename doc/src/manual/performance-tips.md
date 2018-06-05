@@ -1023,7 +1023,7 @@ in a large speedup, such as in the example below. Here, a matrix and a vector ar
 800,000 of their randomly-shuffled indices before being multiplied. Copying the views into
 plain arrays speeds up the multiplication even with the cost of the copying operation.
 
-```jldoctest; setup = :(using Random; srand(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+```julia-repl
 julia> using Random
 
 julia> x = randn(1_000_000);
@@ -1037,15 +1037,15 @@ julia> xtmp = zeros(800_000);
 julia> Atmp = zeros(50, 800_000);
 
 julia> @time sum(view(A, :, inds) * view(x, inds))
-  0.456986 seconds (15 allocations: 992 bytes)
--4256.759568345134
+  0.412156 seconds (14 allocations: 960 bytes)
+-4256.759568345458
 
 julia> @time begin
            copyto!(xtmp, view(x, inds))
            copyto!(Atmp, view(A, :, inds))
            sum(Atmp * xtmp)
        end
-  0.302501 seconds (15 allocations: 992 bytes)
+  0.285923 seconds (14 allocations: 960 bytes)
 -4256.759568345134
 ```
 
