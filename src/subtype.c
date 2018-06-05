@@ -2332,8 +2332,10 @@ static int sub_msp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env)
 {
     JL_GC_PUSH2(&a, &b);
     while (env != NULL) {
-        a = jl_type_unionall(env->var, a);
-        b = jl_type_unionall(env->var, b);
+        if (jl_is_type(a) || jl_is_typevar(a))
+            a = jl_type_unionall(env->var, a);
+        if (jl_is_type(b) || jl_is_typevar(b))
+            b = jl_type_unionall(env->var, b);
         env = env->prev;
     }
     int sub = jl_subtype(a, b);
