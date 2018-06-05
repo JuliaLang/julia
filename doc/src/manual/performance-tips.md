@@ -1038,7 +1038,7 @@ julia> Atmp = zeros(50, 800_000);
 
 julia> @time sum(view(A, :, inds) * view(x, inds))
   0.456986 seconds (15 allocations: 992 bytes)
--4256.759568345458
+-4256.759568345134
 
 julia> @time begin
            copyto!(xtmp, view(x, inds))
