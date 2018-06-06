@@ -1161,7 +1161,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         close(in)
     catch ex
         close(in)
-        process_running(io) && Timer(t -> kill(io), interval = 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
+        process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
         rethrow(ex)
     end
     return io
