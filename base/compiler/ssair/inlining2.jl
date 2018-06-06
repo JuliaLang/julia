@@ -374,7 +374,9 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     return_value
 end
 
-function ir_inline_unionsplit!(compact::IncrementalCompact, topmod::Module, idx::Int,
+const fatal_type_bound_error = ErrorException("fatal error in type inference (type bound)")
+
+function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
                                argexprs::Vector{Any}, linetable::Vector{LineInfoNode},
                                item::UnionSplit, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     stmt, typ, line = compact.result[idx], compact.result_types[idx], compact.result_lines[idx]
@@ -435,7 +437,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, topmod::Module, idx:
     bb += 1
     # We're now in the fall through block, decide what to do
     if item.fully_covered
-        e = Expr(:call, GlobalRef(topmod, :error), "fatal error in type inference (type bound)")
+        e = Expr(:call, GlobalRef(Core, :throw), fatal_type_bound_error)
         e.typ = Union{}
         insert_node_here!(compact, e, Union{}, line)
         insert_node_here!(compact, ReturnNode(), Union{}, line)
@@ -504,7 +506,7 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
                 if isa(item, InliningTodo)
                     compact.ssa_rename[compact.idx-1] = ir_inline_item!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
-                    ir_inline_unionsplit!(compact, _topmod(sv.mod), idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
+                    ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact)
@@ -839,7 +841,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         sv.params.inlining || continue
 
         # Special case inliners for regular functions
-        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft, _topmod(ir.mod))
+        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft)
             continue
         end
 
@@ -1006,17 +1008,16 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
             return val
         end
     end
-    topmod = _topmod(ir.mod)
     # special-case inliners for known pure functions that compute types
     if sv.params.inlining
         if isa(e.typ, Const) # || isconstType(e.typ)
             val = e.typ.val
             if (f === apply_type || f === fieldtype || f === typeof || f === (===) ||
                 f === Core.sizeof || f === isdefined ||
-                istopfunction(topmod, f, :typejoin) ||
-                istopfunction(topmod, f, :isbits) ||
-                istopfunction(topmod, f, :isbitstype) ||
-                istopfunction(topmod, f, :promote_type) ||
+                istopfunction(f, :typejoin) ||
+                istopfunction(f, :isbits) ||
+                istopfunction(f, :isbitstype) ||
+                istopfunction(f, :promote_type) ||
                 (f === Core.kwfunc && length(atypes) == 2) ||
                 (is_inlineable_constant(val) &&
                  (contains_is(_PURE_BUILTINS, f) ||
@@ -1030,8 +1031,8 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
     return nothing
 end
 
-function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, atypes::Vector{Any}, @nospecialize(f), @nospecialize(ft), topmod::Module)
-    if length(atypes) == 3 && istopfunction(topmod, f, :!==)
+function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, atypes::Vector{Any}, @nospecialize(f), @nospecialize(ft))
+    if length(atypes) == 3 && istopfunction(f, :!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting
         # and that works, even though inference generally avoids inferring the `!==` Method
         if isa(stmt.typ, Const)
@@ -1045,7 +1046,7 @@ function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, atypes::Vec
         not_call.typ = Bool
         ir[SSAValue(idx)] = not_call
         return true
-    elseif length(atypes) == 3 && istopfunction(topmod, f, :(>:))
+    elseif length(atypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
         if isa(stmt.typ, Const)
