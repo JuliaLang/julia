@@ -476,7 +476,7 @@ if Sys.isunix()
 end
 
 # readlines(::Cmd), accidentally broken in #20203
-@test sort(readlines(`$lscmd -A`)) == sort(readdir())
+@test sort(collect(readlines(`$lscmd -A`))) == sort(collect(readdir()))
 
 # issue #19864 (PR #20497)
 let c19864 = readchomp(pipeline(ignorestatus(
