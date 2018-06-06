@@ -273,6 +273,7 @@ function typeinf_work(frame::InferenceState)
             frame.stmt_edges[pc] === () || empty!(frame.stmt_edges[pc])
             stmt = frame.src.code[pc]
             changes = s[pc]::VarTable
+            t = nothing
 
             hd = isa(stmt, Expr) ? stmt.head : nothing
 
@@ -360,6 +361,7 @@ function typeinf_work(frame::InferenceState)
                 if hd === :(=)
                     t = abstract_eval(stmt.args[2], changes, frame)
                     t === Bottom && break
+                    frame.src.ssavaluetypes[pc] = t
                     lhs = stmt.args[1]
                     if isa(lhs, Slot)
                         changes = StateUpdate(lhs, VarState(t, false), changes)
@@ -370,13 +372,13 @@ function typeinf_work(frame::InferenceState)
                         changes = StateUpdate(fname, VarState(Any, false), changes)
                     end
                 elseif hd === :inbounds || hd === :meta || hd === :simdloop
-                    stmt.typ = Any
                 else
                     t = abstract_eval(stmt, changes, frame)
                     t === Bottom && break
                     if !isempty(frame.ssavalue_uses[pc])
-                        changes = StateUpdate(SSAValue(pc), VarState(t, false), changes)
                         record_ssa_assign(pc, t, frame)
+                    else
+                        frame.src.ssavaluetypes[pc] = t
                     end
                 end
                 if frame.cur_hand !== () && isa(changes, StateUpdate)
@@ -392,6 +394,12 @@ function typeinf_work(frame::InferenceState)
                     end
                 end
             end
+
+            if t === nothing
+                # mark other reached expressions as `Any` to indicate they don't throw
+                frame.src.ssavaluetypes[pc] = Any
+            end
+
             pc´ > n && break # can't proceed with the fast-path fall-through
             frame.handler_at[pc´] = frame.cur_hand
             newstate = stupdate!(s[pc´], changes)

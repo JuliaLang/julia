@@ -329,7 +329,6 @@ function serialize(s::AbstractSerializer, ex::Expr)
         write(s.io, Int32(l))
     end
     serialize(s, ex.head)
-    serialize(s, ex.typ)
     for a in ex.args
         serialize(s, a)
     end
@@ -971,9 +970,7 @@ function deserialize_expr(s::AbstractSerializer, len)
     e = Expr(:temp)
     resolve_ref_immediately(s, e)
     e.head = deserialize(s)::Symbol
-    ty = deserialize(s)
     e.args = Any[ deserialize(s) for i = 1:len ]
-    e.typ = ty
     e
 end
 

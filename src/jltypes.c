@@ -1959,10 +1959,9 @@ void jl_init_types(void)
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(3, "head", "args", "typ"),
-                        jl_svec(3, jl_sym_type, jl_array_any_type,
-                                 jl_any_type),
-                        0, 1, 3);
+                        jl_perm_symsvec(2, "head", "args"),
+                        jl_svec(2, jl_sym_type, jl_array_any_type),
+                        0, 1, 2);
 
     jl_module_type =
         jl_new_datatype(jl_symbol("Module"), core, jl_any_type, jl_emptysvec,

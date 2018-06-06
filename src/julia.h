@@ -506,7 +506,6 @@ typedef struct {
     JL_DATA_TYPE
     jl_sym_t *head;
     jl_array_t *args;
-    jl_value_t *etype;
 } jl_expr_t;
 
 // constants and type objects -------------------------------------------------

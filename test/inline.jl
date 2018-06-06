@@ -23,7 +23,6 @@ function test_inlined_symbols(func, argtypes)
     nl = length(src.slottypes)
     ast = Expr(:body)
     ast.args = src.code
-    ast.typ = rettype
     walk(ast) do e
         if isa(e, Core.Slot)
             @test 1 <= e.id <= nl

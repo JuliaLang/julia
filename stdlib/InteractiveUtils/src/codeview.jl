@@ -37,10 +37,10 @@ function code_warntype_legacy_ir(io::IO, src::Core.CodeInfo, rettype)
     print(emph_io, "\nBody:\n  ")
     body = Expr(:body)
     body.args = src.code
-    body.typ = rettype
     # Fix slot names and types in function body
     show_unquoted(IOContext(emph_io, :SOURCEINFO => src, :SOURCE_SLOTNAMES => slotnames),
                     body, 2)
+    print(emph_io, "::", rettype)
     print(emph_io, '\n')
 end
 
@@ -77,7 +77,8 @@ function code_warntype(io::IO, f, @nospecialize(t); verbose_linetable=false)
             code_warntype_legacy_ir(io, src, rettype)
         else
             print(io, "Body"); warntype_type_printer(io, rettype); println(io);
-            ir = Core.Compiler.inflate_ir(src)
+            # TODO: static parameter values
+            ir = Core.Compiler.inflate_ir(src, Core.svec())
             Base.IRShow.show_ir(io, ir, warntype_type_printer;
                                 argnames=Base.sourceinfo_slotnames(src), verbose_linetable=verbose_linetable)
         end

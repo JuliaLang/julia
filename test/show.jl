@@ -779,7 +779,7 @@ end
 end
 
 let repr = sprint(dump, :(x = 1))
-    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n  typ: Any\n"
+    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
 end
 let repr = sprint(dump, Pair{String,Int64})
     @test repr == "Pair{String,Int64} <: Any\n  first::String\n  second::Int64\n"
@@ -1220,7 +1220,7 @@ end
 # Tests for code_typed linetable annotations
 function compute_annotations(f, types)
     src = code_typed(f, types)[1][1]
-    ir = Core.Compiler.inflate_ir(src)
+    ir = Core.Compiler.inflate_ir(src, Core.svec())
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
     join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')

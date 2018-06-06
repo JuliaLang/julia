@@ -1004,7 +1004,6 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
                                             jl_expr_type);
     ex->head = head;
     ex->args = ar;
-    ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();
     return ex;
 }
@@ -1022,7 +1021,6 @@ JL_CALLABLE(jl_f__expr)
                                             jl_expr_type);
     ex->head = (jl_sym_t*)args[0];
     ex->args = ar;
-    ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();
     return (jl_value_t*)ex;
 }

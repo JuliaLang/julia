@@ -341,7 +341,7 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
     if isa(arg, Expr) && arg.head === :call && (abstract_evals_to_constant(arg.args[1], svec, vtypes, sv) ||
                                                 abstract_evals_to_constant(arg.args[1], tuple, vtypes, sv))
         aa = arg.args
-        result = Any[ (isa(aa[j],Expr) ? aa[j].typ : abstract_eval(aa[j],vtypes,sv)) for j=2:length(aa) ]
+        result = Any[ abstract_eval(aa[j],vtypes,sv) for j=2:length(aa) ]
         if _any(isvarargtype, result)
             return Any[Vararg{Any}]
         end
@@ -898,7 +898,6 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         # replace singleton types with their equivalent Const object
         t = Const(t.instance)
     end
-    e.typ = t
     return t
 end
 

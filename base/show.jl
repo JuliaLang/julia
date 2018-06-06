@@ -651,7 +651,8 @@ function show(io::IO, src::CodeInfo)
     @assert src.codelocs !== nothing
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
-        ir = Core.Compiler.inflate_ir(src)
+        # TODO: static parameter values?
+        ir = Core.Compiler.inflate_ir(src, Core.svec())
         IRShow.show_ir(lambda_io, ir, argnames=sourceinfo_slotnames(src))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
@@ -1136,17 +1137,6 @@ end
 # TODO: implement interpolated strings
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
-    emphstate = typeemphasize(io)
-    show_type = true
-    if (ex.head == :(=) || ex.head == :line ||
-        ex.head == :boundscheck ||
-        ex.head == :gotoifnot ||
-        ex.head == :return)
-        show_type = false
-    end
-    if !emphstate && ex.typ === Any
-        show_type = false
-    end
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && (length(args) != 2 || !is_expr(args[2], :tuple))
@@ -1211,14 +1201,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             func = fname
         end
         func_args = args[2:end]
-
-        if (in(ex.args[1], (GlobalRef(Base, :bitcast), :throw)) ||
-            ismodulecall(ex))
-            show_type = false
-        end
-        if show_type
-            prec = prec_decl
-        end
 
         # scalar multiplication (i.e. "100x")
         if (func === :* &&
@@ -1493,24 +1475,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
     elseif head === :meta && length(args) >= 2 && args[1] === :push_loc
         print(io, "# meta: location ", join(args[2:end], " "))
-        show_type = false
     elseif head === :meta && length(args) == 1 && args[1] === :pop_loc
         print(io, "# meta: pop location")
-        show_type = false
     elseif head === :meta && length(args) == 2 && args[1] === :pop_loc
         print(io, "# meta: pop locations ($(args[2]))")
-        show_type = false
     # print anything else as "Expr(head, args...)"
     else
         unhandled = true
     end
     if unhandled
-        if head !== :invoke
-            show_type = false
-        end
+        emphstate = typeemphasize(io)
         if emphstate && ex.head !== :lambda && ex.head !== :method
             io = IOContext(io, :TYPEEMPHASIZE => false)
-            emphstate = false
         end
         print(io, "\$(Expr(")
         show(io, ex.head)
@@ -1520,7 +1496,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, "))")
     end
-    show_type && show_expr_type(io, ex.typ, emphstate)
     nothing
 end
 
