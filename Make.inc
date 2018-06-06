@@ -655,7 +655,7 @@ $(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binar
 pass 'MARCH=pentium4'.)
 endif
 
-ifneq ($(findstring $(JULIA_CPU_TARGET),generic i386 i486 i586 i686 pentium pentium2 pentium3),)
+ifneq ($(findstring $(JULIA_CPU_TARGET),i386 i486 i586 i686 pentium pentium2 pentium3),)
 $(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binary, \
 pass 'JULIA_CPU_TARGET=pentium4'.)
 endif
