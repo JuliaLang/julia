@@ -1199,15 +1199,18 @@ end
 function timeit(n, reps)
     x = rand(Float32,n)
     y = rand(Float32,n)
-    s = zero(Float64)
+    s1 = zero(Float64)
+    s2 = zero(Float64)
     time = @elapsed for j in 1:reps
-        s+=inner(x,y)
+        s1+=inner(x,y)
     end
     println("GFlop/sec        = ",2.0*n*reps/time*1E-9)
     time = @elapsed for j in 1:reps
-        s+=innersimd(x,y)
+        s2+=innersimd(x,y)
     end
+    
     println("GFlop/sec (SIMD) = ",2.0*n*reps/time*1E-9)
+    println("Relative error = ",abs(s1-s)/s)
 end
 
 timeit(1000,1000)
@@ -1218,6 +1221,7 @@ On a computer with a 2.4GHz Intel Core i5 processor, this produces:
 ```
 GFlop/sec        = 1.9467069505224963
 GFlop/sec (SIMD) = 17.578554163920018
+Relative error = 4.855173806725726e-7
 ```
 
 (`GFlop/sec` measures the performance, and larger numbers are better.) The range for a `@simd for`
@@ -1228,7 +1232,7 @@ loop:
   * It is safe to execute iterations in arbitrary or overlapping order, with special consideration
     for reduction variables.
   * Floating-point operations on reduction variables can be reordered, possibly causing different
-    results than without `@simd`.
+    results than without `@simd`. Evident in the relative error shown above.
   * No iteration ever waits on another iteration to make forward progress.
 
 A loop containing `break`, `continue`, or `@goto` will cause a compile-time error.
