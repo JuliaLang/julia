@@ -174,11 +174,18 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
     return nothing
 end
 
-exprtype(@nospecialize(x), state) = exprtype(x, state.src, state.sp)
+argextype(@nospecialize(x), state) = argextype(x, state.src, state.sp)
 
-function exprtype(@nospecialize(x), src, spvals::SimpleVector)
+function argextype(@nospecialize(x), src, spvals::SimpleVector)
     if isa(x, Expr)
-        return (x::Expr).typ
+        if x.head === :static_parameter
+            return sparam_type(spvals[x.args[1]])
+        elseif x.head === :boundscheck
+            return Bool
+        elseif x.head === :copyast
+            return argextype(x.args[1], src, spvals)
+        end
+        @assert false "argextype only works on argument-position values"
     elseif isa(x, SlotNumber)
         return src.slottypes[(x::SlotNumber).id]
     elseif isa(x, TypedSlot)

@@ -68,9 +68,6 @@ function print_node(io::IO, idx, stmt, used, argnames, maxsize; color = true, pr
         Base.print(io, "(")
         Base.print(io, join(map(arg->sprint(io->print_ssa(io, arg, argnames)), stmt.args[2:end]), ", "))
         Base.print(io, ")")
-        if print_typ && stmt.typ !== Any
-            Base.print(io, "::$(stmt.typ)")
-        end
     elseif isexpr(stmt, :invoke)
         print(io, "invoke ")
         linfo = stmt.args[1]
@@ -85,9 +82,6 @@ function print_node(io::IO, idx, stmt, used, argnames, maxsize; color = true, pr
         end
         Base.print(io, join((print_arg(i) for i=1:(length(stmt.args)-2)), ", "))
         Base.print(io, ")")
-        if print_typ && stmt.typ !== Any
-            Base.print(io, "::$(stmt.typ)")
-        end
     elseif isexpr(stmt, :new)
         Base.print(io, "new(")
         Base.print(io, join(String[sprint(io->print_ssa(io, arg, argnames)) for arg in stmt.args], ", "))

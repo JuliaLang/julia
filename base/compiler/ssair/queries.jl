@@ -3,7 +3,7 @@
 """
 Determine whether a statement is side-effect-free, i.e. may be removed if it has no uses.
 """
-function stmt_effect_free(@nospecialize(stmt), src, spvals)
+function stmt_effect_free(@nospecialize(stmt), src::IncrementalCompact, spvals::SimpleVector)
     isa(stmt, Union{PiNode, PhiNode}) && return true
     isa(stmt, Union{ReturnNode, GotoNode, GotoIfNot}) && return false
     isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
@@ -13,13 +13,13 @@ function stmt_effect_free(@nospecialize(stmt), src, spvals)
         e = stmt::Expr
         head = e.head
         if head === :static_parameter
+            etyp = sparam_type(spvals[e.args[1]])
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
-            return isa(e.typ, Const) || issingletontype(widenconst(e.typ))
+            return isa(etyp, Const) || issingletontype(widenconst(etyp))
         end
-        (e.typ === Bottom) && return false
         ea = e.args
         if head === :call
-            f = exprtype(ea[1], src, spvals)
+            f = argextype(ea[1], src, spvals)
             if isa(f, Const)
                 f = f.val
             elseif isType(f)
@@ -30,10 +30,10 @@ function stmt_effect_free(@nospecialize(stmt), src, spvals)
             f === return_type && return true
             # TODO: This needs significant refinement
             contains_is(_PURE_BUILTINS, f) || return false
-            return builtin_nothrow(f, Any[exprtype(ea[i], src, spvals) for i = 2:length(ea)])
+            return builtin_nothrow(f, Any[argextype(ea[i], src, spvals) for i = 2:length(ea)])
         elseif head === :new
             a = ea[1]
-            typ = exprtype(a, src, spvals)
+            typ = argextype(a, src, spvals)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
@@ -41,7 +41,7 @@ function stmt_effect_free(@nospecialize(stmt), src, spvals)
             typ = typ::DataType
             fieldcount(typ) >= length(ea) - 1 || return false
             for fld_idx in 1:(length(ea) - 1)
-                eT = exprtype(ea[fld_idx + 1], src, spvals)
+                eT = argextype(ea[fld_idx + 1], src, spvals)
                 fT = fieldtype(typ, fld_idx)
                 eT ⊑ fT || return false
             end
@@ -70,7 +70,7 @@ function compact_exprtype(compact::IncrementalCompact, @nospecialize(value))
     elseif isa(value, Argument)
         return compact.ir.argtypes[value.n]
     end
-    return exprtype(value, compact.ir, compact.ir.spvals)
+    return argextype(value, compact.ir, compact.ir.spvals)
 end
 
 is_tuple_call(ir::IRCode, @nospecialize(def)) = isa(def, Expr) && is_known_call(def, tuple, ir, ir.spvals)

@@ -573,7 +573,7 @@ public:
     }
 };
 
-static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr);
+static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, bool isvol, MDNode *tbaa);
@@ -3070,12 +3070,11 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_method_instance_
     return mark_julia_type(ctx, ret, true, inferred_retty);
 }
 
-static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
+static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 {
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t arglen = jl_array_dim0(ex->args);
     size_t nargs = arglen - 1;
-    jl_value_t *rt = ex->etype;
     assert(arglen >= 2);
 
     jl_cgval_t lival = emit_expr(ctx, args[0]);
@@ -3122,12 +3121,11 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
     return result;
 }
 
-static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex)
+static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 {
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_dim0(ex->args);
     assert(nargs >= 1);
-    jl_value_t *rt = ex->etype;
     jl_cgval_t f = emit_expr(ctx, args[0]);
 
     if (f.constant && jl_typeis(f.constant, jl_intrinsic_type)) {
@@ -3607,7 +3605,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         jl_varinfo_t &vi = ctx.phic_slots[idx];
         slot = emit_varinfo(ctx, vi, jl_symbol("phic"));
     } else {
-        slot = emit_expr(ctx, r); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
+        slot = emit_expr(ctx, r, idx); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
     }
     if (slot.isboxed || slot.TIndex) {
         // see if inference suggested a different type for the ssavalue than the expression
@@ -3729,7 +3727,7 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t 
     }
 }
 
-static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
+static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssize_t ssaval)
 {
     assert(!jl_is_ssavalue(l));
 
@@ -3746,7 +3744,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
         bp = global_binding_pointer(ctx, ctx.module, s, &bnd, true);
     if (bp != NULL) { // it's a global
         assert(bnd);
-        Value *rval = mark_callee_rooted(boxed(ctx, emit_expr(ctx, r)));
+        Value *rval = mark_callee_rooted(boxed(ctx, emit_expr(ctx, r, ssaval)));
         ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
                            { literal_pointer_val(ctx, bnd),
                              rval });
@@ -3758,7 +3756,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
     int sl = jl_slot_number(l) - 1;
     // it's a local variable
     jl_varinfo_t &vi = ctx.slots[sl];
-    jl_cgval_t rval_info = emit_expr(ctx, r);
+    jl_cgval_t rval_info = emit_expr(ctx, r, ssaval);
     emit_varinfo_assign(ctx, vi, rval_info, l);
 }
 
@@ -3820,10 +3818,8 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         return;
     }
     if (!jl_is_expr(expr)) {
-        if (ssaval_result != -1)
-            emit_ssaval_assign(ctx, ssaval_result, expr);
-        else
-            emit_expr(ctx, expr);
+        assert(ssaval_result != -1);
+        emit_ssaval_assign(ctx, ssaval_result, expr);
         return;
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
@@ -3845,14 +3841,12 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             Value *world = ctx.builder.CreateLoad(prepare_global(jlgetworld_global));
             ctx.builder.CreateStore(world, ctx.world_age_field);
         }
-        if (ssaval_result != -1)
-            emit_ssaval_assign(ctx, ssaval_result, expr);
-        else
-            emit_expr(ctx, expr);
+        assert(ssaval_result != -1);
+        emit_ssaval_assign(ctx, ssaval_result, expr);
     }
 }
 
-static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
+static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
 {
     if (jl_is_symbol(expr)) {
         jl_sym_t *sym = (jl_sym_t*)expr;
@@ -3927,13 +3921,21 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         return ghostValue(jl_void_type);
     }
     else if (head == invoke_sym) {
-        return emit_invoke(ctx, ex);
+        assert(ssaval >= 0);
+        jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
+            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaval);
+        return emit_invoke(ctx, ex, expr_t);
     }
     else if (head == call_sym) {
-        jl_cgval_t res = emit_call(ctx, ex);
+        jl_value_t *expr_t;
+        if (ssaval < 0)
+            // TODO: this case is needed for the call to emit_expr in emit_llvmcall
+            expr_t = (jl_value_t*)jl_any_type;
+        else
+            expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type : jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaval);
+        jl_cgval_t res = emit_call(ctx, ex, expr_t);
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
-        jl_value_t *expr_t = ex->etype;
         res = update_julia_type(ctx, res, expr_t);
         if (res.typ == jl_bottom_type || expr_t == jl_bottom_type) {
             CreateTrap(ctx.builder);
@@ -3948,7 +3950,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         return emit_cfunction(ctx, args[0], fexpr_rt, args[2], (jl_svec_t*)args[3]);
     }
     else if (head == assign_sym) {
-        emit_assignment(ctx, args[0], args[1]);
+        emit_assignment(ctx, args[0], args[1], ssaval);
         return ghostValue(jl_void_type);
     }
     else if (head == static_parameter_sym) {

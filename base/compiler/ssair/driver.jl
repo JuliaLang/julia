@@ -57,11 +57,7 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, spvals:
     oldidx = 1
     changemap = fill(0, length(code))
     while idx <= length(code)
-        stmt = code[idx]
-        if isexpr(stmt, :(=))
-            stmt = stmt.args[2]
-        end
-        if isa(stmt, Expr) && stmt.typ === Union{}
+        if code[idx] isa Expr && ci.ssavaluetypes[idx] === Union{}
             if !(idx < length(code) && isexpr(code[idx+1], :unreachable))
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
@@ -115,7 +111,7 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, spvals:
              argtypes = ci.slottypes[1:(nargs+1)]
             IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), argtypes, meta, spvals)
         end
-    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs)
+    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, spvals)
     return ir
 end
 
