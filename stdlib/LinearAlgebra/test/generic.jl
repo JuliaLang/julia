@@ -203,8 +203,8 @@ end
     x = Vector{Int}[[1,2], [3,4]]
     @test @inferred(norm(x)) ≈ sqrt(30)
     @test norm(x, 0) == length(x)
-    @test norm(x, 1) ≈ 10
-    @test norm(x, 3) ≈ cbrt(100)
+    @test norm(x, 1) ≈ 5+sqrt(5)
+    @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin

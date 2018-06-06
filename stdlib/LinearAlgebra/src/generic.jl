@@ -252,12 +252,12 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # special cases of norm; note that they don't need to handle isempty(x)
 function generic_normMinusInf(x)
     (v, s) = iterate(x)::Tuple
-    minabs = norm(v, -Inf)
+    minabs = norm(v)
     while true
         y = iterate(x, s)
         y === nothing && break
         (v, s) = y
-        vnorm = norm(v, -Inf)
+        vnorm = norm(v)
         minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
     end
     return float(minabs)
@@ -265,12 +265,12 @@ end
 
 function generic_normInf(x)
     (v, s) = iterate(x)::Tuple
-    maxabs = norm(v, Inf)
+    maxabs = norm(v)
     while true
         y = iterate(x, s)
         y === nothing && break
         (v, s) = y
-        vnorm = norm(v, Inf)
+        vnorm = norm(v)
         maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
     end
     return float(maxabs)
@@ -278,14 +278,14 @@ end
 
 function generic_norm1(x)
     (v, s) = iterate(x)::Tuple
-    av = float(norm(v, 1))
+    av = float(norm(v))
     T = typeof(av)
     sum::promote_type(Float64, T) = av
     while true
         y = iterate(x, s)
         y === nothing && break
         (v, s) = y
-        sum += norm(v, 1)
+        sum += norm(v)
     end
     return convert(T, sum)
 end
@@ -330,25 +330,25 @@ function generic_normp(x, p)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
     else
-        T = typeof(float(norm(v,p)))
+        T = typeof(float(norm(v)))
     end
     spp::promote_type(Float64, T) = p
     if -1 <= p <= 1 || (isfinite(_length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
-        sum::promote_type(Float64, T) = norm(v,p)^spp
+        sum::promote_type(Float64, T) = norm(v)^spp
         while true
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
-            sum += norm(v,p)^spp
+            sum += norm(v)^spp
         end
         return convert(T, sum^inv(spp))
     else # rescaling
-        sum = (norm(v,p)/maxabs)^spp
+        sum = (norm(v)/maxabs)^spp
         while true
             y = iterate(x, s)
             y == nothing && break
             (v, s) = y
-            sum += (norm(v,p)/maxabs)^spp
+            sum += (norm(v)/maxabs)^spp
         end
         return convert(T, maxabs*sum^inv(spp))
     end
@@ -368,11 +368,12 @@ For any iterable container `A` (including arrays of any dimension) of numbers (o
 element type for which `norm` is defined), compute the `p`-norm (defaulting to `p=2`) as if
 `A` were a vector of the corresponding length.
 
-The `p`-norm is defined as:
+The `p`-norm is defined as
 ```math
 \\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
 ```
-with ``a_i`` the entries of ``A`` and ``n`` its length.
+with ``a_i`` the entries of ``A``, ``| a_i |`` are their [`norm`](@ref)s, and
+``n`` the length of ``A``.
 
 `p` can assume any numeric value (even though not all values produce a
 mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
@@ -407,13 +408,13 @@ julia> norm([1 2 3 4 5 6 7 8 9])
 julia> norm([1 2 3 4 5 6 7 8 9]')
 16.881943016134134
 
-julia> norm(hcat(v,v), 1) == norm(vcat(v,v), 1) == norm([v,v], 1)
+julia> norm(hcat(v,v), 1) == norm(vcat(v,v), 1) != norm([v,v], 1)
 true
 
 julia> norm(hcat(v,v), 2) == norm(vcat(v,v), 2) == norm([v,v], 2)
 true
 
-julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) == norm([v,v], Inf)
+julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
 true
 ```
 """
@@ -430,7 +431,7 @@ function norm(itr, p::Real=2)
     elseif p == -Inf
         return normMinusInf(itr)
     else
-        normp(itr,p)
+        normp(itr, p)
     end
 end
 
