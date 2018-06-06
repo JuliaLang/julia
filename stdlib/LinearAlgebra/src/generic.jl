@@ -720,23 +720,7 @@ function inner(x::AbstractVector, y::AbstractVector)
     return s
 end
 
-"""
-    inner(x,y)
-    dot(x, y)
-    ⋅(x,y)
-
-Compute the inner/dot product between `x` and `y`, see [`inner`](@ref).
-
-# Examples
-```jldoctest
-julia> dot([1; 1], [2; 3])
-5
-
-julia> dot([im; im], [1; 1])
-0 - 2im
-```
-"""
-dot(x, y) = inner(x, y)
+const dot = inner
 
 
 ###########################################################################################
