@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function inflate_ir(ci::CodeInfo)
+function inflate_ir(ci::CodeInfo, spvals::SimpleVector)
     code = copy_exprargs(ci.code)
     for i = 1:length(code)
         if isa(code[i], Expr)
@@ -35,7 +35,7 @@ function inflate_ir(ci::CodeInfo)
     newslottypes = ci.inferred ? copy(ci.slottypes) : Any[ Any for i = 1:length(ci.slotnames) ]
     ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:ci.ssavaluetypes ]
     ir = IRCode(code, ssavaluetypes, copy(ci.codelocs), copy(ci.ssaflags), cfg, collect(LineInfoNode, ci.linetable),
-                newslottypes, ci.linetable[1].mod, Any[])
+                newslottypes, Any[], spvals)
     return ir
 end
 
