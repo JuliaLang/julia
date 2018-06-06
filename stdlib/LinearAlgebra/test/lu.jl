@@ -271,4 +271,15 @@ end
     @test allnames == ["L", "P", "U", "factors", "info", "ipiv", "p"]
 end
 
+include("trickyarithmetic.jl")
+
+@testset "lu with type whose sum is another type" begin
+    A = TrickyArithmetic.A[1 2; 3 4]
+    ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
+    B = lu(A)
+    @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+    C = lu(A, Val(false))
+    @test C isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+end
+
 end # module TestLU
