@@ -64,6 +64,30 @@ isfile("_init.jl") && include(joinpath(pwd(), "_init.jl"))
 then calling `julia` from that directory will run the initialization code without the additional
 command line argument.
 
+## More intensive software development with the REPL
+
+To configure your environment for more intensive software development, you should first install
+the `Revise` package, which scans your source files continuously for changes and reloads and recompiles any changed
+files automatically.  Install it as follows:
+```julia
+using Pkg
+Pkg.add("Revise.jl")
+```
+Most likely you will want to run this package for every invocation of the REPL, in which case
+you can insert the statement `using Revise` in an init file or the startup file described in the preceding
+subsection.
+
+Next, to begin a new project with the REPL, change to your working development directory.  Again, there
+are several ways to make sure Julia starts in a certain directory.  This working development
+directory should be in the [`LOAD_PATH`](@ref) variable; refer to the chapter on Environment Variables.
+Enter `pkg` mode by pressing `]` at the REPL prompt. From this prompt, you can initialize a new project by
+typing `generate <PROJNAME>`.  This will create a skeletal file hierarchy for your project. Put your source
+files in the `<PROJNAME>/src` directory.  The benefits of following this structure are (1) if your project
+needs external packages, which almost certainly it will, then the Package manager understands the file
+hierarchy created by `generate`, and (2) if you ever decide to release your project as a downloadable package,
+it is already in the correct format.  Refer to the chapter on `Pkg` of the standard library documentation.
+
+
 ## Browser-based workflow
 
 It is also possible to interact with a Julia REPL in the browser via [IJulia](https://github.com/JuliaLang/IJulia.jl).
