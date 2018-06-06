@@ -788,6 +788,21 @@ function abstract_eval_cfunction(e::Expr, vtypes::VarTable, sv::InferenceState)
     nothing
 end
 
+# convert an inferred static parameter value to the inferred type of a static_parameter expression
+function sparam_type(@nospecialize(val))
+    if isa(val, TypeVar)
+        if Any <: val.ub
+            # static param bound to typevar
+            # if the tvar is not known to refer to anything more specific than Any,
+            # the static param might actually be an integer, symbol, etc.
+            return Any
+        else
+            return UnionAll(val, Type{val})
+        end
+    end
+    return AbstractEvalConstant(val)
+end
+
 function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if isa(e, QuoteNode)
         return AbstractEvalConstant((e::QuoteNode).value)
@@ -834,18 +849,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         n = e.args[1]
         t = Any
         if 1 <= n <= length(sv.sp)
-            val = sv.sp[n]
-            if isa(val, TypeVar)
-                if Any <: val.ub
-                    # static param bound to typevar
-                    # if the tvar is not known to refer to anything more specific than Any,
-                    # the static param might actually be an integer, symbol, etc.
-                else
-                    t = UnionAll(val, Type{val})
-                end
-            else
-                t = AbstractEvalConstant(val)
-            end
+            t = sparam_type(sv.sp[n])
         end
     elseif e.head === :method
         t = (length(e.args) == 1) ? Any : Nothing

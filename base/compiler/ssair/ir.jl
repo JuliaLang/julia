@@ -167,19 +167,20 @@ struct IRCode
     lines::Vector{Int}
     flags::Vector{UInt8}
     argtypes::Vector{Any}
+    spvals::SimpleVector
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::Vector{NewNode}
-    mod::Module
     meta::Vector{Any}
 
     function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
-            cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, mod::Module, meta::Vector{Any})
-        return new(stmts, types, lines, flags, argtypes, linetable, cfg, NewNode[], mod, meta)
+            cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any},
+            spvals::SimpleVector)
+        return new(stmts, types, lines, flags, argtypes, spvals, linetable, cfg, NewNode[], meta)
     end
     function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
             cfg::CFG, new_nodes::Vector{NewNode})
-        return new(stmts, types, lines, flags, ir.argtypes, ir.linetable, cfg, new_nodes, ir.mod, ir.meta)
+        return new(stmts, types, lines, flags, ir.argtypes, ir.spvals, ir.linetable, cfg, new_nodes, ir.meta)
     end
 end
 copy(code::IRCode) = IRCode(code, copy(code.stmts), copy(code.types),
@@ -867,7 +868,7 @@ end
 function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing)
     stmt = compact.result[idx]
     stmt === nothing && return false
-    effect_free = stmt_effect_free(stmt, compact, compact.ir.mod)
+    effect_free = stmt_effect_free(stmt, compact, compact.ir.spvals)
     if effect_free
         for ops in userefs(stmt)
             val = ops[]

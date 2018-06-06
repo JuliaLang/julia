@@ -644,11 +644,8 @@ function analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, 
         ast = src.code
     end
 
-    @timeit "inline IR inflation" if src.codelocs === nothing
-        # TODO: another way to detect IR that uses slots?
-        ir2 = just_construct_ssa(src, ast, na-1)
-    else
-        ir2, inline_linetable = inflate_ir(src), src.linetable
+    @timeit "inline IR inflation" begin
+        ir2, inline_linetable = inflate_ir(src, spvals_from_meth_instance(linfo)), src.linetable
     end
     #verify_ir(ir2)
 
@@ -704,14 +701,14 @@ function iterate(split::UnionSplitSignature, state::Vector{Int}...)
     return (sig, state)
 end
 
-function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(case), isinvoke::Bool, todo::Vector{Any})
+function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(case), isinvoke::Bool, todo::Vector{Any}, sv::OptimizationState)
     if isa(case, ConstantCase)
         ir[SSAValue(idx)] = case.val
     elseif isa(case, MethodInstance)
         if isinvoke
             stmt.args = rewrite_invoke_exprargs!(
                 (node, typ)->insert_node!(ir, idx, typ, node),
-                arg->exprtype(arg, ir, ir.mod),
+                arg->exprtype(arg, ir, sv.sp),
                 stmt.args)
         end
         stmt.head = :invoke
@@ -734,7 +731,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         isempty(eargs) && continue
         arg1 = eargs[1]
 
-        ft = exprtype(arg1, ir, ir.mod)
+        ft = exprtype(arg1, ir, sv.sp)
         has_free_typevars(ft) && continue
         isa(ft, Conditional) && (ft = Bool)
         f = singleton_type(ft)
@@ -743,7 +740,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         atypes[1] = ft
         ok = true
         for i = 2:length(stmt.args)
-            a = exprtype(stmt.args[i], ir, ir.mod)
+            a = exprtype(stmt.args[i], ir, sv.sp)
             (a === Bottom || isvarargtype(a)) && (ok = false; break)
             atypes[i] = a
         end
@@ -771,7 +768,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         isapply = false
         if f === Core._apply
             new_atypes = Any[]
-            ft = exprtype(stmt.args[2], ir, ir.mod)
+            ft = exprtype(stmt.args[2], ir, sv.sp)
             has_free_typevars(ft) && continue
             isa(ft, Conditional) && (ft = Bool)
             f = singleton_type(ft)
@@ -798,7 +795,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                 # get a good method match). This pattern is used in the array code a bunch.
                 if isa(def, SSAValue) && is_tuple_call(ir, ir[def])
                     for tuparg in ir[def].args[2:end]
-                        push!(new_atypes, exprtype(tuparg, ir, ir.mod))
+                        push!(new_atypes, exprtype(tuparg, ir, sv.sp))
                     end
                 elseif isa(def, Argument) && def.n === length(ir.argtypes) && !isempty(sv.result_vargs)
                     append!(new_atypes, sv.result_vargs)
@@ -814,7 +811,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # Independent of whether we can inline, the above analysis allows us to rewrite
         # this apply call to a regular call
         if isapply
-            stmt.args = rewrite_apply_exprargs!((node, typ)->insert_node!(ir, idx, typ, node), arg->exprtype(arg, ir, ir.mod), stmt.args)
+            stmt.args = rewrite_apply_exprargs!((node, typ)->insert_node!(ir, idx, typ, node), arg->exprtype(arg, ir, sv.sp), stmt.args)
         end
 
         if f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
@@ -859,7 +856,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                                     atype_unlimited, method.sig)::SimpleVector
             methsp = methsp::SimpleVector
             result = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data)
-            handle_single_case!(ir, stmt, idx, result, isinvoke, todo)
+            handle_single_case!(ir, stmt, idx, result, isinvoke, todo, sv)
             continue
         end
 
@@ -942,7 +939,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # be able to do the inlining now (for constant cases), or push it directly
         # onto the todo list
         if fully_covered && length(cases) == 1
-            handle_single_case!(ir, stmt, idx, cases[1][2], isinvoke, todo)
+            handle_single_case!(ir, stmt, idx, cases[1][2], isinvoke, todo, sv)
             continue
         end
         length(cases) == 0 && continue
@@ -1021,7 +1018,7 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
                 (f === Core.kwfunc && length(atypes) == 2) ||
                 (is_inlineable_constant(val) &&
                  (contains_is(_PURE_BUILTINS, f) ||
-                  (f === getfield && effect_free(e, ir, ir.mod, false)) ||
+                  (f === getfield && effect_free(e, ir, ir.spvals, false)) ||
                   (isa(f, IntrinsicFunction) && is_pure_intrinsic_optim(f)))))
                 return quoted(val)
             end
