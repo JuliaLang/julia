@@ -174,10 +174,10 @@ let x = [1, 3.2, 4.7],
     @test sin.(α) == broadcast(sin, α)
     @test sin.(3.2) == broadcast(sin, 3.2) == sin(3.2)
     @test factorial.(3) == broadcast(factorial, 3)
-    @test atan2.(x, y) == broadcast(atan2, x, y)
-    @test atan2.(x, y') == broadcast(atan2, x, y')
-    @test atan2.(x, α) == broadcast(atan2, x, α)
-    @test atan2.(α, y') == broadcast(atan2, α, y')
+    @test atan.(x, y) == broadcast(atan, x, y)
+    @test atan.(x, y') == broadcast(atan, x, y')
+    @test atan.(x, α) == broadcast(atan, x, α)
+    @test atan.(α, y') == broadcast(atan, α, y')
 end
 
 # issue 14725
@@ -215,13 +215,13 @@ end
 # PR #17300: loop fusion
 @test (x->x+1).((x->x+2).((x->x+3).(1:10))) == 7:16
 let A = [sqrt(i)+j for i = 1:3, j=1:4]
-    @test atan2.(log.(A), sum(A, dims=1)) == broadcast(atan2, broadcast(log, A), sum(A, dims=1))
+    @test atan.(log.(A), sum(A, dims=1)) == broadcast(atan, broadcast(log, A), sum(A, dims=1))
 end
 let x = sin.(1:10)
-    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x.+1, x.+2)
-    @test sin.(atan2.([x.+1,x.+2]...)) == sin.(atan2.(x.+1 ,x.+2)) == @. sin(atan2(x+1,x+2))
-    @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
-    @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
+    @test atan.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan, x.+1, x.+2)
+    @test sin.(atan.([x.+1,x.+2]...)) == sin.(atan.(x.+1 ,x.+2)) == @. sin(atan(x+1,x+2))
+    @test sin.(atan.(x, 3.7)) == broadcast(x -> sin(atan(x,3.7)), x)
+    @test atan.(x, 3.7) == broadcast(x -> atan(x,3.7), x) == broadcast(atan, x, 3.7)
 end
 # Use side effects to check for loop fusion.
 let g = Int[]
@@ -235,11 +235,11 @@ end
 # fusion with splatted args:
 let x = sin.(1:10), a = [x]
     @test cos.(x) == cos.(a...)
-    @test atan2.(x,x) == atan2.(a..., a...) == atan2.([x, x]...)
-    @test atan2.(x, cos.(x)) == atan2.(a..., cos.(x)) == broadcast(atan2, x, cos.(a...)) == broadcast(atan2, a..., cos.(a...))
+    @test atan.(x,x) == atan.(a..., a...) == atan.([x, x]...)
+    @test atan.(x, cos.(x)) == atan.(a..., cos.(x)) == broadcast(atan, x, cos.(a...)) == broadcast(atan, a..., cos.(a...))
     @test ((args...)->cos(args[1])).(x) == cos.(x) == ((y,args...)->cos(y)).(x)
 end
-@test atan2.(3, 4) == atan2(3, 4) == (() -> atan2(3, 4)).()
+@test atan.(3, 4) == atan(3, 4) == (() -> atan(3, 4)).()
 # fusion with keyword args:
 let x = [1:4;]
     f17300kw(x; y=0) = x + y

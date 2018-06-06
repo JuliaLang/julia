@@ -72,7 +72,6 @@ Base.tanh(::Number)
 Base.asin(::Number)
 Base.acos(::Number)
 Base.atan(::Number)
-Base.Math.atan2
 Base.Math.asind
 Base.Math.acosd
 Base.Math.atand

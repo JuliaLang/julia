@@ -191,7 +191,7 @@ copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 conj(x::Real) = x
 transpose(x::Number) = x
 adjoint(x::Number) = conj(x)
-angle(z::Real) = atan2(zero(z), z)
+angle(z::Real) = atan(zero(z), z)
 
 """
     inv(x)
