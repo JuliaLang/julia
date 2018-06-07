@@ -807,6 +807,27 @@ function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
     s*s > x ? s-1 : s
 end
 
+"""
+    factorial(n::Integer)
+
+Factorial of `n`. If `n` is an [`Integer`](@ref), the factorial is computed as an
+integer (promoted to at least 64 bits). Note that this may overflow if `n` is not small,
+but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
+
+# Examples
+```jldoctest
+julia> factorial(6)
+720
+
+julia> factorial(21)
+ERROR: OverflowError: 21 is too large to look up in the table
+Stacktrace:
+[...]
+
+julia> factorial(big(21))
+51090942171709440000
+```
+"""
 function factorial(n::Integer)
     n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
     f::typeof(n*n) = 1

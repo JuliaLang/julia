@@ -148,7 +148,7 @@ Base.one(::Type{Unit}) = 1
                             acos, acosh, asin, asinh, atan, atanh, sin, sinh,
                             conj, cos, cosh, tan, tanh,
                             exp, exp2, expm1, log, log10, log1p, log2,
-                            exponent, sqrt, gamma, lgamma,
+                            exponent, sqrt,
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,

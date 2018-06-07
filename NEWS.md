@@ -1256,6 +1256,9 @@ Deprecated or removed
 
   * `setrounding` has been deprecated for `Float32` and `Float64`, as the behaviour was too unreliable ([#26935]).
 
+  * `gamma`, `lgamma`, `beta`, `lbeta` and `lfact` have been moved to
+    [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl) ([#27459], [#27473]).
+
   * `atan2` is now a 2-argument method of `atan` ([#27248]).
 
 Command-line option changes

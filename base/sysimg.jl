@@ -338,7 +338,6 @@ include("methodshow.jl")
 include("floatfuncs.jl")
 include("math.jl")
 using .Math
-import .Math: gamma
 const (√)=sqrt
 const (∛)=cbrt
 
