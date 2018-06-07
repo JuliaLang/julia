@@ -115,6 +115,8 @@ function copy_code_info(c::CodeInfo)
     cnew.code = copy_exprargs(cnew.code)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
+    cnew.codelocs  = copy(cnew.codelocs)
+    cnew.linetable = copy(cnew.linetable)
     return cnew
 end
 
@@ -206,7 +208,11 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
     for line in 1:length(body)
         e = body[line]
-        isa(e, Expr) && find_ssavalue_uses(e, uses, line)
+        if isa(e, SSAValue)
+            push!(uses[e.id], line)
+        elseif isa(e, Expr)
+            find_ssavalue_uses(e, uses, line)
+        end
     end
     return uses
 end
@@ -219,80 +225,15 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
         if skiparg
             skiparg = false
         elseif isa(a, SSAValue)
-            push!(uses[a.id + 1], line)
+            push!(uses[a.id], line)
         elseif isa(a, Expr)
             find_ssavalue_uses(a, uses, line)
         end
     end
 end
 
-function find_ssavalue_defs(body::Vector{Any}, nvals::Int)
-    defs = zeros(Int, nvals)
-    for line in 1:length(body)
-        e = body[line]
-        if isa(e, Expr) && e.head === :(=)
-            lhs = e.args[1]
-            if isa(lhs, SSAValue)
-                defs[lhs.id + 1] = line
-            end
-        end
-    end
-    return defs
-end
-
 # using a function to ensure we can infer this
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
-
-##############
-# LabelNodes #
-##############
-
-# scan body for the value of the largest referenced label
-# so that we won't accidentally re-use it
-function label_counter(body::Vector{Any}, comefrom=true)
-    l = 0
-    for b in body
-        label = 0
-        if isa(b, LabelNode) && comefrom
-            label = b.label::Int
-        elseif isa(b, GotoNode)
-            label = b.label::Int
-        elseif isa(b, Expr)
-            if b.head == :gotoifnot
-                label = b.args[2]::Int
-            elseif b.head == :enter
-                label = b.args[1]::Int
-            elseif b.head === :(=) && comefrom
-                rhs = b.args[2]
-                if isa(rhs, PhiNode)
-                    for edge in rhs.edges
-                        edge = edge::Int + 1
-                        if edge > l
-                            l = edge
-                        end
-                    end
-                end
-            end
-        end
-        if label > l
-            l = label
-        end
-    end
-    return l
-end
-
-function get_label_map(body::Vector{Any})
-    nlabels = label_counter(body)
-    labelmap = zeros(Int, nlabels)
-    for i = 1:length(body)
-        el = body[i]
-        if isa(el, LabelNode)
-            # @assert labelmap[el.label] == 0
-            labelmap[el.label] = i
-        end
-    end
-    return labelmap
-end
 
 ###########
 # options #

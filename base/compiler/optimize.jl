@@ -11,7 +11,6 @@ mutable struct OptimizationState
     src::CodeInfo
     mod::Module
     nargs::Int
-    next_label::Int # index of the current highest label for this function
     min_valid::UInt
     max_valid::UInt
     params::Params
@@ -22,11 +21,10 @@ mutable struct OptimizationState
             frame.stmt_edges[1] = s_edges
         end
         src = frame.src
-        next_label = max(label_counter(src.code), length(src.code)) + 10
         return new(frame.linfo, frame.result.vargs,
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
-                   next_label, frame.min_valid, frame.max_valid,
+                   frame.min_valid, frame.max_valid,
                    frame.params)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo,
@@ -52,12 +50,10 @@ mutable struct OptimizationState
             inmodule = linfo.def::Module
             nargs = 0
         end
-        next_label = max(label_counter(src.code), length(src.code)) + 10
         result_vargs = Any[] # if you want something more accurate, set it yourself :P
         return new(linfo, result_vargs,
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
-                   next_label,
                    min_world(linfo), max_world(linfo),
                    params)
     end
@@ -172,17 +168,10 @@ function optimize(me::InferenceState)
         me.linfo.inInference = false
     elseif me.optimize
         opt = OptimizationState(me)
-        reindex_labels!(opt)
         nargs = Int(opt.nargs) - 1
-        if def isa Method
-            topline = LineInfoNode(opt.mod, def.name, def.file, Int(def.line), 0)
-        else
-            topline = LineInfoNode(opt.mod, NullLineInfo.method, NullLineInfo.file, 0, 0)
-        end
-        linetable = [topline]
-        @timeit "optimizer" ir = run_passes(opt.src, nargs, linetable, opt)
+        @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
         force_noinline = any(x->isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
-        replace_code_newstyle!(opt.src, ir, nargs, linetable)
+        replace_code_newstyle!(opt.src, ir, nargs)
         me.min_valid = opt.min_valid
         me.max_valid = opt.max_valid
     end
@@ -381,19 +370,24 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         if isa(subex, Expr)
             annotate_slot_load!(subex, vtypes, sv, undefs)
         elseif isa(subex, Slot)
-            id = slot_id(subex)
-            s = vtypes[id]
-            vt = maybe_widen_conditional(s.typ)
-            if s.undef
-                # find used-undef variables
-                undefs[id] = true
-            end
-            #  add type annotations where needed
-            if !(sv.src.slottypes[id] ⊑ vt)
-                e.args[i] = TypedSlot(id, vt)
-            end
+            e.args[i] = visit_slot_load!(subex, vtypes, sv, undefs)
         end
     end
+end
+
+function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
+    id = slot_id(sl)
+    s = vtypes[id]
+    vt = maybe_widen_conditional(s.typ)
+    if s.undef
+        # find used-undef variables
+        undefs[id] = true
+    end
+    # add type annotations where needed
+    if !(sv.src.slottypes[id] ⊑ vt)
+        return TypedSlot(id, vt)
+    end
+    return sl
 end
 
 function record_slot_assign!(sv::InferenceState)
@@ -459,9 +453,24 @@ function type_annotate!(sv::InferenceState)
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
     nexpr = length(body)
-    push!(body, LabelNode(nexpr + 1)) # add a terminal label for tracking phi
+
+    # replace gotoifnot with its condition if the branch target is unreachable
+    for i = 1:nexpr
+        expr = body[i]
+        if isa(expr, Expr) && expr.head === :gotoifnot
+            tgt = expr.args[2]::Int
+            if !isa(states[tgt], VarTable)
+                body[i] = expr.args[1]
+            end
+        end
+    end
+
     i = 1
+    oldidx = 0
+    changemap = fill(0, nexpr)
+
     while i <= nexpr
+        oldidx += 1
         st_i = states[i]
         expr = body[i]
         if isa(st_i, VarTable)
@@ -469,48 +478,37 @@ function type_annotate!(sv::InferenceState)
             if isa(expr, Expr)
                 annotate_slot_load!(expr, st_i, sv, undefs)
             elseif isa(expr, Slot)
-                id = slot_id(expr)
-                if st_i[id].undef
-                    # find used-undef variables in statement position
-                    undefs[id] = true
-                end
+                body[i] = visit_slot_load!(expr, st_i, sv, undefs)
             end
         elseif sv.optimize
-            if ((isa(expr, Expr) && is_meta_expr(expr)) ||
-                 isa(expr, LineNumberNode))
+            if isa(expr, Expr) && is_meta_expr(expr)
                 # keep any lexically scoped expressions
-                i += 1
+            else
+                deleteat!(body, i)
+                deleteat!(states, i)
+                deleteat!(src.ssavaluetypes, i)
+                deleteat!(src.codelocs, i)
+                nexpr -= 1
+                if oldidx < length(changemap)
+                    changemap[oldidx+1] = -1
+                end
                 continue
             end
-            # This can create `Expr(:gotoifnot)` with dangling label, which we
-            # will clean up by replacing them with the conditions later.
-            deleteat!(body, i)
-            deleteat!(states, i)
-            nexpr -= 1
-            continue
         end
         i += 1
+    end
+
+    for i = 2:length(changemap)
+        changemap[i] += changemap[i-1]
+    end
+    if changemap[end] != 0
+        renumber_stuff!(body, changemap)
     end
 
     # finish marking used-undef variables
     for j = 1:nslots
         if undefs[j]
             src.slotflags[j] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
-        end
-    end
-
-    # The dead code elimination can delete the target of a reachable node. This
-    # must mean that the target is unreachable. Later optimization passes will
-    # assume that all branches lead to labels that exist, so we must replace
-    # the node with the branch condition (which may have side effects).
-    labelmap = get_label_map(body)
-    for i in 1:length(body)
-        expr = body[i]
-        if isa(expr, Expr) && expr.head === :gotoifnot
-            labelnum = labelmap[expr.args[2]::Int]
-            if labelnum === 0
-                body[i] = expr.args[1]
-            end
         end
     end
     nothing
@@ -712,7 +710,7 @@ function statement_effect_free(@nospecialize(e), src, mod::Module)
         elseif e.head === :gotoifnot
             return effect_free(e.args[1], src, mod, false)
         end
-    elseif isa(e, LabelNode) || isa(e, GotoNode)
+    elseif isa(e, GotoNode)
         return true
     end
     return effect_free(e, src, mod, false)
@@ -810,7 +808,7 @@ function effect_free(@nospecialize(e), src, mod::Module, allow_volatile::Bool)
                 return false
             end
         end
-    elseif isa(e, LabelNode) || isa(e, GotoNode)
+    elseif isa(e, GotoNode)
         return false
     end
     return true
@@ -946,27 +944,6 @@ function inline_worthy(@nospecialize(body), src::CodeInfo, mod::Module, params::
     return inline_worthy(newbody, src, mod, params, cost_threshold)
 end
 
-ssavalue_increment(@nospecialize(body), incr) = body
-ssavalue_increment(body::SSAValue, incr) = SSAValue(body.id + incr)
-function ssavalue_increment(body::Expr, incr)
-    if is_meta_expr(body)
-        return body
-    end
-    for i in 1:length(body.args)
-        body.args[i] = ssavalue_increment(body.args[i], incr)
-    end
-    return body
-end
-ssavalue_increment(body::PiNode, incr) = PiNode(ssavalue_increment(body.val, incr), body.typ)
-function ssavalue_increment(body::PhiNode, incr)
-    values = Vector{Any}(undef, length(body.values))
-    for i = 1:length(values)
-        isassigned(body.values, i) || continue
-        values[i] = ssavalue_increment(body.values[i], incr)
-    end
-    return PhiNode(body.edges, values)
-end
-
 function mk_tuplecall(args, sv::OptimizationState)
     e = Expr(:call, TOP_TUPLE, args...)
     e.typ = tuple_tfunc(Tuple{Any[widenconst(exprtype(x, sv.src, sv.mod)) for x in args]...})
@@ -998,50 +975,29 @@ function is_known_call_p(e::Expr, @nospecialize(pred), src, mod::Module)
     return (isa(f, Const) && pred(f.val)) || (isType(f) && pred(f.parameters[1]))
 end
 
-# fix label numbers to always equal the statement index of the label
-function reindex_labels!(body::Vector{Any})
-    mapping = get_label_map(body)
+function renumber_stuff!(body::Vector{Any}, changemap::Vector{Int})
     for i = 1:length(body)
         el = body[i]
-        # For goto and enter, the statement and the target has to be
-        # both reachable or both not.
-        if isa(el, LabelNode)
-            labelnum = mapping[el.label]
-            @assert labelnum !== 0
-            body[i] = LabelNode(labelnum)
-        elseif isa(el, GotoNode)
-            labelnum = mapping[el.label]
-            @assert labelnum !== 0
-            body[i] = GotoNode(labelnum)
+        if isa(el, GotoNode)
+            body[i] = GotoNode(el.label + changemap[el.label])
+        elseif isa(el, SSAValue)
+            body[i] = SSAValue(el.id + changemap[el.id])
         elseif isa(el, Expr)
             if el.head === :gotoifnot
-                labelnum = mapping[el.args[2]::Int]
-                @assert labelnum !== 0
-                el.args[2] = labelnum
-            elseif el.head === :enter
-                labelnum = mapping[el.args[1]::Int]
-                @assert labelnum !== 0
-                el.args[1] = labelnum
-            elseif el.head === :(=)
-                if isa(el.args[2], PhiNode)
-                    edges = Any[mapping[edge::Int + 1] - 1 for edge in el.args[2].edges]
-                    @assert all(x->x >= 0, edges)
-                    el.args[2] = PhiNode(convert(Vector{Any}, edges), el.args[2].values)
+                cond = el.args[1]
+                if isa(cond, SSAValue)
+                    el.args[1] = SSAValue(cond.id + changemap[cond.id])
                 end
+                tgt = el.args[2]::Int
+                el.args[2] = tgt + changemap[tgt]
+            elseif el.head === :enter
+                tgt = el.args[1]::Int
+                el.args[1] = tgt + changemap[tgt]
+            elseif !is_meta_expr_head(el.head)
+                renumber_stuff!(el.args, changemap)
             end
         end
     end
-    if body[end] isa LabelNode
-        # we usually have a trailing label for the purposes of phi numbering
-        # this can now be deleted also if unused
-        if label_counter(body, false) < length(body)
-            pop!(body)
-        end
-    end
-end
-
-function reindex_labels!(sv::OptimizationState)
-    reindex_labels!(sv.src.code)
 end
 
 function return_type(@nospecialize(f), @nospecialize(t))

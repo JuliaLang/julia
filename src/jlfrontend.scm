@@ -87,9 +87,13 @@
                                      ,@(map (lambda (v) `(implicit-global ,v)) gv)
                                      ,ex))))))
           (if (and (null? (cdadr (caddr th)))
-                   (= 0 (cadddr (caddr th))))
-              ;; if no locals, return just body of function
-              (cadddr th)
+                   (and (length= (lam:body th) 2)
+                        (let ((retval (cadadr (lam:body th))))
+                          (or (and (pair? retval) (eq? (car retval) 'lambda))
+                              (simple-atom? retval)))))
+              ;; generated functions use the pattern (body (return (lambda ...))), which
+              ;; needs to be unwrapped to just the lambda (CodeInfo).
+              (cadadr (lam:body th))
               `(thunk ,th))))))
 
 (define *in-expand* #f)
@@ -111,12 +115,8 @@
            (if (not last)
                (begin (reset-gensyms)
                       (set! *in-expand* #t)))
-           (let ((ex (expand-toplevel-expr-- e)))
-             (set! *in-expand* last)
-             (if (and (length= ex 2) (eq? (car ex) 'body))
-                 ;; (body (return x)) => x
-                 (cadadr ex)
-                 ex))))))
+           (begin0 (expand-toplevel-expr-- e)
+                   (set! *in-expand* last))))))
 
 ;; construct default definitions of `eval` for non-bare modules
 ;; called by jl_eval_module_expr

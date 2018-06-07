@@ -173,6 +173,8 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     tree.slotflags = fill(0x00, Int(method.nargs))
                     tree.slottypes = nothing
                     tree.ssavaluetypes = 0
+                    tree.codelocs = Int[1]
+                    tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
                     tree.inferred = true
                     tree.ssaflags = UInt8[]
                     tree.pure = true
@@ -270,110 +272,123 @@ function typeinf_work(frame::InferenceState)
             frame.cur_hand = frame.handler_at[pc]
             frame.stmt_edges[pc] === () || empty!(frame.stmt_edges[pc])
             stmt = frame.src.code[pc]
-            changes = abstract_interpret(stmt, s[pc]::VarTable, frame)
-            if changes === ()
-                break # this line threw an error and so there is no need to continue
-                # changes = s[pc]
-            end
-            if frame.cur_hand !== () && isa(changes, StateUpdate)
-                # propagate new type info to exception handler
-                # the handling for Expr(:enter) propagates all changes from before the try/catch
-                # so this only needs to propagate any changes
-                l = frame.cur_hand[1]
-                if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
-                    if l < frame.pc´´
-                        frame.pc´´ = l
-                    end
-                    push!(W, l)
-                end
-            end
-            if isa(changes, StateUpdate)
-                changes_var = changes.var
-                if isa(changes_var, SSAValue)
-                    # directly forward changes to an SSAValue to the applicable line
-                    record_ssa_assign(changes_var.id + 1, changes.vtype.typ, frame)
-                end
-            elseif isa(stmt, NewvarNode)
+            changes = s[pc]::VarTable
+
+            hd = isa(stmt, Expr) ? stmt.head : nothing
+
+            if isa(stmt, NewvarNode)
                 sn = slot_id(stmt.slot)
-                changes = changes::VarTable
                 changes[sn] = VarState(Bottom, true)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
-            elseif isa(stmt, Expr)
-                stmt = stmt::Expr
-                hd = stmt.head
-                if hd === :gotoifnot
-                    condt = abstract_eval(stmt.args[1], s[pc], frame)
-                    condval = maybe_extract_const_bool(condt)
-                    l = stmt.args[2]::Int
-                    changes = changes::VarTable
-                    # constant conditions
-                    if condval === true
-                    elseif condval === false
-                        pc´ = l
-                    else
-                        # general case
-                        frame.handler_at[l] = frame.cur_hand
-                        changes_else = changes
-                        if isa(condt, Conditional)
-                            if condt.elsetype !== Any && condt.elsetype !== changes[slot_id(condt.var)]
-                                changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes_else)
-                            end
-                            if condt.vtype !== Any && condt.vtype !== changes[slot_id(condt.var)]
-                                changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
-                            end
+            elseif hd === :gotoifnot
+                condt = abstract_eval(stmt.args[1], s[pc], frame)
+                if condt === Bottom
+                    break
+                end
+                condval = maybe_extract_const_bool(condt)
+                l = stmt.args[2]::Int
+                # constant conditions
+                if condval === true
+                elseif condval === false
+                    pc´ = l
+                else
+                    # general case
+                    frame.handler_at[l] = frame.cur_hand
+                    changes_else = changes
+                    if isa(condt, Conditional)
+                        if condt.elsetype !== Any && condt.elsetype !== changes[slot_id(condt.var)]
+                            changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes_else)
                         end
-                        newstate_else = stupdate!(s[l], changes_else)
-                        if newstate_else !== false
-                            # add else branch to active IP list
-                            if l < frame.pc´´
-                                frame.pc´´ = l
-                            end
-                            push!(W, l)
-                            s[l] = newstate_else
+                        if condt.vtype !== Any && condt.vtype !== changes[slot_id(condt.var)]
+                            changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
                         end
                     end
-                elseif hd === :return
-                    pc´ = n + 1
-                    rt = abstract_eval(stmt.args[1], s[pc], frame)
-                    if !isa(rt, Const) && !isa(rt, Type)
-                        # only propagate information we know we can store
-                        # and is valid inter-procedurally
-                        rt = widenconst(rt)
-                    end
-                    if tchanged(rt, frame.bestguess)
-                        # new (wider) return type for frame
-                        frame.bestguess = tmerge(frame.bestguess, rt)
-                        for (caller, caller_pc) in frame.backedges
-                            # notify backedges of updated type information
-                            if caller.stmt_types[caller_pc] !== ()
-                                if caller_pc < caller.pc´´
-                                    caller.pc´´ = caller_pc
-                                end
-                                push!(caller.ip, caller_pc)
-                            end
-                        end
-                    end
-                elseif hd === :enter
-                    l = stmt.args[1]::Int
-                    frame.cur_hand = (l, frame.cur_hand)
-                    # propagate type info to exception handler
-                    l = frame.cur_hand[1]
-                    old = s[l]
-                    new = s[pc]::Array{Any,1}
-                    newstate_catch = stupdate!(old, new)
-                    if newstate_catch !== false
+                    newstate_else = stupdate!(s[l], changes_else)
+                    if newstate_else !== false
+                        # add else branch to active IP list
                         if l < frame.pc´´
                             frame.pc´´ = l
                         end
                         push!(W, l)
-                        s[l] = newstate_catch
+                        s[l] = newstate_else
                     end
-                    typeassert(s[l], VarTable)
-                    frame.handler_at[l] = frame.cur_hand
-                elseif hd === :leave
-                    for i = 1:((stmt.args[1])::Int)
-                        frame.cur_hand = frame.cur_hand[2]
+                end
+            elseif hd === :return
+                pc´ = n + 1
+                rt = abstract_eval(stmt.args[1], s[pc], frame)
+                if !isa(rt, Const) && !isa(rt, Type)
+                    # only propagate information we know we can store
+                    # and is valid inter-procedurally
+                    rt = widenconst(rt)
+                end
+                if tchanged(rt, frame.bestguess)
+                    # new (wider) return type for frame
+                    frame.bestguess = tmerge(frame.bestguess, rt)
+                    for (caller, caller_pc) in frame.backedges
+                        # notify backedges of updated type information
+                        if caller.stmt_types[caller_pc] !== ()
+                            if caller_pc < caller.pc´´
+                                caller.pc´´ = caller_pc
+                            end
+                            push!(caller.ip, caller_pc)
+                        end
+                    end
+                end
+            elseif hd === :enter
+                l = stmt.args[1]::Int
+                frame.cur_hand = (l, frame.cur_hand)
+                # propagate type info to exception handler
+                l = frame.cur_hand[1]
+                old = s[l]
+                new = s[pc]::Array{Any,1}
+                newstate_catch = stupdate!(old, new)
+                if newstate_catch !== false
+                    if l < frame.pc´´
+                        frame.pc´´ = l
+                    end
+                    push!(W, l)
+                    s[l] = newstate_catch
+                end
+                typeassert(s[l], VarTable)
+                frame.handler_at[l] = frame.cur_hand
+            elseif hd === :leave
+                for i = 1:((stmt.args[1])::Int)
+                    frame.cur_hand = frame.cur_hand[2]
+                end
+            else
+                if hd === :(=)
+                    t = abstract_eval(stmt.args[2], changes, frame)
+                    t === Bottom && break
+                    lhs = stmt.args[1]
+                    if isa(lhs, Slot)
+                        changes = StateUpdate(lhs, VarState(t, false), changes)
+                    end
+                elseif hd === :method
+                    fname = stmt.args[1]
+                    if isa(fname, Slot)
+                        changes = StateUpdate(fname, VarState(Any, false), changes)
+                    end
+                elseif hd === :inbounds || hd === :meta || hd === :simdloop
+                    stmt.typ = Any
+                else
+                    t = abstract_eval(stmt, changes, frame)
+                    t === Bottom && break
+                    if !isempty(frame.ssavalue_uses[pc])
+                        changes = StateUpdate(SSAValue(pc), VarState(t, false), changes)
+                        record_ssa_assign(pc, t, frame)
+                    end
+                end
+                if frame.cur_hand !== () && isa(changes, StateUpdate)
+                    # propagate new type info to exception handler
+                    # the handling for Expr(:enter) propagates all changes from before the try/catch
+                    # so this only needs to propagate any changes
+                    l = frame.cur_hand[1]
+                    if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
+                        if l < frame.pc´´
+                            frame.pc´´ = l
+                        end
+                        push!(W, l)
                     end
                 end
             end

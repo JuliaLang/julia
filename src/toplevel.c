@@ -393,33 +393,18 @@ int jl_code_requires_compiler(jl_code_info_t *src)
 
 static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs, int *has_loops)
 {
-    size_t i, maxlabl=0;
-    for(i=0; i < jl_array_len(body); i++) {
-        jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        if (jl_is_labelnode(stmt)) {
-            int l = jl_labelnode_label(stmt);
-            if (l > maxlabl) maxlabl = l;
-        }
-    }
-    size_t sz = (maxlabl+1+7)/8;
-    char *labls = (char*)alloca(sz); memset(labls,0,sz);
+    size_t i;
     *has_loops = 0;
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
         if (!*has_loops) {
-            if (jl_is_labelnode(stmt)) {
-                int l = jl_labelnode_label(stmt);
-                labls[l/8] |= (1<<(l&7));
-            }
-            else if (jl_is_gotonode(stmt)) {
-                int l = jl_gotonode_label(stmt);
-                if (labls[l/8] & (1<<(l&7)))
+            if (jl_is_gotonode(stmt)) {
+                if (jl_gotonode_label(stmt) <= i)
                     *has_loops = 1;
             }
             else if (jl_is_expr(stmt)) {
-                if (((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
-                    int l = jl_unbox_long(jl_exprarg(stmt,1));
-                    if (labls[l/8] & (1<<(l&7)))
+                if (((jl_expr_t*)stmt)->head == goto_ifnot_sym) {
+                    if (jl_unbox_long(jl_exprarg(stmt,1)) <= i)
                         *has_loops = 1;
                 }
             }
@@ -592,38 +577,6 @@ static jl_module_t *eval_import_from(jl_module_t *m, jl_expr_t *ex, const char *
     return NULL;
 }
 
-static jl_code_info_t *expr_to_code_info(jl_value_t *expr)
-{
-    jl_code_info_t *src = jl_new_code_info_uninit();
-    JL_GC_PUSH1(&src);
-
-    if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
-        jl_array_t *body = jl_alloc_vec_any(1);
-        src->code = body;
-        jl_gc_wb(src, body);
-        jl_array_ptr_set(body, 0, (jl_value_t*)jl_exprn(return_sym, 1));
-        jl_array_ptr_set(((jl_expr_t*)jl_array_ptr_ref(body, 0))->args, 0, expr);
-    }
-    else {
-        src->code = ((jl_expr_t*)expr)->args;
-        jl_gc_wb(src, src->code);
-    }
-    src->slotnames = jl_alloc_vec_any(0);
-    jl_gc_wb(src, src->slotnames);
-    src->slottypes = jl_nothing;
-    src->slotflags = jl_alloc_array_1d(jl_array_uint8_type, 0);
-    jl_gc_wb(src, src->slotflags);
-    src->ssavaluetypes = jl_box_long(0);
-    jl_gc_wb(src, src->ssavaluetypes);
-    src->method_for_inference_limit_heuristics = jl_nothing;
-    src->codelocs = jl_nothing;
-    src->linetable = jl_nothing;
-    src->ssaflags = jl_alloc_array_1d(jl_array_uint8_type, 0);
-
-    JL_GC_POP();
-    return src;
-}
-
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -785,9 +738,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     jl_code_info_t *thk = NULL;
     JL_GC_PUSH3(&li, &thk, &ex);
 
-    if (!expanded && ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
-        ex->head != method_sym && ex->head != toplevel_sym && ex->head != error_sym &&
-        ex->head != jl_incomplete_sym) {
+    if (!expanded && ex->head != thunk_sym && ex->head != method_sym && ex->head != toplevel_sym &&
+        ex->head != error_sym && ex->head != jl_incomplete_sym) {
         // not yet expanded
         ex = (jl_expr_t*)jl_expand(e, m);
     }
@@ -812,28 +764,26 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
             jl_errorf("syntax: %s", jl_string_data(jl_exprarg(ex,0)));
         jl_throw(jl_exprarg(ex,0));
     }
+    else if (jl_is_symbol(ex)) {
+        JL_GC_POP();
+        return jl_eval_global_var(m, (jl_sym_t*)ex);
+    }
+    else if (head == NULL) {
+        JL_GC_POP();
+        return (jl_value_t*)ex;
+    }
 
     int has_intrinsics = 0, has_defs = 0, has_loops = 0;
-    if (head == thunk_sym) {
-        thk = (jl_code_info_t*)jl_exprarg(ex,0);
-        assert(jl_is_code_info(thk));
-        assert(jl_typeis(thk->code, jl_array_any_type));
-        body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
-    }
-    else if (head == body_sym) {
-        thk = expr_to_code_info((jl_value_t*)ex);
-        body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
-    }
-    else {
-        expr_attributes((jl_value_t*)ex, &has_intrinsics, &has_defs);
-    }
+    assert(head == thunk_sym);
+    thk = (jl_code_info_t*)jl_exprarg(ex,0);
+    assert(jl_is_code_info(thk));
+    assert(jl_typeis(thk->code, jl_array_any_type));
+    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
 
     jl_value_t *result;
     if (has_intrinsics || (!has_defs && fast && has_loops &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF)) {
         // use codegen
-        if (thk == NULL)
-            thk = expr_to_code_info((jl_value_t*)ex);
         li = method_instance_for_thunk(thk, m);
         jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
         // Don't infer blocks containing e.g. method definitions, since it's probably not
@@ -852,12 +802,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
     else {
         // use interpreter
-        if (thk != NULL)
-            result = jl_interpret_toplevel_thunk(m, thk);
-        else if (jl_is_toplevel_only_expr((jl_value_t*)ex))
-            result = jl_toplevel_eval(m, (jl_value_t*)ex);
-        else
-            result = jl_interpret_toplevel_expr_in(m, (jl_value_t*)ex, NULL, NULL);
+        assert(thk);
+        result = jl_interpret_toplevel_thunk(m, thk);
     }
 
     JL_GC_POP();

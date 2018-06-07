@@ -643,10 +643,8 @@ function analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, 
     end
 
     @timeit "inline IR inflation" if src.codelocs === nothing
-        topline = LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)
-        inline_linetable = [topline]
-        push!(ast, LabelNode(length(ast) + 1))
-        ir2 = just_construct_ssa(src, ast, na-1, inline_linetable)
+        # TODO: another way to detect IR that uses slots?
+        ir2 = just_construct_ssa(src, ast, na-1)
     else
         ir2, inline_linetable = inflate_ir(src), src.linetable
     end

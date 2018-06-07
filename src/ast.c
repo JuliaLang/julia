@@ -549,11 +549,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             return temp;
         }
         JL_GC_PUSH1(&ex);
-        if (sym == label_sym) {
-            ex = scm_to_julia_(fl_ctx, car_(e), mod);
-            temp = jl_new_struct(jl_labelnode_type, ex);
-        }
-        else if (sym == goto_sym) {
+        if (sym == goto_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct(jl_gotonode_type, ex);
         }
@@ -582,6 +578,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e))))) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct(jl_quotenode_type, ex);
+        }
+        else if (sym == thunk_sym) {
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            assert(jl_is_code_info(ex));
+            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, mod, jl_symbol("top-level scope"));
+            temp = (jl_value_t*)jl_exprn(sym, 1);
+            jl_exprargset(temp, 0, ex);
         }
         if (temp) {
             JL_GC_POP();
@@ -687,11 +690,9 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         fl_free_gc_handles(fl_ctx, 1);
         return scmv;
     }
-    // GC Note: jl_fieldref(v, 0) allocate for LabelNode, GotoNode
+    // GC Note: jl_fieldref(v, 0) allocates for GotoNode
     //          but we don't need a GC root here because julia_to_list2
     //          shouldn't allocate in this case.
-    if (jl_typeis(v, jl_labelnode_type))
-        return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_linenumbernode_type)) {
         jl_value_t *file = jl_fieldref_noalloc(v,1); // non-allocating
         jl_value_t *line = jl_fieldref(v,0); // allocating

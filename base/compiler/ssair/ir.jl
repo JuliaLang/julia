@@ -141,7 +141,7 @@ end
 function first_insert_for_bb(code, cfg::CFG, block::Int)
     for idx in cfg.blocks[block].stmts
         stmt = code[idx]
-        if !isa(stmt, LabelNode) && !isa(stmt, PhiNode)
+        if !isa(stmt, PhiNode)
             return idx
         end
     end
@@ -282,7 +282,7 @@ function is_relevant_expr(e::Expr)
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
-                      :cfunction)
+                      :cfunction, :method)
 end
 
 function setindex!(x::UseRef, @nospecialize(v))
@@ -914,6 +914,8 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
         return PhiCNode(fixup_phinode_values!(compact, stmt.values))
     elseif isa(stmt, NewSSAValue)
         return SSAValue(length(compact.result) + stmt.id)
+    elseif isa(stmt, OldSSAValue)
+        return compact.ssa_rename[stmt.id]
     else
         urs = userefs(stmt)
         urs === () && return stmt
@@ -921,6 +923,8 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
             val = ur[]
             if isa(val, NewSSAValue)
                 ur[] = SSAValue(length(compact.result) + val.id)
+            elseif isa(val, OldSSAValue)
+                ur[] = compact.ssa_rename[val.id]
             end
         end
         return urs[]

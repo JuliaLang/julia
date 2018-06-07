@@ -32,11 +32,14 @@ function inflate_ir(ci::CodeInfo)
             code[i] = stmt
         end
     end
-    ir = IRCode(code, copy(ci.ssavaluetypes), copy(ci.codelocs), copy(ci.ssaflags), cfg, ci.linetable, copy(ci.slottypes), ci.linetable[1].mod, Any[])
+    newslottypes = ci.inferred ? copy(ci.slottypes) : Any[ Any for i = 1:length(ci.slotnames) ]
+    ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:ci.ssavaluetypes ]
+    ir = IRCode(code, ssavaluetypes, copy(ci.codelocs), copy(ci.ssaflags), cfg, collect(LineInfoNode, ci.linetable),
+                newslottypes, ci.linetable[1].mod, Any[])
     return ir
 end
 
-function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs, linetable)
+function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
     # All but the first `nargs` slots will now be unused
     resize!(ci.slottypes, nargs+1)
@@ -44,7 +47,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs, linetable)
     resize!(ci.slotflags, nargs+1)
     ci.code = ir.stmts
     ci.codelocs = ir.lines
-    ci.linetable = linetable
+    ci.linetable = ir.linetable
     ci.ssavaluetypes = ir.types
     ci.ssaflags = ir.flags
     # Translate BB Edges to statement edges

@@ -648,11 +648,13 @@ function show(io::IO, src::CodeInfo)
     if src.slotnames !== nothing
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
     end
-    if src.codelocs !== nothing
+    @assert src.codelocs !== nothing
+    if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         ir = Core.Compiler.inflate_ir(src)
         IRShow.show_ir(lambda_io, ir, argnames=sourceinfo_slotnames(src))
     else
+        # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:body)
         body.args = src.code
         show(lambda_io, body)
@@ -756,7 +758,7 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
 const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode,
-                       LabelNode, GotoNode, GlobalRef}
+                       GotoNode, GlobalRef}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
 # methods use a precedence of -1 to specially allow space-separated macro syntax
@@ -1015,7 +1017,6 @@ end
 
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
-show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
 function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
     print(io, ex.mod)

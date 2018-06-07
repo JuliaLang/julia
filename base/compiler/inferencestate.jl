@@ -29,7 +29,6 @@ mutable struct InferenceState
     n_handlers::Int
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
-    ssavalue_defs::Vector{LineNum}
 
     backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
@@ -112,7 +111,6 @@ mutable struct InferenceState
         s_types[1] = s_argtypes
 
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-        ssavalue_defs = find_ssavalue_defs(code, nssavalues)
 
         # exception handlers
         cur_hand = ()
@@ -143,7 +141,7 @@ mutable struct InferenceState
             nargs, s_types, s_edges,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
-            ssavalue_uses, ssavalue_defs,
+            ssavalue_uses,
             Vector{Tuple{InferenceState,LineNum}}(), # backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
