@@ -572,11 +572,11 @@ struct uv_dirent_t
     typ::Cint
 end
 
-struct ReadDirIter
+struct ReadDirIterator
     path::String
 end
 
-function Base.iterate(iter::ReadDirIter)
+function Base.iterate(iter::ReadDirIterator)
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
     path = iter.path
     err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
@@ -585,7 +585,7 @@ function Base.iterate(iter::ReadDirIter)
     return iterate(iter, uv_readdir_req)
 end
 
-function Base.iterate(d::ReadDirIter, uv_readdir_req::Vector{UInt8})
+function Base.iterate(d::ReadDirIterator, uv_readdir_req::Vector{UInt8})
     ent = Ref{uv_dirent_t}()
     status =  ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
     if status == Base.UV_EOF
@@ -596,11 +596,11 @@ function Base.iterate(d::ReadDirIter, uv_readdir_req::Vector{UInt8})
     return (path, uv_readdir_req)
 end
 
-Base.IteratorSize(::Type{ReadDirIter}) = Base.SizeUnknown()
-Base.eltype(::Type{ReadDirIter}) = String
+Base.IteratorSize(::Type{ReadDirIterator}) = Base.SizeUnknown()
+Base.eltype(::Type{ReadDirIterator}) = String
 
 """
-    readdir(dir::AbstractString=".") -> Vector{String}
+    readdir(dir::AbstractString=".") -> ReadDirIterator
 
 Return an iterator that generates the files and directories in the directory `dir` (or the current working directory if not given).
 
@@ -620,7 +620,13 @@ julia> collect(readdir("/home/JuliaUser/Projects/julia"))
  "usr-staging"
 ```
 """
-readdir(path::AbstractString) = ReadDirIter(String(path))
+function readdir(path::AbstractString)
+    # Test that the path doesn't contain illegal null characters (issue #10994).
+    # Better to fail fast than wait until iteration starts to raise an error.
+    Base.unsafe_convert(Cstring, path)
+
+    ReadDirIterator(String(path))
+end
 
 readdir() = readdir(".")
 
