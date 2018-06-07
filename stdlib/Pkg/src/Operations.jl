@@ -931,10 +931,12 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
             --eval $code
             ```
         run_build = () -> begin
-            open(log_file, "w") do log
+            ok = open(log_file, "w") do log
                 success(pipeline(cmd, stdout=log, stderr=log))
-            end ? Base.rm(log_file, force=true) :
+            end
+            if !ok
                 @error("Error building `$name`; see log file for further info")
+            end
         end
         with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid, version); might_need_to_resolve=might_need_to_resolve) do
             run_build()
