@@ -402,11 +402,14 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     return
 end
 
-init() = init(Context())
+init(; kwargs...) = init(Context(); kwargs...)
 init(path::String) = init(Context(env=EnvCache(path)), path)
-function init(ctx::Context, path::String=pwd())
+function init(ctx::Context, path::String=pwd(); kwargs...)
+    Context!(ctx; kwargs...)
+    ctx.preview && preview_info()
     Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
     Operations.init(ctx)
+    ctx.preview && preview_info()
     return
 end
 
