@@ -393,6 +393,10 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
         if !isa(stateordonet, DataType) || !(stateordonet <: Tuple) || isvatuple(stateordonet) || length(stateordonet.parameters) != 2
             break
         end
+        if stateordonet.parameters[2] <: statetype
+            # infinite (or failing) iterator
+            return Any[Bottom]
+        end
         valtype = stateordonet.parameters[1]
         statetype = stateordonet.parameters[2]
         push!(ret, valtype)
@@ -439,6 +443,9 @@ function abstract_apply(@nospecialize(aft), fargs::Vector{Any}, aargtypes::Vecto
         ctypes´ = []
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
             cti = precise_container_type(fargs[i], ti, vtypes, sv)
+            if _any(t -> t === Bottom, cti)
+                continue
+            end
             for ct in ctypes
                 if isvarargtype(ct[end])
                     tail = tuple_tail_elem(unwrapva(ct[end]), cti)

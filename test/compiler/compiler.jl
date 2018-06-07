@@ -1720,3 +1720,4 @@ Base.iterate(i::Iterator27434, ::Val{1}) = i.y, Val(2)
 Base.iterate(i::Iterator27434, ::Val{2}) = i.z, Val(3)
 Base.iterate(::Iterator27434, ::Any) = nothing
 @test @inferred splat27434(Iterator27434(1, 2, 3)) == (1, 2, 3)
+@test Core.Compiler.return_type(splat27434, Tuple{typeof(Iterators.repeated(1))}) == Union{}
