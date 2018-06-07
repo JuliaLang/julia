@@ -332,6 +332,7 @@ In the following examples `"..."` is used to illustrate an arbitrary docstring.
 
 `doc""` should only be used when the docstring contains `$` or `\` characters that should not
 be parsed by Julia such as LaTeX syntax or Julia source code examples containing interpolation.
+To include `$` in a standard docstring, you need to double-escape it like: `"The cost was \\\$1."`.
 
 ### Functions and Methods
 
