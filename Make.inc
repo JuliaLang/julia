@@ -444,19 +444,22 @@ SHIPFLAGS := -O3 -g -falign-functions
 endif
 
 ifeq ($(USECCACHE), 1)
-# expand CC and CXX at declaration time because we will redefine them
-# Expand CC and CXX here already because we want the original definition and not the ccache version.
+# Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
 CC_ARG   := $(CC)
 CXX_ARG  := $(CXX)
-# Expand CC and CXX here already to avoid recursive referencing.
+FC_ARG   := $(FC)
+# Expand CC, CXX and FC here already to avoid recursive referencing.
 CC_FULL  := ccache $(CC)
 CXX_FULL := ccache $(CXX)
-# Add an extra indirection to make CC/CXX non-simple vars
+FC_FULL  := ccache $(FC)
+# Add an extra indirection to make CC/CXX/FC non-simple vars
 # (because of how -m$(BINARY) is added later on).
 CC       := $(CC_FULL)
 CXX      := $(CXX_FULL)
+FC       := $(FC_FULL)
 CC_BASE  := ccache
 CXX_BASE := ccache
+FC_BASE  := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
 # http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
@@ -470,6 +473,8 @@ CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
 CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
 CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
+FC_BASE := $(shell echo $(FC) | cut -d' ' -f1)
+FC_ARG := $(shell echo $(FC) | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -773,6 +778,7 @@ CXX += -m$(BINARY)
 FC += -m$(BINARY)
 CC_ARG += -m$(BINARY)
 CXX_ARG += -m$(BINARY)
+FC_ARG += -m$(BINARY)
 endif
 endif
 
