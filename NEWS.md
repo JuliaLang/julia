@@ -692,6 +692,9 @@ Library improvements
   * `Sys.which()` provides a cross-platform method to find executable files, similar to
     the Unix `which` command. ([#26559])
 
+  * Added an optimized method of `vecdot` for taking the Frobenius inner product
+    of sparse matrices. ([#27470])
+
 Compiler/Runtime improvements
 -----------------------------
 

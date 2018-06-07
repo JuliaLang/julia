@@ -203,6 +203,37 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     return C
 end
 
+# Frobenius inner product: trace(A'B)
+function vecdot(A::SparseMatrixCSC{T1,S1},B::SparseMatrixCSC{T2,S2}) where {T1,T2,S1,S2}
+    m, n = size(A)
+    size(B) == (m,n) || throw(DimensionMismatch("matrices must have the same dimensions"))
+    r = vecdot(zero(T1), zero(T2))
+    @inbounds for j = 1:n
+        ia = A.colptr[j]; ia_nxt = A.colptr[j+1]
+        ib = B.colptr[j]; ib_nxt = B.colptr[j+1]
+        if ia < ia_nxt && ib < ib_nxt
+            ra = A.rowval[ia]; rb = B.rowval[ib]
+            while true
+                if ra < rb
+                    ia += oneunit(S1)
+                    ia < ia_nxt || break
+                    ra = A.rowval[ia]
+                elseif ra > rb
+                    ib += oneunit(S2)
+                    ib < ib_nxt || break
+                    rb = B.rowval[ib]
+                else # ra == rb
+                    r += vecdot(A.nzval[ia], B.nzval[ib])
+                    ia += oneunit(S1); ib += oneunit(S2)
+                    ia < ia_nxt && ib < ib_nxt || break
+                    ra = A.rowval[ia]; rb = B.rowval[ib]
+                end
+            end
+        end
+    end
+    return r
+end
+
 ## solvers
 function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
