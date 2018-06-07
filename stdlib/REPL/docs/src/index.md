@@ -113,7 +113,7 @@ hello
 ### Pkg mode
 
 The Package manager mode accepts specialized commands for loading and updating packages.  It is entered
-by pressing the `]` key at the Julian REPL prompt and exited by pressing CTRL-C or pressing the backspace
+by pressing the `]` key at the Julian REPL prompt and exited by pressing CTRL-C or pressing the backspace key
 at the beginning of the line.  The prompt for this mode is `pkg>`.  It supports its own help-mode, which is
 entered by pressing `?` at the beginning  of the line of the `pkg>` prompt.  The Package manager mode is
 documented in the Pkg (Package Manager) chapter of the standard library manual.
