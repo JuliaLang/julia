@@ -373,12 +373,17 @@ The `p`-norm is defined as
 \\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
 ```
 with ``a_i`` the entries of ``A``, ``| a_i |`` are their [`norm`](@ref)s, and
-``n`` the length of ``A``.
+``n`` the length of ``A``. Since the `p`-norm is computed using the [`norm`](@ref)s
+of the entries of `A`, the `p`-norm of a vector of vectors is not compatible with
+the interpretation of it as a block vector in general if `p != 2`.
 
 `p` can assume any numeric value (even though not all values produce a
 mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
 in `abs.(A)`, whereas `norm(A, -Inf)` returns the smallest. If `A` is a matrix and `p=2`,
 then this is equivalent to the Frobenius norm.
+
+The second argument `p` is not necessarily a part of the interface for `norm`, i.e. a custom
+type may only implement `norm(A)` without second argument.
 
 Use [`opnorm`](@ref) to compute the operator norm of a matrix.
 
@@ -636,7 +641,10 @@ end
 
 For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
 any element type for which `inner` is defined), compute the inner product (or dot product
-or scalar product, i.e. the sum of `inner(x[i],y[i])`) as if they were vectors.
+or scalar product), i.e. the sum of `inner(x[i],y[i])`, as if they were vectors.
+
+`dot(x, y)`` and `x ⋅ y` (where `⋅` can be typed by tab-completing `\cdot` in the REPL) are
+synonyms for `inner(x, y)`.
 
 # Examples
 ```jldoctest
