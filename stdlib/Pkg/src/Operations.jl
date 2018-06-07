@@ -753,6 +753,15 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         end
     end
 
+    pkgs = PackageSpec[]
+    target = ""
+    if pkg.special_action == PKGSPEC_TESTED
+        target = "test"
+    end
+    if !isempty(target)
+        collect_target_deps!(localctx, pkgs, pkg, target)
+    end
+
     mktempdir() do tmpdir
         localctx.env.project_file = joinpath(tmpdir, "Project.toml")
         localctx.env.manifest_file = joinpath(tmpdir, "Manifest.toml")
@@ -765,31 +774,9 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
             end
         end
 
-        pkgs = PackageSpec[]
-        if pkg.special_action == PKGSPEC_TESTED
-            # Find path to pkg being tested (exploit Base.locate_package instead?)
-            if pkg.uuid in keys(localctx.stdlibs)
-                path = Types.stdlib_path(pkg.name)
-            elseif Types.is_project_uuid(localctx.env, pkg.uuid)
-                path = dirname(mainctx.env.project_file)
-            else
-                info = manifest_info(localctx.env, pkg.uuid)
-                path = haskey(info, "path") ? project_rel_path(localctx, info["path"]) : find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
-            end
-
-            # Collect test/REQUIRE packages if they exist
-            test_reqfile = joinpath(path, "test", "REQUIRE")
-            if isfile(test_reqfile)
-                for r in Pkg2.Reqs.read(test_reqfile)
-                    r isa Pkg2.Reqs.Requirement || continue
-                    pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
-                    push!(pkgs, PackageSpec(pkg_name, vspec))
-                end
-                registry_resolve!(localctx.env, pkgs)
-                ensure_resolved(localctx.env, pkgs; registry=true)
-                add_or_develop(localctx, pkgs)
-                need_to_resolve = false # add resolves
-            end
+        if !isempty(pkgs)
+            add_or_develop(localctx, pkgs)
+            need_to_resolve = false # add resolves
         end
 
         local new
@@ -805,6 +792,51 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
         sep = Sys.iswindows() ? ';' : ':'
         withenv(f, "JULIA_LOAD_PATH" => "@$sep$tmpdir$sep$(Types.stdlib_dir())")
     end
+end
+
+function collect_target_deps!(ctx::Context, pkgs::Vector{PackageSpec}, pkg::PackageSpec, target::String)
+    # Find the path to the package
+    if pkg.uuid in keys(ctx.stdlibs)
+        path = Types.stdlib_path(pkg.name)
+    elseif Types.is_project_uuid(ctx.env, pkg.uuid)
+        path = dirname(ctx.env.project_file)
+    else
+        info = manifest_info(ctx.env, pkg.uuid)
+        path = haskey(info, "path") ? project_rel_path(ctx, info["path"]) : find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
+    end
+
+    if !haskey(ctx.env.project, "targets")
+        if target == "test"
+            pkg2_test_target_compatibility!(ctx, path, pkgs)
+        end
+        return pkgs
+    end
+    targets = ctx.env.project["targets"]
+    haskey(targets, target) || return pkgs
+    targets = ctx.env.project["targets"]
+    target_info = targets[target]
+    haskey(target_info, "deps") || return pkgs
+    targets = ctx.env.project["targets"]
+    deps = target_info["deps"]
+    for (pkg, uuid) in deps
+        push!(pkgs, PackageSpec(pkg, UUID(uuid)))
+    end
+    return nothing
+end
+
+# Pkg2 test/REQUIRE compatibility
+function pkg2_test_target_compatibility!(ctx, path, pkgs)
+    test_reqfile = joinpath(path, "test", "REQUIRE")
+    if isfile(test_reqfile)
+        for r in Pkg2.Reqs.read(test_reqfile)
+            r isa Pkg2.Reqs.Requirement || continue
+            pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
+            push!(pkgs, PackageSpec(pkg_name, vspec))
+        end
+        registry_resolve!(ctx.env, pkgs)
+        ensure_resolved(ctx.env, pkgs; registry=true)
+    end
+    return nothing
 end
 
 function any_package_not_installed(ctx)
