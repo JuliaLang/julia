@@ -24,31 +24,35 @@ Base.iterate(S::BunchKaufman, ::Val{:done}) = nothing
 
 
 """
-    bunchkaufman!(A, rook::Bool=false) -> BunchKaufman
+    bunchkaufman!(A, rook::Bool=false; check = true) -> BunchKaufman
 
 `bunchkaufman!` is the same as [`bunchkaufman`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy.
 """
-function bunchkaufman!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false)
+function bunchkaufman!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix},
+                       rook::Bool = false; check::Bool = true)
     LD, ipiv, info = rook ? LAPACK.sytrf_rook!(A.uplo, A.data) : LAPACK.sytrf!(A.uplo, A.data)
+    check && checknonsingular(info)
     BunchKaufman(LD, ipiv, A.uplo, true, rook, info)
 end
-function bunchkaufman!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false)
+function bunchkaufman!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}},
+                       rook::Bool = false; check::Bool = true)
     LD, ipiv, info = rook ? LAPACK.hetrf_rook!(A.uplo, A.data) : LAPACK.hetrf!(A.uplo, A.data)
+    check && checknonsingular(info)
     BunchKaufman(LD, ipiv, A.uplo, false, rook, info)
 end
-function bunchkaufman!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false)
+function bunchkaufman!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false; check::Bool = true)
     if ishermitian(A)
-        return bunchkaufman!(Hermitian(A), rook)
+        return bunchkaufman!(Hermitian(A), rook; check = check)
     elseif issymmetric(A)
-        return bunchkaufman!(Symmetric(A), rook)
+        return bunchkaufman!(Symmetric(A), rook; check = check)
     else
         throw(ArgumentError("Bunch-Kaufman decomposition is only valid for symmetric or Hermitian matrices"))
     end
 end
 
 """
-    bunchkaufman(A, rook::Bool=false) -> S::BunchKaufman
+    bunchkaufman(A, rook::Bool=false; check = true) -> S::BunchKaufman
 
 Compute the Bunch-Kaufman [^Bunch1977] factorization of a `Symmetric` or
 `Hermitian` matrix `A` as ``P'*U*D*U'*P`` or ``P'*L*D*L'*P``, depending on
@@ -61,6 +65,10 @@ as appropriate given `S.uplo`, and `S.p`.
 
 If `rook` is `true`, rook pivoting is used. If `rook` is false,
 rook pivoting is not used.
+
+When `check = true`, an error is thrown if the decomposition fails.
+When `check = false`, responsibility for checking the decomposition's
+validity (via [`issuccess`](@ref)) lies with the user.
 
 The following functions are available for `BunchKaufman` objects:
 [`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref),
@@ -98,8 +106,8 @@ julia> d == S.D && u == S.U && p == S.p
 true
 ```
 """
-bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false) where {T} =
-    bunchkaufman!(copy_oftype(A, typeof(sqrt(one(T)))), rook)
+bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
+    bunchkaufman!(copy_oftype(A, typeof(sqrt(one(T)))), rook; check = check)
 
 convert(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) where {T} = B
 convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =
@@ -249,10 +257,6 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)
 end
 
 function inv(B::BunchKaufman{<:BlasReal})
-    if !issuccess(B)
-        throw(SingularException(B.info))
-    end
-
     if B.rook
         copytri!(LAPACK.sytri_rook!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
     else
@@ -261,10 +265,6 @@ function inv(B::BunchKaufman{<:BlasReal})
 end
 
 function inv(B::BunchKaufman{<:BlasComplex})
-    if !issuccess(B)
-        throw(SingularException(B.info))
-    end
-
     if issymmetric(B)
         if B.rook
             copytri!(LAPACK.sytri_rook!(B.uplo, copy(B.LD), B.ipiv), B.uplo)
@@ -281,10 +281,6 @@ function inv(B::BunchKaufman{<:BlasComplex})
 end
 
 function ldiv!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
-    if !issuccess(B)
-        throw(SingularException(B.info))
-    end
-
     if B.rook
         LAPACK.sytrs_rook!(B.uplo, B.LD, B.ipiv, R)
     else
@@ -292,10 +288,6 @@ function ldiv!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
     end
 end
 function ldiv!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasComplex
-    if !issuccess(B)
-        throw(SingularException(B.info))
-    end
-
     if B.rook
         if issymmetric(B)
             LAPACK.sytrs_rook!(B.uplo, B.LD, B.ipiv, R)

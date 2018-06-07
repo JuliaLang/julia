@@ -89,7 +89,8 @@ julia> A
  2.0  6.78233
 ```
 """
-isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky!(Hermitian(A)))
+isposdef!(A::AbstractMatrix) =
+    ishermitian(A) && isposdef(cholesky!(Hermitian(A); check = false))
 
 """
     isposdef(A) -> Bool
@@ -109,7 +110,8 @@ julia> isposdef(A)
 true
 ```
 """
-isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky(Hermitian(A)))
+isposdef(A::AbstractMatrix) =
+    ishermitian(A) && isposdef(cholesky(Hermitian(A); check = false))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 # the definition of strides for Array{T,N} is tuple() if N = 0, otherwise it is
@@ -1208,7 +1210,7 @@ function factorize(A::StridedMatrix{T}) where T
             return UpperTriangular(A)
         end
         if herm
-            cf = cholesky(A)
+            cf = cholesky(A; check = false)
             if cf.info == 0
                 return cf
             else

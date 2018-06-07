@@ -8,13 +8,8 @@ eltype(::Type{<:Factorization{T}}) where {T} = T
 size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
 size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
-macro assertposdef(A, info)
-   :($(esc(info)) == 0 ? $(esc(A)) : throw(PosDefException($(esc(info)))))
-end
-
-macro assertnonsingular(A, info)
-   :($(esc(info)) == 0 ? $(esc(A)) : throw(SingularException($(esc(info)))))
-end
+checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
+checknonsingular(info) = info == 0 || throw(SingularException(info))
 
 """
     issuccess(F::Factorization)
@@ -27,7 +22,7 @@ julia> F = cholesky([1 0; 0 1]);
 julia> LinearAlgebra.issuccess(F)
 true
 
-julia> F = lu([1 0; 0 0]);
+julia> F = lu([1 0; 0 0]; check = false);
 
 julia> LinearAlgebra.issuccess(F)
 false

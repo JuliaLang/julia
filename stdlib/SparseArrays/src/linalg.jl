@@ -999,7 +999,7 @@ end
 #     end
 # end
 function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
-    F = cholesky(A)
+    F = cholesky(A; check = false)
     if LinearAlgebra.issuccess(F)
         return F
     else

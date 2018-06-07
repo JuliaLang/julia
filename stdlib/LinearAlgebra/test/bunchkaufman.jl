@@ -104,30 +104,22 @@ bimg  = randn(n,2)/2
                 end
             end
         end
-        if eltya <: BlasReal
-            As1 = fill(eltya(1), n, n)
-            As2 = fill(complex(eltya(1)), n, n)
-            As3 = fill(complex(eltya(1)), n, n)
-            As3[end, 1] += im/2
-            As3[1, end] -= im/2
-            for As = (As1, As2, As3)
-                for As in (As, view(As, 1:n, 1:n))
-                    @testset "$uplo Bunch-Kaufman factors of a singular matrix" for uplo in (:L, :U)
-                        @testset for rook in (false, true)
-                            F = bunchkaufman(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)
-                            @test !LinearAlgebra.issuccess(F)
-                            # test printing of this as well!
-                            bks = sprint(show, "text/plain", F)
-                            @test bks == "Failed factorization of type $(typeof(F))"
-                            @test det(F) == 0
-                            @test_throws LinearAlgebra.SingularException inv(F)
-                            @test_throws LinearAlgebra.SingularException F \ fill(1., size(As,1))
-                        end
-                    end
-                end
-            end
-        end
     end
+end
+
+@testset "Singular matrices" begin
+    R = Float64[1 0; 0 0]
+    C = ComplexF64[1 0; 0 0]
+    for A in (R, Symmetric(R), C, Hermitian(C))
+        @test_throws SingularException bunchkaufman(A)
+        @test_throws SingularException bunchkaufman!(copy(A))
+        @test_throws SingularException bunchkaufman(A; check = true)
+        @test_throws SingularException bunchkaufman!(copy(A); check = true)
+        @test !issuccess(bunchkaufman(A; check = false))
+        @test !issuccess(bunchkaufman!(copy(A); check = false))
+    end
+    F = bunchkaufman(R; check = false)
+    @test sprint(show, "text/plain", F) == "Failed factorization of type $(typeof(F))"
 end
 
 @testset "test example due to @timholy in PR 15354" begin
@@ -139,7 +131,7 @@ end
 end
 
 @test_throws DomainError logdet(bunchkaufman([-1 -1; -1 1]))
-@test logabsdet(bunchkaufman([8 4; 4 2]))[1] == -Inf
+@test logabsdet(bunchkaufman([8 4; 4 2]; check = false))[1] == -Inf
 @test isa(bunchkaufman(Symmetric(ones(0,0))), BunchKaufman) # 0x0 matrix
 
 end # module TestBunchKaufman
