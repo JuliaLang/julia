@@ -376,11 +376,10 @@ end
 
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
-    tm = _topmod(sv)
-    if !isdefined(tm, :iterate) || !isconst(tm, :iterate)
+    if !isdefined(Main, :Base) || !isdefined(Main.Base, :iterate) || !isconst(Main.Base, :iterate)
         return Any[Vararg{Any}]
     end
-    iteratef = getfield(tm, :iterate)
+    iteratef = getfield(Main.Base, :iterate)
     stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype], vtypes, sv)
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
