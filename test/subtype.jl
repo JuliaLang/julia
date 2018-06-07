@@ -1319,3 +1319,9 @@ g26453(x::T,y::T) where {S,T>:S} = T
 @test typeintersect(Union{Int8,Int16,Int32}, Union{Int8,Int16,Int64}) == Union{Int8, Int16}
 @test typeintersect(Union{Int8,Int16,Float64}, Integer) == Union{Int8, Int16}
 @test typeintersect(Integer, Union{Int8,Int16,Float64}) == Union{Int8, Int16}
+@test typeintersect(Tuple{Ref{Int},Any},
+                    Tuple{Ref{T},Union{Val{N}, Array{Float32,N}}} where {T,N}) ==
+                    Tuple{Ref{Int},Union{Val{N}, Array{Float32,N}}} where N
+@test typeintersect(Tuple{Ref{T},Union{Val{N}, Array{Float32,N}}} where {T,N},
+                    Tuple{Ref{Int},Any}) ==
+                    Tuple{Ref{Int},Union{Val{N}, Array{Float32,N}}} where N
