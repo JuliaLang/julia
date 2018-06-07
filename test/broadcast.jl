@@ -731,7 +731,7 @@ end
 let 
     c = ["foo", "bar"]
     d = [1,2]
-    @test Dict(c .=> d) == Dict("foo" => 1, "bar" => 2) 
+    @test Dict(c .=> d) == Dict("foo" => 1, "bar" => 2)
 end
 
 # Broadcasted iterable/indexable APIs
