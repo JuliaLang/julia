@@ -53,6 +53,7 @@ function verify_ir(ir::IRCode)
         end
         last_end = last(block.stmts)
         for p in block.preds
+            p == 0 && continue
             if !(idx in ir.cfg.blocks[p].succs)
                 @verify_error "Predeccsor $p of block $idx not in successor list"
                 error()

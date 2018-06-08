@@ -6170,3 +6170,8 @@ translate27368(name::Symbol) =
 translate27368(::Type{Val{name}}) where {name} =
     field27368(name)
 @test isa(translate27368(:name), Combinator27368)
+
+# issue #27456
+@inline foo27456() = try baz_nonexistent27456(); catch; nothing; end
+bar27456() = foo27456()
+@test bar27456() == nothing
