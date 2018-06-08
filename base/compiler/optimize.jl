@@ -66,8 +66,6 @@ function OptimizationState(linfo::MethodInstance, params::Params)
     return OptimizationState(linfo, src, params)
 end
 
-include("compiler/ssair/driver.jl")
-
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::OptimizationState)
@@ -343,17 +341,15 @@ function finish(me::InferenceState)
     nothing
 end
 
-function maybe_widen_conditional(vt)
-    if isa(vt, Conditional)
-        if vt.vtype === Bottom
-            vt = Const(false)
-        elseif vt.elsetype === Bottom
-            vt = Const(true)
-        else
-            vt = Bool
-        end
+maybe_widen_conditional(@nospecialize vt) = vt
+function maybe_widen_conditional(vt::Conditional)
+    if vt.vtype === Bottom
+        Const(false)
+    elseif vt.elsetype === Bottom
+        Const(true)
+    else
+        Bool
     end
-    vt
 end
 
 function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
@@ -988,3 +984,5 @@ function return_type(@nospecialize(f), @nospecialize(t))
     end
     return rt
 end
+
+include("compiler/ssair/driver.jl")
