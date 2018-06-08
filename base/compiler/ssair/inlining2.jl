@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+struct InvokeData
+    mt::Core.MethodTable
+    entry::Core.TypeMapEntry
+    types0
+end
+
 struct InliningTodo
     idx::Int # The statement to replace
     # Properties of the call - these determine how arguments
@@ -984,10 +990,9 @@ function compute_invoke_data(@nospecialize(atypes), argexprs::Vector{Any}, sv::O
     invoke_tt = invoke_tt.parameters[1]
     invoke_types = rewrap_unionall(Tuple{ft, unwrap_unionall(invoke_tt).parameters...}, invoke_tt)
     invoke_entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt),
-                            invoke_types, sv.params.world)
+                         invoke_types, sv.params.world)
     invoke_entry === nothing && return nothing
-    invoke_data = InvokeData(mt, invoke_entry,
-                             invoke_types, nothing, nothing)
+    invoke_data = InvokeData(mt, invoke_entry, invoke_types)
     atype0 = atypes[2]
     argexpr0 = argexprs[2]
     atypes = atypes[4:end]

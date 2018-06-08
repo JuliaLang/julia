@@ -493,7 +493,7 @@ else
     @test h16850 === nothing
 end
 
-# PR #18888: code_typed shouldn't cache if not optimizing
+# PR #18888: code_typed shouldn't cache, return_types should
 let
     world = typemax(UInt)
     f18888() = return nothing
@@ -507,6 +507,10 @@ let
     @test !isdefined(code, :inferred)
 
     code_typed(f18888, Tuple{}; optimize=true)
+    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
+    @test !isdefined(code, :inferred)
+
+    Base.return_types(f18888, Tuple{})
     code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test isdefined(code, :inferred)
 end

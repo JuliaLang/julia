@@ -912,7 +912,7 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     elseif ty === Core.IntrinsicFunction
         print(io, "::I")
     else
-        if emph && (!isdispatchtuple(Tuple{ty}) || ty == Core.Box)
+        if emph && ty isa Type && (!isdispatchelem(ty) || ty == Core.Box)
             if ty isa Union && is_expected_union(ty)
                 emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
             else

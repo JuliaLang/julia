@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑, isdispatchelem
+import Core.Compiler: Const, Conditional, ⊑
+isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
 using InteractiveUtils: code_llvm
@@ -252,7 +253,7 @@ end
 end
 let ast12474 = code_typed(f12474, Tuple{Float64})
     @test isdispatchelem(ast12474[1][2])
-    @test all(x -> isdispatchelem(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
+    @test all(x -> x isa Const || isdispatchelem(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
 end
 
 
@@ -538,7 +539,7 @@ for (codetype, all_ssa) in Any[
         (code_typed(g19348, (typeof((1, 2.0)),))[1], true)]
     # make sure none of the slottypes are left as Core.Compiler.Const objects
     code = codetype[1]
-    @test all(x->isa(x, Type), code.slottypes)
+    @test all(x -> isa(x, Type) || isa(x, Const), code.slottypes)
     local notconst(@nospecialize(other)) = true
     notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
     function notconst(expr::Expr)
@@ -550,7 +551,9 @@ for (codetype, all_ssa) in Any[
     for i = 1:length(code.code)
         e = code.code[i]
         notconst(e)
-        @test isa(code.ssavaluetypes[i], Type)
+        typ = code.ssavaluetypes[i]
+        typ isa Core.Compiler.MaybeUndef && (typ = typ.typ)
+        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
     end
     test_inferred_static(codetype, all_ssa)
 end
@@ -1132,7 +1135,7 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                     farg = typeof(getfield(farg.mod, farg.name))
                 end
             elseif isa(farg, Core.SSAValue)
-                farg = code.ssavaluetypes[farg.id]
+                farg = Core.Compiler.widenconst(code.ssavaluetypes[farg.id])
             else
                 farg = typeof(farg)
             end

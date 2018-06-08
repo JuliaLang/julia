@@ -7,7 +7,7 @@
 mutable struct OptimizationState
     linfo::MethodInstance
     result_vargs::Vector{Any}
-    backedges::Vector{Any}
+    calledges::Vector{Any}
     src::CodeInfo
     mod::Module
     nargs::Int
@@ -15,6 +15,7 @@ mutable struct OptimizationState
     max_valid::UInt
     params::Params
     sp::SimpleVector # static parameters
+    const_api::Bool
     function OptimizationState(frame::InferenceState)
         s_edges = frame.stmt_edges[1]
         if s_edges === ()
@@ -26,7 +27,7 @@ mutable struct OptimizationState
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
                    frame.min_valid, frame.max_valid,
-                   frame.params, frame.sp)
+                   frame.params, frame.sp, false)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo,
                                params::Params)
@@ -56,8 +57,8 @@ mutable struct OptimizationState
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
                    min_world(linfo), max_world(linfo),
-                   params, spvals_from_meth_instance(linfo))
-    end
+                   params, spvals_from_meth_instance(linfo), false)
+        end
 end
 
 function OptimizationState(linfo::MethodInstance, params::Params)
@@ -65,6 +66,34 @@ function OptimizationState(linfo::MethodInstance, params::Params)
     src === nothing && return nothing
     return OptimizationState(linfo, src, params)
 end
+
+
+#############
+# constants #
+#############
+
+# The slot has uses that are not statically dominated by any assignment
+# This is implied by `SLOT_USEDUNDEF`.
+# If this is not set, all the uses are (statically) dominated by the defs.
+# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
+const SLOT_STATICUNDEF  = 1
+const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
+const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
+# const SLOT_CALLED      = 64
+
+const IR_FLAG_INBOUNDS = 0x01
+
+# known affect-free calls (also effect-free)
+const _PURE_BUILTINS = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
+
+# known effect-free calls (might not be affect-free)
+const _PURE_BUILTINS_VOLATILE = Any[getfield, arrayref, isdefined, Core.sizeof]
+
+const TOP_TUPLE = GlobalRef(Core, :tuple)
+
+#########
+# logic #
+#########
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
@@ -82,55 +111,12 @@ update_valid_age!(li::MethodInstance, sv::OptimizationState) = update_valid_age!
 
 function add_backedge!(li::MethodInstance, caller::OptimizationState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    push!(caller.backedges, li)
+    push!(caller.calledges, li)
     update_valid_age!(li, caller)
     nothing
 end
 
-###########
-# structs #
-###########
-
-struct InvokeData
-    mt::Core.MethodTable
-    entry::Core.TypeMapEntry
-    types0
-    fexpr
-    texpr
-end
-
-#############
-# constants #
-#############
-
-# The slot has uses that are not statically dominated by any assignment
-# This is implied by `SLOT_USEDUNDEF`.
-# If this is not set, all the uses are (statically) dominated by the defs.
-# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
-const SLOT_STATICUNDEF  = 1
-
-const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
-
-const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
-
-# const SLOT_CALLED      = 64
-
-const IR_FLAG_INBOUNDS = 0x01
-
-
-# known affect-free calls (also effect-free)
-const _PURE_BUILTINS = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
-
-# known effect-free calls (might not be affect-free)
-const _PURE_BUILTINS_VOLATILE = Any[getfield, arrayref, isdefined, Core.sizeof]
-
-const TOP_TUPLE = GlobalRef(Core, :tuple)
-
-#########
-# logic #
-#########
-
-function isinlineable(m::Method, me::InferenceState, bonus::Int=0)
+function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
     # compute the cost (size) of inlining this code
     inlineable = false
     cost_threshold = me.params.inline_cost_threshold
@@ -153,49 +139,31 @@ function isinlineable(m::Method, me::InferenceState, bonus::Int=0)
     return inlineable
 end
 
-# converge the optimization work
-function optimize(me::InferenceState)
-    # annotate fulltree with type information
-    type_annotate!(me)
+# run the optimization work
+function optimize(opt::OptimizationState, @nospecialize(result))
+    def = opt.linfo.def
+    nargs = Int(opt.nargs) - 1
+    @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
+    force_noinline = any(x -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
+    replace_code_newstyle!(opt.src, ir, nargs)
 
-    # run optimization passes on fulltree
-    force_noinline = true
-    def = me.linfo.def
-    if me.limited && me.cached && me.parent !== nothing
-        # a top parent will be cached still, but not this intermediate work
-        me.cached = false
-        me.linfo.inInference = false
-    elseif me.optimize
-        opt = OptimizationState(me)
-        nargs = Int(opt.nargs) - 1
-        @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
-        force_noinline = any(x->isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
-        replace_code_newstyle!(opt.src, ir, nargs)
-        me.min_valid = opt.min_valid
-        me.max_valid = opt.max_valid
-    end
-
-    # convert all type information into the form consumed by the code-generator
-    widen_all_consts!(me.src)
-
-    # compute inlining and other related properties
-    me.const_ret = (isa(me.bestguess, Const) || isconstType(me.bestguess))
-    if me.const_ret
+    # compute inlining and other related optimizations
+    if (isa(result, Const) || isconstType(result))
         proven_pure = false
         # must be proven pure to use const_api; otherwise we might skip throwing errors
         # (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
-        if length(me.src.code) < 10
+        if length(opt.src.code) < 10
             proven_pure = true
-            for i in 1:length(me.src.code)
-                if !statement_effect_free(me.src.code[i], me, me.src.ssavaluetypes[i])
+            for i in 1:length(opt.src.code)
+                if !statement_effect_free(opt.src.code[i], opt, opt.src.ssavaluetypes[i])
                     proven_pure = false
                     break
                 end
             end
             if proven_pure
-                for fl in me.src.slotflags
+                for fl in opt.src.slotflags
                     if (fl & SLOT_USEDUNDEF) != 0
                         proven_pure = false
                         break
@@ -204,7 +172,7 @@ function optimize(me::InferenceState)
             end
         end
         if proven_pure
-            me.src.pure = true
+            opt.src.pure = true
         end
 
         if proven_pure && !coverage_enabled()
@@ -214,10 +182,10 @@ function optimize(me::InferenceState)
             # to the `jl_call_method_internal` fast path
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
-            if !(isa(me.bestguess, Const) && !is_inlineable_constant(me.bestguess.val))
-                me.const_api = true
+            if !(isa(result, Const) && !is_inlineable_constant(result.val))
+                opt.const_api = true
             end
-            force_noinline || (me.src.inlineable = true)
+            force_noinline || (opt.src.inlineable = true)
         end
     end
 
@@ -225,7 +193,7 @@ function optimize(me::InferenceState)
     if !force_noinline
         # don't keep ASTs for functions specialized on a Union argument
         # TODO: this helps avoid a type-system bug mis-computing sparams during intersection
-        sig = unwrap_unionall(me.linfo.specTypes)
+        sig = unwrap_unionall(opt.linfo.specTypes)
         if isa(sig, DataType) && sig.name === Tuple.name
             for P in sig.parameters
                 P = unwrap_unionall(P)
@@ -239,339 +207,20 @@ function optimize(me::InferenceState)
         end
     end
     if force_noinline
-        me.src.inlineable = false
-    elseif !me.src.inlineable && isa(def, Method)
+        opt.src.inlineable = false
+    elseif !opt.src.inlineable && isa(def, Method)
         bonus = 0
-        if me.bestguess ⊑ Tuple && !isbitstype(widenconst(me.bestguess))
-            bonus = me.params.inline_tupleret_bonus
+        if result ⊑ Tuple && !isbitstype(widenconst(result))
+            bonus = opt.params.inline_tupleret_bonus
         end
-        me.src.inlineable = isinlineable(def, me, bonus)
-    end
-    me.src.inferred = true
-    if me.optimize && !(me.limited && me.parent !== nothing)
-        validate_code_in_debug_mode(me.linfo, me.src, "optimized")
+        opt.src.inlineable = isinlineable(def, opt, bonus)
     end
     nothing
 end
 
-# inference completed on `me`
-# update the MethodInstance and notify the edges
-function finish(me::InferenceState)
-    if me.cached
-        toplevel = !isa(me.linfo.def, Method)
-        if !toplevel
-            min_valid = me.min_valid
-            max_valid = me.max_valid
-        else
-            min_valid = UInt(0)
-            max_valid = UInt(0)
-        end
 
-        # check if the existing me.linfo metadata is also sufficient to describe the current inference result
-        # to decide if it is worth caching it again (which would also clear any generated code)
-        already_inferred = !me.linfo.inInference
-        if isdefined(me.linfo, :inferred)
-            inf = me.linfo.inferred
-            if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
-                if min_world(me.linfo) == min_valid && max_world(me.linfo) == max_valid
-                    already_inferred = true
-                end
-            end
-        end
-
-        # don't store inferred code if we've decided to interpret this function
-        if !already_inferred && invoke_api(me.linfo) != 4
-            const_flags = (me.const_ret) << 1 | me.const_api
-            if me.const_ret
-                if isa(me.bestguess, Const)
-                    inferred_const = (me.bestguess::Const).val
-                else
-                    @assert isconstType(me.bestguess)
-                    inferred_const = me.bestguess.parameters[1]
-                end
-            else
-                inferred_const = nothing
-            end
-            if me.const_api
-                # use constant calling convention
-                inferred_result = nothing
-            else
-                inferred_result = me.src
-            end
-
-            if !toplevel
-                if !me.const_api
-                    def = me.linfo.def::Method
-                    keeptree = me.optimize &&
-                        (me.src.inlineable ||
-                         ccall(:jl_isa_compileable_sig, Int32, (Any, Any), me.linfo.specTypes, def) != 0)
-                    if keeptree
-                        # compress code for non-toplevel thunks
-                        inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
-                    else
-                        inferred_result = nothing
-                    end
-                end
-            end
-            cache = ccall(:jl_set_method_inferred, Ref{MethodInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
-                me.linfo, widenconst(me.bestguess), inferred_const, inferred_result,
-                const_flags, min_valid, max_valid)
-            if cache !== me.linfo
-                me.linfo.inInference = false
-                me.linfo = cache
-                me.result.linfo = cache
-            end
-        end
-        me.linfo.inInference = false
-    end
-
-    # finish updating the result struct
-    if me.src.inlineable
-        me.result.src = me.src # stash a copy of the code (for inlining)
-    end
-    me.result.result = me.bestguess # record type, and that wip is done and me.linfo can be used as a backedge
-
-    # update all of the callers with real backedges by traversing the temporary list of backedges
-    for (i, _) in me.backedges
-        add_backedge!(me.linfo, i)
-    end
-
-    # finalize and record the linfo result
-    me.inferred = true
-    nothing
-end
-
-maybe_widen_conditional(@nospecialize vt) = vt
-function maybe_widen_conditional(vt::Conditional)
-    if vt.vtype === Bottom
-        Const(false)
-    elseif vt.elsetype === Bottom
-        Const(true)
-    else
-        Bool
-    end
-end
-
-function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
-    head = e.head
-    i0 = 1
-    if is_meta_expr_head(head) || head === :const
-        return
-    end
-    if head === :(=) || head === :method
-        i0 = 2
-    end
-    for i = i0:length(e.args)
-        subex = e.args[i]
-        if isa(subex, Expr)
-            annotate_slot_load!(subex, vtypes, sv, undefs)
-        elseif isa(subex, Slot)
-            e.args[i] = visit_slot_load!(subex, vtypes, sv, undefs)
-        end
-    end
-end
-
-function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
-    id = slot_id(sl)
-    s = vtypes[id]
-    vt = maybe_widen_conditional(s.typ)
-    if s.undef
-        # find used-undef variables
-        undefs[id] = true
-    end
-    # add type annotations where needed
-    if !(sv.src.slottypes[id] ⊑ vt)
-        return TypedSlot(id, vt)
-    end
-    return sl
-end
-
-function record_slot_assign!(sv::InferenceState)
-    # look at all assignments to slots
-    # and union the set of types stored there
-    # to compute a lower bound on the storage required
-    states = sv.stmt_types
-    body = sv.src.code::Vector{Any}
-    slottypes = sv.src.slottypes::Vector{Any}
-    for i = 1:length(body)
-        expr = body[i]
-        st_i = states[i]
-        # find all reachable assignments to locals
-        if isa(st_i, VarTable) && isa(expr, Expr) && expr.head === :(=)
-            lhs = expr.args[1]
-            rhs = expr.args[2]
-            if isa(lhs, Slot)
-                vt = widenconst(sv.src.ssavaluetypes[i])
-                if vt !== Bottom
-                    id = slot_id(lhs)
-                    otherTy = slottypes[id]
-                    if otherTy === Bottom
-                        slottypes[id] = vt
-                    elseif otherTy === Any
-                        slottypes[id] = Any
-                    else
-                        slottypes[id] = tmerge(otherTy, vt)
-                    end
-                end
-            end
-        end
-    end
-end
-
-# annotate types of all symbols in AST
-function type_annotate!(sv::InferenceState)
-    # remove all unused ssa values
-    gt = sv.src.ssavaluetypes
-    for j = 1:length(gt)
-        if gt[j] === NOT_FOUND
-            gt[j] = Union{}
-        end
-        gt[j] = maybe_widen_conditional(gt[j])
-    end
-
-    # compute the required type for each slot
-    # to hold all of the items assigned into it
-    record_slot_assign!(sv)
-
-    # annotate variables load types
-    # remove dead code
-    # and compute which variables may be used undef
-    src = sv.src
-    states = sv.stmt_types
-    nargs = sv.nargs
-    nslots = length(states[1])
-    undefs = fill(false, nslots)
-    body = src.code::Array{Any,1}
-    nexpr = length(body)
-
-    # replace gotoifnot with its condition if the branch target is unreachable
-    for i = 1:nexpr
-        expr = body[i]
-        if isa(expr, Expr) && expr.head === :gotoifnot
-            tgt = expr.args[2]::Int
-            if !isa(states[tgt], VarTable)
-                body[i] = expr.args[1]
-            end
-        end
-    end
-
-    i = 1
-    oldidx = 0
-    changemap = fill(0, nexpr)
-
-    while i <= nexpr
-        oldidx += 1
-        st_i = states[i]
-        expr = body[i]
-        if isa(st_i, VarTable)
-            # st_i === ()  =>  unreached statement  (see issue #7836)
-            if isa(expr, Expr)
-                annotate_slot_load!(expr, st_i, sv, undefs)
-            elseif isa(expr, Slot)
-                body[i] = visit_slot_load!(expr, st_i, sv, undefs)
-            end
-        elseif sv.optimize
-            if isa(expr, Expr) && is_meta_expr(expr)
-                # keep any lexically scoped expressions
-            else
-                deleteat!(body, i)
-                deleteat!(states, i)
-                deleteat!(src.ssavaluetypes, i)
-                deleteat!(src.codelocs, i)
-                nexpr -= 1
-                if oldidx < length(changemap)
-                    changemap[oldidx+1] = -1
-                end
-                continue
-            end
-        end
-        i += 1
-    end
-
-    for i = 2:length(changemap)
-        changemap[i] += changemap[i-1]
-    end
-    if changemap[end] != 0
-        renumber_stuff!(body, changemap)
-    end
-
-    # finish marking used-undef variables
-    for j = 1:nslots
-        if undefs[j]
-            src.slotflags[j] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
-        end
-    end
-    nothing
-end
-
-# widen all Const elements in type annotations
-function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vector{Any})
-    for i = 1:length(e.args)
-        x = e.args[i]
-        if isa(x, Expr)
-            _widen_all_consts!(x, untypedload, slottypes)
-        elseif isa(x, TypedSlot)
-            vt = widenconst(x.typ)
-            if !(vt === x.typ)
-                if slottypes[x.id] ⊑ vt
-                    x = SlotNumber(x.id)
-                    untypedload[x.id] = true
-                else
-                    x = TypedSlot(x.id, vt)
-                end
-                e.args[i] = x
-            end
-        elseif isa(x, PiNode)
-            e.args[i] = PiNode(x.val, widenconst(x.typ))
-        elseif isa(x, SlotNumber) && (i != 1 || e.head !== :(=))
-            untypedload[x.id] = true
-        end
-    end
-    nothing
-end
-
-function widen_all_consts!(src::CodeInfo)
-    for i = 1:length(src.ssavaluetypes)
-        src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
-    end
-    for i = 1:length(src.slottypes)
-        src.slottypes[i] = widenconst(src.slottypes[i])
-    end
-
-    nslots = length(src.slottypes)
-    untypedload = fill(false, nslots)
-    e = Expr(:body)
-    e.args = src.code
-    _widen_all_consts!(e, untypedload, src.slottypes)
-    for i = 1:nslots
-        src.slottypes[i] = widen_slot_type(src.slottypes[i], untypedload[i])
-    end
-    return src
-end
-
-# widen all slots to their optimal storage layout
-# we also need to preserve the type for any untyped load of a DataType
-# since codegen optimizations of functions like `is` will depend on knowing it
-function widen_slot_type(@nospecialize(ty), untypedload::Bool)
-    if isa(ty, DataType)
-        if untypedload || isbitstype(ty) || isdefined(ty, :instance)
-            return ty
-        end
-    elseif isa(ty, Union)
-        ty_a = widen_slot_type(ty.a, false)
-        ty_b = widen_slot_type(ty.b, false)
-        if ty_a !== Any || ty_b !== Any
-            # TODO: better optimized codegen for unions?
-            return ty
-        end
-    elseif isa(ty, UnionAll)
-        if untypedload
-            return ty
-        end
-    end
-    return Any
-end
-
+# NOTE: this dead code is left in place due to external consumers
+#   to allow them time to move this code elsewhere. It also has tests.
 # replace slots 1:na with argexprs, static params with spvals, and increment
 # other slots by offset.
 function substitute!(
@@ -658,6 +307,7 @@ function substitute!(
     return e
 end
 
+
 # whether `f` is pure for inference
 function is_pure_intrinsic_infer(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile
@@ -692,7 +342,7 @@ function is_pure_builtin(@nospecialize(f))
     end
 end
 
-function statement_effect_free(@nospecialize(e), me::InferenceState, @nospecialize(etype))
+function statement_effect_free(@nospecialize(e), me::OptimizationState, @nospecialize(etype))
     if isa(e, Expr)
         if e.head === :(=)
             return !isa(e.args[1], GlobalRef) && effect_free(e.args[2], me, false, etype)
@@ -804,16 +454,6 @@ function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile
         return false
     end
     return true
-end
-
-function countunionsplit(atypes)
-    nu = 1
-    for ti in atypes
-        if isa(ti, Union)
-            nu *= unionlen(ti::Union)
-        end
-    end
-    return nu
 end
 
 ## Computing the cost of a function body
@@ -962,27 +602,6 @@ function renumber_stuff!(body::Vector{Any}, changemap::Vector{Int})
             end
         end
     end
-end
-
-function return_type(@nospecialize(f), @nospecialize(t))
-    params = Params(ccall(:jl_get_tls_world_age, UInt, ()))
-    rt = Union{}
-    if isa(f, Builtin)
-        rt = builtin_tfunction(f, Any[t.parameters...], nothing, params)
-        if isa(rt, TypeVar)
-            rt = rt.ub
-        else
-            rt = widenconst(rt)
-        end
-    else
-        for m in _methods(f, t, -1, params.world)
-            ty = typeinf_type(m[3], m[1], m[2], true, params)
-            ty === nothing && return Any
-            rt = tmerge(rt, ty)
-            rt === Any && break
-        end
-    end
-    return rt
 end
 
 include("compiler/ssair/driver.jl")
