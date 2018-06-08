@@ -572,14 +572,41 @@ struct uv_dirent_t
     typ::Cint
 end
 
-"""
-    readdir(dir::AbstractString=".") -> Vector{String}
+struct ReadDirIterator
+    path::String
+end
 
-Return the files and directories in the directory `dir` (or the current working directory if not given).
+function Base.iterate(iter::ReadDirIterator)
+    uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
+    path = iter.path
+    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
+                eventloop(), uv_readdir_req, path, 0, C_NULL)
+    err < 0 && throw(SystemError("unable to read directory $path", -err))
+    return iterate(iter, uv_readdir_req)
+end
+
+function Base.iterate(d::ReadDirIterator, uv_readdir_req::Vector{UInt8})
+    ent = Ref{uv_dirent_t}()
+    status =  ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
+    if status == Base.UV_EOF
+        ccall(:jl_uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
+        return nothing
+    end
+    path = unsafe_string(ent[].name)
+    return (path, uv_readdir_req)
+end
+
+Base.IteratorSize(::Type{ReadDirIterator}) = Base.SizeUnknown()
+Base.eltype(::Type{ReadDirIterator}) = String
+
+"""
+    readdir(dir::AbstractString=".") -> ReadDirIterator
+
+Return an iterator that generates the files and directories in the directory `dir` (or the current working directory if not given).
 
 # Examples
 ```julia-repl
-julia> readdir("/home/JuliaUser/Projects/julia")
+julia> collect(readdir("/home/JuliaUser/Projects/julia"))
 34-element Array{String,1}:
  ".circleci"
  ".freebsdci.sh"
@@ -594,26 +621,11 @@ julia> readdir("/home/JuliaUser/Projects/julia")
 ```
 """
 function readdir(path::AbstractString)
-    # Allocate space for uv_fs_t struct
-    uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
+    # Test that the path doesn't contain illegal null characters (issue #10994).
+    # Better to fail fast than wait until iteration starts to raise an error.
+    Base.unsafe_convert(Cstring, path)
 
-    # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
-                eventloop(), uv_readdir_req, path, 0, C_NULL)
-    err < 0 && throw(SystemError("unable to read directory $path", -err))
-    #uv_error("unable to read directory $path", err)
-
-    # iterate the listing into entries
-    entries = String[]
-    ent = Ref{uv_dirent_t}()
-    while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
-        push!(entries, unsafe_string(ent[].name))
-    end
-
-    # Clean up the request string
-    ccall(:jl_uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
-
-    return entries
+    ReadDirIterator(String(path))
 end
 
 readdir() = readdir(".")

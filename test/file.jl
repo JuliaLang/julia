@@ -282,8 +282,8 @@ function check_dir(orig_path::AbstractString, copied_path::AbstractString, follo
     isdir(orig_path) || throw(ArgumentError("'$orig_path' is not a directory."))
     # copied_path must also be a dir.
     @test isdir(copied_path)
-    readir_orig = readdir(orig_path)
-    readir_copied = readdir(copied_path)
+    readir_orig = collect(readdir(orig_path))
+    readir_copied = collect(readdir(copied_path))
     @test readir_orig == readir_copied
     # check recursive
     for name in readir_orig
@@ -446,8 +446,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         islink(s) && @test readlink(s) == readlink(d)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
         # all should contain 1 file named  "c.txt"
-        @test "c.txt" in readdir(d)
-        @test length(readdir(d)) == 1
+        @test "c.txt" in collect(readdir(d))
+        @test length(collect(readdir(d))) == 1
     end
 
     function mv_check(s, d, d_mv; force=true)
@@ -465,8 +465,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         islink(s) && @test readlink(s) == readlink(d_mv)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
         # all should contain 1 file named  "c.txt"
-        @test "c.txt" in readdir(d_mv)
-        @test length(readdir(d_mv)) == 1
+        @test "c.txt" in collect(readdir(d_mv))
+        @test length(collect(readdir(d_mv))) == 1
         # d => d_mv same file/dir
         @test Base.samefile(stat_d, stat_d_mv)
     end
@@ -509,7 +509,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
             # Expect no link because a dir is copied (follow_symlinks=false does not effect this)
             @test isdir(d) && !islink(d)
             # none should contain any file
-            @test isempty(readdir(d))
+            @test isempty(collect(readdir(d)))
         end
     end
     # mv ----------------------------------------------------
