@@ -225,7 +225,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
-            @simd for i in axes(A, 1)
+            for i in axes(A, 1)
                 r = op(r, f(A[i, IA]))
             end
             R[i1,IR] = r
@@ -233,7 +233,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     else
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in axes(A, 1)
+            for i in axes(A, 1)
                 R[i,IR] = op(R[i,IR], f(A[i,IA]))
             end
         end

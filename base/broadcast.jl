@@ -828,7 +828,7 @@ preprocess_args(dest, args::Tuple{}) = ()
         end
     end
     bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
+    for I in eachindex(bc′)
         @inbounds dest[I] = bc′[I]
     end
     return dest

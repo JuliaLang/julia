@@ -1138,7 +1138,7 @@ Sometimes you can enable better optimization by promising certain program proper
   * Use `@fastmath` to allow floating point optimizations that are correct for real numbers, but lead
     to differences for IEEE numbers. Be careful when doing this, as this may change numerical results.
     This corresponds to the `-ffast-math` option of clang.
-  * Write `@simd` in front of `for` loops that are amenable to vectorization. **This feature is experimental**
+  * Write `@simd` in front of `for` loops to assert that they are amenable to vectorization. **This feature is experimental**
     and could change or disappear in future versions of Julia.
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
@@ -1205,11 +1205,11 @@ loop:
     results than without `@simd`.
   * No iteration ever waits on another iteration to make forward progress.
 
-A loop containing `break`, `continue`, or `@goto` will cause a compile-time error.
+Violating these assumptions may cause errors or incorrect results. A loop containing `break`, `continue`, or `@goto` will cause a compile-time error.
 
-Using `@simd` merely gives the compiler license to vectorize. Whether it actually does so depends
-on the compiler. To actually benefit from the current implementation, your loop should have the
-following additional properties:
+In many cases, Julia is able to automatically vectorize inner for loops without the use of `@simd`.
+Using `@simd` gives the compiler a little extra leeway to make vectorization possible in more situations.
+In either case, your loop should have the following properties to allow vectorization:
 
   * The loop must be an innermost loop.
   * The loop body must be straight-line code. This is why `@inbounds` is currently needed for all

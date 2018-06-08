@@ -1458,7 +1458,7 @@ end
         B[I] = (AI, AI)
     end
     Bmax = CartesianIndex(sB)
-    @inbounds @simd for I in CartesianIndices(sA)
+    @inbounds for I in CartesianIndices(sA)
         J = min(Bmax,I)
         BJ = B[J]
         AI = A[I]

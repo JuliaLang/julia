@@ -190,7 +190,7 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
         v = op(f(a1), f(a2))
-        @simd for i = ifirst + 2 : ilast
+        for i = ifirst + 2 : ilast
             @inbounds ai = A[i]
             v = op(v, f(ai))
         end
