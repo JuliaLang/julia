@@ -3,19 +3,19 @@
 """
     GitConfig(path::AbstractString, level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP, force::Bool=false)
 
-Create a new `GitConfig` by loading configuration information from the file at `path`. See
-[`addfile`](@ref) for more information about the `level`, `repo` and `force` options.
+Create a new `GitConfig` by loading configuration information from the file at
+`path`. See [`addfile`](@ref) for more information about the `level` and `force`
+options.
 """
 function GitConfig(path::AbstractString,
                    level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
-                   repo::Union{GitRepo, Nothing}=nothing,
                    force::Bool=false)
     # create new config object
     cfg_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_config_new, :libgit2), Cint, (Ptr{Ptr{Cvoid}},), cfg_ptr_ptr)
     cfg = GitConfig(cfg_ptr_ptr[])
     try
-        addfile(cfg, path, level, repo, force)
+        addfile(cfg, path, level, force)
     catch ex
         close(cfg)
         rethrow(ex)
@@ -65,36 +65,22 @@ function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
 end
 
 """
-    addfile(cfg::GitConfig, path::AbstractString,
-            level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP,
-            repo::Union{GitRepo, Nothing} = nothing,
-            force::Bool=false)
+    addfile(cfg::GitConfig, path::AbstractString, level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP, force::Bool=false)
 
 Add an existing git configuration file located at `path` to the current
 `GitConfig` `cfg`. If the file does not exist, it will be created.
-
- - `level` sets the git configuration priority level and is determined by
-[`Consts.GIT_CONFIG`](@ref).
- - `repo` is an optional repository to allow parsing of conditional includes.
- - If `force` is `false` and a configuration for the given priority level already exists,
-`addfile` will error. If `force` is `true`, the existing configuration will be replaced by
-the one in the file at `path`.
-
+`level` sets the git configuration priority level and is determined by
+[`Consts.GIT_CONFIG`](@ref). If `force` is `false` and a configuration for
+the given priority level already exists, `addfile` will error. If `force` is
+`true`, the existing configuration will be replaced by the one in the file at
+`path`.
 """
 function addfile(cfg::GitConfig, path::AbstractString,
                  level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
-                 repo::Union{GitRepo, Nothing} = nothing,
                  force::Bool=false)
-    @static if LibGit2.VERSION >= v"0.27.0"
-        @check ccall((:git_config_add_file_ondisk, :libgit2), Cint,
-                     (Ptr{Ptr{Cvoid}}, Cstring, Cint, Ptr{Cvoid}, Cint),
-                     cfg.ptr, path, Cint(level), isa(repo, GitRepo) ? repo.ptr : C_NULL, Cint(force))
-    else
-        repo === nothing || error("repo argument is not supported in this version of LibGit2")
-        @check ccall((:git_config_add_file_ondisk, :libgit2), Cint,
-                     (Ptr{Ptr{Cvoid}}, Cstring, Cint, Cint),
-                     cfg.ptr, path, Cint(level), Cint(force))
-    end
+    @check ccall((:git_config_add_file_ondisk, :libgit2), Cint,
+                  (Ptr{Ptr{Cvoid}}, Cstring, Cint, Cint),
+                   cfg.ptr, path, Cint(level), Cint(force))
 end
 
 function get(::Type{<:AbstractString}, c::GitConfig, name::AbstractString)
