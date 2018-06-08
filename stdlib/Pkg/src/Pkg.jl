@@ -5,7 +5,6 @@ module Pkg
 
 import Random
 import REPL
-using REPL.TerminalMenus
 
 depots() = Base.DEPOT_PATH
 logdir() = joinpath(depots()[1], "logs")

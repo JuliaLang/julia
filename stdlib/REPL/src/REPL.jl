@@ -45,7 +45,6 @@ import ..LineEdit:
 include("REPLCompletions.jl")
 using .REPLCompletions
 
-include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
 function __init__()

@@ -7,7 +7,6 @@ using Random
 using Dates
 import LibGit2
 import REPL
-using REPL.TerminalMenus
 
 using ..TOML
 import ..Pkg
@@ -1155,33 +1154,25 @@ function registered_names(env::EnvCache, uuid::UUID)::Vector{String}
     String[n for (n, uuids) in env.uuids for u in uuids if u == uuid]
 end
 
-# Determine a single UUID for a given name, prompting if needed
+# Determine a single UUID for a given name, error if multiple
 function registered_uuid(env::EnvCache, name::String)::UUID
     uuids = registered_uuids(env, name)
     length(uuids) == 0 && return UUID(zero(UInt128))
-    choices::Vector{String} = []
     choices_cache::Vector{Tuple{UUID,String}} = []
     for uuid in uuids
         values = registered_info(env, uuid, "repo")
         for value in values
-            depot = "(unknown)"
             for d in depots()
                 r = joinpath(d, "registries")
-                startswith(value[1], r) || continue
-                depot = split(relpath(value[1], r), Base.Filesystem.path_separator_re)[1]
+                 startswith(value[1], r) || continue
                 break
             end
-            push!(choices, "Registry: $depot - Path: $(value[2])")
             push!(choices_cache, (uuid, value[1]))
         end
     end
     length(choices_cache) == 1 && return choices_cache[1][1]
-    # prompt for which UUID was intended:
-    menu = RadioMenu(choices)
-    choice = request("There are multiple registered `$name` packages, choose one:", menu)
-    choice == -1 && return UUID(zero(UInt128))
-    env.paths[choices_cache[choice][1]] = [choices_cache[choice][2]]
-    return choices_cache[choice][1]
+    # TODO Add some interactive choice here
+    cmderror("There are multiple registered `$name` packages, ")
 end
 
 # Determine current name for a given package UUID
