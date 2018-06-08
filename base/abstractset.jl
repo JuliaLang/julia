@@ -129,17 +129,6 @@ julia> setdiff([1,2,3], [3,4,5])
 setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)
 setdiff(s) = union(s)
 
-function setdiff!(s::AbstractSet, itr::Set)
-    if length(s) > length(itr)
-        for x=itr
-            delete!(s, x)
-        end
-    else
-        foldl(delete!, s, itr)
-    end
-    s
-end
-
 """
     setdiff!(s, itrs...)
 

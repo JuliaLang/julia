@@ -294,6 +294,20 @@ function hash(s::AbstractSet, h::UInt)
     hash(hv, h)
 end
 
+function setdiff!(s::Set, itr::Set)
+    if length(s) < length(itr)
+        d = empty(s)
+        for x in s
+            if !(x in itr)
+                push!(d, x)
+            end
+        end
+        return d
+    else
+        return foldl(delete!, s, itr)
+    end
+end
+
 convert(::Type{T}, s::T) where {T<:AbstractSet} = s
 convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
 
