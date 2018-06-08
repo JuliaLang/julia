@@ -15,7 +15,7 @@ using .Base:
     LinearIndices, (:), |, +, -, !==, !, <=, <, missing
 
 import .Base:
-    first, last,
+    esc, first, last,
     isempty, length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype,
     haskey, keys, values, pairs,
@@ -23,6 +23,14 @@ import .Base:
     popfirst!, isdone, peek
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+
+macro something(ex)
+    quote
+        result = $(esc(ex))
+        result === nothing && return nothing
+        result
+    end
+end
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)
