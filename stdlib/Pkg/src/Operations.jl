@@ -7,7 +7,6 @@ using Random: randstring
 import LibGit2
 
 import REPL
-using REPL.TerminalMenus
 using ..Types, ..GraphType, ..Resolve, ..Pkg2, ..BinaryProvider, ..GitTools
 import ..depots, ..devdir, ..Types.uuid_julia
 
