@@ -14,28 +14,7 @@ New language features
   * Named tuples, with the syntax `(a=1, b=2)`. These behave very similarly to tuples,
     except components can also be accessed by name using dot syntax `t.a` ([#22194]).
 
-  * Keyw
-  * The construct `if @generated ...; else ...; end` can be used to provide both
-    `@generated` and normal implementations of part of a function. Surrounding code
-    will be common to both versions ([#23168]).
-
-  * Added `⟂` (`\perp`) operator with comparison precedence ([#24404]).
-
-  * The `missing` singleton object (of type `Missing`) has been added to represent
-    missing values ([#24653]). It propagates through standard operators and mathematical functions,
-    and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
-
-  * Field access via dot-syntax can now be overloaded by adding methods to
-    `Base.getproperty` and `Base.setproperty!` ([#1974]), optionally along with
-    a corresponding `Base.propertynames` method for reflection ([#25311]).
-
-  * Values for `Enum`s can now be specified inside of a `begin` block when using the
-    `@enum` macro ([#25424]).
-
-  * Keyword arguments can be required: if a default value is omitted, then an
-    exception is thrown if the caller does not assign the keyword a value ([#25830]).
-
-  * The pair operator `=>` is now broadcastable as `.=>`ord argument containers (`kw` in `f(; kw...)`) are now named tuples. Dictionary
+  * Keyword argument containers (`kw` in `f(; kw...)`) are now named tuples. Dictionary
     functions like `haskey` and indexing can be used on them, and name-value pairs can be
     iterated using `pairs(kw)`. `kw` can no longer contain multiple entries for the same
     argument name ([#4916]).
