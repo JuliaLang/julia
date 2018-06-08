@@ -440,4 +440,22 @@ end
     @test Transpose(x)*D*x == (Transpose(x)*D)*x == (Transpose(x)*Array(D))*x
 end
 
+struct Foo27494 end
+struct Bar27494
+    iszero::Bool
+end
+Bar27494(::Foo27494) = Bar27494(false)
+Base.zero(::Type{Foo27494}) = Bar27494(true)
+Base.zero(::Type{Bar27494}) = Bar27494(true)
+Base.promote_rule(::Type{Foo27494}, ::Type{Bar27494}) = Bar27494
+
+@testset "typeof(zero(T)) != T (#27494)" begin
+    D = Diagonal([Foo27494(), Foo27494()])
+    @test eltype(D) == Bar27494
+    @test (@inferred D[1, 1]) === Bar27494(false)
+    @test (@inferred D[1, 2]) === Bar27494(true)
+    @test (@inferred D[2, 1]) === Bar27494(true)
+    @test (@inferred D[2, 2]) === Bar27494(false)
+end
+
 end # module TestDiagonal

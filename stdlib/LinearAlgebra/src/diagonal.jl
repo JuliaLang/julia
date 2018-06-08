@@ -2,7 +2,7 @@
 
 ## Diagonal matrices
 
-struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+struct Diagonal{T,V<:AbstractVector} <: AbstractMatrix{T}
     diag::V
 end
 """
@@ -47,6 +47,11 @@ julia> Diagonal(V)
 """
 Diagonal(V::AbstractVector)
 
+Diagonal(diag::V) where {S,V<:AbstractVector{S}} = Diagonal{promote_type(S, typeof(zero(S))),V}(diag)
+
+# `zero` is generally not defined for AbstractMatrix, so:
+Diagonal(diag::V) where {S<:AbstractMatrix,V<:AbstractVector{S}} = Diagonal{S,V}(diag)
+
 Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
 Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
 
@@ -74,10 +79,10 @@ function size(D::Diagonal,d::Integer)
     return d<=2 ? length(D.diag) : 1
 end
 
-@inline function getindex(D::Diagonal, i::Int, j::Int)
+@inline function getindex(D::Diagonal{T}, i::Int, j::Int) where {T}
     @boundscheck checkbounds(D, i, j)
     if i == j
-        @inbounds r = D.diag[i]
+        @inbounds r = T(D.diag[i])
     else
         r = diagzero(D, i, j)
     end
