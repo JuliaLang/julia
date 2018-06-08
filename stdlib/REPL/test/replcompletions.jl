@@ -684,28 +684,29 @@ let s, c, r
     end
 
     # Tests detecting of files in the env path (in shell mode)
-    let path, s, c, r, file
-        oldpath = ENV["PATH"]
+    let path, file
         path = tempdir()
-        # PATH can also contain folders which we aren't actually allowed to read.
         unreadable = joinpath(tempdir(), "replcompletion-unreadable")
-        ENV["PATH"] = string(path, ":", unreadable)
 
-        file = joinpath(path, "tmp-executable")
-        touch(file)
-        chmod(file, 0o755)
-        mkdir(unreadable)
-        chmod(unreadable, 0o000)
+        try
+            file = joinpath(path, "tmp-executable")
+            touch(file)
+            chmod(file, 0o755)
+            mkdir(unreadable)
+            chmod(unreadable, 0o000)
 
-        s = "tmp-execu"
-        c,r = test_scomplete(s)
-        @test "tmp-executable" in c
-        @test r == 1:9
-        @test s[r] == "tmp-execu"
-
-        rm(file)
-        rm(unreadable)
-        ENV["PATH"] = oldpath
+            # PATH can also contain folders which we aren't actually allowed to read.
+            withenv("PATH" => string(path, ":", unreadable)) do
+                s = "tmp-execu"
+                c,r = test_scomplete(s)
+                @test "tmp-executable" in c
+                @test r == 1:9
+                @test s[r] == "tmp-execu"
+            end
+        finally
+            rm(file)
+            rm(unreadable)
+        end
     end
 
     # Make sure completion results are unique in case things are in the env path twice.
