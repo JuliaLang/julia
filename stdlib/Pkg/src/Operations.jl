@@ -134,7 +134,7 @@ function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
     fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
     !isfile(project_file) && return false
     project = read_project(project_file)
-    compat = get(project, "compatibility", Dict())
+    compat = get(project, "compat", Dict())
     for (deppkg_name, uuid) in project["deps"]
         vspec = haskey(compat, deppkg_name) ? Types.semver_spec(compat[deppkg_name]) : VersionSpec()
         deppkg = PackageSpec(deppkg_name, UUID(uuid), vspec)

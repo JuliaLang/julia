@@ -416,7 +416,7 @@ If the compatibility for a dependency is not given, the project is assumed to be
 Compatibility for a dependency is entered in the `Project.toml` file as for example:
 
 ```toml
-[compatibility]
+[compat]
 Example = "0.4.3"
 ```
 

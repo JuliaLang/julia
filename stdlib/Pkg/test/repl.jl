@@ -285,7 +285,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
                 open("Project.toml"; append=true) do io
                     print(io, """
 
-                    [compatibility]
+                    [compat]
                     JSON = "0.16.0"
                     """
                     )

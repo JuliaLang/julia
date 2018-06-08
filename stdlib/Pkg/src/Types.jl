@@ -346,7 +346,7 @@ end
 function project_compatibility(ctx::Context, name::String)
     v = VersionSpec()
     project = ctx.env.project
-    compat = get(project, "compatibility", Dict())
+    compat = get(project, "compat", Dict())
     if haskey(compat, name)
         v = VersionSpec(semver_spec(compat[name]))
     end
@@ -1023,13 +1023,13 @@ function pathrepr(ctx::Union{Nothing, Context}, path::String, base::String=pwd()
 end
 
 function project_key_order(key::String)
-    key == "name"          && return 1
-    key == "uuid"          && return 2
-    key == "keywords"      && return 3
-    key == "license"       && return 4
-    key == "desc"          && return 5
-    key == "deps"          && return 6
-    key == "compatibility" && return 7
+    key == "name"     && return 1
+    key == "uuid"     && return 2
+    key == "keywords" && return 3
+    key == "license"  && return 4
+    key == "desc"     && return 5
+    key == "deps"     && return 6
+    key == "compat"   && return 7
     return 8
 end
 
