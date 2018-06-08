@@ -16,12 +16,22 @@ respectively.
 """
 cglobal
 
-struct CFunction
+"""
+    CFunction struct
+
+Garbage-collection handle for the return value from `@cfunction`
+when the first argument is annotated with '\$'.
+Like all `cfunction` handles, it should be passed to `ccall` as a `Ptr{Cvoid}`,
+and will be converted automatically at the call site to the appropriate type.
+
+See [`@cfunction`](@ref).
+"""
+struct CFunction <: Ref{Cvoid}
     ptr::Ptr{Cvoid}
     f::Any
     _1::Ptr{Cvoid}
     _2::Ptr{Cvoid}
-    let construtor = false end
+    let constructor = false end
 end
 unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
 
@@ -31,11 +41,12 @@ unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
 
 Generate a C-callable function pointer from the Julia function `closure`
 for the given type signature.
+To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the signature.
 
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression
 (although it can include a splat expression). And that these arguments will be evaluated in global scope
 during compile-time (not deferred until runtime).
-Adding a `\$` in front of the function argument changes this to instead create a runtime closure
+Adding a '\$' in front of the function argument changes this to instead create a runtime closure
 over the local variable `callable`.
 
 See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
