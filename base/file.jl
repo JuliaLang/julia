@@ -673,7 +673,7 @@ julia> (root, dirs, files) = first(itr)
 function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     content = nothing
     try
-        content = readdir(root)
+        content = collect(readdir(root))
     catch err
         isa(err, SystemError) || throw(err)
         onerror(err)
