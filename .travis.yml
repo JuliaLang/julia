@@ -137,7 +137,7 @@ script:
     # run tests
     - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
         /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true'
-    - /tmp/julia/bin/julia -e 'versioninfo()'
+    - /tmp/julia/bin/julia -e 'Base.require(Main, :InteractiveUtils).versioninfo()'
     - pushd /tmp/julia/share/julia/test
     - /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
       /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online OldPkg/pkg Pkg/pkg download
