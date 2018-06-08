@@ -219,6 +219,7 @@ Base.gensym
 Base.@gensym
 Base.@goto
 Base.@label
+Base.@simd
 Base.@polly
 ```
 
