@@ -36,3 +36,9 @@ function cd_tempdir(f)
 end
 
 isinstalled(pkg) = Base.locate_package(Base.PkgId(pkg.uuid, pkg.name)) !== nothing
+
+function write_build(path, content)
+    build_filename = joinpath(path, "deps", "build.jl")
+    mkpath(dirname(build_filename))
+    write(build_filename, content)
+end
