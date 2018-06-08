@@ -3562,7 +3562,11 @@ f(x) = yt(x)
                                       (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
-                            (append (if (atom? (cadr e))
+                            (append (if (or (atom? (cadr e))
+                                            (let ((fptr (cadr e)))
+                                              (not (and (length> fptr 1)
+                                                        (eq? (car fptr) 'call)
+                                                        (equal? (cadr fptr) '(core tuple))))))
                                         (compile-args (list (cadr e)) break-labels linearize-args)
                                         (list (cadr e)))
                                     (list-head (cddr e) 4)
