@@ -129,6 +129,9 @@ end
     @test_throws BoundsError getindex((5,6,7,8), [true, false, false, true, true])
 
     @test getindex((5,6,7,8), []) === ()
+    @test getindex((1,9,9,3),:) === (1,9,9,3)
+    @test getindex((),:) === ()
+    @test getindex((1,),:) === (1,)
 
     @testset "boolean arrays" begin
         # issue #19719
