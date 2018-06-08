@@ -533,9 +533,13 @@ end
     @test eltype(Iterators.Stateful("a")) == Char
     # Interaction of zip/Stateful
     let a = Iterators.Stateful("a"), b = ""
-	@test isempty(collect(zip(a,b)))
-	@test !isempty(a)
-	@test isempty(collect(zip(b,a)))
-	@test !isempty(a)
+        @test isempty(collect(zip(a,b)))
+        @test !isempty(a)
+        @test isempty(collect(zip(b,a)))
+        @test !isempty(a)
+    end
+    let z = zip(Iterators.Stateful("ab"), Iterators.Stateful("b"), Iterators.Stateful("c"))
+        v, s = iterate(z)
+        @test Base.isdone(z, s)
     end
 end
