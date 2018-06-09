@@ -294,20 +294,6 @@ reverse(z::Zip) = Zip(reverse(z.a), reverse(z.b))
 @inline isdone(z::Zip) = isdone(z.a) | isdone(z.b)
 @inline isdone(z::Zip, s) = isdone(z.a, first(s)) | isdone(z.b, tail(s))
 
-# sa′ and sb′ are optional state arguments for z.a and z.b
-@propagate_inbounds function zip_iterate(z::Zip, sa′::Tuple, sb′::Tuple)
-    done = isdone(z.a)
-    done === true && return nothing
-    if done === missing
-        a, sa = @something iterate(z.a, sa′...)
-    end
-    b, sb = @something iterate(z.b, sb′...)
-    if done === false
-        a, sa = @something iterate(z.a, sa′...)
-    end
-    (a, b...), (sa, sb...)
-end
-
 # iterate(zip(a, b...)) -> (val_a, val_b...), (state_a, state_b...)
 @propagate_inbounds function iterate(z::Zip1)
     a, sa = @something iterate(z.a)
@@ -317,8 +303,31 @@ end
     a, sa = @something iterate(z.a, first(s))
     (a,), (sa,)
 end
-@propagate_inbounds iterate(z::Zip) = zip_iterate(z, (), ())
-@propagate_inbounds iterate(z::Zip, s::Tuple) = zip_iterate(z, (first(s),), (tail(s),))
+@propagate_inbounds function iterate(z::Zip)
+    done = isdone(z.a)
+    done === true && return nothing
+    if done === missing
+        a, sa = @something iterate(z.a)
+    end
+    b, sb = @something iterate(z.b)
+    if done === false
+        a, sa = @something iterate(z.a)
+    end
+    (a, b...), (sa, sb...)
+end
+@propagate_inbounds function iterate(z::Zip, s::Tuple)
+    sa′, sb′ = first(s), tail(s)
+    done = isdone(z.a)
+    done === true && return nothing
+    if done === missing
+        a, sa = @something iterate(z.a, sa′)
+    end
+    b, sb = @something iterate(z.b, sb′)
+    if done === false
+        a, sa = @something iterate(z.a, sa′)
+    end
+    (a, b...), (sa, sb...)
+end
 
 """
     zip(a, b...)
