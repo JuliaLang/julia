@@ -727,6 +727,13 @@ let f(args...) = *(args...)
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
 end
 
+# Issue #27446: Broadcasting pair operator
+let
+    c = ["foo", "bar"]
+    d = [1,2]
+    @test Dict(c .=> d) == Dict("foo" => 1, "bar" => 2)
+end
+
 # Broadcasted iterable/indexable APIs
 let
     bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5))

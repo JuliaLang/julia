@@ -47,6 +47,8 @@ New language features
   * Keyword arguments can be required: if a default value is omitted, then an
     exception is thrown if the caller does not assign the keyword a value ([#25830]).
 
+  * The pair operator `=>` is now broadcastable as `.=>` which was previously a parsing error ([#27447])
+
 Language changes
 ----------------
 
