@@ -177,6 +177,7 @@ Base.Math.lgamma
 Base.Math.lfact
 Base.Math.beta
 Base.Math.lbeta
+Base.Math.lbinomial
 Base.ndigits
 Base.widemul
 Base.Math.@evalpoly
