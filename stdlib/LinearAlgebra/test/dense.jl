@@ -796,7 +796,7 @@ end
         r = (elty <: Complex ? adjoint : transpose)(rand(elty, 5))
         cm = rand(elty, 5, 1)
         rm = rand(elty, 1, 5)
-        @testset "inner products" begin
+        @testset "dot products" begin
             test_div_pinv_consistency(r, c)
             test_div_pinv_consistency(rm, c)
             test_div_pinv_consistency(r, cm)

@@ -53,7 +53,7 @@ srand(100)
     v41 = convert(Vector{elty}, [4:-1:1;])
 
     let n = 10
-        @testset "inner/dot products" begin
+        @testset "dot products" begin
             if elty <: Real
                 x1 = convert(Vector{elty}, randn(n))
                 x2 = convert(Vector{elty}, randn(n))

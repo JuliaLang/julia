@@ -91,7 +91,6 @@ export
     givens,
     hessenberg,
     hessenberg!,
-    inner,
     isdiag,
     ishermitian,
     isposdef,
@@ -371,7 +370,7 @@ include("schur.jl")
 include("structuredbroadcast.jl")
 include("deprecated.jl")
 
-const ⋅ = inner
+const ⋅ = dot
 const × = cross
 export ⋅, ×
 

@@ -378,7 +378,7 @@ I = findall(!iszero, z)
 
 @test norm(v) ≈ norm(parent(v))
 @test norm(A) ≈ norm(parent(A))
-@test inner(v, v) ≈ inner(v0, v0)
+@test dot(v, v) ≈ dot(v0, v0)
 
 # Prior to its removal from Base, cumsum_kbn was used here. To achieve the same level of
 # accuracy in the tests, we need to use BigFloats with enlarged precision.

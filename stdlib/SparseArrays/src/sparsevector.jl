@@ -1385,27 +1385,27 @@ end
 (*)(a::Number, x::SparseVectorUnion) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
 (/)(x::SparseVectorUnion, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
 
-# inner/dot
-function inner(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
+# dot
+function dot(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(y)
     nzval = nonzeros(y)
-    s = inner(zero(Tx), zero(Ty))
+    s = dot(zero(Tx), zero(Ty))
     for i = 1:length(nzind)
-        s += inner(x[nzind[i]], nzval[i])
+        s += dot(x[nzind[i]], nzval[i])
     end
     return s
 end
 
-function inner(x::SparseVectorUnion{Tx}, y::AbstractVector{Ty}) where {Tx<:Number,Ty<:Number}
+function dot(x::SparseVectorUnion{Tx}, y::AbstractVector{Ty}) where {Tx<:Number,Ty<:Number}
     n = length(y)
     length(x) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
-    s = inner(zero(Tx), zero(Ty))
+    s = dot(zero(Tx), zero(Ty))
     @inbounds for i = 1:length(nzind)
-        s += inner(nzval[i], y[nzind[i]])
+        s += dot(nzval[i], y[nzind[i]])
     end
     return s
 end
@@ -1431,7 +1431,7 @@ function _spdot(f::Function,
     s
 end
 
-function inner(x::SparseVectorUnion{<:Number}, y::SparseVectorUnion{<:Number})
+function dot(x::SparseVectorUnion{<:Number}, y::SparseVectorUnion{<:Number})
     x === y && return sum(abs2, x)
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
@@ -1441,7 +1441,7 @@ function inner(x::SparseVectorUnion{<:Number}, y::SparseVectorUnion{<:Number})
     xnzval = nonzeros(x)
     ynzval = nonzeros(y)
 
-    _spdot(inner,
+    _spdot(dot,
            1, length(xnzind), xnzind, xnzval,
            1, length(ynzind), ynzind, ynzval)
 end
@@ -1612,7 +1612,7 @@ mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractS
     (A = adjA.parent; mul!(y, adjoint(A), x, one(Tx), zero(Ty)))
 
 mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
-    (A = adjA.parent; _At_or_Ac_mul_B!(inner, y, A, x, α, β))
+    (A = adjA.parent; _At_or_Ac_mul_B!(dot, y, A, x, α, β))
 
 function _At_or_Ac_mul_B!(tfun::Function,
                           y::AbstractVector, A::SparseMatrixCSC, x::AbstractSparseVector,
@@ -1633,7 +1633,7 @@ function _At_or_Ac_mul_B!(tfun::Function,
     mx = length(xnzind)
 
     for j = 1:n
-        # s <- inner(A[:,j], x)
+        # s <- dot(A[:,j], x)
         s = _spdot(tfun, Acolptr[j], Acolptr[j+1]-1, Arowval, Anzval,
                    1, mx, xnzind, xnzval)
         @inbounds y[j] += s * α
@@ -1654,7 +1654,7 @@ end
     (A = transA.parent; _At_or_Ac_mul_B(*, A, x))
 
 *(adjA::Adjoint{<:Any,<:SparseMatrixCSC}, x::AbstractSparseVector) =
-    (A = adjA.parent; _At_or_Ac_mul_B(inner, A, x))
+    (A = adjA.parent; _At_or_Ac_mul_B(dot, A, x))
 
 function _At_or_Ac_mul_B(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX}) where {TvA,TiA,TvX,TiX}
     m, n = size(A)

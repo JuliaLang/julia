@@ -215,33 +215,33 @@ end
 end
 
 # issue #6450
-@test inner(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
+@test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
 
-@testset "inner" for elty in (Float32, Float64, ComplexF32, ComplexF64)
+@testset "dot" for elty in (Float32, Float64, ComplexF32, ComplexF64)
     x = convert(Vector{elty},[1.0, 2.0, 3.0])
     y = convert(Vector{elty},[3.5, 4.5, 5.5])
-    @test_throws DimensionMismatch inner(x, 1:2, y, 1:3)
-    @test_throws BoundsError inner(x, 1:4, y, 1:4)
-    @test_throws BoundsError inner(x, 1:3, y, 2:4)
-    @test inner(x, 1:2, y, 1:2) == convert(elty, 12.5)
+    @test_throws DimensionMismatch dot(x, 1:2, y, 1:3)
+    @test_throws BoundsError dot(x, 1:4, y, 1:4)
+    @test_throws BoundsError dot(x, 1:3, y, 2:4)
+    @test dot(x, 1:2, y, 1:2) == convert(elty, 12.5)
     @test transpose(x)*y == convert(elty, 29.0)
     X = convert(Matrix{elty},[1.0 2.0; 3.0 4.0])
     Y = convert(Matrix{elty},[1.5 2.5; 3.5 4.5])
-    @test inner(X, Y) == convert(elty, 35.0)
+    @test dot(X, Y) == convert(elty, 35.0)
     Z = convert(Vector{Matrix{elty}},[reshape(1:4, 2, 2), fill(1, 2, 2)])
-    @test inner(Z, Z) == convert(elty, 34.0)
+    @test dot(Z, Z) == convert(elty, 34.0)
 end
 
-inner_(x,y) = invoke(inner, Tuple{Any,Any}, x,y)
-@testset "generic inner" begin
+dot_(x,y) = invoke(dot, Tuple{Any,Any}, x,y)
+@testset "generic dot" begin
     AA = [1+2im 3+4im; 5+6im 7+8im]
     BB = [2+7im 4+1im; 3+8im 6+5im]
     for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
-        @test inner(A,B) == inner(vec(A),vec(B)) == inner_(A,B) == inner(float.(A),float.(B))
-        @test inner(Int[], Int[]) == 0 == inner_(Int[], Int[])
-        @test_throws MethodError inner(Any[], Any[])
-        @test_throws MethodError inner_(Any[], Any[])
-        for n1 = 0:2, n2 = 0:2, d in (inner, inner_)
+        @test dot(A,B) == dot(vec(A),vec(B)) == dot_(A,B) == dot(float.(A),float.(B))
+        @test dot(Int[], Int[]) == 0 == dot_(Int[], Int[])
+        @test_throws MethodError dot(Any[], Any[])
+        @test_throws MethodError dot_(Any[], Any[])
+        for n1 = 0:2, n2 = 0:2, d in (dot, dot_)
             if n1 != n2
                 @test_throws DimensionMismatch d(1:n1, 1:n2)
             else

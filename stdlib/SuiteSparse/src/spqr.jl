@@ -206,7 +206,7 @@ function LinearAlgebra.lmul!(Q::QRSparseQ, A::StridedVecOrMat)
         h = view(Q.factors, :, l)
         for j in 1:size(A, 2)
             a = view(A, :, j)
-            LinearAlgebra.axpy!(τl*inner(h, a), h, a)
+            LinearAlgebra.axpy!(τl*dot(h, a), h, a)
         end
     end
     return A
@@ -236,7 +236,7 @@ function LinearAlgebra.lmul!(adjQ::Adjoint{<:Any,<:QRSparseQ}, A::StridedVecOrMa
         h = view(Q.factors, :, l)
         for j in 1:size(A, 2)
             a = view(A, :, j)
-            LinearAlgebra.axpy!(τl'*inner(h, a), h, a)
+            LinearAlgebra.axpy!(τl'*dot(h, a), h, a)
         end
     end
     return A

@@ -9,8 +9,8 @@ using Base: @deprecate, depwarn
 # deprecate vecnorm in favor of norm
 @deprecate vecnorm norm
 
-# deprecate vecdot in favor of inner
-@deprecate vecdot inner
+# deprecate vecdot in favor of dot
+@deprecate vecdot dot
 
 # PR #22188
 export cholfact, cholfact!
@@ -544,9 +544,9 @@ IndexStyle(::Type{<:RowVector}) = IndexLinear()
 # Multiplication #
 
 # inner product -> dot product specializations
-@inline *(rowvec::RowVector{T}, vec::AbstractVector{T}) where {T<:Real} = inner(parent(rowvec), vec)
-@inline *(rowvec::ConjRowVector{T}, vec::AbstractVector{T}) where {T<:Real} = inner(rvadjoint(rowvec), vec)
-@inline *(rowvec::ConjRowVector, vec::AbstractVector) = inner(rvadjoint(rowvec), vec)
+@inline *(rowvec::RowVector{T}, vec::AbstractVector{T}) where {T<:Real} = dot(parent(rowvec), vec)
+@inline *(rowvec::ConjRowVector{T}, vec::AbstractVector{T}) where {T<:Real} = dot(rvadjoint(rowvec), vec)
+@inline *(rowvec::ConjRowVector, vec::AbstractVector) = dot(rvadjoint(rowvec), vec)
 
 # Generic behavior
 @inline function *(rowvec::RowVector, vec::AbstractVector)

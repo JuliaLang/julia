@@ -795,14 +795,14 @@ end
             @test exact_equal(xc, sx)
         end
 
-        @testset "inner/dot" begin
-            dv = inner(xf, xf2)
-            @test inner(x, x) == sum(abs2, x)
-            @test inner(x2, x2) == sum(abs2, x2)
-            @test inner(x, x2) ≈ dv
-            @test inner(x2, x) ≈ dv
-            @test inner(Array(x), x2) ≈ dv
-            @test inner(x, Array(x2)) ≈ dv
+        @testset "dot" begin
+            dv = dot(xf, xf2)
+            @test dot(x, x) == sum(abs2, x)
+            @test dot(x2, x2) == sum(abs2, x2)
+            @test dot(x, x2) ≈ dv
+            @test dot(x2, x) ≈ dv
+            @test dot(Array(x), x2) ≈ dv
+            @test dot(x, Array(x2)) ≈ dv
         end
     end
 
@@ -810,8 +810,8 @@ end
         y = complex.(sprand(32, 0.6), sprand(32, 0.6))
         xf = Array(x)::Vector{ComplexF64}
         yf = Array(y)::Vector{ComplexF64}
-        @test inner(x, x) ≈ inner(xf, xf)
-        @test inner(x, y) ≈ inner(xf, yf)
+        @test dot(x, x) ≈ dot(xf, xf)
+        @test dot(x, y) ≈ dot(xf, yf)
     end
 end
 
@@ -1247,12 +1247,12 @@ end
     A = sprandn(n, n, 0.01)
     for j in 1:5:n
         Aj, Ajview = A[:, j], view(A, :, j)
-        @test norm(Aj)            == norm(Ajview)
-        @test inner(Aj, copy(Aj)) == inner(Ajview, Aj) # don't alias since it takes a different code path
-        @test rmul!(Aj, 0.1)      == rmul!(Ajview, 0.1)
-        @test Aj*0.1              == Ajview*0.1
-        @test 0.1*Aj              == 0.1*Ajview
-        @test Aj/0.1              == Ajview/0.1
+        @test norm(Aj)          == norm(Ajview)
+        @test dot(Aj, copy(Aj)) == dot(Ajview, Aj) # don't alias since it takes a different code path
+        @test rmul!(Aj, 0.1)    == rmul!(Ajview, 0.1)
+        @test Aj*0.1            == Ajview*0.1
+        @test 0.1*Aj            == 0.1*Ajview
+        @test Aj/0.1            == Ajview/0.1
         @test LinearAlgebra.axpy!(1.0, Aj,     sparse(fill(1., n))) ==
               LinearAlgebra.axpy!(1.0, Ajview, sparse(fill(1., n)))
         @test LinearAlgebra.lowrankupdate!(Matrix(1.0*I, n, n), fill(1.0, n), Aj) ==
