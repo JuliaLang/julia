@@ -30,6 +30,7 @@ import Distributed: myid
 
 using Random: srand, AbstractRNG, GLOBAL_RNG
 using InteractiveUtils: gen_call_with_extracted_types
+using Core.Compiler: typesubtract
 
 #-----------------------------------------------------------------------
 
@@ -1257,54 +1258,83 @@ function get_testset_depth()
 end
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
+
 """
-    @inferred f(x)
+    @inferred [AllowedType] f(x)
 
-Tests that the call expression `f(x)` returns a value of the same type
-inferred by the compiler. It is useful to check for type stability.
+Tests that the call expression `f(x)` returns a value of the same type inferred by the
+compiler. It is useful to check for type stability.
 
-`f(x)` can be any call expression.
-Returns the result of `f(x)` if the types match,
-and an `Error` `Result` if it finds different types.
+`f(x)` can be any call expression. Returns the result of `f(x)` if the types match, and an
+`Error` `Result` if it finds different types.
+
+Optionally, `AllowedType` relaxes the test, by making it pass when either the type of `f(x)`
+matches the inferred type modulo `AllowedType`, or when the return type is a subtype of
+`AllowedType`. This is useful when testing type stability of functions returning a small
+union such as `Union{Nothing, T}` or `Union{Missing, T}`.
 
 ```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
-julia> f(a,b,c) = b > 1 ? 1 : 1.0
+julia> f(a) = a > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
-julia> typeof(f(1,2,3))
+julia> typeof(f(2))
 Int64
 
-julia> @code_warntype f(1,2,3)
+julia> @code_warntype f(2)
 Body::UNION{FLOAT64, INT64}
-1 1 ─ %1 = Base.slt_int(1, %%b)::Bool
+1 1 ─ %1 = Base.slt_int(1, %%a)::Bool
   └──      goto 3 if not %1
   2 ─      return 1
   3 ─      return 1.0
 
-julia> @inferred f(1,2,3)
+julia> @inferred f(2)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
-Stacktrace:
 [...]
 
 julia> @inferred max(1,2)
 2
+
+julia> g(a) = a < 10 ? missing : 1.0
+g (generic function with 1 method)
+
+julia> @inferred g(20)
+ERROR: return type Float64 does not match inferred return type Union{Missing, Float64}
+[...]
+
+julia> @inferred Missing g(20)
+1.0
+
+julia> h(a) = a < 10 ? missing : f(a)
+h (generic function with 1 method)
+
+julia> @inferred Missing h(20)
+ERROR: return type Int64 does not match inferred return type Union{Missing, Float64, Int64}
+[...]
 ```
 """
 macro inferred(ex)
+    _inferred(ex, __module__)
+end
+macro inferred(allow, ex)
+    _inferred(ex, __module__, allow)
+end
+function _inferred(ex, mod, allow = :(Union{}))
     if Meta.isexpr(ex, :ref)
         ex = Expr(:call, :getindex, ex.args...)
     end
-    Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
+    Meta.isexpr(ex, :call) || throw(ArgumentError("@inferred requires a call expression"))
 
-    Base.remove_linenums!(quote
+    quote
         let
+            allow = $(esc(allow))
+            allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
             $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
                 # Has keywords
                 args = gensym()
                 kwargs = gensym()
                 quote
                     $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                    inftypes = $(gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                    inftypes = $(gen_call_with_extracted_types(mod, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
                 end
             else
                 # No keywords
@@ -1315,11 +1345,11 @@ macro inferred(ex)
                 end
             end)
             @assert length(inftypes) == 1
-            rettype = isa(result, Type) ? Type{result} : typeof(result)
-            rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            rettype = result isa Type ? Type{result} : typeof(result)
+            rettype <: allow || rettype == typesubtract(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
             result
         end
-    end)
+    end
 end
 
 """
