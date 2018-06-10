@@ -53,6 +53,23 @@ Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash
 Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
 Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))::Bool
 
+function Base.show(io::IO, x::Adjoint{<:Any,<:Factorization})
+    print(io, "Adjoint of ")
+    show(io, parent(x))
+end
+function Base.show(io::IO, x::Transpose{<:Any,<:Factorization})
+    print(io, "Transpose of ")
+    show(io, parent(x))
+end
+function Base.show(io::IO, ::MIME"text/plain", x::Adjoint{<:Any,<:Factorization})
+    print(io, "Adjoint of ")
+    show(io, MIME"text/plain"(), parent(x))
+end
+function Base.show(io::IO, ::MIME"text/plain", x::Transpose{<:Any,<:Factorization})
+    print(io, "Transpose of ")
+    show(io, MIME"text/plain"(), parent(x))
+end
+
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
