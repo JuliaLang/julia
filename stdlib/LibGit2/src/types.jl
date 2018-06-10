@@ -45,9 +45,6 @@ Matches the [`git_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_time)
 struct TimeStruct
     time::Int64     # time in seconds from epoch
     offset::Cint    # timezone offset in minutes
-    @static if LibGit2.VERSION >= v"0.27.0"
-        sign::Cchar
-    end
 end
 
 """
@@ -833,8 +830,6 @@ The fields represent:
   * `flags`: flags for controlling any callbacks used in a status call.
   * `pathspec`: an array of paths to use for path-matching. The behavior of the path-matching
     will vary depending on the values of `show` and `flags`.
-  * The `baseline` is the tree to be used for comparison to the working directory and
-    index; defaults to HEAD.
 """
 @kwdef struct StatusOptions
     version::Cuint           = 1
@@ -844,9 +839,6 @@ The fields represent:
                                Consts.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
                                Consts.STATUS_OPT_SORT_CASE_SENSITIVELY
     pathspec::StrArrayStruct
-    @static if LibGit2.VERSION >= v"0.27.0"
-        baseline::Ptr{Cvoid}
-    end
 end
 
 """

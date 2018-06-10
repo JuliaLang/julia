@@ -435,7 +435,7 @@ findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
 """
     occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
 
-Determine whether the second argument is a substring of the first. If `needle`
+Determine whether the first argument is a substring of the second. If `needle`
 is a regular expression, checks whether `haystack` contains a match.
 
 # Examples

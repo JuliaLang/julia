@@ -91,17 +91,15 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\\alpha\t")
     readuntil(stdout_read,"α")
     write(stdin_write, '\x03')
-    # Test cd feature in shell mode.  We limit to 40 characters when
-    # calling readuntil() to suppress the warning it (currently) gives for
-    # long strings.
+    # Test cd feature in shell mode.
     origpwd = pwd()
     mktempdir() do tmpdir
         # Test `cd`'ing to an absolute path
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd $(escape_string(tmpdir))\n")
-        readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
-        readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
+        readuntil(stdout_read, "cd $(escape_string(tmpdir))")
+        readuntil(stdout_read, realpath(tmpdir))
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
         @test pwd() == realpath(tmpdir)
@@ -110,7 +108,7 @@ fake_repl() do stdin_write, stdout_read, repl
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd\n")
-        readuntil(stdout_read, realpath(homedir())[max(1,end-39):end])
+        readuntil(stdout_read, realpath(homedir()))
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
         @test pwd() == realpath(homedir())
@@ -119,21 +117,23 @@ fake_repl() do stdin_write, stdout_read, repl
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd -\n")
-        readuntil(stdout_read, tmpdir[max(1,end-39):end])
+        readuntil(stdout_read, tmpdir)
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
         @test pwd() == realpath(tmpdir)
 
         # Test using `~` in `cd` commands
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd ~\n")
-        readuntil(stdout_read, realpath(homedir())[max(1,end-39):end])
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == realpath(homedir())
+        if !Sys.iswindows()
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd ~\n")
+            readuntil(stdout_read, realpath(homedir()))
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
+            @test pwd() == realpath(homedir())
+        end
+        cd(origpwd)
     end
-    cd(origpwd)
 
     # issue #20482
     #if !Sys.iswindows()
@@ -161,25 +161,27 @@ fake_repl() do stdin_write, stdout_read, repl
     end
 
     # issue #27293
-    let s, old_stdout = stdout
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "echo ~")
-        s = readuntil(stdout_read, "~")
+    if Sys.isunix()
+        let s, old_stdout = stdout
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "echo ~")
+            s = readuntil(stdout_read, "~")
 
-        proc_stdout_read, proc_stdout = redirect_stdout()
-        get_stdout = @async read(proc_stdout_read, String)
-        try
-            write(stdin_write, "\n")
-            readuntil(stdout_read, "\n")
-            s = readuntil(stdout_read, "\n")
-        finally
-            redirect_stdout(old_stdout)
+            proc_stdout_read, proc_stdout = redirect_stdout()
+            get_stdout = @async read(proc_stdout_read, String)
+            try
+                write(stdin_write, "\n")
+                readuntil(stdout_read, "\n")
+                s = readuntil(stdout_read, "\n")
+            finally
+                redirect_stdout(old_stdout)
+            end
+            @test s == "\e[0m" # the child has exited
+            close(proc_stdout)
+            # check for the correct, expanded response
+            @test occursin(expanduser("~"), fetch(get_stdout))
         end
-        @test s == "\e[0m" # the child has exited
-        close(proc_stdout)
-        # check for the correct, expanded response
-        @test occursin(expanduser("~"), fetch(get_stdout))
     end
 
     # issues #22176 & #20482
