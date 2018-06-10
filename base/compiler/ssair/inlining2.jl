@@ -151,7 +151,7 @@ function cfg_inline_item!(item::InliningTodo, state::CFGInliningState, from_unio
         if old_block != 1 || need_split_before
             p = state.new_cfg_blocks[new_block].preds
             map!(p, p) do old_pred_block
-                return bb_rename_range[old_pred_block]
+                return old_pred_block == 0 ? 0 : bb_rename_range[old_pred_block]
             end
         end
         if new_block != last(new_block_range)
