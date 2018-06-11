@@ -38,6 +38,7 @@ function __init__()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module MPFR")
     end
+    nothing
 end
 
 const ROUNDING_MODE = RefValue{Cint}(0)
