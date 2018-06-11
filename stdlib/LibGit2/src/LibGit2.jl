@@ -901,7 +901,7 @@ function snapshot(repo::GitRepo)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
     work = try
         with(GitIndex, repo) do idx
-            if length(readdir(path(repo))) > 1
+            if length(collect(readdir(path(repo)))) > 1
                 add!(idx, ".")
                 write!(idx)
             end

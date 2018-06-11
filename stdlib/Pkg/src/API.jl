@@ -310,7 +310,7 @@ function gc(ctx::Context=Context(); period = Dates.Week(6), kwargs...)
         if isdir(packagedir)
             for name in readdir(packagedir)
                 name_path = joinpath(packagedir, name)
-                if isempty(readdir(name_path))
+                if isempty(collect(readdir(name_path)))
                     !ctx.preview && Base.rm(name_path)
                 end
             end

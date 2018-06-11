@@ -76,7 +76,7 @@ else
     function isfile_casesensitive(path)
         isfile(path) || return false
         dir, filename = splitdir(path)
-        any(readdir(dir) .== filename)
+        any(collect(readdir(dir)) .== filename)
     end
 end
 

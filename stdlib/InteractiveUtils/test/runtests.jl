@@ -185,7 +185,7 @@ end
             @test occursin("Environment:", ver)
             @test occursin("Package Status:", ver)
             @test occursin("no packages installed", ver)
-            @test isempty(readdir(dir))
+            @test isempty(collect(readdir(dir)))
         end
     end
     let exename = `$(Base.julia_cmd()) --startup-file=no`

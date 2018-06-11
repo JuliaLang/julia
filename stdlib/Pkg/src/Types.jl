@@ -488,7 +488,7 @@ mutable struct EnvCache
             project_file === nothing && error("package environment does not exist: $env")
         elseif env isa String
             if isdir(env)
-                isempty(readdir(env)) || error("environment is a package directory: $env")
+                isempty(collect(readdir(env))) || error("environment is a package directory: $env")
                 project_file = joinpath(env, Base.project_names[end])
             else
                 project_file = endswith(env, ".toml") ? abspath(env) :
@@ -1004,7 +1004,7 @@ const DEFAULT_REGISTRIES = Dict("Uncurated" => "https://github.com/JuliaRegistri
 function registries(depot::String)::Vector{String}
     d = joinpath(depot, "registries")
     ispath(d) || return String[]
-    regs = filter!(readdir(d)) do r
+    regs = filter!(collect(readdir(d))) do r
         isfile(joinpath(d, r, "Registry.toml"))
     end
     String[joinpath(depot, "registries", r) for r in regs]

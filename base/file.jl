@@ -599,6 +599,8 @@ end
 Base.IteratorSize(::Type{ReadDirIterator}) = Base.SizeUnknown()
 Base.eltype(::Type{ReadDirIterator}) = String
 
+Base.show(io::IO, iter::ReadDirIterator) = show(io, collect(iter))
+
 """
     readdir(dir::AbstractString=".") -> ReadDirIterator
 

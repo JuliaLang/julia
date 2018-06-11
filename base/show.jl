@@ -40,10 +40,13 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
+displayname(::KeySet)="Keys"
+displayname(::ValueIterator)="Values"
+displayname(::Filesystem.ReadDirIterator)="Directory contents"
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     print(io, summary(iter))
     isempty(iter) && return
-    print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
+    print(io, ". ", displayname(iter), ":")
     limit::Bool = get(io, :limit, false)
     if limit
         sz = displaysize(io)

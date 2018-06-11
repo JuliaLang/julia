@@ -396,7 +396,7 @@ function install_archive(
                 url_success = false
             end
             url_success || continue
-            dirs = readdir(dir)
+            dirs = collect(readdir(dir))
             # 7z on Win might create this spurious file
             filter!(x -> x != "pax_global_header", dirs)
             @assert length(dirs) == 1
