@@ -138,7 +138,7 @@ function lookup(ip::Base.InterpreterIP)
         file = empty_sym
         line = 0
     end
-    i = max(ip.stmt, 1)
+    i = max(ip.stmt+1, 1)  # ip.stmt is 0-indexed
     if i > length(codeinfo.codelocs) || codeinfo.codelocs[i] == 0
         return [StackFrame(func, file, line, ip.code, false, false, 0)]
     end
