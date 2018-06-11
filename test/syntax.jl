@@ -1425,3 +1425,14 @@ macro test27155()
     end
 end
 @test @test27155() == (Tuple{T} where T)
+
+# issue #27521
+macro test27521(f, x)
+    :(($(esc(f)), $x))
+end
+let ex = Meta.parse("@test27521(2) do y; y; end")
+    fex = Expr(:(->), Expr(:tuple, :y), Expr(:block, LineNumberNode(1,:none), :y))
+    @test ex == Expr(:do, Expr(:macrocall, Symbol("@test27521"), LineNumberNode(1,:none), 2),
+                     fex)
+    @test macroexpand(@__MODULE__, ex) == Expr(:tuple, fex, 2)
+end
