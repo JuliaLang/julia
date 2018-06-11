@@ -409,7 +409,7 @@ function type_annotate!(sv::InferenceState)
                 body[i] = visit_slot_load!(expr, st_i, sv, undefs)
             end
         else
-            if isa(expr, Expr) && is_meta_expr(expr)
+            if isa(expr, Expr) && is_meta_expr_head(expr.head)
                 # keep any lexically scoped expressions
             elseif run_optimizer
                 deleteat!(body, i)

@@ -219,95 +219,6 @@ function optimize(opt::OptimizationState, @nospecialize(result))
 end
 
 
-# NOTE: this dead code is left in place due to external consumers
-#   to allow them time to move this code elsewhere. It also has tests.
-# replace slots 1:na with argexprs, static params with spvals, and increment
-# other slots by offset.
-function substitute!(
-        @nospecialize(e), na::Int, argexprs::Vector{Any},
-        @nospecialize(spsig), spvals::Vector{Any},
-        offset::Int, boundscheck::Symbol)
-    if isa(e, Slot)
-        id = slot_id(e)
-        if 1 <= id <= na
-            ae = argexprs[id]
-            if isa(e, TypedSlot) && isa(ae, Slot)
-                return TypedSlot(ae.id, e.typ)
-            end
-            return ae
-        end
-        if isa(e, SlotNumber)
-            return SlotNumber(id + offset)
-        else
-            return TypedSlot(id + offset, e.typ)
-        end
-    end
-    if isa(e, NewvarNode)
-        return NewvarNode(substitute!(e.slot, na, argexprs, spsig, spvals, offset, boundscheck))
-    end
-    if isa(e, PhiNode)
-        values = Vector{Any}(undef, length(e.values))
-        for i = 1:length(values)
-            isassigned(e.values, i) || continue
-            values[i] = substitute!(e.values[i], na, argexprs, spsig,
-                spvals, offset, boundscheck)
-        end
-        return PhiNode(e.edges, values)
-    end
-    if isa(e, PiNode)
-        return PiNode(substitute!(e.val, na, argexprs, spsig, spvals, offset, boundscheck), e.typ)
-    end
-    if isa(e, Expr)
-        e = e::Expr
-        head = e.head
-        if head === :static_parameter
-            return quoted(spvals[e.args[1]])
-        elseif head === :cfunction
-            @assert !isa(spsig, UnionAll) || !isempty(spvals)
-            if !(e.args[2] isa QuoteNode) # very common no-op
-                e.args[2] = substitute!(e.args[2], na, argexprs, spsig, spvals, offset, boundscheck)
-            end
-            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
-            e.args[4] = svec(Any[
-                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
-                for argt
-                in e.args[4] ]...)
-        elseif head === :foreigncall
-            @assert !isa(spsig, UnionAll) || !isempty(spvals)
-            for i = 1:length(e.args)
-                if i == 2
-                    e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
-                elseif i == 3
-                    e.args[3] = svec(Any[
-                        ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
-                        for argt
-                        in e.args[3] ]...)
-                elseif i == 4
-                    @assert isa((e.args[4]::QuoteNode).value, Symbol)
-                elseif i == 5
-                    @assert isa(e.args[5], Int)
-                else
-                    e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset, boundscheck)
-                end
-            end
-        elseif head === :boundscheck
-            if boundscheck === :propagate
-                return e
-            elseif boundscheck === :off
-                return false
-            else
-                return true
-            end
-        elseif !is_meta_expr_head(head)
-            for i = 1:length(e.args)
-                e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset, boundscheck)
-            end
-        end
-    end
-    return e
-end
-
-
 # whether `f` is pure for inference
 function is_pure_intrinsic_infer(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile
@@ -466,7 +377,7 @@ isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
 
 function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector, params::Params)
     head = ex.head
-    if is_meta_expr(ex) || head == :copyast # not sure if copyast is right
+    if is_meta_expr_head(head) || head == :copyast # not sure if copyast is right
         return 0
     end
     argcost = 0

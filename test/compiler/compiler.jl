@@ -1106,8 +1106,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
         if isa(ex, LineNumberNode)
             continue
         elseif isa(ex, Expr)
-            ex = ex::Expr
-            if Core.Compiler.is_meta_expr(ex)
+            if Core.Compiler.is_meta_expr_head(ex.head)
                 continue
             elseif ex.head === :return
                 # multiple returns
@@ -1370,7 +1369,7 @@ function f24852_kernel_cinfo(fsig::Type)
     isdefined(method, :source) || return (nothing, :(f(x, y)))
     code_info = Base.uncompressed_ast(method)
     body = Expr(:block, code_info.code...)
-    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 1, :propagate)
+    Meta.substitute!(body, 0, Any[], sig, Any[spvals...], 1, :propagate)
     if startswith(String(method.name), "f24852")
         for a in body.args
             if a isa Expr && a.head == :(=)
