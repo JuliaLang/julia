@@ -322,33 +322,6 @@ oneunit(::Type{T}) where {T} = T(one(T))
 _default_type(::Type{Number}) = Int
 
 """
-    factorial(n)
-
-Factorial of `n`. If `n` is an [`Integer`](@ref), the factorial is computed as an
-integer (promoted to at least 64 bits). Note that this may overflow if `n` is not small,
-but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
-If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](@ref).
-
-# Examples
-```jldoctest
-julia> factorial(6)
-720
-
-julia> factorial(21)
-ERROR: OverflowError: 21 is too large to look up in the table
-Stacktrace:
-[...]
-
-julia> factorial(21.0)
-5.109094217170944e19
-
-julia> factorial(big(21))
-51090942171709440000
-```
-"""
-factorial(x::Number) = gamma(x + 1) # fallback for x not Integer
-
-"""
     big(T::Type)
 
 Compute the type that represents the numeric type `T` with arbitrary precision.
