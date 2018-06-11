@@ -1207,8 +1207,8 @@ _mat_ldiv_rowvec_error() = throw(DimensionMismatch("Cannot left-divide matrix by
 *(A::RowVector, B::Adjoint{<:Any,<:AbstractRotation}) = A * adjoint(B.parent)
 
 # methods involving RowVector from base/linalg/generic.jl, to deprecate
-norm(tv::RowVector, q::Real) = q == Inf ? opnorm(rvtranspose(tv), 1) : opnorm(rvtranspose(tv), q/(q-1))
-norm(tv::RowVector) = opnorm(rvtranspose(tv))
+norm(tv::RowVector, q::Real) = q == Inf ? norm(rvtranspose(tv), 1) : norm(rvtranspose(tv), q/(q-1))
+norm(tv::RowVector) = norm(rvtranspose(tv))
 
 # methods involving RowVector from base/linalg/factorization.jl, to deprecate
 \(A::Adjoint{<:Any,<:Factorization}, B::RowVector) = adjoint(A.parent) \ B

@@ -372,7 +372,7 @@ The `p`-norm is defined as
 ```math
 \\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
 ```
-with ``a_i`` the entries of ``A``, ``| a_i |`` are their [`norm`](@ref)s, and
+with ``a_i`` the entries of ``A``, ``| a_i |`` the [`norm`](@ref) of ``a_i``, and
 ``n`` the length of ``A``. Since the `p`-norm is computed using the [`norm`](@ref)s
 of the entries of `A`, the `p`-norm of a vector of vectors is not compatible with
 the interpretation of it as a block vector in general if `p != 2`.
@@ -410,7 +410,7 @@ julia> norm([1 2 3; 4 5 6; 7 8 9])
 julia> norm([1 2 3 4 5 6 7 8 9])
 16.881943016134134
 
-julia> norm([1 2 3 4 5 6 7 8 9]')
+julia> norm(1:9)
 16.881943016134134
 
 julia> norm(hcat(v,v), 1) == norm(vcat(v,v), 1) != norm([v,v], 1)
@@ -515,7 +515,7 @@ end
 """
     opnorm(A::AbstractMatrix, p::Real=2)
 
-Computes the operator norm (or matrix norm) induced by the vector `p`-norm,
+Compute the operator norm (or matrix norm) induced by the vector `p`-norm,
 where valid values of `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices,
 `p=2` is currently not implemented.) Use [`norm`](@ref) to compute the Frobenius
 norm.
