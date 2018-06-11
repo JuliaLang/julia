@@ -512,7 +512,6 @@ let
             :LibGit2,
             :Logging,
             :Sockets,
-
             :Printf,
             :Profile,
             :Dates,
@@ -527,9 +526,9 @@ let
             :SuiteSparse,
             :SharedArrays,
             :Distributed,
+            :Pkg,
             :Test,
             :REPL,
-            :Pkg,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
