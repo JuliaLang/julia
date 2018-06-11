@@ -69,7 +69,7 @@ eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;
                nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
                tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
-               ritzvec::Bool=true, explicittransform=:AUTO)
+               ritzvec::Bool=true, explicittransform=nothing)
     n = checksquare(A)
 
     eigval_postprocess = false; # If we need to shift-and-invert eigvals as postprocessing
@@ -117,7 +117,7 @@ function _eigs(A, B;
         which=:LM
     end
 
-    if (explicittransform==:AUTO)
+    if (explicittransform==nothing)
         # Try to automatically detect if it is good to carry out an explicittransform
         if (isgeneral && (isshift  || which==:LM))
             explicittransform = true
