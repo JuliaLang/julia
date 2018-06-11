@@ -16,8 +16,26 @@ include(joinpath(BASE_TEST_PATH, "testenv.jl"))
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
+
+function kill_timer(delay)
+    # Give ourselves a generous timer here, just to prevent
+    # this causing e.g. a CI hang when there's something unexpected in the output.
+    # This is really messy and leaves the process in an undefined state.
+    # the proper and correct way to do this in real code would be to destroy the
+    # IO handles: `close(stdout_read); close(stdin_write)`
+    test_task = current_task()
+    function kill_test(t)
+        # **DON'T COPY ME.**
+        # The correct way to handle timeouts is to close the handle:
+        # e.g. `close(stdout_read); close(stdin_write)`
+        schedule(test_task, "hard kill repl test"; error=true)
+        print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
+    end
+    return Timer(kill_test, delay)
+end
+
 # REPL tests
-function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
+function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -31,6 +49,7 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
     repl.options = options
 
+    hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
     f(input.in, output.out, repl)
     t = @async begin
         close(input.in)
@@ -40,6 +59,7 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     @test read(err.out, String) == ""
     #display(read(output.out, String))
     Base._wait(t)
+    close(hard_kill)
     nothing
 end
 
@@ -68,14 +88,6 @@ fake_repl() do stdin_write, stdout_read, repl
     inc = true
     notify(b)
     wait(c)
-
-    # Give ourselves a generous timer here, just to prevent
-    # this causing e.g. a CI hang when there's something unexpected
-    # in the output.
-    t = Timer(200) do t
-        isopen(t) || return
-        error("Stuck waiting for repl test")
-    end
 
     # Latex completions
     write(stdin_write, "\x32\\alpha\t")
@@ -247,14 +259,12 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
     write(stdin_write, "\e[A\n")
-    t = Timer(10) do t
-        isopen(t) || return
-        error("Stuck waiting for the repl to write `1+1`")
+    let t = kill_timer(60)
+        # yield make sure this got processed
+        readuntil(stdout_read, "1+1")
+        readuntil(stdout_read, "\n\n")
+        close(t) # cancel timeout
     end
-    # yield make sure this got processed
-    readuntil(stdout_read, "1+1")
-    close(t)
-    readuntil(stdout_read, "\n\n")
 
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
@@ -287,11 +297,12 @@ fake_repl() do stdin_write, stdout_read, repl
     # Now, down arrow, enter, should get us back to 2
     write(stdin_write, "\e[B\n")
     readuntil(stdout_read, s2)
-    close(t)
 
     # Close REPL ^D
     write(stdin_write, '\x04')
     Base._wait(repltask)
+
+    nothing
 end
 
 function buffercontents(buf::IOBuffer)

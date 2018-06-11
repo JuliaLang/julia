@@ -547,8 +547,13 @@ function mktemp(fn::Function, parent=tempdir())
     try
         fn(tmp_path, tmp_io)
     finally
-        close(tmp_io)
-        rm(tmp_path)
+        # TODO: should we call GC.gc() first on error, to make it much more likely that `rm` succeeds?
+        try
+            close(tmp_io)
+            rm(tmp_path)
+        catch ex
+            @error "mktemp cleanup" _group=:file exception=(ex, catch_backtrace())
+        end
     end
 end
 
@@ -563,7 +568,12 @@ function mktempdir(fn::Function, parent=tempdir())
     try
         fn(tmpdir)
     finally
-        rm(tmpdir, recursive=true)
+        # TODO: should we call GC.gc() first on error, to make it much more likely that `rm` succeeds?
+        try
+            rm(tmpdir, recursive=true)
+        catch ex
+            @error "mktempdir cleanup" _group=:file exception=(ex, catch_backtrace())
+        end
     end
 end
 
