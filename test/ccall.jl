@@ -1459,3 +1459,15 @@ function ccall27478()
     ccall(Libdl.dlsym(module_lib, "getpid"), Cint, ())
 end
 @test code_typed(ccall27478, ()) isa Array
+
+# issue #27477
+@eval module Pkg27477
+const libccalltest = $libccalltest
+end
+
+module Test27477
+using ..Pkg27477
+test27477() = ccall((:ctest, Pkg27477.libccalltest), Complex{Int}, (Complex{Int},), 1 + 2im)
+end
+
+@test Test27477.test27477() == 2 + 0im
