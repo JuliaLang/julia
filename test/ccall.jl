@@ -1452,3 +1452,10 @@ function once_removed()
     mycompare_c = @cfunction($mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}))
 end
 @test isa(once_removed(), Base.CFunction)
+
+# issue #27478
+function ccall27478()
+    module_lib = Libdl.dlopen("libjulia")
+    ccall(Libdl.dlsym(module_lib, "getpid"), Cint, ())
+end
+@test code_typed(ccall27478, ()) isa Array

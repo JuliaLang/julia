@@ -11,9 +11,9 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, significand,
-       lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
+       hypot, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
-       beta, lbeta, @evalpoly
+       @evalpoly
 
 import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
@@ -484,7 +484,7 @@ Stacktrace:
 ```
 """
 log1p(x)
-for f in (:log2, :log10, :lgamma)
+for f in (:log2, :log10)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
@@ -1037,7 +1037,6 @@ include("special/exp.jl")
 include("special/exp10.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
-include("special/gamma.jl")
 include("special/rem_pio2.jl")
 include("special/log.jl")
 
@@ -1045,7 +1044,7 @@ include("special/log.jl")
 for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
           :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
           :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
-          :(log2), :(exponent), :(sqrt), :(gamma), :(lgamma))
+          :(log2), :(exponent), :(sqrt))
     @eval $(f)(::Missing) = missing
 end
 

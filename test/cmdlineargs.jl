@@ -48,13 +48,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         # make sure this is a non-fatal error and the REPL still loads
         @test v[1]
         @test isempty(v[2])
-        @test startswith(v[3], """
-                         ┌ Warning: Failed to insert InteractiveUtils into module Main
-                         │   exception =
-                         │    ArgumentError: Module InteractiveUtils not found in current path.
-                         │    Run `Pkg.add("InteractiveUtils")` to install the InteractiveUtils package.
-                         │    Stacktrace:
-                         """)
+        @test startswith(v[3], "┌ Warning: Failed to insert InteractiveUtils into module Main\n")
     end
     for nc in ("0", "-2", "x", "2x", " ")
         v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))

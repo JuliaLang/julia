@@ -547,6 +547,13 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             insert!(builder_value, fastkey, this)
         end
     end
+    function cleanup!(node::StackFrameTree)
+        empty!(node.builder_key)
+        empty!(node.builder_value)
+        foreach(cleanup!, values(node.down))
+        nothing
+    end
+    cleanup!(root)
     return root
 end
 

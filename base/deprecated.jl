@@ -1699,6 +1699,19 @@ end
 @deprecate_moved varm "StatsBase"
 @deprecate_moved linreg "StatsBase"
 
+# ?? more special functions to SpecialFunctions.jl
+@deprecate_moved gamma "SpecialFunctions"
+@deprecate_moved lgamma "SpecialFunctions"
+@deprecate_moved beta "SpecialFunctions"
+@deprecate_moved lbeta "SpecialFunctions"
+@deprecate_moved lfact "SpecialFunctions"
+function factorial(x::Number)
+    error("""factorial(x::Number) has been moved to the package SpecialFunctions.jl.
+        Run `Pkg.add("SpecialFunctions")` to install it, restart Julia,
+        and then run `using SpecialFunctions` to load it.
+        """)
+end
+
 # issue #27093
 # in src/jlfrontend.scm a call to `@deprecate` is generated for per-module `eval(m, x)`
 @eval Core Main.Base.@deprecate(eval(e), Core.eval(Main, e))

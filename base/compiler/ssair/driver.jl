@@ -50,18 +50,14 @@ function normalize(@nospecialize(stmt), meta::Vector{Any})
     return stmt
 end
 
-function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int)
+function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, spvals::SimpleVector)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
     oldidx = 1
     changemap = fill(0, length(code))
     while idx <= length(code)
-        stmt = code[idx]
-        if isexpr(stmt, :(=))
-            stmt = stmt.args[2]
-        end
-        if isa(stmt, Expr) && stmt.typ === Union{}
+        if code[idx] isa Expr && ci.ssavaluetypes[idx] === Union{}
             if !(idx < length(code) && isexpr(code[idx+1], :unreachable))
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
@@ -113,14 +109,14 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int)
     @timeit "domtree 1" domtree = construct_domtree(cfg)
     ir = let code = Any[nothing for _ = 1:length(code)]
              argtypes = ci.slottypes[1:(nargs+1)]
-            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), argtypes, ci.linetable[1].mod, meta)
+            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), argtypes, meta, spvals)
         end
-    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs)
+    @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, spvals)
     return ir
 end
 
 function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
-    ir = just_construct_ssa(ci, copy_exprargs(ci.code), nargs)
+    ir = just_construct_ssa(ci, copy_exprargs(ci.code), nargs, sv.sp)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)

@@ -734,7 +734,7 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
             modpath, modkey, build_id = dep::Tuple{String, PkgId, UInt64}
             dep = _tryrequire_from_serialized(modkey, build_id, modpath)
             if dep === nothing
-                @debug "Required dependency $modname failed to load from cache file for $modpath."
+                @debug "Required dependency $modkey failed to load from cache file for $modpath."
                 staledeps = true
                 break
             end
@@ -865,8 +865,23 @@ For more details regarding code loading, see the manual.
 function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
     # Core.println("require($(PkgId(into)), $mod) -> $uuidkey")
-    uuidkey === nothing &&
-        throw(ArgumentError("Module $mod not found in current path.\nRun `Pkg.add(\"$mod\")` to install the $mod package."))
+    if uuidkey === nothing
+        where = PkgId(into)
+        if where.uuid === nothing
+            throw(ArgumentError("""
+                Package $mod not found in current path:
+                 - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
+                """))
+        else
+            throw(ArgumentError("""
+                Package $(where.name) does not have $mod in its dependencies:
+                 - If you have $(where.name) checked out for development and have
+                   added $mod as a dependency but haven't updated your primary
+                   environment's manifest file, try `Pkg.resolve()`.
+                 - Otherwise you may need to report an issue with $(where.name).
+                """))
+        end
+    end
     if _track_dependencies[]
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
@@ -947,7 +962,10 @@ function _require(pkg::PkgId)
         name = pkg.name
         path = locate_package(pkg)
         if path === nothing
-            throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
+            throw(ArgumentError("""
+                Package $pkg is required but does not seem to be installed:
+                 - Run `Pkg.instantiate()` to install all recorded dependencies.
+                """))
         end
 
         # attempt to load the module file via the precompile cache locations
@@ -1179,7 +1197,7 @@ function compilecache(pkg::PkgId)
     # decide where to get the source file from
     name = pkg.name
     path = locate_package(pkg)
-    path === nothing && throw(ArgumentError("$name not found in path"))
+    path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
     # decide where to put the resulting cache file
     cachefile = abspath(DEPOT_PATH[1], cache_file_entry(pkg))
     cachepath = dirname(cachefile)

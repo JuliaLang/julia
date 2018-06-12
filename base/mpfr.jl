@@ -12,18 +12,16 @@ import
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, log1p,
+        log1p,
         eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, beta, RefValue
+        isone, big, RefValue
 
 import .Base.Rounding: rounding_raw, setrounding_raw
 
 import .Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
-
-import .Base.Math.lgamma_r
 
 import .Base.FastMath.sincos_fast
 
@@ -38,6 +36,7 @@ function __init__()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module MPFR")
     end
+    nothing
 end
 
 const ROUNDING_MODE = RefValue{Cint}(0)
@@ -655,7 +654,7 @@ function sum(arr::AbstractArray{BigFloat})
 end
 
 # Functions for which NaN results are converted to DomainError, following Base
-for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :gamma)
+for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh)
     @eval begin
         function ($f)(x::BigFloat)
             isnan(x) && return x
@@ -667,27 +666,10 @@ for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :at
     end
 end
 
-# log of absolute value of gamma function
-const lgamma_signp = Ref{Cint}()
-function lgamma(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_lgamma,:libmpfr), Cint, (Ref{BigFloat}, Ref{Cint}, Ref{BigFloat}, Int32), z, lgamma_signp, x, ROUNDING_MODE[])
-    return z
-end
-
-lgamma_r(x::BigFloat) = (lgamma(x), lgamma_signp[])
-
 function atan(y::BigFloat, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_atan2, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Int32), z, y, x, ROUNDING_MODE[])
     return z
-end
-if version() >= v"4.0.0"
-    function beta(y::BigFloat, x::BigFloat)
-        z = BigFloat()
-        ccall((:mpfr_beta, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Int32), z, y, x, ROUNDING_MODE[])
-        return z
-    end
 end
 
 # Utility functions

@@ -50,7 +50,7 @@ jobs:
       - run: | # move source tree out of the way, run tests from install tree
           cd .. &&
           mv project julia-src &&
-          /tmp/julia/bin/julia -e 'versioninfo()' &&
+          /tmp/julia/bin/julia -e 'Base.require(Main, :InteractiveUtils).versioninfo()' &&
           /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
           /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true' &&
           pushd /tmp/julia/share/julia/test &&

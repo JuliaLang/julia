@@ -10,6 +10,7 @@ export
     Threads,
     Iterators,
     Broadcast,
+    MathConstants,
 
 # Types
     AbstractChannel,
@@ -260,7 +261,6 @@ export
     floor,
     fma,
     frexp,
-    gamma,
     gcd,
     gcdx,
     hypot,
@@ -284,8 +284,6 @@ export
     ldexp,
     leading_ones,
     leading_zeros,
-    lfact,
-    lgamma,
     log,
     log10,
     log1p,
@@ -347,10 +345,6 @@ export
     ∛,
     ≈,
     ≉,
-
-# specfun
-    beta,
-    lbeta,
 
 # arrays
     axes,

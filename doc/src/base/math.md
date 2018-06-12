@@ -172,11 +172,6 @@ Base.prevpow
 Base.nextprod
 Base.invmod
 Base.powermod
-Base.Math.gamma
-Base.Math.lgamma
-Base.Math.lfact
-Base.Math.beta
-Base.Math.lbeta
 Base.ndigits
 Base.widemul
 Base.Math.@evalpoly

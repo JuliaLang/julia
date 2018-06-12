@@ -271,7 +271,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
             elseif isexpr(def, :new)
-                typ = def.typ
+                typ = types(compact)[leaf]
                 if isa(typ, UnionAll)
                     typ = unwrap_unionall(typ)
                 end
@@ -555,11 +555,11 @@ function getfield_elim_pass!(ir::IRCode, domtree)
                     old_preserves[pidx] = nothing
                     continue
                 elseif isexpr(def, :new)
-                    typ = def.typ
+                    typ = widenconst(compact_exprtype(compact, SSAValue(defidx)))
                     if isa(typ, UnionAll)
                         typ = unwrap_unionall(typ)
                     end
-                    if !typ.mutable
+                    if typ isa DataType && !typ.mutable
                         process_immutable_preserve(new_preserves, compact, def)
                         old_preserves[pidx] = nothing
                         continue
@@ -576,7 +576,6 @@ function getfield_elim_pass!(ir::IRCode, domtree)
                 old_preserves = filter(ssa->ssa !== nothing, old_preserves)
                 new_expr = Expr(:foreigncall, stmt.args[1:(6+nccallargs-1)]...,
                     old_preserves..., new_preserves...)
-                new_expr.typ = stmt.typ
                 compact[idx] = new_expr
             end
             continue
@@ -674,7 +673,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         # Find the type for this allocation
         defexpr = ir[SSAValue(idx)]
         isexpr(defexpr, :new) || continue
-        typ = defexpr.typ
+        typ = ir.types[idx]
         if isa(typ, UnionAll)
             typ = unwrap_unionall(typ)
         end
@@ -758,7 +757,6 @@ function getfield_elim_pass!(ir::IRCode, domtree)
             old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
             new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
                 old_preserves..., new_preserves...)
-            new_expr.typ = useexpr.typ
             ir[SSAValue(use)] = new_expr
         end
     end

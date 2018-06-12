@@ -151,6 +151,7 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
     return
 end
 
+resolve() = up(level=UPLEVEL_FIXED)
 
 pin(pkg::Union{String, PackageSpec}; kwargs...) = pin([pkg]; kwargs...)
 pin(pkgs::Vector{String}; kwargs...)            = pin([PackageSpec(pkg) for pkg in pkgs]; kwargs...)

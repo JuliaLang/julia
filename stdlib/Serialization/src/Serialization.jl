@@ -137,15 +137,16 @@ const REF_OBJECT_TAG       = Int32(o0+13)
 const FULL_GLOBALREF_TAG   = Int32(o0+14)
 const HEADER_TAG           = Int32(o0+15)
 
-writetag(s::IO, tag) = write(s, UInt8(tag))
+writetag(s::IO, tag) = (write(s, UInt8(tag)); nothing)
 
 function write_as_tag(s::IO, tag)
     tag < VALUE_TAGS && write(s, UInt8(0))
     write(s, UInt8(tag))
+    nothing
 end
 
 # cycle handling
-function serialize_cycle(s::AbstractSerializer, x)
+function serialize_cycle(s::AbstractSerializer, @nospecialize(x))
     offs = get(s.table, x, -1)::Int
     if offs != -1
         if offs <= typemax(UInt16)
@@ -225,6 +226,7 @@ function serialize(s::AbstractSerializer, x::Symbol)
         write(s.io, Int32(len))
     end
     unsafe_write(s.io, pname, len)
+    nothing
 end
 
 function serialize_array_data(s::IO, a)
@@ -290,6 +292,7 @@ function serialize(s::AbstractSerializer, ss::String)
         write(s.io, Int64(len))
     end
     write(s.io, ss)
+    nothing
 end
 
 function serialize(s::AbstractSerializer, ss::SubString{String})
@@ -326,7 +329,6 @@ function serialize(s::AbstractSerializer, ex::Expr)
         write(s.io, Int32(l))
     end
     serialize(s, ex.head)
-    serialize(s, ex.typ)
     for a in ex.args
         serialize(s, a)
     end
@@ -546,6 +548,7 @@ function serialize_type_data(s, t::DataType)
             end
         end
     end
+    nothing
 end
 
 function serialize(s::AbstractSerializer, t::DataType)
@@ -575,6 +578,7 @@ function serialize(s::AbstractSerializer, n::Int32)
         writetag(s.io, INT32_TAG)
         write(s.io, n)
     end
+    nothing
 end
 
 function serialize(s::AbstractSerializer, n::Int64)
@@ -587,6 +591,7 @@ function serialize(s::AbstractSerializer, n::Int64)
         writetag(s.io, INT64_TAG)
         write(s.io, n)
     end
+    nothing
 end
 
 serialize(s::AbstractSerializer, ::Type{Bottom}) = write_as_tag(s.io, BOTTOM_TAG)
@@ -636,6 +641,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
             end
         end
     end
+    nothing
 end
 
 """
@@ -964,9 +970,7 @@ function deserialize_expr(s::AbstractSerializer, len)
     e = Expr(:temp)
     resolve_ref_immediately(s, e)
     e.head = deserialize(s)::Symbol
-    ty = deserialize(s)
     e.args = Any[ deserialize(s) for i = 1:len ]
-    e.typ = ty
     e
 end
 

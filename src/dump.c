@@ -630,7 +630,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             write_int32(s->s, l);
         }
         jl_serialize_value(s, e->head);
-        jl_serialize_value(s, e->etype);
         for (i = 0; i < l; i++) {
             jl_serialize_value(s, jl_exprarg(e, i));
         }
@@ -1488,8 +1487,6 @@ static jl_value_t *jl_deserialize_value_expr(jl_serializer_state *s, jl_value_t 
     jl_expr_t *e = jl_exprn((jl_sym_t*)jl_deserialize_value(s, NULL), len);
     if (usetable)
         backref_list.items[pos] = e;
-    e->etype = jl_deserialize_value(s, &e->etype);
-    jl_gc_wb(e, e->etype);
     jl_value_t **data = (jl_value_t**)(e->args->data);
     for (i = 0; i < len; i++) {
         data[i] = jl_deserialize_value(s, &data[i]);

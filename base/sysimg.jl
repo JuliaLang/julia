@@ -338,7 +338,6 @@ include("methodshow.jl")
 include("floatfuncs.jl")
 include("math.jl")
 using .Math
-import .Math: gamma
 const (√)=sqrt
 const (∛)=cbrt
 
@@ -512,7 +511,6 @@ let
             :LibGit2,
             :Logging,
             :Sockets,
-
             :Printf,
             :Profile,
             :Dates,
@@ -527,9 +525,9 @@ let
             :SuiteSparse,
             :SharedArrays,
             :Distributed,
+            :Pkg,
             :Test,
             :REPL,
-            :Pkg,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))

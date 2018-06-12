@@ -51,44 +51,7 @@ mutable struct InferenceState
         code = src.code::Array{Any,1}
         toplevel = !isa(linfo.def, Method)
 
-        if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
-            # linfo is unspecialized
-            sp = Any[]
-            sig = linfo.def.sig
-            while isa(sig, UnionAll)
-                push!(sp, sig.var)
-                sig = sig.body
-            end
-            sp = svec(sp...)
-        else
-            sp = linfo.sparam_vals
-            if _any(t->isa(t,TypeVar), sp)
-                sp = collect(Any, sp)
-            end
-        end
-        if !isa(sp, SimpleVector)
-            for i = 1:length(sp)
-                v = sp[i]
-                if v isa TypeVar
-                    ub = v.ub
-                    while ub isa TypeVar
-                        ub = ub.ub
-                    end
-                    if has_free_typevars(ub)
-                        ub = Any
-                    end
-                    lb = v.lb
-                    while lb isa TypeVar
-                        lb = lb.lb
-                    end
-                    if has_free_typevars(lb)
-                        lb = Bottom
-                    end
-                    sp[i] = TypeVar(v.name, lb, ub)
-                end
-            end
-            sp = svec(sp...)
-        end
+        sp = spvals_from_meth_instance(linfo::MethodInstance)
 
         nssavalues = src.ssavaluetypes::Int
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
@@ -162,6 +125,49 @@ function InferenceState(result::InferenceResult, optimize::Bool, cached::Bool, p
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
     return InferenceState(result, src, optimize, cached, params)
+end
+
+function spvals_from_meth_instance(linfo::MethodInstance)
+    toplevel = !isa(linfo.def, Method)
+    if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
+        # linfo is unspecialized
+        sp = Any[]
+        sig = linfo.def.sig
+        while isa(sig, UnionAll)
+            push!(sp, sig.var)
+            sig = sig.body
+        end
+        sp = svec(sp...)
+    else
+        sp = linfo.sparam_vals
+        if _any(t->isa(t,TypeVar), sp)
+            sp = collect(Any, sp)
+        end
+    end
+    if !isa(sp, SimpleVector)
+        for i = 1:length(sp)
+            v = sp[i]
+            if v isa TypeVar
+                ub = v.ub
+                while ub isa TypeVar
+                    ub = ub.ub
+                end
+                if has_free_typevars(ub)
+                    ub = Any
+                end
+                lb = v.lb
+                while lb isa TypeVar
+                    lb = lb.lb
+                end
+                if has_free_typevars(lb)
+                    lb = Bottom
+                end
+                sp[i] = TypeVar(v.name, lb, ub)
+            end
+        end
+        sp = svec(sp...)
+    end
+    return sp
 end
 
 _topmod(sv::InferenceState) = _topmod(sv.mod)

@@ -67,7 +67,6 @@ const fast_op =
          :exp => :exp_fast,
          :expm1 => :expm1_fast,
          :hypot => :hypot_fast,
-         :lgamma => :lgamma_fast,
          :log10 => :log10_fast,
          :log1p => :log1p_fast,
          :log2 => :log2_fast,
@@ -276,7 +275,7 @@ sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
 const libm = Base.libm_name
 
 for f in (:acosh, :asinh, :atanh, :cbrt, :cos,
-          :cosh, :exp2, :expm1, :lgamma, :log10, :log1p, :log2,
+          :cosh, :exp2, :expm1, :log10, :log1p, :log2,
           :log, :sin, :sinh, :tan, :tanh)
     f_fast = fast_op[f]
     @eval begin
@@ -377,7 +376,7 @@ end
 # fall-back implementations and type promotion
 
 for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
-          :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1, :lgamma,
+          :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1,
           :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan,
           :tanh)
     f_fast = fast_op[f]

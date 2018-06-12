@@ -209,8 +209,6 @@ end
 # PR 13825
 let ex = :(a + b)
     @test string(ex) == "a + b"
-    ex.typ = Integer
-    @test string(ex) == "(a + b)::Integer"
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
