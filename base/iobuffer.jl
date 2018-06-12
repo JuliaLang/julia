@@ -234,7 +234,10 @@ function seek(io::GenericIOBuffer, n::Integer)
 end
 
 function seekend(io::GenericIOBuffer)
-    io.ptr = io.size+1
+    if !io.seekable && !ismarked(io)
+        io.size = 0
+    end
+    io.ptr = io.size + 1
     return io
 end
 
@@ -246,7 +249,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     if n > length(io.data)
         resize!(io.data, n)
     end
-    io.data[io.size+1:n] .= 0
+    io.data[(io.size + 1):n] .= 0x00
     io.size = n
     io.ptr = min(io.ptr, n+1)
     ismarked(io) && io.mark > n && unmark(io)

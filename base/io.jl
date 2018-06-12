@@ -261,6 +261,33 @@ julia> bytesavailable(io)
 bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io))
 
 """
+    position(s)
+
+Get the current position of a stream.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> position(io)
+5
+
+julia> skip(io, 10);
+
+julia> position(io)
+15
+
+julia> seekend(io);
+
+julia> position(io)
+35
+```
+"""
+position(io::AbstractPipe) = position(pipe_reader(io))
+
+"""
     eof(stream) -> Bool
 
 Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
@@ -912,7 +939,9 @@ Add a mark at the current position of stream `s`. Return the marked position.
 See also [`unmark`](@ref), [`reset`](@ref), [`ismarked`](@ref).
 """
 function mark(io::IO)
-    io.mark = position(io)
+    p = position(io)
+    io.mark = p
+    return p
 end
 
 """
@@ -962,6 +991,79 @@ ismarked(io::IO) = io.mark >= 0
 Commit all currently buffered writes to the given stream.
 """
 flush(io::IO) = nothing
+
+"""
+    truncate_text(io::IO, at_width, at_chars, truncmark)
+
+Truncate the content in the buffer in the buffer to `at_width` units wide,
+or at the first occurrence of any of the characters in `at_chars`.
+Append `truncmark`, if there is room for it, if truncation occurs.
+
+See also [`bytesavailable_until_text`](@ref).
+"""
+function truncate_text(io::IO, at_width::Integer, at_chars="", truncmark="…")
+    nb = bytesavailable_until_text(io, at_width, at_chars, truncmark)
+    if nb < bytesavailable(io)
+        truncate(io, nb)
+        if nb > 0
+            mark(io)
+            seekend(io)
+            write(io, truncmark)
+            reset(io)
+        end
+    end
+    return io
+end
+
+"""
+    bytesavailable_until_text(io::IO, width, chars=Set(), truncmark="…")
+
+Compute the number of bytes in the buffer until either
+the text is `width` units wide, minus the textwidth of `truncmark`,
+or any of the characters in `chars` is encountered.
+May destroy the current IO mark.
+Return the number of bytes available for reading without exceeding
+width (even after appending truncmark) or returning a char in chars.
+"""
+function bytesavailable_until_text(io::IO, width::Integer, chars="", truncmark="…")
+    truncwidth = textwidth(truncmark)
+    if width <= 0 || width < truncwidth
+        return 0
+    end
+
+    # backup current state
+    # in preparation of examining its contents,
+    # starting at the current position
+    mark(io)
+    trunc = false
+    wid = 0
+    truncidx = 0
+    try
+        while !eof(io)
+            lastidx = position(io)
+            c = read(io, Char)
+            wid += textwidth(c)
+            if c in chars
+                truncidx == 0 && (truncidx = lastidx)
+                trunc = true
+                break
+            elseif wid >= width - truncwidth
+                truncidx == 0 && (truncidx = lastidx)
+                if wid >= width
+                    trunc = true
+                    break
+                end
+            end
+        end
+    finally
+        reset(io)
+    end
+
+    return (trunc ? truncidx - position(io) : bytesavailable(io))
+end
+
+bytesavailable_until_text(io::AbstractPipe, width::Integer, chars="", truncmark="…") =
+    bytesavailable_until_text(pipe_reader(io), width, chars, truncmark)
 
 """
     skipchars(predicate, io::IO; linecomment=nothing)

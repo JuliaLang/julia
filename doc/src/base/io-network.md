@@ -42,6 +42,7 @@ Base.redirect_stdin
 Base.redirect_stdin(::Function, ::Any)
 Base.readchomp
 Base.truncate
+Base.truncate_text
 Base.skipchars
 Base.countlines
 Base.PipeBuffer
@@ -126,6 +127,7 @@ Base.Multimedia.istextmime
 
 ```@docs
 Base.bytesavailable
+Base.bytesavailable_until_text
 Base.ntoh
 Base.hton
 Base.ltoh

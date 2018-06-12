@@ -92,7 +92,7 @@ These regions can be used to colorize, or otherwise structure or describe, each 
 """
 struct IOFormatBuffer <: AbstractPipe
     buf::IOBuffer
-    annotation::Vector{Any}
+    annotation::Vector{Any} # covers bytes of buf from [start to end]
     starts::Vector{Int}
     ends::Vector{Int}
     function IOFormatBuffer()
@@ -104,6 +104,55 @@ end
 
 pipe_writer(io::IOFormatBuffer) = io.buf
 pipe_reader(io::IOFormatBuffer) = error("IOFormatBuffer not readable")
+
+"""
+    bytesavailable(io::IOFormatBuffer)
+
+Return the amount of data (number of bytes) in the IOFormatBuffer.
+"""
+bytesavailable(io::IOFormatBuffer) = io.buf.size
+
+# While IOFormatBuffer doesn't define `pipe_reader`,
+# it is valid to try to ask some questions about the read state.
+# It is just not valid to try to actually change that state!
+mark(io::IOFormatBuffer) = mark(io.buf)
+reset(io::IOFormatBuffer) = reset(io.buf)
+unmark(io::IOFormatBuffer) = unmark(io.buf)
+ismarked(io::IOFormatBuffer) = ismarked(io.buf)
+seekend(io::IOFormatBuffer) = io
+
+function bytesavailable_until_text(io::IOFormatBuffer, width::Integer, chars="", truncmark="…")
+    io.buf.readable = true
+    nb = bytesavailable_until_text(io.buf, width, chars, truncmark)
+    io.buf.readable = false
+    return nb
+end
+
+"""
+    truncate(io::IOFormatBuffer, n)
+
+Truncate the content in the buffer to at most `n` bytes,
+before applying any formatting.
+
+See also [`bytesavailable(io::IOFormatBuffer)`](@ref).
+"""
+function truncate(io::IOFormatBuffer, n::Integer)
+    ismarked(io.buf) && io.buf.mark > n && unmark(io.buf)
+    if n <= 0
+        empty!(io.annotation)
+        empty!(io.starts)
+        empty!(io.ends)
+        seekend(io.buf)
+    elseif n < bytesavailable(io)
+        io.buf.size = n
+        io.buf.ptr = 1
+        for id in 1:length(io.annotation)
+            io.starts[id] > n && (io.starts[id] = n)
+            io.ends[id] >= n && (io.ends[id] = n - 1)
+        end
+    end
+    return io
+end
 
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOContext(IOFormatBuffer(), io)
@@ -159,9 +208,9 @@ function apply_ansi_format(mark_io::IOFormatBuffer)
     emptyline = true
     for i in 1:length(out)
         # record all of the spans that start on this byte
-        while nextid <= length(mark_io.starts) && (mark_io.starts[nextid] == i)
+        while nextid <= length(mark_io.starts) && mark_io.starts[nextid] == i
             fmt = mark_io.annotation[nextid]
-            if haskey(text_colors, fmt)
+            if mark_io.ends[nextid] >= i && haskey(text_colors, fmt)
                 # determine what effect this formatting command will have
                 is_fmt = findfirst(isequal(fmt), ansi_formats)
                 if is_fmt === nothing
@@ -251,11 +300,8 @@ function write(io::IO, mark_io::IOFormatBuffer)
     if get(io, :color, false)
         fmt = apply_ansi_format(mark_io)
     end
-    mark_io.buf.seekable = true
-    truncate(mark_io.buf, 0)
-    mark_io.buf.seekable = false
-    write(io, fmt)
-    nothing
+    truncate(mark_io, 0)
+    return write(io, fmt)
 end
 
 #function write(io::IOFormatBuffer, mark_io::IOFormatBuffer)
