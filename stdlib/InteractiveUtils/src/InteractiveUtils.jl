@@ -6,7 +6,7 @@ module InteractiveUtils
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, peakflops, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native
+    @code_typed, @code_lowered, @code_llvm, @code_native, Pkg
 
 import Base.Docs.apropos
 
@@ -15,7 +15,7 @@ using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_ty
 
 using Markdown
 using LinearAlgebra  # for peakflops
-import OldPkg
+import Pkg, OldPkg
 
 include("editless.jl")
 include("codeview.jl")
