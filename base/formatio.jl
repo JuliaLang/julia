@@ -304,10 +304,30 @@ function write(io::IO, mark_io::IOFormatBuffer)
     return write(io, fmt)
 end
 
-#function write(io::IOFormatBuffer, mark_io::IOFormatBuffer)
-#    TODO: preserve `annotation` information, rather than eagerly rendering it
-#end
-#write(io::IOContext{IOFormatBuffer}, mark_io::IOFormatBuffer) = write(io.io, mark_io)
+function write(to::IOFormatBuffer, from::IOFormatBuffer)
+    # preserve `annotation` information, rather than eagerly rendering it
+    # offset all [start:end] range by `p`
+    p = bytesavailable(to.buf)
+    nb = write(to.buf, from.buf)
+    # `nb` usually equals bytesavailable(from.buf), unless there wasn't enough space in `to`
+    for id in 1:length(from.annotation)
+        from_start = from.starts[id]
+        if from_start > nb + 1
+            from_start = nb + 1
+        end
+        from_end = from.ends[id]
+        if from_end == -1 || from_end > nb
+            from_end = nb # do `pop!(from, 1)` now
+        end
+        push!(to.annotation, from.annotation[id])
+        push!(to.starts, from_start + p)
+        push!(to.ends, from_end + p)
+    end
+    to === from || truncate(from, 0)
+    return nb
+end
+
+write(io::IOContext{IOFormatBuffer}, mark_io::IOFormatBuffer) = write(io.io, mark_io)
 
 # NOTE: I recommend wrapping this html output in:
 #   <div style="white-space: pre-wrap; font-family: monospace; unicode-bidi: embed">
