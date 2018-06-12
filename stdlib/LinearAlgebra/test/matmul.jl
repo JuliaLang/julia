@@ -425,7 +425,6 @@ end
     @test  transpose(Xv2)*Xv2     ≈ XtX
     @test (transpose(Xv3)*Xv3)[1] ≈ XtX
     @test  Xv1'*Xv1     ≈ XcX
-    @test_throws MethodError Xv2'*Xv2 ≈ XcX # Xv2'*Xv2 is a scalar, XcX a matrix
     @test Xv2'*Xv2 ≈ norm(Xv2)^2
     @test (Xv3'*Xv3)[1] ≈ XcX
     @test (Xv1*transpose(Xv1))[1] ≈ XXt
