@@ -69,7 +69,7 @@ eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;
                nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
                tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
-               ritzvec::Bool=true, explicittransform=nothing)
+               ritzvec::Bool=true, explicittransform::Union{Bool, Nothing}=nothing)
     n = checksquare(A)
 
     eigval_postprocess = false; # If we need to shift-and-invert eigvals as postprocessing
