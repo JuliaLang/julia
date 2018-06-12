@@ -40,6 +40,59 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
+function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
+    truncwidth = textwidth(truncmark)
+    (width <= 0 || width < truncwidth) && return ""
+
+    wid = truncidx = lastidx = 0
+    for (idx, c) in pairs(str)
+        lastidx = idx
+        wid += textwidth(c)
+        wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
+        (wid >= width || c in chars) && break
+    end
+
+    lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
+    truncidx == 0 && (truncidx = lastidx)
+    if lastidx < lastindex(str)
+        return String(SubString(str, 1, truncidx) * truncmark)
+    else
+        return String(str)
+    end
+end
+
+function show(io::IO, t::AbstractDict{K,V}) where V where K
+    recur_io = IOContext(io, :SHOWN_SET => t)
+    limit::Bool = get(io, :limit, false)
+    if !haskey(io, :compact)
+        recur_io = IOContext(recur_io, :compact => true)
+    end
+
+    # show in a Julia-syntax-like form: Dict(k=>v, ...)
+    if isempty(t)
+        print(io, typeof(t), "()")
+    else
+        if isconcretetype(K) && isconcretetype(V)
+            print(io, typeof(t).name)
+        else
+            print(io, typeof(t))
+        end
+        print(io, '(')
+        if !show_circular(io, t)
+            first = true
+            n = 0
+            for pair in t
+                first || print(io, ',')
+                first = false
+                show(recur_io, pair)
+                n+=1
+                limit && n >= 10 && (print(io, "…"); break)
+            end
+        end
+        print(io, ')')
+    end
+end
+
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     print(io, summary(iter))
     isempty(iter) && return
