@@ -99,7 +99,7 @@ git-tree-sha1 = "1bf63d3be994fe83456a03b874b409cfd59a6373"
 version = "0.1.5"
 
 [[Pub]]
-uuid = "ba13f791-ae1d-465a-978b-69c3ad90f72b"
+uuid = "c07ecb7d-0dc9-4db7-8803-fadaaeaf08e1"
 git-tree-sha1 = "9ebd50e2b0dd1e110e842df3b433cb5869b0dd38"
 version = "2.1.4"
 
@@ -126,13 +126,13 @@ A materialized representation of this dependency `graph` looks like this:
 graph = Dict{UUID,Dict{Symbol,UUID}}(
     # Priv – the private one:
     UUID("ba13f791-ae1d-465a-978b-69c3ad90f72b") => Dict{Symbol,UUID}(
-        :Pub   => UUID("ba13f791-ae1d-465a-978b-69c3ad90f72b"),
+        :Pub   => UUID("c07ecb7d-0dc9-4db7-8803-fadaaeaf08e1"),
         :Zebra => UUID("f7a24cb4-21fc-4002-ac70-f0e3a0dd3f62"),
     ),
     # Priv – the public one:
     UUID("2d15fe94-a1f7-436c-a4d8-07a9a496e01c") => Dict{Symbol,UUID}(),
     # Pub:
-    UUID("ba13f791-ae1d-465a-978b-69c3ad90f72b") => Dict{Symbol,UUID}(
+    UUID("c07ecb7d-0dc9-4db7-8803-fadaaeaf08e1") => Dict{Symbol,UUID}(
         :Priv  => UUID("2d15fe94-a1f7-436c-a4d8-07a9a496e01c"),
         :Zebra => UUID("f7a24cb4-21fc-4002-ac70-f0e3a0dd3f62"),
     ),
@@ -141,10 +141,10 @@ graph = Dict{UUID,Dict{Symbol,UUID}}(
 )
 ```
 
-Given this dependency `graph`, when Julia sees `import Priv` in the `Pub` package—which has UUID `ba13f791-ae1d-465a-978b-69c3ad90f72b`—it looks up:
+Given this dependency `graph`, when Julia sees `import Priv` in the `Pub` package—which has UUID `c07ecb7d-0dc9-4db7-8803-fadaaeaf08e1`—it looks up:
 
 ```julia
-graph[UUID("ba13f791-ae1d-465a-978b-69c3ad90f72b")][:Priv]
+graph[UUID("c07ecb7d-0dc9-4db7-8803-fadaaeaf08e1")][:Priv]
 ```
 
 and gets `2d15fe94-a1f7-436c-a4d8-07a9a496e01c` , which indicates that in the context of the `Pub` package,  `import Priv` refers to the public `Priv` package, rather than the private one which the app depends on directly. This is how the name `Priv` can refer to different packages in the main project than it does in one of the packages dependencies, which allows for name collisions in the package ecosystem.
@@ -180,7 +180,7 @@ paths = Dict{Tuple{UUID,Symbol},String}(
         # package installed in the system depot:
         "/usr/local/julia/packages/Priv/HDkr/src/Priv.jl",
     # Pub:
-    (UUID("ba13f791-ae1d-465a-978b-69c3ad90f72b"), :Pub) =>
+    (UUID("c07ecb7d-0dc9-4db7-8803-fadaaeaf08e1"), :Pub) =>
         # package installed in the user depot:
         "/home/me/.julia/packages/Pub/oKpw/src/Pub.jl",
     # Zebra:
