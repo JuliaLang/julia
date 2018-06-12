@@ -553,7 +553,7 @@ function is_default_method(m::Method)
 end
 
 @noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(linearindices.(A), ", ", " and "))"))
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(LinearIndices.(A), ", ", " and "))"))
 end
 @noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
     throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))

@@ -83,7 +83,7 @@ if is_primary_base_module
         return RefArray(a) # effectively a no-op
     end
     function Ref{P}(a::Array{T}) where P<:Union{Ptr,Cwstring,Cstring} where T
-        if (!isbits(T) && T <: eltype(P))
+        if (!isbitstype(T) && T <: eltype(P))
             # this Array already has the right memory layout for the requested Ref
             return RefArray(a,1,false) # root something, so that this function is type-stable
         else

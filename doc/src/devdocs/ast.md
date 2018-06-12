@@ -544,3 +544,10 @@ component is optional (and omitted when the current line number, but not file na
 changes).
 
 These expressions are represented as `LineNumberNode`s in Julia.
+
+### Macros
+
+Macro hygiene is represented through the expression head pair `escape` and `hygienic-scope`.
+The result of a macro expansion is automatically wrapped in `(hygienic-scope block module)`,
+to represent the result of the new scope. The user can insert `(escape block)` inside
+to interpolate code from the caller.

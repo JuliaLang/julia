@@ -86,7 +86,7 @@ end
 # Transform indices to be "dense"
 _trimmedindex(i::Real) = oftype(i, 1)
 _trimmedindex(i::AbstractUnitRange) = oftype(i, OneTo(length(i)))
-_trimmedindex(i::AbstractArray) = oftype(i, reshape(linearindices(i), axes(i)))
+_trimmedindex(i::AbstractArray) = oftype(i, reshape(eachindex(IndexLinear(), i), axes(i)))
 
 ## SubArray creation
 # We always assume that the dimensionality of the parent matches the number of
@@ -105,6 +105,7 @@ given indices instead of making a copy.  Calling [`getindex`](@ref) or
 [`setindex!`](@ref) on the returned `SubArray` computes the
 indices to the parent array on the fly without checking bounds.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:

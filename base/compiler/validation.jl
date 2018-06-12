@@ -56,7 +56,7 @@ end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
 function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind::String)
-    #=if JLOptions().debug_level == 2
+    if JLOptions().debug_level == 2
         # this is a debug build of julia, so let's validate linfo
         errors = validate_code(linfo, src)
         if !isempty(errors)
@@ -70,7 +70,7 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
                 end
             end
         end
-    end=#
+    end
 end
 
 """
@@ -104,7 +104,8 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     ssavals = BitSet()
     lhs_slotnums = BitSet()
     for x in c.code
-        if isa(x, Expr)
+        if c.codelocs !== nothing && is_valid_rvalue(x)
+        elseif isa(x, Expr)
             head = x.head
             if !is_top_level
                 head === :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
@@ -124,7 +125,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                     n = lhs.id
                     push!(lhs_slotnums, n)
                 end
-                if !is_valid_rvalue(lhs, rhs)
+                if !is_valid_rvalue(rhs)
                     push!(errors, InvalidCodeError(INVALID_RVALUE, rhs))
                 end
                 validate_val!(lhs)
@@ -156,6 +157,10 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
         elseif isa(x, SlotNumber)
         elseif isa(x, GlobalRef)
         elseif isa(x, LineNumberNode)
+        elseif isa(x, PiNode)
+        elseif isa(x, PhiCNode)
+        elseif isa(x, PhiNode)
+        elseif isa(x, UpsilonNode)
         else
             push!(errors, InvalidCodeError("invalid statement", x))
         end
@@ -208,9 +213,9 @@ end
 
 validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 
-is_valid_lvalue(x) = isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef)
+is_valid_lvalue(@nospecialize(x)) = isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef)
 
-function is_valid_argument(x)
+function is_valid_argument(@nospecialize(x))
     if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
         (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck, :copyast))) ||
         isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
@@ -222,16 +227,14 @@ function is_valid_argument(x)
              isa(x,LineNumberNode) || isa(x,NewvarNode))
 end
 
-function is_valid_rvalue(lhs, x)
+function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
     if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin)
         return true
-        # TODO: disallow `globalref = call` when .typ field is removed
-        #return isa(lhs, SSAValue) || isa(lhs, Slot)
     end
     return false
 end
 
-is_valid_return(x) = is_valid_argument(x) || (isa(x,Expr) && x.head in (:new, :lambda))
+is_valid_return(@nospecialize(x)) = is_valid_argument(x) || (isa(x, Expr) && x.head in (:new, :lambda))
 
 is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag

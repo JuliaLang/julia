@@ -212,7 +212,6 @@ export
     asind,
     asinh,
     atan,
-    atan2,
     atand,
     atanh,
     big,
@@ -357,8 +356,6 @@ export
     axes,
     broadcast!,
     broadcast,
-    broadcast_getindex,
-    broadcast_setindex!,
     cat,
     checkbounds,
     checkindex,
@@ -392,7 +389,6 @@ export
     isperm,
     issorted,
     last,
-    linearindices,
     mapslices,
     max,
     maximum!,
@@ -470,7 +466,6 @@ export
 
 # bitarrays
     falses,
-    flipbits!,
     trues,
 
 # dequeues
@@ -567,10 +562,10 @@ export
     escape_string,
     hex2bytes,
     hex2bytes!,
-    isalpha,
     isascii,
     iscntrl,
     isdigit,
+    isletter,
     islowercase,
     isnumeric,
     isprint,
@@ -637,8 +632,6 @@ export
     set_zero_subnormals,
 
 # statistics
-    cor,
-    cov,
     mean!,
     mean,
     median!,
@@ -646,15 +639,12 @@ export
     middle,
     quantile!,
     quantile,
-    std,
-    stdm,
-    var,
-    varm,
 
 # iteration
     done,
     next,
     start,
+    iterate,
 
     enumerate,  # re-exported from Iterators
     zip,
@@ -704,6 +694,7 @@ export
     ismissing,
     missing,
     skipmissing,
+    something,
 
 # time
     sleep,
@@ -723,14 +714,15 @@ export
 
 # types
     convert,
-    # getproperty,
-    # setproperty!,
+    getproperty,
+    setproperty!,
     fieldoffset,
     fieldname,
     fieldnames,
     fieldcount,
-    # propertynames,
+    propertynames,
     isabstracttype,
+    isbitstype,
     isprimitivetype,
     isstructtype,
     isconcretetype,
@@ -974,7 +966,6 @@ export
     @allocated,
 
     # tasks
-    @schedule,
     @sync,
     @async,
     @task,

@@ -352,11 +352,11 @@ function isprimitivetype(@nospecialize(t::Type))
 end
 
 """
-    isbits(T)
+    isbitstype(T)
 
 Return `true` if type `T` is a "plain data" type,
 meaning it is immutable and contains no references to other values,
-only `primitive` types and other `isbits` types.
+only `primitive` types and other `isbitstype` types.
 Typical examples are numeric types such as [`UInt8`](@ref),
 [`Float64`](@ref), and [`Complex{Float64}`](@ref).
 This category of types is significant since they are valid as type parameters,
@@ -365,14 +365,20 @@ and have a defined layout that is compatible with C.
 
 # Examples
 ```jldoctest
-julia> isbits(Complex{Float64})
+julia> isbitstype(Complex{Float64})
 true
 
-julia> isbits(Complex)
+julia> isbitstype(Complex)
 false
 ```
 """
-isbits(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+
+"""
+    isbits(x)
+
+Return `true` if `x` is an instance of an `isbitstype` type.
+"""
 isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
 
 """
@@ -542,6 +548,13 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
+argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
+function argument_mt(@nospecialize t)
+    dt = argument_datatype(t)
+    (dt === nothing || !isdefined(dt.name, :mt)) && return nothing
+    dt.name.mt
+end
+
 """
     fieldcount(t::Type)
 
@@ -550,7 +563,7 @@ An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
     if t isa UnionAll || t isa Union
-        t = ccall(:jl_argument_datatype, Any, (Any,), t)
+        t = argument_datatype(t)
         if t === nothing
             error("type does not have a definite number of fields")
         end
@@ -681,9 +694,8 @@ end
 
 length(m::MethodList) = length(m.ms)
 isempty(m::MethodList) = isempty(m.ms)
-start(m::MethodList) = start(m.ms)
-done(m::MethodList, s) = done(m.ms, s)
-next(m::MethodList, s) = next(m.ms, s)
+iterate(m::MethodList, s...) = iterate(m.ms, s...)
+eltype(::Type{MethodList}) = Method
 
 function MethodList(mt::Core.MethodTable)
     ms = Method[]

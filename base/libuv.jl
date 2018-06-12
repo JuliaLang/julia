@@ -48,8 +48,20 @@ disassociate_julia_struct(handle::Ptr{Cvoid}) =
 # A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
 const uvhandles = IdDict()
-preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)::Int+1
-unpreserve_handle(x) = (v = uvhandles[x]::Int; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
+function preserve_handle(x)
+    v = get(uvhandles, x, 0)::Int
+    uvhandles[x] = v + 1
+    nothing
+end
+function unpreserve_handle(x)
+    v = uvhandles[x]::Int
+    if v == 1
+        pop!(uvhandles, x)
+    else
+        uvhandles[x] = v - 1
+    end
+    nothing
+end
 
 ## Libuv error handling ##
 

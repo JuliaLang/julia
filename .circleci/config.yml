@@ -16,10 +16,10 @@ jobs:
           JULIA_TEST_MAXRSS_MB: 800
     steps: &steps
       - run: | # install build dependencies
-          sudo apt-get install -y g++-4.8-multilib gfortran-4.8-multilib \
+          sudo apt-get install -y g++-6-multilib gfortran-6-multilib \
             time ccache bar &&
           for prog in gcc g++ gfortran; do
-            sudo ln -s /usr/bin/$prog-4.8 /usr/local/bin/$prog;
+            sudo ln -s /usr/bin/$prog-6 /usr/local/bin/$prog;
           done
       - checkout # circle ci code checkout step
 # (FIXME: need to unset url."ssh://git@github.com".insteadOf or libgit2 tests fail)
@@ -55,7 +55,7 @@ jobs:
           /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true' &&
           pushd /tmp/julia/share/julia/test &&
           /tmp/julia/bin/julia --check-bounds=yes runtests.jl all --skip Sockets | bar -i 30 &&
-          /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg Pkg3/pkg download &&
+          /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online OldPkg/pkg Pkg/pkg download &&
           popd &&
           mkdir /tmp/embedding-test &&
           make check -C /tmp/julia/share/julia/test/embedding \

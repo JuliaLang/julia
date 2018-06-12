@@ -27,7 +27,7 @@ if Sys.isunix()
 elseif Sys.iswindows()
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
-    const path_absolute_re  = r"^(?:\w+:)?[/\\]"
+    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"
     const path_directory_re = r"(?:^|[/\\])\.{0,2}$"
     const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
@@ -155,7 +155,7 @@ See also: [`basename`](@ref)
 Get the file name part of a path.
 
 # Examples
- ```jldoctest
+```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
 ```
@@ -338,13 +338,13 @@ if Sys.iswindows()
 expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 else
 function expanduser(path::AbstractString)
-    i = start(path)
-    if done(path,i) return path end
-    c, i = next(path,i)
+    y = iterate(path)
+    y === nothing && return path
+    c, i = y
     if c != '~' return path end
-    if done(path,i) return homedir() end
-    c, j = next(path,i)
-    if c == '/' return homedir()*path[i:end] end
+    y = iterate(path, i)
+    if y == nothing return homedir() end
+    if y[1] == '/' return homedir()*path[i:end] end
     throw(ArgumentError("~user tilde expansion not yet implemented"))
 end
 end
@@ -381,8 +381,8 @@ function relpath(path::String, startpath::String = ".")
             break
         end
     end
-    pathpart = join(path_arr[i+1:coalesce(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
-    prefix_num = coalesce(findlast(x -> !isempty(x), start_arr), 0) - i - 1
+    pathpart = join(path_arr[i+1:something(findlast(x -> !isempty(x), path_arr), 0)], path_separator)
+    prefix_num = something(findlast(x -> !isempty(x), start_arr), 0) - i - 1
     if prefix_num >= 0
         prefix = pardir * path_separator
         relpath_ = isempty(pathpart)     ?

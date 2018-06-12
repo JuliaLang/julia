@@ -171,9 +171,26 @@ end
 end
 
 # Ensure only LLVM-supported types can be atomic
-@test_throws TypeError Atomic{Bool}
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{ComplexF64}
+
+function test_atomic_bools()
+    x = Atomic{Bool}(false)
+    # Arithmetic functions are not defined.
+    @test_throws MethodError atomic_add!(x, true)
+    @test_throws MethodError atomic_sub!(x, true)
+    # All the rest are:
+    for v in [true, false]
+        @test x[] == atomic_xchg!(x, v)
+        @test v == atomic_cas!(x, v, !v)
+    end
+    x = Atomic{Bool}(false)
+    @test false == atomic_max!(x, true); @test x[] == true
+    x = Atomic{Bool}(true)
+    @test true == atomic_and!(x, false); @test x[] == false
+end
+
+test_atomic_bools()
 
 # Test atomic memory ordering with load/store
 mutable struct CommBuf

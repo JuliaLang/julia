@@ -1,20 +1,13 @@
 JULIAHOME := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(JULIAHOME)/Make.inc
 
-# TODO: Code bundled with Julia should be installed into a versioned directory,
-# prefix/share/julia/VERSDIR, so that in the future one can have multiple
-# major versions of Julia installed concurrently. Third-party code that
-# is not controlled by Pkg should be installed into
-# prefix/share/julia/site/VERSDIR (not prefix/share/julia/VERSDIR/site ...
-# so that prefix/share/julia/VERSDIR can be overwritten without touching
-# third-party code).
 VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
 
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/site $(build_man1dir))
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/stdlib $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
 BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/embedding)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
@@ -46,8 +39,8 @@ endif
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia,$(notdir $(link)))))
 
-build_defaultpkgdir = $(build_datarootdir)/julia/site/$(shell echo $(VERSDIR))
-$(eval $(call symlink_target,$(JULIAHOME)/stdlib,$(build_datarootdir)/julia/site,$(shell echo $(VERSDIR))))
+build_defaultpkgdir = $(build_datarootdir)/julia/stdlib/$(shell echo $(VERSDIR))
+$(eval $(call symlink_target,$(JULIAHOME)/stdlib,$(build_datarootdir)/julia/stdlib,$(shell echo $(VERSDIR))))
 
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
@@ -105,9 +98,8 @@ release-candidate: release testall
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/contrib/add_license_to_files.jl #add license headers
 	@#Check documentation
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/NEWS-update.jl #Add missing cross-references to NEWS.md
-	@$(MAKE) -C $(BUILDROOT)/doc html
+	@$(MAKE) -C $(BUILDROOT)/doc html doctest=true linkcheck=true
 	@$(MAKE) -C $(BUILDROOT)/doc pdf
-	@$(MAKE) -C $(BUILDROOT)/doc check
 
 	@# Check to see if the above make invocations changed anything important
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -257,6 +249,19 @@ endif
 endif
 endif
 
+ifeq ($(OS),FreeBSD)
+define std_so
+julia-deps: | $$(build_libdir)/lib$(1).so
+$$(build_libdir)/lib$(1).so: | $$(build_libdir)
+	$$(INSTALL_M) $$(GCCPATH)/lib$(1).so* $$(build_libdir)
+JL_LIBS += $(1)
+endef
+
+$(eval $(call std_so,gfortran))
+$(eval $(call std_so,gcc_s))
+$(eval $(call std_so,quadmath))
+endif # FreeBSD
+
 ifeq ($(OS),WINNT)
 define std_dll
 julia-deps: | $$(build_bindir)/lib$(1).dll $$(build_depsbindir)/lib$(1).dll
@@ -266,7 +271,14 @@ $$(build_depsbindir)/lib$(1).dll: | $$(build_depsbindir)
 	cp $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_depsbindir)
 JL_LIBS += $(1)
 endef
-$(eval $(call std_dll,gfortran-3))
+
+# Given a list of space-separated libraries, return the first library name that is
+# correctly found through `pathsearch`.
+define select_std_dll
+$(firstword $(foreach name,$(1),$(if $(call pathsearch,lib$(name).dll,$(STD_LIB_PATH)),$(name),)))
+endef
+
+$(eval $(call std_dll,$(call select_std_dll,gfortran-3 gfortran-4 gfortran-5)))
 $(eval $(call std_dll,quadmath-0))
 $(eval $(call std_dll,stdc++-6))
 ifeq ($(ARCH),i686)
@@ -284,7 +296,7 @@ endef
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) all
-	@for subdir in $(bindir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
+	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
@@ -365,6 +377,11 @@ endif
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
 	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia.$(SHLIB_EXT),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
 	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT),sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
+endif
+
+	# On FreeBSD, remove the build's libdir from each library's RPATH
+ifeq ($(OS),FreeBSD)
+	$(JULIAHOME)/contrib/fixup-rpath.sh $(build_depsbindir)/patchelf $(DESTDIR)$(libdir) $(build_libdir)
 endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)

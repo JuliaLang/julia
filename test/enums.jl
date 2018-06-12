@@ -22,7 +22,8 @@ end
 
 @enum Fruit apple orange kiwi
 @test typeof(Fruit) == DataType
-@test isbits(Fruit)
+@test isbitstype(Fruit)
+@test isbits(apple)
 @test typeof(apple) <: Fruit <: Enum
 @test Int(apple) == 0
 @test Int(orange) == 1
@@ -154,6 +155,9 @@ let b = IOBuffer()
     seekstart(b)
     @test deserialize(b) === apple
 end
+
+@enum UI8::UInt8 ten=0x0A thr=0x03 sevn=0x07
+@test repr("text/plain", UI8) == "Enum $(string(UI8)):\nten = 0x0a\nthr = 0x03\nsevn = 0x07"
 
 # test block form
 @enum BritishFood begin

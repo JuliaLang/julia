@@ -37,11 +37,8 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
 
         copy(A::$t) = $t(copy(A.data))
 
-        broadcast(::typeof(big), A::$t) = $t(big.(A.data))
-
         real(A::$t{<:Real}) = A
         real(A::$t{<:Complex}) = (B = real(A.data); $t(B))
-        broadcast(::typeof(abs), A::$t) = $t(abs.(A.data))
     end
 end
 
@@ -2159,7 +2156,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         R[i,i+1] = i / sqrt((2 * i)^2 - 1)
         R[i+1,i] = R[i,i+1]
     end
-    x,V = eig(R)
+    x,V = eigen(R)
     w = Vector{Float64}(undef, m)
     for i = 1:m
         x[i] = (x[i] + 1) / 2
@@ -2435,10 +2432,10 @@ function logabsdet(A::Union{UpperTriangular{T},LowerTriangular{T}}) where T
     return abs_det, sgn
 end
 
-eigfact(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
+eigen(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 
 # Generic singular systems
-for func in (:svd, :svdfact, :svdfact!, :svdvals)
+for func in (:svd, :svd!, :svdvals)
     @eval begin
         ($func)(A::AbstractTriangular) = ($func)(copyto!(similar(parent(A)), A))
     end
@@ -2446,20 +2443,20 @@ end
 
 factorize(A::AbstractTriangular) = A
 
-# dismabiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
+# disambiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
 *(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Ajd of AbstractTriangular)
+# disambiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Ajd of AbstractTriangular)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractTriangular}) = copy(A) * B
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Adj/Trans of AbsVec or AbsMat)
+# disambiguation methods: *(Adj/Trans of AbstractTriangular, Adj/Trans of AbsVec or AbsMat)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
-# dismabiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj/Trans of AbstractTriangular)
+# disambiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj/Trans of AbstractTriangular)
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractTriangular}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractTriangular}) = transpose(transpose(B) * transpose(A))

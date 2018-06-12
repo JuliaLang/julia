@@ -63,15 +63,11 @@ let SOURCE_PATH = ""
 end
 INCLUDE_STATE = 1 # include = Core.include
 
-baremodule MainInclude
-export include
-include(fname::AbstractString) = Main.Base.include(Main, fname)
-end
-
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
-eval(m, x) = Core.eval(m, x)
+eval(m::Module, x) = Core.eval(m, x)
+
 VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
 convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
@@ -135,13 +131,6 @@ using .Checked
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
-# Define the broadcast function, which is mostly implemented in
-# broadcast.jl, so that we can overload broadcast methods for
-# specific array types etc.
-#  --Here, just define fallback routines for broadcasting with no arguments
-broadcast(f) = f()
-broadcast!(f, X::AbstractArray) = (@inbounds for I in eachindex(X); X[I] = f(); end; X)
-
 # array structures
 include("indices.jl")
 include("array.jl")
@@ -155,6 +144,7 @@ include("reinterpretarray.jl")
 # type and dimensionality specified, accepting dims as series of Integers
 Vector{T}(::UndefInitializer, m::Integer) where {T} = Vector{T}(undef, Int(m))
 Matrix{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Matrix{T}(undef, Int(m), Int(n))
+Array{T,N}(::UndefInitializer, d::Vararg{Integer,N}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # type but not dimensionality specified, accepting dims as series of Integers
 Array{T}(::UndefInitializer, m::Integer) where {T} = Array{T,1}(undef, Int(m))
 Array{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Array{T,2}(undef, Int(m), Int(n))
@@ -163,6 +153,9 @@ Array{T}(::UndefInitializer, d::Integer...) where {T} = Array{T}(undef, convert(
 # dimensionality but not type specified, accepting dims as series of Integers
 Vector(::UndefInitializer, m::Integer) = Vector{Any}(undef, Int(m))
 Matrix(::UndefInitializer, m::Integer, n::Integer) = Matrix{Any}(undef, Int(m), Int(n))
+# Dimensions as a single tuple
+Array{T}(::UndefInitializer, d::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
+Array{T,N}(::UndefInitializer, d::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # empty vector constructor
 Vector() = Vector{Any}(undef, 0)
 
@@ -298,6 +291,9 @@ end
     end
 end
 
+# missing values
+include("missing.jl")
+
 # version
 include("version.jl")
 
@@ -350,6 +346,7 @@ INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
+include("accumulate.jl")
 
 # basic data structures
 include("ordering.jl")
@@ -416,13 +413,9 @@ include("stacktraces.jl")
 using .StackTraces
 
 include("initdefs.jl")
-include("client.jl")
 
 # statistics
 include("statistics.jl")
-
-# missing values
-include("missing.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -451,6 +444,8 @@ include("deprecated.jl")
 
 # Some basic documentation
 include("docs/basedocs.jl")
+
+include("client.jl")
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
@@ -525,7 +520,7 @@ let
             :Random,
             :UUIDs,
             :Future,
-            :Pkg,
+            :OldPkg,
             :LinearAlgebra,
             :IterativeEigensolvers,
             :SparseArrays,
@@ -534,7 +529,7 @@ let
             :Distributed,
             :Test,
             :REPL,
-            :Pkg3,
+            :Pkg,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
@@ -752,7 +747,6 @@ end
     # @deprecate_stdlib kron        LinearAlgebra true
     @deprecate_stdlib ldltfact    LinearAlgebra true
     @deprecate_stdlib ldltfact!   LinearAlgebra true
-    @deprecate_stdlib linreg      LinearAlgebra true
     @deprecate_stdlib logabsdet   LinearAlgebra true
     @deprecate_stdlib logdet      LinearAlgebra true
     @deprecate_stdlib lu          LinearAlgebra true
@@ -792,8 +786,8 @@ end
     @deprecate_stdlib triu        LinearAlgebra true
     @deprecate_stdlib vecdot      LinearAlgebra true
     @deprecate_stdlib vecnorm     LinearAlgebra true
-    # @deprecate_stdlib ⋅           LinearAlgebra true
-    # @deprecate_stdlib ×           LinearAlgebra true
+    @deprecate_stdlib $(:⋅)       LinearAlgebra true
+    @deprecate_stdlib $(:×)       LinearAlgebra true
 
     ## types that were re-exported from Base
     @deprecate_stdlib Diagonal        LinearAlgebra true

@@ -48,17 +48,22 @@ LLVM_VER = 3.5.0
 Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to bulid against the latest
 development version of LLVM.
 
+You can also specify to build a debug version of LLVM, by setting either `LLVM_DEBUG = 1` or
+`LLVM_DEBUG = Release` in your `Make.user` file. The former will be a fully unoptimized build
+of LLVM and the latter will produce an optimized build of LLVM. Depending on your needs the
+latter will suffice and it quite a bit faster. If you use `LLVM_DEBUG = Release` you will also
+want to set `LLVM_ASSERTIONS = 1` to enable diagonstics for different passes. Only `LLVM_DEBUG = 1`
+implies that option by default.
+
 ## Passing options to LLVM
 
-You can pass options to LLVM using *debug* builds of Julia. To create a debug build, run `make debug`.
-The resulting executable is `usr/bin/julia-debug`. You can pass LLVM options to this executable
-via the environment variable `JULIA_LLVM_ARGS`. Here are example settings using `bash` syntax:
+You can pass options to LLVM via the environment variable `JULIA_LLVM_ARGS`.
+Here are example settings using `bash` syntax:
 
   * `export JULIA_LLVM_ARGS = -print-after-all` dumps IR after each pass.
   * `export JULIA_LLVM_ARGS = -debug-only=loop-vectorize` dumps LLVM `DEBUG(...)` diagnostics for
-    loop vectorizer *if* you built Julia with `LLVM_ASSERTIONS=1`. Otherwise you will get warnings
-    about "Unknown command line argument". Counter-intuitively, building Julia with `LLVM_DEBUG=1`
-    is *not* enough to dump `DEBUG` diagnostics from a pass.
+    loop vectorizer. If you get warnings about "Unknown command line argument", rebuild LLVM with
+    `LLVM_ASSERTIONS = 1`.
 
 ## Debugging LLVM transformations in isolation
 

@@ -36,3 +36,25 @@ B:
     %load = load i64, i64 addrspace(11)* %phi
     ret i64 %load
 }
+
+
+define i64 @select(i1 %cond) {
+; CHECK-LABEL: @select
+; CHECK-NOT: addrspace(11)
+top:
+    %stack1 = alloca i64
+    %stack2 = alloca i64
+    %stack1_casted = addrspacecast i64 *%stack1 to i64 addrspace(11)*
+    %stack2_casted = addrspacecast i64 *%stack2 to i64 addrspace(11)*
+    %select = select i1 %cond, i64 addrspace(11)* %stack1_casted, i64 addrspace(11)* %stack2_casted
+    %load = load i64, i64 addrspace(11)* %select
+    ret i64 %load
+}
+
+define i64 @nullptr() {
+; CHECK-LABEL: @nullptr
+; CHECK-NOT: addrspace(11)
+    %casted = addrspacecast i64 *null to i64 addrspace(11)*
+    %load = load i64, i64 addrspace(11)* %casted
+    ret i64 %load
+}

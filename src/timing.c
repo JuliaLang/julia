@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include "julia.h"
 #include "options.h"
+#include "stdio.h"
 
 #ifdef __cplusplus
 extern "C" {

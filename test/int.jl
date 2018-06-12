@@ -188,15 +188,15 @@ end
     end
 end
 @testset "widen/widemul" begin
-    @test widen(UInt8(3)) === UInt32(3)
-    @test widen(UInt16(3)) === UInt32(3)
+    @test widen(UInt8(3)) === UInt(3)
+    @test widen(UInt16(3)) === UInt(3)
     @test widen(UInt32(3)) === UInt64(3)
     @test widen(UInt64(3)) === UInt128(3)
     @test widen(UInt128(3)) == 3
     @test typeof(widen(UInt128(3))) == BigInt
 
-    @test widen(Int8(-3)) === Int32(-3)
-    @test widen(Int16(-3)) === Int32(-3)
+    @test widen(Int8(-3)) === Int(-3)
+    @test widen(Int16(-3)) === Int(-3)
     @test widen(Int32(-3)) === Int64(-3)
     @test widen(Int64(-3)) === Int128(-3)
     @test widen(Int128(-3)) == -3
@@ -280,3 +280,10 @@ end
     @test_throws ArgumentError big"1_0_0_0_"
     @test_throws ArgumentError big"_1_0_0_0"
 end
+
+# issue #26779
+struct MyInt26779 <: Integer
+    x::Int
+end
+@test promote_type(MyInt26779, Int) == Integer
+@test_throws ErrorException MyInt26779(1) + 1

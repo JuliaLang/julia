@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Core.IR
 const Compiler = Core.Compiler
 
@@ -22,4 +24,12 @@ let code = Any[
     ))
 
     Compiler.run_passes(ci, 1, Compiler.LineInfoNode[Compiler.NullLineInfo])
+end
+
+# test >:
+let
+
+f(a,b) = a >: b
+code_typed(f, Tuple{Any, Any})
+
 end

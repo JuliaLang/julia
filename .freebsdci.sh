@@ -2,10 +2,11 @@
 # FreeBSD CI Build Scripts
 # The flow of a FreeBSD CI (https://freebsdci.julialang.org) build:
 #
-# 1. `compile`
-# 2. `build-state`
-# 3. `runtests`
-# 4. `test-embedding`
+# 1. `cleanup`
+# 2. `compile`
+# 3. `build-state`
+# 4. `runtests`
+# 5. `test-embedding`
 #
 # Detail of flow is controlled by the variable `factory`
 # here.
@@ -19,12 +20,18 @@ build-state(){
     gmake build-stats
 }
 
+cleanup(){
+    git clean -fdx
+}
+
 compile(){
     export MALLOC_CONF='junk:false'
     export VERBOSE=1
     export FORCE_ASSERTIONS=1
     export LLVM_ASSERTIONS=1
+    export USECCACHE=1
 
+    gmake check-whitespace
     gmake all -j $MAKE_JOBS_NUMBER
 }
 
@@ -36,8 +43,9 @@ runtests(){
     export JULIA_TEST_MAXRSS_MB=600
     export JULIA_CPU_CORES=$MAKE_JOBS_NUMBER
 
-    ./usr/bin/julia test/runtests.jl all
-    ./usr/bin/julia test/runtests.jl LibGit2/online Pkg/pkg Pkg3/pkg download
+    ./usr/bin/julia --check-bounds=yes test/runtests.jl all
+    ./usr/bin/julia --check-bounds=yes test/runtests.jl \
+        LibGit2/online OldPkg/pkg Pkg/pkg download
 }
 
 test-embedding(){

@@ -8,7 +8,7 @@ Interface to [libgit2](https://libgit2.github.com/).
 module LibGit2
 
 import Base: ==
-using Base: coalesce, notnothing
+using Base: something, notnothing
 using Base.Printf: @printf
 
 export with, GitRepo, GitConfig
@@ -727,7 +727,7 @@ function merge!(repo::GitRepo;
                 throw(GitError(Error.Merge, Error.ERROR,
                                "There is no fetch reference for this branch."))
             end
-            map(fh->GitAnnotated(repo,fh), fheads)
+            Base.map(fh->GitAnnotated(repo,fh), fheads)
         else # merge commitish
             [GitAnnotated(repo, committish)]
         end
@@ -785,7 +785,7 @@ function merge!(repo::GitRepo;
                merge_opts=merge_opts,
                checkout_opts=checkout_opts)
     finally
-        map(close, upst_anns)
+        Base.map(close, upst_anns)
     end
 end
 

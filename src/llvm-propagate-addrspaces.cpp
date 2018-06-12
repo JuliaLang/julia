@@ -132,6 +132,21 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
                 Stack.push_back(Phi);
                 LocalVisited.insert(Phi);
                 break;
+            } else if (auto *Select = dyn_cast<SelectInst>(CurrentV)) {
+                if (LiftingMap.count(Select)) {
+                    break;
+                } else if (Visited.count(Select)) {
+                    return nullptr;
+                }
+                // Push one of the branches onto the worklist, continue with the other one
+                // directly
+                Worklist.push_back(Select->getOperand(2));
+                Stack.push_back(Select);
+                LocalVisited.insert(Select);
+                CurrentV = Select->getOperand(1);
+            } else if (isa<ConstantPointerNull>(CurrentV)) {
+                // It's always legal to lift null pointers into any address space
+                break;
             } else {
                 // Ok, we've reached a leaf - check if it is eligible for lifting
                 if (!CurrentV->getType()->isPointerTy() ||
@@ -154,25 +169,19 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
     for (Value *V : Stack) {
         if (LiftingMap.count(V))
             continue;
-        if (auto *GEP = dyn_cast<GetElementPtrInst>(V)) {
-            auto *NewGEP = cast<GetElementPtrInst>(GEP->clone());
-            ToInsert.push_back(std::make_pair(NewGEP, GEP));
-            Type *NewRetTy = cast<PointerType>(GEP->getType())->getElementType()->getPointerTo(0);
-            NewGEP->mutateType(NewRetTy);
-            LiftingMap[GEP] = NewGEP;
-            ToRevisit.push_back(NewGEP);
-        } else if (auto *Phi = dyn_cast<PHINode>(V)) {
-            auto *NewPhi = cast<PHINode>(Phi->clone());
-            ToInsert.push_back(std::make_pair(NewPhi, Phi));
-            Type *NewRetTy = cast<PointerType>(Phi->getType())->getElementType()->getPointerTo(0);
-            NewPhi->mutateType(NewRetTy);
-            LiftingMap[Phi] = NewPhi;
-            ToRevisit.push_back(NewPhi);
+        if (isa<GetElementPtrInst>(V) || isa<PHINode>(V) || isa<SelectInst>(V)) {
+            Instruction *InstV = cast<Instruction>(V);
+            Instruction *NewV = InstV->clone();
+            ToInsert.push_back(std::make_pair(NewV, InstV));
+            Type *NewRetTy = cast<PointerType>(InstV->getType())->getElementType()->getPointerTo(0);
+            NewV->mutateType(NewRetTy);
+            LiftingMap[InstV] = NewV;
+            ToRevisit.push_back(NewV);
         }
     }
 
-    auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) {
-        Type *TargetType = cast<PointerType>(CurrentV->getType())->getElementType()->getPointerTo(0);
+    auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
+        PointerType *TargetType = cast<PointerType>(CurrentV->getType())->getElementType()->getPointerTo(0);
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
@@ -180,6 +189,9 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
                 CurrentV = cast<AddrSpaceCastInst>(CurrentV)->getOperand(0);
             else
                 break;
+        }
+        if (isa<ConstantPointerNull>(CurrentV)) {
+            return ConstantPointerNull::get(TargetType);
         }
         if (LiftingMap.count(CurrentV))
             CurrentV = LiftingMap[CurrentV];
@@ -202,6 +214,9 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
                 NewPhi->setIncomingValue(i, CollapseCastsAndLift(NewPhi->getIncomingValue(i),
                     NewPhi->getIncomingBlock(i)->getTerminator()));
             }
+        } else if (SelectInst *NewSelect = dyn_cast<SelectInst>(V)) {
+            NewSelect->setOperand(1, CollapseCastsAndLift(NewSelect->getOperand(1), NewSelect));
+            NewSelect->setOperand(2, CollapseCastsAndLift(NewSelect->getOperand(2), NewSelect));
         } else {
             assert(false && "Shouldn't have reached here");
         }

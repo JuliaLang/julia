@@ -208,10 +208,10 @@ end
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 
-broadcast(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
-broadcast(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
+Broadcast.broadcasted(::typeof(*), x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
+Broadcast.broadcasted(::typeof(*), J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
 
-broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
+Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
@@ -353,32 +353,15 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
     return hvcat(rows, promote_to_arrays(n,1, promote_to_array_type(A), A...)...)
 end
 
-
-## Cholesky
-function _chol!(J::UniformScaling, uplo)
-    c, info = _chol!(J.λ, uplo)
-    UniformScaling(c), info
-end
-
-chol!(J::UniformScaling, uplo) = ((J, info) = _chol!(J, uplo); @assertposdef J info)
-
-"""
-    chol(J::UniformScaling) -> C
-
-Compute the square root of a non-negative UniformScaling `J`.
-
-# Examples
-```jldoctest
-julia> chol(16I)
-UniformScaling{Float64}
-4.0*I
-```
-"""
-chol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposdef C info)
-
-
 ## Matrix construction from UniformScaling
-Matrix{T}(s::UniformScaling, dims::Dims{2}) where {T} = setindex!(Base.zeros(T, dims), T(s.λ), diagind(dims...))
+function Matrix{T}(s::UniformScaling, dims::Dims{2}) where {T}
+    A = zeros(T, dims)
+    v = T(s.λ)
+    for i in diagind(dims...)
+        @inbounds A[i] = v
+    end
+    return A
+end
 Matrix{T}(s::UniformScaling, m::Integer, n::Integer) where {T} = Matrix{T}(s, Dims((m, n)))
 Matrix(s::UniformScaling, m::Integer, n::Integer) = Matrix(s, Dims((m, n)))
 Matrix(s::UniformScaling, dims::Dims{2}) = Matrix{eltype(s)}(s, dims)

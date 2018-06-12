@@ -143,7 +143,7 @@ end
             @test asin(x) ≈ asin(big(x))
             @test asinh(x) ≈ asinh(big(x))
             @test atan(x) ≈ atan(big(x))
-            @test atan2(x,y) ≈ atan2(big(x),big(y))
+            @test atan(x,y) ≈ atan(big(x),big(y))
             @test atanh(x) ≈ atanh(big(x))
             @test cbrt(x) ≈ cbrt(big(x))
             @test cos(x) ≈ cos(big(x))
@@ -172,7 +172,7 @@ end
             @test isequal(acosh(T(1)), T(0))
             @test asin(T(1)) ≈ T(pi)/2 atol=eps(T)
             @test atan(T(1)) ≈ T(pi)/4 atol=eps(T)
-            @test atan2(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
+            @test atan(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
             @test isequal(cbrt(T(1000000000)), T(1000))
@@ -211,7 +211,7 @@ end
             @test cbrt(x^3) ≈ x
             @test asinh(sinh(x)) ≈ x
             @test atan(tan(x)) ≈ x
-            @test atan2(x,y) ≈ atan(x/y)
+            @test atan(x,y) ≈ atan(x/y)
             @test atanh(tanh(x)) ≈ x
             @test cos(acos(x)) ≈ x
             @test cosh(acosh(1+x)) ≈ 1+x
@@ -612,7 +612,7 @@ end
 
 @testset "vectorization of 2-arg functions" begin
     binary_math_functions = [
-        copysign, flipsign, log, atan2, hypot, max, min,
+        copysign, flipsign, log, atan, hypot, max, min,
         beta, lbeta,
     ]
     @testset "$f" for f in binary_math_functions
@@ -788,58 +788,58 @@ end
         @test atan(1.7581305072934137) ≈ 1.053644580517088
     end
 end
-@testset "atan2" begin
+@testset "atan" begin
     for T in (Float32, Float64)
-        @test isnan_type(T, atan2(T(NaN), T(NaN)))
-        @test isnan_type(T, atan2(T(NaN), T(0.1)))
-        @test isnan_type(T, atan2(T(0.1), T(NaN)))
+        @test isnan_type(T, atan(T(NaN), T(NaN)))
+        @test isnan_type(T, atan(T(NaN), T(0.1)))
+        @test isnan_type(T, atan(T(0.1), T(NaN)))
         r = T(randn())
         absr = abs(r)
         # y zero
-        @test atan2(T(r), one(T)) === atan(T(r))
-        @test atan2(zero(T), absr) === zero(T)
-        @test atan2(-zero(T), absr) === -zero(T)
-        @test atan2(zero(T), -absr) === T(pi)
-        @test atan2(-zero(T), -absr) === -T(pi)
+        @test atan(T(r), one(T)) === atan(T(r))
+        @test atan(zero(T), absr) === zero(T)
+        @test atan(-zero(T), absr) === -zero(T)
+        @test atan(zero(T), -absr) === T(pi)
+        @test atan(-zero(T), -absr) === -T(pi)
         # x zero and y not zero
-        @test atan2(one(T), zero(T)) === T(pi)/2
-        @test atan2(-one(T), zero(T)) === -T(pi)/2
+        @test atan(one(T), zero(T)) === T(pi)/2
+        @test atan(-one(T), zero(T)) === -T(pi)/2
         # isinf(x) == true && isinf(y) == true
-        @test atan2(T(Inf), T(Inf)) === T(pi)/4 # m == 0 (see atan2 code)
-        @test atan2(-T(Inf), T(Inf)) === -T(pi)/4 # m == 1
-        @test atan2(T(Inf), -T(Inf)) === 3*T(pi)/4 # m == 2
-        @test atan2(-T(Inf), -T(Inf)) === -3*T(pi)/4 # m == 3
+        @test atan(T(Inf), T(Inf)) === T(pi)/4 # m == 0 (see atan code)
+        @test atan(-T(Inf), T(Inf)) === -T(pi)/4 # m == 1
+        @test atan(T(Inf), -T(Inf)) === 3*T(pi)/4 # m == 2
+        @test atan(-T(Inf), -T(Inf)) === -3*T(pi)/4 # m == 3
         # isinf(x) == true && isinf(y) == false
-        @test atan2(absr, T(Inf)) === zero(T) # m == 0
-        @test atan2(-absr, T(Inf)) === -zero(T) # m == 1
-        @test atan2(absr, -T(Inf)) === T(pi) # m == 2
-        @test atan2(-absr, -T(Inf)) === -T(pi) # m == 3
+        @test atan(absr, T(Inf)) === zero(T) # m == 0
+        @test atan(-absr, T(Inf)) === -zero(T) # m == 1
+        @test atan(absr, -T(Inf)) === T(pi) # m == 2
+        @test atan(-absr, -T(Inf)) === -T(pi) # m == 3
         # isinf(y) == true && isinf(x) == false
-        @test atan2(T(Inf), absr) === T(pi)/2
-        @test atan2(-T(Inf), absr) === -T(pi)/2
-        @test atan2(T(Inf), -absr) === T(pi)/2
-        @test atan2(-T(Inf), -absr) === -T(pi)/2
+        @test atan(T(Inf), absr) === T(pi)/2
+        @test atan(-T(Inf), absr) === -T(pi)/2
+        @test atan(T(Inf), -absr) === T(pi)/2
+        @test atan(-T(Inf), -absr) === -T(pi)/2
         # |y/x| above high threshold
         atanpi = T(1.5707963267948966)
-        @test atan2(T(2.0^61), T(1.0)) === atanpi # m==0
-        @test atan2(-T(2.0^61), T(1.0)) === -atanpi # m==1
-        @test atan2(T(2.0^61), -T(1.0)) === atanpi # m==2
-        @test atan2(-T(2.0^61), -T(1.0)) === -atanpi # m==3
-        @test atan2(-T(Inf), -absr) === -T(pi)/2
+        @test atan(T(2.0^61), T(1.0)) === atanpi # m==0
+        @test atan(-T(2.0^61), T(1.0)) === -atanpi # m==1
+        @test atan(T(2.0^61), -T(1.0)) === atanpi # m==2
+        @test atan(-T(2.0^61), -T(1.0)) === -atanpi # m==3
+        @test atan(-T(Inf), -absr) === -T(pi)/2
         # |y|/x between 0 and low threshold
-        @test atan2(T(2.0^-61), -T(1.0)) === T(pi) # m==2
-        @test atan2(-T(2.0^-61), -T(1.0)) === -T(pi) # m==3
+        @test atan(T(2.0^-61), -T(1.0)) === T(pi) # m==2
+        @test atan(-T(2.0^-61), -T(1.0)) === -T(pi) # m==3
         # y/x is "safe" ("arbitrary values", just need to hit the branch)
-        _ATAN2_PI_LO(::Type{Float32}) = -8.7422776573f-08
-        _ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
-        @test atan2(T(5.0), T(2.5)) === atan(abs(T(5.0)/T(2.5)))
-        @test atan2(-T(5.0), T(2.5)) === -atan(abs(-T(5.0)/T(2.5)))
-        @test atan2(T(5.0), -T(2.5)) === T(pi)-(atan(abs(T(5.0)/-T(2.5)))-_ATAN2_PI_LO(T))
-        @test atan2(-T(5.0), -T(2.5)) === -(T(pi)-atan(abs(-T(5.0)/-T(2.5)))-_ATAN2_PI_LO(T))
-        @test atan2(T(1235.2341234), T(2.5)) === atan(abs(T(1235.2341234)/T(2.5)))
-        @test atan2(-T(1235.2341234), T(2.5)) === -atan(abs(-T(1235.2341234)/T(2.5)))
-        @test atan2(T(1235.2341234), -T(2.5)) === T(pi)-(atan(abs(T(1235.2341234)/-T(2.5)))-_ATAN2_PI_LO(T))
-        @test atan2(-T(1235.2341234), -T(2.5)) === -(T(pi)-(atan(abs(-T(1235.2341234)/T(2.5)))-_ATAN2_PI_LO(T)))
+        _ATAN_PI_LO(::Type{Float32}) = -8.7422776573f-08
+        _ATAN_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
+        @test atan(T(5.0), T(2.5)) === atan(abs(T(5.0)/T(2.5)))
+        @test atan(-T(5.0), T(2.5)) === -atan(abs(-T(5.0)/T(2.5)))
+        @test atan(T(5.0), -T(2.5)) === T(pi)-(atan(abs(T(5.0)/-T(2.5)))-_ATAN_PI_LO(T))
+        @test atan(-T(5.0), -T(2.5)) === -(T(pi)-atan(abs(-T(5.0)/-T(2.5)))-_ATAN_PI_LO(T))
+        @test atan(T(1235.2341234), T(2.5)) === atan(abs(T(1235.2341234)/T(2.5)))
+        @test atan(-T(1235.2341234), T(2.5)) === -atan(abs(-T(1235.2341234)/T(2.5)))
+        @test atan(T(1235.2341234), -T(2.5)) === T(pi)-(atan(abs(T(1235.2341234)/-T(2.5)))-_ATAN_PI_LO(T))
+        @test atan(-T(1235.2341234), -T(2.5)) === -(T(pi)-(atan(abs(-T(1235.2341234)/T(2.5)))-_ATAN_PI_LO(T)))
     end
 end
 

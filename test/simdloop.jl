@@ -115,19 +115,19 @@ function simd_cartesian_range!(indices, crng)
     indices
 end
 
-crng = CartesianIndices((2:4, 0:1, 1:1, 3:5))
+crng = CartesianIndices(map(Base.Slice, (2:4, 0:1, 1:1, 3:5)))
 indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indices == vec(collect(crng))
 
-crng = CartesianIndices((-1:1, 1:3))
+crng = CartesianIndices(map(Base.Slice, (-1:1, 1:3)))
 indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indices == vec(collect(crng))
 
-crng = CartesianIndices((-1:-1, 1:3))
+crng = CartesianIndices(map(Base.Slice, (-1:-1, 1:3)))
 indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indices == vec(collect(crng))
 
-crng = CartesianIndices((2:4,))
+crng = CartesianIndices(map(Base.Slice, (2:4,)))
 indices = simd_cartesian_range!(Vector{eltype(crng)}(), crng)
 @test indices == collect(crng)
 

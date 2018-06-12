@@ -118,13 +118,7 @@ arithmetic functions ([`+`](@ref), [`-`](@ref), [`*`](@ref),
 functions may give incorrect or invalid values when using rounding modes other than the
 default `RoundNearest`.
 
-Note that this may affect other types, for instance changing the rounding mode of
-[`Float64`](@ref) will change the rounding mode of [`Float32`](@ref).
-See [`RoundingMode`](@ref) for available modes.
-
-!!! warning
-
-    This feature is still experimental, and may give unexpected or incorrect values.
+Note that this is currently only supported for `T == BigFloat`.
 """
 setrounding(T::Type, mode)
 
@@ -142,7 +136,6 @@ See [`RoundingMode`](@ref) for available modes.
 setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:fegetround, Int32, ())
 
-setrounding(::Type{T}, r::RoundingMode) where {T<:Union{Float32,Float64}} = setrounding_raw(T,to_fenv(r))
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
 
 """
@@ -157,28 +150,6 @@ equivalent to:
     setrounding(T, old)
 
 See [`RoundingMode`](@ref) for available rounding modes.
-
-!!! warning
-
-    This feature is still experimental, and may give unexpected or incorrect values. A
-    known problem is the interaction with compiler optimisations, e.g.
-
-        julia> setrounding(Float64,RoundDown) do
-                   1.1 + 0.1
-               end
-        1.2000000000000002
-
-    Here the compiler is *constant folding*, that is evaluating a known constant
-    expression at compile time, however the rounding mode is only changed at runtime, so
-    this is not reflected in the function result. This can be avoided by moving constants
-    outside the expression, e.g.
-
-        julia> x = 1.1; y = 0.1;
-
-        julia> setrounding(Float64,RoundDown) do
-                   x + y
-               end
-        1.2
 """
 function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
     old_rounding_raw = rounding_raw(T)

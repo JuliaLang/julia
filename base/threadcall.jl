@@ -68,7 +68,7 @@ function do_threadcall(fun_ptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, arg
     args_arr = Vector{UInt8}(undef, args_size)
     ptr = pointer(args_arr)
     for (T, x) in zip(argtypes, argvals)
-        isbits(T) || throw(ArgumentError("threadcall requires isbits argument types"))
+        isbitstype(T) || throw(ArgumentError("threadcall requires isbits argument types"))
         y = cconvert(T, x)
         push!(roots, y)
         unsafe_store!(convert(Ptr{T}, ptr), unsafe_convert(T, y)::T)

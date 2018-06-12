@@ -31,7 +31,7 @@ let
         ex1 = Meta.parse(ex1); ex2 = Meta.parse(ex2)
         @test ex1.head === :call && (ex1.head === ex2.head)
         @test ex1.args[2] === 5 && ex2.args[2] === 5
-        @test eval(Main, undot(ex1.args[1])) === eval(Main, undot(ex2.args[1]))
+        @test Core.eval(Main, undot(ex1.args[1])) === Core.eval(Main, undot(ex2.args[1]))
         @test ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
     end
 end
@@ -581,7 +581,7 @@ let thismodule = @__MODULE__,
     ex = Meta.lower(thismodule, :(@M16096.iter))
     @test isa(ex, Expr)
     @test !isdefined(M16096, :foo16096)
-    local_foo16096 = eval(@__MODULE__, ex)
+    local_foo16096 = Core.eval(@__MODULE__, ex)
     @test local_foo16096(2.0) == 1
     @test !@isdefined foo16096
     @test !@isdefined it
@@ -755,18 +755,31 @@ end
     end
 end
 
-f1_exprs = get_expr_list(code_typed(f1, (Int,))[1][1])
-f2_exprs = get_expr_list(code_typed(f2, (Int,))[1][1])
+f1_ci = code_typed(f1, (Int,))[1][1]
+f2_ci = code_typed(f2, (Int,))[1][1]
 
-@test Meta.isexpr(f1_exprs[end], :return)
-@test Meta.isexpr(f2_exprs[end], :return) || Meta.isexpr(f2_exprs[end-1], :return)
+f1_exprs = get_expr_list(f1_ci)
+f2_exprs = get_expr_list(f2_ci)
 
-if Base.JLOptions().can_inline != 0
-    @test count_meta_loc(f1_exprs) == 1
-    @test count_meta_loc(f2_exprs) == 2
+if f1_ci.codelocs !== nothing # New style IR
+    if Base.JLOptions().can_inline != 0
+        @test length(f1_ci.linetable) == 3
+        @test length(f2_ci.linetable) >= 4
+    else
+        @test length(f1_ci.linetable) == 2
+        @test length(f2_ci.linetable) >= 3
+    end
 else
-    @test count_meta_loc(f1_exprs) == 0
-    @test count_meta_loc(f2_exprs) == 1
+    @test Meta.isexpr(f1_exprs[end], :return)
+    @test Meta.isexpr(f2_exprs[end-1], :return)
+
+    if Base.JLOptions().can_inline != 0
+        @test count_meta_loc(f1_exprs) == 1
+        @test count_meta_loc(f2_exprs) == 2
+    else
+        @test count_meta_loc(f1_exprs) == 0
+        @test count_meta_loc(f2_exprs) == 1
+    end
 end
 
 # Check that string and command literals are parsed to the appropriate macros
@@ -914,7 +927,7 @@ macro m20729()
     return ex
 end
 
-@test_throws ErrorException eval(@__MODULE__, :(@m20729))
+@test_throws ErrorException Core.eval(@__MODULE__, :(@m20729))
 @test Meta.lower(@__MODULE__, :(@m20729)) == Expr(:error, "undefined reference in AST")
 
 macro err20000()
@@ -939,8 +952,8 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax a.[1]")
-@test Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax a.{1}")
+@test Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax \"a.[1]\"")
+@test Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax \"a.{1}\"")
 
 # Issue #21225
 let abstr = Meta.parse("abstract type X end")
@@ -1204,7 +1217,7 @@ end
 @test Meta.parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), LineNumberNode(1, :none), "x"))
 
 # misplaced top-level expressions
-@test_throws ErrorException("syntax: \"\$\" expression outside quote") eval(@__MODULE__, Meta.parse("x->\$x"))
+@test_throws ErrorException("syntax: \"\$\" expression outside quote") Core.eval(@__MODULE__, Meta.parse("x->\$x"))
 @test Meta.lower(@__MODULE__, Expr(:$, :x)) == Expr(:error, "\"\$\" expression outside quote")
 @test Meta.lower(@__MODULE__, :(x->import Foo)) == Expr(:error, "\"import\" expression not at top level")
 @test Meta.lower(@__MODULE__, :(x->module Foo end)) == Expr(:error, "\"module\" expression not at top level")
@@ -1386,3 +1399,61 @@ end
 
 # issue #26717
 @test Meta.lower(@__MODULE__, :( :(:) = 2 )) == Expr(:error, "invalid assignment location \":(:)\"")
+
+# issue #17781
+let ex = Meta.lower(@__MODULE__, Meta.parse("
+    A = function (s, o...)
+        f(a, b) do
+        end
+    end,
+    B = function (s, o...)
+        f(a, b) do
+        end
+    end"))
+    @test isa(ex, Expr) && ex.head === :error
+    @test ex.args[1] == """
+invalid assignment location "function (s, o...)
+    # none, line 3
+    f(a, b) do
+        # none, line 4
+    end
+end\""""
+end
+
+# issue #15229
+@test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
+    Expr(:error, "local variable name \"x\" conflicts with an argument")
+
+# issue #26739
+@test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") Core.eval(@__MODULE__, :(sin.[1]))
+
+# issue #26873
+f26873 = 0
+try
+    include_string(@__MODULE__, """f26873."a" """)
+    @test false
+catch e
+    @test e isa LoadError
+    @test e.error isa MethodError
+end
+
+@test Meta.lower(@__MODULE__, :(if true; break; end for i = 1:1)) == Expr(:error, "break or continue outside loop")
+@test Meta.lower(@__MODULE__, :([if true; break; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
+@test Meta.lower(@__MODULE__, :(Int[if true; break; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
+@test Meta.lower(@__MODULE__, :([if true; continue; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
+@test Meta.lower(@__MODULE__, :(Int[if true; continue; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
+
+@test Meta.lower(@__MODULE__, :(return 0 for i=1:2)) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :([ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
+@test Meta.lower(@__MODULE__, :(Int[ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
+@test [ ()->return 42 for i = 1:1 ][1]() == 42
+@test Function[ identity() do x; return 2x; end for i = 1:1 ][1](21) == 42
+
+# issue #27155
+macro test27155()
+    quote
+        MyTest27155{Arg} = Tuple{Arg}
+        MyTest27155
+    end
+end
+@test @test27155() == (Tuple{T} where T)

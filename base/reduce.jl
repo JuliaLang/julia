@@ -34,20 +34,18 @@ mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
 
 ## foldl && mapfoldl
 
-@noinline function mapfoldl_impl(f, op, v0, itr, i)
+@noinline function mapfoldl_impl(f, op, v0, itr, i...)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
-    if done(itr, i)
-        return v0
-    else
-        (x, i) = next(itr, i)
-        v = op(v0, f(x))
-        while !done(itr, i)
-            @inbounds (x, i) = next(itr, i)
-            v = op(v, f(x))
-        end
-        return v
+    y = iterate(itr, i...)
+    y === nothing && return v0
+    v = op(v0, f(y[1]))
+    while true
+        y = iterate(itr, y[2])
+        y === nothing && break
+        v = op(v, f(y[1]))
     end
+    return v
 end
 
 """
@@ -56,7 +54,7 @@ end
 Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`](@ref).
 `v0` will be used exactly once.
 """
-mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
+mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr)
 
 """
     mapfoldl(f, op, itr)
@@ -67,11 +65,11 @@ Specifically, `mapfoldl(f, op, itr)` produces the same result as
 In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 """
 function mapfoldl(f, op, itr)
-    i = start(itr)
-    if done(itr, i)
+    y = iterate(itr)
+    if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    (x, i) = next(itr, i)
+    (x, i) = y
     v0 = mapreduce_first(f, op, x)
     mapfoldl_impl(f, op, v0, itr, i)
 end
@@ -82,6 +80,7 @@ end
 Like [`reduce`](@ref), but with guaranteed left associativity. `v0` will be used
 exactly once.
 
+# Examples
 ```jldoctest
 julia> foldl(=>, 0, 1:4)
 (((0=>1)=>2)=>3) => 4
@@ -95,6 +94,7 @@ foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
 Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In general, this
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
+# Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
 ((1=>2)=>3) => 4
@@ -150,6 +150,7 @@ end
 Like [`reduce`](@ref), but with guaranteed right associativity. `v0` will be used
 exactly once.
 
+# Examples
 ```jldoctest
 julia> foldr(=>, 0, 1:4)
 1 => (2=>(3=>(4=>0)))
@@ -163,6 +164,7 @@ foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
 Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In general, this
 cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
 
+# Examples
 ```jldoctest
 julia> foldr(=>, 1:4)
 1 => (2=>(3=>4))
@@ -224,6 +226,7 @@ collections. It is unspecified whether `v0` is used for non-empty collections.
 map(f, itr))`, but will in general execute faster since no intermediate collection needs to
 be created. See documentation for [`reduce`](@ref) and [`map`](@ref).
 
+# Examples
 ```jldoctest
 julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
 14
@@ -331,7 +334,7 @@ mapreduce_first(f, op, x) = reduce_first(op, f(x))
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
-    inds = linearindices(A)
+    inds = LinearIndices(A)
     n = length(inds)
     if n == 0
         return mapreduce_empty(f, op, T)
@@ -392,6 +395,7 @@ Like `reduce(op, v0, itr)`. This cannot be used with empty collections, except f
 special cases (e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can
 determine the neutral element of `op`.
 
+# Examples
 ```jldoctest
 julia> reduce(*, [2; 3; 4])
 24
@@ -413,6 +417,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> sum(abs2, [2; 3; 4])
 29
@@ -444,6 +449,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> sum(1:20)
 210
@@ -462,6 +468,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> prod(abs2, [2; 3; 4])
 576
@@ -478,6 +485,7 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
+# Examples
 ```jldoctest
 julia> prod(1:20)
 2432902008176640000
@@ -509,6 +517,7 @@ minimum(f::Callable, a) = mapreduce(f, min, a)
 
 Returns the largest element in a collection.
 
+# Examples
 ```jldoctest
 julia> maximum(-20.5:10)
 9.5
@@ -524,6 +533,7 @@ maximum(a) = mapreduce(identity, max, a)
 
 Returns the smallest element in a collection.
 
+# Examples
 ```jldoctest
 julia> minimum(-20.5:10)
 -20.5
@@ -544,6 +554,7 @@ extrema(x::Real) = (x, x)
 
 Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
 
+# Examples
 ```jldoctest
 julia> extrema(2:10)
 (2, 10)
@@ -553,12 +564,14 @@ julia> extrema([9,pi,4.5])
 ```
 """
 function extrema(itr)
-    s = start(itr)
-    done(itr, s) && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = next(itr, s)
+    y = iterate(itr)
+    y === nothing && throw(ArgumentError("collection must be non-empty"))
+    (v, s) = y
     vmin = vmax = v
-    while !done(itr, s)
-        (x, s) = next(itr, s)
+    while true
+        y = iterate(itr, s)
+        y === nothing && break
+        (x, s) = y
         vmax = max(x, vmax)
         vmin = min(x, vmin)
     end
@@ -577,6 +590,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
@@ -611,6 +625,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> a = [true,false,false,true]
 4-element Array{Bool,1}:
@@ -647,6 +662,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
 true
@@ -694,6 +710,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+# Examples
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
 true
@@ -734,13 +751,16 @@ end
 
 
 ## in & contains
+in(x, itr) = any(y -> y == x, itr)
+const ∈ = in
+∋(itr, x) = ∈(x, itr)
+∉(x, itr) = !∈(x, itr)
+∌(itr, x) = !∋(itr, x)
 
 """
     in(item, collection) -> Bool
-    ∈(item,collection) -> Bool
-    ∋(collection,item) -> Bool
-    ∉(item,collection) -> Bool
-    ∌(collection,item) -> Bool
+    ∈(item, collection) -> Bool
+    ∋(collection, item) -> Bool
 
 Determine whether an item is in the given collection, in the sense that it is
 [`==`](@ref) to one of the values generated by iterating over the collection.
@@ -756,6 +776,7 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
+# Examples
 ```jldoctest
 julia> a = 1:3:20
 1:3:19
@@ -779,16 +800,26 @@ julia> missing in Set([1, 2])
 false
 ```
 """
-in(x, itr) = any(y -> y == x, itr)
+in, ∋
 
-const ∈ = in
-∉(x, itr)=!∈(x, itr)
-∋(itr, x)= ∈(x, itr)
-∌(itr, x)=!∋(itr, x)
+"""
+    ∉(item, collection) -> Bool
+    ∌(collection, item) -> Bool
 
+Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
+
+# Examples
+```jldoctest
+julia> 1 ∉ 2:4
+true
+
+julia> 1 ∉ 1:3
+false
+```
+"""
+∉, ∌
 
 ## count
-
 """
     count(p, itr) -> Integer
     count(itr) -> Integer
@@ -797,6 +828,7 @@ Count the number of elements in `itr` for which predicate `p` returns `true`.
 If `p` is omitted, counts the number of `true` elements in `itr` (which
 should be a collection of boolean values).
 
+# Examples
 ```jldoctest
 julia> count(i->(4<=i<=6), [2,3,4,5,6])
 3

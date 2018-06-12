@@ -67,9 +67,6 @@ g11840(sig::Type{T}) where {T<:Tuple} = 3
 
 g11840b(::DataType) = 1
 g11840b(::Type) = 2
-# FIXME (needs a test): how to compute that the guard entry is still required,
-# even though Type{Vector} ∩ DataType = Bottom and this method would set
-# cache_with_orig = true
 g11840b(sig::Type{T}) where {T<:Tuple} = 3
 @test g11840b(Vector) == 2
 @test g11840b(Vector.body) == 1
@@ -89,6 +86,20 @@ h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Union{Vector.body, Matrix.body}) == '2'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
+
+# show that we don't make the cache confused by using alternative representations
+# when specificity is reversed
+j11840(::DataType) = '1'
+j11840(::Union{Type{T}, T}) where {T} = '2' # force cache to contain leaftypes
+@test j11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
+@test j11840(Tuple{Union{Int32, Int64}}) == '1' # DataType more specific than Type
+
+# but show we can correctly match types with alternate equivalent representations
+k11840(::Type{Union{Tuple{Int32}, Tuple{Int64}}}) = '2'
+@test k11840(Tuple{Union{Int32, Int64}}) == '2'
+@test k11840(Tuple{Union{Int32, Int64}}) == '2'
+@test k11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
+
 
 # issue #20511
 f20511(x::DataType) = 0
@@ -929,6 +940,15 @@ function f24331()
 end
 @test f24331() == [2]
 
+# issue #26743
+function f26743()
+    try
+        return 5
+    finally
+    end
+end
+@test @inferred(f26743()) == 5
+
 # finalizers
 let A = [1]
     local x = 0
@@ -1745,7 +1765,7 @@ mutable struct SIQ{A,B} <: Number
 end
 import Base: promote_rule
 promote_rule(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) where {T,T2,S,S2} = SIQ{promote_type(T,S)}
-@test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
+@test promote_type(SIQ{Int},SIQ{Float64}) == SIQ
 f4731(x::T...) where {T} = ""
 f4731(x...) = 0
 g4731() = f4731()
@@ -1966,11 +1986,11 @@ test5884()
 
 # issue #5924
 let
-    function Test()
+    function test5924()
         func = function () end
         func
     end
-    @test Test()() === nothing
+    @test test5924()() === nothing
 end
 
 # issue #6031
@@ -3375,7 +3395,7 @@ end
 @noinline throw_error() = error()
 foo11904(x::Int) = x
 @inline function foo11904(x::Nullable11904{S}) where S
-    if isbits(S)
+    if isbitstype(S)
         Nullable11904(foo11904(x.value), x.hasvalue)
     else
         throw_error()
@@ -6071,3 +6091,116 @@ g1_23206(::Tuple{Type{Int}, T}) where T = 0
 g2_23206(::Tuple{Type{Int}}) = 1
 @test_throws MethodError g1_23206(tuple(Int, 2))
 @test_throws MethodError g2_23206(tuple(Int, 2))
+
+# issue #26739
+let x26739 = Int[1]
+    @test eval(:(identity.($x26739))) == x26739
+end
+
+# issue #27018
+@test Base.isvatuple(Tuple{Float64,Vararg{Int}})
+@test Base.isvatuple(Tuple{T,Vararg{Int}} where T)
+@test Base.isvatuple(Tuple{Int,Int,Vararg{Int,N}} where N)
+@test Base.isvatuple(Tuple{T,S,Vararg{T}} where T<:S where S)
+@test Base.isvatuple(Tuple{T,S,Vararg{T,3}} where T<:S where S)
+@test !Base.isvatuple(Tuple{Float64,Vararg{Int,1}})
+@test !Base.isvatuple(Tuple{T,Vararg{Int,2}} where T)
+@test !Base.isvatuple(Tuple{Int,Int,Vararg{Int,2}})
+
+# The old iteration protocol shims deprecation test
+struct DelegateIterator{T}
+    x::T
+end
+Base.start(itr::DelegateIterator) = start(itr.x)
+Base.next(itr::DelegateIterator, state) = next(itr.x, state)
+Base.done(itr::DelegateIterator, state) = done(itr.x, state)
+let A = [1], B = [], C = DelegateIterator([1]), D = DelegateIterator([]), E = Any[1,"abc"]
+    @test next(A, start(A))[1] == 1
+    @test done(A, next(A, start(A))[2])
+    @test done(B, start(B))
+    @test next(C, start(C))[1] == 1
+    @test done(C, next(C, start(C))[2])
+    @test done(D, start(D))
+    @test next(E, next(E, start(E))[2])[1] == "abc"
+end
+
+# Issue 27103
+function f27103()
+    a = @isdefined x
+    x = 3
+    b = @isdefined x
+    (a, b)
+end
+@test f27103() == (false, true)
+
+g27103() = @isdefined z27103
+@test g27103() == false
+z27103 = 1
+@test g27103() == true
+
+# Issue 27181
+struct A27181
+    typ::Type
+end
+
+struct C27181
+    val
+end
+
+function f27181()
+    invoke(A27181(C27181).typ, Tuple{Any}, nothing)
+end
+@test f27181() == C27181(nothing)
+
+# Issue #27204
+struct Foo27204{T}
+end
+(::Foo27204{Int})() = 1
+(::Foo27204{Float64})() = 2
+@noinline f27204(x) = x ? Foo27204{Int}() : Foo27204{Float64}()
+foo27204(x) = f27204(x)()
+@test foo27204(true) == 1
+@test foo27204(false) == 2
+
+# Issue 27209
+@noinline function f27209(x::Union{Float64, Nothing})
+    if x === nothing
+        y = x; return @isdefined(y)
+    else
+        return @isdefined(y)
+    end
+end
+g27209(x) = f27209(x ? nothing : 1.0)
+@test g27209(true) == true
+
+# Issue 27240
+@inline function foo27240()
+    if rand(Bool)
+        return foo_nonexistant_27240
+    else
+        return bar_nonexistant_27240
+    end
+end
+bar27240() = foo27240()
+@test_throws UndefVarError bar27240()
+
+# issue #27269
+struct T27269{X, Y <: Vector{X}}
+    v::Vector{Y}
+end
+@test T27269([[1]]) isa T27269{Int, Vector{Int}}
+
+# issue #27368
+struct Combinator27368
+    op
+    args::Vector{Any}
+    Combinator27368(op, args...) =
+        new(op, collect(Any, args))
+end
+field27368(name) =
+    Combinator27368(field27368, name)
+translate27368(name::Symbol) =
+    translate27368(Val{name})
+translate27368(::Type{Val{name}}) where {name} =
+    field27368(name)
+@test isa(translate27368(:name), Combinator27368)

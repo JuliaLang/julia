@@ -24,8 +24,8 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
                 The resulting array would have non-integral first dimension.
             """))
         end
-        isbits(T) || throwbits(S, T, T)
-        isbits(S) || throwbits(S, T, S)
+        isbitstype(T) || throwbits(S, T, T)
+        isbitstype(S) || throwbits(S, T, S)
         (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T)
         if N != 0 && sizeof(S) != sizeof(T)
             dim = size(a)[1]

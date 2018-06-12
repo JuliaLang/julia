@@ -767,6 +767,7 @@ end
     @nospecialize(f, a, tt)
     # generic API 1
     cf = @cfunction $f Ref{T} (Ref{T},)
+    GC.gc()
     @test cf.ptr != C_NULL
     @test cf.f === f
     @test (cf._1 == C_NULL) == permanent
@@ -778,6 +779,7 @@ end
     end
     # generic API 2
     cf2 = @cfunction $f Any (Ref{S},)
+    GC.gc()
     @test cf2.ptr != C_NULL
     @test cf2.f === f
     @test (cf2._1 == C_NULL) == permanent
@@ -1422,3 +1424,31 @@ macro cglobal26297(sym)
 end
 cglobal26297() = @cglobal26297(:global_var)
 @test cglobal26297() != C_NULL
+
+# issue #26607
+noop_func_26607 = () -> nothing
+function callthis_26607(args)
+    @cfunction(noop_func_26607, Cvoid, ())
+    return nothing
+end
+@test callthis_26607(Int64(0)) === nothing
+@test callthis_26607(Int32(0)) === nothing
+
+# issue #27178 (cfunction special case in inlining)
+mutable struct CallThisFunc27178{FCN_TYPE}
+    fcn::FCN_TYPE
+end
+
+callback27178(cb::CTF) where CTF<:CallThisFunc27178 = nothing
+@inline make_cfunc27178(cbi::CI) where CI = @cfunction(callback27178, Cvoid, (Ref{CI},))
+get_c_func(fcn::FCN_TYPE) where {FCN_TYPE<:Function} = return make_cfunc27178(CallThisFunc27178(fcn))
+@test isa(get_c_func(sin), Ptr)
+
+# issue #27215
+function once_removed()
+    function mycompare(a, b)::Cint
+        return (a < b) ? -1 : ((a > b) ? +1 : 0)
+    end
+    mycompare_c = @cfunction($mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}))
+end
+@test isa(once_removed(), Base.CFunction)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function transform!(context::T) where {T<:SHA3_CTX}
     # First, update state with buffer
     pbuf = Ptr{eltype(context.state)}(pointer(context.buffer))
@@ -61,7 +63,7 @@ function digest!(context::T) where {T<:SHA3_CTX}
         # Begin padding with a 0x06
         context.buffer[usedspace+1] = 0x06
         # Fill with zeros up until the last byte
-        context.buffer[usedspace+2:end-1] = 0x00
+        context.buffer[usedspace+2:end-1] .= 0x00
         # Finish it off with a 0x80
         context.buffer[end] = 0x80
     else

@@ -122,7 +122,7 @@ end
             end
         end
         for f in (:+, :-, :*, :/, :%, :(==), :!=, :<, :<=, :>, :>=, :^,
-                  :atan2, :hypot, :max, :min, :log)
+                  :atan, :hypot, :max, :min, :log)
             @eval begin
                 @test @fastmath($f($half, $third)) ≈ $f($half, $third)
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half)

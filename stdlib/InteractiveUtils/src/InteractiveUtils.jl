@@ -15,7 +15,7 @@ using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_ty
 
 using Markdown
 using LinearAlgebra  # for peakflops
-import Pkg
+import OldPkg
 
 include("editless.jl")
 include("codeview.jl")
@@ -104,26 +104,23 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
-    println(io, "Environment:")
-    for (k,v) in ENV
-        if occursin(r"JULIA", String(k))
-            println(io, "  $(k) = $(v)")
-        end
-    end
-    if verbose
-        for (k,v) in ENV
-            if occursin(r"PATH|FLAG|^TERM$|HOME", String(k))
-                println(io, "  $(k) = $(v)")
-            end
+    env_strs = [String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"JULIA", k)];
+                (verbose ?
+                 String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"PATH|FLAG|^TERM$|HOME", k)] :
+                 [])]
+    if !isempty(env_strs)
+        println(io, "Environment:")
+        for str in env_strs
+            println(io, str)
         end
     end
     if packages || verbose
         println(io, "Packages:")
-        println(io, "  Package Directory: ", Pkg.dir())
+        println(io, "  Package Directory: ", OldPkg.dir())
         print(io, "  Package Status:")
-        if isdir(Pkg.dir())
+        if isdir(OldPkg.dir())
             println(io, "")
-            Pkg.status(io)
+            OldPkg.status(io)
         else
             println(io, " no packages installed")
         end

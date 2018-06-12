@@ -111,6 +111,7 @@ jl_datatype_t *jl_methoderror_type;
 jl_datatype_t *jl_loaderror_type;
 jl_datatype_t *jl_initerror_type;
 jl_datatype_t *jl_undefvarerror_type;
+jl_datatype_t *jl_lineinfonode_type;
 jl_unionall_t *jl_ref_type;
 jl_unionall_t *jl_pointer_type;
 jl_typename_t *jl_pointer_typename;
@@ -2022,26 +2023,28 @@ void jl_init_types(void)
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(12,
+                        jl_perm_symsvec(13,
                             "code",
                             "codelocs",
-                            "signature_for_inference_heuristics",
+                            "method_for_inference_limit_heuristics",
                             "slottypes",
                             "ssavaluetypes",
                             "linetable",
+                            "ssaflags",
                             "slotflags",
                             "slotnames",
                             "inferred",
                             "inlineable",
                             "propagate_inbounds",
                             "pure"),
-                        jl_svec(12,
+                        jl_svec(13,
                             jl_array_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
+                            jl_array_uint8_type,
                             jl_array_uint8_type,
                             // Note: The following fields have special serialization.
                             // If you change them, you'll have to adjust the
@@ -2051,7 +2054,7 @@ void jl_init_types(void)
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
-                        0, 1, 12);
+                        0, 1, 13);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,

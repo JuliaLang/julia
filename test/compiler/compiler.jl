@@ -18,6 +18,48 @@ let comparison = Tuple{X, X} where X<:Tuple
     @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  10) == sig
 end
 
+# PR 22120
+function tmerge_test(a, b, r, commutative=true)
+    @test r == Core.Compiler.tuplemerge(a, b)
+    if commutative
+        @test r == Core.Compiler.tuplemerge(b, a)
+    else
+        @test_broken r == Core.Compiler.tuplemerge(b, a)
+    end
+end
+tmerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
+tmerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
+tmerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
+tmerge_test(Tuple{Int}, Tuple{Int, Int},
+    Tuple{Vararg{Int}})
+tmerge_test(Tuple{Integer}, Tuple{Int, Int},
+    Tuple{Vararg{Integer}})
+tmerge_test(Tuple{}, Tuple{Int, Int},
+    Tuple{Vararg{Int}})
+tmerge_test(Tuple{}, Tuple{Complex},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Complex}}, false)
+tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Complex}})
+@test Core.Compiler.tmerge(Tuple{}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Int32, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Int32, Nothing, Tuple{ComplexF32, ComplexF32}}
+@test Core.Compiler.tmerge(Union{Int32, Nothing, Tuple{ComplexF32}}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Int32, Nothing, Tuple{Vararg{ComplexF32}}}
 
 # issue 9770
 @noinline x9770() = false
@@ -205,13 +247,12 @@ end
 
 # issue #12474
 @generated function f12474(::Any)
-    :(for i in 1
-      end)
+    return :(for i in 1
+        end)
 end
-let
-    ast12474 = code_typed(f12474, Tuple{Float64})
+let ast12474 = code_typed(f12474, Tuple{Float64})
     @test isdispatchelem(ast12474[1][2])
-    @test all(isdispatchelem, ast12474[1][1].slottypes)
+    @test all(x -> isdispatchelem(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
 end
 
 
@@ -484,7 +525,7 @@ function g19348(x)
     a, b = x
     g = 1
     g = 2
-    c = Base.indexed_next(x, g, g)
+    c = Base.indexed_iterate(x, g, g)
     return a + b + c[1]
 end
 
@@ -514,9 +555,21 @@ end
 @test h18679() === nothing
 
 
-# issue #5575
-f5575() = zeros(Type[Float64][1], 1)
+# issue #5575: inference with abstract types on a reasonably complex method tree
+zeros5575(::Type{T}, dims::Tuple{Vararg{Any,N}}) where {T,N} = Array{T,N}(dims)
+zeros5575(dims::Tuple) = zeros5575(Float64, dims)
+zeros5575(::Type{T}, dims...) where {T} = zeros5575(T, dims)
+zeros5575(a::AbstractArray) = zeros5575(a, Float64)
+zeros5575(a::AbstractArray, ::Type{T}) where {T} = zeros5575(a, T, size(a))
+zeros5575(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} = zeros5575(T, dims)
+zeros5575(a::AbstractArray, ::Type{T}, dims...) where {T} = zeros5575(T, dims)
+zeros5575(dims...) = zeros5575(dims)
+f5575() = zeros5575(Type[Float64][1], 1)
 @test Base.return_types(f5575, ())[1] == Vector
+
+g5575() = zeros(Type[Float64][1], 1)
+@test_broken Base.return_types(g5575, ())[1] == Vector # This should be fixed by removing deprecations
+
 
 # make sure Tuple{unknown} handles the possibility that `unknown` is a Vararg
 function maybe_vararg_tuple_1()
@@ -1064,6 +1117,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
 end
 
 function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
+    new_style_ir = code.codelocs !== nothing
     for ex in code.code
         Meta.isexpr(ex, :(=)) && (ex = ex.args[2])
         isa(ex, Expr) || continue
@@ -1074,7 +1128,7 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                     farg = typeof(getfield(farg.mod, farg.name))
                 end
             elseif isa(farg, Core.SSAValue)
-                farg = code.ssavaluetypes[farg.id + 1]
+                farg = code.ssavaluetypes[farg.id + (new_style_ir ? 0 : 1)]
             else
                 farg = typeof(farg)
             end
@@ -1298,73 +1352,119 @@ function _generated_stub(gen::Symbol, args::Vector{Any}, params::Vector{Any}, li
     return Expr(:meta, :generated, stub)
 end
 
-f24852_kernel(x, y) = x * y
+f24852_kernel1(x, y::Tuple) = x * y[1][1][1]
+f24852_kernel2(x, y::Tuple) = f24852_kernel1(x, (y,))
+f24852_kernel3(x, y::Tuple) = f24852_kernel2(x, (y,))
+f24852_kernel(x, y::Number) = f24852_kernel3(x, (y,))
 
-function f24852_kernel_cinfo(x, y)
-    sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f24852_kernel),x,y}, -1, typemax(UInt))[1]
+function f24852_kernel_cinfo(fsig::Type)
+    world = typemax(UInt) # FIXME
+    sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
+    isdefined(method, :source) || return (nothing, :(f(x, y)))
     code_info = Base.uncompressed_ast(method)
     body = Expr(:block, code_info.code...)
-    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
+    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 1, :propagate)
+    if startswith(String(method.name), "f24852")
+        for a in body.args
+            if a isa Expr && a.head == :(=)
+                a = a.args[2]
+            end
+            if a isa Expr && length(a.args) === 3 && a.head === :call
+                pushfirst!(a.args, Core.SlotNumber(1))
+            end
+        end
+    end
+    pushfirst!(code_info.slotnames, Symbol("#self#"))
+    pushfirst!(code_info.slotflags, 0x00)
     return method, code_info
 end
 
-function f24852_gen_cinfo_uninflated(X, Y, f, x, y)
-    _, code_info = f24852_kernel_cinfo(x, y)
+function f24852_gen_cinfo_uninflated(X, Y, _, f, x, y)
+    _, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
     return code_info
 end
 
-function f24852_gen_cinfo_inflated(X, Y, f, x, y)
-    method, code_info = f24852_kernel_cinfo(x, y)
-    code_info.signature_for_inference_heuristics = Core.Compiler.svec(f, (x, y), typemax(UInt))
+function f24852_gen_cinfo_inflated(X, Y, _, f, x, y)
+    method, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
+    code_info.method_for_inference_limit_heuristics = method
     return code_info
 end
 
-function f24852_gen_expr(X, Y, f, x, y)
-    return :(f24852_kernel(x::$X, y::$Y))
+function f24852_gen_expr(X, Y, _, f, x, y) # deparse f(x::X, y::Y) where {X, Y}
+    if f === typeof(f24852_kernel)
+        f2 = :f24852_kernel3
+    elseif f === typeof(f24852_kernel3)
+        f2 = :f24852_kernel2
+    elseif f === typeof(f24852_kernel2)
+        f2 = :f24852_kernel1
+    elseif f === typeof(f24852_kernel1)
+        return :((x::$X) * (y::$Y)[1][1][1])
+    else
+        return :(error(repr(f)))
+    end
+    return :(f24852_late_expr($f2, x::$X, (y::$Y,)))
 end
 
 @eval begin
-    function f24852_late_expr(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:f24852_late_expr, :x, :y],
+    function f24852_late_expr(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_late_inflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:f24852_late_inflated, :x, :y],
+    function f24852_late_inflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_late_uninflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:f24852_late_uninflated, :x, :y],
+    function f24852_late_uninflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
 end
 
 @eval begin
-    function f24852_early_expr(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:f24852_early_expr, :x, :y],
+    function f24852_early_expr(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_early_inflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:f24852_early_inflated, :x, :y],
+    function f24852_early_inflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_early_uninflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:f24852_early_uninflated, :x, :y],
+    function f24852_early_uninflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
 end
 
 x, y = rand(), rand()
 result = f24852_kernel(x, y)
 
-@test result === f24852_late_expr(x, y)
-@test result === f24852_late_uninflated(x, y)
-@test result === f24852_late_inflated(x, y)
+@test result === f24852_late_expr(f24852_kernel, x, y)
+@test Base.return_types(f24852_late_expr, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === f24852_late_uninflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === f24852_late_uninflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
 
-@test result === f24852_early_expr(x, y)
-@test result === f24852_early_uninflated(x, y)
-@test result === f24852_early_inflated(x, y)
+@test result === f24852_early_expr(f24852_kernel, x, y)
+@test Base.return_types(f24852_early_expr, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === f24852_early_uninflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_early_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === @inferred f24852_early_inflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_early_inflated, typeof((f24852_kernel, x, y))) == Any[Float64]
 
-# TODO: test that `expand_early = true` + inflated `signature_for_inference_heuristics`
+# TODO: test that `expand_early = true` + inflated `method_for_inference_limit_heuristics`
 # can be used to tighten up some inference result.
 
 # Test that Conditional doesn't get widened to Bool too quickly
@@ -1423,3 +1523,63 @@ f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
 g26172(::Val{0}) = ()
 g26172(v) = (nothing, g26172(f26172(v))...)
 @test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)
+
+# 26826 constant prop through varargs
+
+struct Foo26826{A,B}
+    a::A
+    b::B
+end
+
+x26826 = rand()
+
+apply26826(f, args...) = f(args...)
+
+# We use getproperty to drive these tests because it requires constant
+# propagation in order to lower to a well-inferred getfield call.
+f26826(x) = apply26826(Base.getproperty, Foo26826(1, x), :b)
+
+@test @inferred(f26826(x26826)) === x26826
+
+getfield26826(x, args...) = Base.getproperty(x, getfield(args, 2))
+
+g26826(x) = getfield26826(x, :a, :b)
+
+@test @inferred(g26826(Foo26826(1, x26826))) === x26826
+
+# Somewhere in here should be a single getfield call, and it should be inferred as Float64.
+# If this test is broken (especially if inference is getting a correct, but loose result,
+# like a Union) then it's potentially an indication that the optimizer isn't hitting the
+# InferenceResult cache properly for varargs methods.
+typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first.code
+found_well_typed_getfield_call = false
+for stmt in typed_code
+    lhs = Meta.isexpr(stmt, :(=)) ? stmt.args[2] : stmt
+    if Meta.isexpr(lhs, :call) && lhs.args[1] == GlobalRef(Base, :getfield) && lhs.typ === Float64
+        global found_well_typed_getfield_call = true
+    end
+end
+
+@test found_well_typed_getfield_call
+
+# 27059 fix fieldtype vararg and union handling
+
+f27059(::Type{T}) where T = i -> fieldtype(T, i)
+T27059 = Tuple{Float64,Vararg{Float32}}
+@test f27059(T27059)(2) === fieldtype(T27059, 2) === Float32
+@test f27059(Union{T27059,Tuple{Vararg{Symbol}}})(2) === Union{Float32,Symbol}
+@test fieldtype(Union{Tuple{Int,Symbol},Tuple{Float64,String}}, 1) === Union{Int,Float64}
+@test fieldtype(Union{Tuple{Int,Symbol},Tuple{Float64,String}}, 2) === Union{Symbol,String}
+@test fieldtype(Union{Tuple{T,Symbol},Tuple{S,String}} where {T<:Number,S<:T}, 1) === Union{S,T} where {T<:Number,S<:T}
+
+# PR #27068, improve `ifelse` inference
+
+@noinline _f_ifelse_isa_() = rand(Bool) ? 1 : nothing
+function _g_ifelse_isa_()
+    x = _f_ifelse_isa_()
+    ifelse(isa(x, Nothing), 1, x)
+end
+@test Base.return_types(_g_ifelse_isa_, ()) == [Int]
+
+# Equivalence of Const(T.instance) and T for singleton types
+@test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)

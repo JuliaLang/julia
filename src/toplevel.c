@@ -615,9 +615,10 @@ static jl_code_info_t *expr_to_code_info(jl_value_t *expr)
     jl_gc_wb(src, src->slotflags);
     src->ssavaluetypes = jl_box_long(0);
     jl_gc_wb(src, src->ssavaluetypes);
-    src->signature_for_inference_heuristics = jl_nothing;
+    src->method_for_inference_limit_heuristics = jl_nothing;
     src->codelocs = jl_nothing;
     src->linetable = jl_nothing;
+    src->ssaflags = jl_alloc_array_1d(jl_array_uint8_type, 0);
 
     JL_GC_POP();
     return src;
@@ -638,9 +639,13 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     if (ex->head == dot_sym) {
         if (jl_expr_nargs(ex) != 2)
             jl_error("syntax: malformed \".\" expression");
-        return jl_eval_dot_expr(m, jl_exprarg(ex, 0), jl_exprarg(ex, 1), fast);
+        jl_value_t *lhs = jl_exprarg(ex, 0);
+        jl_value_t *rhs = jl_exprarg(ex, 1);
+        // only handle `a.b` syntax here
+        if (jl_is_quotenode(rhs) && jl_is_symbol(jl_fieldref(rhs,0)))
+            return jl_eval_dot_expr(m, lhs, rhs, fast);
     }
-    else if (ptls->in_pure_callback) {
+    if (ptls->in_pure_callback) {
         jl_error("eval cannot be used in a generated function");
     }
     else if (ex->head == module_sym) {
