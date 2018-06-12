@@ -431,8 +431,8 @@ The format of the version specifier is described in detail below.
 
 Similar to other package managers, the Julia package manager respects [semantic versioning](https://semver.org/) (semver).
 As an example, a version specifier is given as e.g. `1.2.3` is therefore assumed to be compatible with the versions `[1.2.3 - 2.0.0)` where `)` is a non-inclusive upper bound.
-More specifically, a version specifier is either given as a **caret specifier**, e.g. `~1.2.3`  or a **tilde specifier** `^1.2.3`.
-Caret specifiers are the default and hence `1.2.3 == ~1.2.3`. The difference between a caret and tilde is described in the next section.
+More specifically, a version specifier is either given as a **caret specifier**, e.g. `^1.2.3`  or a **tilde specifier** `~1.2.3`.
+Caret specifiers are the default and hence `1.2.3 == ^1.2.3`. The difference between a caret and tilde is described in the next section.
 
 #### Caret specifiers
 
@@ -456,11 +456,11 @@ a version given as `0.a.b` is considered compatible with `0.a.c` if `a != 0` and
 
 #### Tilde specifiers
 
-A tilde specifier provides more limited upgrade possibilities. With a caret, only the last specified digit is allowed to increment by one.
+A tilde specifier provides more limited upgrade possibilities. With a tilde, only the last specified digit is allowed to increment by one.
 This gives the following example.
 
 ```
-~1.2.3 = [1.2.3, 1.3.0)
+~1.2.3 = [1.2.3, 1.2.4)
 ~1.2 = [1.2.0, 1.3.0)
 ~1 = [1.0.0, 2.0.0)
 ```
