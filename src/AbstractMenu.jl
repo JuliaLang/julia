@@ -102,6 +102,22 @@ varies based on menu type.
 request(m::AbstractMenu) = request(terminal, m)
 
 function request(term::Base.Terminals.TTYTerminal, m::AbstractMenu)
+
+    function advance_cursor()
+        if cursor < length(options(m))
+            # move selection up
+            cursor += 1
+            # scroll page
+            if cursor >= m.pagesize + m.pageoffset && m.pagesize + m.pageoffset < length(options(m))
+                m.pageoffset += 1
+            end
+        elseif CONFIG[:scroll_wrap]
+            # wrap to top
+            cursor = 1
+            m.pageoffset = 0
+        end
+    end
+
     cursor = 1
 
     menu_header = header(m)
@@ -133,19 +149,7 @@ function request(term::Base.Terminals.TTYTerminal, m::AbstractMenu)
                 end
 
             elseif c == Int(ARROW_DOWN)
-
-                if cursor < length(options(m))
-                    # move selection up
-                    cursor += 1
-                    # scroll page
-                    if cursor >= m.pagesize + m.pageoffset && m.pagesize + m.pageoffset < length(options(m))
-                        m.pageoffset += 1
-                    end
-                elseif CONFIG[:scroll_wrap]
-                    # wrap to top
-                    cursor = 1
-                    m.pageoffset = 0
-                end
+                advance_cursor()
 
             elseif c == Int(PAGE_UP)
                 # If we're at the bottom, move the page 1 less to move the cursor up from
@@ -172,6 +176,8 @@ function request(term::Base.Terminals.TTYTerminal, m::AbstractMenu)
             elseif c == 13 # <enter>
                 # will break if pick returns true
                 pick(m, cursor) && break
+                advance_cursor()
+
             elseif c == UInt32('q')
                 cancel(m)
                 break
