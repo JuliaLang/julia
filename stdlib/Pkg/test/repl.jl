@@ -25,6 +25,11 @@ function git_init_package(tmp, path)
 end
 
 
+@testset "generate init args" begin
+    @test_throws CommandError pkg"generate"
+    @test_throws CommandError pkg"init Beep"
+end
+
 mktempdir() do project_path
     cd(project_path) do
         pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
