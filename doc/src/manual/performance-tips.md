@@ -1144,7 +1144,7 @@ Sometimes you can enable better optimization by promising certain program proper
     like allowing floating-point re-associativity and ignoring dependent memory accesses. Again, be very
     careful when asserting `@simd` as erroneously annotating a loop with dependent iterations may result
     in unexpected results. In particular, note that `setindex!` on some `AbstractArray` subtypes is
-    enherently dependent upon iteration order. **This feature is experimental**
+    inherently dependent upon iteration order. **This feature is experimental**
     and could change or disappear in future versions of Julia.
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,

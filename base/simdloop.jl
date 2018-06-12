@@ -94,7 +94,7 @@ Annotate a `for` loop to allow the compiler to take extra liberties to allow loo
     This feature is experimental and could change or disappear in future versions of Julia.
     Incorrect use of the `@simd` macro may cause unexpected results.
 
-The object iterated over in a `@simd for` loop should be a one-dimensional range.
+The object iterated over in a `@simd for` loop should be a one-dimensional range or a CartesianIndices iterator.
 By using `@simd`, you are asserting several properties of the loop:
 
     * It is safe to execute iterations in arbitrary or overlapping order, with special consideration for reduction variables.

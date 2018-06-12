@@ -187,14 +187,7 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
         return mapreduce_first(f, op, a1)
     elseif ifirst + blksize > ilast
         # sequential portion
-        @inbounds a1 = A[ifirst]
-        @inbounds a2 = A[ifirst+1]
-        v = op(f(a1), f(a2))
-        for i = ifirst + 2 : ilast
-            @inbounds ai = A[i]
-            v = op(v, f(ai))
-        end
-        return v
+        return _mapreduce_impl_loop(simdable(f), simdable(op), A, ifirst, ilast)
     else
         # pairwise portion
         imid = (ifirst + ilast) >> 1
@@ -202,6 +195,32 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
         v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
         return op(v1, v2)
     end
+end
+
+# The @simd transformation is only valid in limited situations
+struct SIMDableFunction{f}; end
+(::SIMDableFunction{f})(args...) where {f} = f(args...)
+simdable(f::Union{map(typeof, (+, *, &, |, add_sum, mul_prod, -, /, ^, identity))...}) = SIMDableFunction{f}()
+simdable(f) = f
+function _mapreduce_impl_loop(f::SIMDableFunction, op::SIMDableFunction, A::Array, ifirst, ilast)
+    @inbounds a1 = A[ifirst]
+    @inbounds a2 = A[ifirst+1]
+    v = op(f(a1), f(a2))
+    @simd for i = ifirst + 2 : ilast
+        @inbounds ai = A[i]
+        v = op(v, f(ai))
+    end
+    return v
+end
+function _mapreduce_impl_loop(f, op, A, ifirst, ilast)
+    @inbounds a1 = A[ifirst]
+    @inbounds a2 = A[ifirst+1]
+    v = op(f(a1), f(a2))
+    for i = ifirst + 2 : ilast
+        @inbounds ai = A[i]
+        v = op(v, f(ai))
+    end
+    return v
 end
 
 mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
