@@ -1959,5 +1959,6 @@ kron(A::SparseMatrixCSC,v::SparseVector) = kron(A,SparseMatrixCSC(v))
 
 function kron(v1::SparseVector,v2::SparseVector)  
    v = kron(SparseMatrixCSC(v1),SparseMatrixCSC(v2))
-   return SparseVector(v.n,v.nzind,v.nzval)
+   return SparseVector(v.n,v.rowval,v.nzval)
 end
+
