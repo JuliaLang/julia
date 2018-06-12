@@ -9,7 +9,7 @@ A menu that allows a user to select a multiple options from a list.
 ```julia
 julia> request(MultiSelectMenu(options))
 Select the fruits you like:
-[press: d=done, a=all, n=none]
+[press: d=done, a=all, n=none, <enter>=select]
    [ ] apple
  > [X] orange
    [X] grape
@@ -82,7 +82,7 @@ function pick(menu::MultiSelectMenu, cursor::Int)
         push!(menu.selected, cursor)
     end
 
-    return false #break out of the menu
+    return false #don't break out of the menu
 end
 
 function writeLine(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool, term_width::Int)
