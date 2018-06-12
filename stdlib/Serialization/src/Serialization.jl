@@ -313,11 +313,6 @@ function serialize(s::AbstractSerializer, n::BigInt)
     serialize(s, string(n, base = 62))
 end
 
-function serialize(s::AbstractSerializer, n::BigFloat)
-    serialize_type(s, BigFloat)
-    serialize(s, string(n))
-end
-
 function serialize(s::AbstractSerializer, ex::Expr)
     serialize_cycle(s, ex) && return
     l = length(ex.args)
@@ -1180,8 +1175,6 @@ function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
     end
     return t
 end
-
-deserialize(s::AbstractSerializer, ::Type{BigFloat}) = parse(BigFloat, deserialize(s))
 
 deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), base = 62)
 
