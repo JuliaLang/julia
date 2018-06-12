@@ -41,12 +41,12 @@ Signed
 ```
 """
 function supertype(T::DataType)
-    @_pure_meta
+    @_unsafe_pure_meta
     T.super
 end
 
 function supertype(T::UnionAll)
-    @_pure_meta
+    @_unsafe_pure_meta
     UnionAll(T.var, supertype(T.body))
 end
 
@@ -151,11 +151,11 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 
 function ==(T::Type, S::Type)
-    @_pure_meta
+    @_unsafe_pure_meta
     T<:S && S<:T
 end
 function !=(T::Type, S::Type)
-    @_pure_meta
+    @_unsafe_pure_meta
     !(T == S)
 end
 ==(T::TypeVar, S::Type) = false
