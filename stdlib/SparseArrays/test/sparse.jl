@@ -351,13 +351,13 @@ end
     end
 end
 
-@testset "sparse Frobenius inner product" begin
+@testset "sparse Frobenius dot/inner product" begin
     for i = 1:5
         A = sprand(ComplexF64,10,15,0.4)
         B = sprand(ComplexF64,10,15,0.5)
-        @test vecdot(A,B) ≈ vecdot(Matrix(A),Matrix(B))
+        @test dot(A,B) ≈ dot(Matrix(A),Matrix(B))
     end
-    @test_throws DimensionMismatch vecdot(sprand(5,5,0.2),sprand(5,6,0.2))
+    @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
 
 sA = sprandn(3, 7, 0.5)
