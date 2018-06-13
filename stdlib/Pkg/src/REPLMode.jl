@@ -17,7 +17,7 @@ using ..Types, ..Display, ..Operations, ..API
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
                    CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
                    CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE, CMD_PRECOMPILE,
-                   CMD_INSTANTIATE)
+                   CMD_INSTANTIATE, CMD_RESOLVE)
 
 struct Command
     kind::CommandKind
@@ -57,6 +57,7 @@ const cmds = Dict(
     "generate"  => CMD_GENERATE,
     "precompile" => CMD_PRECOMPILE,
     "instantiate" => CMD_INSTANTIATE,
+    "resolve"   => CMD_RESOLVE,
 )
 
 #################
@@ -286,6 +287,7 @@ function do_cmd!(tokens::Vector{Token}, repl)
     cmd.kind == CMD_PIN      ? Base.invokelatest(           do_pin!, ctx, tokens) :
     cmd.kind == CMD_FREE     ? Base.invokelatest(          do_free!, ctx, tokens) :
     cmd.kind == CMD_GENERATE ? Base.invokelatest(      do_generate!, ctx, tokens) :
+    cmd.kind == CMD_RESOLVE  ? Base.invokelatest(       do_resolve!, ctx, tokens) :
     cmd.kind == CMD_PRECOMPILE ? Base.invokelatest(  do_precompile!, ctx, tokens) :
     cmd.kind == CMD_INSTANTIATE ? Base.invokelatest(do_instantiate!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
@@ -321,33 +323,36 @@ What action you want the package manager to take:
 
 `status`: summarize contents of and changes to environment
 
-`generate`: generate files for a new project
-
 `add`: add packages to project
+
+`develop`: clone the full package repo locally for development
 
 `rm`: remove packages from project or manifest
 
 `up`: update packages in manifest
 
-`preview`: previews a subsequent command without affecting the current state
-
 `test`: run tests for packages
-
-`gc`: garbage collect packages not used for a significant time
-
-`init`: initializes an environment in the current, or git base, directory
 
 `build`: run the build script for packages
 
 `pin`: pins the version of packages
 
-`develop`: clone the full package repo locally for development
-
 `free`: undoes a `pin`, `develop`, or stops tracking a repo.
+
+`instantiate`: downloads all the dependencies for the project
+
+`resolve`: resolves to update the manifest from changes in dependencis of
+developed packages
+
+`init`: initializes an environment in the current, or git base, directory
+
+`generate`: generate files for a new project
+
+`preview`: previews a subsequent command without affecting the current state
 
 `precompile`: precompile all the project dependencies
 
-`instantiate`: downloads all the dependencies for the project
+`gc`: garbage collect packages not used for a significant time
 """
 
 const helps = Dict(
@@ -505,6 +510,11 @@ const helps = Dict(
 
     Download all the dependencies for the current project at the version given by the project's manifest.
     If no manifest exists or the `--project` option is given, resolve and download the dependencies compatible with the project.
+    """, CMD_RESOLVE => md"""
+        resolve
+
+    Resolve the project i.e. run package resolution and update the Manifest. This is useful in case the dependencies of developed
+    packages have changed causing the current Manifest to_indices be out of sync.
     """
 )
 
@@ -775,6 +785,11 @@ function do_instantiate!(ctx::Context, tokens::Vector{Token})
         end
     end
     API.instantiate(ctx; manifest=manifest)
+end
+
+function do_resolve!(ctx::Context, tokens::Vector{Token})
+    !isempty(tokens) && cmderror("`resolve` does not take any arguments")
+    API.resolve(ctx)
 end
 
 

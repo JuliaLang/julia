@@ -368,7 +368,12 @@ To stop tracking a path and use the registered version again, use `free`
 ```
 
 It should be pointed out that by using `dev` your project is now inherently stateful.
-Its state depends on the current content of the files at the path and the manifest cannot be "instantiated" by someone else without knowing the exact content of all the packages that are tracking a path.
+Its state depends on the current content of the files at the path and the manifest cannot be "instantiated" by someone else without
+knowing the exact content of all the packages that are tracking a path.
+
+Note that if you add a dependency to a package that tracks a local path, the Manifest (which contains the whole dependency graph) will become
+out of sync with the actual dependency graph. This means that the package will not be able to load that dependency since it is not recorded
+in the Manifest. To update sync the Manifest, use the REPL command `resolve`.
 
 ### Removing packages
 
