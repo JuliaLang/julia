@@ -273,7 +273,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     stmt = compact.result[idx]
     linetable_offset = length(linetable)
     # Append the linetable of the inlined function to our line table
-    inlined_at = compact.result_lines[idx]
+    inlined_at = Int(compact.result_lines[idx])
     for entry in item.linetable
         push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
@@ -958,7 +958,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
     todo
 end
 
-function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int)
+function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int32)
     e = Expr(:call, TOP_TUPLE, args...)
     etyp = tuple_tfunc(Tuple{Any[widenconst(compact_exprtype(compact, args[i])) for i in 1:length(args)]...})
     return insert_node_here!(compact, e, etyp, line_idx)

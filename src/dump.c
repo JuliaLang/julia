@@ -78,7 +78,6 @@ static const intptr_t LongPhic_tag     = 27;
 static const intptr_t LiteralVal_tag   = 28;
 static const intptr_t SmallInt64_tag   = 29;
 static const intptr_t SmallDataType_tag= 30;
-static const intptr_t Int32_tag        = 31;
 static const intptr_t Array1d_tag      = 32;
 static const intptr_t Singleton_tag    = 33;
 static const intptr_t CommonSym_tag    = 34;
@@ -86,6 +85,7 @@ static const intptr_t NearbyGlobal_tag = 35;  // a GlobalRef pointing to tree_en
 static const intptr_t CoreMod_tag      = 36;
 static const intptr_t BaseMod_tag      = 37;
 static const intptr_t BITypeName_tag   = 38;  // builtin TypeName
+static const intptr_t NearbyModule_tag = 39;
 static const intptr_t Null_tag         = 253;
 static const intptr_t ShortBackRef_tag = 254;
 static const intptr_t BackRef_tag      = 255;
@@ -442,9 +442,8 @@ static int is_ast_node(jl_value_t *v)
     return jl_is_symbol(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
         jl_is_uniontype(v) || jl_is_expr(v) || jl_is_newvarnode(v) ||
         jl_is_svec(v) || jl_is_tuple(v) || ((jl_datatype_t*)jl_typeof(v))->instance ||
-        jl_is_int32(v) || jl_is_int64(v) || jl_is_bool(v) ||
-        jl_is_quotenode(v) || jl_is_gotonode(v) ||
-        jl_is_linenode(v) || jl_is_globalref(v) ||
+        jl_is_int32(v) || jl_is_int64(v) || jl_is_bool(v) || jl_is_uint8(v) ||
+        jl_is_quotenode(v) || jl_is_gotonode(v) || jl_is_linenode(v) || jl_is_globalref(v) ||
         jl_is_phinode(v) || jl_is_phicnode(v) || jl_is_upsilonnode(v) || jl_is_pinode(v) ||
         jl_typeis(v, jl_lineinfonode_type);
 }
@@ -491,6 +490,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             writetag(s->s, (jl_value_t*)BaseMod_tag);
             return;
         }
+        else if (v == (jl_value_t*)s->tree_enclosing_module) {
+            writetag(s->s, (jl_value_t*)NearbyModule_tag);
+            return;
+        }
         else if (!as_literal && !is_ast_node(v)) {
             writetag(s->s, (jl_value_t*)LiteralVal_tag);
             int id = literal_val_id(s, v);
@@ -499,7 +502,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             return;
         }
     }
-    else {
+    else if (!jl_is_uint8(v)) {
         bp = ptrhash_bp(&backref_table, v);
         if (*bp != HT_NOTFOUND) {
             uintptr_t pos = (char*)*bp - (char*)HT_NOTFOUND - 1;
@@ -804,19 +807,29 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             te = te->next;
         }
     }
-    else {
-        jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+    else if (jl_typeis(v, jl_int64_type)) {
         void *data = jl_data_ptr(v);
-        if (t == jl_int64_type &&
-            *(int64_t*)data >= S32_MIN && *(int64_t*)data <= S32_MAX) {
+        if (*(int64_t*)data >= S32_MIN && *(int64_t*)data <= S32_MAX) {
             writetag(s->s, (jl_value_t*)SmallInt64_tag);
             write_int32(s->s, (int32_t)*(int64_t*)data);
         }
-        else if (t == jl_int32_type) {
-            writetag(s->s, (jl_value_t*)Int32_tag);
-            write_int32(s->s, (int32_t)*(int32_t*)data);
-        }
         else {
+            writetag(s->s, (jl_value_t*)jl_int64_type);
+            write_int64(s->s, *(int64_t*)data);
+        }
+    }
+    else if (jl_typeis(v, jl_int32_type)) {
+        writetag(s->s, (jl_value_t*)jl_int32_type);
+        write_int32(s->s, *(int32_t*)jl_data_ptr(v));
+    }
+    else if (jl_typeis(v, jl_uint8_type)) {
+        writetag(s->s, (jl_value_t*)jl_uint8_type);
+        write_int8(s->s, *(int8_t*)jl_data_ptr(v));
+    }
+    else {
+        jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+        void *data = jl_data_ptr(v);
+        {
             if (v == t->instance) {
                 if (s->mode == MODE_MODULE && !type_in_worklist(t)) {
                     // also flag this in the backref table as special
@@ -1948,16 +1961,29 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
             arraylist_push(&backref_list, v);
         return v;
     }
-    else if (vtag == (jl_value_t*)Int32_tag) {
+    else if (vtag == (jl_value_t*)jl_int64_type) {
+        jl_value_t *v = jl_box_int64((int64_t)read_uint64(s->s));
+        if (usetable)
+            arraylist_push(&backref_list, v);
+        return v;
+    }
+    else if (vtag == (jl_value_t*)jl_int32_type) {
         jl_value_t *v = jl_box_int32(read_int32(s->s));
         if (usetable)
             arraylist_push(&backref_list, v);
         return v;
     }
+    else if (vtag == (jl_value_t*)jl_uint8_type) {
+        return jl_box_uint8(read_uint8(s->s));
+    }
     else if (vtag == (jl_value_t*)NearbyGlobal_tag) {
         assert(s->tree_enclosing_module != NULL);
         jl_value_t *sym = jl_deserialize_value(s, NULL);
         return jl_module_globalref(s->tree_enclosing_module, (jl_sym_t*)sym);
+    }
+    else if (vtag == (jl_value_t*)NearbyModule_tag) {
+        assert(s->tree_enclosing_module != NULL);
+        return (jl_value_t*)s->tree_enclosing_module;
     }
     else if (vtag == (jl_value_t*)jl_globalref_type) {
         return jl_deserialize_value_globalref(s);
@@ -2952,10 +2978,11 @@ void jl_init_serializer(void)
                      (void*)LongExpr_tag, (void*)LongPhi_tag, (void*)LongPhic_tag,
                      (void*)LiteralVal_tag, jl_string_type,
                      (void*)SmallInt64_tag, (void*)SmallDataType_tag, jl_typemap_entry_type,
-                     (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
+                     (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
                      (void*)CoreMod_tag, (void*)BaseMod_tag, (void*)BITypeName_tag,
+                     (void*)NearbyModule_tag, jl_int32_type, jl_int64_type, jl_uint8_type,
                      // everything above here represents a class of object rather than only a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
@@ -2986,10 +3013,9 @@ void jl_init_serializer(void)
                      jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
                      jl_box_int64(21), jl_box_int64(22), jl_box_int64(23),
                      jl_box_int64(24), jl_box_int64(25), jl_box_int64(26),
-                     jl_box_int64(27), jl_box_int64(28),
+                     jl_box_int64(27),
 
-                     jl_bool_type, jl_int32_type, jl_int64_type,
-                     jl_gotonode_type, jl_linenumbernode_type, jl_lineinfonode_type,
+                     jl_bool_type, jl_gotonode_type, jl_linenumbernode_type, jl_lineinfonode_type,
                      jl_quotenode_type, jl_pinode_type, jl_upsilonnode_type,
                      jl_type_type, jl_bottom_type, jl_ref_type,
                      jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_void_type,
@@ -3000,7 +3026,7 @@ void jl_init_serializer(void)
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
-                     jl_typeofbottom_type, jl_namedtuple_type, jl_array_int_type,
+                     jl_typeofbottom_type, jl_namedtuple_type, jl_array_int32_type,
 
                      ptls->root_task,
 

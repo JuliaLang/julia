@@ -938,7 +938,7 @@ let f, m
     m = first(methods(f))
     m.source = Base.uncompressed_ast(m)::CodeInfo
     m.source.ssavaluetypes = 3
-    m.source.codelocs = [1, 1, 1]
+    m.source.codelocs = Int32[1, 1, 1]
     m.source.code = Any[
         Expr(:call, GlobalRef(Core, :svec), 1, 2, 3),
         Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(1)),
