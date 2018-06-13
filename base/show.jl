@@ -82,11 +82,14 @@ function show(io::IO, t::AbstractDict{K,V}) where V where K
             first = true
             n = 0
             for pair in t
-                first || print(io, ',')
+                first || print(io, ", ")
                 first = false
                 show(recur_io, pair)
-                n+=1
-                limit && n >= 10 && (print(io, "…"); break)
+                n += 1
+                if limit && n >= 10
+                    print(io, "…")
+                    break
+                end
             end
         end
         print(io, ')')
@@ -164,7 +167,10 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
 
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
-        i == rows < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+        if i == rows < length(t)
+            print(io, rpad("⋮", keylen), " => ⋮")
+            break
+        end
 
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
