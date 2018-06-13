@@ -68,19 +68,6 @@ automatically called upon first import of `BinaryProvider`.
 parse_tarball_listing = (output::AbstractString) ->
     error("Call `probe_platform_engines()` before `parse_tarball_listing()`")
 
-"""
-`gen_sh_cmd(cmd::Cmd)`
-
-Runs a command using `sh`.  On Unices, this will default to the first `sh`
-found on the `PATH`, however on Windows if that is not found it will fall back
-to the `sh` provided by the `busybox.exe` shipped with Julia.
-
-This method is initialized by `probe_platform_engines()`, which should be
-automatically called upon first import of `BinaryProvider`.
-"""
-gen_sh_cmd = (cmd::Cmd) ->
-    error("Call `probe_platform_engines()` before `gen_sh_cmd()`")
-
 
 """
 `probe_cmd(cmd::Cmd; verbose::Bool = false)`
@@ -110,8 +97,8 @@ already_probed = false
 Searches the environment for various tools needed to download, unpack, and
 package up binaries.  Searches for a download engine to be used by
 `gen_download_cmd()` and a compression engine to be used by `gen_unpack_cmd()`,
-`gen_package_cmd()`, `gen_list_tarball_cmd()` and `parse_tarball_listing()`, as
-well as a `sh` execution engine for `gen_sh_cmd()`.  Running this function
+`gen_package_cmd()`, `gen_list_tarball_cmd()` and `parse_tarball_listing()`.
+Running this function
 will set the global functions to their appropriate implementations given the
 environment this package is running on.
 
@@ -184,11 +171,6 @@ function probe_platform_engines!(;verbose::Bool = false)
         (`tar --help`, unpack_tar, package_tar, list_tar, parse_tar_list),
     ]
 
-    # sh_engines is just a list of Cmds-as-paths
-    sh_engines = [
-        `sh`
-    ]
-
     # For windows, we need to tweak a few things, as the tools available differ
     @static if Sys.iswindows()
         # For download engines, we will most likely want to use powershell.
@@ -222,10 +204,6 @@ function probe_platform_engines!(;verbose::Bool = false)
         # On windows, we bundle 7z with Julia, so try invoking that directly
         exe7z = joinpath(Sys.BINDIR, "7z.exe")
         prepend!(compression_engines, [(`$exe7z --help`, gen_7z(exe7z)...)])
-
-        # And finally, we want to look for sh as busybox as well:
-        busybox = joinpath(Sys.BINDIR, "busybox.exe")
-        prepend!(sh_engines, [(`$busybox sh`)])
     end
 
     # Allow environment override
@@ -263,7 +241,6 @@ function probe_platform_engines!(;verbose::Bool = false)
 
     download_found = false
     compression_found = false
-    sh_found = false
 
     if verbose
         @info("Probing for download engine...")
@@ -305,22 +282,6 @@ function probe_platform_engines!(;verbose::Bool = false)
         end
     end
 
-    if verbose
-        @info("Probing for sh engine...")
-    end
-
-    for path in sh_engines
-        if probe_cmd(`$path --help`; verbose=verbose)
-            gen_sh_cmd = (cmd) -> `$path -c $cmd`
-            if verbose
-                @info("Found sh engine $(path.exec[1])")
-            end
-            sh_found = true
-            break
-        end
-    end
-
-
     # Build informative error messages in case things go sideways
     errmsg = ""
     if !download_found
@@ -335,14 +296,8 @@ function probe_platform_engines!(;verbose::Bool = false)
         errmsg *= ". Install one and ensure it is available on the path.\n"
     end
 
-    if !sh_found
-        errmsg *= "No sh engines found. We looked for: "
-        errmsg *= join([b.exec[1] for b in sh_engines], ", ")
-        errmsg *= ". Install one and ensure it is available on the path.\n"
-    end
-
     # Error out if we couldn't find something
-    if !download_found || !compression_found || !sh_found
+    if !download_found || !compression_found
         error(errmsg)
     end
     already_probed = true

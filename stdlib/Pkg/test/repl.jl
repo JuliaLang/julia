@@ -25,6 +25,11 @@ function git_init_package(tmp, path)
 end
 
 
+@testset "generate init args" begin
+    @test_throws CommandError pkg"generate"
+    @test_throws CommandError pkg"init Beep"
+end
+
 mktempdir() do project_path
     cd(project_path) do
         pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
@@ -266,24 +271,40 @@ temp_pkg_dir() do project_path; cd(project_path) do
     end
 end end
 
-mktempdir() do tmp
-    cp(joinpath(@__DIR__, "test_packages", "BigProject"), joinpath(tmp, "BigProject"))
-    cd(joinpath(tmp, "BigProject")) do
-        try
-            pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
-            pkg"build"
-            @eval using BigProject
-            pkg"build BigProject"
-            @test_throws CommandError pkg"add BigProject"
-            pkg"test SubModule"
-            pkg"test SubModule2"
-            pkg"test BigProject"
-            pkg"test"
-        finally
-            popfirst!(LOAD_PATH)
+temp_pkg_dir() do project_path; cd(project_path) do
+    mktempdir() do tmp
+        cp(joinpath(@__DIR__, "test_packages", "BigProject"), joinpath(tmp, "BigProject"))
+        cd(joinpath(tmp, "BigProject")) do
+            try
+                pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                pkg"build"
+                @eval using BigProject
+                pkg"build BigProject"
+                @test_throws CommandError pkg"add BigProject"
+                pkg"test SubModule"
+                pkg"test SubModule2"
+                pkg"test BigProject"
+                pkg"test"
+                current_json = Pkg.API.installed()["JSON"]
+                old_project = read("Project.toml", String)
+                open("Project.toml"; append=true) do io
+                    print(io, """
+
+                    [compat]
+                    JSON = "0.16.0"
+                    """
+                    )
+                end
+                pkg"up"
+                @test Pkg.API.installed()["JSON"].minor == 16
+                write("Project.toml", old_project)
+                pkg"up"
+                @test Pkg.API.installed()["JSON"] == current_json
+            finally
+                popfirst!(LOAD_PATH)
+            end
         end
     end
-end
-
+end; end
 
 end # module

@@ -17,8 +17,73 @@ include("utils.jl")
 
 const TEST_PKG = (name = "Example", uuid = UUID("7876af07-990d-54b4-ab0e-23690620f79a"))
 
-# Make the progress bar less verbose since some CI does not support \r
-Pkg.GitTools.PROGRESS_BAR_PERCENTAGE_GRANULARITY[] = 33
+import Pkg.Types: semver_spec, VersionSpec
+@testset "semver notation" begin
+    @test semver_spec("^1.2.3") == VersionSpec("1.2.3-1")
+    @test semver_spec("^1.2")   == VersionSpec("1.2.0-1")
+    @test semver_spec("^1")     == VersionSpec("1.0.0-1")
+    @test semver_spec("^0.2.3") == VersionSpec("0.2.3-0.2")
+    @test semver_spec("^0.0.3") == VersionSpec("0.0.3-0.0.3")
+    @test semver_spec("^0.0")   == VersionSpec("0.0.0-0.0")
+    @test semver_spec("^0")     == VersionSpec("0.0.0-0")
+    @test semver_spec("~1.2.3") == VersionSpec("1.2.3-1.2")
+    @test semver_spec("~1.2")   == VersionSpec("1.2.0-1.2")
+    @test semver_spec("~1")     == VersionSpec("1.0.0-1")
+    @test semver_spec("1.2.3")  == semver_spec("^1.2.3")
+    @test semver_spec("1.2")    == semver_spec("^1.2")
+    @test semver_spec("1")      == semver_spec("^1")
+    @test semver_spec("0.0.3")  == semver_spec("^0.0.3")
+    @test semver_spec("0")      == semver_spec("^0")
+
+    @test semver_spec("0.0.3, 1.2") == VersionSpec(["0.0.3-0.0.3", "1.2.0-1"])
+    @test semver_spec("~1.2.3, ~v1") == VersionSpec(["1.2.3-1.2", "1.0.0-1"])
+
+    @test   v"1.5.2"  in semver_spec("1.2.3")
+    @test   v"1.2.3"  in semver_spec("1.2.3")
+    @test !(v"2.0.0"  in semver_spec("1.2.3"))
+    @test !(v"1.2.2"  in semver_spec("1.2.3"))
+    @test   v"1.2.99" in semver_spec("~1.2.3")
+    @test   v"1.2.3"  in semver_spec("~1.2.3")
+    @test !(v"1.3"    in semver_spec("~1.2.3"))
+    @test  v"1.2.0"   in semver_spec("1.2")
+    @test  v"1.9.9"   in semver_spec("1.2")
+    @test !(v"2.0.0"  in semver_spec("1.2"))
+    @test !(v"1.1.9"  in semver_spec("1.2"))
+    @test   v"0.2.3"  in semver_spec("0.2.3")
+    @test !(v"0.3.0"  in semver_spec("0.2.3"))
+    @test !(v"0.2.2"  in semver_spec("0.2.3"))
+    @test   v"0.0.0"  in semver_spec("0")
+    @test  v"0.99.0"  in semver_spec("0")
+    @test !(v"1.0.0"  in semver_spec("0"))
+    @test  v"0.0.0"   in semver_spec("0.0")
+    @test  v"0.0.99"  in semver_spec("0.0")
+    @test !(v"0.1.0"  in semver_spec("0.0"))
+end
+
+# TODO: Should rewrite these tests not to rely on internals like field names
+@testset "union, isjoinable" begin
+    @test sprint(print, VersionRange("0-0.3.2")) == "0-0.3.2"
+    # test missing paths on union! and isjoinable
+    # there's no == for VersionBound or VersionRange
+    unified_vr = union!([VersionRange("1.5-2.8"), VersionRange("2.5-3")])[1]
+    @test unified_vr.lower.t == (UInt32(1), UInt32(5), UInt32(0))
+    @test unified_vr.upper.t == (UInt32(3), UInt32(0), UInt32(0))
+    unified_vr = union!([VersionRange("2.5-3"), VersionRange("1.5-2.8")])[1]
+    @test unified_vr.lower.t == (UInt32(1), UInt32(5), UInt32(0))
+    @test unified_vr.upper.t == (UInt32(3), UInt32(0), UInt32(0))
+    unified_vr = union!([VersionRange("1.5-2.2"), VersionRange("2.5-3")])[1]
+    @test unified_vr.lower.t == (UInt32(1), UInt32(5), UInt32(0))
+    @test unified_vr.upper.t == (UInt32(2), UInt32(2), UInt32(0))
+    unified_vr = union!([VersionRange("1.5-2.2"), VersionRange("2.5-3")])[2]
+    @test unified_vr.lower.t == (UInt32(2), UInt32(5), UInt32(0))
+    @test unified_vr.upper.t == (UInt32(3), UInt32(0), UInt32(0))
+    unified_vb = Types.VersionBound(union!([v"1.5", v"1.6"])[1])
+    @test unified_vb.t == (UInt32(1), UInt32(5), UInt32(0))
+    unified_vb = Types.VersionBound(union!([v"1.5", v"1.6"])[2])
+    @test unified_vb.t == (UInt32(1), UInt32(6), UInt32(0))
+    unified_vb = Types.VersionBound(union!([v"1.5", v"1.5"])[1])
+    @test unified_vb.t == (UInt32(1), UInt32(5), UInt32(0))
+end
 
 temp_pkg_dir() do project_path
     @testset "simple add and remove with preview" begin
@@ -192,9 +257,35 @@ temp_pkg_dir() do project_path
     end
 end
 
-
 @testset "parse package url win" begin
     @test typeof(Pkg.REPLMode.parse_package("https://github.com/abc/ABC.jl"; context=Pkg.REPLMode.CMD_ADD)) == PackageSpec
+end
+
+@testset "preview generate" begin
+    mktempdir() do tmp
+        cd(tmp) do
+            withenv("USER" => "Test User") do
+                Pkg.generate("Foo"; preview=true)
+                @test !isdir(joinpath(tmp, "Foo"))
+            end
+        end
+    end
+end
+
+temp_pkg_dir() do project_path
+    @testset "test should instantiate" begin
+        mktempdir() do dir
+            cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
+            cd(joinpath(dir, "UnregisteredWithProject")) do
+                try
+                    pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                    Pkg.test()
+                finally
+                    popfirst!(LOAD_PATH)
+                end
+            end
+        end
+    end
 end
 
 include("repl.jl")

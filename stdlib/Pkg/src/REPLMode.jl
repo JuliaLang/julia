@@ -455,7 +455,7 @@ const helps = Dict(
     coverage enabled.
     """, CMD_GC => md"""
 
-    Deletes packages that are not reached from any environment used within the last 6 weeks.
+    Deletes packages that cannot be reached from any existing environment.
     """, CMD_INIT => md"""
 
         init
@@ -738,6 +738,7 @@ function do_init!(ctx::Context, tokens::Vector{Token})
 end
 
 function do_generate!(ctx::Context, tokens::Vector{Token})
+    isempty(tokens) && cmderror("`generate` requires a project name as an argument")
     local pkg
     while !isempty(tokens)
         token = popfirst!(tokens)
@@ -748,7 +749,7 @@ function do_generate!(ctx::Context, tokens::Vector{Token})
             cmderror("`generate` takes a name of the project to create")
         end
     end
-    API.generate(pkg)
+    API.generate(ctx, pkg)
 end
 
 function do_precompile!(ctx::Context, tokens::Vector{Token})

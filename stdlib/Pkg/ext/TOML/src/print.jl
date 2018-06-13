@@ -41,59 +41,67 @@ function printvalue(io::IO, value; sorted=false)
     end
 end
 
-function _print(io::IO, a::AbstractDict, ks=String[]; sorted=false)
+is_table(value)           = isa(value, AbstractDict)
+is_array_of_tables(value) = isa(value, Array) && length(value) > 0 && isa(value[1], AbstractDict)
+is_tabular(value)         = is_table(value) || is_array_of_tables(value)
+
+function _print(io::IO, a::AbstractDict,
+    ks::Vector{String} = String[];
+    indent::Int = 0,
+    first_block::Bool = true,
+    sorted::Bool = false,
+    by::Function = identity,
+)
     akeys = keys(a)
     if sorted
-        akeys = sort!(collect(akeys))
+        akeys = sort!(collect(akeys), by = by)
     end
-    first_block = true
 
     for key in akeys
         value = a[key]
-        # skip tables
-        isa(value, AbstractDict) && continue # skip tables
-        # skip arrays of tabels
-        isa(value, Array) && length(value)>0 && isa(value[1], AbstractDict) && continue
-
-        Base.print(io, repeat("    ", max(0, length(ks)-1)))
+        is_tabular(value) && continue
+        Base.print(io, ' '^4max(0,indent-1))
         printkey(io, [key])
         Base.print(io, " = ") # print separator
-        printvalue(io, value, sorted=sorted)
+        printvalue(io, value, sorted = sorted)
         Base.print(io, "\n")  # new line?
         first_block = false
     end
 
-    indent = repeat("    ", length(ks))
     for key in akeys
         value = a[key]
-        if isa(value, AbstractDict)
-            # print table
-            first_block || println(io)
-            first_block = false
+        if is_table(value)
             push!(ks, key)
-            Base.print(io, indent)
-            Base.print(io,"[")
-            printkey(io, ks)
-            Base.print(io,"]\n")
-            _print(io, value, ks, sorted=sorted)
+            header = !all(is_tabular(v) for v in values(value))
+            if header
+                # print table
+                first_block || println(io)
+                first_block = false
+                Base.print(io, ' '^4indent)
+                Base.print(io,"[")
+                printkey(io, ks)
+                Base.print(io,"]\n")
+            end
+            _print(io, value, ks,
+                indent = indent + header, first_block = header, sorted = sorted, by = by)
             pop!(ks)
-        elseif isa(value, Array) && length(value)>0 && isa(value[1], AbstractDict)
+        elseif is_array_of_tables(value)
             # print array of tables
             first_block || println(io)
             first_block = false
             push!(ks, key)
             for v in value
-                Base.print(io, indent)
+                Base.print(io, ' '^4indent)
                 Base.print(io,"[[")
                 printkey(io, ks)
                 Base.print(io,"]]\n")
                 !isa(v, AbstractDict) && error("array should contain only tables")
-                _print(io, v, ks, sorted=sorted)
+                _print(io, v, ks, indent = indent + 1, sorted = sorted, by = by)
             end
             pop!(ks)
         end
     end
 end
 
-print(io::IO, a::AbstractDict; sorted=false) = _print(io, a, sorted=sorted)
-print(a::AbstractDict; sorted=false) = print(stdout, a, sorted=sorted)
+print(io::IO, a::AbstractDict; kwargs...) = _print(io, a; kwargs...)
+print(a::AbstractDict; kwargs...) = print(stdout, a; kwargs...)
