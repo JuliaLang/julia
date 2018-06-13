@@ -469,8 +469,7 @@ end
 
 `try`/`catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
 
-The `catch` clause is not strictly necessary; when omitted, the default return value is
-[`nothing`](@ref). The power of the `try`/`catch` construct lies in the ability to unwind a deeply
+The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 """
 kw"try", kw"catch"

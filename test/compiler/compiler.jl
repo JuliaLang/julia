@@ -1515,6 +1515,7 @@ function h25579(g)
     try
         h = -1.25
         error("continue at catch block")
+    catch
     end
     return t ? typeof(h) : typeof(h)
 end

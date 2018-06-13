@@ -1201,6 +1201,7 @@ function factorize(A::StridedMatrix{T}) where T
                 if (herm & (T <: Complex)) | sym
                     try
                         return ldlt!(SymTridiagonal(diag(A), diag(A, -1)))
+                    catch
                     end
                 end
                 return lu(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))

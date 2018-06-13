@@ -1065,11 +1065,11 @@ end
 
     A = Matrix{Int}(I, 0, 0)
     S = sparse(A)
-    iA = try argmax(A) end
-    iS = try argmax(S) end
+    iA = try argmax(A); catch; end
+    iS = try argmax(S); catch; end
     @test iA === iS === nothing
-    iA = try argmin(A) end
-    iS = try argmin(S) end
+    iA = try argmin(A); catch; end
+    iS = try argmin(S); catch; end
     @test iA === iS === nothing
 end
 

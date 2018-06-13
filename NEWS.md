@@ -220,6 +220,9 @@ Language changes
     is deprecated. It will likely be reclaimed in a later version for passing keyword
     arguments. Note this does not affect updating operators like `+=` ([#25631]).
 
+  * `try` blocks without `catch` or `finally` are no longer allowed. An explicit empty
+    `catch` block should be written instead ([#27554]).
+
 Breaking changes
 ----------------
 

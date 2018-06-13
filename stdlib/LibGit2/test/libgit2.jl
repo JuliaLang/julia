@@ -2694,6 +2694,7 @@ mktempdir() do dir
                 # In some environments, namely Macs, the hostname "macbook.local" is bound
                 # to the external address while "macbook" is bound to the loopback address.
                 pushfirst!(hostnames, replace(gethostname(), r"\..*$" => ""))
+            catch
             end
 
             loopback = ip"127.0.0.1"

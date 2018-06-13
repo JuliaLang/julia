@@ -954,6 +954,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
         if Sys.isapple()
             return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
         end
+    catch
     end
 
     return nothing

@@ -63,6 +63,7 @@ function add(pkg::AbstractString, vers::VersionSet)
                     try
                         LibGit2.fetch(repo)
                         outdated = LibGit2.isdiff(repo, "origin/$branch") ? (:yes) : (:no)
+                    catch
                     end
                 end
             else

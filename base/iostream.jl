@@ -485,6 +485,7 @@ function read(s::IOStream)
         if pos > 0
             sz -= pos
         end
+    catch
     end
     b = StringVector(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))

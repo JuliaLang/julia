@@ -504,6 +504,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
                 head_name = string(GitHash(head_ref))
             end
         end
+    catch
     end
 
     # search for commit to get a commit object

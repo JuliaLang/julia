@@ -127,7 +127,7 @@ end
 open_streams = []
 function cleanup()
     for s_ in open_streams
-        try close(s_) end
+        try close(s_); catch; end
     end
     empty!(open_streams)
     for tsk in tasks
