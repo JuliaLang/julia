@@ -20,8 +20,9 @@ skip_commits:
 # Add [av skip] to commit messages for docfixes, etc to reduce load on queue
   message: /\[av skip\]/
 # Skip running CI for changes only to the documentation
-  files:
-    - doc/
+# https://github.com/JuliaLang/julia/pull/27356#discussion_r192536676
+# files:
+#   - doc/
 
 notifications:
   - provider: Email
