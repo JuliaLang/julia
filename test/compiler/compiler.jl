@@ -1602,8 +1602,8 @@ end
 
 abstract type AbstractT27351 end
 struct T27351 <: AbstractT27351 end
-for i in 1:15
-    @eval f27351(::Val{$i}, ::AbstractT27351, ::AbstractT27351) = $i
+for i27351 in 1:15
+    @eval f27351(::Val{$i27351}, ::AbstractT27351, ::AbstractT27351) = $i27351
 end
 f27351(::T, ::T27351, ::T27351) where {T} = 16
 @test_throws MethodError f27351(Val(1), T27351(), T27351())
