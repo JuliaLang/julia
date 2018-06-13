@@ -8,7 +8,7 @@ using UUIDs
 import REPL
 import REPL: LineEdit, REPLCompletions
 
-import ..devdir, ..Types.isdir_windows_workaround
+import ..devdir, ..Types.casesensitive_isdir
 using ..Types, ..Display, ..Operations, ..API
 
 ############
@@ -142,7 +142,7 @@ end
 
 function parse_package(word::AbstractString; context=nothing)::PackageSpec
     word = replace(word, "~" => homedir())
-    if context in (CMD_ADD, CMD_DEVELOP) && isdir_windows_workaround(word)
+    if context in (CMD_ADD, CMD_DEVELOP) && casesensitive_isdir(word)
         pkg = PackageSpec()
         pkg.repo = Types.GitRepo(abspath(word))
         return pkg

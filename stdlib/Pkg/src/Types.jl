@@ -414,6 +414,8 @@ function isdir_windows_workaround(path::String)
     end
 end
 
+casesensitive_isdir(dir::String) = isdir_windows_workaround(dir) && dir in readdir(joinpath(dir, ".."))
+
 function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
     creds = LibGit2.CachedCredentials()
     env = ctx.env
