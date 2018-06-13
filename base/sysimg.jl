@@ -246,6 +246,7 @@ include("c.jl")
 include("io.jl")
 include("iostream.jl")
 include("iobuffer.jl")
+include("secretbuffer.jl")
 
 # strings & printing
 include("intfuncs.jl")
