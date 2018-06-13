@@ -3900,6 +3900,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 expr = jl_box_int64(val);
             }
         }
+        else if (jl_is_uint8(expr)) {
+            expr = jl_box_uint8(jl_unbox_uint8(expr));
+            needroot = false;
+        }
         if (needroot && jl_is_method(ctx.linfo->def.method)) { // toplevel exprs and some integers are already rooted
             jl_add_method_root(ctx, expr);
         }
@@ -5964,7 +5968,7 @@ static std::unique_ptr<Module> emit_function(
         }
         size_t prev_loc = 0;
         for (i = 0; i < stmtslen; i++) {
-            size_t loc = ((size_t*)jl_array_data(src->codelocs))[i];
+            size_t loc = ((int32_t*)jl_array_data(src->codelocs))[i];
             StmtProp &cur_prop = stmtprops[i];
             cur_prop.is_poploc = false;
             if (loc > 0) {

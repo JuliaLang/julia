@@ -164,7 +164,7 @@ copy(n::NewNode) = copy(n.pos, n.attach_after, n.typ, copy(n.node), n.line)
 struct IRCode
     stmts::Vector{Any}
     types::Vector{Any}
-    lines::Vector{Int}
+    lines::Vector{Int32}
     flags::Vector{UInt8}
     argtypes::Vector{Any}
     spvals::SimpleVector
@@ -173,12 +173,12 @@ struct IRCode
     new_nodes::Vector{NewNode}
     meta::Vector{Any}
 
-    function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
+    function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int32}, flags::Vector{UInt8},
             cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any},
             spvals::SimpleVector)
         return new(stmts, types, lines, flags, argtypes, spvals, linetable, cfg, NewNode[], meta)
     end
-    function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int}, flags::Vector{UInt8},
+    function IRCode(ir::IRCode, stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int32}, flags::Vector{UInt8},
             cfg::CFG, new_nodes::Vector{NewNode})
         return new(stmts, types, lines, flags, ir.argtypes, ir.spvals, ir.linetable, cfg, new_nodes, ir.meta)
     end
@@ -414,7 +414,7 @@ mutable struct IncrementalCompact
     ir::IRCode
     result::Vector{Any}
     result_types::Vector{Any}
-    result_lines::Vector{Int}
+    result_lines::Vector{Int32}
     result_flags::Vector{UInt8}
     result_bbs::Vector{BasicBlock}
     ssa_rename::Vector{Any}
@@ -439,7 +439,7 @@ mutable struct IncrementalCompact
         new_len = length(code.stmts) + length(code.new_nodes)
         result = Array{Any}(undef, new_len)
         result_types = Array{Any}(undef, new_len)
-        result_lines = fill(0, new_len)
+        result_lines = fill(Int32(0), new_len)
         result_flags = fill(0x00, new_len)
         used_ssas = fill(0, new_len)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
@@ -567,7 +567,7 @@ function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @
     end
 end
 
-function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typ), ltable_idx::Int, reverse_affinity=false)
+function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typ), ltable_idx::Int32, reverse_affinity::Bool=false)
     if compact.result_idx > length(compact.result)
         @assert compact.result_idx == length(compact.result) + 1
         resize!(compact, compact.result_idx)

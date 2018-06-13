@@ -426,7 +426,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     nstmts = sum(length(ir.cfg.blocks[i].stmts) for i in result_order if i !== 0)
     result_stmts = Vector{Any}(undef, nstmts + ncritbreaks + nnewfallthroughs)
     result_types = Any[Any for i = 1:length(result_stmts)]
-    result_ltable = fill(0, length(result_stmts))
+    result_ltable = fill(Int32(0), length(result_stmts))
     result_flags = fill(0x00, length(result_stmts))
     inst_rename = Vector{Any}(undef, length(ir.stmts))
     for i = 1:length(ir.new_nodes)
