@@ -189,7 +189,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
 
         cred.user = something(git_cred.username, "")
         cred.pass = something(git_cred.password, "")
-        shred!(git_cred)
+        Base.shred!(git_cred)
         revised = true
 
         p.use_git_helpers = false

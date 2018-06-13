@@ -441,7 +441,7 @@ will always be called.
 """
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
-securezero!(s::Union{String,Cstring}) = unsafe_securezero!(pointer(s), sizeof(s))
+securezero!(s::Cstring) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
@@ -450,7 +450,7 @@ if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
     flush(stdout)
-    s = SecureString()
+    s = SecretBuffer()
     plen = 0
     while true
         c = ccall(:_getch, UInt8, ())
@@ -468,7 +468,7 @@ function getpass(prompt::AbstractString)
 end
 else
 function getpass(prompt::AbstractString)
-    SecureString(ccall(:getpass, Cstring, (Cstring,), prompt))
+    SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), prompt))
 end
 end
 
@@ -577,7 +577,7 @@ if Sys.iswindows()
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]
         result = (String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
-                  SecureString(transcode(UInt8, passbuf_)))
+                  SecretBuffer!(transcode(UInt8, passbuf_)))
         securezero!(passbuf_)
         securezero!(passbuf)
 

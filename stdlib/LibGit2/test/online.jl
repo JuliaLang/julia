@@ -70,7 +70,7 @@ mktempdir() do dir
                 @test isa(ex, LibGit2.Error.GitError)
                 @test ex.code == LibGit2.Error.EAUTH
             end
-            shred!(cred)
+            Base.shred!(cred)
         end
 
         @testset "Empty Credentials" begin

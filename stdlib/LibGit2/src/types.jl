@@ -1180,7 +1180,7 @@ function objtype(obj_type::Consts.OBJECT)
     end
 end
 
-import Base.shred!
+import Base.Base.shred!
 
 abstract type AbstractCredential end
 
@@ -1194,8 +1194,8 @@ isfilled(::AbstractCredential)
 "Credential that support only `user` and `password` parameters"
 mutable struct UserPasswordCredential <: AbstractCredential
     user::AbstractString
-    pass::SecureString
-    function UserPasswordCredential(user::AbstractString="", pass::Union{AbstractString, SecureString}="")
+    pass::Base.SecretBuffer
+    function UserPasswordCredential(user::AbstractString="", pass::Union{AbstractString, Base.SecretBuffer}="")
         new(user, pass)
     end
 
@@ -1210,8 +1210,8 @@ mutable struct UserPasswordCredential <: AbstractCredential
     UserPasswordCredential(prompt_if_incorrect::Bool) = UserPasswordCredential("","",prompt_if_incorrect)
 end
 
-function shred!(cred::UserPasswordCredential)
-    shred!(cred.pass)
+function Base.shred!(cred::UserPasswordCredential)
+    Base.shred!(cred.pass)
     return cred
 end
 
@@ -1226,7 +1226,7 @@ end
 "SSH credential type"
 mutable struct SSHCredential <: AbstractCredential
     user::AbstractString
-    pass::SecureString
+    pass::Base.SecretBuffer
     # Paths to private keys
     prvkey::AbstractString
     pubkey::AbstractString
@@ -1247,8 +1247,8 @@ mutable struct SSHCredential <: AbstractCredential
     SSHCredential(prompt_if_incorrect::Bool) = SSHCredential("","","","",prompt_if_incorrect)
 end
 
-function shred!(cred::SSHCredential)
-    shred!(cred.pass)
+function Base.shred!(cred::SSHCredential)
+    Base.shred!(cred.pass)
     return cred
 end
 
@@ -1271,8 +1271,8 @@ Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id
 Base.getindex(cache::CachedCredentials, cred_id) = Base.getindex(cache.cred, cred_id)
 Base.get!(cache::CachedCredentials, cred_id, default) = Base.get!(cache.cred, cred_id, default)
 
-function shred!(p::CachedCredentials)
-    foreach(shred!, values(p.cred))
+function Base.shred!(p::CachedCredentials)
+    foreach(Base.shred!, values(p.cred))
     return p
 end
 
@@ -1386,7 +1386,7 @@ function approve(p::CredentialPayload; shred::Bool=true)
         approve(p.config, cred, p.url)
     end
 
-    shred && shred!(cred)
+    shred && Base.shred!(cred)
     nothing
 end
 
@@ -1411,7 +1411,7 @@ function reject(p::CredentialPayload; shred::Bool=true)
         reject(p.config, cred, p.url)
     end
 
-    shred && shred!(cred)
+    shred && Base.shred!(cred)
     nothing
 end
 

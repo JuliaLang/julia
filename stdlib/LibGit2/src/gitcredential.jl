@@ -11,7 +11,7 @@ mutable struct GitCredential
     host::Union{AbstractString, Nothing}
     path::Union{AbstractString, Nothing}
     username::Union{AbstractString, Nothing}
-    password::Union{SecureString, Nothing}
+    password::Union{Base.SecretBuffer, Nothing}
     use_http_path::Bool
 
     function GitCredential(
@@ -34,12 +34,12 @@ Base.:(==)(c1::GitCredential, c2::GitCredential) = (c1.protocol, c1.host, c1.pat
                                                    (c2.protocol, c2.host, c2.path, c2.username, c2.password, c2.use_http_path)
 Base.hash(cred::GitCredential, h::UInt) = hash(GitCredential, hash((cred.protocol, cred.host, cred.path, cred.username, cred.password, cred.use_http_path), h))
 
-function shred!(cred::GitCredential)
+function Base.shred!(cred::GitCredential)
     cred.protocol !== nothing && (cred.protocol = nothing)
     cred.host !== nothing && (cred.host = nothing)
     cred.path !== nothing && (cred.path = nothing)
     cred.username !== nothing && (cred.username = nothing)
-    cred.password !== nothing && shred!(cred.password)
+    cred.password !== nothing && Base.shred!(cred.password)
     return cred
 end
 
@@ -101,7 +101,7 @@ function Base.read!(io::IO, cred::GitCredential)
     while !eof(io)
         key = readuntil(io, '=')
         if key == "password"
-            value = SecureString()
+            value = Base.SecretBuffer()
             while !eof(io) && (c = read(io, UInt8)) != UInt8('\n')
                 write(value, c)
             end
@@ -112,11 +112,11 @@ function Base.read!(io::IO, cred::GitCredential)
         if key == "url"
             # Any components which are missing from the URL will be set to empty
             # https://git-scm.com/docs/git-credential#git-credential-codeurlcode
-            shred!(cred)
+            Base.shred!(cred)
             copy!(cred, parse(GitCredential, value))
         else
             field = getproperty(cred, Symbol(key))
-            field !== nothing && Symbol(key) == :password && shred!(field)
+            field !== nothing && Symbol(key) == :password && Base.shred!(field)
             setproperty!(cred, Symbol(key), value)
         end
     end
@@ -282,7 +282,7 @@ function approve(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractStri
         approve(helper, git_cred)
     end
 
-    shred!(git_cred)
+    Base.shred!(git_cred)
     nothing
 end
 
@@ -294,6 +294,6 @@ function reject(cfg::GitConfig, cred::UserPasswordCredential, url::AbstractStrin
         reject(helper, git_cred)
     end
 
-    shred!(git_cred)
+    Base.shred!(git_cred)
     nothing
 end

@@ -433,7 +433,7 @@ end
         cred = read!(IOBuffer(str), LibGit2.GitCredential())
         # @test cred == LibGit2.GitCredential()
         @test sprint(write, cred) == str
-        shred!(cred)
+        Base.shred!(cred)
     end
 
     @testset "empty" begin
@@ -447,7 +447,7 @@ end
         cred = read!(IOBuffer(str), LibGit2.GitCredential())
         @test cred == LibGit2.GitCredential("", "", "", "", "")
         @test sprint(write, cred) == str
-        shred!(cred)
+        Base.shred!(cred)
     end
 
     @testset "input/output" begin
@@ -462,8 +462,8 @@ end
         cred = read!(IOBuffer(str), LibGit2.GitCredential())
         @test cred == expected_cred
         @test sprint(write, cred) == str
-        shred!(cred)
-        shred!(expected_cred)
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
     end
 
     @testset "use http path" begin
@@ -480,7 +480,7 @@ end
 
         @test cred.path == "dir/file"
         @test sprint(write, cred) == expected
-        shred!(cred)
+        Base.shred!(cred)
     end
 
     @testset "URL input/output" begin
@@ -501,39 +501,39 @@ end
         cred = read!(IOBuffer(str), LibGit2.GitCredential())
         @test cred == expected_cred
         @test sprint(write, cred) == expected_str
-        shred!(cred)
-        shred!(expected_cred)
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
     end
 
     @testset "ismatch" begin
         # Equal
         cred = LibGit2.GitCredential("https", "github.com")
         @test LibGit2.ismatch("https://github.com", cred)
-        shred!(cred)
+        Base.shred!(cred)
 
         # Credential hostname is different
         cred = LibGit2.GitCredential("https", "github.com")
         @test !LibGit2.ismatch("https://myhost", cred)
-        shred!(cred)
+        Base.shred!(cred)
 
         # Credential is less specific than URL
         cred = LibGit2.GitCredential("https")
         @test !LibGit2.ismatch("https://github.com", cred)
-        shred!(cred)
+        Base.shred!(cred)
 
         # Credential is more specific than URL
         cred = LibGit2.GitCredential("https", "github.com", "path", "user", "pass")
         @test LibGit2.ismatch("https://github.com", cred)
-        shred!(cred)
+        Base.shred!(cred)
 
         # Credential needs to have an "" username to match
         cred = LibGit2.GitCredential("https", "github.com", nothing, "")
         @test LibGit2.ismatch("https://@github.com", cred)
-        shred!(cred)
+        Base.shred!(cred)
 
         cred = LibGit2.GitCredential("https", "github.com", nothing, nothing)
         @test !LibGit2.ismatch("https://@github.com", cred)
-        shred!(cred)
+        Base.shred!(cred)
     end
 end
 
@@ -1680,7 +1680,7 @@ mktempdir() do dir
 
     @testset "Credentials" begin
         creds_user = "USER"
-        creds_pass = SecureString("PASS")
+        creds_pass = Base.SecretBuffer("PASS")
         creds = LibGit2.UserPasswordCredential(creds_user, creds_pass)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
@@ -1695,11 +1695,11 @@ mktempdir() do dir
         sshcreds2 = LibGit2.SSHCredential(creds_user, creds_pass)
         @test sshcreds == sshcreds2
 
-        shred!(creds)
-        shred!(creds2)
-        shred!(sshcreds)
-        shred!(sshcreds2)
-        shred!(creds_pass)
+        Base.shred!(creds)
+        Base.shred!(creds2)
+        Base.shred!(sshcreds)
+        Base.shred!(sshcreds2)
+        Base.shred!(creds_pass)
     end
 
     @testset "CachedCredentials" begin
@@ -1710,7 +1710,7 @@ mktempdir() do dir
         cred = LibGit2.UserPasswordCredential("julia", "password")
 
         @test !haskey(cache, cred_id)
-        password = SecureString("password")
+        password = Base.SecretBuffer("password")
 
         # Attempt to reject a credential which wasn't stored
         LibGit2.reject(cache, cred, url)
@@ -1729,9 +1729,9 @@ mktempdir() do dir
         @test cred.user == "julia"
         @test cred.pass == password
 
-        shred!(cache)
-        shred!(cred)
-        shred!(password)
+        Base.shred!(cache)
+        Base.shred!(cred)
+        Base.shred!(password)
     end
 
     @testset "Git credential username" begin
@@ -1769,8 +1769,8 @@ mktempdir() do dir
                 username = LibGit2.default_username(cfg, mygit_cred)
                 @test username == "bar"
 
-                shred!(github_cred)
-                shred!(mygit_cred)
+                Base.shred!(github_cred)
+                Base.shred!(mygit_cred)
             end
         end
 
@@ -1795,8 +1795,8 @@ mktempdir() do dir
                 username = LibGit2.default_username(cfg, mygit_cred)
                 @test username == "name"
 
-                shred!(github_cred)
-                shred!(mygit_cred)
+                Base.shred!(github_cred)
+                Base.shred!(mygit_cred)
             end
         end
     end
@@ -1830,8 +1830,8 @@ mktempdir() do dir
                 @test !LibGit2.use_http_path(cfg, github_cred)
                 @test LibGit2.use_http_path(cfg, mygit_cred)
 
-                shred!(github_cred)
-                shred!(mygit_cred)
+                Base.shred!(github_cred)
+                Base.shred!(mygit_cred)
             end
         end
     end
@@ -1877,8 +1877,8 @@ mktempdir() do dir
                 println(stderr, "The following 'Resetting the helper list...' warning is expected:")
                 @test_broken LibGit2.credential_helpers(cfg, mygit_cred) == expected[2]
 
-                shred!(github_cred)
-                shred!(mygit_cred)
+                Base.shred!(github_cred)
+                Base.shred!(mygit_cred)
             end
         end
 
@@ -1901,23 +1901,23 @@ mktempdir() do dir
 
                     @test !isfile(credential_path)
 
-                    shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == query
                     end
 
                     LibGit2.approve(helper, filled)
                     @test isfile(credential_path)
-                    shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == filled
                     end
 
                     LibGit2.reject(helper, filled)
-                    shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == query
                     end
 
-                    shred!(query)
-                    shred!(filled)
+                    Base.shred!(query)
+                    Base.shred!(filled)
                 end
             end
         end
@@ -1954,57 +1954,57 @@ mktempdir() do dir
 
                     @test !isfile(credential_path)
 
-                    shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == query
                     end
-                    shred!(LibGit2.fill!(helper, deepcopy(query_a))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query_a))) do result
                         @test result == query_a
                     end
-                    shred!(LibGit2.fill!(helper, deepcopy(query_b))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query_b))) do result
                         @test result == query_b
                     end
 
                     LibGit2.approve(helper, filled_a)
                     @test isfile(credential_path)
-                    shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == filled_without_path_a
                     end
-                    shred!(LibGit2.fill!(helper, deepcopy(query_a))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query_a))) do result
                         @test result == filled_a
                     end
-                    shred!(LibGit2.fill!(helper, deepcopy(query_b))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query_b))) do result
                         @test result == query_b
                     end
 
                     LibGit2.approve(helper, filled_b)
-                    shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == filled_without_path_b
                     end
-                    shred!(LibGit2.fill!(helper, deepcopy(query_a))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query_a))) do result
                         @test result == filled_a
                     end
-                    shred!(LibGit2.fill!(helper, deepcopy(query_b))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query_b))) do result
                         @test result == filled_b
                     end
 
                     LibGit2.reject(helper, filled_b)
-                    shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == filled_without_path_a
                     end
-                    shred!(LibGit2.fill!(helper, deepcopy(query_a))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query_a))) do result
                         @test result == filled_a
                     end
-                    shred!(LibGit2.fill!(helper, deepcopy(query_b))) do result
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query_b))) do result
                         @test result == query_b
                     end
 
-                    shred!(query)
-                    shred!(query_a)
-                    shred!(query_b)
-                    shred!(filled_a)
-                    shred!(filled_b)
-                    shred!(filled_without_path_a)
-                    shred!(filled_without_path_b)
+                    Base.shred!(query)
+                    Base.shred!(query_a)
+                    Base.shred!(query_b)
+                    Base.shred!(filled_a)
+                    Base.shred!(filled_b)
+                    Base.shred!(filled_without_path_a)
+                    Base.shred!(filled_without_path_b)
                 end
             end
         end
@@ -2276,8 +2276,8 @@ mktempdir() do dir
                 @test auth_attempts == 2
             end
 
-            shred!(valid_cred)
-            shred!(valid_p_cred)
+            Base.shred!(valid_cred)
+            Base.shred!(valid_p_cred)
         end
 
         @testset "HTTPS credential prompt" begin
@@ -2342,7 +2342,7 @@ mktempdir() do dir
             @test err == prompt_limit
             @test auth_attempts == 3
 
-            shred!(valid_cred)
+            Base.shred!(valid_cred)
         end
 
         @testset "SSH agent username" begin
@@ -2373,7 +2373,7 @@ mktempdir() do dir
             @test err == exhausted_error
             @test auth_attempts == 2
 
-            shred!(valid_cred)
+            Base.shred!(valid_cred)
         end
 
         @testset "SSH default" begin
@@ -2435,8 +2435,8 @@ mktempdir() do dir
                     @test auth_attempts == 1
                 end
 
-                shred!(valid_cred)
-                shred!(valid_p_cred)
+                Base.shred!(valid_cred)
+                Base.shred!(valid_p_cred)
             end
         end
 
@@ -2486,7 +2486,7 @@ mktempdir() do dir
                 @test p.credential.pubkey == abspath(valid_key * ".pub")
             end
 
-            shred!(valid_cred)
+            Base.shred!(valid_cred)
         end
 
         @testset "SSH explicit credentials" begin
@@ -2527,8 +2527,8 @@ mktempdir() do dir
             @test p.explicit == invalid_cred
             # @test p.credential != invalid_cred # TODO!!!
 
-            shred!(valid_cred)
-            shred!(invalid_cred)
+            Base.shred!(valid_cred)
+            Base.shred!(invalid_cred)
         end
 
         @testset "HTTPS explicit credentials" begin
@@ -2562,8 +2562,8 @@ mktempdir() do dir
             @test p.explicit == invalid_cred
             @test p.credential != invalid_cred
 
-            shred!(valid_cred)
-            shred!(invalid_cred)
+            Base.shred!(valid_cred)
+            Base.shred!(invalid_cred)
         end
 
         @testset "Cached credentials" begin
@@ -2649,8 +2649,8 @@ mktempdir() do dir
             @test cache.cred == Dict()
             @test p.credential != invalid_cred
 
-            shred!(valid_cred)
-            shred!(invalid_cred)
+            Base.shred!(valid_cred)
+            Base.shred!(invalid_cred)
         end
 
         @testset "HTTPS git helper username" begin
@@ -2688,7 +2688,7 @@ mktempdir() do dir
             # Verify credential wasn't accidentally zeroed (#24731)
             @test p.credential == valid_cred
 
-            shred!(valid_cred)
+            Base.shred!(valid_cred)
         end
 
         @testset "Incompatible explicit credentials" begin
@@ -2708,7 +2708,7 @@ mktempdir() do dir
             @test p.explicit == valid_cred
             @test p.credential != valid_cred
 
-            shred!(valid_cred)
+            Base.shred!(valid_cred)
 
             # User provides a SSH credential where a user/password credential is required.
             valid_cred = LibGit2.SSHCredential("foo", "", "", "")
@@ -2726,7 +2726,7 @@ mktempdir() do dir
             @test p.explicit == valid_cred
             # @test p.credential != valid_cred # TODO!!!
 
-            shred!(valid_cred)
+            Base.shred!(valid_cred)
         end
 
         # A hypothetical scenario where the the allowed authentication can either be
@@ -2749,7 +2749,7 @@ mktempdir() do dir
             @test err == git_ok
             @test auth_attempts == 1
 
-            shred!(valid_cred)
+            Base.shred!(valid_cred)
         end
 
         @testset "CredentialPayload reset" begin
@@ -2789,7 +2789,7 @@ mktempdir() do dir
             @test err == git_ok
             @test auth_attempts == 1
 
-            shred!(valid_cred)
+            Base.shred!(valid_cred)
         end
     end
 
@@ -2910,7 +2910,7 @@ end
 
 let cache = LibGit2.CachedCredentials()
     get!(cache, "foo", LibGit2.SSHCredential("", "bar"))
-    shred!(cache)
+    Base.shred!(cache)
     @test all(cache["foo"].pass.data .== UInt(0))
 end
 
