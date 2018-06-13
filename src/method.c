@@ -19,7 +19,7 @@ extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
 static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
-                                   int binding_effects)
+                                   int binding_effects, int eager_resolve)
 {
     if (jl_is_symbol(expr)) {
         if (module == NULL)
@@ -122,6 +122,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 3));
                 JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 3));
                 JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 4));
+                jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
+                i++;
             }
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == structtype_sym ||
                      e->head == primtype_sym || e->head == module_sym) {
@@ -129,7 +131,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             }
             for (; i < nargs; i++) {
                 // TODO: this should be making a copy, not mutating the source
-                jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals, binding_effects));
+                jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals, binding_effects, eager_resolve));
             }
             if (e->head == call_sym && jl_expr_nargs(e) == 3 &&
                     jl_is_globalref(jl_exprarg(e, 0)) &&
@@ -147,7 +149,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 jl_module_t *me_mod = jl_globalref_mod(me);
                 jl_sym_t *me_sym = jl_globalref_name(me);
                 if (fe_mod->istopmod && !strcmp(jl_symbol_name(fe_sym), "getproperty") && jl_is_symbol(s)) {
-                    if (jl_binding_resolved_p(me_mod, me_sym)) {
+                    if (eager_resolve || jl_binding_resolved_p(me_mod, me_sym)) {
                         jl_binding_t *b = jl_get_binding(me_mod, me_sym);
                         if (b && b->constp && b->value && jl_is_module(b->value)) {
                             return jl_module_globalref((jl_module_t*)b->value, (jl_sym_t*)s);
@@ -194,7 +196,7 @@ void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *spar
     size_t i, l = jl_array_len(stmts);
     for (i = 0; i < l; i++) {
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-        jl_array_ptr_set(stmts, i, resolve_globals(stmt, m, sparam_vals, binding_effects));
+        jl_array_ptr_set(stmts, i, resolve_globals(stmt, m, sparam_vals, binding_effects, 0));
     }
 }
 
@@ -540,7 +542,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
         }
         else {
-            st = resolve_globals(st, m->module, sparam_vars, 1);
+            st = resolve_globals(st, m->module, sparam_vars, 1, 0);
         }
         jl_array_ptr_set(copy, i, st);
     }

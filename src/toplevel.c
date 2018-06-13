@@ -630,6 +630,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
         return jl_nothing;
     }
     else if (ex->head == using_sym) {
+        size_t last_age = ptls->world_age;
+        ptls->world_age = jl_world_counter;
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "using");
         size_t i = 0;
@@ -641,6 +643,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
             jl_value_t *a = jl_exprarg(ex, i);
             if (jl_is_expr(a) && ((jl_expr_t*)a)->head == dot_sym) {
                 name = NULL;
+                ptls->world_age = jl_world_counter;
                 jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "using");
                 jl_module_t *u = import;
                 if (name != NULL)
@@ -672,9 +675,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
                 }
             }
         }
+        ptls->world_age = last_age;
         return jl_nothing;
     }
     else if (ex->head == import_sym) {
+        size_t last_age = ptls->world_age;
+        ptls->world_age = jl_world_counter;
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "import");
         size_t i = 0;
@@ -686,6 +692,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
             jl_value_t *a = jl_exprarg(ex, i);
             if (jl_is_expr(a) && ((jl_expr_t*)a)->head == dot_sym) {
                 name = NULL;
+                ptls->world_age = jl_world_counter;
                 jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "import");
                 if (name == NULL) {
                     import_module(m, import);
@@ -699,6 +706,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
                 }
             }
         }
+        ptls->world_age = last_age;
         return jl_nothing;
     }
     else if (ex->head == export_sym) {

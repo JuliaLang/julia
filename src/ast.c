@@ -44,7 +44,7 @@ jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
-jl_sym_t *underscore_sym;
+jl_sym_t *underscore_sym; jl_sym_t *do_sym;
 jl_sym_t *abstracttype_sym;
 jl_sym_t *primtype_sym;
 jl_sym_t *structtype_sym;
@@ -392,6 +392,7 @@ void jl_init_frontend(void)
     generated_sym = jl_symbol("generated");
     generated_only_sym = jl_symbol("generated_only");
     throw_undef_if_not_sym = jl_symbol("throw_undef_if_not");
+    do_sym = jl_symbol("do");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -1079,6 +1080,23 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         }
         JL_GC_POP();
         return result;
+    }
+    if (e->head == do_sym && jl_expr_nargs(e) == 2 && jl_is_expr(jl_exprarg(e, 0)) &&
+        ((jl_expr_t*)jl_exprarg(e, 0))->head == macrocall_sym) {
+        jl_expr_t *mc = (jl_expr_t*)jl_exprarg(e, 0);
+        size_t nm = jl_expr_nargs(mc);
+        jl_expr_t *mc2 = jl_exprn(macrocall_sym, nm+1);
+        JL_GC_PUSH1(&mc2);
+        jl_exprargset(mc2, 0, jl_exprarg(mc, 0));  // macro name
+        jl_exprargset(mc2, 1, jl_exprarg(mc, 1));  // location
+        jl_exprargset(mc2, 2, jl_exprarg(e, 1));   // function argument
+        size_t j;
+        for (j = 2; j < nm; j++) {
+            jl_exprargset(mc2, j+1, jl_exprarg(mc, j));
+        }
+        jl_value_t *ret = jl_expand_macros((jl_value_t*)mc2, inmodule, macroctx, onelevel);
+        JL_GC_POP();
+        return ret;
     }
     if (e->head == escape_sym && macroctx) {
         macroctx = macroctx->parent;

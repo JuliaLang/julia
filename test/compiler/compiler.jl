@@ -1588,3 +1588,12 @@ end
 
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
+
+# Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union}}) == Type{Union{}}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Int}) == Union{}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) == Union{}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Type
