@@ -55,7 +55,7 @@ end
     @test c[1] == 1
 
     c = [0]
-    ex = try retry(foo_error, check=(s,e)->(s,try e.http_status_code == "503" end != true))(c,2) catch e; e end
+    ex = try retry(foo_error, check=(s,e)->(s,try e.http_status_code == "503"; catch; end != true))(c,2) catch e; e end
     @test typeof(ex) == ErrorException
     @test ex.msg == "foo"
     @test c[1] == 2

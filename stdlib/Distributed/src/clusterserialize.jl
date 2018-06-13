@@ -212,6 +212,7 @@ function original_ex(s::ClusterSerializer, ex_str, remote_stktrace)
     local pid_str = ""
     try
         pid_str = string(" from worker ", worker_id_from_socket(s.io))
+    catch
     end
 
     stk_str = remote_stktrace ? "Remote" : "Local"

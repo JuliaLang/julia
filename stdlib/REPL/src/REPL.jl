@@ -217,6 +217,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                 if isa(e,InterruptException)
                     try # raise the debugger if present
                         ccall(:jl_raise_debugger, Int, ())
+                    catch
                     end
                     line = ""
                     interrupted = true

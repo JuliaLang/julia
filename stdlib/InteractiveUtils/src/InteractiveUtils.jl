@@ -68,10 +68,10 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     if verbose
         lsb = ""
         if Sys.islinux()
-            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)) end
+            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)); catch; end
         end
         if Sys.iswindows()
-            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)) end
+            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)); catch; end
         end
         if !isempty(lsb)
             println(io, "      ", lsb)
@@ -95,7 +95,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
 
     if verbose
         println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io, "  Uptime: $(Sys.uptime()) sec") end
+        try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
         print(io, "  Load Avg: ")
         Base.print_matrix(io, Sys.loadavg()')
         println(io)

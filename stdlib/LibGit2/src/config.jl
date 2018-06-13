@@ -130,7 +130,7 @@ end
 
 function get(c::GitConfig, name::AbstractString, default::T) where T
     res = default
-    try res = get(T,c,name) end
+    try res = get(T,c,name); catch; end
     return res
 end
 
