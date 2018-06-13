@@ -1597,3 +1597,13 @@ end
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) == Union{}
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Type
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Type
+
+# PR 27351, make sure optimized type intersection for method invalidation handles typevars
+
+abstract type AbstractT27351 end
+struct T27351 <: AbstractT27351 end
+for i in 1:15
+    @eval f27351(::Val{$i}, ::AbstractT27351, ::AbstractT27351) = $i
+end
+f27351(::T, ::T27351, ::T27351) where {T} = 16
+@test_throws MethodError f27351(Val(1), T27351(), T27351())
