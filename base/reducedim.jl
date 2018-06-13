@@ -237,7 +237,7 @@ end
 
 # The innermost loops are split out to allow for @simd in known safe cases
 # add a few more simd-safe functions that were not available earlier in bootstrap
-simdable(f::Union{map(typeof, (abs, sqrt, log, log10, log2))...}) = SIMDableFunction{f}()
+simdable(f::Union{map(typeof, (abs, abs2, sqrt, log, log10, log2))...}) = SIMDableFunction{f}()
 @inline function _mapreducedim_loop1!(f, op, R, A, IR, IA, i1)
     @inbounds begin
         r = R[i1,IR]

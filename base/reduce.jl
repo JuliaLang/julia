@@ -202,7 +202,7 @@ struct SIMDableFunction{f}; end
 (::SIMDableFunction{f})(args...) where {f} = f(args...)
 simdable(f::Union{map(typeof, (+, *, &, |, add_sum, mul_prod, -, /, ^, identity))...}) = SIMDableFunction{f}()
 simdable(f) = f
-function _mapreduce_impl_loop(f::SIMDableFunction, op::SIMDableFunction, A::Array, ifirst, ilast)
+@inline function _mapreduce_impl_loop(f::SIMDableFunction, op::SIMDableFunction, A::Array, ifirst, ilast)
     @inbounds a1 = A[ifirst]
     @inbounds a2 = A[ifirst+1]
     v = op(f(a1), f(a2))
@@ -212,7 +212,7 @@ function _mapreduce_impl_loop(f::SIMDableFunction, op::SIMDableFunction, A::Arra
     end
     return v
 end
-function _mapreduce_impl_loop(f, op, A, ifirst, ilast)
+@inline function _mapreduce_impl_loop(f, op, A, ifirst, ilast)
     @inbounds a1 = A[ifirst]
     @inbounds a2 = A[ifirst+1]
     v = op(f(a1), f(a2))
