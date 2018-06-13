@@ -264,8 +264,10 @@ end
 @testset "preview generate" begin
     mktempdir() do tmp
         cd(tmp) do
-            Pkg.generate("Foo"; preview=true)
-            @test !isdir(joinpath(tmp, "Foo"))
+            withenv("USER" => "Test User") do
+                Pkg.generate("Foo"; preview=true)
+                @test !isdir(joinpath(tmp, "Foo"))
+            end
         end
     end
 end
