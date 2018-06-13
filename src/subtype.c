@@ -2247,9 +2247,11 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         e.envsz = szb;
         *ans = intersect_all(a, b, &e);
         if (*ans == jl_bottom_type) goto bot;
-        // TODO: don't yet use the types returned by `intersect`, since it returns
-        // Unions of Tuples and other code can only handle direct Tuples.
-        if (!jl_is_datatype(jl_unwrap_unionall(*ans))) {
+        // TODO: code dealing with method signatures is not able to handle unions, so if
+        // `a` and `b` are both tuples, we need to be careful and may not return a union,
+        // even if `intersect` produced one
+        if (jl_is_tuple_type(jl_unwrap_unionall(a)) && jl_is_tuple_type(jl_unwrap_unionall(b)) &&
+            !jl_is_datatype(jl_unwrap_unionall(*ans))) {
             *ans = b;
         }
         else {
