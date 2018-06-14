@@ -540,6 +540,7 @@ Stacktrace:
 [...]
 ```
 """
+hypot() = throw(ArgumentError("at least one argument is required"))
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
@@ -571,7 +572,45 @@ end
 
 Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
-hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
+hypot(x::Number...) = hypot(promote(x...)...)
+function hypot(x::T...) where T<:Number
+
+    # compute infnorm x (modeled on generic_vecnormMinusInf(x) in LinearAlgebra/generic.gl)
+    (v, s) = iterate(x)::Tuple
+    maxabs = abs(v)
+    while true
+        y = iterate(x, s)
+        y === nothing && break
+        (v, s) = y
+        vnorm = abs(v)
+        maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
+    end
+    maxabsf = float(maxabs)
+
+    # compute vecnorm2(x) (modeled on generic_vecnorm2(x) in LinearAlgebra/generic.gl)
+    (maxabsf == 0 || isinf(maxabsf)) && return maxabsf
+    (v, s) = iterate(x)::Tuple
+    Tfloat = typeof(maxabsf)
+    if isfinite(length(x)*maxabsf*maxabsf) && maxabsf*maxabsf != 0 # Scaling not necessary
+        sum::promote_type(Float64, Tfloat) = abs2(v)
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
+            sum += abs2(v)
+        end
+        return convert(Tfloat, sqrt(sum))
+    else
+        sum = (abs(v)/maxabsf)^2
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
+            sum += (abs(v)/maxabsf)^2
+        end
+        return convert(Tfloat, maxabsf*sqrt(sum))
+    end
+end
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
 atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
