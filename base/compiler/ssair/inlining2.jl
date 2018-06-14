@@ -935,7 +935,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             method = meth[1][3]::Method
             fully_covered = true
             case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data, calltype)
-            case == nothing && continue
+            case === nothing && continue
             push!(cases, Pair{Any,Any}(metharg, case))
         end
 

@@ -674,11 +674,18 @@ static void jl_compilation_sig(
         }
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
-                (definition->nospecialize & (1 << (i_arg - 1))) &&
-                decl_i == (jl_value_t*)jl_any_type) { // TODO: handle @nospecialize with other declared types
-            if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-            jl_svecset(*newparams, i, (jl_value_t*)jl_any_type);
-            continue;
+                (definition->nospecialize & (1 << (i_arg - 1)))) {
+            if (decl_i == (jl_value_t*)jl_any_type) {
+                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                jl_svecset(*newparams, i, (jl_value_t*)jl_any_type);
+                continue;
+            }
+            if (decl_i == (jl_value_t*)jl_tuple_type) {
+                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                jl_svecset(*newparams, i, (jl_value_t*)jl_tuple_type);
+                continue;
+            }
+            // TODO: handle @nospecialize with other declared types
         }
 
         if (jl_is_type_type(elt)) {
@@ -788,11 +795,18 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         }
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
-                (definition->nospecialize & (1 << (i_arg - 1))) &&
-                decl_i == (jl_value_t*)jl_any_type) { // TODO: handle @nospecialize with other declared types
-            if (elt == (jl_value_t*)jl_any_type)
-                continue;
-            return 0;
+                (definition->nospecialize & (1 << (i_arg - 1)))) {
+            if (decl_i == (jl_value_t*)jl_any_type) {
+                if (elt == (jl_value_t*)jl_any_type)
+                    continue;
+                return 0;
+            }
+            if (decl_i == (jl_value_t*)jl_tuple_type) {
+                if (elt == (jl_value_t*)jl_tuple_type)
+                    continue;
+                return 0;
+            }
+            // TODO: handle @nospecialize with other declared types
         }
 
         if (jl_is_type_type(elt)) {
@@ -1064,7 +1078,7 @@ static jl_method_instance_t *cache_method(
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);
             jl_svecset(newparams, i, kind);
         }
-        else if (!jl_is_concrete_type(elt)) { // currently just jl_function_type
+        else if (!jl_is_concrete_type(elt)) { // currently just jl_function_type and jl_tuple_type
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);
             jl_svecset(newparams, i, jl_any_type);
         }
