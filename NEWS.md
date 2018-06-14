@@ -697,6 +697,9 @@ Library improvements
   * Added an optimized method of `vecdot` for taking the Frobenius inner product
     of sparse matrices. ([#27470])
 
+  * Added an optimized method of `kron` for taking the tensor product of two
+    `Diagonal` matrices. ([27581])
+
 Compiler/Runtime improvements
 -----------------------------
 

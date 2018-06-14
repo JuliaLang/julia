@@ -354,6 +354,16 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
 \(adjF::Adjoint{<:Any,<:Factorization}, D::Diagonal) =
     (F = adjF.parent; ldiv!(adjoint(F), Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
 
+function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
+    valA = A.diag; nA = length(valA)
+    valB = B.diag; nB = length(valB)
+    valC = Vector{typeof(zero(T1)*zero(T2))}(undef,nA*nB)
+    @inbounds for i = 1:nA, j = 1:nB
+        valC[(i-1)*nB+j] = valA[i] * valB[j]
+    end
+    return Diagonal(valC)
+end
+
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
