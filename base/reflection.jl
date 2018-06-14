@@ -560,6 +560,27 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
+"""
+    hasfield(T, name::Symbol)
+
+Return `true` if a composite DataType `T` has a field called `name`.
+
+# Examples
+```jldoctest
+julia> struct Foo
+           x::Int64
+           y::String
+       end
+
+julia> Base.hasfield(Foo, :x)
+true
+
+julia> Base.hasfield(Foo, :balloon)
+false
+```
+"""
+hasfield(T::DataType, name::Symbol) = fieldindex(T, name, false) > 0
+
 argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
 function argument_mt(@nospecialize t)
     dt = argument_datatype(t)

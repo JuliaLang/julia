@@ -154,6 +154,7 @@ Base.isbitstype
 Core.fieldtype
 Base.fieldcount
 Base.fieldoffset
+Base.hasfield
 Base.datatype_alignment
 Base.datatype_haspadding
 Base.datatype_pointerfree

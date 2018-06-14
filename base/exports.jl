@@ -714,6 +714,7 @@ export
     fieldname,
     fieldnames,
     fieldcount,
+    hasfield,
     propertynames,
     isabstracttype,
     isbitstype,
