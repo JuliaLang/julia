@@ -51,7 +51,7 @@ function SecretBuffer(str::String)
 end
 
 """
-    SecretBuffer!(data::Union{Cstring, Ptr{UInt8}, Vector{UInt8}})
+    SecretBuffer!(data::Vector{UInt8})
 
 Initialize a new `SecretBuffer` with `data` and securely zero the original source argument.
 """
@@ -105,10 +105,11 @@ function write(io::IO, s::SecretBuffer)
     return nb
 end
 
+cconvert(::Type{Cstring}, s::SecretBuffer) = unsafe_convert(Cstring, s)
 function unsafe_convert(::Type{Cstring}, s::SecretBuffer)
     # Ensure that no nuls appear in the valid region
-    if any(!(==(0x00)), s.data[i] for i in 1:s.size)
-        error("`SecretBuffers` containing nul bytes cannot be converted to `Cstring`")
+    if any(==(0x00), s.data[i] for i in 1:s.size)
+        throw(ArgumentError("`SecretBuffers` containing nul bytes cannot be converted to C strings"))
     end
     # Add a hidden nul byte just past the end of the valid region
     p = s.ptr
@@ -116,7 +117,7 @@ function unsafe_convert(::Type{Cstring}, s::SecretBuffer)
     write(s, '\0')
     s.ptr = p
     s.size -= 1
-    return unsafe_convert(Ptr{UInt8}, s.data)
+    return Cstring(unsafe_convert(Ptr{Cchar}, s.data))
 end
 
 seek(io::SecretBuffer, n::Integer) = (io.ptr = max(min(n+1, io.size+1), 1); io)

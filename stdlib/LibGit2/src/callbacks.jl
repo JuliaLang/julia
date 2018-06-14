@@ -167,9 +167,8 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     if !revised
         return exhausted_abort()
     end
-
     return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
-                 (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Ptr{UInt8}),
+                 (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
 end
 
@@ -227,7 +226,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     end
 
     return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
-                 (Ptr{Ptr{Cvoid}}, Cstring, Ptr{UInt8}),
+                 (Ptr{Ptr{Cvoid}}, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pass)
 end
 

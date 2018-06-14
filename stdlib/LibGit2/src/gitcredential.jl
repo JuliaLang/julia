@@ -80,12 +80,12 @@ function Base.parse(::Type{GitCredential}, url::AbstractString)
 end
 
 function Base.copy!(a::GitCredential, b::GitCredential)
-    shred!(a)
+    Base.shred!(a)
     a.protocol = b.protocol
     a.host = b.host
     a.path = b.path
     a.username = b.username
-    a.password = copy(b.password)
+    a.password = b.password == nothing ? nothing : copy(b.password)
     return a
 end
 
@@ -114,7 +114,7 @@ function Base.read!(io::IO, cred::GitCredential)
         if key == "url"
             # Any components which are missing from the URL will be set to empty
             # https://git-scm.com/docs/git-credential#git-credential-codeurlcode
-            shred!(parse(GitCredential, value)) do urlcred
+            Base.shred!(parse(GitCredential, value)) do urlcred
                 copy!(cred, urlcred)
             end
         else
