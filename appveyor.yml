@@ -13,9 +13,16 @@ branches:
     - master
     - /^release-.*/
 
+# Note: use `[ci skip]` or `[skip ci]` anywhere in the commit message and AppVeyor won't be
+# built for that commit. You can use `[skip appveyor]` to explicitly skip AppVeyor and
+# allow other CI to still run.
 skip_commits:
 # Add [av skip] to commit messages for docfixes, etc to reduce load on queue
   message: /\[av skip\]/
+# Skip running CI for changes only to the documentation
+# https://github.com/JuliaLang/julia/pull/27356#discussion_r192536676
+# files:
+#   - doc/
 
 notifications:
   - provider: Email
