@@ -829,6 +829,11 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(wkd, WeakKeyDict)
 
     @test_throws ArgumentError WeakKeyDict([1, 2, 3])
+
+    # issue #26939
+    d26939 = WeakKeyDict()
+    d26939[big"1.0" + 1.1] = 1
+    GC.gc() # make sure this doesn't segfault
 end
 
 @testset "issue #19995, hash of dicts" begin
