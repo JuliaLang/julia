@@ -41,8 +41,10 @@ function show_sexpr(io::IO, ex::Expr, indent::Int)
         print(io, ex.head === :block ? ",\n"*" "^inner : ", ")
         show_sexpr(io, arg, inner)
     end
-    if isempty(ex.args); print(io, ",)")
-    else print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
+    if isempty(ex.args)
+        print(io, ",)")
+    else
+        print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
     end
 end
 
@@ -53,7 +55,7 @@ Show every part of the representation of the given expression. Equivalent to
 [`dump(:(expr))`](@ref dump).
 """
 macro dump(expr)
-    dump(expr)
+    return :(dump($(QuoteNode(expr))))
 end
 
 """
