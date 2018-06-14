@@ -271,17 +271,17 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     ptls->world_age = jl_typeinf_world;
     li->inInference = 1;
     in_inference++;
-    jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
+    jl_svec_t *linfo_src = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
     ptls->world_age = last_age;
     in_inference--;
     li->inInference = 0;
 
-    if (linfo_src_rettype &&
-            jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
-            jl_is_method_instance(jl_svecref(linfo_src_rettype, 0)) &&
-            jl_is_code_info(jl_svecref(linfo_src_rettype, 1))) {
-        *pli = (jl_method_instance_t*)jl_svecref(linfo_src_rettype, 0);
-        src = (jl_code_info_t*)jl_svecref(linfo_src_rettype, 1);
+    if (linfo_src &&
+            jl_is_svec(linfo_src) && jl_svec_len(linfo_src) == 2 &&
+            jl_is_method_instance(jl_svecref(linfo_src, 0)) &&
+            jl_is_code_info(jl_svecref(linfo_src, 1))) {
+        *pli = (jl_method_instance_t*)jl_svecref(linfo_src, 0);
+        src = (jl_code_info_t*)jl_svecref(linfo_src, 1);
     }
     JL_GC_POP();
 #endif

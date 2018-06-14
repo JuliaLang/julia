@@ -53,7 +53,6 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
-is_meta_expr(ex::Expr) = is_meta_expr_head(ex.head)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -74,7 +73,6 @@ end
 # count occurrences up to n+1
 function occurs_more(@nospecialize(e), pred, n)
     if isa(e,Expr)
-        e = e::Expr
         head = e.head
         is_meta_expr_head(head) && return 0
         c = 0

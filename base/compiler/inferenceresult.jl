@@ -9,7 +9,7 @@ mutable struct InferenceResult
                        # on the InferenceResult, so that the optimizer can use this info
                        # later during inlining.
     result # ::Type, or InferenceState if WIP
-    src::Union{CodeInfo, Nothing} # if inferred copy is available
+    src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     function InferenceResult(linfo::MethodInstance)
         if isdefined(linfo, :inferred_const)
             result = Const(linfo.inferred_const)
