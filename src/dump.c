@@ -740,12 +740,12 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             assert(*bp != (uintptr_t)HT_NOTFOUND);
             *bp |= 1;
         }
+        write_uint8(s->s, internal);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         if (!internal)
             jl_serialize_value(s, (jl_value_t*)li->def.method->sig);
         else
             jl_serialize_value(s, li->def.value);
-        write_uint8(s->s, internal);
         if (!internal)
             return;
         jl_serialize_value(s, li->inferred);
@@ -1605,6 +1605,23 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     uintptr_t pos = backref_list.len;
     if (usetable)
         arraylist_push(&backref_list, li);
+    int internal = read_uint8(s->s);
+    if (internal == 1) {
+        li->min_world = 0;
+        li->max_world = 0;
+    }
+    else if (internal == 2) {
+        li->min_world = jl_world_counter;
+        li->max_world = ~(size_t)0;
+    }
+    else if (internal == 3) {
+        li->min_world = 1;
+        li->max_world = 0;
+    }
+    else if (internal) {
+        assert(0 && "corrupt deserialization state");
+        abort();
+    }
 
     li->specTypes = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
     if (li->specTypes)
@@ -1613,7 +1630,6 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     if (li->def.value)
         jl_gc_wb(li, li->def.value);
 
-    int internal = read_uint8(s->s);
     if (!internal) {
         assert(loc != NULL && loc != HT_NOTFOUND);
         arraylist_push(&flagref_list, loc);
@@ -1633,22 +1649,6 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     li->backedges = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->backedges);
     if (li->backedges)
         jl_gc_wb(li, li->backedges);
-    if (internal == 1) {
-        li->min_world = 0;
-        li->max_world = 0;
-    }
-    else if (internal == 2) {
-        li->min_world = jl_world_counter;
-        li->max_world = ~(size_t)0;
-    }
-    else if (internal == 3) {
-        li->min_world = 1;
-        li->max_world = 0;
-    }
-    else {
-        assert(0 && "corrupt deserialization state");
-        abort();
-    }
     li->functionObjectsDecls.functionObject = NULL;
     li->functionObjectsDecls.specFunctionObject = NULL;
     li->inInference = 0;
@@ -1795,7 +1795,8 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v, size_t 
         }
         else {
             // garbage entry - delete it :(
-            ((jl_typemap_entry_t*)v)->min_world = ((jl_typemap_entry_t*)v)->max_world - 1;
+            ((jl_typemap_entry_t*)v)->min_world = 1;
+            ((jl_typemap_entry_t*)v)->max_world = 0;
         }
     }
 }
@@ -1809,10 +1810,20 @@ static jl_value_t *jl_deserialize_typemap_entry(jl_serializer_state *s)
         jl_value_t *v = jl_gc_alloc(s->ptls, jl_datatype_size(jl_typemap_entry_type), jl_typemap_entry_type);
         if (n == N && s->mode != MODE_AST)
             arraylist_push(&backref_list, v);
+        jl_typemap_entry_t* te = (jl_typemap_entry_t*)v;
+        te->next = (jl_typemap_entry_t*)jl_nothing; // `next` is the first field
         jl_deserialize_struct(s, v, 1);
-        ((jl_typemap_entry_t*)v)->next = (jl_typemap_entry_t*)jl_nothing;
+#ifndef NDEBUG
+        if (te->func.value && jl_typeis(te->func.value, jl_method_instance_type)) {
+            assert((te->func.linfo->max_world == 0 &&
+                    te->func.linfo->min_world == 1) ||
+                   (te->func.linfo->max_world >= te->max_world &&
+                    te->func.linfo->min_world <= te->min_world) &&
+                   "corrupt typemap entry structure");
+        }
+#endif
         *pn = v;
-        pn = (jl_value_t**)&((jl_typemap_entry_t*)v)->next;
+        pn = (jl_value_t**)&te->next;
         n--;
     }
     return te;
