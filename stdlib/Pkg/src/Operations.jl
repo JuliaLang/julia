@@ -628,7 +628,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
         delete!(info, "repo-rev")
     elseif special_action == PKGSPEC_FREED
         if get(info, "pinned", false)
-           delete!(info, "pinned")
+            delete!(info, "pinned")
         else
             delete!(info, "repo-url")
             delete!(info, "repo-rev")
@@ -671,11 +671,11 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
                 registry_resolve!(env, dep_pkgs)
                 ensure_resolved(env, dep_pkgs; registry=true)
             end
-                for dep_pkg in dep_pkgs
-                    dep_pkg.name == "julia" && continue
-                    deps[dep_pkg.name] = string(dep_pkg.uuid)
-                end
+            for dep_pkg in dep_pkgs
+                dep_pkg.name == "julia" && continue
+                deps[dep_pkg.name] = string(dep_pkg.uuid)
             end
+        end
         if !isempty(deps)
             info["deps"] = deps
         end
@@ -805,21 +805,43 @@ function collect_target_deps!(ctx::Context, pkgs::Vector{PackageSpec}, pkg::Pack
         path = haskey(info, "path") ? project_rel_path(ctx, info["path"]) : find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
     end
 
-    if !haskey(ctx.env.project, "targets")
-        if target == "test"
-            pkg2_test_target_compatibility!(ctx, path, pkgs)
+    project_path = nothing
+    for project_name in Base.project_names
+        project_path_cand = joinpath(path, project_name)
+        if isfile(project_path_cand)
+            project_path = project_path_cand
+            break
         end
-        return pkgs
     end
-    targets = ctx.env.project["targets"]
-    haskey(targets, target) || return pkgs
-    targets = ctx.env.project["targets"]
-    target_info = targets[target]
-    haskey(target_info, "deps") || return pkgs
-    targets = ctx.env.project["targets"]
-    deps = target_info["deps"]
-    for (pkg, uuid) in deps
-        push!(pkgs, PackageSpec(pkg, UUID(uuid)))
+    project = nothing
+    if project_path !== nothing
+        project = read_project(project_path)
+    end
+
+    # Pkg2 compatibiity with test/REQUIRE
+    has_project_test_target = false
+    if project !== nothing
+        if haskey(project, "targets")
+            has_project_test_target = true
+        end
+    end
+    if target == "test" && !has_project_test_target
+        pkg2_test_target_compatibility!(ctx, path, pkgs)
+        return
+    end
+
+    # Collect target deps from Project
+    if project !== nothing
+        targets = project["targets"]
+        haskey(targets, target) || return pkgs
+        targets = project["targets"]
+        target_info = targets[target]
+        haskey(target_info, "deps") || return pkgs
+        targets = project["targets"]
+        deps = target_info["deps"]
+        for (pkg, uuid) in deps
+            push!(pkgs, PackageSpec(pkg, UUID(uuid)))
+        end
     end
     return nothing
 end
