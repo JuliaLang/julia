@@ -670,12 +670,12 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
                 end
                 registry_resolve!(env, dep_pkgs)
                 ensure_resolved(env, dep_pkgs; registry=true)
+            end
                 for dep_pkg in dep_pkgs
                     dep_pkg.name == "julia" && continue
                     deps[dep_pkg.name] = string(dep_pkg.uuid)
                 end
             end
-        end
         if !isempty(deps)
             info["deps"] = deps
         end
