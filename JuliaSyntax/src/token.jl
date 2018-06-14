@@ -53,12 +53,13 @@ struct Token <: AbstractToken
     endbyte::Int # The byte where the token ended in the buffer
     val::String # The actual string of the token
     token_error::TokenError
+    dotop::Bool
 end
 function Token(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
     startbyte::Int, endbyte::Int, val::String)
-Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR)
+Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR, false)
 end
-Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN)
+Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN, false)
 
 struct RawToken <: AbstractToken
     kind::Kind
@@ -68,12 +69,13 @@ struct RawToken <: AbstractToken
     startbyte::Int # The byte where the token start in the buffer
     endbyte::Int # The byte where the token ended in the buffer
     token_error::TokenError
+    dotop::Bool
 end
 function RawToken(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
     startbyte::Int, endbyte::Int)
-RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR)
+RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR, false)
 end
-RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN)
+RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN, false)
 
 
 const _EMPTY_TOKEN = Token()
@@ -97,7 +99,12 @@ function untokenize(t::Token)
     elseif iskeyword(t.kind)
         return lowercase(string(t.kind))
     elseif isoperator(t.kind)
-        return string(UNICODE_OPS_REVERSE[t.kind])
+        if t.dotop
+            str = string(".", UNICODE_OPS_REVERSE[t.kind]) 
+        else 
+            str = string(UNICODE_OPS_REVERSE[t.kind]) 
+        end 
+        return string(str, t.val) 
     elseif t.kind == LPAREN
         return "("
     elseif t.kind == LSQUARE
