@@ -41,7 +41,7 @@ end
 convert(::Type{SecretBuffer}, s::AbstractString) = SecretBuffer(String(s))
 SecretBuffer(str::AbstractString) = SecretBuffer(String(str))
 function SecretBuffer(str::String)
-    buf = codepoints(str)
+    buf = codeunits(str)
     s = SecretBuffer(sizehint=length(buf))
     for c in buf
         write(s, c)
@@ -55,17 +55,6 @@ end
 
 Initialize a new `SecretBuffer` with `data` and securely zero the original source argument.
 """
-SecretBuffer!(s::Cstring) = SecretBuffer!(convert(Ptr{UInt8}, s))
-function SecretBuffer!(p::Ptr{UInt8})
-    len = ccall(:strlen, Cint, (Ptr{UInt8},), p)
-    s = SecretBuffer(sizehint=len)
-    for i in 1:len
-        write(s, unsafe_load(p, i))
-    end
-    seek(s, 0)
-    unsafe_securezero!(p, len)
-    s
-end
 function SecretBuffer!(d::Vector{UInt8})
     len = length(d)
     s = SecretBuffer(sizehint=len)
@@ -76,6 +65,18 @@ function SecretBuffer!(d::Vector{UInt8})
     securezero!(d)
     s
 end
+
+unsafe_SecretBuffer!(s::Cstring) = unsafe_SecretBuffer!(convert(Ptr{UInt8}, s), ccall(:strlen, Cint, (Cstring,), s))
+function unsafe_SecretBuffer!(p::Ptr{UInt8}, len=1)
+    s = SecretBuffer(sizehint=len)
+    for i in 1:len
+        write(s, unsafe_load(p, i))
+    end
+    seek(s, 0)
+    unsafe_securezero!(p, len)
+    s
+end
+
 
 show(io::IO, s::SecretBuffer) = print(io, "SecretBuffer(\"*******\")")
 

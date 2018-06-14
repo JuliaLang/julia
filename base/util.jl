@@ -467,7 +467,7 @@ function getpass(prompt::AbstractString)
 end
 else
 function getpass(prompt::AbstractString)
-    SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), prompt))
+    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), prompt))
 end
 end
 

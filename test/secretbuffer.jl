@@ -1,5 +1,5 @@
 using Base: SecretBuffer, SecretBuffer!, shred!, isshredded
-using Base.Test
+using Test
 
 @testset "SecretBuffer" begin
     @testset "original unmodified" begin
@@ -10,8 +10,8 @@ using Base.Test
         seekstart(secret)
 
         @test shred!(secret) === secret
-        @test read(secret, String) != ""
-        @test str != "foobar"
+        @test read(secret, String) == ""
+        @test str == "foobar"
     end
 
     @testset "finalizer" begin
@@ -24,5 +24,20 @@ using Base.Test
 
         @test all(iszero, v)
         @test !isshredded(secret_b)
+    end
+
+    @testset "initializers" begin
+        s1 = SecretBuffer("setec astronomy")
+        data2 = [0x73, 0x65, 0x74, 0x65, 0x63, 0x20, 0x61, 0x73, 0x74, 0x72, 0x6f, 0x6e, 0x6f, 0x6d, 0x79]
+        s2 = SecretBuffer!(data2)
+        @test all(==(0x0), data2)
+        @test s1 == s2
+
+        ptr3 = Base.unsafe_convert(Cstring, "setec astronomy")
+        s3 = Base.unsafe_SecretBuffer!(ptr3)
+        @test Base.unsafe_string(ptr3) == ""
+        @test s1 == s2 == s3
+
+        shred!(s1); shred!(s2); shred!(s3)
     end
 end
