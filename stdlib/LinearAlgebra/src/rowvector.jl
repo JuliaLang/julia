@@ -62,4 +62,5 @@ end
 const ConjRowVector{T,CV<:ConjVector} = RowVector{T,CV}
 
 # Issue #24590: an inner product on a vector space induces an inner product on the dual space.
-dot(x::RowVector, y::RowVector) = dot(transpose(x), transpose(y))
+dot(x::Transpose{<:AbstractVector{<:Number}}, y::Transpose{<:AbstractVector{<:Number}}) = dot(transpose(x), transpose(y))
+dot(x::Adjoint{<:AbstractVector{<:Number}}, y::Adjoint{<:AbstractVector{<:Number}}) = dot(adjoint(y), adjoint(x)) # note order (y,x): this is to get the correct conjugation

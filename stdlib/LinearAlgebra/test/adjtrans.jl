@@ -460,4 +460,12 @@ end
     @test B == A .* A'
 end
 
+@testset "Issue #24590" begin
+    for T in (Transpose, Adjoint)
+        @test dot(T([1, 2, 3, 4]), T([2, 3, 6, 10])) == 66
+        @test dot(T([1, 2, 3, 4]), (1+2im)*T([2, 3, 6, 10])) == (1+2im)*66
+        @test dot((1+2im)*T([1, 2, 3, 4]), T([2, 3, 6, 10])) == (1-2im)*66
+    end
+end
+
 end # module TestAdjointTranspose
