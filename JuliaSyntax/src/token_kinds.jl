@@ -59,6 +59,9 @@
     begin_literal,
         LITERAL, # general
         INTEGER, # 4
+        BIN_INT, # 0b1
+        HEX_INT, # 0x0
+        OCT_INT, # 0o0
         FLOAT, # 3.5, 3.7e+3
         STRING, # "foo"
         TRIPLE_STRING, # """ foo \n """
@@ -532,6 +535,7 @@
             DOUBLE_LINE_SLANTED_GREATER_THAN_OR_EQUAL_TO, # ⫺
             RIGHT_TACK, # ⊢
             LEFT_TACK, # ⊣
+            PERP, # ⟂
         end_comparison,
 
         # Level 7
@@ -1160,6 +1164,7 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '⫺' => DOUBLE_LINE_SLANTED_GREATER_THAN_OR_EQUAL_TO,
 '⊢' => RIGHT_TACK,
 '⊣' => LEFT_TACK,
+'⟂' => PERP,
 '⊕' => CIRCLED_PLUS,
 '⊖' => CIRCLED_MINUS,
 '⊞' => SQUARED_PLUS,
