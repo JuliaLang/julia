@@ -50,9 +50,12 @@ static int exec_program(char *program)
             if (errs) {
                 bt_data = (uintptr_t*)malloc(bt_size * sizeof(void*));
                 memcpy(bt_data, ptls->bt_data, bt_size * sizeof(void*));
-                jl_call2(jl_get_function(jl_base_module, "show"), errs, e);
-                jl_printf(JL_STDERR, "\n");
-                shown_err = 1;
+                jl_value_t *showf = jl_get_function(jl_base_module, "show");
+                if (showf != NULL) {
+                    jl_call2(showf, errs, e);
+                    jl_printf(JL_STDERR, "\n");
+                    shown_err = 1;
+                }
             }
         }
         JL_CATCH {

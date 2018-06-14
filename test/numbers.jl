@@ -2214,7 +2214,7 @@ end
         end
     end
 end
-@testset "angle(z::Real) = atan2(zero(z), z)" begin
+@testset "angle(z::Real) = atan(zero(z), z)" begin
     #function only returns two values, depending on sign
     @test angle(10) == 0.0
     @test angle(-10) == 3.141592653589793

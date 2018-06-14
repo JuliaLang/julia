@@ -457,7 +457,7 @@ we could compute the singular values of several large random matrices in paralle
 ```julia-repl
 julia> M = Matrix{Float64}[rand(1000,1000) for i = 1:10];
 
-julia> pmap(svd, M);
+julia> pmap(svdvals, M);
 ```
 
 Julia's [`pmap`](@ref) is designed for the case where each function call does a large amount
@@ -486,7 +486,7 @@ As an example, consider computing the singular values of matrices of different s
 ```julia-repl
 julia> M = Matrix{Float64}[rand(800,800), rand(600,600), rand(800,800), rand(600,600)];
 
-julia> pmap(svd, M);
+julia> pmap(svdvals, M);
 ```
 
 If one process handles both 800×800 matrices and another handles both 600×600 matrices, we will
@@ -565,7 +565,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and read end.
 
     # we can schedule `n` instances of `foo` to be active concurrently.
     for _ in 1:n
-        @schedule foo()
+        @async foo()
     end
     ```
   * Channels are created via the `Channel{T}(sz)` constructor. The channel will only hold objects
@@ -672,10 +672,10 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> @schedule make_jobs(n); # feed the jobs channel with "n" jobs
+julia> @async make_jobs(n); # feed the jobs channel with "n" jobs
 
 julia> for i in 1:4 # start 4 tasks to process requests in parallel
-           @schedule do_work()
+           @async do_work()
        end
 
 julia> @elapsed while n > 0 # print out results
@@ -780,7 +780,7 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> @schedule make_jobs(n); # feed the jobs channel with "n" jobs
+julia> @async make_jobs(n); # feed the jobs channel with "n" jobs
 
 julia> for p in workers() # start tasks on the workers to process requests in parallel
            remote_do(do_work, p, jobs, results)

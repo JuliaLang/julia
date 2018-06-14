@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
         arg isa String && return esc(:(println($arg)))
@@ -11,27 +13,29 @@ end
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
-            def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id - length(ir.stmts)][1])
+            def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id - length(ir.stmts)].pos)
         else
             def_bb = block_for_inst(ir.cfg, op.id)
         end
         if (def_bb == use_bb)
             if op.id > length(ir.stmts)
-                @assert ir.new_nodes[op.id - length(ir.stmts)][1] <= use_idx
+                @assert ir.new_nodes[op.id - length(ir.stmts)].pos <= use_idx
             else
                 @assert op.id < use_idx
             end
         else
-            if !dominates(domtree, def_bb, use_bb)
-                enable_new_optimizer[] = false
-                @show ir
+            if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
+                #@Base.show ir
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
                 error()
             end
         end
+    elseif isa(op, Union{OldSSAValue, NewSSAValue})
+        #@Base.show ir
+        @verify_error "Left over SSA marker"
+        error()
     elseif isa(op, Union{SlotNumber, TypedSlot})
-        enable_new_optimizer[] = false
-        #@error "Left over slot detected in converted IR"
+        @verify_error "Left over slot detected in converted IR"
         error()
     end
 end
@@ -43,15 +47,13 @@ function verify_ir(ir::IRCode)
     last_end = 0
     for (idx, block) in pairs(ir.cfg.blocks)
         if first(block.stmts) != last_end + 1
-            enable_new_optimizer[] = false
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
-            @show ranges
-            @show (first(block.stmts), last_end)
             @verify_error "First statement of BB $idx ($(first(block.stmts))) does not match end of previous ($last_end)"
             error()
         end
         last_end = last(block.stmts)
         for p in block.preds
+            p == 0 && continue
             if !(idx in ir.cfg.blocks[p].succs)
                 @verify_error "Predeccsor $p of block $idx not in successor list"
                 error()
@@ -59,9 +61,9 @@ function verify_ir(ir::IRCode)
         end
         for s in block.succs
             if !(idx in ir.cfg.blocks[s].preds)
-                @show ir.cfg
-                @show ir
-                @show ir.argtypes
+                #@Base.show ir.cfg
+                #@Base.show ir
+                #@Base.show ir.argtypes
                 @verify_error "Successor $s of block $idx not in predecessor list"
                 error()
             end
@@ -77,9 +79,8 @@ function verify_ir(ir::IRCode)
             for i = 1:length(stmt.edges)
                 edge = stmt.edges[i]
                 if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
-                    enable_new_optimizer[] = false
-                    @show ir.argtypes
-                    @show ir
+                    #@Base.show ir.argtypes
+                    #@Base.show ir
                     @verify_error "Edge $edge of φ node $idx not in predecessor list"
                     error()
                 end
@@ -96,6 +97,9 @@ function verify_ir(ir::IRCode)
                         #"""
                         #error()
                     end
+                elseif isa(val, GlobalRef) || isa(val, Expr)
+                    @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
+                    error()
                 end
                 check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1)
             end
@@ -115,8 +119,14 @@ function verify_ir(ir::IRCode)
             if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
                 if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
                     if ir.lines[idx] <= 0
-                        @verify_error "Missing line number information for statement $idx of $ir"
+                        #@verify_error "Missing line number information for statement $idx of $ir"
                     end
+                end
+            end
+            if isa(stmt, Expr) && stmt.head === :(=)
+                if stmt.args[1] isa SSAValue
+                    @verify_error "SSAValue as assignment LHS"
+                    error()
                 end
             end
             for op in userefs(stmt)

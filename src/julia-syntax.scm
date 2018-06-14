@@ -533,7 +533,7 @@
                                                ,(if (or (eq? T 'ANY)
                                                         (and (globalref? T)
                                                              (eq? (caddr T) 'ANY)))
-                                                    `(call (|.| (core Intrinsics) 'select_value)
+                                                    `(call (core ifelse)
                                                            (call (core ===) ,T (core ANY))
                                                            (core Any)
                                                            ,T)
@@ -881,12 +881,17 @@
        ;; "outer" constructors
        ,@(if (and (null? defs)
                   (not (null? params))
-                  ;; don't generate an outer constructor if the type has
-                  ;; parameters not mentioned in the field types. such a
-                  ;; constructor would not be callable anyway.
-                  (every (lambda (sp)
-                           (expr-contains-eq sp (cons 'list field-types)))
-                         params))
+                  ;; To generate an outer constructor, each parameter must occur in a field
+                  ;; type, or in the bounds of a subsequent parameter.
+                  ;; Otherwise the constructor would not work, since the parameter values
+                  ;; would never be specified.
+                  (let loop ((root-types field-types)
+                             (sp         (reverse bounds)))
+                    (or (null? sp)
+                        (let ((p (car sp)))
+                          (and (expr-contains-eq (car p) (cons 'list root-types))
+                               (loop (append (cdr p) root-types)
+                                     (cdr sp)))))))
              `((scope-block
                 (block
                  (global ,name)
@@ -1403,7 +1408,7 @@
       (= ,t ,x)
       ,@(let loop ((lhs lhss)
                    (i   1))
-          (if (null? lhs) '((null))
+          (if (null? lhs) '()
               (cons (if (eventually-call? (car lhs))
                         ;; if this is a function assignment, avoid putting our ssavalue
                         ;; inside the function and instead create a capture-able variable.
@@ -1581,7 +1586,8 @@
          (if (null? lhss)
              body
              (let* ((coll  (make-ssavalue))
-                    (state (gensy))
+                    (next  (gensy))
+                    (state (make-ssavalue))
                     (outer (outer? (car lhss)))
                     (lhs   (if outer (cadar lhss) (car lhss)))
                     (body
@@ -1591,8 +1597,7 @@
                        ,@(if (not outer)
                              (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
                              '())
-                       ,(lower-tuple-assignment (list lhs state)
-                                                `(call (top next) ,coll ,state))
+                       ,(lower-tuple-assignment (list lhs state) next)
                        ,(nest (cdr lhss) (cdr itrs))))
                     (body
                      (if (null? (cdr lhss))
@@ -1602,13 +1607,15 @@
                              ,body))
                          `(scope-block ,body))))
                `(block (= ,coll ,(car itrs))
-                       (= ,state (call (top start) ,coll))
+                       (= ,next (call (top iterate) ,coll))
                        ;; TODO avoid `local declared twice` error from this
                        ;;,@(if outer `((local ,lhs)) '())
                        ,@(if outer `((require-existing-local ,lhs)) '())
-                       (_while
-                        (call (top not_int) (call (core typeassert) (call (top done) ,coll ,state) (core Bool)))
-                        ,body))))))))
+                       (if (call (top not_int) (call (core ===) ,next (null)))
+                           (_do_while
+			    (block ,body
+				   (= ,next (call (top iterate) ,coll ,state)))
+			    (call (top not_int) (call (core ===) ,next (null))))))))))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs flat outervars)
@@ -1978,13 +1985,12 @@
                        (st  (gensy)))
                   `(block
                     ,@ini
-                    (= ,st (call (top start) ,xx))
                     ,.(map (lambda (i lhs)
                              (expand-forms
                               (lower-tuple-assignment
                                (list lhs st)
-                               `(call (top indexed_next)
-                                      ,xx ,(+ i 1) ,st))))
+                               `(call (top indexed_iterate)
+                                      ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
                            (iota (length lhss))
                            lhss)
                     (unnecessary ,xx))))))
@@ -1997,6 +2003,8 @@
           (let ((a    (cadr lhs))
                 (idxs (cddr lhs))
                 (rhs  (caddr e)))
+            (if (any assignment? idxs)
+                (syntax-deprecation "assignment inside indexing" "" #f))
             (let* ((reuse (and (pair? a)
                                (contains (lambda (x) (eq? x 'end))
                                          idxs)))
@@ -2055,6 +2063,8 @@
    'ref
    (lambda (e)
      (let ((args (cddr e)))
+       (if (any assignment? args)
+           (syntax-deprecation "assignment inside indexing" "" #f))
        (if (has-parameters? args)
            (error "unexpected semicolon in array expression")
            (expand-forms (partially-expand-ref e)))))
@@ -2063,6 +2073,8 @@
    (lambda (e)
      (if (has-parameters? (cddr e))
          (error (string "unexpected semicolon in \"" (deparse e) "\"")))
+     (if (any assignment? (cddr e))
+         (syntax-deprecation "assignment inside T{ }" "" #f))
      (let* ((p (extract-implicit-whereparams e))
             (curlyparams (car p))
             (whereparams (cdr p)))
@@ -2235,14 +2247,21 @@
    (lambda (e)
      (if (has-parameters? (cdr e))
          (error "unexpected semicolon in array expression"))
+     (if (any assignment? (cdr e))
+         (syntax-deprecation "assignment inside [ ]" "" #f))
      (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
-   (lambda (e) (expand-forms `(call (top hcat) ,@(cdr e))))
+   (lambda (e)
+     (if (any assignment? (cdr e))
+         (syntax-deprecation "assignment inside [ ]" "" #f))
+     (expand-forms `(call (top hcat) ,@(cdr e))))
 
    'vcat
    (lambda (e)
      (let ((a (cdr e)))
+       (if (any assignment? a)
+           (syntax-deprecation "assignment inside [ ]" "" #f))
        (if (has-parameters? a)
            (error "unexpected semicolon in array expression")
            (expand-forms
@@ -2261,12 +2280,17 @@
                 `(call (top vcat) ,@a))))))
 
    'typed_hcat
-   (lambda (e) (expand-forms `(call (top typed_hcat) ,@(cdr e))))
+   (lambda (e)
+     (if (any assignment? (cddr e))
+         (syntax-deprecation "assignment inside T[ ]" "" #f))
+     (expand-forms `(call (top typed_hcat) ,@(cdr e))))
 
    'typed_vcat
    (lambda (e)
      (let ((t (cadr e))
            (a (cddr e)))
+       (if (any assignment? (cddr e))
+           (syntax-deprecation "assignment inside T[ ]" "" #f))
        (expand-forms
         (if (any (lambda (x)
                    (and (pair? x) (eq? (car x) 'row)))
@@ -2292,7 +2316,9 @@
                             (return (expand-forms `(call transpose ,(cadr e))))))
 
    'generator
-   (lambda (e) (expand-generator e #f '()))
+   (lambda (e)
+     (check-no-return e)
+     (expand-generator e #f '()))
 
    'flatten
    (lambda (e) (expand-generator (cadr e) #t '()))
@@ -2314,56 +2340,75 @@
                (let ((ranges (cddr (caddr e))))
                  (if (any (lambda (x) (eq? x ':)) ranges)
                      (error "comprehension syntax with `:` ranges has been removed"))
-                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)
-                                              (pair? (caddr x))
-                                              (eq? (car (caddr x)) 'call)
-                                              (eq? (cadr (caddr x)) ':)))
+                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)))
                              ranges)
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
                       (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
           `(call (top collect) ,(cadr e) ,(caddr e)))))))
 
-(define (lower-comprehension atype expr ranges)
-  (let ((result    (make-ssavalue))
-        (ri        (gensy))
-        (oneresult (make-ssavalue))
-        (lengths   (map (lambda (x) (make-ssavalue)) ranges))
-        (states    (map (lambda (x) (gensy)) ranges))
-        (rv        (map (lambda (x) (make-ssavalue)) ranges)))
+(define (has-return? e)
+  (expr-contains-p return? e (lambda (x) (not (function-def? x)))))
 
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges rv states lengths)
-      (if (null? ranges)
+(define (check-no-return e)
+  (if (has-return? e)
+      (error "\"return\" not allowed inside comprehension or generator")))
+
+(define (has-break-or-continue? e)
+  (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
+                   e
+                   (lambda (x) (not (and (pair? x)
+                                         (memq (car x) '(for while)))))))
+
+(define (lower-comprehension ty expr itrs)
+  (check-no-return expr)
+  (if (has-break-or-continue? expr)
+      (error "break or continue outside loop"))
+  (let ((result    (gensy))
+        (idx       (gensy))
+        (oneresult (make-ssavalue))
+        (prod      (make-ssavalue))
+        (isz       (make-ssavalue))
+        (szunk     (make-ssavalue))
+        (iv        (map (lambda (x) (make-ssavalue)) itrs)))
+
+    ;; construct loops over all iterators
+    (define (construct-loops itrs iv)
+      (if (null? itrs)
           `(block (= ,oneresult ,expr)
                   (inbounds true)
-                  (call (top setindex!) ,result ,oneresult ,ri)
+                  (if ,szunk
+                      (call (top push!) ,result ,oneresult)
+                      (call (top setindex!) ,result ,oneresult ,idx))
                   (inbounds pop)
-                  (= ,ri (call (top add_int) ,ri 1)))
-          `(block
-            (= ,(car states) (call (top start) ,(car rv)))
-            (while (call (top not_int) (call (core typeassert) (call (top done) ,(car rv) ,(car states)) (core Bool)))
-                   (scope-block
-                   (block
-                    (= (tuple ,(cadr (car ranges)) ,(car states))
-                       (call (top next) ,(car rv) ,(car states)))
-                    ;; *** either this or force all for loop vars local
-                    ,.(map (lambda (r) `(local ,r))
-                           (lhs-vars (cadr (car ranges))))
-                    ,(construct-loops (cdr ranges) (cdr rv) (cdr states) (cdr lengths))))))))
+                  (= ,idx (call (top add_int) ,idx 1)))
+          `(for (= ,(cadr (car itrs)) ,(car iv))
+                (block
+                 ;; TODO: remove when all loop vars are local in 1.0
+                 ,.(map (lambda (v) `(local ,v))
+                        (lhs-vars (cadr (car itrs))))
+                 ,(construct-loops (cdr itrs) (cdr iv))))))
 
-    ;; Evaluate the comprehension
-    `(block
-      ,.(map (lambda (v) `(local ,v)) states)
-      (local ,ri)
-      ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-      ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
-      (scope-block
-       (block
-        (= ,result (call (curly Array ,atype ,(length lengths)) undef ,@lengths))
-        (= ,ri 1)
-        ,(construct-loops (reverse ranges) (reverse rv) states (reverse lengths))
-        ,result)))))
+    (let ((overall-itr (if (length= itrs 1) (car iv) prod)))
+      `(scope-block
+        (block
+         (local ,result) (local ,idx)
+         ,.(map (lambda (v r) `(= ,v ,(caddr r))) iv itrs)
+         ,.(if (length= itrs 1)
+               '()
+               `((= ,prod (call (top product) ,@iv))))
+         (= ,isz (call (top IteratorSize) ,overall-itr))
+         (= ,szunk (call (core isa) ,isz (top SizeUnknown)))
+         (if ,szunk
+             (= ,result (call (curly (core Array) ,ty 1) (core undef) 0))
+             (if (call (core isa) ,isz (top HasShape))
+                 (= ,result (call (top similar) (curly (core Array) ,ty) (call (top axes) ,overall-itr)))
+                 (= ,result (call (curly (core Array) ,ty 1) (core undef) (call (core Int)
+                                                                                (|::| (call (top length) ,overall-itr)
+                                                                                 (core Integer)))))))
+         (= ,idx (call (top first) (call (top LinearIndices) ,result)))
+         ,(construct-loops (reverse itrs) (reverse iv))
+         ,result)))))
 
 (define (lhs-vars e)
   (cond ((symbol? e) (list e))
@@ -2549,6 +2594,12 @@
                            (if (memq v all-vars)
                                (error (string "variable \"" v "\" declared both local and global"))))
                          glob)
+               (let ((argnames (if lam (lam:vars lam) '())))
+                 (if (pair? argnames)
+                     (for-each (lambda (v)
+                                 (if (memq v argnames)
+                                     (error (string "local variable name \"" v "\" conflicts with an argument"))))
+                               locals-declared)))
                (if lam ;; update in-place the list of local variables in lam
                    (set-car! (cddr lam)
                              (append real-new-vars real-new-vars-def (caddr lam))))
@@ -3147,7 +3198,7 @@ f(x) = yt(x)
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
-                               (newlam    (renumber-slots-and-labels (linearize (car exprs)))))
+                               (newlam    (compact-and-renumber (linearize (car exprs)))))
                           `(toplevel-butlast
                             ,@top-stmts
                             (block ,@sp-inits
@@ -3312,13 +3363,13 @@ f(x) = yt(x)
   (or (simple-atom? e) (symbol? e)
       (and (pair? e)
            (memq (car e) '(quote inert top core globalref outerref
-                                 slot static_parameter boundscheck copyast)))))
+                                 slot static_parameter boundscheck)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin)))))
+           (memq (car e) '(new the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -3424,7 +3475,7 @@ f(x) = yt(x)
                                  (cdr lst))))
                 (simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
                                                 (and (pair? x)
-                                                     (memq (car x) '(quote inert top core globalref outerref copyast boundscheck)))))
+                                                     (memq (car x) '(quote inert top core globalref outerref boundscheck)))))
                                 lst)))
             (let loop ((lst  lst)
                        (vals '()))
@@ -3439,7 +3490,7 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))
                                          (not (simple-atom? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(& quote inert top core globalref outerref copyast boundscheck))))
+                                                   (memq (car arg) '(& quote inert top core globalref outerref boundscheck))))
                                          (not (and (symbol? aval) ;; function args are immutable and always assigned
                                                    (memq aval (lam:args lam))))
                                          (not (and (symbol? arg)
@@ -3511,7 +3562,11 @@ f(x) = yt(x)
                                       (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
-                            (append (if (atom? (cadr e))
+                            (append (if (or (atom? (cadr e))
+                                            (let ((fptr (cadr e)))
+                                              (not (and (length> fptr 1)
+                                                        (eq? (car fptr) 'call)
+                                                        (equal? (cadr fptr) '(core tuple))))))
                                         (compile-args (list (cadr e)) break-labels linearize-args)
                                         (list (cadr e)))
                                     (list-head (cddr e) 4)
@@ -3628,14 +3683,24 @@ f(x) = yt(x)
                (emit `(gotoifnot ,test ,endl))
                (compile (caddr e) break-labels #f #f)
                (emit `(goto ,topl))
-               (mark-label endl)))
+               (mark-label endl))
+             (if value (compile '(null) break-labels value tail)))
+            ((_do_while)
+             (let* ((endl (make-label))
+                    (topl (make&mark-label)))
+               (compile (cadr e) break-labels #f #f)
+               (let ((test (compile-cond (caddr e) break-labels)))
+                 (emit `(gotoifnot ,test ,endl)))
+               (emit `(goto ,topl))
+               (mark-label endl))
+             (if value (compile '(null) break-labels value tail)))
             ((break-block)
              (let ((endl (make-label)))
-               (begin0 (compile (caddr e)
-                                (cons (list (cadr e) endl handler-level)
-                                      break-labels)
-                                value #f)
-                       (mark-label endl)))
+               (compile (caddr e)
+                        (cons (list (cadr e) endl handler-level)
+                              break-labels)
+                        #f #f)
+               (mark-label endl))
              (if value (compile '(null) break-labels value tail)))
             ((break)
              (let ((labl (assq (cadr e) break-labels)))
@@ -3736,7 +3801,7 @@ f(x) = yt(x)
              (if value (error "misplaced \"global\" declaration"))
              (let ((vname (cadr e)))
                (if (var-info-for vname vi) ;; issue #7264
-                   (error (string "`global " vname "`: " vname " is local variable in the enclosing scope"))
+                   (error (string "`global " vname "`: " vname " is a local variable in its enclosing scope"))
                    (emit e))))
             ((local-def) #f)
             ((local) #f)
@@ -3951,37 +4016,62 @@ f(x) = yt(x)
              (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
        ,@(cdddr lam))))
 
-(define (label-to-idx-map body)
-  (let ((tbl (table)))
-    (let loop ((stmts (cdr body))
-               (prev  (cdr body))
-               (i 1))
+(define (compact-ir body)
+  (let ((code         '(body))
+        (locs         '(list))
+        (linetable    '(list))
+        (labltable    (table))
+        (ssavtable    (table))
+        (current-loc  0)
+        (current-file 'none)
+        (current-line 0)
+        (locstack     '())
+        (i            1))
+    (define (emit e)
+      (if (and (null? (cdr linetable))
+               (not (and (pair? e) (eq? (car e) 'meta))))
+          (begin (set! linetable (cons '(line 0 none) linetable))
+                 (set! current-loc 1)))
+      (set! code (cons e code))
+      (set! i (+ i 1))
+      (set! locs (cons current-loc locs)))
+    (let loop ((stmts (cdr body)))
       (if (pair? stmts)
-          (let* ((el  (car stmts))
-                 (nxt (cdr stmts))
-                 ;; is next statement also a label?
-                 (nl  (and (pair? nxt) (pair? (car nxt)) (eq? (caar nxt) 'label))))
-            (if (and (pair? el) (eq? (car el) 'label))
-                (begin (put! tbl (cadr el) i)
-                       (loop nxt
-                             (if nl prev nxt)
-                             (if nl ;; merge adjacent labels
-                                 (begin (set-cdr! prev (cdr nxt))
-                                        i)
-                                 (+ i 1))))
-                (loop nxt nxt (+ i 1))))))
-    tbl))
-
-(define (renumber-labels! lam label2idx)
-  (let loop ((stmts (cdr (lam:body lam))))
-    (if (pair? stmts)
-        (let ((el (car stmts)))
-          (if (pair? el)
-              (case (car el)
-                ((label goto enter) (set-car! (cdr el) (get label2idx (cadr el))))
-                ((gotoifnot)        (set-car! (cddr el) (get label2idx (caddr el))))
-                (else #f)))
-          (loop (cdr stmts))))))
+          (let ((e (car stmts)))
+            (cond ((and (pair? e) (eq? (car e) 'line))
+                   (if (and (= current-line 0) (length= e 2) (pair? linetable))
+                       ;; (line n) after push_loc just updates the line for the new file
+                       (set-car! (cdr (car linetable)) (cadr e))
+                       (begin
+                         (set! current-line (cadr e))
+                         (if (pair? (cddr e))
+                             (set! current-file (caddr e)))
+                         (set! linetable (cons (if (null? locstack)
+                                                   `(line ,current-line ,current-file)
+                                                   `(line ,current-line ,current-file ,(caar locstack)))
+                                               linetable))
+                         (set! current-loc (+ 1 current-loc)))))
+                  ((and (length> e 2) (eq? (car e) 'meta) (eq? (cadr e) 'push_loc))
+                   (set! locstack (cons (list current-loc current-line current-file) locstack))
+                   (set! current-file (caddr e))
+                   (set! current-line 0)
+                   (set! linetable (cons `(line ,current-line ,current-file ,current-loc) linetable))
+                   (set! current-loc (+ 1 current-loc)))
+                  ((and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'pop_loc))
+                   (let ((l (car locstack)))
+                     (set! locstack (cdr locstack))
+                     (set! current-loc (car l))
+                     (set! current-line (cadr l))
+                     (set! current-file (caddr l))))
+                  ((and (pair? e) (eq? (car e) 'label))
+                   (put! labltable (cadr e) i))
+                  ((and (assignment? e) (ssavalue? (cadr e)))
+                   (put! ssavtable (cadr (cadr e)) i)
+                   (emit (caddr e)))
+                  (else
+                   (emit e)))
+            (loop (cdr stmts)))))
+    (vector (reverse code) (reverse locs) (reverse linetable) ssavtable labltable)))
 
 (define (symbol-to-idx-map lst)
   (let ((tbl (table)))
@@ -3992,51 +4082,59 @@ f(x) = yt(x)
     tbl))
 
 (define (renumber-lambda lam)
-  (renumber-labels! lam (label-to-idx-map (lam:body lam)))
-  (define nssavalues 0)
-  (define ssavalue-table (table))
-  (define nslots (length (car (lam:vinfo lam))))
-  (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
-  (define sp-table (symbol-to-idx-map (lam:sp lam)))
-  (define (renumber-slots e)
-    (cond ((symbol? e)
-           (let ((idx (get slot-table e #f)))
-             (if idx `(slot ,idx) e)))
-          ((and (pair? e) (eq? (car e) 'outerref))
-           (let ((idx (get sp-table (cadr e) #f)))
-                (if idx `(static_parameter ,idx) (cadr e))))
-          ((nospecialize-meta? e)
-           ;; convert nospecialize vars to slot numbers
-           `(meta nospecialize ,@(map renumber-slots (cddr e))))
-          ((or (atom? e) (quoted? e)) e)
-          ((ssavalue? e)
-           (let ((idx (or (get ssavalue-table (cadr e) #f)
-                          (begin0 nssavalues
-                                  (put! ssavalue-table (cadr e) nssavalues)
-                                  (set! nssavalues (+ nssavalues 1))))))
-             `(ssavalue ,idx)))
-          ((eq? (car e) 'lambda)
-           (renumber-lambda e))
-          (else (cons (car e)
-                      (map renumber-slots (cdr e))))))
-  (let ((body (renumber-slots (lam:body lam)))
-        (vi   (lam:vinfo lam)))
-    (listify-lambda
-     `(lambda ,(cadr lam)
-        (,(car vi) ,(cadr vi) ,nssavalues ,(last vi))
-        ,body))))
+  (let* ((stuff (compact-ir (lam:body lam)))
+         (code (aref stuff 0))
+         (locs (aref stuff 1))
+         (linetab (aref stuff 2))
+         (ssavalue-table (aref stuff 3))
+         (label-table (aref stuff 4)))
+    (set-car! (cdddr lam) code)
+    (define nslots (length (car (lam:vinfo lam))))
+    (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
+    (define sp-table (symbol-to-idx-map (lam:sp lam)))
+    (define (renumber-stuff e)
+      (cond ((symbol? e)
+             (let ((idx (get slot-table e #f)))
+               (if idx `(slot ,idx) e)))
+            ((and (pair? e) (eq? (car e) 'outerref))
+             (let ((idx (get sp-table (cadr e) #f)))
+               (if idx `(static_parameter ,idx) (cadr e))))
+            ((nospecialize-meta? e)
+             ;; convert nospecialize vars to slot numbers
+             `(meta nospecialize ,@(map renumber-stuff (cddr e))))
+            ((or (atom? e) (quoted? e)) e)
+            ((ssavalue? e)
+             (let ((idx (or (get ssavalue-table (cadr e) #f)
+                            (error "ssavalue with no def"))))
+               `(ssavalue ,idx)))
+            ((memq (car e) '(goto enter))
+             (list* (car e) (get label-table (cadr e)) (cddr e)))
+            ((eq? (car e) 'gotoifnot)
+             `(gotoifnot ,(renumber-stuff (cadr e)) ,(get label-table (caddr e))))
+            ((eq? (car e) 'lambda)
+             (renumber-lambda e))
+            (else (cons (car e)
+                        (map renumber-stuff (cdr e))))))
+    (let ((body (renumber-stuff (lam:body lam)))
+          (vi   (lam:vinfo lam)))
+      (listify-lambda
+       `(lambda ,(cadr lam)
+          (,(car vi) ,(cadr vi) ,(length (cdr body)) ,(last vi))
+          ,body
+          ,locs
+          ,linetab)))))
 
-(define (renumber-slots-and-labels ex)
+(define (compact-and-renumber ex)
   (if (atom? ex) ex
       (if (eq? (car ex) 'lambda)
           (renumber-lambda ex)
           (cons (car ex)
-                (map renumber-slots-and-labels (cdr ex))))))
+                (map compact-and-renumber (cdr ex))))))
 
 ;; expander entry point
 
 (define (julia-expand1 ex)
-  (renumber-slots-and-labels
+  (compact-and-renumber
    (linearize
     (closure-convert
      (analyze-variables!

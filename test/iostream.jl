@@ -33,7 +33,7 @@
         for (byte,char) in zip(1:4, ('@','߷','࿊','𐋺'))
             append_to_file("abcdef$char")
             @test Base.codelen(char) == byte
-            @test !eof(skipchars(isalpha, file))
+            @test !eof(skipchars(isletter, file))
             @test read(file, Char) == char
         end
     end

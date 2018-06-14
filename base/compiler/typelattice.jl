@@ -127,6 +127,9 @@ function ⊑(@nospecialize(a), @nospecialize(b))
         end
         return isa(a.val, widenconst(b))
     elseif isa(b, Const)
+        if isa(a, DataType) && isdefined(a, :instance)
+            return a.instance === b.val
+        end
         return a === Bottom
     elseif !(isa(a, Type) || isa(a, TypeVar)) ||
            !(isa(b, Type) || isa(b, TypeVar))

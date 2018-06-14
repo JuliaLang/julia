@@ -251,11 +251,12 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 
 # special cases of vecnorm; note that they don't need to handle isempty(x)
 function generic_vecnormMinusInf(x)
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     minabs = norm(v)
-    while !done(x, s)
-        (v, s) = next(x, s)
+    while true
+        y = iterate(x, s)
+        y === nothing && break
+        (v, s) = y
         vnorm = norm(v)
         minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
     end
@@ -263,11 +264,12 @@ function generic_vecnormMinusInf(x)
 end
 
 function generic_vecnormInf(x)
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     maxabs = norm(v)
-    while !done(x, s)
-        (v, s) = next(x, s)
+    while true
+        y = iterate(x, s)
+        y === nothing && break
+        (v, s) = y
         vnorm = norm(v)
         maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
     end
@@ -275,13 +277,14 @@ function generic_vecnormInf(x)
 end
 
 function generic_vecnorm1(x)
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     av = float(norm(v))
     T = typeof(av)
     sum::promote_type(Float64, T) = av
-    while !done(x, s)
-        (v, s) = next(x, s)
+    while true
+        y = iterate(x, s)
+        y === nothing && break
+        (v, s) = y
         sum += norm(v)
     end
     return convert(T, sum)
@@ -295,20 +298,23 @@ norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
     (maxabs == 0 || isinf(maxabs)) && return maxabs
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
     if isfinite(_length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
         sum::promote_type(Float64, T) = norm_sqr(v)
-        while !done(x, s)
-            (v, s) = next(x, s)
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
             sum += norm_sqr(v)
         end
         return convert(T, sqrt(sum))
     else
         sum = abs2(norm(v)/maxabs)
-        while !done(x, s)
-            (v, s) = next(x, s)
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
             sum += (norm(v)/maxabs)^2
         end
         return convert(T, maxabs*sqrt(sum))
@@ -318,8 +324,7 @@ end
 # Compute L_p norm ‖x‖ₚ = sum(abs(x).^p)^(1/p)
 # (Not technically a "norm" for p < 1.)
 function generic_vecnormp(x, p)
-    s = start(x)
-    (v, s) = next(x, s)
+    (v, s) = iterate(x)::Tuple
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? vecnormInf(x) : vecnormMinusInf(x)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
@@ -330,15 +335,19 @@ function generic_vecnormp(x, p)
     spp::promote_type(Float64, T) = p
     if -1 <= p <= 1 || (isfinite(_length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
         sum::promote_type(Float64, T) = norm(v)^spp
-        while !done(x, s)
-            (v, s) = next(x, s)
+        while true
+            y = iterate(x, s)
+            y === nothing && break
+            (v, s) = y
             sum += norm(v)^spp
         end
         return convert(T, sum^inv(spp))
     else # rescaling
         sum = (norm(v)/maxabs)^spp
-        while !done(x, s)
-            (v, s) = next(x, s)
+        while true
+            y = iterate(x, s)
+            y == nothing && break
+            (v, s) = y
             sum += (norm(v)/maxabs)^spp
         end
         return convert(T, maxabs*sum^inv(spp))
@@ -626,29 +635,30 @@ julia> vecdot(x, y)
 ```
 """
 function vecdot(x, y) # arbitrary iterables
-    ix = start(x)
-    if done(x, ix)
-        if !isempty(y)
+    ix = iterate(x)
+    iy = iterate(y)
+    if ix === nothing
+        if iy !== nothing
             throw(DimensionMismatch("x and y are of different lengths!"))
         end
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
-    iy = start(y)
-    if done(y, iy)
+    if iy === nothing
         throw(DimensionMismatch("x and y are of different lengths!"))
     end
-    (vx, ix) = next(x, ix)
-    (vy, iy) = next(y, iy)
+    (vx, xs) = ix
+    (vy, ys) = iy
     s = dot(vx, vy)
-    while !done(x, ix)
-        if done(y, iy)
-            throw(DimensionMismatch("x and y are of different lengths!"))
+    while true
+        ix = iterate(x, xs)
+        iy = iterate(y, ys)
+        if (ix == nothing) || (iy == nothing)
+            break
         end
-        (vx, ix) = next(x, ix)
-        (vy, iy) = next(y, iy)
+        (vx, xs), (vy, ys) = ix, iy
         s += dot(vx, vy)
     end
-    if !done(y, iy)
+    if !(iy == nothing && ix == nothing)
             throw(DimensionMismatch("x and y are of different lengths!"))
     end
     return s
@@ -678,18 +688,18 @@ function dot(x::AbstractVector, y::AbstractVector)
     if length(x) != length(y)
         throw(DimensionMismatch("dot product arguments have lengths $(length(x)) and $(length(y))"))
     end
-    ix = start(x)
-    if done(x, ix)
+    ix = iterate(x)
+    if ix === nothing
         # we only need to check the first vector, since equal lengths have been asserted
         return zero(eltype(x))'zero(eltype(y))
     end
-    @inbounds (vx, ix) = next(x, ix)
-    @inbounds (vy, iy) = next(y, start(y))
-    s = vx'vy
-    while !done(x, ix)
-        @inbounds (vx, ix) = next(x, ix)
-        @inbounds (vy, iy) = next(y, iy)
-        s += vx'vy
+    iy = iterate(y)
+    s = ix[1]'iy[1]
+    ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
+    while ix != nothing
+        s += ix[1]'iy[1]
+        ix = iterate(x, ix[2])
+        iy = iterate(y, iy[2])
     end
     return s
 end
@@ -852,9 +862,9 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         if istriu(A)
             return UpperTriangular(A) \ B
         end
-        return lufact(A) \ B
+        return lu(A) \ B
     end
-    return qrfact(A,Val(true)) \ B
+    return qr(A,Val(true)) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
@@ -1111,46 +1121,6 @@ isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)
 isdiag(x::Number) = true
 
 
-"""
-    linreg(x, y)
-
-Perform simple linear regression using Ordinary Least Squares. Returns `a` and `b` such
-that `a + b*x` is the closest straight line to the given points `(x, y)`, i.e., such that
-the squared error between `y` and `a + b*x` is minimized.
-
-# Examples
-```julia
-using PyPlot
-x = 1.0:12.0
-y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
-a, b = linreg(x, y)          # Linear regression
-plot(x, y, "o")              # Plot (x, y) points
-plot(x, a + b*x)             # Plot line determined by linear regression
-```
-
-See also:
-
-`\\`, [`cov`](@ref), [`std`](@ref), [`mean`](@ref).
-
-"""
-function linreg(x::AbstractVector, y::AbstractVector)
-    # Least squares given
-    # Y = a + b*X
-    # where
-    # b = cov(X, Y)/var(X)
-    # a = mean(Y) - b*mean(X)
-    if size(x) != size(y)
-        throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), " *
-            "but these must be the same size"))
-    end
-    mx = mean(x)
-    my = mean(y)
-    # don't need to worry about the scaling (n vs n - 1) since they cancel in the ratio
-    b = Base.covm(x, mx, y, my)/Base.varm(x, mx)
-    a = my - b*mx
-    return (a, b)
-end
-
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
@@ -1167,9 +1137,9 @@ end
 function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
     if _length(rx) != _length(ry)
         throw(DimensionMismatch("rx has length $(_length(rx)), but ry has length $(_length(ry))"))
-    elseif !checkindex(Bool, linearindices(x), rx)
+    elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
         throw(BoundsError(x, rx))
-    elseif !checkindex(Bool, linearindices(y), ry)
+    elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
         throw(BoundsError(y, ry))
     end
     for (IY, IX) in zip(eachindex(ry), eachindex(rx))
@@ -1260,7 +1230,7 @@ function det(A::AbstractMatrix{T}) where T
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
     end
-    return det(lufact(A))
+    return det(lu(A; check = false))
 end
 det(x::Number) = x
 
@@ -1295,7 +1265,7 @@ julia> logabsdet(B)
 (0.6931471805599453, 1.0)
 ```
 """
-logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
+logabsdet(A::AbstractMatrix) = logabsdet(lu(A))
 
 """
     logdet(M)

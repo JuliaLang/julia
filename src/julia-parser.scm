@@ -10,7 +10,7 @@
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
            '(:= ~ $=)))
 ;; comma - higher than assignment outside parentheses, lower when inside
-(define prec-pair '(=>))
+(define prec-pair (add-dots '(=>)))
 (define prec-conditional '(?))
 (define prec-arrow       (append!
                           '(-- -->)
@@ -1969,11 +1969,9 @@
   (cond ((eq? (car e) 'tuple)  (map =-to-kw (cdr e)))
         ((eq? (car e) 'block)
          (cond ((length= e 1) '())
-               ((length= e 2) (list (cadr e)))
+               ((length= e 2) (list (=-to-kw (cadr e))))
                ((length= e 3)
-                (if (assignment? (caddr e))
-                    `((parameters (kw ,@(cdr (caddr e)))) ,(cadr e))
-                    `((parameters ,(caddr e)) ,(cadr e))))
+                `((parameters ,(=-to-kw (caddr e))) ,(=-to-kw (cadr e))))
                (else
                 (error "more than one semicolon in argument list"))))
         (else
@@ -2390,14 +2388,7 @@
                                  ,startloc
                                  ,@(parse-space-separated-exprs s)))
                   (let ((call (parse-call-chain s head #t)))
-                    (if (and (pair? call) (eq? (car call) 'call))
-                        `(macrocall ,(macroify-name (cadr call))
-                                    ,startloc
-                                    ,@(cddr call))
-                        (maybe-docstring
-                         s `(macrocall ,(macroify-name call)
-                                       ,startloc
-                                       ,@(parse-space-separated-exprs s)))))))))
+                    (macroify-call s call startloc))))))
           ;; command syntax
           ((eqv? t #\`)
            (take-token s)
@@ -2421,6 +2412,19 @@
          `(|.| ,(cadr e)
                (quote ,(apply macroify-name (cadr (caddr e)) suffixes))))
         (else (error (string "invalid macro usage \"@(" (deparse e) ")\"" )))))
+
+(define (macroify-call s call startloc)
+  (cond ((and (pair? call) (eq? (car call) 'call))
+         `(macrocall ,(macroify-name (cadr call))
+                     ,startloc
+                     ,@(cddr call)))
+        ((and (pair? call) (eq? (car call) 'do))
+         `(do ,(macroify-call s (cadr call) startloc) ,(caddr call)))
+        (else
+         (maybe-docstring
+          s `(macrocall ,(macroify-name call)
+                        ,startloc
+                        ,@(parse-space-separated-exprs s))))))
 
 (define (called-macro-name e)
   (if (and (length= e 3) (eq? (car e) '|.|)

@@ -21,7 +21,7 @@ function prompt(msg::AbstractString; default::AbstractString="", password::Bool=
     Base.depwarn(string(
         "`LibGit2.prompt(msg::AbstractString; default::AbstractString=\"\", password::Bool=false)` is deprecated, use ",
         "`result = Base.prompt(msg, default=default, password=password); result === nothing ? \"\" : result` instead."), :prompt)
-    coalesce(Base.prompt(msg, default=default, password=password), "")
+    something(Base.prompt(msg, default=default, password=password), "")
 end
 
 # PR #26437
@@ -39,6 +39,12 @@ end
 
 @eval Base @deprecate merge!(repo::$(GitRepo), args...; kwargs...) $(LibGit2.merge!)(repo, args...; kwargs...)
 @eval Base @deprecate push!(w::$(GitRevWalker), arg) $(LibGit2.push!)(w, arg)
+@eval Base @deprecate count(diff::$(GitDiff)) $(LibGit2.count)(diff)
+@eval Base @deprecate count(idx::$(GitIndex)) $(LibGit2.count)(idx)
+@eval Base @deprecate count(rb::$(GitRebase)) $(LibGit2.count)(rb)
+@eval Base @deprecate count(tree::$(GitTree)) $(LibGit2.count)(tree)
+@eval Base @deprecate count(f::Function, walker::$(GitRevWalker); kwargs...) $(LibGit2.count)(f, walker; kwargs...)
+@eval Base @deprecate map(f::Function, walker::$(GitRevWalker); kwargs...) $(LibGit2.map)(f, walker; kwargs...)
 
 # PR #24594
 @deprecate AbstractCredentials AbstractCredential false

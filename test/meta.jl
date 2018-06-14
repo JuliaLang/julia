@@ -177,7 +177,6 @@ let oldout = stdout
                 1: Symbol +
                 2: Symbol x
                 3: Symbol y
-              typ: Any
             """
     finally
         redirect_stdout(oldout)

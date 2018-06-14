@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # accumulate_pairwise slightly slower then accumulate, but more numerically
 # stable in certain situations (e.g. sums).
 # it does double the number of operations compared to accumulate,
@@ -19,8 +21,8 @@ function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, 
 end
 
 function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector) where Op
-    li = linearindices(v)
-    li != linearindices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))
+    li = LinearIndices(v)
+    li != LinearIndices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))
     n = length(li)
     n == 0 && return result
     i1 = first(li)
@@ -379,8 +381,8 @@ end
 
 function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
-    inds = linearindices(A)
-    inds == linearindices(B) || throw(DimensionMismatch("linearindices of A and B don't match"))
+    inds = LinearIndices(A)
+    inds == LinearIndices(B) || throw(DimensionMismatch("LinearIndices of A and B don't match"))
     dim > 1 && return copyto!(B, A)
     i1 = inds[1]
     cur_val = reduce_first(op, v1)

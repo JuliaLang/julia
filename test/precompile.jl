@@ -142,6 +142,9 @@ try
 
               g() = override(1.0)
               Test.@test g() === 2.0 # compile this
+
+              const abigfloat_f() = big"12.34"
+              const abigfloat_x = big"43.21"
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -164,6 +167,10 @@ try
         @test Foo.override(1.0e0) == Float64('a')
         @test Foo.override(1.0f0) == 'b'
         @test Foo.override(UInt(1)) == 2
+
+        # Issue #15722
+        @test Foo.abigfloat_f()::BigFloat == big"12.34"
+        @test (Foo.abigfloat_x::BigFloat + 21) == big"64.21"
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
@@ -219,7 +226,7 @@ try
                 [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
                  :Future, :IterativeEigensolvers, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :Pkg3, :LibGit2, :SHA, :UUIDs, :Sockets]))
+                 :Unicode, :REPL, :InteractiveUtils, :OldPkg, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2

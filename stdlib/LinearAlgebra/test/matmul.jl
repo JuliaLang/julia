@@ -402,4 +402,44 @@ module TestPR18218
     @test d == TypeC[5, 11]
 end
 
+@testset "VecOrMat of Vectors" begin
+    X   = rand(ComplexF64, 3, 3)
+    Xv1 = [X[:,j] for i in 1:1, j in 1:3]
+    Xv2 = [transpose(X[i,:]) for i in 1:3]
+    Xv3 = [transpose(X[i,:]) for i in 1:3, j in 1:1]
+
+    XX   = X*X
+    XtX  = transpose(X)*X
+    XcX  = X'*X
+    XXt  = X*transpose(X)
+    XtXt = transpose(XX)
+    XcXt = X'*transpose(X)
+    XXc  = X*X'
+    XtXc = transpose(X)*X'
+    XcXc = X'*X'
+
+    @test (Xv1*Xv2)[1] ≈ XX
+    @test (Xv1*Xv3)[1] ≈ XX
+    @test  transpose(Xv1)*Xv1     ≈ XtX
+    @test  transpose(Xv2)*Xv2     ≈ XtX
+    @test (transpose(Xv3)*Xv3)[1] ≈ XtX
+    @test  Xv1'*Xv1     ≈ XcX
+    @test  Xv2'*Xv2     ≈ XcX
+    @test (Xv3'*Xv3)[1] ≈ XcX
+    @test (Xv1*transpose(Xv1))[1] ≈ XXt
+    @test  Xv2*transpose(Xv2)     ≈ XXt
+    @test  Xv3*transpose(Xv3)     ≈ XXt
+    @test transpose(Xv1)*transpose(Xv2) ≈ XtXt
+    @test transpose(Xv1)*transpose(Xv3) ≈ XtXt
+    @test  Xv1'*transpose(Xv2) ≈ XcXt
+    @test  Xv1'*transpose(Xv3) ≈ XcXt
+    @test (Xv1*Xv1')[1] ≈ XXc
+    @test  Xv2*Xv2'     ≈ XXc
+    @test  Xv3*Xv3'     ≈ XXc
+    @test transpose(Xv1)*Xv2' ≈ XtXc
+    @test transpose(Xv1)*Xv3' ≈ XtXc
+    @test Xv1'*Xv2' ≈ XcXc
+    @test Xv1'*Xv3' ≈ XcXc
+end
+
 end # module TestMatmul

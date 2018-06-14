@@ -1183,7 +1183,7 @@ Any
 If you apply [`supertype`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
 is raised:
 
-```jldoctest
+```jldoctest; filter = r"Closest candidates.*"s
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:

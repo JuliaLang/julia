@@ -875,7 +875,6 @@ void jl_get_builtin_hooks(void)
     jl_methoderror_type = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type = (jl_datatype_t*)core("LoadError");
     jl_initerror_type = (jl_datatype_t*)core("InitError");
-    jl_lineinfonode_type = (jl_datatype_t*)core("LineInfoNode");
 }
 
 void jl_get_builtins(void)
@@ -891,6 +890,7 @@ void jl_get_builtins(void)
     jl_builtin_arrayset = core("arrayset");     jl_builtin_arraysize = core("arraysize");
     jl_builtin_apply_type = core("apply_type"); jl_builtin_applicable = core("applicable");
     jl_builtin_invoke = core("invoke");         jl_builtin__expr = core("_expr");
+    jl_builtin_ifelse = core("ifelse");
 }
 
 #ifdef __cplusplus

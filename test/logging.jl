@@ -296,8 +296,8 @@ end
 
 # Issue #26273
 let m = Module(:Bare26273i, false)
-    eval(m, :(import Base: @error))
-    @test_logs (:error, "Hello") eval(m, quote
+    Core.eval(m, :(import Base: @error))
+    @test_logs (:error, "Hello") Core.eval(m, quote
         @error "Hello"
     end)
 end

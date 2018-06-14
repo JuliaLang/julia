@@ -108,7 +108,7 @@ julia> round(357.913; sigdigits=4, base=2)
     julia> x < 115//100
     true
 
-    julia> round(x, 1)
+    julia> round(x, digits=1)
     1.2
     ```
 
@@ -131,11 +131,10 @@ trunc(x::Real; kwargs...) = round(x, RoundToZero; kwargs...)
 floor(x::Real; kwargs...) = round(x, RoundDown; kwargs...)
 ceil(x::Real; kwargs...)  = round(x, RoundUp; kwargs...)
 
-# avoid recursive calls
-round(x::Real, r::RoundingMode) = throw(MethodError(round, (x,r)))
 round(x::Integer, r::RoundingMode) = x
 
-_round(x, r::RoundingMode, digits::Nothing, sigdigits::Nothing, base) = round(x, r)
+# if we hit this method, it means that no `round(x, r)` method is defined
+_round(x::Real, r::RoundingMode, digits::Nothing, sigdigits::Nothing, base) = throw(MethodError(round, (x,r)))
 
 # round x to multiples of 1/invstep
 function _round_invstep(x, invstep, r::RoundingMode)

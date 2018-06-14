@@ -74,7 +74,7 @@ macro enum(T, syms...)
     typename = T
     if isa(T, Expr) && T.head == :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
         typename = T.args[1]
-        basetype = eval(__module__, T.args[2])
+        basetype = Core.eval(__module__, T.args[2])
         if !isa(basetype, DataType) || !(basetype <: Integer) || !isbitstype(basetype)
             throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer primitive type"))
         end
@@ -98,7 +98,7 @@ macro enum(T, syms...)
         elseif isa(s, Expr) &&
                (s.head == :(=) || s.head == :kw) &&
                length(s.args) == 2 && isa(s.args[1], Symbol)
-            i = eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
+            i = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
                 throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
             end
@@ -162,7 +162,8 @@ macro enum(T, syms...)
             Base.show_datatype(io, t)
             print(io, ":")
             for (sym, i) in $vals
-                print(io, "\n", sym, " = ", i)
+                print(io, "\n", sym, " = ")
+                show(io, i)
             end
         end
     end

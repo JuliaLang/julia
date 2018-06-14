@@ -72,6 +72,7 @@ for UI = (:UInt10, :UInt10Raw, :UInt23, :UInt23Raw, :UInt52, :UInt52Raw,
     end
 end
 
+Base.eltype(::Type{<:UniformBits{T}}) where {T} = T
 
 ### floats
 

@@ -12,8 +12,8 @@ using Base.Sort: Forward
 using LinearAlgebra
 
 import Base: +, -, *, \, /, &, |, xor, ==
-import LinearAlgebra: mul!, ldiv!, rdiv!, chol, adjoint!, diag, dot, eig,
-    issymmetric, istril, istriu, lu, tr, transpose!, tril!, triu!,
+import LinearAlgebra: mul!, ldiv!, rdiv!, chol, adjoint!, diag, dot, eigen,
+    issymmetric, istril, istriu, lu, tr, transpose!, tril!, triu!, vecdot,
     vecnorm, cond, diagm, factorize, ishermitian, norm, lmul!, rmul!, tril, triu
 
 import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,

@@ -98,9 +98,8 @@ release-candidate: release testall
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/contrib/add_license_to_files.jl #add license headers
 	@#Check documentation
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/NEWS-update.jl #Add missing cross-references to NEWS.md
-	@$(MAKE) -C $(BUILDROOT)/doc html
+	@$(MAKE) -C $(BUILDROOT)/doc html doctest=true linkcheck=true
 	@$(MAKE) -C $(BUILDROOT)/doc pdf
-	@$(MAKE) -C $(BUILDROOT)/doc check
 
 	@# Check to see if the above make invocations changed anything important
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -250,6 +249,19 @@ endif
 endif
 endif
 
+ifeq ($(OS),FreeBSD)
+define std_so
+julia-deps: | $$(build_libdir)/lib$(1).so
+$$(build_libdir)/lib$(1).so: | $$(build_libdir)
+	$$(INSTALL_M) $$(GCCPATH)/lib$(1).so* $$(build_libdir)
+JL_LIBS += $(1)
+endef
+
+$(eval $(call std_so,gfortran))
+$(eval $(call std_so,gcc_s))
+$(eval $(call std_so,quadmath))
+endif # FreeBSD
+
 ifeq ($(OS),WINNT)
 define std_dll
 julia-deps: | $$(build_bindir)/lib$(1).dll $$(build_depsbindir)/lib$(1).dll
@@ -259,7 +271,14 @@ $$(build_depsbindir)/lib$(1).dll: | $$(build_depsbindir)
 	cp $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_depsbindir)
 JL_LIBS += $(1)
 endef
-$(eval $(call std_dll,gfortran-3))
+
+# Given a list of space-separated libraries, return the first library name that is
+# correctly found through `pathsearch`.
+define select_std_dll
+$(firstword $(foreach name,$(1),$(if $(call pathsearch,lib$(name).dll,$(STD_LIB_PATH)),$(name),)))
+endef
+
+$(eval $(call std_dll,$(call select_std_dll,gfortran-3 gfortran-4 gfortran-5)))
 $(eval $(call std_dll,quadmath-0))
 $(eval $(call std_dll,stdc++-6))
 ifeq ($(ARCH),i686)
@@ -358,6 +377,11 @@ endif
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
 	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia.$(SHLIB_EXT),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
 	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT),sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
+endif
+
+	# On FreeBSD, remove the build's libdir from each library's RPATH
+ifeq ($(OS),FreeBSD)
+	$(JULIAHOME)/contrib/fixup-rpath.sh $(build_depsbindir)/patchelf $(DESTDIR)$(libdir) $(build_libdir)
 endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)

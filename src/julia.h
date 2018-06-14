@@ -506,7 +506,6 @@ typedef struct {
     JL_DATA_TYPE
     jl_sym_t *head;
     jl_array_t *args;
-    jl_value_t *etype;
 } jl_expr_t;
 
 // constants and type objects -------------------------------------------------
@@ -599,10 +598,10 @@ extern JL_DLLEXPORT jl_unionall_t *jl_namedtuple_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_array_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_array_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_array_symbol_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_value_t *jl_array_int_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_expr_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_globalref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_labelnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_phinode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_pinode_type JL_GLOBALLY_ROOTED;
@@ -823,7 +822,6 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 // Not using jl_fieldref to avoid allocations
 #define jl_linenode_line(x) (((intptr_t*)(x))[0])
 #define jl_linenode_file(x) (((jl_value_t**)(x))[1])
-#define jl_labelnode_label(x) (((intptr_t*)(x))[0])
 #define jl_slot_number(x) (((intptr_t*)(x))[0])
 #define jl_typedslot_get_type(x) (((jl_value_t**)(x))[1])
 #define jl_gotonode_label(x) (((intptr_t*)(x))[0])
@@ -948,7 +946,6 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_slot(v)        (jl_typeis(v,jl_slotnumber_type) || jl_typeis(v,jl_typedslot_type))
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_globalref(v)   jl_typeis(v,jl_globalref_type)
-#define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_pinode(v)      jl_typeis(v,jl_pinode_type)
 #define jl_is_phinode(v)     jl_typeis(v,jl_phinode_type)

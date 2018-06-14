@@ -9,7 +9,7 @@ import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
 import Base: ensureroom, peek, show, AnyDict, position
-using Base: coalesce
+using Base: something
 
 abstract type TextInterface end
 abstract type ModeState end
@@ -258,7 +258,7 @@ function common_prefix(completions)
     c1 = completions[1]
     isempty(c1) && return ret
     i = 1
-    cc, nexti = next(c1, i)
+    cc, nexti = iterate(c1, i)
     while true
         for c in completions
             (i > lastindex(c) || c[i] != cc) && return ret
@@ -266,7 +266,7 @@ function common_prefix(completions)
         ret = string(ret, cc)
         i >= lastindex(c1) && return ret
         i = nexti
-        cc, nexti = next(c1, i)
+        cc, nexti = iterate(c1, i)
     end
 end
 
@@ -584,7 +584,7 @@ function edit_move_up(buf::IOBuffer)
     npos === nothing && return false # we're in the first line
     # We're interested in character count, not byte count
     offset = length(content(buf, npos => position(buf)))
-    npos2 = coalesce(findprev(isequal(UInt8('\n')), buf.data, npos-1), 0)
+    npos2 = something(findprev(isequal(UInt8('\n')), buf.data, npos-1), 0)
     seek(buf, npos2)
     for _ = 1:offset
         pos = position(buf)
@@ -603,7 +603,7 @@ function edit_move_up(s)
 end
 
 function edit_move_down(buf::IOBuffer)
-    npos = coalesce(findprev(isequal(UInt8('\n')), buf.data[1:buf.size], position(buf)), 0)
+    npos = something(findprev(isequal(UInt8('\n')), buf.data[1:buf.size], position(buf)), 0)
     # We're interested in character count, not byte count
     offset = length(String(buf.data[(npos+1):(position(buf))]))
     npos2 = findnext(isequal(UInt8('\n')), buf.data[1:buf.size], position(buf)+1)
@@ -700,7 +700,7 @@ function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_in
     buf = buffer(s)
     if align < 0
         beg = beginofline(buf)
-        align = min(coalesce(findnext(_notspace, buf.data[beg+1:buf.size], 1), 0) - 1,
+        align = min(something(findnext(_notspace, buf.data[beg+1:buf.size], 1), 0) - 1,
                     position(buf) - beg) # indentation must not increase
         align < 0 && (align = buf.size-beg)
     end
@@ -727,7 +727,7 @@ const _space = UInt8(' ')
 
 _notspace(c) = c != _space
 
-beginofline(buf, pos=position(buf)) = coalesce(findprev(isequal(_newline), buf.data, pos), 0)
+beginofline(buf, pos=position(buf)) = something(findprev(isequal(_newline), buf.data, pos), 0)
 
 function lastindexline(buf, pos=position(buf))
     eol = findnext(isequal(_newline), buf.data[pos+1:buf.size], 1)
@@ -745,12 +745,12 @@ function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=false)
     if align && c == ' ' # maybe delete multiple spaces
         beg = beginofline(buf, newpos)
         align = textwidth(String(buf.data[1+beg:newpos])) % 4
-        nonspace = coalesce(findprev(_notspace, buf.data, newpos), 0)
+        nonspace = something(findprev(_notspace, buf.data, newpos), 0)
         if newpos - align >= nonspace
             newpos -= align
             seek(buf, newpos)
             if adjust
-                spaces = coalesce(findnext(_notspace, buf.data[newpos+2:buf.size], 1), 0)
+                spaces = something(findnext(_notspace, buf.data[newpos+2:buf.size], 1), 0)
                 oldpos = spaces == 0 ? buf.size :
                     buf.data[newpos+1+spaces] == _newline ? newpos+spaces :
                     newpos + min(spaces, 4)
@@ -1107,7 +1107,7 @@ end
 # compute the number of spaces from b till the next non-space on the right
 # (which can also be "end of line" or "end of buffer")
 function leadingspaces(buf::IOBuffer, b::Int)::Int
-    ls = coalesce(findnext(_notspace, buf.data, b+1), 0)-1
+    ls = something(findnext(_notspace, buf.data, b+1), 0)-1
     ls == -1 && (ls = buf.size)
     ls -= b
     ls
@@ -1204,25 +1204,25 @@ normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
     wildcard in key && error("Matching '\U10f7ff' not supported.")
     buf = IOBuffer()
-    i = start(key)
-    while !done(key, i)
-        c, i = next(key, i)
+    i = firstindex(key)
+    while i <= ncodeunits(key)
+        c, i = iterate(key, i)
         if c == '*'
             write(buf, wildcard)
         elseif c == '^'
-            c, i = next(key, i)
+            c, i = iterate(key, i)
             write(buf, uppercase(c)-64)
         elseif c == '\\'
-            c, i = next(key, i)
+            c, i = iterate(key, i)
             if c == 'C'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 @assert c == '-'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 write(buf, uppercase(c)-64)
             elseif c == 'M'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 @assert c == '-'
-                c, i = next(key, i)
+                c, i = iterate(key, i)
                 write(buf, '\e')
                 write(buf, c)
             end
@@ -1247,14 +1247,15 @@ function normalize_keys(keymap::Dict)
 end
 
 function add_nested_key!(keymap::Dict, key, value; override = false)
-    i = start(key)
-    while !done(key, i)
-        c, i = next(key, i)
-        if !override && c in keys(keymap) && (done(key, i) || !isa(keymap[c], Dict))
+    y = iterate(key)
+    while y !== nothing
+        c, i = y
+        y = iterate(key, i)
+        if !override && c in keys(keymap) && (y === nothing || !isa(keymap[c], Dict))
             error("Conflicting definitions for keyseq " * escape_string(key) *
                   " within one keymap")
         end
-        if done(key, i)
+        if y === nothing
             keymap[c] = value
             break
         elseif !(c in keys(keymap) && isa(keymap[c], Dict))
@@ -1298,7 +1299,7 @@ end
 keymap_fcn(f::Nothing, c) = (s, p) -> return :ok
 function keymap_fcn(f::Function, c)
     return function (s, p)
-        r = eval(Expr(:call,f,s, p, c))
+        r = Base.invokelatest(f, s, p, c)
         if isa(r, Symbol)
             return r
         else
@@ -1680,7 +1681,9 @@ function complete_line(s::SearchState, repeats)
         prev_pos = position(s)
         push_undo(s)
         edit_splice!(s, prev_pos-sizeof(partial) => prev_pos, completions[1])
+        return true
     end
+    false
 end
 
 function accept_result(s, p)
@@ -1838,7 +1841,7 @@ function move_line_start(s::MIState)
     if s.key_repeats > 0
         move_input_start(s)
     else
-        seek(buf, coalesce(findprev(isequal(UInt8('\n')), buf.data, curpos), 0))
+        seek(buf, something(findprev(isequal(UInt8('\n')), buf.data, curpos), 0))
     end
 end
 
@@ -1910,7 +1913,7 @@ end
 function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_spaces)
     i = position(buf)
     if jump_spaces && i < buf.size && buf.data[i+1] == _space
-        spaces = coalesce(findnext(_notspace, buf.data[i+1:buf.size], 1), 0)
+        spaces = something(findnext(_notspace, buf.data[i+1:buf.size], 1), 0)
         if delete_trailing && (spaces == 0 || buf.data[i+spaces] == _newline)
             edit_splice!(buf, i => (spaces == 0 ? buf.size : i+spaces-1))
         else
@@ -2210,7 +2213,7 @@ function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=ini
             @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
-        eval(Main,
+        Core.eval(Main,
             Expr(:body,
                 Expr(:return,
                      Expr(:call,

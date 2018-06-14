@@ -12,6 +12,7 @@ tc(r1,r2) = false
 
 bitcheck(b::BitArray) = Test._check_bitarray_consistency(b)
 bitcheck(x) = true
+bcast_setindex!(b, x, I...) = (b[I...] .= x; b)
 
 function check_bitop_call(ret_type, func, args...; kwargs...)
     r1 = func(args...; kwargs...)
@@ -156,7 +157,7 @@ timesofar("conversions")
         b1 = bitrand(v1)
         @test_throws BoundsError resize!(b1, -1)
         @check_bit_operation resize!(b1, v1 ÷ 2) BitVector
-        gr(b) = (resize!(b, v1)[(v1÷2):end] = 1; b)
+        gr(b) = (resize!(b, v1)[(v1÷2):end] .= 1; b)
         @check_bit_operation gr(b1) BitVector
     end
 
@@ -251,39 +252,41 @@ timesofar("constructors")
 
         for j in [1, 63, 64, 65, 127, 128, 129, 191, 192, 193, l-1]
             x = rand(Bool)
-            @check_bit_operation setindex!(b1, x, 1:j) T
+            @check_bit_operation fill!(b1, x) T
+            rand!(b1)
+            @check_bit_operation bcast_setindex!(b1, x, 1:j)
             b2 = bitrand(j)
             for bb in (b2, view(b2, 1:j), view(Array{Any}(b2), :))
                 @check_bit_operation setindex!(b1, bb, 1:j) T
             end
             x = rand(Bool)
-            @check_bit_operation setindex!(b1, x, j+1:l) T
+            @check_bit_operation bcast_setindex!(b1, x, j+1:l) T
             b2 = bitrand(l-j)
             @check_bit_operation setindex!(b1, b2, j+1:l) T
         end
         for j in [1, 63, 64, 65, 127, 128, 129, div(l,2)]
             m1 = j:(l-j)
             x = rand(Bool)
-            @check_bit_operation setindex!(b1, x, m1) T
+            @check_bit_operation bcast_setindex!(b1, x, m1) T
             b2 = bitrand(length(m1))
             @check_bit_operation setindex!(b1, b2, m1) T
         end
         x = rand(Bool)
-        @check_bit_operation setindex!(b1, x, 1:100) T
+        @check_bit_operation bcast_setindex!(b1, x, 1:100) T
         b2 = bitrand(100)
         @check_bit_operation setindex!(b1, b2, 1:100) T
 
         y = rand(0.0:1.0)
-        @check_bit_operation setindex!(b1, y, 1:100) T
+        @check_bit_operation bcast_setindex!(b1, y, 1:100) T
 
         t1 = findall(bitrand(l))
         x = rand(Bool)
-        @check_bit_operation setindex!(b1, x, t1) T
+        @check_bit_operation bcast_setindex!(b1, x, t1) T
         b2 = bitrand(length(t1))
         @check_bit_operation setindex!(b1, b2, t1) T
 
         y = rand(0.0:1.0)
-        @check_bit_operation setindex!(b1, y, t1) T
+        @check_bit_operation bcast_setindex!(b1, y, t1) T
     end
 
     @testset "multidimensional" begin
@@ -405,8 +408,16 @@ timesofar("constructors")
 
         for (b2, k1, k2) in Channel(gen_setindex_data)
             # println(typeof(b2), " ", typeof(k1), " ", typeof(k2)) # uncomment to debug
-            for bb in ((b2 isa AbstractArray) ? (b2, view(b2, :), view(Array{Any}(b2), :)) : (b2,))
-                @check_bit_operation setindex!(b1, bb, k1, k2) BitMatrix
+            if b2 isa AbstractArray
+                for bb in (b2, view(b2, :), view(Array{Any}(b2), :))
+                    @check_bit_operation setindex!(b1, bb, k1, k2) BitMatrix
+                end
+            else
+                if k1 isa Integer && k2 isa Integer
+                    @check_bit_operation setindex!(b1, b2, k1, k2) BitMatrix
+                else
+                    @check_bit_operation bcast_setindex!(b1, b2, k1, k2) BitMatrix
+                end
             end
         end
 
@@ -415,7 +426,7 @@ timesofar("constructors")
         @check_bit_operation setindex!(b1, b2, m1, 1:m2) BitMatrix
         x = rand(Bool)
         b2 = bitrand(1, m2, 1)
-        @check_bit_operation setindex!(b1, x, m1, 1:m2, 1)  BitMatrix
+        @check_bit_operation bcast_setindex!(b1, x, m1, 1:m2, 1)  BitMatrix
         @check_bit_operation setindex!(b1, b2, m1, 1:m2, 1) BitMatrix
 
         b1 = bitrand(s1, s2, s3, s4)
@@ -461,7 +472,11 @@ timesofar("constructors")
 
         for (b2, k1, k2, k3, k4) in Channel(gen_setindex_data4)
             # println(typeof(b2), " ", typeof(k1), " ", typeof(k2), " ", typeof(k3), " ", typeof(k4)) # uncomment to debug
-            @check_bit_operation setindex!(b1, b2, k1, k2, k3, k4) BitArray{4}
+            if b2 isa Bool
+                @check_bit_operation bcast_setindex!(b1, b2, k1, k2, k3, k4) BitArray{4}
+            else
+                @check_bit_operation setindex!(b1, b2, k1, k2, k3, k4) BitArray{4}
+            end
         end
 
         for p1 = [rand(1:v1) 1 63 64 65 191 192 193]
@@ -489,7 +504,7 @@ timesofar("constructors")
 
         b1 = bitrand(n1, n2)
         t1 = bitrand(n1, n2)
-        @check_bit_operation setindex!(b1, true, t1) BitMatrix
+        @check_bit_operation bcast_setindex!(b1, true, t1) BitMatrix
 
         t1 = bitrand(n1, n2)
         b2 = bitrand(count(t1))
@@ -761,10 +776,11 @@ timesofar("dequeue")
     @check_bit_operation (-)(b0)  Vector{Int}
     @check_bit_operation broadcast(sign, b0) BitVector
 
-    @testset "flipbits!" begin
+    @testset "in-place .!" begin
         b1 = bitrand(n1, n2)
         i1 = Array(b1)
-        @test flipbits!(b1) == .~i1
+        b1 .= .!b1
+        @test b1 == .~i1
         @test bitcheck(b1)
     end
 end
@@ -1389,14 +1405,14 @@ timesofar("permutedims")
     b1 = bitrand(s1, s2, s3, s4)
     b2 = bitrand(s1, s3, s3, s4)
     b3 = bitrand(s1, s2, s3, s1)
-    @check_bit_operation cat(2, b1, b2) BitArray{4}
-    @check_bit_operation cat(4, b1, b3) BitArray{4}
-    @check_bit_operation cat(6, b1, b1) BitArray{6}
+    @check_bit_operation cat(b1, b2, dims=2) BitArray{4}
+    @check_bit_operation cat(b1, b3, dims=4) BitArray{4}
+    @check_bit_operation cat(b1, b1, dims=6) BitArray{6}
 
     b1 = bitrand(1, v1, 1)
-    @check_bit_operation cat(2, 0, b1, 1, 1, b1) Array{Int,3}
-    @check_bit_operation cat(2, 3, b1, 4, 5, b1) Array{Int,3}
-    @check_bit_operation cat(2, false, b1, true, true, b1) BitArray{3}
+    @check_bit_operation cat(0, b1, 1, 1, b1, dims=2) Array{Int,3}
+    @check_bit_operation cat(3, b1, 4, 5, b1, dims=2) Array{Int,3}
+    @check_bit_operation cat(false, b1, true, true, b1, dims=2) BitArray{3}
 
     b1 = bitrand(n1, n2)
     for m1 = 1:(n1-1), m2 = 1:(n2-1)
@@ -1451,8 +1467,10 @@ timesofar("cat")
     @check_bit_operation diff(b1, dims=2) Matrix{Int}
 
     b1 = bitrand(n1, n1)
-    @check_bit_operation svd(b1)
-    @check_bit_operation qr(b1)
+    @test ((svdb1, svdb1A) = (svd(b1), svd(Array(b1)));
+            svdb1.U == svdb1A.U && svdb1.S == svdb1A.S && svdb1.V == svdb1A.V)
+    @test ((qrb1, qrb1A) = (qr(b1), qr(Array(b1)));
+            qrb1.Q == qrb1A.Q && qrb1.R == qrb1A.R)
 
     b1 = bitrand(v1)
     @check_bit_operation diagm(0 => b1) BitMatrix

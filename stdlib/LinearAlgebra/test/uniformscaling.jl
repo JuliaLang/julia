@@ -192,14 +192,6 @@ end
     end
 end
 
-@testset "chol" begin
-    for T in (Float64, ComplexF32, BigFloat, Int)
-        λ = T(4)
-        @test chol(λ*I) ≈ √λ*I
-        @test_throws LinearAlgebra.PosDefException chol(-λ*I)
-    end
-end
-
 @testset "Matrix/Array construction from UniformScaling" begin
     I2_33 = [2 0 0; 0 2 0; 0 0 2]
     I2_34 = [2 0 0 0; 0 2 0 0; 0 0 2 0]
@@ -257,6 +249,11 @@ end
     @test eltype(fill(Float16(1), 2, 2)I) == Float16
     @test eltype(fill(Int8(1), 2, 2) + I) == Int8
     @test eltype(fill(Float16(1), 2, 2) + I) == Float16
+end
+
+@testset "test that UniformScaling is applied correctly for matrices of matrices" begin
+    LL = Bidiagonal(fill(0*I, 3), fill(1*I, 2), :L)
+    @test (I - LL')\[[0], [0], [1]] == (I - LL)'\[[0], [0], [1]] == fill([1], 3)
 end
 
 end # module TestUniformscaling

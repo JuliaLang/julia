@@ -696,9 +696,9 @@ end
     # hypot
     @test hypot(BigFloat(3), BigFloat(4)) == 5
 
-    # atan2
+    # atan
     setprecision(53) do
-        @test atan2(12,2) == atan2(BigFloat(12), BigFloat(2))
+        @test atan(12,2) == atan(BigFloat(12), BigFloat(2))
     end
 end
 @testset "ldexp" begin
@@ -853,11 +853,17 @@ end
 @test_throws ArgumentError parse(BigFloat, "1\0")
 
 @testset "serialization (issue #12386)" begin
-    b = IOBuffer()
-    x = 2.1 * big(pi)
-    serialize(b, x)
-    seekstart(b)
-    @test deserialize(b) == x
+    b = PipeBuffer()
+    let x = setprecision(53) do
+            return 2.1 * big(pi)
+        end
+        serialize(b, x)
+        @test deserialize(b) == x
+    end
+    let x = BigFloat(Inf, 46)
+        serialize(b, x)
+        @test deserialize(b) == x == BigFloat(Inf, 2)
+    end
 end
 @test isnan(sqrt(BigFloat(NaN)))
 
@@ -923,5 +929,3 @@ end
         @test to_string(big"-1.0") == "-1.0"
     end
 end
-
-@test beta(big(1.0),big(1.2)) ≈ beta(1.0,1.2) rtol=4*eps()

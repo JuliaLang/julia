@@ -18,7 +18,7 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
 endif
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifneq ($(ARCH),x86_64)
@@ -33,43 +33,28 @@ LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 else
-LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="-L$(build_shlibdir) -lcurl"
+LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="curl"
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
-LIBGIT2_OPTS += -DUSE_HTTPS=ON -DTLS_BACKEND="mbedTLS" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DSHA1_BACKEND="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
-$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls.patch
+	echo 1 > $@
+
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls2.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls2.patch
 	echo 1 > $@
 
 $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-verify.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-fixup.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-ssh-loop.patch
 	echo 1 > $@
 
 $(build_datarootdir)/julia/cert.pem:
@@ -80,11 +65,8 @@ $(build_datarootdir)/julia/cert.pem:
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls2.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied \
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted $(build_datarootdir)/julia/cert.pem
 	mkdir -p $(dir $@)

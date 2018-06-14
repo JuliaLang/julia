@@ -18,6 +18,48 @@ let comparison = Tuple{X, X} where X<:Tuple
     @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  10) == sig
 end
 
+# PR 22120
+function tmerge_test(a, b, r, commutative=true)
+    @test r == Core.Compiler.tuplemerge(a, b)
+    if commutative
+        @test r == Core.Compiler.tuplemerge(b, a)
+    else
+        @test_broken r == Core.Compiler.tuplemerge(b, a)
+    end
+end
+tmerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
+tmerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
+tmerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
+tmerge_test(Tuple{Int}, Tuple{Int, Int},
+    Tuple{Vararg{Int}})
+tmerge_test(Tuple{Integer}, Tuple{Int, Int},
+    Tuple{Vararg{Integer}})
+tmerge_test(Tuple{}, Tuple{Int, Int},
+    Tuple{Vararg{Int}})
+tmerge_test(Tuple{}, Tuple{Complex},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Complex}}, false)
+tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Complex}})
+@test Core.Compiler.tmerge(Tuple{}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Int32, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Int32, Nothing, Tuple{ComplexF32, ComplexF32}}
+@test Core.Compiler.tmerge(Union{Int32, Nothing, Tuple{ComplexF32}}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Int32, Nothing, Tuple{Vararg{ComplexF32}}}
 
 # issue 9770
 @noinline x9770() = false
@@ -205,13 +247,12 @@ end
 
 # issue #12474
 @generated function f12474(::Any)
-    :(for i in 1
-      end)
+    return :(for i in 1
+        end)
 end
-let
-    ast12474 = code_typed(f12474, Tuple{Float64})
+let ast12474 = code_typed(f12474, Tuple{Float64})
     @test isdispatchelem(ast12474[1][2])
-    @test all(isdispatchelem, ast12474[1][1].slottypes)
+    @test all(x -> isdispatchelem(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
 end
 
 
@@ -436,24 +477,25 @@ function is_typed_expr(e::Expr)
     end
     return false
 end
+is_typed_expr(@nospecialize other) = false
 test_inferred_static(@nospecialize(other)) = true
 test_inferred_static(slot::TypedSlot) = @test isdispatchelem(slot.typ)
 function test_inferred_static(expr::Expr)
-    if is_typed_expr(expr)
-        @test isdispatchelem(expr.typ)
-    end
     for a in expr.args
         test_inferred_static(a)
     end
 end
-function test_inferred_static(arrow::Pair)
+function test_inferred_static(arrow::Pair, all_ssa)
     code, rt = arrow
     @test isdispatchelem(rt)
     @test code.inferred
     @test all(isdispatchelem, code.slottypes)
-    @test all(isdispatchelem, code.ssavaluetypes)
-    for e in code.code
+    for i = 1:length(code.code)
+        e = code.code[i]
         test_inferred_static(e)
+        if all_ssa && is_typed_expr(e)
+            @test isdispatchelem(code.ssavaluetypes[i])
+        end
     end
 end
 
@@ -466,6 +508,7 @@ function f18679()
             return a[1]
         end
     end
+    error()
 end
 g18679(x::Tuple) = ()
 g18679() = g18679(any_undef_global::Union{Int, Tuple{}})
@@ -484,30 +527,32 @@ function g19348(x)
     a, b = x
     g = 1
     g = 2
-    c = Base.indexed_next(x, g, g)
+    c = Base.indexed_iterate(x, g, g)
     return a + b + c[1]
 end
 
-for codetype in Any[
-        code_typed(f18679, ())[1],
-        code_typed(g18679, ())[1],
-        code_typed(h18679, ())[1],
-        code_typed(g19348, (typeof((1, 2.0)),))[1]]
+for (codetype, all_ssa) in Any[
+        (code_typed(f18679, ())[1], true),
+        (code_typed(g18679, ())[1], false),
+        (code_typed(h18679, ())[1], true),
+        (code_typed(g19348, (typeof((1, 2.0)),))[1], true)]
     # make sure none of the slottypes are left as Core.Compiler.Const objects
     code = codetype[1]
     @test all(x->isa(x, Type), code.slottypes)
     local notconst(@nospecialize(other)) = true
     notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
     function notconst(expr::Expr)
-        @test isa(expr.typ, Type)
         for a in expr.args
             notconst(a)
         end
     end
-    for e in code.code
+    local i
+    for i = 1:length(code.code)
+        e = code.code[i]
         notconst(e)
+        @test isa(code.ssavaluetypes[i], Type)
     end
-    test_inferred_static(code)
+    test_inferred_static(codetype, all_ssa)
 end
 @test f18679() === ()
 @test_throws UndefVarError(:any_undef_global) g18679()
@@ -889,11 +934,12 @@ let f, m
     f() = 0
     m = first(methods(f))
     m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.ssavaluetypes = 2
+    m.source.ssavaluetypes = 3
+    m.source.codelocs = [1, 1, 1]
     m.source.code = Any[
-        Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
-        Expr(:(=), SSAValue(1), Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0))),
-        Expr(:return, SSAValue(1))
+        Expr(:call, GlobalRef(Core, :svec), 1, 2, 3),
+        Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(1)),
+        Expr(:return, SSAValue(2))
     ]
     @test @inferred(f()) == 6
 end
@@ -1086,7 +1132,7 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                     farg = typeof(getfield(farg.mod, farg.name))
                 end
             elseif isa(farg, Core.SSAValue)
-                farg = code.ssavaluetypes[farg.id + 1]
+                farg = code.ssavaluetypes[farg.id]
             else
                 farg = typeof(farg)
             end
@@ -1440,13 +1486,11 @@ i = 1
 while !Meta.isexpr(opt25261[i], :gotoifnot); global i += 1; end
 foundslot = false
 for expr25261 in opt25261[i:end]
-    Meta.isexpr(expr25261, :(=)) || continue
-    isa(expr25261.args[2], Union{GlobalRef, Expr}) && continue
-    # This should be the assignment to the SSAValue into the getfield
-    # call - make sure it's a TypedSlot
-    @test isa(expr25261.args[2], TypedSlot)
-    @test expr25261.args[2].typ === Tuple{Int, Int}
-    global foundslot = true
+    if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
+        # This should be the assignment to the SSAValue into the getfield
+        # call - make sure it's a TypedSlot
+        global foundslot = true
+    end
 end
 @test foundslot
 
@@ -1481,3 +1525,75 @@ f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
 g26172(::Val{0}) = ()
 g26172(v) = (nothing, g26172(f26172(v))...)
 @test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)
+
+# 26826 constant prop through varargs
+
+struct Foo26826{A,B}
+    a::A
+    b::B
+end
+
+x26826 = rand()
+
+apply26826(f, args...) = f(args...)
+
+# We use getproperty to drive these tests because it requires constant
+# propagation in order to lower to a well-inferred getfield call.
+f26826(x) = apply26826(Base.getproperty, Foo26826(1, x), :b)
+
+@test @inferred(f26826(x26826)) === x26826
+
+getfield26826(x, args...) = Base.getproperty(x, getfield(args, 2))
+
+g26826(x) = getfield26826(x, :a, :b)
+
+@test @inferred(g26826(Foo26826(1, x26826))) === x26826
+
+# Somewhere in here should be a single getfield call, and it should be inferred as Float64.
+# If this test is broken (especially if inference is getting a correct, but loose result,
+# like a Union) then it's potentially an indication that the optimizer isn't hitting the
+# InferenceResult cache properly for varargs methods.
+typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first
+found_well_typed_getfield_call = false
+let i
+    for i = 1:length(typed_code.code)
+        stmt = typed_code.code[i]
+        rhs = Meta.isexpr(stmt, :(=)) ? stmt.args[2] : stmt
+        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] === Float64
+            global found_well_typed_getfield_call = true
+        end
+    end
+end
+
+@test found_well_typed_getfield_call
+
+# 27059 fix fieldtype vararg and union handling
+
+f27059(::Type{T}) where T = i -> fieldtype(T, i)
+T27059 = Tuple{Float64,Vararg{Float32}}
+@test f27059(T27059)(2) === fieldtype(T27059, 2) === Float32
+@test f27059(Union{T27059,Tuple{Vararg{Symbol}}})(2) === Union{Float32,Symbol}
+@test fieldtype(Union{Tuple{Int,Symbol},Tuple{Float64,String}}, 1) === Union{Int,Float64}
+@test fieldtype(Union{Tuple{Int,Symbol},Tuple{Float64,String}}, 2) === Union{Symbol,String}
+@test fieldtype(Union{Tuple{T,Symbol},Tuple{S,String}} where {T<:Number,S<:T}, 1) === Union{S,T} where {T<:Number,S<:T}
+
+# PR #27068, improve `ifelse` inference
+
+@noinline _f_ifelse_isa_() = rand(Bool) ? 1 : nothing
+function _g_ifelse_isa_()
+    x = _f_ifelse_isa_()
+    ifelse(isa(x, Nothing), 1, x)
+end
+@test Base.return_types(_g_ifelse_isa_, ()) == [Int]
+
+# Equivalence of Const(T.instance) and T for singleton types
+@test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
+
+# Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union}}) == Type{Union{}}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Int}) == Union{}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) == Union{}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Type

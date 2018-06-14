@@ -82,13 +82,13 @@ jl_typename_t *jl_array_typename;
 jl_value_t *jl_array_uint8_type;
 jl_value_t *jl_array_any_type=NULL;
 jl_value_t *jl_array_symbol_type;
+jl_value_t *jl_array_int_type;
 jl_datatype_t *jl_weakref_type;
 jl_datatype_t *jl_abstractstring_type;
 jl_datatype_t *jl_string_type;
 jl_datatype_t *jl_expr_type;
 jl_datatype_t *jl_globalref_type;
 jl_datatype_t *jl_linenumbernode_type;
-jl_datatype_t *jl_labelnode_type;
 jl_datatype_t *jl_gotonode_type;
 jl_datatype_t *jl_pinode_type;
 jl_datatype_t *jl_phinode_type;
@@ -1952,28 +1952,31 @@ void jl_init_types(void)
     jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type));
 
     jl_array_any_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_any_type, jl_box_long(1));
-
     jl_array_symbol_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_sym_type, jl_box_long(1));
-
     jl_array_uint8_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint8_type, jl_box_long(1));
+    jl_array_int_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_long_type, jl_box_long(1));
 
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(3, "head", "args", "typ"),
-                        jl_svec(3, jl_sym_type, jl_array_any_type,
-                                 jl_any_type),
-                        0, 1, 3);
+                        jl_perm_symsvec(2, "head", "args"),
+                        jl_svec(2, jl_sym_type, jl_array_any_type),
+                        0, 1, 2);
+
+    jl_module_type =
+        jl_new_datatype(jl_symbol("Module"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(2, "name", "parent"),
+                        jl_svec(2, jl_sym_type, jl_any_type), 0, 1, 2);
 
     jl_linenumbernode_type =
         jl_new_datatype(jl_symbol("LineNumberNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(2, "line", "file"),
                         jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
 
-    jl_labelnode_type =
-        jl_new_datatype(jl_symbol("LabelNode"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(1, "label"),
-                        jl_svec(1, jl_long_type), 0, 0, 1);
+    jl_lineinfonode_type =
+        jl_new_datatype(jl_symbol("LineInfoNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(5, "mod", "method", "file", "line", "inlined_at"),
+                        jl_svec(5, jl_module_type, jl_sym_type, jl_sym_type, jl_long_type, jl_long_type), 0, 0, 5);
 
     jl_gotonode_type =
         jl_new_datatype(jl_symbol("GotoNode"), core, jl_any_type, jl_emptysvec,
@@ -2009,11 +2012,6 @@ void jl_init_types(void)
         jl_new_datatype(jl_symbol("NewvarNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "slot"),
                         jl_svec(1, jl_slotnumber_type), 0, 0, 1);
-
-    jl_module_type =
-        jl_new_datatype(jl_symbol("Module"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(2, "name", "parent"),
-                        jl_svec(2, jl_sym_type, jl_any_type), 0, 1, 2);
 
     jl_globalref_type =
         jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
@@ -2226,7 +2224,7 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_methtable_type);
     jl_compute_field_offsets(jl_expr_type);
     jl_compute_field_offsets(jl_linenumbernode_type);
-    jl_compute_field_offsets(jl_labelnode_type);
+    jl_compute_field_offsets(jl_lineinfonode_type);
     jl_compute_field_offsets(jl_gotonode_type);
     jl_compute_field_offsets(jl_quotenode_type);
     jl_compute_field_offsets(jl_pinode_type);

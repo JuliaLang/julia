@@ -39,7 +39,6 @@ end
 struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
     dict::T
 end
-KeySet(dict::AbstractDict) = KeySet{keytype(dict), typeof(dict)}(dict)
 
 struct ValueIterator{T<:AbstractDict}
     dict::T
@@ -55,17 +54,10 @@ isempty(v::Union{KeySet,ValueIterator}) = isempty(v.dict)
 _tt2(::Type{Pair{A,B}}) where {A,B} = B
 eltype(::Type{ValueIterator{D}}) where {D} = _tt2(eltype(D))
 
-start(v::Union{KeySet,ValueIterator}) = start(v.dict)
-done(v::Union{KeySet,ValueIterator}, state) = done(v.dict, state)
-
-function next(v::KeySet, state)
-    n = next(v.dict, state)
-    n[1][1], n[2]
-end
-
-function next(v::ValueIterator, state)
-    n = next(v.dict, state)
-    n[1][2], n[2]
+function iterate(v::Union{KeySet,ValueIterator}, state...)
+    y = iterate(v.dict, state...)
+    y === nothing && return nothing
+    return (y[1][isa(v, KeySet) ? 1 : 2], y[2])
 end
 
 in(k, v::KeySet) = get(v.dict, k, secret_table_token) !== secret_table_token
@@ -670,15 +662,19 @@ end
 
 _oidd_nextind(a, i) = reinterpret(Int, ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 
-start(d::IdDict) = _oidd_nextind(d.ht, 0)
-done(d::IdDict, i) = (i == -1)
-next(d::IdDict{K, V}, i) where {K, V} = (Pair{K, V}(d.ht[i + 1]::K, d.ht[i + 2]::V), _oidd_nextind(d.ht, i + 2))
+function iterate(d::IdDict{K,V}, idx=0) where {K, V}
+    idx = _oidd_nextind(d.ht, idx)
+    idx == -1 && return nothing
+    return (Pair{K, V}(d.ht[idx + 1]::K, d.ht[idx + 2]::V), idx + 2)
+end
 
 length(d::IdDict) = d.count
 
 copy(d::IdDict) = typeof(d)(d)
 
 get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
+
+in(@nospecialize(k), v::KeySet{<:Any,<:IdDict}) = get(v.dict, k, secret_table_token) !== secret_table_token
 
 # For some AbstractDict types, it is safe to implement filter!
 # by deleting keys during iteration.
@@ -700,20 +696,20 @@ copy(s::IdSet) = typeof(s)(s)
 
 isempty(s::IdSet) = isempty(s.dict)
 length(s::IdSet)  = length(s.dict)
-in(x, s::IdSet) = haskey(s.dict, x)
-push!(s::IdSet, x) = (s.dict[x] = nothing; s)
-pop!(s::IdSet, x) = (pop!(s.dict, x); x)
-pop!(s::IdSet, x, deflt) = x in s ? pop!(s, x) : deflt
-delete!(s::IdSet, x) = (delete!(s.dict, x); s)
+in(@nospecialize(x), s::IdSet) = haskey(s.dict, x)
+push!(s::IdSet, @nospecialize(x)) = (s.dict[x] = nothing; s)
+pop!(s::IdSet, @nospecialize(x)) = (pop!(s.dict, x); x)
+pop!(s::IdSet, @nospecialize(x), @nospecialize(default)) = (x in s ? pop!(s, x) : default)
+delete!(s::IdSet, @nospecialize(x)) = (delete!(s.dict, x); s)
 
 sizehint!(s::IdSet, newsz) = (sizehint!(s.dict, newsz); s)
 empty!(s::IdSet) = (empty!(s.dict); s)
 
 filter!(f, d::IdSet) = unsafe_filter!(f, d)
 
-start(s::IdSet)       = start(s.dict)
-done(s::IdSet, state) = done(s.dict, state)
-function next(s::IdSet, state)
-    ((k, _), i) = next(s.dict, state)
+function iterate(s::IdSet, state...)
+    y = iterate(s.dict, state...)
+    y === nothing && return nothing
+    ((k, _), i) = y
     return (k, i)
 end

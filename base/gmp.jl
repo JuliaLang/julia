@@ -70,6 +70,7 @@ results are promoted to a [`BigInt`](@ref).
 Instances can be constructed from strings via [`parse`](@ref), or using the `big`
 string literal.
 
+# Examples
 ```jldoctest
 julia> parse(BigInt, "42")
 42

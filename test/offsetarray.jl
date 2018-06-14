@@ -80,7 +80,7 @@ for i = 1:9 @test A_3_3[i] == i end
 @test_throws BoundsError A[CartesianIndex(1,1)]
 @test_throws BoundsError S[CartesianIndex(1,1)]
 @test eachindex(A) == 1:4
-@test eachindex(S) == CartesianIndices((0:1,3:4))
+@test eachindex(S) == CartesianIndices(axes(S)) == CartesianIndices(map(Base.Slice, (0:1,3:4)))
 
 # logical indexing
 @test A[A .> 2] == [3,4]
@@ -98,13 +98,13 @@ S = view(A, :, 3)
 @test S[0] == 1
 @test S[1] == 2
 @test_throws BoundsError S[2]
-@test axes(S) === (0:1,)
+@test axes(S) === (Base.Slice(0:1),)
 S = view(A, 0, :)
 @test S == OffsetArray([1,3], (A.offsets[2],))
 @test S[3] == 1
 @test S[4] == 3
 @test_throws BoundsError S[1]
-@test axes(S) === (3:4,)
+@test axes(S) === (Base.Slice(3:4),)
 S = view(A, 0:0, 4)
 @test S == [3]
 @test S[1] == 3
@@ -123,17 +123,17 @@ S = view(A, :, :)
 @test S[0,4] == S[3] == 3
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
-@test axes(S) === (0:1, 3:4)
+@test axes(S) === Base.Slice.((0:1, 3:4))
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
 g = OffsetArray(Vector(-2:3), (-3,))
 gv = view(g, -1:2)
 @test axes(gv, 1) === Base.OneTo(4)
 @test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-2,)))
-@test axes(gv, 1) === -1:2
+@test axes(gv, 1) === Base.Slice(-1:2)
 @test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-1,)))
-@test axes(gv, 1) === 0:3
+@test axes(gv, 1) === Base.Slice(0:3)
 @test collect(gv) == -1:2
 
 # iteration
@@ -210,26 +210,26 @@ B = similar(A, (3,4))
 @test axes(B) === (Base.OneTo(3), Base.OneTo(4))
 B = similar(A, (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test axes(B) === (-3:3, 1:4)
+@test axes(B) === Base.Slice.((-3:3, 1:4))
 B = similar(parent(A), (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test axes(B) === (-3:3, 1:4)
+@test axes(B) === Base.Slice.((-3:3, 1:4))
 
 # Indexing with OffsetArray indices
 i1 = OffsetArray([2,1], (-5,))
 i1 = OffsetArray([2,1], -5)
 b = A0[i1, 1]
-@test axes(b) === (-4:-3,)
+@test axes(b) === (Base.Slice(-4:-3),)
 @test b[-4] == 2
 @test b[-3] == 1
 b = A0[1,i1]
-@test axes(b) === (-4:-3,)
+@test axes(b) === (Base.Slice(-4:-3),)
 @test b[-4] == 3
 @test b[-3] == 1
 v = view(A0, i1, 1)
-@test axes(v) === (-4:-3,)
+@test axes(v) === (Base.Slice(-4:-3),)
 v = view(A0, 1:1, i1)
-@test axes(v) === (Base.OneTo(1), -4:-3)
+@test axes(v) === (Base.OneTo(1), Base.Slice(-4:-3))
 
 # copyto! and fill!
 a = OffsetArray{Int}(undef, (-3:-1,))
@@ -316,7 +316,7 @@ a = OffsetArray(a0, (-1,2,3,4,5))
 v = OffsetArray(v0, (-3,))
 @test lastindex(v) == 1
 @test v ≈ v
-@test axes(v') === (Base.OneTo(1),-2:1)
+@test axes(v') === (Base.OneTo(1),Base.Slice(-2:1))
 @test parent(v) == collect(v)
 rv = reverse(v)
 @test axes(rv) == axes(v)
@@ -332,7 +332,7 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test lastindex(A, 1) == 1
 @test lastindex(A, 2) == 9
 @test A ≈ A
-@test axes(A') === (6:9, -2:1)
+@test axes(A') === Base.Slice.((6:9, -2:1))
 @test parent(copy(A')) == copy(parent(A)')
 @test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))
@@ -374,9 +374,6 @@ I = findall(!iszero, z)
 @test mean(x->2x, A_3_3) == 10
 @test mean(A_3_3, dims=1) == median(A_3_3, dims=1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
 @test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
-@test var(A_3_3) == 7.5
-@test std(A_3_3, dims=1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
-@test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
 @test vecnorm(v) ≈ vecnorm(parent(v))
@@ -406,8 +403,8 @@ seek(io, 0)
 amin, amax = extrema(parent(A))
 @test clamp.(A, (amax+amin)/2, amax).parent == clamp.(parent(A), (amax+amin)/2, amax)
 
-@test unique(A, dims=1) == parent(A)
-@test unique(A, dims=2) == parent(A)
+@test unique(A, dims=1) == OffsetArray(parent(A), 0, first(axes(A, 2)) - 1)
+@test unique(A, dims=2) == OffsetArray(parent(A), first(axes(A, 1)) - 1, 0)
 v = OffsetArray(rand(8), (-2,))
 @test sort(v) == OffsetArray(sort(parent(v)), v.offsets)
 @test sortrows(A) == OffsetArray(sortrows(parent(A)), A.offsets)
@@ -435,6 +432,12 @@ dest = OffsetArray(Matrix{Int}(undef, 4,4), (-1,1))
 circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
 @test dest[1:3,2:4] == src[1:3,2:4]
+
+# reshape
+A = OffsetArray(rand(4,4), (-3,5))
+@test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
+A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
+@test vec(A) == reshape(A, :) == reshape(A, 16) == reshape(A, Val(1)) == A[:] == vec(A.parent)
 
 end # let
 

@@ -446,6 +446,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
+void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_sym_t *name);
 
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT,
     jl_value_t **args, size_t nargs, int cache, size_t world);
@@ -781,7 +782,6 @@ JL_DLLEXPORT jl_value_t *jl_abs_float(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_copysign_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 
-JL_DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 int jl_array_store_unboxed(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);

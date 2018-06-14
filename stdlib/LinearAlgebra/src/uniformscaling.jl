@@ -64,9 +64,7 @@ copy(J::UniformScaling) = UniformScaling(J.λ)
 conj(J::UniformScaling) = UniformScaling(conj(J.λ))
 
 transpose(J::UniformScaling) = J
-Transpose(S::UniformScaling) = transpose(S)
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
-Adjoint(S::UniformScaling) = adjoint(S)
 
 one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
 one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})
@@ -94,83 +92,39 @@ ishermitian(J::UniformScaling) = isreal(J.λ)
 (-)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ-J2.λ)
 (-)(B::BitArray{2}, J::UniformScaling)      = Array(B) - J
 (-)(J::UniformScaling, B::BitArray{2})      = J - Array(B)
+(-)(A::AbstractMatrix, J::UniformScaling)   = A + (-J)
 
+# Unit{Lower/Upper}Triangular matrices become {Lower/Upper}Triangular under
+# addition with a UniformScaling
 for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
                  (:UnitLowerTriangular, :LowerTriangular))
-    for op in (:+,:-)
-        @eval begin
-            ($op)(UL::$t2, J::UniformScaling) = ($t2)(($op)(UL.data, J))
-
-            function ($op)(UL::$t1, J::UniformScaling)
-                ULnew = copy_oftype(UL.data, Base._return_type($op, Tuple{eltype(UL), typeof(J.λ)}))
-                for i = 1:size(ULnew, 1)
-                    ULnew[i,i] = ($op)(1, J.λ)
-                end
-                return ($t2)(ULnew)
+    @eval begin
+        function (+)(UL::$t1, J::UniformScaling)
+            ULnew = copy_oftype(UL.data, Base._return_type(+, Tuple{eltype(UL), typeof(J)}))
+            for i in axes(ULnew, 1)
+                ULnew[i,i] = one(ULnew[i,i]) + J
             end
+            return ($t2)(ULnew)
         end
     end
-end
-
-function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
-    ULnew = similar(parent(UL), Base._return_type(-, Tuple{typeof(J.λ), eltype(UL)}))
-    n = size(ULnew, 1)
-    ULold = UL.data
-    for j = 1:n
-        for i = 1:j - 1
-            ULnew[i,j] = -ULold[i,j]
-        end
-        if isa(UL, UnitUpperTriangular)
-            ULnew[j,j] = J.λ - 1
-        else
-            ULnew[j,j] = J.λ - ULold[j,j]
-        end
-    end
-    return UpperTriangular(ULnew)
-end
-function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
-    ULnew = similar(parent(UL), Base._return_type(-, Tuple{typeof(J.λ), eltype(UL)}))
-    n = size(ULnew, 1)
-    ULold = UL.data
-    for j = 1:n
-        if isa(UL, UnitLowerTriangular)
-            ULnew[j,j] = J.λ - 1
-        else
-            ULnew[j,j] = J.λ - ULold[j,j]
-        end
-        for i = j + 1:n
-            ULnew[i,j] = -ULold[i,j]
-        end
-    end
-    return LowerTriangular(ULnew)
 end
 
 function (+)(A::AbstractMatrix, J::UniformScaling)
-    n = checksquare(A)
-    B = similar(A, Base._return_type(+, Tuple{eltype(A), typeof(J.λ)}))
-    copyto!(B,A)
-    @inbounds for i = 1:n
-        B[i,i] += J.λ
+    checksquare(A)
+    B = copy_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
+    @inbounds for i in axes(A, 1)
+        B[i,i] += J
     end
-    B
+    return B
 end
 
-function (-)(A::AbstractMatrix, J::UniformScaling)
-    n = checksquare(A)
-    B = similar(A, Base._return_type(-, Tuple{eltype(A), typeof(J.λ)}))
-    copyto!(B, A)
-    @inbounds for i = 1:n
-        B[i,i] -= J.λ
-    end
-    B
-end
 function (-)(J::UniformScaling, A::AbstractMatrix)
-    n = checksquare(A)
-    B = convert(AbstractMatrix{Base._return_type(-, Tuple{typeof(J.λ), eltype(A)})}, -A)
-    @inbounds for j = 1:n
-        B[j,j] += J.λ
+    checksquare(A)
+    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, -A)
+    @inbounds for i in axes(A, 1)
+        B[i,i] += J
     end
-    B
+    return B
 end
 
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
@@ -353,32 +307,15 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
     return hvcat(rows, promote_to_arrays(n,1, promote_to_array_type(A), A...)...)
 end
 
-
-## Cholesky
-function _chol!(J::UniformScaling, uplo)
-    c, info = _chol!(J.λ, uplo)
-    UniformScaling(c), info
-end
-
-chol!(J::UniformScaling, uplo) = ((J, info) = _chol!(J, uplo); @assertposdef J info)
-
-"""
-    chol(J::UniformScaling) -> C
-
-Compute the square root of a non-negative UniformScaling `J`.
-
-# Examples
-```jldoctest
-julia> chol(16I)
-UniformScaling{Float64}
-4.0*I
-```
-"""
-chol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposdef C info)
-
-
 ## Matrix construction from UniformScaling
-Matrix{T}(s::UniformScaling, dims::Dims{2}) where {T} = setindex!(Base.zeros(T, dims), T(s.λ), diagind(dims...))
+function Matrix{T}(s::UniformScaling, dims::Dims{2}) where {T}
+    A = zeros(T, dims)
+    v = T(s.λ)
+    for i in diagind(dims...)
+        @inbounds A[i] = v
+    end
+    return A
+end
 Matrix{T}(s::UniformScaling, m::Integer, n::Integer) where {T} = Matrix{T}(s, Dims((m, n)))
 Matrix(s::UniformScaling, m::Integer, n::Integer) = Matrix(s, Dims((m, n)))
 Matrix(s::UniformScaling, dims::Dims{2}) = Matrix{eltype(s)}(s, dims)

@@ -96,7 +96,7 @@ function transpose_f!(f, B::AbstractMatrix, A::AbstractMatrix)
     inds = axes(A)
     axes(B,1) == inds[2] && axes(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
 
-    m, n = length(inds[1]), length(inds[2])
+    m, n = Base._length(inds[1]), Base._length(inds[2])
     if m*n<=4*transposebaselength
         @inbounds begin
             for j = inds[2]
@@ -153,7 +153,7 @@ Eagerly evaluate the lazy matrix transpose/adjoint.
 Note that the transposition is applied recursively to elements.
 
 This operation is intended for linear algebra usage - for general data manipulation see
-[`permutedims`](@ref), which is non-recursive.
+[`permutedims`](@ref Base.permutedims), which is non-recursive.
 
 # Examples
 ```jldoctest

@@ -220,6 +220,11 @@ includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(incl
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 
+# BinaryBuilder options
+# TODO: Autodiscover triplet
+USE_BINARYBUILDER_LLVM := 0
+BINARYBUILDER_TRIPLET :=
+
 # LLVM Options
 LLVMROOT := $(build_prefix)
 LLVM_ASSERTIONS := 0
@@ -258,7 +263,7 @@ CROSS_COMPILE:=
 # delayed expansion of $(CC), since it won't be computed until later
 HOSTCC = $(CC)
 else
-HOSTCC := gcc
+HOSTCC ?= gcc
 OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
@@ -439,19 +444,22 @@ SHIPFLAGS := -O3 -g -falign-functions
 endif
 
 ifeq ($(USECCACHE), 1)
-# expand CC and CXX at declaration time because we will redefine them
-# Expand CC and CXX here already because we want the original definition and not the ccache version.
+# Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
 CC_ARG   := $(CC)
 CXX_ARG  := $(CXX)
-# Expand CC and CXX here already to avoid recursive referencing.
+FC_ARG   := $(FC)
+# Expand CC, CXX and FC here already to avoid recursive referencing.
 CC_FULL  := ccache $(CC)
 CXX_FULL := ccache $(CXX)
-# Add an extra indirection to make CC/CXX non-simple vars
+FC_FULL  := ccache $(FC)
+# Add an extra indirection to make CC/CXX/FC non-simple vars
 # (because of how -m$(BINARY) is added later on).
 CC       := $(CC_FULL)
 CXX      := $(CXX_FULL)
+FC       := $(FC_FULL)
 CC_BASE  := ccache
 CXX_BASE := ccache
+FC_BASE  := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
 # http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
@@ -465,6 +473,8 @@ CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
 CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
 CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
+FC_BASE := $(shell echo $(FC) | cut -d' ' -f1)
+FC_ARG := $(shell echo $(FC) | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -534,10 +544,10 @@ endif
 # Allow the user to specify this in Make.user
 GCCPATH ?= $(LOCALBASE)/lib/gcc$(_GCCVER)
 
-LDFLAGS += -L$(build_libdir) -L$(GCCPATH) -Wl,-rpath,$(build_libdir) -Wl,-rpath,$(GCCPATH)
-
-# This ensures we get the right RPATH even if we're missing FFLAGS somewhere
-FC += -Wl,-rpath=$(GCCPATH)
+# We're going to copy over the libraries we need from GCCPATH into build_libdir, then
+# tell everyone to look for them there. At install time, the build_libdir added into
+# the RPATH here is removed by patchelf.
+LDFLAGS += -L$(build_libdir) -Wl,-rpath,$(build_libdir)
 
 endif # gfortran
 endif # FreeBSD
@@ -768,6 +778,7 @@ CXX += -m$(BINARY)
 FC += -m$(BINARY)
 CC_ARG += -m$(BINARY)
 CXX_ARG += -m$(BINARY)
+FC_ARG += -m$(BINARY)
 endif
 endif
 
@@ -941,12 +952,12 @@ else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/' -Wl,-rpath,'@loader_path/julia/'
+  RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN' -Wl,-rpath,'$$ORIGIN/julia' -Wl,-z,origin
+  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 endif
 
 # --whole-archive

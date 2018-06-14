@@ -46,7 +46,15 @@ end
     getalladdrinfo(host::AbstractString) -> Vector{IPAddr}
 
 Gets all of the IP addresses of the `host`.
-Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
+Uses the operating system's underlying `getaddrinfo` implementation, which may do a DNS lookup.
+
+# Example
+```julia-repl
+julia> getalladdrinfo("google.com")
+2-element Array{IPAddr,1}:
+ ip"172.217.6.174"
+ ip"2607:f8b0:4000:804::200e"
+```
 """
 function getalladdrinfo(host::String)
     isascii(host) || error("non-ASCII hostname: $host")
@@ -137,7 +145,13 @@ end
     getnameinfo(host::IPAddr) -> String
 
 Performs a reverse-lookup for IP address to return a hostname and service
-using the operating system's underlying getnameinfo implementation.
+using the operating system's underlying `getnameinfo` implementation.
+
+# Examples
+```julia-repl
+julia> getnameinfo(Sockets.IPv4("8.8.8.8"))
+"google-public-dns-a.google.com"
+```
 """
 function getnameinfo(address::Union{IPv4, IPv6})
     req = Libc.malloc(Base._sizeof_uv_getnameinfo)
@@ -203,6 +217,12 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
     getipaddr() -> IPAddr
 
 Get the IP address of the local machine.
+
+# Examples
+```julia-repl
+julia> getipaddr()
+ip"192.168.1.28"
+```
 """
 function getipaddr()
     addr_ref = Ref{Ptr{UInt8}}(C_NULL)
