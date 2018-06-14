@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using .Main.TestHelpers.OAs
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
 using DelimitedFiles
 using Random
 using LinearAlgebra
 using Statistics
 
-const OAs_name = join(fullname(OAs), ".")
+const OAs_name = join(fullname(OffsetArrays), ".")
 
 let
 # Basics
