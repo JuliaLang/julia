@@ -441,7 +441,6 @@ will always be called.
 """
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
-securezero!(s::Cstring) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
@@ -453,11 +452,11 @@ function getpass(prompt::AbstractString)
     s = SecretBuffer()
     plen = 0
     while true
-        c = ccall(:_getch, UInt8, ())
+        c = UInt8(ccall(:_getch, Cint, ()))
         if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
             break # EOF or return
         elseif c == 0x00 || c == 0xe0
-            ccall(:_getch, UInt8, ()) # ignore function/arrow keys
+            ccall(:_getch, Cint, ()) # ignore function/arrow keys
         elseif c == UInt8('\b') && plen > 0
             plen -= 1 # delete last character on backspace
         elseif !iscntrl(Char(c)) && plen < 128
@@ -473,13 +472,13 @@ end
 end
 
 """
-    prompt(message; default="", password=false) -> Union{AbstractString, Nothing}
+    prompt(message; default="", password=false) -> Union{String, SecretBuffer, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
 then the user can enter just a newline character to select the `default`. Alternatively,
 when the `password` keyword is `true` the characters entered by the user will not be
-displayed.
+displayed and it will return a `SecretBuffer` instead of a `String`.
 """
 function prompt(message::AbstractString; default::AbstractString="", password::Bool=false)
     if Sys.iswindows() && password

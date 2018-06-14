@@ -1,11 +1,12 @@
 """
     Base.SecretBuffer()
 
-An IOBuffer-like object where the contents will be securely wiped when garbage collected. However, it is
-considered best practice to wipe the buffer using `Base.shred!(::SecretBuffer)` as soon as the
-secure data are no longer required. Avoid initializing with converting to strings as they are
-unable to be explicitly zeroed through mutation; when initializing with existing data the `SecretBuffer!`
-function is recommended to securely zero the passed argument.
+An IOBuffer-like object where the contents will be securely wiped when garbage collected.
+
+It is considered best practice to wipe the buffer using `Base.shred!(::SecretBuffer)` as
+soon as the secure data are no longer required. When initializing with existing data, the
+`SecretBuffer!` method is highly recommended to securely zero the passed argument. Avoid
+initializing with and converting to `String`s as they are unable to be securely zeroed.
 
 # Examples
 ```jldoctest
@@ -40,7 +41,7 @@ end
 convert(::Type{SecretBuffer}, s::AbstractString) = SecretBuffer(String(s))
 SecretBuffer(str::AbstractString) = SecretBuffer(String(str))
 function SecretBuffer(str::String)
-    buf = unsafe_wrap(Vector{UInt8}, str)
+    buf = codepoints(str)
     s = SecretBuffer(sizehint=length(buf))
     for c in buf
         write(s, c)
@@ -66,9 +67,10 @@ function SecretBuffer!(p::Ptr{UInt8})
     s
 end
 function SecretBuffer!(d::Vector{UInt8})
-    s = SecretBuffer(sizehint=length(d))
+    len = length(d)
+    s = SecretBuffer(sizehint=len)
     for i in 1:len
-        write(s, unsafe_load(p, i))
+        write(s, d[i])
     end
     seek(s, 0)
     securezero!(d)
@@ -102,7 +104,11 @@ function write(io::IO, s::SecretBuffer)
     return nb
 end
 
-function unsafe_convert(::Type{Ptr{UInt8}}, s::SecretBuffer)
+function unsafe_convert(::Type{Cstring}, s::SecretBuffer)
+    # Ensure that no nuls appear in the valid region
+    if any(!(==(0x00)), s.data[i] for i in 1:s.size)
+        error("`SecretBuffers` containing nul bytes cannot be converted to `Cstring`")
+    end
     # Add a hidden nul byte just past the end of the valid region
     p = s.ptr
     s.ptr = s.size + 1
@@ -112,7 +118,10 @@ function unsafe_convert(::Type{Ptr{UInt8}}, s::SecretBuffer)
     return unsafe_convert(Ptr{UInt8}, s.data)
 end
 
-seek(io::SecretBuffer, n::Integer) = (io.ptr = max(min(n+1, io.size+1), 1))
+seek(io::SecretBuffer, n::Integer) = (io.ptr = max(min(n+1, io.size+1), 1); io)
+seekend(io::SecretBuffer) = seek(io, io.size+1)
+skip(io::SecretBuffer, n::Integer) = seek(io, position(io) + n)
+
 bytesavailable(io::SecretBuffer) = io.size - io.ptr + 1
 position(io::SecretBuffer) = io.ptr-1
 eof(io::SecretBuffer) = io.ptr > io.size
@@ -128,11 +137,7 @@ function read(io::SecretBuffer, ::Type{UInt8})
     return byte
 end
 
-function final_shred!(s::SecretBuffer)
-    if !isshredded(s)
-        shred!(s)
-    end
-end
+final_shred!(s::SecretBuffer) = shred!(s)
 
 function shred!(s::SecretBuffer)
     securezero!(s.data)

@@ -323,7 +323,6 @@ end
         url = LibGit2.git_url(
             scheme="https",
             username="user",
-            # password="pass",
             host="server.com",
             port=80,
             path="org/project.git")
@@ -334,7 +333,6 @@ end
         url = LibGit2.git_url(
             scheme="ssh",
             username="user",
-            # password="pass",
             host="server",
             port="22",
             path="project.git")
@@ -369,7 +367,6 @@ end
         url = LibGit2.git_url(
             scheme="https",
             username="user",
-            # password="pass",
             host="server.com",
             port="80")
         @test url == "https://user@server.com:80"
@@ -397,7 +394,6 @@ end
         url = LibGit2.git_url(
             scheme="",
             username="",
-            # password="",
             host="server.com",
             port="",
             path="")
@@ -431,7 +427,7 @@ end
     @testset "missing" begin
         str = ""
         cred = read!(IOBuffer(str), LibGit2.GitCredential())
-        # @test cred == LibGit2.GitCredential()
+        @test cred == LibGit2.GitCredential()
         @test sprint(write, cred) == str
         Base.shred!(cred)
     end
@@ -2525,7 +2521,7 @@ mktempdir() do dir
             @test err == exhausted_error
             @test auth_attempts == 3
             @test p.explicit == invalid_cred
-            # @test p.credential != invalid_cred # TODO!!!
+            @test p.credential != invalid_cred
 
             Base.shred!(valid_cred)
             Base.shred!(invalid_cred)
@@ -2724,7 +2720,7 @@ mktempdir() do dir
             @test err == incompatible_error
             @test auth_attempts == 1
             @test p.explicit == valid_cred
-            # @test p.credential != valid_cred # TODO!!!
+            @test p.credential != valid_cred
 
             Base.shred!(valid_cred)
         end

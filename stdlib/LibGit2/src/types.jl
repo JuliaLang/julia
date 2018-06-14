@@ -1180,8 +1180,6 @@ function objtype(obj_type::Consts.OBJECT)
     end
 end
 
-import Base.Base.shred!
-
 abstract type AbstractCredential end
 
 """
@@ -1193,7 +1191,7 @@ isfilled(::AbstractCredential)
 
 "Credential that support only `user` and `password` parameters"
 mutable struct UserPasswordCredential <: AbstractCredential
-    user::AbstractString
+    user::String
     pass::Base.SecretBuffer
     function UserPasswordCredential(user::AbstractString="", pass::Union{AbstractString, Base.SecretBuffer}="")
         new(user, pass)
@@ -1211,6 +1209,7 @@ mutable struct UserPasswordCredential <: AbstractCredential
 end
 
 function Base.shred!(cred::UserPasswordCredential)
+    cred.user = ""
     Base.shred!(cred.pass)
     return cred
 end
@@ -1225,11 +1224,11 @@ end
 
 "SSH credential type"
 mutable struct SSHCredential <: AbstractCredential
-    user::AbstractString
+    user::String
     pass::Base.SecretBuffer
     # Paths to private keys
-    prvkey::AbstractString
-    pubkey::AbstractString
+    prvkey::String
+    pubkey::String
     function SSHCredential(user="", pass="",
                            prvkey="", pubkey="")
         new(user, pass, prvkey, pubkey)
@@ -1248,7 +1247,10 @@ mutable struct SSHCredential <: AbstractCredential
 end
 
 function Base.shred!(cred::SSHCredential)
+    cred.user = ""
     Base.shred!(cred.pass)
+    cred.prvkey = ""
+    cred.pubkey = ""
     return cred
 end
 

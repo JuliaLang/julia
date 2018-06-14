@@ -151,7 +151,7 @@ function git_url(;
         end
         write(io, path)
     end
-    seek(io, 0)
+    seekstart(io)
 
     return String(take!(io))
 end
