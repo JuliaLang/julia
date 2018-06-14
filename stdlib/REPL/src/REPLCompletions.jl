@@ -22,6 +22,10 @@ struct ModuleCompletion <: Completion
     mod::String
 end
 
+struct PackageCompletion <: Completion
+    package::String
+end
+
 struct PropertyCompletion <: Completion
     value
     property::Symbol
@@ -55,6 +59,7 @@ end
 completion_text(c::KeywordCompletion) = c.keyword
 completion_text(c::PathCompletion) = c.path
 completion_text(c::ModuleCompletion) = c.mod
+completion_text(c::PackageCompletion) = c.package
 completion_text(c::PropertyCompletion) = string(c.property)
 completion_text(c::FieldCompletion) = string(c.field)
 completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method, kwtype=c.kwtype))
@@ -539,7 +544,7 @@ end
     return matches
 end
 
-function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)
+function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)::Vector{Completion}
     loading_candidates = String[]
     open(project_file) do io
         state = :top
@@ -561,7 +566,7 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
             end
         end
     end
-    return loading_candidates
+    return Completion[PackageCompletion(name) for name in loading_candidates]
 end
 
 function completions(string, pos, context_module=Main)::Completions
@@ -651,7 +656,7 @@ function completions(string, pos, context_module=Main)::Completions
                         #   <Mod>.jl/src/<Mod>.jl
                         if isfile(joinpath(dir, pname))
                             endswith(pname, ".jl") && push!(suggestions,
-                                                            ModuleCompletion(Base.__toplevel__, pname[1:prevind(pname, end-2)]))
+                                                            PackageCompletion(pname[1:prevind(pname, end-2)]))
                         else
                             mod_name = if endswith(pname, ".jl")
                                 pname[1:prevind(pname, end-2)]
@@ -660,7 +665,7 @@ function completions(string, pos, context_module=Main)::Completions
                             end
                             if isfile(joinpath(dir, pname, "src",
                                                "$mod_name.jl"))
-                                push!(suggestions, ModuleCompletion(Base.__toplevel__, mod_name))
+                                push!(suggestions, PackageCompletion(mod_name))
                             end
                         end
                     end
