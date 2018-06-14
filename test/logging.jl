@@ -7,8 +7,8 @@ import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
 import Test: collect_test_logs, TestLogger
 using Base.Printf: @sprintf
 
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers
+isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
+using Main.MacroCalls
 
 #-------------------------------------------------------------------------------
 @testset "Logging" begin

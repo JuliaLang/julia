@@ -5,8 +5,8 @@ include("testenv.jl")
 
 using Test, Serialization
 
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using Main.TestHelpers
+isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
+using Main.MacroCalls
 
 @test_throws MethodError convert(Enum, 1.0)
 

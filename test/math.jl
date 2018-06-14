@@ -978,8 +978,8 @@ end
     end
 end
 
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+using .Main.Furlongs
 @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
 @test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
 @test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
