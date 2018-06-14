@@ -935,7 +935,18 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
                 success(pipeline(cmd, stdout=log, stderr=log))
             end
             if !ok
-                @error("Error building `$name`; see log file for further info")
+                n_lines = isinteractive() ? 100 : 5000
+                # TODO: Extract last n  lines more efficiently
+                log_lines = readlines(log_file)
+                log_show = join(log_lines[max(1, length(log_lines) - n_lines):end], '\n')
+                full_log_at, last_lines =
+                if length(log_lines) > n_lines
+                    "\n\nFull log at $log_file",
+                    ", showing the last $n_lines of log"
+                else
+                    "", ""
+                end
+                @error "Error building `$name`$last_lines: \n$log_show$full_log_at"
             end
         end
         with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid, version); might_need_to_resolve=might_need_to_resolve) do

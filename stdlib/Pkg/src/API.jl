@@ -262,7 +262,7 @@ function gc(ctx::Context=Context(); kwargs...)
     # Find all reachable packages through manifests recently used
     new_usage = Dict{String, Any}()
     paths_to_keep = String[]
-    printpkgstyle(ctx, :Active, "projects files at:")
+    printpkgstyle(ctx, :Active, "manifests at:")
     for (manifestfile, date) in manifest_date
         !isfile(manifestfile) && continue
         println("        `$manifestfile`")
@@ -341,7 +341,7 @@ function gc(ctx::Context=Context(); kwargs...)
             TOML.print(io, new_usage, sorted=true)
         end
     end
-    byte_save_str = length(paths_to_delete) == 0 ? "" : ("saving " * pretty_byte_str(sz))
+    byte_save_str = length(paths_to_delete) == 0 ? "" : (": " * pretty_byte_str(sz))
     printpkgstyle(ctx, :Deleted, "$(length(paths_to_delete)) package installations $byte_save_str")
 
     ctx.preview && preview_info()
