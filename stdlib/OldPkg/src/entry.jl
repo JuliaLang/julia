@@ -420,7 +420,7 @@ function update(branch::AbstractString, upkgs::Set{String})
         end
     end
     fixed = Read.fixed(avail,instd,dont_update)
-    shred!(LibGit2.CachedCredentials()) do creds
+    Base.shred!(LibGit2.CachedCredentials()) do creds
         stopupdate = false
         for (pkg,ver) in fixed
             ispath(pkg,".git") || continue
