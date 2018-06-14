@@ -222,10 +222,10 @@ struct AtA_or_AAt{T,S} <: AbstractArray{T, 2}
     buffer::Vector{T}
 end
 
-function AtA_or_AAt(A::AbstractMatrix{T}) where T
+function AtA_or_AAt(A)
+    T    = eltype(A)
     Tnew = typeof(zero(T)/sqrt(one(T)))
-    Anew = convert(AbstractMatrix{Tnew}, A)
-    AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(undef, max(size(A)...)))
+    AtA_or_AAt{Tnew,typeof(A)}(A, Vector{Tnew}(undef, max(size(A)...)))
 end
 
 function LinearAlgebra.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
@@ -239,7 +239,6 @@ function LinearAlgebra.mul!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVec
 end
 Base.size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
 LinearAlgebra.ishermitian(s::AtA_or_AAt) = true
-
 
 svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)
 svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))

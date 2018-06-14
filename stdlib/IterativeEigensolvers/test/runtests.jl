@@ -281,3 +281,17 @@ end
     @test_throws MethodError eigs(big.(rand(1:10, 10, 10)), rand(1:10, 10, 10))
     @test_throws MethodError svds(big.(rand(1:10, 10, 8)))
 end
+
+struct MyOp{S}
+    mat::S
+end
+Base.size(A::MyOp) = size(A.mat)
+Base.size(A::MyOp, i::Integer) = size(A.mat, i)
+Base.eltype(A::MyOp) = Float64
+Base.:*(A::MyOp, B::AbstractMatrix) = A.mat*B
+LinearAlgebra.mul!(y::AbstractVector, A::MyOp, x::AbstractVector) = mul!(y, A.mat, x)
+LinearAlgebra.adjoint(A::MyOp) = MyOp(adjoint(A.mat))
+@testset "svds for non-AbstractMatrix" begin
+    A = MyOp(randn(10, 9))
+    @test svds(A, v0 = ones(9))[1].S == svds(A.mat, v0 = ones(9))[1].S
+end
