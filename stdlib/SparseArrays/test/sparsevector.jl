@@ -1008,19 +1008,6 @@ end
         end
     end
 end
-@testset "kron" begin
-    testdims = ((5,10), (20,12), (25,30))
-    for (m,n) in testdims
-        x = sprand(m, 0.4)
-        y = sprand(n, 0.3)
-        @test Vector(kron(x,y)) == kron(Vector(x), Vector(y))
-        @test Vector(kron(Vector(x),y)) == kron(Vector(x), Vector(y))
-        @test Vector(kron(x,Vector(y))) == kron(Vector(x), Vector(y))
-        # test different types
-        z = convert(SparseVector{Float16, Int8}, y)
-        @test Vector(kron(x, z)) == kron(Vector(x), Vector(z))
-    end
-end
 
 @testset "fkeep!" begin
     x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
