@@ -553,16 +553,18 @@ function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(
     linfo
 end
 
-function rewrite_apply_exprargs!(inserter, typefunc, argexprs::Vector{Any})
+function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, sv::OptimizationState)
     new_argexprs = Any[argexprs[2]]
     # Flatten all tuples
     for arg in argexprs[3:end]
-        tupT = typefunc(arg)
+        tupT = argextype(arg, ir, sv.sp)
         t = widenconst(tupT)
         for i = 1:length(t.parameters)
             # Insert a getfield call here
             new_call = Expr(:call, Core.getfield, arg, i)
-            push!(new_argexprs, inserter(new_call, getfield_tfunc(tupT, Const(i))))
+            typ = getfield_tfunc(tupT, Const(i))
+            new_arg = insert_node!(ir, idx, typ, new_call)
+            push!(new_argexprs, new_arg)
         end
     end
     argexprs = new_argexprs
@@ -819,7 +821,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # Independent of whether we can inline, the above analysis allows us to rewrite
         # this apply call to a regular call
         if isapply
-            stmt.args = rewrite_apply_exprargs!((node, typ)->insert_node!(ir, idx, typ, node), arg->argextype(arg, ir, sv.sp), stmt.args)
+            stmt.args = rewrite_apply_exprargs!(ir, idx, stmt.args, sv)
         end
 
         if f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
