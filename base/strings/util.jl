@@ -135,15 +135,17 @@ function chomp(s::String)
 end
 
 """
-    lstrip(str::AbstractString[, chars])
+    lstrip([pred=isspace,] str::AbstractString)
+    lstrip(str::AbstractString, chars)
 
-Remove leading characters from `str`.
+Remove leading characters from `str`, either those specified by `chars` or those for
+which the function `pred` returns `true`.
 
 The default behaviour is to remove leading whitespace and delimiters: see
 [`isspace`](@ref) for precise details.
 
-The optional `chars` argument specifies which characters to remove: it can be a single character,
-vector or set of characters, or a predicate function.
+The optional `chars` argument specifies which characters to remove: it can be a single
+character, or a vector or set of characters.
 
 # Examples
 ```jldoctest
@@ -154,25 +156,28 @@ julia> lstrip(a)
 "March"
 ```
 """
-function lstrip(s::AbstractString, f=isspace)
+function lstrip(f, s::AbstractString)
     e = lastindex(s)
     for (i, c) in pairs(s)
         !f(c) && return SubString(s, i, e)
     end
     SubString(s, e+1, e)
 end
-lstrip(s::AbstractString, chars::Chars) = lstrip(s, in(chars))
+lstrip(s::AbstractString) = lstrip(isspace, s)
+lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 
 """
-    rstrip(str::AbstractString[, chars])
+    rstrip([pred=isspace,] str::AbstractString)
+    rstrip(str::AbstractString, chars)
 
-Remove trailing characters from `str`.
+Remove trailing characters from `str`, either those specified by `chars` or those for
+which the function `pred` returns `true`.
 
 The default behaviour is to remove leading whitespace and delimiters: see
 [`isspace`](@ref) for precise details.
 
-The optional `chars` argument specifies which characters to remove: it can be a single character,
-vector or set of characters, or a predicate function.
+The optional `chars` argument specifies which characters to remove: it can be a single
+character, or a vector or set of characters.
 
 # Examples
 ```jldoctest
@@ -183,13 +188,14 @@ julia> rstrip(a)
 "March"
 ```
 """
-function rstrip(s::AbstractString, f=isspace)
+function rstrip(f, s::AbstractString)
     for (i, c) in Iterators.reverse(pairs(s))
         f(c) || return SubString(s, 1, i)
     end
     SubString(s, 1, 0)
 end
-rstrip(s::AbstractString, chars::Chars) = rstrip(s, in(chars))
+rstrip(s::AbstractString) = rstrip(isspace, s)
+rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
     strip(str::AbstractString, [chars])
