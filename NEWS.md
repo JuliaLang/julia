@@ -1269,6 +1269,8 @@ Deprecated or removed
 
   * `atan2` is now a 2-argument method of `atan` ([#27248]).
 
+  * `hasfield` was added to check if a composite type has a field of a given name ([#27582])
+
 Command-line option changes
 ---------------------------
 
