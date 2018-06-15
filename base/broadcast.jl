@@ -958,6 +958,10 @@ _longest_tuple(A::NTuple{N,Any}, B::NTuple{N,Any}) where N = A
 
 ## scalar-range broadcast operations ##
 # DefaultArrayStyle and \ are not available at the time of range.jl
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::OrdinalRange) = r
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::StepRangeLen) = r
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::LinRange) = r
+
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::StepRangeLen) = StepRangeLen(-r.ref, -r.step, length(r), r.offset)
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::LinRange) = LinRange(-r.start, -r.stop, length(r))
