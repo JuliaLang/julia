@@ -587,7 +587,7 @@ function parse_package!(ctx, pkg, project_path)
         end
     end
     if !found_project_file
-        @warn "packages will require to have a [Julia]Project.toml file in the future"
+        @warn "packages will need to have a [Julia]Project.toml file in the future"
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
         else
