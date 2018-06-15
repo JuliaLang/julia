@@ -1281,7 +1281,7 @@ Deprecated or removed
 
   * The functions `eigs` and `svds` have been moved to the `Arpack.jl` package ([#27616]).
 
-  * `vecdot` and `norm` are deprecated in favor of `dot` and `norm`, respectively ([#27401]).
+  * `vecdot` and `vecnorm` are deprecated in favor of `dot` and `norm`, respectively ([#27401]).
 
 Command-line option changes
 ---------------------------
