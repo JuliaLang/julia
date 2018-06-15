@@ -248,7 +248,11 @@ USE_POLLY_ACC := 0     # Enable GPU code-generation
 CMAKE ?= cmake
 CMAKE_GENERATOR ?= make
 
-# Point pkg-config to only look at our libraries
+# Point pkg-config to only look at our libraries, overriding whatever
+# the user may have unwittingly set.  To pass PKG_CONFIG_* variables
+# through to the buildsystem, these must be set either on the command
+# line, or through `override` directives within Make.user
+export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
