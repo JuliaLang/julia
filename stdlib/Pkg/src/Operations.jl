@@ -529,7 +529,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UU
         success, path = exc_or_success, bt_or_path
         if success
             vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
-            printpkgstyle(ctx, :Downloaded, string(rpad(pkg.name * " ", max_name + 2, "─"), " ", vstr))
+            printpkgstyle(ctx, :Installed, string(rpad(pkg.name * " ", max_name + 2, "─"), " ", vstr))
         else
             push!(missed_packages, (pkg, path))
         end
