@@ -57,7 +57,7 @@ function stmt_effect_free(@nospecialize(stmt), src::IncrementalCompact, spvals::
 end
 
 function abstract_eval_ssavalue(s::SSAValue, src::IRCode)
-    return src.types[s.id]
+    return types(src)[s]
 end
 
 function abstract_eval_ssavalue(s::SSAValue, src::IncrementalCompact)

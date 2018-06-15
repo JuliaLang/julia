@@ -6194,3 +6194,11 @@ function baz27365()
 end
 
 @test isa(baz27365(), Float64)
+
+# Issue #27566
+function test27566(a,b)
+    c = (b,(0,1)...)
+    test27566(a, c...)
+end
+test27566(a, b, c, d) = a.*(b, c, d)
+@test test27566(1,1) == (1,0,1)
