@@ -242,8 +242,6 @@ Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
 Base.length(bc::Broadcasted) = prod(map(length, axes(bc)))
-Base.size(bc::Broadcasted) = _size(axes(bc))
-_size(::Tuple{Vararg{Base.OneTo}}) = map(length, axes(bc))
 
 function Base.iterate(bc::Broadcasted)
     iter = eachindex(bc)
