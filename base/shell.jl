@@ -9,7 +9,7 @@ function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
         ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
-        c in _default_delims || return SubString(s, 1, i)
+        isspace(c) || return SubString(s, 1, i)
         c_old = c
     end
     SubString(s, 1, 0)
