@@ -230,6 +230,11 @@ tlayout = TLayout(5,7,11)
 @test_throws ArgumentError fieldname(TLayout, 4)
 @test_throws BoundsError fieldoffset(TLayout, 4)
 
+for name in (:x, :y, :z)
+    @test hasfield(TLayout, name)
+end
+@test !hasfield(TLayout, :parameters)
+
 @test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
 @test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
