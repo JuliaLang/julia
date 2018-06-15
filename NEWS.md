@@ -507,6 +507,13 @@ This section lists changes that do not have deprecation warnings.
     the `@sync` block.
     This change makes `@schedule` redundant with `@async`, so `@schedule` has been
     deprecated ([#27164]).
+    
+  * `norm(A::AbstractMatrix, p=2)` computes no longer the operator/matrix norm but the `norm` of `A`
+    as for other iterables, i.e. as if it were a vector. Especially, `norm(A::AbstractMatrix)` is the
+    Frobenius norm. To compute the operator/matrix norm, use the new function `opnorm` ([#27401]).
+    
+  * `dot(u, v)` now acts recursively. Instead of `sum(u[i]' * v[i] for i in ...)`, it computes 
+    `sum(dot(u[i], v[i]) for i in ...)`, similarly to `vecdot` before ([#27401]).
 
 Library improvements
 --------------------
@@ -1268,6 +1275,8 @@ Deprecated or removed
     [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl) ([#27459], [#27473]).
 
   * `atan2` is now a 2-argument method of `atan` ([#27248]).
+  
+  * `vecdot` and `norm` are deprecated in favor of `dot` and `norm`, respectively ([#27401]).
 
 Command-line option changes
 ---------------------------
@@ -1605,3 +1614,4 @@ Command-line option changes
 [#27189]: https://github.com/JuliaLang/julia/issues/27189
 [#27212]: https://github.com/JuliaLang/julia/issues/27212
 [#27248]: https://github.com/JuliaLang/julia/issues/27248
+[#27401]: https://github.com/JuliaLang/julia/issues/27401
