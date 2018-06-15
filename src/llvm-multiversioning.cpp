@@ -252,6 +252,7 @@ struct CloneCtx {
     void clone_all_partials();
     void fix_gv_uses();
     void fix_inst_uses();
+    void emit_plt();
     void emit_metadata();
 private:
     void prepare_vmap(ValueToValueMapTy &vmap);
@@ -545,60 +546,6 @@ void CloneCtx::check_partial(Group &grp, Target &tgt)
         grp.clone_fs.insert(i);
         all_origs.insert(orig_f);
     }
-    std::set<Function*> sets[2]{all_origs, std::set<Function*>{}};
-    auto *cur_set = &sets[0];
-    auto *next_set = &sets[1];
-    // Reduce dispatch by expand the cloning set to functions that are directly called by
-    // and calling cloned functions.
-    auto &graph = pass->getAnalysis<CallGraphWrapperPass>().getCallGraph();
-    while (!cur_set->empty()) {
-        for (auto orig_f: *cur_set) {
-            // Use the uncloned function since it's already in the call graph
-            auto node = graph[orig_f];
-            for (const auto &I: *node) {
-                auto child_node = I.second;
-                auto orig_child_f = child_node->getFunction();
-                if (!orig_child_f)
-                    continue;
-                // Already cloned
-                if (all_origs.count(orig_child_f))
-                    continue;
-                bool calling_clone = false;
-                for (const auto &I2: *child_node) {
-                    auto orig_child_f2 = I2.second->getFunction();
-                    if (!orig_child_f2)
-                        continue;
-                    if (all_origs.count(orig_child_f2)) {
-                        calling_clone = true;
-                        break;
-                    }
-                }
-                if (!calling_clone)
-                    continue;
-                next_set->insert(orig_child_f);
-                all_origs.insert(orig_child_f);
-                auto child_f = grp.base_func(orig_child_f);
-                Function *new_f = Function::Create(child_f->getFunctionType(),
-                                                   child_f->getLinkage(),
-                                                   child_f->getName() + suffix, &M);
-                new_f->copyAttributesFrom(child_f);
-                vmap[child_f] = new_f;
-            }
-        }
-        std::swap(cur_set, next_set);
-        next_set->clear();
-    }
-    for (uint32_t i = 0; i < nfuncs; i++) {
-        // Only need to handle expanded functions
-        if (func_infos[i] & flag)
-            continue;
-        auto orig_f = orig_funcs[i];
-        if (all_origs.count(orig_f)) {
-            if (!has_cloneall)
-                cloned.insert(orig_f);
-            grp.clone_fs.insert(i);
-        }
-    }
 }
 
 void CloneCtx::clone_partial(Group &grp, Target &tgt)
@@ -699,7 +646,7 @@ Constant *CloneCtx::rewrite_gv_init(const Stack& stack)
 
 void CloneCtx::fix_gv_uses()
 {
-    auto single_pass = [&] (Function *orig_f) {
+    auto single_pass = [this] (uint32_t fid, Function *orig_f) {
         bool changed = false;
         for (auto uses = ConstantUses<GlobalValue>(orig_f, M); !uses.done(); uses.next()) {
             changed = true;
@@ -711,7 +658,6 @@ void CloneCtx::fix_gv_uses()
             auto val = cast<GlobalVariable>(info.val);
             assert(info.use->getOperandNo() == 0);
             assert(!val->isConstant());
-            auto fid = get_func_id(orig_f);
             auto addr = ConstantExpr::getPtrToInt(val, T_size);
             if (info.offset)
                 addr = ConstantExpr::getAdd(addr, ConstantInt::get(T_size, info.offset));
@@ -723,7 +669,17 @@ void CloneCtx::fix_gv_uses()
     for (auto orig_f: orig_funcs) {
         if (!has_cloneall && !cloned.count(orig_f))
             continue;
-        while (single_pass(orig_f)) {
+        auto id = get_func_id(orig_f);
+        // create the const_relocs slot for id
+        // Null initialize so that LLVM put it in the correct section.
+        auto &slot = const_relocs[id];
+        assert(!slot);
+        slot = new GlobalVariable(M, T_pvoidfunc, false, GlobalVariable::InternalLinkage,
+                                  ConstantPointerNull::get(T_pvoidfunc),
+                                  orig_f->getName() + ".reloc_slot");
+        // rewrite any Global initialization that uses this function
+        // to instead be initialized by our linker to point to the real function
+        while (single_pass(id, orig_f)) {
         }
     }
 }
@@ -733,11 +689,35 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F)
     // Null initialize so that LLVM put it in the correct section.
     auto id = get_func_id(F);
     auto &slot = const_relocs[id];
-    if (!slot)
-        slot = new GlobalVariable(M, T_pvoidfunc, false, GlobalVariable::InternalLinkage,
-                                  ConstantPointerNull::get(T_pvoidfunc),
-                                  F->getName() + ".reloc_slot");
+    assert(slot);
     return std::make_pair(id, slot);
+}
+
+void CloneCtx::emit_plt()
+{
+    for (auto F: orig_funcs) {
+        if (!has_cloneall && !cloned.count(F))
+            continue;
+        Function *PLT_F = Function::Create(F->getFunctionType(), F->getLinkage(), "", &M);
+        PLT_F->takeName(F);
+        PLT_F->copyAttributesFrom(F);
+        PLT_F->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+        F->setName(PLT_F->getName() + ".original");
+        BasicBlock *BB = BasicBlock::Create(ctx, "plt", PLT_F);
+        uint32_t id;
+        GlobalVariable *slot;
+        std::tie(id, slot) = get_reloc_slot(F);
+        Instruction *ptr = new LoadInst(T_pvoidfunc, slot, "", false, BB);
+        ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+        ptr = new BitCastInst(ptr, F->getType(), "", BB);
+        SmallVector<Value*, 16> args;
+        for (auto &arg: PLT_F->args())
+            args.push_back(&arg);
+        CallInst *ret = CallInst::Create(F->getFunctionType(), ptr, args, "", BB);
+        ret->setAttributes(F->getAttributes());
+        ret->setTailCall();
+        ReturnInst::Create(ctx, ret->getType()->isVoidTy() ? nullptr : ret, BB);
+    }
 }
 
 template<typename Stack>
@@ -1061,6 +1041,12 @@ bool MultiVersioning::runOnModule(Module &M)
     // on all targets, the caller site does not need a relocation slot).
     // A target needs a slot to be initialized iff at least one caller is not initialized.
     clone.fix_inst_uses();
+
+    // For any function that was cloned, emit a generic stub call
+    // under the original name. This is essentially what we manually
+    // inline and specialize above, but may be needed if there's still
+    // another caller which we don't know about that's external to this module.
+    clone.emit_plt();
 
     // Store back sysimg information with the correct format.
     // At this point, we should have fixed up all the uses of the cloned functions
