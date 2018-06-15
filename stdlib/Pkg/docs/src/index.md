@@ -315,6 +315,16 @@ Downloaded MacroTools ─ v0.4.0
 The dependencies of the unregistered package (here `MacroTools`) got installed.
 For unregistered packages we could have given a branch (or commit SHA) to track using `#`, just like for registered packages.
 
+Finally, if we want to use a *local* package that is not a git repository, we can use `develop` followed by its local path:
+
+```
+(HelloWorld) pkg> develop /PATH/TO/LOCAL/PACKAGE/MyGreatPackage
+ Resolving package versions...
+  Updating "~/Documents/HelloWorld/Project.toml"
+  [f2b96e9e] + MyGreatPackage v0.1.0 /PATH/TO/LOCAL/PACKAGE/MyGreatPackage
+  Updating "~/Documents/HelloWorld/Manifest.toml"
+  [f2b96e9e] + MyGreatPackage v0.1.0 /PATH/TO/LOCAL/PACKAGE/MyGreatPackage
+ ```
 
 ## Developing packages
 
