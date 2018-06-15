@@ -1846,12 +1846,9 @@ JL_DLLEXPORT int32_t jl_invoke_api(jl_method_instance_t *mi)
 }
 
 // compile-time method lookup
-jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world)
+jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache)
 {
     JL_TIMING(METHOD_LOOKUP_COMPILE);
-    if (!jl_is_datatype(((jl_value_t*)types)) || !types->isdispatchtuple)
-        /* TODO: if (!jl_isa_compileable_sig((jl_value_t*)types)) return NULL; */
-        return NULL;
     if (jl_has_free_typevars((jl_value_t*)types))
         return NULL; // don't poison the cache due to a malformed query
     if (!jl_has_concrete_subtype((jl_value_t*)types))
@@ -1863,27 +1860,42 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world
     jl_value_t *matches = jl_matching_methods(types, 1, 1, world, &min_valid, &max_valid);
     if (matches == jl_false || jl_array_len(matches) != 1)
         return NULL;
-    jl_tupletype_t *ti = NULL;
+    jl_tupletype_t *tt = NULL;
     jl_svec_t *newparams = NULL;
-    JL_GC_PUSH3(&matches, &ti, &newparams);
+    JL_GC_PUSH3(&matches, &tt, &newparams);
     jl_svec_t *match = (jl_svec_t*)jl_array_ptr_ref(matches, 0);
     jl_method_t *m = (jl_method_t*)jl_svecref(match, 2);
     jl_svec_t *env = (jl_svec_t*)jl_svecref(match, 1);
-    ti = (jl_tupletype_t*)jl_svecref(match, 0);
+    jl_tupletype_t *ti = (jl_tupletype_t*)jl_svecref(match, 0);
     jl_method_instance_t *nf = NULL;
-    if (jl_is_datatype(ti) &&
-            jl_egal((jl_value_t*)ti, (jl_value_t*)types) && // use concrete_match+subtype instead of egal?
-            !jl_has_call_ambiguities((jl_value_t*)types, m)) {
-        // get the specialization without caching it
+    if (jl_is_datatype(ti)) {
         jl_datatype_t *dt = jl_first_argument_datatype((jl_value_t*)ti);
-        assert(jl_is_datatype(dt));
-        jl_methtable_t *mt = dt->name->mt;
-        intptr_t nspec = (mt == jl_type_type_mt ? m->nargs + 1 : mt->max_args + 2);
-        jl_compilation_sig(ti, env, m, nspec, &newparams);
-        if (newparams)
-            ti = jl_apply_tuple_type(newparams);
-        nf = jl_specializations_get_linfo(m, (jl_value_t*)ti, env, world);
-        assert(nf->min_world <= world && nf->max_world >= world);
+        if (dt && jl_is_datatype(dt)) {
+            // get the specialization without caching it
+            jl_methtable_t *mt = dt->name->mt;
+            if (mt_cache && ((jl_datatype_t*)ti)->isdispatchtuple) {
+                // Since we also use this presence in the cache
+                // to trigger compilation when producing `.ji` files,
+                // inject it there now if we think it will be
+                // used via dispatch later (e.g. because it was hinted via a call to `precompile`)
+                jl_methtable_t *mt = dt->name->mt;
+                JL_LOCK(&mt->writelock);
+                nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, ti, m, world, env, /*allow_exec*/1);
+                JL_UNLOCK(&mt->writelock);
+                assert(nf->min_world <= world && nf->max_world >= world);
+            }
+            else {
+                intptr_t nspec = (mt == jl_type_type_mt ? m->nargs + 1 : mt->max_args + 2);
+                jl_compilation_sig(ti, env, m, nspec, &newparams);
+                tt = (newparams ? jl_apply_tuple_type(newparams) : ti);
+                int is_compileable = ((jl_datatype_t*)ti)->isdispatchtuple ||
+                    jl_isa_compileable_sig(tt, m);
+                if (is_compileable) {
+                    nf = jl_specializations_get_linfo(m, (jl_value_t*)tt, env, world);
+                    assert(nf->min_world <= world && nf->max_world >= world);
+                }
+            }
+        }
     }
     JL_GC_POP();
     return nf;
@@ -1892,7 +1904,7 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 {
     size_t world = jl_world_counter;
-    jl_method_instance_t *li = jl_get_specialization1(types, world);
+    jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
     if (li == NULL)
         return 0;
     jl_code_info_t *src = NULL;
@@ -1917,8 +1929,10 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 
 JL_DLLEXPORT jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types, size_t world)
 {
-    jl_method_instance_t *li = jl_get_specialization1(types, world);
-    return li ? (jl_value_t*)li : jl_nothing;
+    jl_method_instance_t *li = jl_get_specialization1(types, world, 0);
+    if (!li || jl_has_call_ambiguities((jl_value_t*)types, li->def.method))
+        return jl_nothing;
+    return (jl_value_t*)li;
 }
 
 // see if a call to m with computed from `types` is ambiguous
