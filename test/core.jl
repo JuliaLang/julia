@@ -6219,3 +6219,19 @@ function foo27594()
 end
 
 @test foo27594() == 1
+
+# Issue 27597
+function f27597(y)
+    x = Int[]
+
+    if isempty(y)
+        y = 1:length(x)
+    elseif false
+        ;
+    end
+
+    length(y)
+    return y
+end
+@test f27597([1]) == [1]
+@test f27597([]) == 1:0
