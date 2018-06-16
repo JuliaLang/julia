@@ -139,14 +139,50 @@ x
 
 ∃
 
-y</code></pre><p>Julia uses the UTF-8 encoding by default, and support for new encodings can be added by packages. For example, the <a href="https://github.com/JuliaArchive/LegacyStrings.jl">LegacyStrings.jl</a> package implements <code>UTF16String</code> and <code>UTF32String</code> types. Additional discussion of other encodings and how to implement support for them is beyond the scope of this document for the time being. For further discussion of UTF-8 encoding issues, see the section below on <a href="#man-byte-array-literals-1">byte array literals</a>. The <a href="../../base/strings/#Base.transcode"><code>transcode</code></a> function is provided to convert data between the various UTF-xx encodings, primarily for working with external data and libraries.</p><h2><a class="nav-anchor" id="Concatenation-1" href="#Concatenation-1">Concatenation</a></h2><p>One of the most common and useful string operations is concatenation:</p><pre><code class="language-julia-repl">julia&gt; greet = &quot;Hello&quot;
+y</code></pre><p>Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to treat any byte sequence as a <code>String</code>. In such situations a rule is that when parsing a sequence of code units from left to right characters are formed by the longest sequence of 8-bit code units that matches the start of one of the following bit patterns (each <code>x</code> can be <code>0</code> or <code>1</code>):</p><ul><li><code>0xxxxxxx</code>;</li><li><code>110xxxxx</code> <code>10xxxxxx</code>;</li><li><code>1110xxxx</code> <code>10xxxxxx</code> <code>10xxxxxx</code>;</li><li><code>11110xxx</code> <code>10xxxxxx</code> <code>10xxxxxx</code> <code>10xxxxxx</code>;</li><li><code>10xxxxxx</code>;</li><li><code>11111xxx</code>.</li></ul><p>In particular this implies that overlong and too high code unit sequences are accepted. This rule is best explained by an example:</p><pre><code class="language-julia-repl">julia&gt; s = &quot;\xc0\xa0\xe2\x88\xe2|&quot;
+&quot;\xc0\xa0\xe2\x88\xe2|&quot;
+
+julia&gt; foreach(display, s)
+&#39;\xc0\xa0&#39;: [overlong] ASCII/Unicode U+0020 (category Zs: Separator, space)
+&#39;\xe2\x88&#39;: Malformed UTF-8 (category Ma: Malformed, bad data)
+&#39;\xe2&#39;: Malformed UTF-8 (category Ma: Malformed, bad data)
+&#39;|&#39;: ASCII/Unicode U+007c (category Sm: Symbol, math)
+
+julia&gt; isvalid.(collect(s))
+4-element BitArray{1}:
+ false
+ false
+ false
+  true
+
+julia&gt; s2 = &quot;\xf7\xbf\xbf\xbf&quot;
+&quot;\U1fffff&quot;
+
+julia&gt; foreach(display, s2)
+&#39;\U1fffff&#39;: Unicode U+1fffff (category In: Invalid, too high)</code></pre><p>We can see that the first two code units in the string <code>s</code> form an overlong encoding of space character. It is invalid, but is accepted in a string as a single character. The next two code units form a valid start of a three-byte UTF-8 sequence. However, the fifth code unit <code>\xe2</code> is not its valid continuation. Therefore code units 3 and 4 are also interpreted as malformed characters in this string. Similarly code unit 5 forms a malformed character because <code>|</code> is not a valid continuation to it. Finally the string <code>s2</code> contains one too high code point.</p><p>Julia uses the UTF-8 encoding by default, and support for new encodings can be added by packages. For example, the <a href="https://github.com/JuliaArchive/LegacyStrings.jl">LegacyStrings.jl</a> package implements <code>UTF16String</code> and <code>UTF32String</code> types. Additional discussion of other encodings and how to implement support for them is beyond the scope of this document for the time being. For further discussion of UTF-8 encoding issues, see the section below on <a href="#man-byte-array-literals-1">byte array literals</a>. The <a href="../../base/strings/#Base.transcode"><code>transcode</code></a> function is provided to convert data between the various UTF-xx encodings, primarily for working with external data and libraries.</p><h2><a class="nav-anchor" id="Concatenation-1" href="#Concatenation-1">Concatenation</a></h2><p>One of the most common and useful string operations is concatenation:</p><pre><code class="language-julia-repl">julia&gt; greet = &quot;Hello&quot;
 &quot;Hello&quot;
 
 julia&gt; whom = &quot;world&quot;
 &quot;world&quot;
 
 julia&gt; string(greet, &quot;, &quot;, whom, &quot;.\n&quot;)
-&quot;Hello, world.\n&quot;</code></pre><p>Julia also provides <code>*</code> for string concatenation:</p><pre><code class="language-julia-repl">julia&gt; greet * &quot;, &quot; * whom * &quot;.\n&quot;
+&quot;Hello, world.\n&quot;</code></pre><p>A situation which is important to be aware of is when invalid UTF-8 strings are concatenated. In that case the resulting string may contain different characters than the input strings, and its number of characters may be lower than sum of numbers of characters of the concatenated strings, e.g.:</p><pre><code class="language-julia-repl">julia&gt; a, b = &quot;\xe2\x88&quot;, &quot;\x80&quot;
+(&quot;\xe2\x88&quot;, &quot;\x80&quot;)
+
+julia&gt; c = a*b
+&quot;∀&quot;
+
+julia&gt; collect.([a, b, c])
+3-element Array{Array{Char,1},1}:
+ [&#39;\xe2\x88&#39;]
+ [&#39;\x80&#39;]
+ [&#39;∀&#39;]
+
+julia&gt; length.([a, b, c])
+3-element Array{Int64,1}:
+ 1
+ 1
+ 1</code></pre><p>This situation can happen only for invalid UTF-8 strings. For valid UTF-8 strings concatenation preserves all characters in strings and additivity of string lengths.</p><p>Julia also provides <code>*</code> for string concatenation:</p><pre><code class="language-julia-repl">julia&gt; greet * &quot;, &quot; * whom * &quot;.\n&quot;
 &quot;Hello, world.\n&quot;</code></pre><p>While <code>*</code> may seem like a surprising choice to users of languages that provide <code>+</code> for string concatenation, this use of <code>*</code> has precedent in mathematics, particularly in abstract algebra.</p><p>In mathematics, <code>+</code> usually denotes a <em>commutative</em> operation, where the order of the operands does not matter. An example of this is matrix addition, where <code>A + B == B + A</code> for any matrices <code>A</code> and <code>B</code> that have the same shape. In contrast, <code>*</code> typically denotes a <em>noncommutative</em> operation, where the order of the operands <em>does</em> matter. An example of this is matrix multiplication, where in general <code>A * B != B * A</code>. As with matrix multiplication, string concatenation is noncommutative: <code>greet * whom != whom * greet</code>. As such, <code>*</code> is a more natural choice for an infix string concatenation operator, consistent with common mathematical use.</p><p>More precisely, the set of all finite-length strings <em>S</em> together with the string concatenation operator <code>*</code> forms a <a href="https://en.wikipedia.org/wiki/Free_monoid">free monoid</a> (<em>S</em>, <code>*</code>). The identity element of this set is the empty string, <code>&quot;&quot;</code>. Whenever a free monoid is not commutative, the operation is typically represented as <code>\cdot</code>, <code>*</code>, or a similar symbol, rather than <code>+</code>, which as stated usually implies commutativity.</p><h2><a class="nav-anchor" id="string-interpolation-1" href="#string-interpolation-1">Interpolation</a></h2><p>Constructing strings using concatenation can become a bit cumbersome, however. To reduce the need for these verbose calls to <a href="../../base/strings/#Base.string"><code>string</code></a> or repeated multiplications, Julia allows interpolation into string literals using <code>$</code>, as in Perl:</p><pre><code class="language-julia-repl">julia&gt; &quot;$greet, $whom.\n&quot;
 &quot;Hello, world.\n&quot;</code></pre><p>This is more readable and convenient and equivalent to the above string concatenation – the system rewrites this apparent single string literal into a concatenation of string literals with variables.</p><p>The shortest complete expression after the <code>$</code> is taken as the expression whose value is to be interpolated into the string. Thus, you can interpolate any expression into a string using parentheses:</p><pre><code class="language-julia-repl">julia&gt; &quot;1 + 2 = $(1 + 2)&quot;
 &quot;1 + 2 = 3&quot;</code></pre><p>Both concatenation and string interpolation call <a href="../../base/strings/#Base.string"><code>string</code></a> to convert objects into string form. Most non-<code>AbstractString</code> objects are converted to strings closely corresponding to how they are entered as literal expressions:</p><pre><code class="language-julia-repl">julia&gt; v = [1,2,3]
@@ -314,7 +350,20 @@ x   Tells the regular expression parser to ignore most whitespace
 r&quot;a+.*b+.*?d$&quot;ims
 
 julia&gt; match(r&quot;a+.*b+.*?d$&quot;ism, &quot;Goodbye,\nOh, angry,\nBad world\n&quot;)
-RegexMatch(&quot;angry,\nBad world&quot;)</code></pre><p>Triple-quoted regex strings, of the form <code>r&quot;&quot;&quot;...&quot;&quot;&quot;</code>, are also supported (and may be convenient for regular expressions containing quotation marks or newlines).</p><h2><a class="nav-anchor" id="man-byte-array-literals-1" href="#man-byte-array-literals-1">Byte Array Literals</a></h2><p>Another useful non-standard string literal is the byte-array string literal: <code>b&quot;...&quot;</code>. This form lets you use string notation to express read only literal byte arrays – i.e. arrays of <a href="../../base/numbers/#Core.UInt8"><code>UInt8</code></a> values. The type of those objects is <code>CodeUnits{UInt8, String}</code>. The rules for byte array literals are the following:</p><ul><li>ASCII characters and ASCII escapes produce a single byte.</li><li><code>\x</code> and octal escape sequences produce the <em>byte</em> corresponding to the escape value.</li><li>Unicode escape sequences produce a sequence of bytes encoding that code point in UTF-8.</li></ul><p>There is some overlap between these rules since the behavior of <code>\x</code> and octal escapes less than 0x80 (128) are covered by both of the first two rules, but here these rules agree. Together, these rules allow one to easily use ASCII characters, arbitrary byte values, and UTF-8 sequences to produce arrays of bytes. Here is an example using all three:</p><pre><code class="language-julia-repl">julia&gt; b&quot;DATA\xff\u2200&quot;
+RegexMatch(&quot;angry,\nBad world&quot;)</code></pre><p>The <code>r&quot;...&quot;</code> literal is constructed without interpolation and unescaping (except for quotation mark <code>&quot;</code> which still has to be escaped). Here is an example showing the difference from standard string literals:</p><pre><code class="language-julia-repl">julia&gt; x = 10
+10
+
+julia&gt; r&quot;$x&quot;
+r&quot;$x&quot;
+
+julia&gt; &quot;$x&quot;
+&quot;10&quot;
+
+julia&gt; r&quot;\x&quot;
+r&quot;\x&quot;
+
+julia&gt; &quot;\x&quot;
+ERROR: syntax: invalid escape sequence</code></pre><p>Triple-quoted regex strings, of the form <code>r&quot;&quot;&quot;...&quot;&quot;&quot;</code>, are also supported (and may be convenient for regular expressions containing quotation marks or newlines).</p><h2><a class="nav-anchor" id="man-byte-array-literals-1" href="#man-byte-array-literals-1">Byte Array Literals</a></h2><p>Another useful non-standard string literal is the byte-array string literal: <code>b&quot;...&quot;</code>. This form lets you use string notation to express read only literal byte arrays – i.e. arrays of <a href="../../base/numbers/#Core.UInt8"><code>UInt8</code></a> values. The type of those objects is <code>CodeUnits{UInt8, String}</code>. The rules for byte array literals are the following:</p><ul><li>ASCII characters and ASCII escapes produce a single byte.</li><li><code>\x</code> and octal escape sequences produce the <em>byte</em> corresponding to the escape value.</li><li>Unicode escape sequences produce a sequence of bytes encoding that code point in UTF-8.</li></ul><p>There is some overlap between these rules since the behavior of <code>\x</code> and octal escapes less than 0x80 (128) are covered by both of the first two rules, but here these rules agree. Together, these rules allow one to easily use ASCII characters, arbitrary byte values, and UTF-8 sequences to produce arrays of bytes. Here is an example using all three:</p><pre><code class="language-julia-repl">julia&gt; b&quot;DATA\xff\u2200&quot;
 8-element Base.CodeUnits{UInt8,String}:
  0x44
  0x41
