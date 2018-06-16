@@ -101,7 +101,7 @@ using Test, LinearAlgebra, SparseArrays, Random
         k = 3
         A = randn(n,n); A = A'A
         B = randn(n,k); B = B*B'
-        @test sort(eigs(A, B, nev = k, sigma = 1.0)[1]) ≈ sort(eigvals(A, B)[1:k])
+        @test sort(eigs(A, B, nev = k, sigma = 1.0, explicittransform=false)[1]) ≈ sort(eigvals(A, B)[1:k])
     end
 end
 

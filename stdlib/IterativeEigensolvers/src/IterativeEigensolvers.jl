@@ -69,8 +69,10 @@ eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;
                nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
                tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
-               ritzvec::Bool=true)
+               ritzvec::Bool=true, explicittransform::Union{Bool, Nothing}=nothing)
     n = checksquare(A)
+
+    eigval_postprocess = false; # If we need to shift-and-invert eigvals as postprocessing
 
     T = eltype(A)
     iscmplx = T <: Complex
@@ -115,10 +117,48 @@ function _eigs(A, B;
         which=:LM
     end
 
+    if (explicittransform==nothing)
+        # Try to automatically detect if it is good to carry out an explicittransform
+        if (isgeneral && (isshift  || which==:LM))
+            explicittransform = true
+        else
+            explicittransform = false
+        end
+    end
+
     if sigma !== nothing && !iscmplx && isa(sigma,Complex)
         throw(ArgumentError("complex shifts for real problems are not yet supported"))
     end
     sigma = isshift ? convert(T,sigma) : zero(T)
+
+    if (!explicittransform && isgeneral && !ishermitian(B))
+        @warn "B matrix not hermitian. Explicit transformation is generally needed unless B is definite. "
+    end
+    if (explicittransform==true && (which==:LM || which==:LR || which == :LI) && !isgeneral)
+        @warn "Explicit transformation with :L* for standard eigenvalue problems has no meaning. Changing to explicittransform=false."
+       explicittransform=false
+    end
+
+    sigma0=sigma; # Store for inverted shift-and-invert
+    if explicittransform
+        isgeneral=false
+        bmat="I"
+        sym=false # Explicit transform destroys symmetry in general
+        sigma=zero(T);
+        if (isshift) # Try to keep the original meaning of which & sigma
+            if (which == :LM)
+                which = :SM
+            elseif (which == :SM)
+                which = :LM
+            end
+            if (which == :LR)
+                which = :SR
+            elseif (which == :SR)
+                which = :LR
+            end
+        end
+
+    end
 
     if !isempty(v0)
         if length(v0) != n
@@ -155,16 +195,33 @@ function _eigs(A, B;
     end
 
     # Refer to ex-*.doc files in ARPACK/DOCUMENTS for calling sequence
-    matvecA!(y, x) = mul!(y, A, x)
-    if !isgeneral           # Standard problem
+    matvecA! = (y, x) -> mul!(y, A, x)
+    if !isgeneral || explicittransform      # Standard problem
         matvecB = x -> x
-        if !isshift         #    Regular mode
-            mode       = 1
-            solveSI = x->x
-        else                #    Shift-invert mode
-            mode       = 3
-            F = factorize(A - UniformScaling(sigma))
-            solveSI = x -> F \ x
+
+        if (!explicittransform)
+            if !isshift         #    Regular mode
+                mode       = 1
+                solveSI = x->x
+            else                #    Shift-invert mode
+                mode       = 3
+                F = factorize(A - UniformScaling(sigma))
+                solveSI = x -> F \ x
+            end
+        else
+            # doing explicit transformation to standard eigprob
+            if (which == :LM || which == :LI || which == :LR)
+                eigval_postprocess = false # No eigval postprocess necessary the operator is B^{-1}A
+                F = factorize(B);
+                matvecA! = (y,x) -> (y[:]= F \ (A*x))
+            else
+                eigval_postprocess = true
+                sigma = zero(T);
+                F = factorize(sigma0*B - A);
+                matvecA! = (y,x) -> (y[:]= F \ (B*x))
+            end
+            mode = 1;
+            solveSI = x -> x;
         end
     else                    # Generalized eigenproblem
         matvecB = x -> B * x
@@ -191,6 +248,11 @@ function _eigs(A, B;
     nev = length(output[1])
     nconv = output[ritzvec ? 3 : 2]
     nev ≤ nconv || @warn "Not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv"
+
+    if (eigval_postprocess) # invert the shift-and-inverse
+       λ = sigma0 .- 1 ./output[1];
+       return (λ, output[2:end]...)
+    end
 
     return output
 end
