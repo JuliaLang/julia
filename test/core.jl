@@ -5742,7 +5742,7 @@ function constant23367 end
 let
     b = B23367(91, A23367(ntuple(i -> Int8(i), Val(7))), 23)
     @eval @noinline constant23367(a, b) = (a ? b : $b)
-    b2 = &b[] # copy b via field assignment
+    b2 = (&b)[] # copy b via field assignment
     b3 = B23367[b][1] # copy b via array assignment
     addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
     @test addr(b)  == addr(b)

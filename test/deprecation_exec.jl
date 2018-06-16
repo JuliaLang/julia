@@ -205,9 +205,6 @@ end
             for i=1:10
             end
         end))
-
-    # #6080
-    @test_deprecated r"Syntax `&argument`.*is deprecated" Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x)))
 end
 
 module LogTest
