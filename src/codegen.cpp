@@ -6242,7 +6242,10 @@ static std::unique_ptr<Module> emit_function(
             workstack.push_back(lname - 1);
             BasicBlock *ifnot = BB[lname];
             BasicBlock *ifso = BB[cursor+2];
-            ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
+            if (ifnot == ifso)
+                ctx.builder.CreateBr(ifnot);
+            else
+                ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
             find_next_stmt(cursor + 1);
             continue;
         }
@@ -6332,6 +6335,19 @@ static std::unique_ptr<Module> emit_function(
             // This edge was statically unreachable. Don't codegen it.
             if (!FromBB)
                 continue;
+            // We folded this branch to an unconditional branch, only codegen it once
+            if (cast<BranchInst>(FromBB->getTerminator())->isUnconditional()) {
+                bool found = false;
+                for (size_t j = 0; j < i; ++j) {
+                    size_t j_edge = jl_unbox_long(jl_array_ptr_ref(edges, j));
+                    if (j_edge == edge) {
+                        found = true;
+                        assert(jl_egal(value, jl_array_ptr_ref(values, j)));
+                    }
+                }
+                if (found)
+                    continue;
+            }
 #ifndef JL_NDEBUG
             if (FromBB) {
                 bool found_pred = false;
