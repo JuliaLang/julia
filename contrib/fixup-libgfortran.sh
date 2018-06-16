@@ -29,11 +29,6 @@ fi
 
 private_libdir=$1
 
-if [ ! -f "$private_libdir/libarpack.$SHLIB_EXT" ]; then
-    echo "ERROR: Could not open $private_libdir/libarpack.$SHLIB_EXT" >&2
-    exit 2
-fi
-
 find_shlib()
 {
     lib_path="$1"
@@ -52,7 +47,7 @@ private_libname()
 }
 
 # First, discover all the places where libgfortran/libgcc is, as well as their true SONAMES
-for lib in arpack lapack; do
+for lib in lapack; do
     if [ -f "$private_libdir/lib$lib.$SHLIB_EXT" ]; then
         # Find the paths to the libraries we're interested in.  These are almost
         # always within the same directory, but we like to be general.
@@ -125,11 +120,11 @@ change_linkage()
 }
 
 # For every library that remotely touches libgfortran stuff (the libraries we
-# have copied in ourselves as well as arpack, etc...) we must
+# have copied in ourselves) we must
 # update the linkage to point to @rpath (on OSX) or $ORIGIN (on Linux) so
 # that direct links to the old libgfortran directories are instead directed
 # to the proper location, which is our $private_libdir.
-for lib in libopenblas libarpack libcholmod liblapack $SONAMES; do
+for lib in libopenblas libcholmod liblapack $SONAMES; do
     # Grab every incarnation of that library that exists within $private_libdir
     # (e.g. "libopenblas.so", and "libopenblas.so.0", etc...)
     for lib_path in $private_libdir/$lib*; do

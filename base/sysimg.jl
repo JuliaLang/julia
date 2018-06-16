@@ -520,7 +520,6 @@ let
             :Future,
             :OldPkg,
             :LinearAlgebra,
-            :IterativeEigensolvers,
             :SparseArrays,
             :SuiteSparse,
             :SharedArrays,
@@ -646,9 +645,6 @@ end
     @deprecate_stdlib DateFormat Dates true
     @eval @deprecate_stdlib $(Symbol("@dateformat_str")) Dates true
     @deprecate_stdlib now Dates true
-
-    @deprecate_stdlib eigs IterativeEigensolvers true
-    @deprecate_stdlib svds IterativeEigensolvers true
 
     @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
     @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true

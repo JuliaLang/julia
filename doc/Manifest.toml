@@ -14,7 +14,6 @@ version = "0.65.0+"
     DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
     Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
     InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
-    IterativeEigensolvers = "de555fa4-b82f-55e7-8b71-53f60bbc027d"
     LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"
     Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
     LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -57,9 +56,6 @@ version = "0.18.0"
 
 [[InteractiveUtils]]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
-
-[[IterativeEigensolvers]]
-uuid = "de555fa4-b82f-55e7-8b71-53f60bbc027d"
 
 [[LibGit2]]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"

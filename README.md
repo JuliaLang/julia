@@ -309,7 +309,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[LAPACK]** (>= 3.5)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
 - **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices (see [note below](#suitesparse)).
-- **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
@@ -339,7 +338,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 [LAPACK]:       http://www.netlib.org/lapack
 [MKL]:          http://software.intel.com/en-us/articles/intel-mkl
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
-[ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng
 [PCRE]:         http://www.pcre.org
 [LLVM]:         http://www.llvm.org
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
