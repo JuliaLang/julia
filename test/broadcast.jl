@@ -418,7 +418,9 @@ end
 @test (-).(C_NULL, C_NULL)::UInt == 0
 @test (+).(1, &2) == 3
 @test (+).(&1, &2) == 3
-@test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
+@test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) ==
+      [[0,2], [1,3]] .+ &[1,-1] == [[1,1], [2,2]]
+@test string.(1:3, &[3,4,5]) == @.(string(1:3, &[3,4,5])) == ["1[3, 4, 5]", "2[3, 4, 5]", "3[3, 4, 5]"]
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
 # and similarly for broadcast!(f, A, numbers...) (#19799).
