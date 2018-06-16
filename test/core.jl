@@ -6202,3 +6202,20 @@ function test27566(a,b)
 end
 test27566(a, b, c, d) = a.*(b, c, d)
 @test test27566(1,1) == (1,0,1)
+
+# Issue #27594
+struct Iter27594 end
+Base.iterate(::Iter27594) = (1, nothing)
+Base.iterate(::Iter27594, ::Any) = nothing
+
+function foo27594()
+    ind = 0
+    for x in (1,)
+        for y in Iter27594()
+            ind += 1
+        end
+    end
+    ind
+end
+
+@test foo27594() == 1
