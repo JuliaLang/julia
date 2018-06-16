@@ -560,12 +560,14 @@ value:
 
 ```jldoctest using-records-variable
 julia> records = [(10,"Alice"), (12, "Bob"), (5, "Carol")];
+
 julia> name = for (id, n) in records
            if id == 12
                # break the loop, returning the current value of n
                break n
            end
        end;
+
 julia> name
 "Bob"
 ```
@@ -580,6 +582,7 @@ julia> name = for (id, n) in records
        else
            "<name not found>"
        end;
+
 julia> name
 "<name not found>"
 ```
@@ -593,6 +596,8 @@ julia> f(p) = while true
            end
            p = q
        end
+f (generic function with 1 method)
+
 julia> f(3.1415926)
 3.141592653589793
 ```
