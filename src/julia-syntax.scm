@@ -959,12 +959,10 @@
           (if (eq? ty 'Any)
               (loop (if isseq F (cdr F)) (cdr A) stmts (list* a C) GC)
               (let* ((g (make-ssavalue))
-                     (isamp (and (pair? a) (eq? (car a) '&)))
-                     (a (if isamp (cadr a) a))
-                     (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,a)) stmts))
-                     (ca `(call (top ,(if isamp 'ptr_arg_unsafe_convert 'unsafe_convert)) ,ty ,g)))
+                     (stmts (cons `(= ,g (call (top cconvert) ,ty ,a)) stmts))
+                     (ca `(call (top unsafe_convert) ,ty ,g)))
                 (loop (if isseq F (cdr F)) (cdr A) stmts
-                      (list* (if isamp `(& ,ca) ca) C) (list* g GC))))))))
+                      (list* ca C) (list* g GC))))))))
 
 (define (expand-function-def e)   ;; handle function definitions
   (define (just-arglist? ex)
@@ -2059,6 +2057,10 @@
 
    'comparison
    (lambda (e) (expand-forms (expand-compare-chain (cdr e))))
+
+   '&
+   (lambda (e)
+     (expand-forms `(call (top RefValue) ,(cadr e))))
 
    'ref
    (lambda (e)
@@ -3552,14 +3554,6 @@ f(x) = yt(x)
             ((call new foreigncall cfunction)
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
-                            (for-each (lambda (a)
-                                        (if (and (length= a 2) (eq? (car a) '&))
-                                            (deprecation-message
-                                             (string "Syntax `&argument`" (linenode-string current-loc)
-                                                     " is deprecated. Remove the `&` and use a `Ref` argument "
-                                                     "type instead.")
-                                             current-loc)))
-                                      (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
                             (append (if (or (atom? (cadr e))
@@ -3786,11 +3780,6 @@ f(x) = yt(x)
                                     (if skip (mark-label skip))
                                     (loop (cdr actions)))))))
                  val)))
-
-            ((&)
-             (if (or (not value) tail)
-                 (error "misplaced \"&\" expression"))
-             `(& ,(compile (cadr e) break-labels value tail)))
 
             ((newvar)
              ;; avoid duplicate newvar nodes
