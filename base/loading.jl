@@ -768,7 +768,7 @@ const include_callbacks = Any[]
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt64}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
 const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
-const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
+const _track_dependencies = &false # set this to true to track the list of file dependencies
 function _include_dependency(mod::Module, _path::AbstractString)
     prev = source_path(nothing)
     if prev === nothing
@@ -840,7 +840,7 @@ function __precompile__(isprecompilable::Bool=true)
 end
 
 # require always works in Main scope and loads files from node 1
-const toplevel_load = Ref(true)
+const toplevel_load = &true
 
 """
     require(module::Symbol)

@@ -197,7 +197,7 @@ before the attempted merge, stage `1` is the changes which have been made locall
 stages `2` and larger are for changes from other branches (for instance, in the case
 of a multi-branch "octopus" merge, stages `2`, `3`, and `4` might be used).
 """
-stage(ie::IndexEntry) = ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
+stage(ie::IndexEntry) = ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), &ie)
 
 function Base.show(io::IO, idx::GitIndex)
     println(io, "GitIndex:\nRepository: ", repository(idx), "\nNumber of elements: ", count(idx))

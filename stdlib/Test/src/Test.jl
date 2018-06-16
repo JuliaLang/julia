@@ -813,7 +813,7 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
 end
 
 
-const TESTSET_PRINT_ENABLE = Ref(true)
+const TESTSET_PRINT_ENABLE = &true
 
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset

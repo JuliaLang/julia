@@ -352,7 +352,7 @@ end
 
 # Global log limiting mechanism for super fast but inflexible global log
 # limiting.
-const _min_enabled_level = Ref(Debug)
+const _min_enabled_level = &Debug
 
 # LogState - a concretely typed cache of data extracted from the logger, plus
 # the logger itself.

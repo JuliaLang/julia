@@ -9,7 +9,7 @@ freeing by the garbage collector as long as the `Ref` itself is referenced.
 
 In Julia, `Ref` objects are dereferenced (loaded or stored) with `[]`.
 
-Creation of a `Ref` to a value `x` of type `T` is usually written `Ref(x)`.
+Creation of a `Ref` to a value `x` of type `T` is usually written `&x` or `Ref(x)`.
 Additionally, for creating interior pointers to containers (such as Array or Ptr),
 it can be written `Ref(a, i)` for creating a reference to the `i`-th element of `a`.
 

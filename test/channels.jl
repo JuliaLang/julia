@@ -107,7 +107,7 @@ using Distributed
 
     # Multiple tasks, first one to terminate closes the channel
     nth = rand(1:5)
-    ref = Ref(0)
+    ref = &0
     cond = Condition()
     tf3(i) = begin
         if i == nth
@@ -210,7 +210,7 @@ end
 
 @testset "yield/wait/event failures" begin
     @noinline garbage_finalizer(f) = finalizer(f, "gar" * "bage")
-    run = Ref(0)
+    run = &0
     GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch
     garbage_finalizer((x) -> (run[] += 1; sleep(1)))
@@ -276,7 +276,7 @@ end
 end
 
 @testset "Timer / AsyncCondition triggering and race #12719" begin
-    tc = Ref(0)
+    tc = &0
     t = Timer(0) do t
         tc[] += 1
     end
@@ -287,7 +287,7 @@ end
     yield()
     @test tc[] == 1
 
-    tc = Ref(0)
+    tc = &0
     t = Timer(0) do t
         tc[] += 1
     end
@@ -297,7 +297,7 @@ end
     sleep(0.1)
     @test tc[] == 0
 
-    tc = Ref(0)
+    tc = &0
     async = Base.AsyncCondition() do async
         tc[] += 1
     end
@@ -323,7 +323,7 @@ end
     sleep(0.1) # no further events
     @test tc[] == 2
 
-    tc = Ref(0)
+    tc = &0
     async = Base.AsyncCondition() do async
         tc[] += 1
     end
@@ -368,7 +368,7 @@ end
     @test a[] == 0
     nothing
 end
-let a = Ref(0)
+let a = &0
     make_unrooted_timer(a)
     GC.gc()
     @test a[] == 1

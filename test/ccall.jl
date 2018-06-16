@@ -52,7 +52,7 @@ mutable struct IntLike
     x::Int
 end
 @test @ccall_echo_load(132, Ptr{Int}, Ref{Int}) === 132
-@test @ccall_echo_load(Ref(921), Ptr{Int}, Ref{Int}) === 921
+@test @ccall_echo_load(&921, Ptr{Int}, Ref{Int}) === 921
 @test @ccall_echo_load(IntLike(993), Ptr{Int}, Ref{IntLike}) === 993
 @test @ccall_echo_load(IntLike(881), Ptr{IntLike}, Ref{IntLike}).x === 881
 @test @ccall_echo_func(532, Int, Int) === 532

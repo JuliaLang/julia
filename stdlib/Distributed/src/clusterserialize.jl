@@ -28,7 +28,7 @@ end
 ClusterSerializer(io::IO) = ClusterSerializer{typeof(io)}(io)
 
 const object_numbers = WeakKeyDict()
-const obj_number_salt = Ref(0)
+const obj_number_salt = &0
 function object_number(s::ClusterSerializer, @nospecialize(l))
     global obj_number_salt, object_numbers
     if haskey(object_numbers, l)

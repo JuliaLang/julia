@@ -12,7 +12,7 @@ function GitBlame(repo::GitRepo, path::AbstractString; options::BlameOptions=Bla
     blame_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_blame_file, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Ptr{BlameOptions}),
-                   blame_ptr_ptr, repo.ptr, path, Ref(options))
+                   blame_ptr_ptr, repo.ptr, path, &options)
     return GitBlame(repo, blame_ptr_ptr[])
 end
 

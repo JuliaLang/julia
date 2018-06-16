@@ -99,4 +99,4 @@ end
 (-)(x::AbstractRange{T}, y::AbstractRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
 
 # Allow dates and times to broadcast as unwrapped scalars
-Base.Broadcast.broadcastable(x::AbstractTime) = Ref(x)
+Base.Broadcast.broadcastable(x::AbstractTime) = &x

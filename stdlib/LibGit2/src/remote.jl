@@ -285,7 +285,7 @@ function fetch(rmt::GitRemote, refspecs::Vector{<:AbstractString};
     msg = "libgit2.fetch: $msg"
     @check ccall((:git_remote_fetch, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{FetchOptions}, Cstring),
-                 rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, Ref(options), msg)
+                 rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, &options, msg)
 end
 
 """
@@ -309,7 +309,7 @@ function push(rmt::GitRemote, refspecs::Vector{<:AbstractString};
               force::Bool = false, options::PushOptions = PushOptions())
     @check ccall((:git_remote_push, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{PushOptions}),
-                 rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, Ref(options))
+                 rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, &options)
 end
 
 """

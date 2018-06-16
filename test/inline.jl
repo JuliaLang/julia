@@ -94,7 +94,7 @@ let (src, _) = code_typed(g21074, ())[1]
 end
 
 # issue #21311
-counter21311 = Ref(0)
+counter21311 = &0
 @noinline function update21311!(x)
     counter21311[] += 1
     x[] = counter21311[]
@@ -103,7 +103,7 @@ end
 @noinline map21311(t::Tuple{Any}) = (update21311!(t[1]),)
 @inline map21311(t::Tuple) = (update21311!(t[1]), map21311(Base.tail(t))...)
 function read21311()
-    xs = Ref(1), Ref(1)
+    xs = &1, &1
     map21311(xs)
     return xs[1]
 end

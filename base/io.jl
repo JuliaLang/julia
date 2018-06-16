@@ -511,7 +511,7 @@ unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p)
 write(s::IO, x::Ref{T}) where {T} = unsafe_write(s, x, Core.sizeof(T))
 write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
 function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
-    return write(s, Ref(x))
+    return write(s, &x)
 end
 
 write(s::IO, x::Bool) = write(s, UInt8(x))

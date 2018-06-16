@@ -19,7 +19,7 @@ on `threadid()`.
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
 # Only read/written by the main thread
-const in_threaded_loop = Ref(false)
+const in_threaded_loop = &false
 
 function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index

@@ -2,7 +2,7 @@
 
 abstract type AbstractMsg end
 
-const REF_ID = Ref(1)
+const REF_ID = &1
 next_ref_id() = (id = REF_ID[]; REF_ID[] = id+1; id)
 
 struct RRID

@@ -248,7 +248,7 @@ end
 @which get_A18434()(1, y=2)
 @test counter18434 == 2
 
-let _true = Ref(true), f, g, h
+let _true = &true, f, g, h
     @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Cvoid, ()) # some expression that throws an error in codegen
     @noinline g() = _true[] ? 0 : h()
     @noinline h() = (g(); f())

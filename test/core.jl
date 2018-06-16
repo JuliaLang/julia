@@ -3723,7 +3723,7 @@ end
 # check if finalizers for the old gen can be triggered manually
 # issue #13986
 let
-    obj = Ref(1)
+    obj = &1
     finalized = 0
     finalizer((obj) -> (finalized = 1), obj)
     # obj should be marked for promotion after the second gc and be promoted
@@ -3752,8 +3752,8 @@ let
     GC.gc(false)
     # all objects in `finalizer_list` are now moved to `finalizer_list_marked`
 
-    obj1 = Ref(1)
-    obj2 = Ref(1)
+    obj1 = &1
+    obj2 = &1
     finalized = 0
     finalizer((obj) -> (finalized += 1), obj1)
     finalizer((obj) -> (finalized += 1), obj1)
@@ -4103,7 +4103,7 @@ end
 # Use a `@noinline` function to make sure the inefficient gc root generation
 # doesn't keep the object alive.
 @noinline function create_dead_object13995(finalized)
-    obj = Ref(1)
+    obj = &1
     finalizer((x)->(finalized[1] = true), obj)
     finalizer((x)->(finalized[2] = true), obj)
     finalizer((x)->(finalized[3] = true), obj)
@@ -4343,7 +4343,7 @@ function count_expr_push(ex::Expr, head::Symbol, counter)
 end
 
 function metadata_matches(ast::Core.CodeInfo)
-    inbounds_cnt = Ref(0)
+    inbounds_cnt = &0
     for ex in ast.code::Array{Any,1}
         if isa(ex, Expr)
             ex = ex::Expr
@@ -4914,7 +4914,7 @@ end
     b0 = Base.gc_bytes()
     local a
     for i in 1:n
-        a, t, allocd = @timed [Ref(1) for i in 1:1000]
+        a, t, allocd = @timed [&1 for i in 1:1000]
         @test allocd > 0
         b1 = Base.gc_bytes()
         if b1 < b0
@@ -5742,7 +5742,7 @@ function constant23367 end
 let
     b = B23367(91, A23367(ntuple(i -> Int8(i), Val(7))), 23)
     @eval @noinline constant23367(a, b) = (a ? b : $b)
-    b2 = Ref(b)[] # copy b via field assignment
+    b2 = &b[] # copy b via field assignment
     b3 = B23367[b][1] # copy b via array assignment
     addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
     @test addr(b)  == addr(b)

@@ -8,7 +8,7 @@ function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Cvoid}, Ptr{RebaseOptions}),
                    rebase_ptr_ptr, repo.ptr, branch.ptr, upstream.ptr,
-                   onto === nothing ? C_NULL : onto.ptr, Ref(opts))
+                   onto === nothing ? C_NULL : onto.ptr, &opts)
     return GitRebase(repo, rebase_ptr_ptr[])
 end
 

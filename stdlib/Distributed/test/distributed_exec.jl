@@ -902,7 +902,7 @@ let (p, p2) = filter!(p -> p != myid(), procs())
     @test !remotecall_fetch(isdefined, p2, Main, :defined_on_p)
     @test nothing === @everywhere [p, p] defined_on_p += 1
     @test 3 === @everywhere p defined_on_p
-    let ref = Ref(0)
+    let ref = &0
         @test nothing ===
             @everywhere [myid(), p, myid(), myid(), p] begin
                 Test.@test Main === @__MODULE__

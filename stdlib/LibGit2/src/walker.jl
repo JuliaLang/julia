@@ -60,7 +60,7 @@ to apply a function to all commits since a certain year, by passing the first co
 of that year as `cid` and then passing the resulting `w` to [`map`](@ref LibGit2.map).
 """
 function push!(w::GitRevWalker, cid::GitHash)
-    @check ccall((:git_revwalk_push, :libgit2), Cint, (Ptr{Cvoid}, Ptr{GitHash}), w.ptr, Ref(cid))
+    @check ccall((:git_revwalk_push, :libgit2), Cint, (Ptr{Cvoid}, Ptr{GitHash}), w.ptr, &cid)
     return w
 end
 

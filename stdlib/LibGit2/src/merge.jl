@@ -17,7 +17,7 @@ function GitAnnotated(repo::GitRepo, commit_id::GitHash)
     ann_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{GitHash}),
-                   ann_ptr_ptr, repo.ptr, Ref(commit_id))
+                   ann_ptr_ptr, repo.ptr, &commit_id)
     return GitAnnotated(repo, ann_ptr_ptr[])
 end
 
@@ -145,7 +145,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
                   (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t,
                    Ptr{MergeOptions}, Ptr{CheckoutOptions}),
                    repo.ptr, Base.map(x->x.ptr, anns), anns_size,
-                   Ref(merge_opts), Ref(checkout_opts))
+                   &merge_opts, &checkout_opts)
     @info "Review and commit merged changes"
     return true
 end

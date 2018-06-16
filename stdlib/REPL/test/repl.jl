@@ -769,7 +769,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # Relies on implementation detail to make sure we only have the single
     # replinit callback we want to test.
     saved_replinit = copy(Base.repl_hooks)
-    slot = Ref(false)
+    slot = &false
     # Create a closure from a newer world to check if `_atreplinit`
     # can run it correctly
     atreplinit(@eval(repl::REPL.LineEditREPL -> ($slot[] = true)))

@@ -746,7 +746,7 @@ end
 repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(length(hp.history)-hp.start_idx)]"
 repl_filename(repl, hp) = "REPL"
 
-const JL_PROMPT_PASTE = Ref(true)
+const JL_PROMPT_PASTE = &true
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
 setup_interface(

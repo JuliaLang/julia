@@ -13,7 +13,7 @@ function GitStatus(repo::GitRepo; status_opts=StatusOptions())
     stat_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_status_list_new, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{StatusOptions}),
-                  stat_ptr_ptr, repo.ptr, Ref(status_opts))
+                  stat_ptr_ptr, repo.ptr, &status_opts)
     return GitStatus(repo, stat_ptr_ptr[])
 end
 

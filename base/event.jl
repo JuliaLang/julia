@@ -166,7 +166,7 @@ function yield(t::Task, @nospecialize x = nothing)
     t.state == :runnable || error("schedule: Task not runnable")
     t.result = x
     enq_work(current_task())
-    return try_yieldto(ensure_rescheduled, Ref(t))
+    return try_yieldto(ensure_rescheduled, &t)
 end
 
 """
@@ -179,7 +179,7 @@ or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize x = nothing)
     t.result = x
-    return try_yieldto(identity, Ref(t))
+    return try_yieldto(identity, &t)
 end
 
 function try_yieldto(undo, reftask::Ref{Task})
@@ -237,7 +237,7 @@ end
         return
     end
     t.state = :runnable
-    return Ref(t)
+    return &t
 end
 
 function wait()

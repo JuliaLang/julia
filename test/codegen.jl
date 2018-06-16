@@ -111,7 +111,7 @@ if opt_level > 0
 end
 
 # Make sure we will not elide the allocation
-@noinline create_ref1() = Ref(1)
+@noinline create_ref1() = &1
 function pointer_not_safepoint()
     a = create_ref1()
     unsafe_store!(Ptr{Int}(pointer_from_objref(a)), 3)
@@ -127,7 +127,7 @@ struct LargeStruct
 end
 
 const large_struct = LargeStruct()
-@noinline create_ref_struct() = Ref(large_struct)
+@noinline create_ref_struct() = &large_struct
 function compare_large_struct(a)
     b = create_ref_struct()
     if a[] === b[]
@@ -237,13 +237,13 @@ let was_gced = false
     @noinline assert_not_gced() = @test !was_gced
 
     function foo22770()
-        b = Ref(2)
+        b = &2
         finalizer(x -> was_gced = true, b)
         y = make_tuple(b)
         x = y[1]
-        a = Ref(1)
+        a = &1
         use(x); use(a); use(y)
-        c = Ref(3)
+        c = &3
         GC.gc()
         assert_not_gced()
         use(x)
@@ -311,10 +311,10 @@ end
 # Test no gcframe is allocated for `x.x.x` even though `x.x` isn't live at the call site
 g24108(x::B24108) = f24108(x.x.x)
 
-@test g22421_1(Ref(1), Ref(2), true) === 7
-@test g22421_1(Ref(3), Ref(4), false) === 16
-@test g22421_2(Ref(5), Ref(6), true) === 17
-@test g22421_2(Ref(7), Ref(8), false) === 24
+@test g22421_1(&1, &2, true) === 7
+@test g22421_1(&3, &4, false) === 16
+@test g22421_2(&5, &6, true) === 17
+@test g22421_2(&7, &8, false) === 24
 
 if opt_level > 0
     @test !occursin("%gcframe",

@@ -179,7 +179,7 @@ Base.hash(id::GitHash, h::UInt) = hash(id.val, h)
 function Base.cmp(id1::GitHash, id2::GitHash)
     Int(ccall((:git_oid_cmp, :libgit2), Cint,
               (Ptr{GitHash}, Ptr{GitHash}),
-              Ref(id1), Ref(id2)))
+              &id1, &id2))
 end
 function Base.cmp(id1::GitShortHash, id2::GitShortHash)
     # shortened hashes appear at the beginning of the order, i.e.

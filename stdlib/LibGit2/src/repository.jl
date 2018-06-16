@@ -143,7 +143,7 @@ function (::Type{T})(repo::GitRepo, spec::AbstractString) where T<:GitObject
 end
 
 function (::Type{T})(repo::GitRepo, oid::GitHash) where T<:GitObject
-    oid_ptr  = Ref(oid)
+    oid_ptr  = &oid
     obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
     @assert repo.ptr != C_NULL
@@ -274,7 +274,7 @@ function GitDescribeResult(commitish::GitObject;
     result_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_describe_commit, :libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{DescribeOptions}),
-                 result_ptr_ptr, commitish.ptr, Ref(options))
+                 result_ptr_ptr, commitish.ptr, &options)
     return GitDescribeResult(commitish.owner, result_ptr_ptr[])
 end
 
@@ -300,7 +300,7 @@ function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptio
     @assert repo.ptr != C_NULL
     @check ccall((:git_describe_workdir, :libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{DescribeOptions}),
-                 result_ptr_ptr, repo.ptr, Ref(options))
+                 result_ptr_ptr, repo.ptr, &options)
     return GitDescribeResult(repo, result_ptr_ptr[])
 end
 
@@ -316,7 +316,7 @@ function format(result::GitDescribeResult; options::DescribeFormatOptions=Descri
     buf_ref = Ref(Buffer())
     @check ccall((:git_describe_format, :libgit2), Cint,
                  (Ptr{Buffer}, Ptr{Cvoid}, Ptr{DescribeFormatOptions}),
-                 buf_ref, result.ptr, Ref(options))
+                 buf_ref, result.ptr, &options)
     buf = buf_ref[]
     str = unsafe_string(buf.ptr, buf.size)
     free(buf_ref)
@@ -341,7 +341,7 @@ function checkout_tree(repo::GitRepo, obj::GitObject;
     @assert repo.ptr != C_NULL
     @check ccall((:git_checkout_tree, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{CheckoutOptions}),
-                 repo.ptr, obj.ptr, Ref(options))
+                 repo.ptr, obj.ptr, &options)
 end
 
 """
@@ -358,7 +358,7 @@ function checkout_index(repo::GitRepo, idx::Union{GitIndex, Nothing} = nothing;
                  (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{CheckoutOptions}),
                  repo.ptr,
                  idx === nothing ? C_NULL : idx.ptr,
-                 Ref(options))
+                 &options)
 end
 
 """
@@ -375,7 +375,7 @@ function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions
     @assert repo.ptr != C_NULL
     @check ccall((:git_checkout_head, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{CheckoutOptions}),
-                 repo.ptr, Ref(options))
+                 repo.ptr, &options)
 end
 
 """
@@ -393,7 +393,7 @@ function cherrypick(repo::GitRepo, commit::GitCommit; options::CherrypickOptions
     @assert repo.ptr != C_NULL
     @check ccall((:git_cherrypick, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{CherrypickOptions}),
-                 repo.ptr, commit.ptr, Ref(options))
+                 repo.ptr, commit.ptr, &options)
 end
 
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
@@ -413,7 +413,7 @@ function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
     @assert repo.ptr != C_NULL
     @check ccall((:git_reset, :libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{Cvoid}, Cint, Ptr{CheckoutOptions}),
-                  repo.ptr, obj.ptr, mode, Ref(checkout_opts))
+                  repo.ptr, obj.ptr, mode, &checkout_opts)
     return head_oid(repo)
 end
 
@@ -432,7 +432,7 @@ repo = LibGit2.clone(repo_url, "/home/me/projects/Example")
 """
 function clone(repo_url::AbstractString, repo_path::AbstractString,
                clone_opts::CloneOptions)
-    clone_opts_ref = Ref(clone_opts)
+    clone_opts_ref = &clone_opts
     repo_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_clone, :libgit2), Cint,
             (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Ref{CloneOptions}),

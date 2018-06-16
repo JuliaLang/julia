@@ -698,7 +698,7 @@ end
 @noinline function Broadcast.broadcastable(x)
     depwarn("""
         broadcast will default to iterating over its arguments in the future. Wrap arguments of
-        type `x::$(typeof(x))` with `Ref(x)` to ensure they broadcast as "scalar" elements.
+        type `x::$(typeof(x))` with `&x` to ensure they broadcast as "scalar" elements.
         """, (:broadcast, :broadcast!))
     return Ref{typeof(x)}(x)
 end

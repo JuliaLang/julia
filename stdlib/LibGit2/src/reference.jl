@@ -13,7 +13,7 @@ function GitReference(repo::GitRepo, obj_oid::GitHash, refname::AbstractString =
     ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_reference_create, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{UInt8}, Ptr{GitHash}, Cint, Cstring),
-                   ref_ptr_ptr, repo.ptr, refname, Ref(obj_oid), Cint(force),
+                   ref_ptr_ptr, repo.ptr, refname, &obj_oid, Cint(force),
                    isempty(msg) ? C_NULL : msg)
     return GitReference(repo, ref_ptr_ptr[])
 end
@@ -307,7 +307,7 @@ function target!(ref::GitReference, new_oid::GitHash; msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_reference_set_target, :libgit2), Cint,
              (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{GitHash}, Cstring),
-             ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? C_NULL : msg)
+             ref_ptr_ptr, ref.ptr, &new_oid, isempty(msg) ? C_NULL : msg)
     return GitReference(ref.owner, ref_ptr_ptr[])
 end
 

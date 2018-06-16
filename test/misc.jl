@@ -88,7 +88,7 @@ end
 # lock / unlock
 let l = ReentrantLock()
     lock(l)
-    success = Ref(false)
+    success = &false
     @test trylock(l) do
         @test lock(l) do
             success[] = true
@@ -117,7 +117,7 @@ end
     Base._wait(t)
     nothing
 end
-let c = Ref(0),
+let c = &0,
     t2 = @async (wait(); c[] += 99)
     @test c[] == 0
     f6597(c)
@@ -131,7 +131,7 @@ end
 
 # test that @sync is lexical (PR #27164)
 
-const x27164 = Ref(0)
+const x27164 = &0
 do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
 
 let t = nothing

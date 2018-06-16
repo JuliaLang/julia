@@ -83,7 +83,7 @@ function print(io::IO, v::VersionNumber)
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
-Broadcast.broadcastable(v::VersionNumber) = Ref(v)
+Broadcast.broadcastable(v::VersionNumber) = &v
 
 const VERSION_REGEX = r"^
     v?                                      # prefix        (optional)
