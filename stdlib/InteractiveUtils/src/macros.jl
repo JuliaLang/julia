@@ -32,7 +32,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
     ex = Meta.lower(__module__, ex0)
     exret = Expr(:none)
     if !isa(ex, Expr)
-        exret = Expr(:call, :error, "expression is not a function call or symbol")
+        return Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
             (ex.args[1] === GlobalRef(Core,:_apply) ||
