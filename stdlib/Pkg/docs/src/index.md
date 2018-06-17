@@ -58,7 +58,7 @@ official release again.
 
 **Project:** a source tree with a standard layout, including a `src` directory
 for the main body of Julia code, a `test` directory for testing the project,
-`docs` for documentation files, and optionally a `build` directory for a build
+`docs` for documentation files, and optionally a `deps` directory for a build
 script and its outputs. A project will typically also have a project file and
 may optionally have a manifest file:
 
@@ -221,7 +221,7 @@ In the Pkg REPL packages can be added with the `add` command followed by the nam
 
 Here we added the package Example to the current project. In this example, we are using a fresh Julia installation,
 and this is our first time adding a package using Pkg. By default, Pkg clones Julia's Uncurated registry,
-and uses this registry to look up packages requested for inclusion in the current environment."
+and uses this registry to look up packages requested for inclusion in the current environment.
 The status update shows a short form of the package UUID to the left, then the package name, and the version.
 Since standard libraries (e.g. `Test`) are shipped with Julia, they do not have a version. The project status contains the packages
 you have added yourself, in this case, `Example`:
@@ -243,7 +243,7 @@ The manifest status, in addition, includes the dependencies of explicitly added 
 
 It is possible to add multiple packages in one command as `pkg> add A B C`.
 
-After a package is added to the project, it can be loaded in julia:
+After a package is added to the project, it can be loaded in Julia:
 
 ```
 julia> using Example
@@ -757,7 +757,7 @@ or
 ```
 
 will show you the effects of adding `Plots`, or doing a full upgrade, respectively, would have on your project.
-However, nothing would be installed and your `Project.toml` and `Manfiest.toml` are untouched.
+However, nothing would be installed and your `Project.toml` and `Manifest.toml` are untouched.
 
 ## Using someone else's project
 
