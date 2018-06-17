@@ -181,7 +181,7 @@ roundoff error).  If `step` has an exact rational representation
 where `nb` is the number of trailing zero bits of `step.hi`.  For
 ranges, you can set `nb = ceil(Int, log2(len-1))`.
 """
-struct TwicePrecision{T}
+struct TwicePrecision{T} <: Number
     hi::T    # most significant bits
     lo::T    # least significant bits
 end
