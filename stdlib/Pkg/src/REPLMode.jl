@@ -912,14 +912,21 @@ function completions(full, index)
 end
 
 function promptf()
-    env = EnvCache()
-    proj_dir = dirname(env.project_file)
-    if startswith(pwd(), proj_dir) && env.pkg != nothing && !isempty(env.pkg.name)
-        name = env.pkg.name
-    else
-        name = basename(proj_dir)
+    env = try
+        EnvCache()
+    catch
+        nothing
     end
-    prefix = string("(", name, ") ")
+    prefix = ""
+    if env !== nothing
+        proj_dir = dirname(env.project_file)
+        if startswith(pwd(), proj_dir) && env.pkg != nothing && !isempty(env.pkg.name)
+            name = env.pkg.name
+        else
+            name = basename(proj_dir)
+        end
+        prefix = string("(", name, ") ")
+    end
     return prefix * "pkg> "
 end
 
