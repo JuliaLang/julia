@@ -108,8 +108,14 @@ end
 
 # Search for a compiler to link sys.o into sys.dl_ext. Honor LD environment variable.
 function find_system_compiler()
-    cc = nothing
     warn_msg = String[] # save warning messages into an array
+
+    if haskey(ENV, "CC")
+        if !success(`$(ENV["CC"]) -v`)
+            push!(warn_msg, "Using compiler override $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`.")
+        end
+        return ENV["CC"], warn_msg
+    end
 
     # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
     if Sys.iswindows()
@@ -118,7 +124,7 @@ function find_system_compiler()
             winrpmgcc = joinpath(WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
                 "sys-root", "mingw", "bin", "gcc.exe")
             if success(`$winrpmgcc --version`)
-                cc = winrpmgcc
+                return winrpmgcc, warn_msg
             else
                 throw()
             end
@@ -127,25 +133,15 @@ function find_system_compiler()
         end
     end
 
-    if haskey(ENV, "CC")
-        if !success(`$(ENV["CC"]) -v`)
-            push!(warn_msg, "Using compiler override $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`.")
-        end
-        cc = ENV["CC"]
-    end
-
     # See if `cc` exists
     try
         if success(`cc -v`)
-            cc = "cc"
+            return "cc", warn_msg
         end
     end
 
-    if cc === nothing
-        push!(warn_msg, "No supported compiler found; startup times will be longer.")
-    end
-
-    return cc, warn_msg
+    push!(warn_msg, "No supported compiler found; startup times will be longer.")
+    return nothing, warn_msg
 end
 
 # Link sys.o into sys.$(dlext)
