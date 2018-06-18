@@ -3,7 +3,7 @@
 module Pkg2Types
 
 export VersionInterval, VersionSet
-import Base: show, isempty, in, intersect, union!, union, ==, hash, copy, deepcopy_internal
+import Base: show, isempty, in, intersect, union!, union, ==, hash, copy
 
 import ...Types: VersionBound, VersionRange
 
@@ -151,6 +151,5 @@ end
 
 ==(A::VersionSet, B::VersionSet) = A.intervals == B.intervals
 hash(s::VersionSet, h::UInt) = hash(s.intervals, h + (0x2fd2ca6efa023f44 % UInt))
-deepcopy_internal(vs::VersionSet, ::IdDict) = copy(vs)
 
 end # module
