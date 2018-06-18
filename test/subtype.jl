@@ -1307,3 +1307,10 @@ f26453(x::T,y::T) where {S,T>:S} = 0
 g26453(x::T,y::T) where {S,T>:S} = T
 @test_throws UndefVarError(:T) g26453(1,1)
 @test issub_strict((Tuple{T,T} where T), (Tuple{T,T} where {S,T>:S}))
+
+# issue #27632
+@test !(Tuple{Array{Int,0}, Int, Vararg{Int}} <: Tuple{AbstractArray{T,N}, Vararg{Int,N}} where {T, N})
+@test !(Tuple{Array{Int,0}, Int, Vararg{Int}} <: Tuple{AbstractArray{T,N}, Vararg{Any,N}} where {T, N})
+@test !(Tuple{Array{Int,0}, Vararg{Any}} <: Tuple{AbstractArray{T,N}, Vararg{Any,N}} where {T, N})
+@test Tuple{Array{Int,0},} <: Tuple{AbstractArray{T,N}, Vararg{Any,N}} where {T, N}
+@test !(Tuple{Array{Int,0}, Any} <: Tuple{AbstractArray{T,N}, Vararg{Any,N}} where {T, N})
