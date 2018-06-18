@@ -106,7 +106,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     end
 end
 
-# Search for a compiler to link sys.o into sys.dl_ext. Honor LD environment variable.
+# Search for a compiler to link sys.o into sys.dl_ext. Honor CC environment variable.
 function find_system_compiler()
     warn_msg = String[] # save warning messages into an array
 
