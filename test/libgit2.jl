@@ -1697,7 +1697,7 @@ mktempdir() do dir
                             deserialize(f)
                         end
                         @test err.code == LibGit2.Error.ERROR
-                        @test err.msg == "Invalid Content-Type: text/plain"
+                        @test lowercase(err.msg) == lowercase("Invalid Content-Type: text/plain")
                     end
                 finally
                     kill(pobj)
