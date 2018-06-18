@@ -32,7 +32,7 @@ end
 
 mktempdir() do project_path
     cd(project_path) do
-        pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+        pushfirst!(LOAD_PATH, project_path)
         try
             withenv("USER" => "Test User") do
                 pkg"generate HelloWorld"
@@ -182,7 +182,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
     end # mktempdir
     # nested
     try
-        pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+        pushfirst!(LOAD_PATH, "@")
         mktempdir() do other_dir
             mktempdir() do tmp; cd(tmp) do
                 withenv("USER" => "Test User") do
@@ -225,7 +225,7 @@ end
 # Autocompletions
 temp_pkg_dir() do project_path; cd(project_path) do
     try
-        pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+        pushfirst!(LOAD_PATH, ".")
         Pkg.Types.registries()
         pkg"init"
         c, r = test_complete("add Exam")
@@ -290,7 +290,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
         cp(joinpath(@__DIR__, "test_packages", "BigProject"), joinpath(tmp, "BigProject"))
         cd(joinpath(tmp, "BigProject")) do
             try
-                pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                pushfirst!(LOAD_PATH, ".")
                 pkg"dev SubModule"
                 pkg"dev SubModule2"
                 pkg"add Random"

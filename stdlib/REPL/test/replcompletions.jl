@@ -495,9 +495,9 @@ end
 
 # Test completion of packages
 mkp(p) = ((@assert !isdir(p)); mkpath(p))
-push!(LOAD_PATH, OldPkg.dir)
-try
-    temp_pkg_dir_noinit() do
+temp_pkg_dir_noinit() do
+    push!(LOAD_PATH, OldPkg.dir())
+    try
         # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
         # but not <Mod>/ if no corresponding .jl file is found
         pkg_dir = OldPkg.dir("CompletionFooPackage", "src")
@@ -522,9 +522,9 @@ try
         @test !("CompletionFooPackageNone" in c) #The package
         @test !("CompletionFooPackageNone2" in c) #The package
         @test s[r] == "Completion"
+    finally
+        @test pop!(LOAD_PATH) == OldPkg.dir()
     end
-finally
-    @test pop!(LOAD_PATH) == OldPkg.dir
 end
 
 path = joinpath(tempdir(),randstring())
@@ -564,15 +564,6 @@ try
     c, r, res = test_complete("using Test_p")
     @test !("Test_pack" in c)
     @test "Test_pack2" in c
-
-    # Test that it also completes on .jl files in pwd()
-    cd(Pack_folder) do
-        open("Text.txt","w") do f end
-        open("Pack.jl","w") do f end
-        c, r, res = test_complete("using ")
-        @test "Pack" in c
-        @test !("Text.txt" in c)
-    end
 finally
     @test pop!(LOAD_PATH) == path
     rm(path, recursive=true)

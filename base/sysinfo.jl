@@ -43,7 +43,7 @@ A string containing the full path to the directory containing the `julia` execut
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-:STDLIB
+STDLIB = "$BINDIR/../../stdlib" # for bootstrap
 
 # helper to avoid triggering precompile warnings
 

@@ -13,7 +13,7 @@ using ..TOML
 import ..Pkg
 import Pkg: GitTools, depots, logdir
 
-import Base: SHA1, AbstractEnv
+import Base: SHA1
 using SHA
 
 export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
@@ -207,7 +207,7 @@ const default_envs = [
 
 mutable struct EnvCache
     # environment info:
-    env::Union{Nothing,String,AbstractEnv}
+    env::Union{Nothing,String}
     git::Union{Nothing,LibGit2.GitRepo}
 
     # paths for files:
@@ -225,26 +225,26 @@ mutable struct EnvCache
     uuids::Dict{String,Vector{UUID}}
     paths::Dict{UUID,Vector{String}}
 
-    function EnvCache(env::Union{Nothing,String,AbstractEnv}=nothing)
+    function EnvCache(env::Union{Nothing,String}=nothing)
         if env isa Nothing
             project_file = nothing
             for entry in LOAD_PATH
-                project_file = Base.find_env(entry)
+                project_file = Base.load_path_expand(entry)
                 project_file isa String && !isdir(project_file) && break
                 project_file = nothing
             end
             if project_file == nothing
                 project_dir = nothing
                 for entry in LOAD_PATH
-                    project_dir = Base.find_env(entry)
+                    project_dir = Base.load_path_expand(entry)
                     project_dir isa String && isdir(project_dir) && break
                     project_dir = nothing
                 end
                 project_dir == nothing && error("No Pkg environment found in LOAD_PATH")
                 project_file = joinpath(project_dir, Base.project_names[end])
             end
-        elseif env isa AbstractEnv
-            project_file = Base.find_env(env)
+        elseif startswith(env, '@')
+            project_file = Base.load_path_expand(env)
             project_file === nothing && error("package environment does not exist: $env")
         elseif env isa String
             if isdir(env)
