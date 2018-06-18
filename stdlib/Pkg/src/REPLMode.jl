@@ -30,20 +30,11 @@ const cmds = Dict(
     "?"         => CMD_HELP,
     "status"    => CMD_STATUS,
     "st"        => CMD_STATUS,
-    "."         => CMD_STATUS,
-    "search"    => CMD_SEARCH,
-    "find"      => CMD_SEARCH,
-    "/"         => CMD_SEARCH,
     "add"       => CMD_ADD,
-    "install"   => CMD_ADD,
-    "+"         => CMD_ADD,
     "rm"        => CMD_RM,
     "remove"    => CMD_RM,
-    "uninstall" => CMD_RM,
-    "-"         => CMD_RM,
     "up"        => CMD_UP,
     "update"    => CMD_UP,
-    "upgrade"   => CMD_UP,
     "test"      => CMD_TEST,
     "gc"        => CMD_GC,
     "preview"   => CMD_PREVIEW,
@@ -51,7 +42,6 @@ const cmds = Dict(
     "build"     => CMD_BUILD,
     "pin"       => CMD_PIN,
     "free"      => CMD_FREE,
-    "checkout"  => CMD_CHECKOUT, # deprecated
     "develop"   => CMD_DEVELOP,
     "dev"       => CMD_DEVELOP,
     "generate"  => CMD_GENERATE,
@@ -71,7 +61,7 @@ end
 # Options #
 ###########
 @enum(OptionKind, OPT_ENV, OPT_PROJECT, OPT_MANIFEST, OPT_MAJOR, OPT_MINOR,
-                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME, OPT_PATH)
+                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME)
 
 function Types.PackageMode(opt::OptionKind)
     opt == OPT_MANIFEST && return PKGMODE_MANIFEST
@@ -97,11 +87,8 @@ struct Option
                     OPT_MINOR, OPT_PATCH, OPT_FIXED) &&
                 argument !== nothing
             cmderror("the `$val` option does not take an argument")
-        elseif kind in (OPT_ENV, OPT_PATH) && argument == nothing
+        elseif kind in (OPT_ENV,) && argument == nothing
             cmderror("the `$val` option requires an argument")
-        end
-        if kind == OPT_PATH
-            argument =  replace(argument, "~" => homedir())
         end
         new(kind, val, argument)
     end
@@ -120,7 +107,6 @@ const opts = Dict(
     "fixed"    => OPT_FIXED,
     "coverage" => OPT_COVERAGE,
     "name"     => OPT_NAME,
-    "path"     => OPT_PATH,
 )
 
 function parse_option(word::AbstractString)::Option
@@ -674,11 +660,6 @@ function do_free!(ctx::Context, tokens::Vector{Token})
         end
     end
     API.free(ctx, pkgs)
-end
-
-function do_checkout!(ctx::Context, tokens::Vector{Token})
-    Base.depwarn("`checkout`` is deprecated, use `develop`", :checkout)
-    do_develop!(ctx, tokens)
 end
 
 function do_status!(ctx::Context, tokens::Vector{Token})
