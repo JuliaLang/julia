@@ -921,7 +921,7 @@ function Base.show(io::IO, ce::ConfigEntry)
 end
 
 """
-    split(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
+    LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
 
 Break the `ConfigEntry` up to the following pieces: section, subsection, name, and value.
 
@@ -938,14 +938,14 @@ The `ConfigEntry` would look like the following:
 julia> entry
 ConfigEntry("credential.https://example.com.username", "me")
 
-julia> split(entry)
+julia> LibGit2.split_cfg_entry(entry)
 ("credential", "https://example.com", "username", "me")
 ```
 
 Refer to the [git config syntax documenation](https://git-scm.com/docs/git-config#_syntax)
 for more details.
 """
-function Base.split(ce::ConfigEntry)
+function split_cfg_entry(ce::ConfigEntry)
     key = unsafe_string(ce.name)
 
     # Determine the positions of the delimiters

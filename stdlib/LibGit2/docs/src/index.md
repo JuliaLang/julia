@@ -137,6 +137,7 @@ LibGit2.revcount
 LibGit2.set_remote_url
 LibGit2.shortname
 LibGit2.snapshot
+LibGit2.split_cfg_entry
 LibGit2.status
 LibGit2.stage
 LibGit2.tag_create
