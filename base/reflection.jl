@@ -115,6 +115,8 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
+_fieldnames(@nospecialize t) = isdefined(t, :names) ? t.names : t.name.names
+
 """
     fieldname(x::DataType, i::Integer)
 
@@ -130,7 +132,7 @@ julia> fieldname(Rational, 2)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    names = isdefined(t, :names) ? t.names : t.name.names
+    names = _fieldnames(t)
     n_fields = length(names)
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
@@ -153,7 +155,8 @@ julia> fieldnames(Rational)
 (:num, :den)
 ```
 """
-fieldnames(t::DataType) = ntuple(i -> fieldname(t, i), fieldcount(t))
+fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
+                           (_fieldnames(t)...,))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
