@@ -415,8 +415,9 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
                     # impossible
                     # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                     return argcost
-                elseif f == Main.Core.arrayref
-                    return plus_saturate(argcost, isknowntype(extyp) ? 4 : params.inline_nonleaf_penalty)
+                elseif f == Main.Core.arrayref && length(ex.args) >= 3
+                    atyp = argextype(ex.args[3], src, spvals)
+                    return plus_saturate(argcost, isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty)
                 end
                 fidx = findfirst(x->x===f, T_FFUNC_KEY)
                 if fidx === nothing
