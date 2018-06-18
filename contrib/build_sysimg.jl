@@ -1,6 +1,8 @@
 #!/usr/bin/env julia
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Libdl
+
 # Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
 # userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
 # unless force is set to true. Allow targeting of a CPU architecture via cpu_target.
@@ -33,7 +35,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     sysimg = Libdl.dlopen_e("sys")
     if sysimg != C_NULL
         if !force && Base.samefile(Libdl.dlpath(sysimg), "$(sysimg_path).$(Libdl.dlext)")
-            info("System image already loaded at $(Libdl.dlpath(sysimg)), set force=true to override.")
+            @info("System image already loaded at $(Libdl.dlpath(sysimg)), set force=true to override.")
             return nothing
         end
     end
@@ -71,31 +73,36 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
         try
             # Start by building basecompiler.{ji,o}
             basecompiler_path = joinpath(dirname(sysimg_path), "basecompiler")
-            info("Building basecompiler.o")
-            info("$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl")
+            @info("Building basecompiler.o")
+            @info("$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl")
             run(`$julia -C $cpu_target --output-ji $basecompiler_path.ji --output-o $basecompiler_path.o compiler/compiler.jl`)
 
             # Bootstrap off of that to create sys.{ji,o}
-            info("Building sys.o")
-            info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl")
+            @info("Building sys.o")
+            @info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl")
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $basecompiler_path.ji --startup-file=no sysimg.jl`)
 
             if cc !== nothing
                 link_sysimg(sysimg_path, cc, debug)
-                !isempty(warn_msg) && foreach(warn, warn_msg)
-            else
-                !isempty(warn_msg) && foreach(warn, warn_msg)
-                info("System image successfully built at $sysimg_path.ji.")
+            end
+
+            # Spit out all our warning messages
+            for w in warn_msg
+                @warn w
+            end
+
+            if cc == nothing
+                @info("System image successfully built at $sysimg_path.ji.")
             end
 
             if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
                 if isfile("$sysimg_path.$(Libdl.dlext)")
-                    info("To run Julia with this image loaded, run: `julia -J $sysimg_path.$(Libdl.dlext)`.")
+                    @info("To run Julia with this image loaded, run: `julia -J $sysimg_path.$(Libdl.dlext)`.")
                 else
-                    info("To run Julia with this image loaded, run: `julia -J $sysimg_path.ji`.")
+                    @info("To run Julia with this image loaded, run: `julia -J $sysimg_path.ji`.")
                 end
             else
-                info("Julia will automatically load this system image at next startup.")
+                @info("Julia will automatically load this system image at next startup.")
             end
         finally
             # Cleanup userimg.jl
@@ -120,7 +127,7 @@ function find_system_compiler()
     # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
     if Sys.iswindows()
         try
-            eval(Main, :(using WinRPM))
+            Core.eval(Main, :(using WinRPM))
             winrpmgcc = joinpath(WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
                 "sys-root", "mingw", "bin", "gcc.exe")
             if success(`$winrpmgcc --version`)
@@ -138,10 +145,10 @@ function find_system_compiler()
         if success(`cc -v`)
             return "cc", warn_msg
         end
+    catch
+        push!(warn_msg, "No supported compiler found; startup times will be longer.")
+        return nothing, warn_msg
     end
-
-    push!(warn_msg, "No supported compiler found; startup times will be longer.")
-    return nothing, warn_msg
 end
 
 # Link sys.o into sys.$(dlext)
@@ -165,13 +172,12 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     # Windows has difficulties overwriting a file in use so we first link to a temp file
     if Sys.iswindows() && isfile(sysimg_file)
         if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=stdout, stderr=stderr))
-            mv(sysimg_file, "$sysimg_file.old"; force=true)
             mv("$sysimg_path.tmp", sysimg_file; force=true)
         end
     else
         run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
     end
-    info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
+    @info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
     return
 end
 
