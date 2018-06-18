@@ -564,7 +564,7 @@ end
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, T::Type, val) = (@_noinline_meta; throw(InexactError(f, T, val)))
+throw_inexacterror(f::Symbol, T::Type, @nospecialize(val)) = (@_noinline_meta; throw(InexactError(f, T, val)))
 
 function is_top_bit_set(x)
     @_inline_meta
