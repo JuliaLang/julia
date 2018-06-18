@@ -78,9 +78,8 @@ before_install:
         brew install -v gcc gmp mpfr pcre2 staticfloat/julia/openblas-julia staticfloat/julia/suite-sparse-julia staticfloat/juliadeps/libgfortran;
         BUILDOPTS="-j3 USECLANG=1 USECCACHE=1 BINARYBUILDER_TRIPLET=x86_64-apple-darwin14 BINARYBUILDER_LLVM_ASSERTS=1";
         BUILDOPTS="$BUILDOPTS USE_BINARYBUILDER_LLVM=1 LLVM_CONFIG=$TRAVIS_BUILD_DIR/usr/tools/llvm-config LLVM_SIZE=$TRAVIS_BUILD_DIR/usr/tools/llvm-size";
-        BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in SUITESPARSE BLAS LAPACK GMP MPFR PCRE LIBUNWIND; do
+        for lib in BLAS LAPACK GMP MPFR PCRE LIBUNWIND; do
             BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
@@ -89,7 +88,6 @@ before_install:
         spawn_DYLD_FALLBACK_LIBRARY_PATH+=":$(brew --prefix suite-sparse-julia)/lib";
         export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$spawn_DYLD_FALLBACK_LIBRARY_PATH\" \$1";
         export BUILDOPTS="$BUILDOPTS spawn=\$(JULIA_MACOS_SPAWN)";
-        make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
         export JULIA_CPU_CORES=2;
         export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out

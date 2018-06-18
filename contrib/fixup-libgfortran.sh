@@ -119,7 +119,7 @@ change_linkage()
 # update the linkage to point to @rpath (on OSX) or $ORIGIN (on Linux) so
 # that direct links to the old libgfortran directories are instead directed
 # to the proper location, which is our $private_libdir.
-for lib in libopenblas libcholmod liblapack $SONAMES; do
+for lib in libopenblas liblapack $SONAMES; do
     # Grab every incarnation of that library that exists within $private_libdir
     # (e.g. "libopenblas.so", and "libopenblas.so.0", etc...)
     for lib_path in $private_libdir/$lib*; do

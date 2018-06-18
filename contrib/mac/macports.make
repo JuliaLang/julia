@@ -15,7 +15,6 @@ CPP=/usr/bin/llvm-cpp-4.2
 FC=${PREFIX}/bin/gfortran-mp-4.5
 USEGCC=1
 USECLANG=0
-SUITESPARSE_VER_MAJOR=4
 JMAKEFLAGS = USE_SYSTEM_LLVM=1 LLVM_CONFIG=${LLVM_CONFIG} \
 		USE_SYSTEM_PCRE=1 PCRE_CONFIG=${PCRE_CONFIG} \
 		USE_SYSTEM_LIBM=1 \
@@ -25,7 +24,6 @@ JMAKEFLAGS = USE_SYSTEM_LLVM=1 LLVM_CONFIG=${LLVM_CONFIG} \
 		USE_SYSTEM_GMP=1 \
 		USE_SYSTEM_MPFR=1 \
 		USE_SYSTEM_ARPACK=1 \
-		USE_SYSTEM_SUITESPARSE=1 \
 		USE_SYSTEM_ZLIB=1 \
 		USE_SYSTEM_GRISU=0 \
 		USE_SYSTEM_LIBUV=0 \
@@ -33,12 +31,8 @@ JMAKEFLAGS = USE_SYSTEM_LLVM=1 LLVM_CONFIG=${LLVM_CONFIG} \
 		CC=${CC} CXX=${CXX} CPP=${CPP} FC=${FC} USEGCC=${USEGCC} USECLANG=${USECLANG}
 
 all: default
-../../usr/lib/libspqr.dylib:
-	$(MAKE) -C .. -f repackage_system_suitesparse${SUITESPARSE_VER_MAJOR}.make \
-		USE_SYSTEM_BLAS=1 USE_SYSTEM_LAPACK=1 USE_BLAS64=0 \
-		CFLAGS=${CFLAGS} CXXFLAGS=${CXXFLAGS} LDFLAGS=${LDFLAGS}
 
-default test release debug: ../../usr/lib/libspqr.dylib
+default test release debug:
 	$(MAKE) -C ../.. $(JMAKEFLAGS) $@
 
 .PHONY: all default test release debug

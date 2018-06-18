@@ -225,7 +225,7 @@ try
                  end for s in
                 [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
-                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
+                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :OldPkg, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
                  :Statistics, ]))
         @test discard_module.(deps) == deps1

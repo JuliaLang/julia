@@ -1,10 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function needs_USE_GPL_LIBS(s::String)
-    occursin("CHOLMOD", s) && return true
-    return false
-end
-
 const HEADER = """
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
@@ -46,10 +41,7 @@ function fixup_precompile(new_precompile_file; merge=false)
         end
         @eval PrecompileStagingArea begin""")
         for statement in sort(collect(precompile_statements))
-            isgpl = needs_USE_GPL_LIBS(statement)
-            isgpl && print(f, "if Base.USE_GPL_LIBS\n    ")
             println(f, statement)
-            isgpl && println(f, "end")
         end
         println(f, "end\nend")
     end

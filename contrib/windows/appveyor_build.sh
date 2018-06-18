@@ -172,7 +172,7 @@ if ! [ -e usr/bin/busybox.exe ]; then
 fi
 chmod -R +x usr/bin usr/tools
 
-for lib in SUITESPARSE ARPACK BLAS LAPACK \
+for lib in BLAS LAPACK \
     GMP MPFR PCRE LIBUNWIND; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
