@@ -121,7 +121,7 @@ function eval_user_input(@nospecialize(ast), show_value::Bool)
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
-                Core.eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
