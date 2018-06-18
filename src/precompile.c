@@ -306,16 +306,21 @@ static void jl_compile_all_defs(void)
     JL_GC_POP();
 }
 
+static int precompile_enq_all_cache__(jl_typemap_entry_t *l, void *closure)
+{
+    jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
+    return 1;
+}
+
 static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
 {
     if (jl_is_method_instance(l->func.value) &&
             l->func.linfo->functionObjectsDecls.functionObject == NULL &&
             l->func.linfo->invoke != jl_fptr_const_return &&
-            (l->func.linfo->invoke != jl_fptr_trampoline ||
-             (l->func.linfo->inferred &&
-              l->func.linfo->inferred != jl_nothing &&
-              jl_ast_flag_inferred((jl_array_t*)l->func.linfo->inferred) &&
-              !jl_ast_flag_inlineable((jl_array_t*)l->func.linfo->inferred))))
+            (l->func.linfo->inferred &&
+             l->func.linfo->inferred != jl_nothing &&
+             jl_ast_flag_inferred((jl_array_t*)l->func.linfo->inferred) &&
+             !jl_ast_flag_inlineable((jl_array_t*)l->func.linfo->inferred)))
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
     return 1;
 }
@@ -337,6 +342,7 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
 static void precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
 {
     jl_typemap_visitor(mt->defs, precompile_enq_all_specializations__, env);
+    jl_typemap_visitor(mt->cache, precompile_enq_all_cache__, env);
 }
 
 static void jl_compile_specializations(void)
