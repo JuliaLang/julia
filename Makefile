@@ -162,7 +162,6 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/essentials.jl \
 		base/expr.jl \
 		base/generator.jl \
-		base/hashing.jl \
 		base/int.jl \
 		base/indices.jl \
 		base/iterators.jl \
