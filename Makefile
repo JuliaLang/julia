@@ -248,17 +248,22 @@ endif
 endif
 endif
 
+# On FreeBSD, /lib/libgcc_s.so.1 is incompatible with Fortran; to use Fortran on FreeBSD,
+# we need to link to the libgcc_s that ships with the same GCC version used by libgfortran.
+# To work around this, we copy the GCC libraries we need, namely libgfortran, libgcc_s,
+# and libquadmath, into our build library directory, $(build_libdir). We also add them to
+# JL_PRIVATE_LIBS-0 so that they know where they need to live at install time.
 ifeq ($(OS),FreeBSD)
 define std_so
-julia-deps: | $$(build_libdir)/lib$(1).so
-$$(build_libdir)/lib$(1).so: | $$(build_libdir)
-	$$(INSTALL_M) $$(GCCPATH)/lib$(1).so* $$(build_libdir)
-JL_LIBS += $(1)
+julia-deps: | $$(build_libdir)/$(1).so
+$$(build_libdir)/$(1).so: | $$(build_libdir)
+	$$(INSTALL_M) $$(GCCPATH)/$(1).so* $$(build_libdir)
+JL_PRIVATE_LIBS-0 += $(1)
 endef
 
-$(eval $(call std_so,gfortran))
-$(eval $(call std_so,gcc_s))
-$(eval $(call std_so,quadmath))
+$(eval $(call std_so,libgfortran))
+$(eval $(call std_so,libgcc_s))
+$(eval $(call std_so,libquadmath))
 endif # FreeBSD
 
 ifeq ($(OS),WINNT)
@@ -381,6 +386,15 @@ endif
 	# On FreeBSD, remove the build's libdir from each library's RPATH
 ifeq ($(OS),FreeBSD)
 	$(JULIAHOME)/contrib/fixup-rpath.sh $(build_depsbindir)/patchelf $(DESTDIR)$(libdir) $(build_libdir)
+	$(JULIAHOME)/contrib/fixup-rpath.sh $(build_depsbindir)/patchelf $(DESTDIR)$(private_libdir) $(build_libdir)
+	$(JULIAHOME)/contrib/fixup-rpath.sh $(build_depsbindir)/patchelf $(DESTDIR)$(bindir) $(build_libdir)
+	# Set libgfortran's RPATH to ORIGIN instead of GCCPATH. It's only libgfortran that
+	# needs to be fixed here, as libgcc_s and libquadmath don't have RPATHs set. If we
+	# don't set libgfortran's RPATH, it won't be able to find its friends on systems
+	# that don't have the exact GCC port installed used for the build.
+	for lib in $(DESTDIR)$(private_libdir)/libgfortran*$(SHLIB_EXT)*; do \
+		$(build_depsbindir)/patchelf --set-rpath '$$ORIGIN' $$lib; \
+	done
 endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
@@ -409,7 +423,11 @@ ifneq ($(DESTDIR),)
 endif
 	@$(MAKE) -C $(BUILDROOT) -f $(JULIAHOME)/Makefile install
 	cp $(JULIAHOME)/LICENSE.md $(BUILDROOT)/julia-$(JULIA_COMMIT)
-ifneq ($(OS), WINNT)
+	# Run fixup-libgfortran on all platforms but Windows and FreeBSD. On FreeBSD we
+	# pull in the GCC libraries earlier and use them for the build to make sure we
+	# don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
+	# libgfortran.
+ifeq (,$(findstring $(OS),FreeBSD WINNT))
 	-$(CUSTOM_LD_LIBRARY_PATH) PATH=$(PATH):$(build_depsbindir) $(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
 ifeq ($(OS), Linux)
