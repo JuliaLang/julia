@@ -527,23 +527,39 @@ finally
     @test pop!(LOAD_PATH) == OldPkg.dir
 end
 
-path = joinpath(tempdir(),randstring())
-pushfirst!(LOAD_PATH, path)
-try
-    mkpath(path)
-    write(joinpath(path, "Project.toml"),
-        """
-        name = "MyProj"
+mktempdir() do path
+    pushfirst!(LOAD_PATH, path)
+    try
+        mkpath(path)
+        write(joinpath(path, "Project.toml"),
+            """
+            name = "MyProj"
 
-        [deps]
-        MyPack = "09ebe64f-f76c-4f21-bef2-bd9be6c77e76"
-        """)
+            [deps]
+            MyPack = "09ebe64f-f76c-4f21-bef2-bd9be6c77e76"
+            """)
         c, r, res = test_complete("using MyP")
         @test "MyPack" in c
         @test "MyProj" in c
-finally
-    @test popfirst!(LOAD_PATH) == path
-    rm(path, recursive=true)
+        mktempdir() do path2
+            pushfirst!(LOAD_PATH, path2)
+            try
+                write(joinpath(path2, "Project.toml"),
+                """
+                [deps]
+                Pekåge = "09ebe64f-f76c-4f21-bef2-bd9be6c77e76"
+                """)
+                c, r, res = test_complete("using MyPa")
+                @test "MyPack" in c
+                c, r, res = test_complete("using Pek")
+                @test "Pekåge" in c
+            finally
+                @test popfirst!(LOAD_PATH) == path2
+            end
+        end
+    finally
+        @test popfirst!(LOAD_PATH) == path
+    end
 end
 
 
