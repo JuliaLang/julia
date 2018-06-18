@@ -331,14 +331,11 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     @test occursin(rgx, output)
 end
 
-using InteractiveUtils: gen_call_with_extracted_types
-
-@testset "gen_call_with_extracted_types" begin
-    for ex0 in ["", 0, 1.0]
-        exret = gen_call_with_extracted_types(Main, :dummy, ex0)
-        @test exret.head == :call
-        @test exret.args[1] == :error
-    end
+@testset "error message" begin
+    err = ErrorException("expression is not a function call or symbol")
+    @test_throws err @code_lowered ""
+    @test_throws err @code_lowered 1
+    @test_throws err @code_lowered 1.0
 end
 
 using InteractiveUtils: editor
