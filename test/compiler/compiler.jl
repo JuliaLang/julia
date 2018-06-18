@@ -1610,3 +1610,71 @@ for i27351 in 1:15
 end
 f27351(::T, ::T27351, ::T27351) where {T} = 16
 @test_throws MethodError f27351(Val(1), T27351(), T27351())
+
+# Domsort stress test (from JLD2.jl) - Issue #27625
+function JLD2_hash(k::Ptr{UInt8}, n::Integer=length(k), initval::UInt32=UInt32(0))
+    # Set up the internal state
+    a = b = c = 0xdeadbeef + convert(UInt32, n) + initval
+
+    ptr = k
+    @inbounds while n > 12
+        a += unsafe_load(convert(Ptr{UInt32}, ptr))
+        ptr += 4
+        b += unsafe_load(convert(Ptr{UInt32}, ptr))
+        ptr += 4
+        c += unsafe_load(convert(Ptr{UInt32}, ptr))
+        (a, b, c) = mix(a, b, c)
+        ptr += 4
+        n -= 12
+    end
+    @inbounds if n > 0
+        if n == 12
+            c += unsafe_load(convert(Ptr{UInt32}, ptr+8))
+            @goto n8
+        elseif n == 11
+            c += UInt32(unsafe_load(Ptr{UInt8}(ptr+10)))<<16
+            @goto n10
+        elseif n == 10
+            @label n10
+            c += UInt32(unsafe_load(Ptr{UInt8}(ptr+9)))<<8
+            @goto n9
+        elseif n == 9
+            @label n9
+            c += unsafe_load(ptr+8)
+            @goto n8
+        elseif n == 8
+            @label n8
+            b += unsafe_load(convert(Ptr{UInt32}, ptr+4))
+            @goto n4
+        elseif n == 7
+            @label n7
+            b += UInt32(unsafe_load(Ptr{UInt8}(ptr+6)))<<16
+            @goto n6
+        elseif n == 6
+            @label n6
+            b += UInt32(unsafe_load(Ptr{UInt8}(ptr+5)))<<8
+            @goto n5
+        elseif n == 5
+            @label n5
+            b += unsafe_load(ptr+4)
+            @goto n4
+        elseif n == 4
+            @label n4
+            a += unsafe_load(convert(Ptr{UInt32}, ptr))
+        elseif n == 3
+            @label n3
+            a += UInt32(unsafe_load(Ptr{UInt8}(ptr+2)))<<16
+            @goto n2
+        elseif n == 2
+            @label n2
+            a += UInt32(unsafe_load(Ptr{UInt8}(ptr+1)))<<8
+            @goto n1
+        elseif n == 1
+            @label n1
+            a += unsafe_load(ptr)
+        end
+        c = a + b + c
+    end
+    c
+end
+@test isa(code_typed(JLD2_hash, Tuple{Ptr{UInt8}, Int, UInt32}), Array)
