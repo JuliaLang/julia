@@ -1720,6 +1720,8 @@ end
 
 @deprecate atan2(y, x) atan(y, x)
 
+@deprecate_moved eigs "Arpack"
+@deprecate_moved svds "Arpack"
 
 # END 0.7 deprecations
 

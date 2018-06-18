@@ -180,7 +180,6 @@ $(eval $(call symlink_system_library,$(LIBLAPACKNAME),LAPACK))
 endif
 $(eval $(call symlink_system_library,libgmp,GMP))
 $(eval $(call symlink_system_library,libmpfr,MPFR))
-$(eval $(call symlink_system_library,libarpack,ARPACK))
 $(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
 $(eval $(call symlink_system_library,libssh2,LIBSSH2))
 $(eval $(call symlink_system_library,libcurl,CURL))

@@ -277,6 +277,10 @@ temp_pkg_dir() do project_path; cd(project_path) do
         cd(joinpath(tmp, "BigProject")) do
             try
                 pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                pkg"dev SubModule"
+                pkg"dev SubModule2"
+                pkg"add Random"
+                pkg"add Example"
                 pkg"build"
                 @eval using BigProject
                 pkg"build BigProject"
@@ -285,21 +289,21 @@ temp_pkg_dir() do project_path; cd(project_path) do
                 pkg"test SubModule2"
                 pkg"test BigProject"
                 pkg"test"
-                current_json = Pkg.API.installed()["JSON"]
+                current_example = Pkg.API.installed()["Example"]
                 old_project = read("Project.toml", String)
                 open("Project.toml"; append=true) do io
                     print(io, """
 
                     [compat]
-                    JSON = "0.16.0"
+                    Example = "0.4.0"
                     """
                     )
                 end
                 pkg"up"
-                @test Pkg.API.installed()["JSON"].minor == 16
+                @test Pkg.API.installed()["Example"].minor == 4
                 write("Project.toml", old_project)
                 pkg"up"
-                @test Pkg.API.installed()["JSON"] == current_json
+                @test Pkg.API.installed()["Example"] ==     current_example
             finally
                 popfirst!(LOAD_PATH)
             end

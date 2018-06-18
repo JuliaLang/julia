@@ -1130,9 +1130,6 @@ Deprecated or removed
     `normalize`, and moved to the new `Unicode` standard library module.
     `graphemes` has also been moved to that module ([#25021]).
 
-  * The functions `eigs` and `svds` have been moved to the `IterativeEigensolvers` standard
-    library module ([#24714]).
-
   * Sparse array functionality has moved to the `SparseArrays` standard library module ([#25249]).
 
   * Linear algebra functionality, and specifically the `LinAlg` module has moved to the
@@ -1271,6 +1268,8 @@ Deprecated or removed
     [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl) ([#27459], [#27473]).
 
   * `atan2` is now a 2-argument method of `atan` ([#27248]).
+
+  * The functions `eigs` and `svds` have been moved to the `Arpack.jl` package ([#27616]).
 
 Command-line option changes
 ---------------------------
