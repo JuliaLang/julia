@@ -563,3 +563,13 @@ let
     su = view(u, :, 1)
     @test size(@inferred(xcorr(x, su))) == (19,)
 end
+
+# issue #27632
+function _test_27632(A)
+    for J in CartesianRange(size(A)[2:end])
+        A[1, J]
+    end
+    nothing
+end
+# check that this doesn't crash
+_test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))

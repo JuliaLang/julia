@@ -737,6 +737,21 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
                 break;  // if y ends in `Vararg{Any}` skip checking everything
         }
         if (vx && vy) {
+            jl_tvar_t *yp1=NULL, *yp2=NULL;
+            jl_value_t *yva = unwrap_2_unionall(yi, &yp1, &yp2);
+            jl_tvar_t *xp1=NULL, *xp2=NULL;
+            jl_value_t *xva = unwrap_2_unionall(xi, &xp1, &xp2);
+            if ((jl_value_t*)xp1 == jl_tparam1(xva) || (jl_value_t*)xp2 == jl_tparam1(xva)) {
+                // check for unconstrained vararg on left, constrained on right
+                if (jl_is_long(jl_tparam1(yva)))
+                    return 0;
+                if (jl_is_typevar(jl_tparam1(yva))) {
+                    jl_varbinding_t *ylv = lookup(e, (jl_tvar_t*)jl_tparam1(yva));
+                    if (ylv && jl_is_long(ylv->lb))
+                        return 0;
+                }
+            }
+
             // skip testing element type if vararg lengths are 0
             if (jl_is_datatype(xi)) {
                 jl_value_t *xl = jl_tparam1(xi);
