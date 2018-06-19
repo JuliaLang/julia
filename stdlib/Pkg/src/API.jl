@@ -125,10 +125,10 @@ up(pkgs::Vector{String}; kwargs...)            = up([PackageSpec(pkg) for pkg in
 up(pkgs::Vector{PackageSpec}; kwargs...)       = up(Context(), pkgs; kwargs...)
 
 function up(ctx::Context, pkgs::Vector{PackageSpec};
-            level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, kwargs...)
+            level::UpgradeLevel=UPLEVEL_MAJOR, mode::PackageMode=PKGMODE_PROJECT, do_update_registry=true, kwargs...)
     Context!(ctx; kwargs...)
     ctx.preview && preview_info()
-    update_registry(ctx)
+    do_update_registry && update_registry(ctx)
     if isempty(pkgs)
         if mode == PKGMODE_PROJECT
             for (name::String, uuidstr::String) in ctx.env.project["deps"]
@@ -151,7 +151,8 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
     return
 end
 
-resolve() = up(level=UPLEVEL_FIXED)
+resolve() = resolve(Context())
+resolve(ctx::Context) = up(ctx, level=UPLEVEL_FIXED, mode=PKGMODE_MANIFEST, do_update_registry=false)
 
 pin(pkg::Union{String, PackageSpec}; kwargs...) = pin([pkg]; kwargs...)
 pin(pkgs::Vector{String}; kwargs...)            = pin([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
@@ -262,7 +263,7 @@ function gc(ctx::Context=Context(); kwargs...)
     # Find all reachable packages through manifests recently used
     new_usage = Dict{String, Any}()
     paths_to_keep = String[]
-    printpkgstyle(ctx, :Active, "projects files at:")
+    printpkgstyle(ctx, :Active, "manifests at:")
     for (manifestfile, date) in manifest_date
         !isfile(manifestfile) && continue
         println("        `$manifestfile`")
@@ -341,7 +342,7 @@ function gc(ctx::Context=Context(); kwargs...)
             TOML.print(io, new_usage, sorted=true)
         end
     end
-    byte_save_str = length(paths_to_delete) == 0 ? "" : ("saving " * pretty_byte_str(sz))
+    byte_save_str = length(paths_to_delete) == 0 ? "" : (": " * pretty_byte_str(sz))
     printpkgstyle(ctx, :Deleted, "$(length(paths_to_delete)) package installations $byte_save_str")
 
     ctx.preview && preview_info()

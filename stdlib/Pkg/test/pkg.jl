@@ -279,6 +279,7 @@ temp_pkg_dir() do project_path
             cd(joinpath(dir, "UnregisteredWithProject")) do
                 try
                     pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                    Pkg.add("Test") # test https://github.com/JuliaLang/Pkg.jl/issues/324
                     Pkg.test()
                 finally
                     popfirst!(LOAD_PATH)
