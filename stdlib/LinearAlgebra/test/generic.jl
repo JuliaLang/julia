@@ -197,14 +197,14 @@ end
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
-@test_throws ArgumentError norm(Matrix{Float64}(undef,5,5),5)
+@test_throws ArgumentError opnorm(Matrix{Float64}(undef,5,5),5)
 
-@testset "generic vecnorm for arrays of arrays" begin
+@testset "generic norm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
     @test @inferred(norm(x)) ≈ sqrt(30)
     @test norm(x, 0) == length(x)
-    @test norm(x, 1) ≈ sqrt(5) + 5
-    @test norm(x, 3) ≈ cbrt(sqrt(125)+125)
+    @test norm(x, 1) ≈ 5+sqrt(5)
+    @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin

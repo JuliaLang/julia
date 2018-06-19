@@ -6,6 +6,12 @@ using Base: @deprecate, depwarn
 
 @deprecate cond(F::LinearAlgebra.LU, p::Integer) cond(convert(AbstractArray, F), p)
 
+# deprecate vecnorm in favor of norm
+@deprecate vecnorm norm
+
+# deprecate vecdot in favor of dot
+@deprecate vecdot dot
+
 # PR #22188
 export cholfact, cholfact!
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholesky!(Hermitian(A, uplo), Val(false))

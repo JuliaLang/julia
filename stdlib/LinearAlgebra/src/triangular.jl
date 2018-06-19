@@ -1952,7 +1952,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         ArgumentError("p must be a real number in (-1,1), got $p")
     end
 
-    normA0 = norm(A0, 1)
+    normA0 = opnorm(A0, 1)
     rmul!(A0, 1/normA0)
 
     theta = [1.53e-5, 2.25e-3, 1.92e-2, 6.08e-2, 1.25e-1, 2.03e-1, 2.84e-1]
@@ -2050,8 +2050,8 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     AmI = A - I
-    d2 = sqrt(norm(AmI^2, 1))
-    d3 = cbrt(norm(AmI^3, 1))
+    d2 = sqrt(opnorm(AmI^2, 1))
+    d3 = cbrt(opnorm(AmI^3, 1))
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
@@ -2062,9 +2062,9 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     while !foundm
         more = false
         if s > s0
-            d3 = cbrt(norm(AmI^3, 1))
+            d3 = cbrt(opnorm(AmI^3, 1))
         end
-        d4 = norm(AmI^4, 1)^(1/4)
+        d4 = opnorm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
             local j
@@ -2083,7 +2083,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         end
 
         if !more
-            d5 = norm(AmI^5, 1)^(1/5)
+            d5 = opnorm(AmI^5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
@@ -2250,8 +2250,8 @@ function invsquaring(A0::UpperTriangular, theta)
     end
 
     AmI = A - I
-    d2 = sqrt(norm(AmI^2, 1))
-    d3 = cbrt(norm(AmI^3, 1))
+    d2 = sqrt(opnorm(AmI^2, 1))
+    d3 = cbrt(opnorm(AmI^3, 1))
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
@@ -2262,9 +2262,9 @@ function invsquaring(A0::UpperTriangular, theta)
     while !foundm
         more = false
         if s > s0
-            d3 = cbrt(norm(AmI^3, 1))
+            d3 = cbrt(opnorm(AmI^3, 1))
         end
-        d4 = norm(AmI^4, 1)^(1/4)
+        d4 = opnorm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
             local j
@@ -2287,7 +2287,7 @@ function invsquaring(A0::UpperTriangular, theta)
         end
 
         if !more
-            d5 = norm(AmI^5, 1)^(1/5)
+            d5 = opnorm(AmI^5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]

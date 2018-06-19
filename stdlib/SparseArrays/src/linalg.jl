@@ -203,11 +203,11 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     return C
 end
 
-# Frobenius inner product: trace(A'B)
-function vecdot(A::SparseMatrixCSC{T1,S1},B::SparseMatrixCSC{T2,S2}) where {T1,T2,S1,S2}
+# Frobenius dot/inner product: trace(A'B)
+function dot(A::SparseMatrixCSC{T1,S1},B::SparseMatrixCSC{T2,S2}) where {T1,T2,S1,S2}
     m, n = size(A)
     size(B) == (m,n) || throw(DimensionMismatch("matrices must have the same dimensions"))
-    r = vecdot(zero(T1), zero(T2))
+    r = dot(zero(T1), zero(T2))
     @inbounds for j = 1:n
         ia = A.colptr[j]; ia_nxt = A.colptr[j+1]
         ib = B.colptr[j]; ib_nxt = B.colptr[j+1]
@@ -223,7 +223,7 @@ function vecdot(A::SparseMatrixCSC{T1,S1},B::SparseMatrixCSC{T2,S2}) where {T1,T
                     ib < ib_nxt || break
                     rb = B.rowval[ib]
                 else # ra == rb
-                    r += vecdot(A.nzval[ia], B.nzval[ib])
+                    r += dot(A.nzval[ia], B.nzval[ib])
                     ia += oneunit(S1); ib += oneunit(S2)
                     ia < ia_nxt && ib < ib_nxt || break
                     ra = A.rowval[ia]; rb = B.rowval[ib]
@@ -560,15 +560,15 @@ end
 diff(a::SparseMatrixCSC; dims::Integer) = dims==1 ? sparse_diff1(a) : sparse_diff2(a)
 
 ## norm and rank
-vecnorm(A::SparseMatrixCSC, p::Real=2) = vecnorm(view(A.nzval, 1:nnz(A)), p)
+norm(A::SparseMatrixCSC, p::Real=2) = norm(view(A.nzval, 1:nnz(A)), p)
 
-function norm(A::SparseMatrixCSC,p::Real=2)
+function opnorm(A::SparseMatrixCSC, p::Real=2)
     m, n = size(A)
     if m == 0 || n == 0 || isempty(A)
         return float(real(zero(eltype(A))))
     elseif m == 1 || n == 1
         # TODO: compute more efficiently using A.nzval directly
-        return norm(Array(A), p)
+        return opnorm(Array(A), p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
@@ -583,7 +583,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
             end
             return convert(Tnorm, nA)
         elseif p==2
-            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(Array(A)) or norm(A, p) where p=1 or Inf."))
+            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try opnorm(Array(A)) or opnorm(A, p) where p=1 or Inf."))
         elseif p==Inf
             rowSum = zeros(Tsum,m)
             for i=1:length(A.nzval)
@@ -592,7 +592,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
             return convert(Tnorm, maximum(rowSum))
         end
     end
-    throw(ArgumentError("invalid p-norm p=$p. Valid: 1, Inf"))
+    throw(ArgumentError("invalid operator p-norm p=$p. Valid: 1, Inf"))
 end
 
 # TODO rank
@@ -600,12 +600,12 @@ end
 # cond
 function cond(A::SparseMatrixCSC, p::Real=2)
     if p == 1
-        normAinv = normestinv(A)
-        normA = norm(A, 1)
+        normAinv = opnormestinv(A)
+        normA = opnorm(A, 1)
         return normA * normAinv
     elseif p == Inf
-        normAinv = normestinv(copy(A'))
-        normA = norm(A, Inf)
+        normAinv = opnormestinv(copy(A'))
+        normA = opnorm(A, Inf)
         return normA * normAinv
     elseif p == 2
         throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(Array(A), 2) instead"))
@@ -614,7 +614,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
     end
 end
 
-function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)))) where T
+function opnormestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)))) where T
     maxiter = 5
     # Check the input
     n = checksquare(A)
