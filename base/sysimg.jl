@@ -402,7 +402,6 @@ include("channels.jl")
 
 # utilities
 include("deepcopy.jl")
-include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
@@ -860,6 +859,7 @@ end
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
     @deprecate_stdlib peakflops     InteractiveUtils true
+    @deprecate_stdlib clipboard     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
@@ -889,7 +889,6 @@ end
     @deprecate_stdlib send           Sockets true
     @deprecate_stdlib TCPSocket      Sockets true
     @deprecate_stdlib UDPSocket      Sockets true
-
 end
 end
 

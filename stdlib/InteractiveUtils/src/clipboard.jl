@@ -59,12 +59,12 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
 elseif Sys.iswindows()
     # TODO: these functions leak memory and memory locks if they throw an error
     function clipboard(x::AbstractString)
-        if containsnul(x)
+        if Base.containsnul(x)
             throw(ArgumentError("Windows clipboard strings cannot contain NUL character"))
         end
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL))
         systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
-        x_u16 = cwstring(x)
+        x_u16 = Base.cwstring(x)
         # copy data to locked, allocated space
         p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{UInt16}, (UInt16, Int32), 2, sizeof(x_u16))
         systemerror(:GlobalAlloc, p==C_NULL)
