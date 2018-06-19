@@ -4,7 +4,7 @@
 # Run as: fixup-libgfortran.sh [--verbose] <$private_libdir>
 
 # If we're invoked with "--verbose", create a `debug` function that prints stuff out
-if [ "$1" == "--verbose" ] || [ "$1" == "-v" ]; then
+if [ "$1" = "--verbose" ] || [ "$1" = "-v" ]; then
 shift 1
 debug() { echo "$*"; }
 else
