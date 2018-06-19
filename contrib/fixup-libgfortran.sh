@@ -41,19 +41,14 @@ find_shlib()
     fi
 }
 
-private_libname()
-{
-    echo "$private_libdir/lib$1.$SHLIB_EXT"
-}
-
 # First, discover all the places where libgfortran/libgcc is, as well as their true SONAMES
-for lib in lapack; do
-    if [ -f "$private_libdir/lib$lib.$SHLIB_EXT" ]; then
+for lib in lapack blas openblas; do
+    for private_libname in ${private_libdir}/lib$lib*.$SHLIB_EXT*; do
         # Find the paths to the libraries we're interested in.  These are almost
         # always within the same directory, but we like to be general.
-        LIBGFORTRAN_PATH=$(find_shlib "$(private_libname $lib)" libgfortran)
-        LIBGCC_PATH=$(find_shlib "$(private_libname $lib)" libgcc_s)
-        LIBQUADMATH_PATH=$(find_shlib "$(private_libname $lib)" libquadmath)
+        LIBGFORTRAN_PATH=$(find_shlib "$private_libname" libgfortran)
+        LIBGCC_PATH=$(find_shlib "$private_libname" libgcc_s)
+        LIBQUADMATH_PATH=$(find_shlib "$private_libname" libquadmath)
 
         # Take the directories, add them onto LIBGFORTRAN_DIRS, which we use to
         # search for these libraries in the future.
@@ -65,7 +60,7 @@ for lib in lapack; do
         LIBGFORTRAN_SONAMES="$LIBGFORTRAN_SONAMES $(basename "$LIBGFORTRAN_PATH")"
         LIBGCC_SONAMES="$LIBGCC_SONAMES $(basename "$LIBGCC_PATH")"
         LIBQUADMATH_SONAMES="$LIBQUADMATH_SONAMES $(basename "$LIBQUADMATH_PATH")"
-    fi
+    done
 done
 
 # Take in a list of space-separated tokens, return a deduplicated list of the same
