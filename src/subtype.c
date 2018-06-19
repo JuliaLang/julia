@@ -2201,15 +2201,13 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 {
     int ntvars = jl_subtype_env_size((jl_value_t*)u);
     jl_svec_t *vec = jl_alloc_svec_uninit(ntvars);
-    JL_GC_PUSH1(&vec);
     jl_unionall_t *ua = (jl_unionall_t*)u;
     int i;
-    for(i=0; i < ntvars; i++) {
+    for (i = 0; i < ntvars; i++) {
         assert(jl_is_unionall(ua));
         jl_svecset(vec, i, ua->var);
         ua = (jl_unionall_t*)ua->body;
     }
-    JL_GC_POP();
     return vec;
 }
 
@@ -2220,25 +2218,25 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
 {
     if (jl_is_unionall(a)) {
-        jl_value_t *ans = switch_union_tuple(((jl_unionall_t *) a)->body, b);
+        jl_value_t *ans = switch_union_tuple(((jl_unionall_t*)a)->body, b);
         if (ans == NULL)
             return NULL;
         JL_GC_PUSH1(&ans);
-        ans = jl_type_unionall(((jl_unionall_t *) a)->var, ans);
+        ans = jl_type_unionall(((jl_unionall_t*)a)->var, ans);
         JL_GC_POP();
         return ans;
     }
     if (jl_is_unionall(b)) {
-        jl_value_t *ans = switch_union_tuple(a, ((jl_unionall_t *) b)->body);
+        jl_value_t *ans = switch_union_tuple(a, ((jl_unionall_t*)b)->body);
         if (ans == NULL)
             return NULL;
         JL_GC_PUSH1(&ans);
-        ans = jl_type_unionall(((jl_unionall_t *) b)->var, ans);
+        ans = jl_type_unionall(((jl_unionall_t*)b)->var, ans);
         JL_GC_POP();
         return ans;
     }
     if (jl_is_uniontype(a)) {
-        a = switch_union_tuple(((jl_uniontype_t *)a)->a, ((jl_uniontype_t *)a)->b);
+        a = switch_union_tuple(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)a)->b);
         if (a == NULL)
             return NULL;
         JL_GC_PUSH1(&a);
@@ -2247,7 +2245,7 @@ jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
         return ans;
     }
     if (jl_is_uniontype(b)) {
-        b = switch_union_tuple(((jl_uniontype_t *)b)->a, ((jl_uniontype_t *)b)->b);
+        b = switch_union_tuple(((jl_uniontype_t*)b)->a, ((jl_uniontype_t*)b)->b);
         if (b == NULL)
             return NULL;
         JL_GC_PUSH1(&b);
@@ -2258,17 +2256,19 @@ jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
     if (!jl_is_tuple_type(a) || !jl_is_tuple_type(b)) {
         return NULL;
     }
-    if (jl_nparams(a) != jl_nparams(b) || jl_is_va_tuple((jl_datatype_t *)a) ||
-        jl_is_va_tuple((jl_datatype_t *) b)) {
+    if (jl_nparams(a) != jl_nparams(b) || jl_is_va_tuple((jl_datatype_t*)a) ||
+            jl_is_va_tuple((jl_datatype_t*)b)) {
         return NULL;
     }
-    jl_svec_t *vec = jl_alloc_svec_uninit(jl_nparams(a));
+    jl_svec_t *vec = jl_alloc_svec(jl_nparams(a));
     JL_GC_PUSH1(&vec);
     for (int i = 0; i < jl_nparams(a); i++) {
-        jl_value_t *ts[2] = { jl_tparam(a, i), jl_tparam(b, i) };
+        jl_value_t *ts[2];
+        ts[0] = jl_tparam(a, i);
+        ts[1] = jl_tparam(b, i);
         jl_svecset(vec, i, jl_type_union(ts, 2));
     }
-    jl_value_t *ans = (jl_value_t *) jl_apply_tuple_type(vec);
+    jl_value_t *ans = (jl_value_t*)jl_apply_tuple_type(vec);
     JL_GC_POP();
     return ans;
 }
@@ -2316,7 +2316,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             jl_value_t *ans_unwrapped = jl_unwrap_unionall(*ans);
             JL_GC_PUSH1(&ans_unwrapped);
             if (jl_is_uniontype(ans_unwrapped)) {
-                ans_unwrapped = switch_union_tuple(((jl_uniontype_t *)ans_unwrapped)->a, ((jl_uniontype_t *)ans_unwrapped)->b);
+                ans_unwrapped = switch_union_tuple(((jl_uniontype_t*)ans_unwrapped)->a, ((jl_uniontype_t*)ans_unwrapped)->b);
                 if (ans_unwrapped != NULL) {
                     *ans = jl_rewrap_unionall(ans_unwrapped, *ans);
                 }
