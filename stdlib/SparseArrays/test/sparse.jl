@@ -308,22 +308,46 @@ end
     end
 end
 
-@testset "matrix multiplication and kron" begin
+@testset "matrix multiplication" begin
     for i = 1:5
         a = sprand(10, 5, 0.7)
         b = sprand(5, 15, 0.3)
         @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
         @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
         @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
-        @test Array(kron(a,b)) == kron(Array(a), Array(b))
-        @test Array(kron(Array(a),b)) == kron(Array(a), Array(b))
-        @test Array(kron(a,Array(b))) == kron(Array(a), Array(b))
-        c = sparse(rand(Float32,5,5))
-        d = sparse(rand(Float64,5,5))
-        @test Array(kron(c,d)) == kron(Array(c),Array(d))
         f = Diagonal(rand(5))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
+    end
+end
+
+@testset "kronecker product" begin
+    for (m,n) in ((5,10), (13,8), (14,10))
+        a = sprand(m, 5, 0.4); a_d = Matrix(a)
+        b = sprand(n, 6, 0.3); b_d = Matrix(b)
+        x = sprand(m, 0.4); x_d = Vector(x)
+        y = sprand(n, 0.3); y_d = Vector(y)
+        # mat ⊗ mat
+        @test Array(kron(a, b)) == kron(a_d, b_d)
+        @test Array(kron(a_d, b)) == kron(a_d, b_d)
+        @test Array(kron(a, b_d)) == kron(a_d, b_d)
+        # vec ⊗ vec
+        @test Vector(kron(x, y)) == kron(x_d, y_d)
+        @test Vector(kron(x_d, y)) == kron(x_d, y_d)
+        @test Vector(kron(x, y_d)) == kron(x_d, y_d)
+        # mat ⊗ vec
+        @test Array(kron(a, y)) == kron(a_d, y_d)
+        @test Array(kron(a_d, y)) == kron(a_d, y_d)
+        @test Array(kron(a, y_d)) == kron(a_d, y_d)
+        # vec ⊗ mat
+        @test Array(kron(x, b)) == kron(x_d, b_d)
+        @test Array(kron(x_d, b)) == kron(x_d, b_d)
+        @test Array(kron(x, b_d)) == kron(x_d, b_d)
+        # test different types
+        z = convert(SparseVector{Float16, Int8}, y); z_d = Vector(z)
+        @test Vector(kron(x, z)) == kron(x_d, z_d)
+        @test Array(kron(a, z)) == kron(a_d, z_d)
+        @test Array(kron(z, b)) == kron(z_d, b_d)
     end
 end
 
