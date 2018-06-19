@@ -50,7 +50,6 @@ own licenses:
 Julia's standard library uses the following external libraries, which have
 their own licenses:
 
-- [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE) [BSD-3]
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt) [BSD-3]
 - [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md) [MIT, BSD-2, ISC]
 - [GMP](http://gmplib.org/manual/Copying.html#Copying) [LGPL3+ or GPL2+]
@@ -62,8 +61,6 @@ their own licenses:
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE) [BSD-3]
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt) [BSD-3]
 - [PCRE](http://www.pcre.org/licence.txt) [BSD-3]
-- [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html) [mix of LGPL2+ and GPL2+; see individual module licenses]
-
 
 The following components of Julia's standard library have separate licenses:
 
