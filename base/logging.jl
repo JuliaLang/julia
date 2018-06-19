@@ -307,7 +307,10 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     line = $line
                     try
                         msg = $(esc(message))
-                        handle_message(logger, level, msg, _module, group, id, file, line; $(kwargs...))
+                        if msg !== nothing
+                            handle_message(logger, level, msg, _module, group, id, file, line;
+                                           $(kwargs...))
+                        end
                     catch err
                         logging_error(logger, level, _module, group, id, file, line, err)
                     end
