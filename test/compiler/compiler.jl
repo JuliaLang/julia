@@ -1610,3 +1610,9 @@ for i27351 in 1:15
 end
 f27351(::T, ::T27351, ::T27351) where {T} = 16
 @test_throws MethodError f27351(Val(1), T27351(), T27351())
+
+# issue #19668
+struct Foo19668
+    Foo19668(; kwargs...) = new()
+end
+@test Base.return_types(Foo19668, ()) == [Foo19668]

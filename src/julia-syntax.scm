@@ -466,22 +466,6 @@
           (mangled (symbol (string "#" (if name (undot-name name) 'call) "#"
                                    (string (current-julia-module-counter))))))
       `(block
-        ;; call with no keyword args
-        ,(method-def-expr-
-          name positional-sparams (append pargl vararg)
-          `(block
-            ,@(without-generated prologue)
-            ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
-                   (ret `(return (call ,mangled
-                                       ,@(if ordered-defaults keynames vals)
-                                       ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
-                                       ,@(map arg-name pargl)
-                                       ,@(if (null? vararg) '()
-                                             (list `(... ,(arg-name (car vararg)))))))))
-               (if ordered-defaults
-                   (scopenest keynames vals ret)
-                   ret))))
-
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
           mangled sparams
@@ -500,6 +484,22 @@
                                ,@stmts)
                              annotations)
           rett)
+
+        ;; call with no keyword args
+        ,(method-def-expr-
+          name positional-sparams (append pargl vararg)
+          `(block
+            ,@(without-generated prologue)
+            ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
+                   (ret `(return (call ,mangled
+                                       ,@(if ordered-defaults keynames vals)
+                                       ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
+                                       ,@(map arg-name pargl)
+                                       ,@(if (null? vararg) '()
+                                             (list `(... ,(arg-name (car vararg)))))))))
+               (if ordered-defaults
+                   (scopenest keynames vals ret)
+                   ret))))
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
@@ -3021,6 +3021,7 @@ f(x) = yt(x)
                            (or (atom? e)
                                (memq (car e) '(quote top core line inert local local-def unnecessary
                                                meta inbounds boundscheck simdloop decl
+                                               struct_type abstract_type primitive_type thunk new
                                                implicit-global global globalref outerref
                                                const = null method call foreigncall cfunction ssavalue
                                                gc_preserve_begin gc_preserve_end))))
