@@ -320,10 +320,6 @@ static Function *box_uint64_func;
 static Function *box_float32_func;
 static Function *box_float64_func;
 static Function *box_ssavalue_func;
-static Function *box8_func;
-static Function *box16_func;
-static Function *box32_func;
-static Function *box64_func;
 static Function *expect_func;
 static Function *jldlsym_func;
 static Function *jltypeassert_func;
@@ -7503,22 +7499,14 @@ extern "C" void jl_init_codegen(void)
     Module *m = (Module *)jl_init_llvm();
     init_julia_llvm_env(m);
 
-    BOX_F(int8,int8);  UBOX_F(uint8,uint8);
-    BOX_F(int16,int16); UBOX_F(uint16,uint16);
-    BOX_F(int32,int32); UBOX_F(uint32,uint32);
-    BOX_F(int64,int64); UBOX_F(uint64,uint64);
-    BOX_F(float32,float32); BOX_F(float64,float64);
-    BOX_F(char,char);
+    SBOX_F_PERM(int8,int8); UBOX_F_PERM(uint8,uint8);
+    SBOX_F(int16,int16); UBOX_F(uint16,uint16);
+    SBOX_F(int32,int32); UBOX_F(uint32,uint32);
+    SBOX_F(int64,int64); UBOX_F(uint64,uint64);
+    BOX_F(float32,float32,T_prjlvalue); BOX_F(float64,float64,T_prjlvalue);
+    UBOX_F(char,char);
     UBOX_F(ssavalue,size);
 
-    box8_func  = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int8),
-                              "jl_box8", &jl_box8, m);
-    box16_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int16),
-                              "jl_box16", &jl_box16, m);
-    box32_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int32),
-                              "jl_box32", &jl_box32, m);
-    box64_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int64),
-                              "jl_box64", &jl_box64, m);
     jl_init_intrinsic_functions_codegen(m);
 }
 
