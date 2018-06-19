@@ -522,3 +522,7 @@ end
 @testset "perp" begin 
     @test tok("1 ⟂ 2", 3).kind==T.PERP 
 end
+
+@testset "outer" begin 
+    @test tok("outer", 1).kind==T.OUTER
+end
