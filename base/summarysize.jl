@@ -65,6 +65,7 @@ end
 (ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj)
 # define the general case separately to make sure it is not specialized for every type
 @noinline function _summarysize(ss::SummarySize, @nospecialize obj)
+    isdefined(typeof(obj), :instance) && return 0
     # NOTE: this attempts to discover multiple copies of the same immutable value,
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)

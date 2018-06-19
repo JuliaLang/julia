@@ -390,6 +390,8 @@ JL_CALLABLE(jl_f_sizeof)
             jl_error("type does not have a fixed size");
         return jl_box_long(jl_datatype_size(x));
     }
+    if (x == jl_bottom_type)
+        jl_error("The empty type does not have a well-defined size since it does not have instances.");
     if (jl_is_array(x)) {
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
     }
