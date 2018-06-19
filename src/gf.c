@@ -557,54 +557,9 @@ jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i)
     return NULL;
 }
 
-// after intersection, the argument tuple type may need to be corrected to reflect the signature match
-// that occurred, if the arguments contained a Type but the signature matched on the kind
-static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_value_t *sig)
-{
-    jl_svec_t *newparams = NULL;
-    JL_GC_PUSH1(&newparams);
-    size_t i, np;
-    for (i = 0, np = jl_nparams(tt); i < np; i++) {
-        jl_value_t *elt = jl_tparam(tt, i);
-        jl_value_t *newelt = NULL;
-        jl_value_t *decl_i = jl_nth_slot_type((jl_value_t*)sig, i);
-
-        if (jl_is_type_type(elt)) {
-            // if the declared type was not Any or Union{Type, ...},
-            // then the match must been with UnionAll or DataType
-            // and the result of matching the type signature
-            // needs to be corrected to the concrete type 'kind'
-            jl_value_t *kind = jl_typeof(jl_tparam0(elt));
-            if (jl_subtype(kind, decl_i)) {
-                if (!jl_subtype((jl_value_t*)jl_type_type, decl_i)) {
-                    // UnionAlls are problematic because they can be alternate
-                    // representations of any type. If we matched this method because
-                    // it matched the concrete type UnionAll, then don't cache something
-                    // different since that doesn't necessarily actually apply.
-                    //
-                    // similarly, if we matched Type{T<:Any}::DataType,
-                    // then we don't want to cache it that way
-                    // since lookup will think we matched ::Type{T}
-                    // and that is quite a different thing
-                    newelt = kind;
-                }
-            }
-        }
-        // prepare to build a new type with the replacement above
-        if (newelt) {
-            if (!newparams) newparams = jl_svec_copy(tt->parameters);
-            jl_svecset(newparams, i, newelt);
-        }
-    }
-    if (newparams)
-        tt = jl_apply_tuple_type(newparams);
-    JL_GC_POP();
-    return tt;
-}
-
 // if concrete_match returns false, the sig may specify `Type{T::DataType}`, while the `tt` contained DataType
 // in this case, subtyping is wrong, and this may not actually match at runtime
-// since it may instead match `Type{T::Type}`
+// since it may instead match any kind of `Type{T::Type}`
 //static int concrete_match(jl_tupletype_t *tt, jl_value_t *sig)
 //{
 //    size_t i, np;
@@ -627,7 +582,9 @@ static jl_value_t *ml_matches(union jl_typemap_t ml, int offs,
 // get the compilation signature specialization for this method
 static void jl_compilation_sig(
     jl_tupletype_t *const tt, // the original tupletype of the call : this is expected to be a relative simple type (no Varags, Union, UnionAll, etc.)
+    jl_svec_t *sparams,
     jl_method_t *definition,
+    intptr_t nspec,
     // output:
     jl_svec_t **const newparams)
 {
@@ -755,9 +712,77 @@ static void jl_compilation_sig(
             continue;
         }
     }
+
+    // for varargs methods, only specialize up to max_args.
+    // in general, here we want to find the biggest type that's not a
+    // supertype of any other method signatures. so far we are conservative
+    // and the types we find should be bigger.
+    if (jl_nparams(tt) >= nspec && jl_va_tuple_kind((jl_datatype_t*)definition->sig) == JL_VARARG_UNBOUND) {
+        jl_svec_t *limited = jl_alloc_svec(nspec);
+        jl_value_t *temp = NULL;
+        JL_GC_PUSH2(&limited, temp);
+        if (!*newparams) *newparams = tt->parameters;
+        size_t i;
+        for (i = 0; i < nspec - 1; i++) {
+            jl_svecset(limited, i, jl_svecref(*newparams, i));
+        }
+        jl_value_t *lasttype = jl_svecref(*newparams, i - 1);
+        // if all subsequent arguments are subtypes of lasttype, specialize
+        // on that instead of decl. for example, if decl is
+        // (Any...)
+        // and type is
+        // (Symbol, Symbol, Symbol)
+        // then specialize as (Symbol...), but if type is
+        // (Symbol, Int32, Expr)
+        // then specialize as (Any...)
+        size_t j = i;
+        int all_are_subtypes = 1;
+        for (; j < jl_svec_len(*newparams); j++) {
+            if (!jl_subtype(jl_svecref(*newparams, j), lasttype)) {
+                all_are_subtypes = 0;
+                break;
+            }
+        }
+        if (all_are_subtypes) {
+            // avoid Type{Type{...}}...
+            if (jl_is_type_type(lasttype) && jl_is_type_type(jl_tparam0(lasttype)))
+                lasttype = (jl_value_t*)jl_type_type;
+            jl_svecset(limited, i, jl_wrap_vararg(lasttype, (jl_value_t*)NULL));
+        }
+        else {
+            jl_value_t *unw = jl_unwrap_unionall(definition->sig);
+            jl_value_t *lastdeclt = jl_tparam(unw, jl_nparams(unw) - 1);
+            int nsp = jl_svec_len(sparams);
+            if (nsp > 0) {
+                jl_svec_t *env = jl_alloc_svec_uninit(2 * nsp);
+                temp = (jl_value_t*)env;
+                jl_unionall_t *ua = (jl_unionall_t*)definition->sig;
+                for (j = 0; j < nsp; j++) {
+                    assert(jl_is_unionall(ua));
+                    jl_svecset(env, j * 2, ua->var);
+                    jl_svecset(env, j * 2 + 1, jl_svecref(sparams, j));
+                    ua = (jl_unionall_t*)ua->body;
+                }
+                lastdeclt = (jl_value_t*)jl_instantiate_type_with((jl_value_t*)lastdeclt,
+                                                                  jl_svec_data(env), nsp);
+            }
+            jl_svecset(limited, i, lastdeclt);
+        }
+        *newparams = limited;
+        // now there is a problem: the widened signature is more
+        // general than just the given arguments, so it might conflict
+        // with another definition that doesn't have cache instances yet.
+        // to fix this, we insert guard cache entries for all intersections
+        // of this signature and definitions. those guard entries will
+        // supersede this one in conflicted cases, alerting us that there
+        // should actually be a cache miss.
+        // TODO: the above analysis assumes that there will never
+        // be a call attempted that should throw a no-method error
+        JL_GC_POP();
+    }
 }
 
-// compute whether this type signature is a possible return value from jl_compilation_sig
+// compute whether this type signature is a possible return value from jl_compilation_sig given a concrete-type for `tt`
 JL_DLLEXPORT int jl_isa_compileable_sig(
     jl_tupletype_t *type,
     jl_method_t *definition)
@@ -775,6 +800,8 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 
     size_t i, np = jl_nparams(type);
     size_t nargs = definition->nargs; // == jl_field_count(jl_unwrap_unionall(decl));
+    if (definition->isva ? np <= nargs : np != nargs)
+        return 0;
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(type, i);
         jl_value_t *decl_i = jl_nth_slot_type((jl_value_t*)decl, i);
@@ -903,6 +930,7 @@ static jl_method_instance_t *cache_method(
         int allow_exec)
 {
     // caller must hold the mt->writelock
+    // short-circuit (now that we hold the lock) if this entry is already present
     jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(*cache, (jl_value_t*)tt, NULL, /*subtype*/1, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
     if (entry && entry->func.value)
         return (jl_method_instance_t*)entry->func.value;
@@ -914,86 +942,22 @@ static jl_method_instance_t *cache_method(
     jl_svec_t *newparams = NULL;
     JL_GC_PUSH5(&temp, &temp2, &temp3, &newmeth, &newparams);
 
-    jl_compilation_sig(tt, definition, &newparams);
-
-    // for varargs methods, only specialize up to max_args.
-    // in general, here we want to find the biggest type that's not a
-    // supertype of any other method signatures. so far we are conservative
-    // and the types we find should be bigger.
-    intptr_t nspec = (mt == jl_type_type_mt ? definition->nargs + 1 : mt->max_args + 2);
-    if (definition->generator == NULL && jl_nparams(tt) >= nspec
-            && jl_va_tuple_kind((jl_datatype_t*)definition->sig) == JL_VARARG_UNBOUND) {
-        jl_svec_t *limited = jl_alloc_svec(nspec);
-        temp = (jl_value_t*)limited;
-        if (!newparams) newparams = tt->parameters;
-        size_t i;
-        for (i = 0; i < nspec - 1; i++) {
-            jl_svecset(limited, i, jl_svecref(newparams, i));
-        }
-        jl_value_t *lasttype = jl_svecref(newparams, i - 1);
-        // if all subsequent arguments are subtypes of lasttype, specialize
-        // on that instead of decl. for example, if decl is
-        // (Any...)
-        // and type is
-        // (Symbol, Symbol, Symbol)
-        // then specialize as (Symbol...), but if type is
-        // (Symbol, Int32, Expr)
-        // then specialize as (Any...)
-        size_t j = i;
-        int all_are_subtypes = 1;
-        for (; j < jl_svec_len(newparams); j++) {
-            if (!jl_subtype(jl_svecref(newparams, j), lasttype)) {
-                all_are_subtypes = 0;
-                break;
-            }
-        }
-        if (all_are_subtypes) {
-            // avoid Type{Type{...}}...
-            if (jl_is_type_type(lasttype) && jl_is_type_type(jl_tparam0(lasttype)))
-                lasttype = (jl_value_t*)jl_type_type;
-            jl_svecset(limited, i, jl_wrap_vararg(lasttype, (jl_value_t*)NULL));
-        }
-        else {
-            jl_value_t *unw = jl_unwrap_unionall(definition->sig);
-            jl_value_t *lastdeclt = jl_tparam(unw, jl_nparams(unw) - 1);
-            int nsp = jl_svec_len(sparams);
-            if (nsp > 0) {
-                jl_svec_t *env = jl_alloc_svec_uninit(2 * nsp);
-                temp2 = (jl_value_t*)env;
-                jl_unionall_t *ua = (jl_unionall_t*)definition->sig;
-                for (j = 0; j < nsp; j++) {
-                    assert(jl_is_unionall(ua));
-                    jl_svecset(env, j * 2, ua->var);
-                    jl_svecset(env, j * 2 + 1, jl_svecref(sparams, j));
-                    ua = (jl_unionall_t*)ua->body;
-                }
-                lastdeclt = (jl_value_t*)jl_instantiate_type_with((jl_value_t*)lastdeclt,
-                                                                  jl_svec_data(env), nsp);
-            }
-            jl_svecset(limited, i, lastdeclt);
-        }
-        newparams = limited;
-        // now there is a problem: the widened signature is more
-        // general than just the given arguments, so it might conflict
-        // with another definition that doesn't have cache instances yet.
-        // to fix this, we insert guard cache entries for all intersections
-        // of this signature and definitions. those guard entries will
-        // supersede this one in conflicted cases, alerting us that there
-        // should actually be a cache miss.
-        // TODO: the above analysis assumes that there will never
-        // be a call attempted that should throw a no-method error
-    }
-
-    size_t min_valid = definition->min_world;
-    size_t max_valid = ~(size_t)0;
     int cache_with_orig = 1;
-    jl_svec_t* guardsigs = jl_emptysvec;
     jl_tupletype_t *compilationsig = tt;
-    jl_tupletype_t *cachett = tt;
+    intptr_t nspec = (mt == jl_type_type_mt ? definition->nargs + 1 : mt->max_args + 2);
+    jl_compilation_sig(tt, sparams, definition, nspec, &newparams);
     if (newparams) {
         cache_with_orig = 0;
         compilationsig = jl_apply_tuple_type(newparams);
         temp2 = (jl_value_t*)compilationsig;
+    }
+    newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)compilationsig, sparams, world);
+
+    jl_tupletype_t *cachett = tt;
+    jl_svec_t* guardsigs = jl_emptysvec;
+    size_t min_valid = definition->min_world;
+    size_t max_valid = ~(size_t)0;
+    if (!cache_with_orig) {
         // now examine what will happen if we chose to use this sig in the cache
         temp = ml_matches(mt->defs, 0, compilationsig, -1, 0, world, &min_valid, &max_valid); // TODO: use MAX_UNSPECIALIZED_CONFLICTS?
         int guards = 0;
@@ -1053,7 +1017,6 @@ static jl_method_instance_t *cache_method(
     }
 
     // here we infer types and specialize the method
-    newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)compilationsig, sparams, world);
     if (newmeth->min_world > min_valid)
         min_valid = newmeth->min_world;
     if (newmeth->max_world < max_valid)
@@ -1088,6 +1051,15 @@ static jl_method_instance_t *cache_method(
         temp2 = (jl_value_t*)simplett;
     }
 
+    // TODO: short-circuit if this exact entry is already present
+    // to avoid adding a new duplicate copy of it
+    // (need to verify that simplett and guardsigs are actually a full match first though)
+    //if (cachett != tt) {
+    //    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(*cache, (jl_value_t*)cachett, NULL, /*subtype*/0, jl_cachearg_offset(mt), world, /*max_world_mask*/0);
+    //    if (entry && entry->func.value)
+    //        return (jl_method_instance_t*)entry->func.value;
+    //}
+
     jl_typemap_insert(cache, parent, cachett, simplett, guardsigs,
             (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache,
             min_valid, max_valid, NULL);
@@ -1111,8 +1083,8 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
 
     jl_method_instance_t *nf = NULL;
     jl_svec_t *env = jl_emptysvec;
-    jl_tupletype_t *sig = NULL;
-    JL_GC_PUSH2(&env, &sig);
+    jl_svec_t *newparams = NULL;
+    JL_GC_PUSH3(&tt, &env, &newparams);
     entry = jl_typemap_assoc_by_type(mt->defs, (jl_value_t*)tt, &env, /*subtype*/1, /*offs*/0, world, /*max_world_mask*/0);
     if (entry != NULL) {
         jl_method_t *m = entry->func.method;
@@ -1125,8 +1097,12 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
             }
 #endif
             if (!mt_cache) {
-                sig = join_tsig(tt, m->sig);
-                nf = jl_specializations_get_linfo(m, (jl_value_t*)sig, env, world);
+                intptr_t nspec = (mt == jl_type_type_mt ? m->nargs + 1 : mt->max_args + 2);
+                jl_compilation_sig(tt, env, m, nspec, &newparams);
+                if (newparams)
+                    tt = jl_apply_tuple_type(newparams);
+                nf = jl_specializations_get_linfo(m, (jl_value_t*)tt, env, world);
+                assert(nf->min_world <= world && nf->max_world >= world);
             }
             else {
                 nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, tt, m, world, env, allow_exec);
@@ -1691,7 +1667,7 @@ static jl_method_instance_t *jl_method_lookup_by_type(
     }
     JL_LOCK(&mt->writelock);
     if (jl_is_datatype((jl_value_t*)types) && types->isdispatchtuple)
-        cache = 1; // TODO: this might be detrimental to performance, should be tested
+        cache = 1;
     jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, cache, allow_exec, world);
     JL_UNLOCK(&mt->writelock);
     return sf;
@@ -1870,12 +1846,9 @@ JL_DLLEXPORT int32_t jl_invoke_api(jl_method_instance_t *mi)
 }
 
 // compile-time method lookup
-jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world)
+jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache)
 {
     JL_TIMING(METHOD_LOOKUP_COMPILE);
-    if (!jl_is_datatype(((jl_value_t*)types)) || !types->isdispatchtuple)
-        /* TODO: if (!jl_isa_compileable_sig((jl_value_t*)types)) return NULL; */
-        return NULL;
     if (jl_has_free_typevars((jl_value_t*)types))
         return NULL; // don't poison the cache due to a malformed query
     if (!jl_has_concrete_subtype((jl_value_t*)types))
@@ -1887,29 +1860,42 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world
     jl_value_t *matches = jl_matching_methods(types, 1, 1, world, &min_valid, &max_valid);
     if (matches == jl_false || jl_array_len(matches) != 1)
         return NULL;
-    jl_tupletype_t *sig = NULL;
+    jl_tupletype_t *tt = NULL;
     jl_svec_t *newparams = NULL;
-    JL_GC_PUSH3(&matches, &sig, &newparams);
+    JL_GC_PUSH3(&matches, &tt, &newparams);
     jl_svec_t *match = (jl_svec_t*)jl_array_ptr_ref(matches, 0);
     jl_method_t *m = (jl_method_t*)jl_svecref(match, 2);
     jl_svec_t *env = (jl_svec_t*)jl_svecref(match, 1);
-    jl_tupletype_t *ti = (jl_tupletype_t*)jl_unwrap_unionall(jl_svecref(match, 0));
+    jl_tupletype_t *ti = (jl_tupletype_t*)jl_svecref(match, 0);
     jl_method_instance_t *nf = NULL;
-    if (jl_egal((jl_value_t*)ti, (jl_value_t*)types) && // use concrete_match+subtype instead of egal?
-            !jl_has_call_ambiguities((jl_value_t*)types, m)) {
-        jl_datatype_t *dt = jl_first_argument_datatype(jl_unwrap_unionall((jl_value_t*)types));
-        assert(jl_is_datatype(dt));
-        jl_methtable_t *mt = dt->name->mt;
-        JL_LOCK(&mt->writelock);
-        nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, ti, m, world, env, /*allow_exec*/1);
-        JL_UNLOCK(&mt->writelock);
-        assert(nf->min_world <= world && nf->max_world >= world);
-        // // get the specialization without caching it
-        // jl_compilation_sig(ti, m, &newparams);
-        // TODO: apply Varargs transform
-        // if (newparams)
-        //     sig = jl_apply_tuple_type(newparams);
-        // nf = jl_specializations_get_linfo(m, (jl_value_t*)sig, env, world);
+    if (jl_is_datatype(ti)) {
+        jl_datatype_t *dt = jl_first_argument_datatype((jl_value_t*)ti);
+        if (dt && jl_is_datatype(dt)) {
+            // get the specialization without caching it
+            jl_methtable_t *mt = dt->name->mt;
+            if (mt_cache && ((jl_datatype_t*)ti)->isdispatchtuple) {
+                // Since we also use this presence in the cache
+                // to trigger compilation when producing `.ji` files,
+                // inject it there now if we think it will be
+                // used via dispatch later (e.g. because it was hinted via a call to `precompile`)
+                jl_methtable_t *mt = dt->name->mt;
+                JL_LOCK(&mt->writelock);
+                nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, ti, m, world, env, /*allow_exec*/1);
+                JL_UNLOCK(&mt->writelock);
+                assert(nf->min_world <= world && nf->max_world >= world);
+            }
+            else {
+                intptr_t nspec = (mt == jl_type_type_mt ? m->nargs + 1 : mt->max_args + 2);
+                jl_compilation_sig(ti, env, m, nspec, &newparams);
+                tt = (newparams ? jl_apply_tuple_type(newparams) : ti);
+                int is_compileable = ((jl_datatype_t*)ti)->isdispatchtuple ||
+                    jl_isa_compileable_sig(tt, m);
+                if (is_compileable) {
+                    nf = jl_specializations_get_linfo(m, (jl_value_t*)tt, env, world);
+                    assert(nf->min_world <= world && nf->max_world >= world);
+                }
+            }
+        }
     }
     JL_GC_POP();
     return nf;
@@ -1918,7 +1904,7 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 {
     size_t world = jl_world_counter;
-    jl_method_instance_t *li = jl_get_specialization1(types, world);
+    jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
     if (li == NULL)
         return 0;
     jl_code_info_t *src = NULL;
@@ -1943,8 +1929,10 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 
 JL_DLLEXPORT jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types, size_t world)
 {
-    jl_method_instance_t *li = jl_get_specialization1(types, world);
-    return li ? (jl_value_t*)li : jl_nothing;
+    jl_method_instance_t *li = jl_get_specialization1(types, world, 0);
+    if (!li || jl_has_call_ambiguities((jl_value_t*)types, li->def.method))
+        return jl_nothing;
+    return (jl_value_t*)li;
 }
 
 // see if a call to m with computed from `types` is ambiguous
