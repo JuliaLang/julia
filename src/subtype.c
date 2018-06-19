@@ -248,6 +248,8 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
         return 0;
+    if (specificity && a == (jl_value_t*)jl_typeofbottom_type)
+        return 0;
     if (jl_is_concrete_type(a) && jl_is_concrete_type(b) &&
         // TODO: remove these 2 lines if and when Tuple{Union{}} === Union{}
         (((jl_datatype_t*)a)->name != jl_tuple_typename ||
@@ -2695,6 +2697,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
 
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
         jl_datatype_t *tta = (jl_datatype_t*)a, *ttb = (jl_datatype_t*)b;
+        // Type{Union{}} is more specific than other types, so TypeofBottom must be too
+        if (tta == jl_typeofbottom_type && (jl_is_kind(b) || jl_is_type_type(b)))
+            return 1;
         int super = 0;
         while (tta != jl_any_type) {
             if (tta->name == ttb->name) {
