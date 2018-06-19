@@ -73,6 +73,11 @@ end
             @test typeof(fb) == SubString{T}
         end
     end
+
+    @test lstrip(isnumeric, "0123abc") == "abc"
+    @test rstrip(isnumeric, "abc0123") == "abc"
+    @test lstrip("ello", ['e','o']) == "llo"
+    @test rstrip("ello", ['e','o']) == "ell"
 end
 
 @testset "rsplit/split" begin
