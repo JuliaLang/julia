@@ -1283,6 +1283,10 @@ Deprecated or removed
 
   * `vecdot` and `vecnorm` are deprecated in favor of `dot` and `norm`, respectively ([#27401]).
 
+  * `clipboard` has been moved to the `InteractiveUtils` standard library package
+    (along with other utilities mostly used at the interactive prompt, such as `edit`
+    and `less`) ([#27635]).
+
 Command-line option changes
 ---------------------------
 

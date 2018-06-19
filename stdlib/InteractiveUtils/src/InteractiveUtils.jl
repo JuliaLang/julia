@@ -6,7 +6,7 @@ module InteractiveUtils
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, peakflops, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native, Pkg
+    @code_typed, @code_lowered, @code_llvm, @code_native, Pkg, clipboard
 
 import Base.Docs.apropos
 
@@ -20,6 +20,7 @@ import Pkg, OldPkg
 include("editless.jl")
 include("codeview.jl")
 include("macros.jl")
+include("clipboard.jl")
 
 """
     varinfo(m::Module=Main, pattern::Regex=r"")
