@@ -158,6 +158,8 @@ julia> fieldnames(Rational)
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
                            (_fieldnames(t)...,))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
+fieldnames(::Core.TypeofBottom) =
+    error("The empty type does not have field names since it does not have instances.")
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
@@ -584,7 +586,7 @@ function fieldcount(@nospecialize t)
         end
         t = t::DataType
     elseif t == Union{}
-        return 0
+        error("The empty type does not have a well-defined number of fields since it does not have instances.")
     end
     if !(t isa DataType)
         throw(TypeError(:fieldcount, "", Type, t))
