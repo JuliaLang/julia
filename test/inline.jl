@@ -122,3 +122,18 @@ end
     @test f19122()
     @test g19122()
 end
+
+@testset "issue #27403: getindex is inlined with Union{Int,Missing}" begin
+    function sum27403(X::AbstractArray)
+        s = zero(eltype(X)) + zero(eltype(X))
+        for x in X
+            if !ismissing(x)
+                s += x
+            end
+        end
+        s
+    end
+
+    (src, _) = code_typed(sum27403, Tuple{Vector{Int}})[1]
+    @test !any(x -> x isa Expr && x.head === :invoke, src.code)
+end
