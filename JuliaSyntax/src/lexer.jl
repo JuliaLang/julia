@@ -7,7 +7,7 @@ import ..Tokens: AbstractToken, Token, RawToken, Kind, TokenError, UNICODE_OPS, 
 
 import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BREAK, CATCH, CONST, CONTINUE,
                  DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF, IMMUTABLE,
-                 IMPORT, IMPORTALL, MACRO, MODULE, QUOTE, RETURN, TRUE, TRY, TYPE, TYPEALIAS, USING, WHILE, ISA, IN,
+                 IMPORT, IMPORTALL, MACRO, MODULE, OUTER, QUOTE, RETURN, TRUE, TRY, TYPE, TYPEALIAS, USING, WHILE, ISA, IN,
                  MUTABLE, PRIMITIVE, STRUCT, WHERE
 
 
@@ -1172,6 +1172,8 @@ function lex_identifier(l, c)
         else
             return _doret(l, c)
         end
+    elseif c == 'o'
+        return tryread(l, ('u', 't', 'e', 'r'), OUTER, c)
     elseif c == 'p'
         return tryread(l, ('r', 'i', 'm', 'i', 't', 'i', 'v', 'e'), PRIMITIVE, c)
     elseif c == 'q'
