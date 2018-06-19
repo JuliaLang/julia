@@ -195,7 +195,6 @@ end
 end
 
 @testset "complex matrix-vector multiplication and left-division" begin
-    if Base.USE_GPL_LIBS
     for i = 1:5
         a = I + 0.1*sprandn(5, 5, 0.2)
         b = randn(5,3) + im*randn(5,3)
@@ -210,9 +209,6 @@ end
         @test (maximum(abs.(mul!(similar(c), transpose(a), c) - transpose(Array(a))*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
         @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
         @test (maximum(abs.((a'*c + d) - (Array(a)'*c + d))) < 1000*eps())
         @test (maximum(abs.((α*transpose(a)*c + β*d) - (α*transpose(Array(a))*c + β*d))) < 1000*eps())
         @test (maximum(abs.((transpose(a)*c + d) - (transpose(Array(a))*c + d))) < 1000*eps())
@@ -225,9 +221,6 @@ end
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
         @test (maximum(abs.(transpose(a)*b - transpose(Array(a))*b)) < 100*eps())
-        @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
-        @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
-        @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
 
         a = I + tril(0.1*sprandn(5, 5, 0.2))
         b = randn(5,3) + im*randn(5,3)
@@ -305,94 +298,11 @@ end
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
         @test (maximum(abs.(transpose(a)\b - Array(transpose(a))\b)) < 1000*eps())
     end
-    end
-end
-
-@testset "matrix multiplication" begin
-    for i = 1:5
-        a = sprand(10, 5, 0.7)
-        b = sprand(5, 15, 0.3)
-        @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
-        @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
-        f = Diagonal(rand(5))
-        @test Array(a*f) == Array(a)*f
-        @test Array(f*b) == f*Array(b)
-    end
-end
-
-@testset "kronecker product" begin
-    for (m,n) in ((5,10), (13,8), (14,10))
-        a = sprand(m, 5, 0.4); a_d = Matrix(a)
-        b = sprand(n, 6, 0.3); b_d = Matrix(b)
-        x = sprand(m, 0.4); x_d = Vector(x)
-        y = sprand(n, 0.3); y_d = Vector(y)
-        # mat ⊗ mat
-        @test Array(kron(a, b)) == kron(a_d, b_d)
-        @test Array(kron(a_d, b)) == kron(a_d, b_d)
-        @test Array(kron(a, b_d)) == kron(a_d, b_d)
-        # vec ⊗ vec
-        @test Vector(kron(x, y)) == kron(x_d, y_d)
-        @test Vector(kron(x_d, y)) == kron(x_d, y_d)
-        @test Vector(kron(x, y_d)) == kron(x_d, y_d)
-        # mat ⊗ vec
-        @test Array(kron(a, y)) == kron(a_d, y_d)
-        @test Array(kron(a_d, y)) == kron(a_d, y_d)
-        @test Array(kron(a, y_d)) == kron(a_d, y_d)
-        # vec ⊗ mat
-        @test Array(kron(x, b)) == kron(x_d, b_d)
-        @test Array(kron(x_d, b)) == kron(x_d, b_d)
-        @test Array(kron(x, b_d)) == kron(x_d, b_d)
-        # test different types
-        z = convert(SparseVector{Float16, Int8}, y); z_d = Vector(z)
-        @test Vector(kron(x, z)) == kron(x_d, z_d)
-        @test Array(kron(a, z)) == kron(a_d, z_d)
-        @test Array(kron(z, b)) == kron(z_d, b_d)
-    end
-end
-
-@testset "sparse Frobenius dot/inner product" begin
-    for i = 1:5
-        A = sprand(ComplexF64,10,15,0.4)
-        B = sprand(ComplexF64,10,15,0.5)
-        @test dot(A,B) ≈ dot(Matrix(A),Matrix(B))
-    end
-    @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
 
 sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
 dA = Array(sA)
-
-@testset "scaling with * and mul!, rmul!, and lmul!" begin
-    b = randn(7)
-    @test dA * Diagonal(b) == sA * Diagonal(b)
-    @test dA * Diagonal(b) == mul!(sC, sA, Diagonal(b))
-    @test dA * Diagonal(b) == rmul!(copy(sA), Diagonal(b))
-    b = randn(3)
-    @test Diagonal(b) * dA == Diagonal(b) * sA
-    @test Diagonal(b) * dA == mul!(sC, Diagonal(b), sA)
-    @test Diagonal(b) * dA == lmul!(Diagonal(b), copy(sA))
-
-    @test dA * 0.5            == sA * 0.5
-    @test dA * 0.5            == mul!(sC, sA, 0.5)
-    @test dA * 0.5            == rmul!(copy(sA), 0.5)
-    @test 0.5 * dA            == 0.5 * sA
-    @test 0.5 * dA            == mul!(sC, sA, 0.5)
-    @test 0.5 * dA            == lmul!(0.5, copy(sA))
-    @test mul!(sC, 0.5, sA)   == mul!(sC, sA, 0.5)
-
-    @testset "inverse scaling with mul!" begin
-        bi = inv.(b)
-        dAt = copy(transpose(dA))
-        sAt = copy(transpose(sA))
-        @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), Diagonal(b))
-        @test rmul!(copy(dAt), Diagonal(bi)) ≈ rdiv!(copy(sAt), transpose(Diagonal(b)))
-        @test rmul!(copy(dAt), Diagonal(conj(bi))) ≈ rdiv!(copy(sAt), adjoint(Diagonal(b)))
-        @test_throws DimensionMismatch rdiv!(copy(sAt), Diagonal(fill(1., length(b)+1)))
-        @test_throws LinearAlgebra.SingularException rdiv!(copy(sAt), Diagonal(zeros(length(b))))
-    end
-end
 
 @testset "copyto!" begin
     A = sprand(5, 5, 0.2)
@@ -1349,14 +1259,6 @@ end
     @test count(!iszero, sparsevec(Diagonal(Int[]))) == 0
 end
 
-@testset "explicit zeros" begin
-    if Base.USE_GPL_LIBS
-        a = SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 2], [1.0, 0.0, 0.0, 1.0])
-        @test lu(a)\[2.0, 3.0] ≈ [2.0, 3.0]
-        @test cholesky(a)\[2.0, 3.0] ≈ [2.0, 3.0]
-    end
-end
-
 @testset "issue #9917" begin
     @test sparse([]') == reshape(sparse([]), 1, 0)
     @test Array(sparse([])) == zeros(0)
@@ -1562,16 +1464,6 @@ end
     @test isequal(length(tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -1).rowval), 0)
 end
 
-@testset "norm" begin
-    local A
-    A = sparse(Int[],Int[],Float64[],0,0)
-    @test norm(A) == zero(eltype(A))
-    A = sparse([1.0])
-    @test norm(A) == 1.0
-    @test_throws ArgumentError opnorm(sprand(5,5,0.2),3)
-    @test_throws ArgumentError opnorm(sprand(5,5,0.2),2)
-end
-
 @testset "ishermitian/issymmetric" begin
     local A
     # real matrices
@@ -1687,73 +1579,6 @@ end
     @test typeof(min.(A12118, B12118)) == SparseMatrixCSC{Int,Int}
 end
 
-@testset "sparse matrix norms" begin
-    Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
-    Ar = sprandn(10,10,.1)
-    Ai = ceil.(Int,Ar*100)
-    @test opnorm(Ac,1) ≈ opnorm(Array(Ac),1)
-    @test opnorm(Ac,Inf) ≈ opnorm(Array(Ac),Inf)
-    @test norm(Ac) ≈ norm(Array(Ac))
-    @test opnorm(Ar,1) ≈ opnorm(Array(Ar),1)
-    @test opnorm(Ar,Inf) ≈ opnorm(Array(Ar),Inf)
-    @test norm(Ar) ≈ norm(Array(Ar))
-    @test opnorm(Ai,1) ≈ opnorm(Array(Ai),1)
-    @test opnorm(Ai,Inf) ≈ opnorm(Array(Ai),Inf)
-    @test norm(Ai) ≈ norm(Array(Ai))
-    Ai = trunc.(Int, Ar*100)
-    @test opnorm(Ai,1) ≈ opnorm(Array(Ai),1)
-    @test opnorm(Ai,Inf) ≈ opnorm(Array(Ai),Inf)
-    @test norm(Ai) ≈ norm(Array(Ai))
-    Ai = round.(Int, Ar*100)
-    @test opnorm(Ai,1) ≈ opnorm(Array(Ai),1)
-    @test opnorm(Ai,Inf) ≈ opnorm(Array(Ai),Inf)
-    @test norm(Ai) ≈ norm(Array(Ai))
-    # make certain entries in nzval beyond
-    # the range specified in colptr do not
-    # impact norm of a sparse matrix
-    foo = sparse(1.0I, 4, 4)
-    resize!(foo.nzval, 5)
-    setindex!(foo.nzval, NaN, 5)
-    @test norm(foo) == 2.0
-end
-
-@testset "sparse matrix cond" begin
-    local A = sparse(reshape([1.0], 1, 1))
-    Ac = sprandn(20, 20,.5) + im*sprandn(20, 20,.5)
-    Ar = sprandn(20, 20,.5) + eps()*I
-    @test cond(A, 1) == 1.0
-    # For a discussion of the tolerance, see #14778
-    if Base.USE_GPL_LIBS
-        @test 0.99 <= cond(Ar, 1) \ opnorm(Ar, 1) * opnorm(inv(Array(Ar)), 1) < 3
-        @test 0.99 <= cond(Ac, 1) \ opnorm(Ac, 1) * opnorm(inv(Array(Ac)), 1) < 3
-        @test 0.99 <= cond(Ar, Inf) \ opnorm(Ar, Inf) * opnorm(inv(Array(Ar)), Inf) < 3
-        @test 0.99 <= cond(Ac, Inf) \ opnorm(Ac, Inf) * opnorm(inv(Array(Ac)), Inf) < 3
-    end
-    @test_throws ArgumentError cond(A,2)
-    @test_throws ArgumentError cond(A,3)
-    Arect = spzeros(10, 6)
-    @test_throws DimensionMismatch cond(Arect, 1)
-    @test_throws ArgumentError cond(Arect,2)
-    @test_throws DimensionMismatch cond(Arect, Inf)
-end
-
-@testset "sparse matrix opnormestinv" begin
-    srand(1234)
-    Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
-    Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
-    Ar = sprandn(20,20,.5)
-    Ari = ceil.(Int64, 100*Ar)
-    if Base.USE_GPL_LIBS
-        # NOTE: opnormestinv is probabilistic, so requires a fixed seed (set above in srand(1234))
-        @test SparseArrays.opnormestinv(Ac,3) ≈ opnorm(inv(Array(Ac)),1) atol=1e-4
-        @test SparseArrays.opnormestinv(Aci,3) ≈ opnorm(inv(Array(Aci)),1) atol=1e-4
-        @test SparseArrays.opnormestinv(Ar) ≈ opnorm(inv(Array(Ar)),1) atol=1e-4
-        @test_throws ArgumentError SparseArrays.opnormestinv(Ac,0)
-        @test_throws ArgumentError SparseArrays.opnormestinv(Ac,21)
-    end
-    @test_throws DimensionMismatch SparseArrays.opnormestinv(sprand(3,5,.9))
-end
-
 @testset "issue #13008" begin
     @test_throws ArgumentError sparse(Vector(1:100), Vector(1:100), fill(5,100), 5, 5)
     @test_throws ArgumentError sparse(Int[], Vector(1:5), Vector(1:5))
@@ -1788,31 +1613,6 @@ end
 
 @testset "fillstored!" begin
     @test LinearAlgebra.fillstored!(sparse(2.0I, 5, 5), 1) == Matrix(I, 5, 5)
-end
-
-@testset "factorization" begin
-    srand(123)
-    local A
-    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
-    A = A + copy(A')
-    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
-    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
-    A = A*A'
-    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
-    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
-    A = A + copy(transpose(A))
-    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
-    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
-    A = A*transpose(A)
-    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
-    @test factorize(triu(A)) == triu(A)
-    @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-    @test factorize(tril(A)) == tril(A)
-    @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-    C, b = A[:, 1:4], fill(1., size(A, 1))
-    @test !Base.USE_GPL_LIBS || factorize(C)\b ≈ Array(C)\b
-    @test_throws ErrorException eigen(A)
-    @test_throws ErrorException inv(A)
 end
 
 @testset "issue #13792, use sparse triangular solvers for sparse triangular solves" begin
@@ -1893,12 +1693,6 @@ end
     intmat = fill(1, m, m)
     ltintmat = LowerTriangular(rand(1:5, m, m))
     @test \(transpose(ltintmat), sparse(intmat)) ≈ \(transpose(ltintmat), intmat)
-end
-
-# Test temporary fix for issue #16548 in PR #16979. Somewhat brittle. Expect to remove with `\` revisions.
-@testset "issue #16548" begin
-    ms = methods(\, (SparseMatrixCSC, AbstractVecOrMat)).ms
-    @test all(m -> m.module == SparseArrays, ms)
 end
 
 @testset "row indexing a SparseMatrixCSC with non-Int integer type" begin

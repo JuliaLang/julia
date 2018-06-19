@@ -3346,7 +3346,7 @@ function diag(A::SparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
 end
 
 function tr(A::SparseMatrixCSC{Tv}) where Tv
-    n = checksquare(A)
+    n = LinearAlgebra.checksquare(A)
     s = zero(Tv)
     for i in 1:n
         s += A[i,i]

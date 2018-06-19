@@ -41,7 +41,6 @@ include("abstractsparse.jl")
 include("sparsematrix.jl")
 include("sparsevector.jl")
 include("higherorderfns.jl")
-include("linalg.jl")
 include("deprecated.jl")
 
 
