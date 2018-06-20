@@ -51,6 +51,7 @@ size(g::Generator) = size(g.iter)
 axes(g::Generator) = axes(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 keys(g::Generator) = g.iter
+getindex(g::Generator, i) = g.f(i)
 
 
 ## iterator traits
