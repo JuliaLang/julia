@@ -1458,6 +1458,27 @@ end
         B[I] = (AI, AI)
     end
     Bmax = CartesianIndex(sB)
+    @inbounds for I in CartesianIndices(sA)
+        J = min(Bmax,I)
+        BJ = B[J]
+        AI = A[I]
+        if AI < BJ[1]
+            B[J] = (AI, BJ[2])
+        elseif AI > BJ[2]
+            B[J] = (BJ[1], AI)
+        end
+    end
+    return B
+end
+# When both arrays are ::Array the SIMD transform is safe
+@noinline function extrema!(B::Array, A::Array)
+    sA = size(A)
+    sB = size(B)
+    for I in CartesianIndices(sB)
+        AI = A[I]
+        B[I] = (AI, AI)
+    end
+    Bmax = CartesianIndex(sB)
     @inbounds @simd for I in CartesianIndices(sA)
         J = min(Bmax,I)
         BJ = B[J]

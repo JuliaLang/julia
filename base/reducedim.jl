@@ -222,24 +222,55 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(indices1(R))
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            r = R[i1,IR]
-            @simd for i in axes(A, 1)
-                r = op(r, f(A[i, IA]))
-            end
-            R[i1,IR] = r
+            _mapreducedim_loop1!(simdable(f), simdable(op), R, A, IR, IA, i1)
         end
     else
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in axes(A, 1)
-                R[i,IR] = op(R[i,IR], f(A[i,IA]))
-            end
+            _mapreducedim_loop!(simdable(f), simdable(op), R, A, IR, IA)
         end
     end
     return R
 end
+
+# The innermost loops are split out to allow for @simd in known safe cases
+# add a few more simd-safe functions that were not available earlier in bootstrap
+simdable(f::Union{map(typeof, (abs, abs2, sqrt, log, log10, log2))...}) = SIMDableFunction{f}()
+@inline function _mapreducedim_loop1!(f, op, R, A, IR, IA, i1)
+    @inbounds begin
+        r = R[i1,IR]
+        for i in axes(A, 1)
+            r = op(r, f(A[i, IA]))
+        end
+        R[i1,IR] = r
+    end
+    return R
+end
+@inline function _mapreducedim_loop1!(f::SIMDableFunction, op::SIMDableFunction, R::Array, A::Array, IR, IA, i1)
+    @inbounds begin
+        r = R[i1,IR]
+        @simd for i in axes(A, 1)
+            r = op(r, f(A[i, IA]))
+        end
+        R[i1,IR] = r
+    end
+    return R
+end
+@inline function _mapreducedim_loop!(f, op, R, A, IR, IA)
+    @inbounds for i in axes(A, 1)
+        R[i,IR] = op(R[i,IR], f(A[i,IA]))
+    end
+    return R
+end
+@inline function _mapreducedim_loop!(f::SIMDableFunction, op::SIMDableFunction, R::Array, A::Array, IR, IA)
+    @inbounds @simd for i in axes(A, 1)
+        R[i,IR] = op(R[i,IR], f(A[i,IA]))
+    end
+    return R
+end
+
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
     (_mapreducedim!(f, op, R, A); R)

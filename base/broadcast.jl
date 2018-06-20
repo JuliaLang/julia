@@ -826,11 +826,24 @@ preprocess_args(dest, args::Tuple{}) = ()
         end
     end
     bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
-        @inbounds dest[I] = bc′[I]
+    if _is_simd_safe(dest, bc)
+        @inbounds @simd for I in eachindex(bc′)
+            dest[I] = bc′[I]
+        end
+    else
+        @inbounds for I in eachindex(bc′)
+            dest[I] = bc′[I]
+        end
     end
     return dest
 end
+
+_is_simd_safe(::Any, ::Any) = false
+@inline _is_simd_safe(::Array, bc::Broadcasted) = _args_are_simd_safe(bc)
+_args_are_simd_safe() = true
+_args_are_simd_safe(::Any, args...) = false
+@inline _args_are_simd_safe(::Union{Array, Number}, args...) = _args_are_simd_safe(args...)
+@inline _args_are_simd_safe(bc::Broadcasted, args...) = Base.simdable(bc.f) isa Base.SIMDableFunction && _args_are_simd_safe(args...)
 
 # Performance optimization: for BitArray outputs, we cache the result
 # in a "small" Vector{Bool}, and then copy in chunks into the output
