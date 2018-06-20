@@ -1369,7 +1369,7 @@ function f24852_kernel_cinfo(fsig::Type)
     isdefined(method, :source) || return (nothing, :(f(x, y)))
     code_info = Base.uncompressed_ast(method)
     body = Expr(:block, code_info.code...)
-    Meta.substitute!(body, 0, Any[], sig, Any[spvals...], 1, :propagate)
+    Meta.partially_inline!(body, Any[], sig, Any[spvals...], 1, 0, :propagate)
     if startswith(String(method.name), "f24852")
         for a in body.args
             if a isa Expr && a.head == :(=)
