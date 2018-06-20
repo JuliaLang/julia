@@ -10,7 +10,7 @@ module DelimitedFiles
 
 using Mmap
 
-import Base: _default_delims, tryparse_internal, show
+import Base: tryparse_internal, show
 
 export readdlm, writedlm
 
@@ -590,7 +590,7 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
             val,idx = iterate(dbuff, idx)
             if (is_eol = (Char(val) == Char(eol)))
                 is_dlm = is_comment = is_cr = is_quote = false
-            elseif (is_dlm = (is_default_dlm ? in(Char(val), _default_delims) : (Char(val) == Char(dlm))))
+            elseif (is_dlm = (is_default_dlm ? isspace(Char(val)) : (Char(val) == Char(dlm))))
                 is_comment = is_cr = is_quote = false
             elseif (is_quote = (Char(val) == Char(qchar)))
                 is_comment = is_cr = false

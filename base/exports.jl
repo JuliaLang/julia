@@ -85,6 +85,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    SubstitutionString,
     Timer,
     UnitRange,
     Val,
@@ -769,7 +770,6 @@ export
 # misc
     atexit,
     atreplinit,
-    clipboard,
     exit,
     ntuple,
 

@@ -16,10 +16,10 @@ NTuple
 
 ## indexing ##
 
-length(t::Tuple) = nfields(t)
-firstindex(t::Tuple) = 1
-lastindex(t::Tuple) = length(t)
-size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+length(@nospecialize t::Tuple) = nfields(t)
+firstindex(@nospecialize t::Tuple) = 1
+lastindex(@nospecialize t::Tuple) = length(t)
+size(@nospecialize(t::Tuple), d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 @eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
@@ -39,10 +39,10 @@ _setindex(v, i::Integer) = ()
 
 iterate(t::Tuple, i::Int=1) = length(t) < i ? nothing : (t[i], i+1)
 
-keys(t::Tuple) = OneTo(length(t))
+keys(@nospecialize t::Tuple) = OneTo(length(t))
 
-prevind(t::Tuple, i::Integer) = Int(i)-1
-nextind(t::Tuple, i::Integer) = Int(i)+1
+prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
+nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 
 function keys(t::Tuple, t2::Tuple...)
     @_inline_meta
@@ -363,7 +363,7 @@ end
 ## functions ##
 
 isempty(x::Tuple{}) = true
-isempty(x::Tuple) = false
+isempty(@nospecialize x::Tuple) = false
 
 revargs() = ()
 revargs(x, r...) = (revargs(r...)..., x)
@@ -400,4 +400,4 @@ any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 Returns an empty tuple, `()`.
 """
-empty(x::Tuple) = ()
+empty(@nospecialize x::Tuple) = ()

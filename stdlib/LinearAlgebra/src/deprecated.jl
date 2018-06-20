@@ -6,6 +6,12 @@ using Base: @deprecate, depwarn
 
 @deprecate cond(F::LinearAlgebra.LU, p::Integer) cond(convert(AbstractArray, F), p)
 
+# deprecate vecnorm in favor of norm
+@deprecate vecnorm norm
+
+# deprecate vecdot in favor of dot
+@deprecate vecdot dot
+
 # PR #22188
 export cholfact, cholfact!
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholesky!(Hermitian(A, uplo), Val(false))
@@ -1414,7 +1420,7 @@ export eigfact!
 # deprecate chol[!] to cholesky[!] with getproperty
 @deprecate(chol(A::RealHermSymComplexHerm), cholesky(A).U)
 @deprecate(chol(A::AbstractMatrix), cholesky(A).U)
-@deprecate(chol(x::Number, args...), sqrt(A))
+@deprecate(chol(x::Number, args...), sqrt(x))
 @deprecate(chol(J::UniformScaling), UniformScaling(sqrt(J.λ)))
 @deprecate(chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}), cholesky!(A).U, false)
 @deprecate(chol!(A::StridedMatrix), cholesky!(A).U, false)

@@ -1184,6 +1184,11 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     };
 
     add_output(*shadow_output, "unopt.bc", "text.bc", "text.o");
+    // save some memory, by deleting all of the function bodies
+    for (auto &F : shadow_output->functions()) {
+        if (!F.isDeclaration())
+            F.deleteBody();
+    }
 
     LLVMContext &Context = shadow_output->getContext();
     std::unique_ptr<Module> sysimage(new Module("sysimage", Context));

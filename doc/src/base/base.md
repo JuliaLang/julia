@@ -22,8 +22,6 @@ Base.exit
 Base.atexit
 Base.isinteractive
 Base.summarysize
-Base.clipboard(::Any)
-Base.clipboard()
 Base.require
 Base.compilecache
 Base.__precompile__

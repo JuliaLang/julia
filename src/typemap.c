@@ -509,9 +509,19 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
             ty = jl_tparam(ttypes, offs);
         }
         if (ty) {
+            while (jl_is_typevar(ty))
+                ty = ((jl_tvar_t*)ty)->ub;
+            // approxify the tparam until we have a valid type
+            if (jl_has_free_typevars(ty)) {
+                ty = jl_unwrap_unionall(ty);
+                if (jl_is_datatype(ty))
+                    ty = ((jl_datatype_t*)ty)->name->wrapper;
+                else
+                    ty = (jl_value_t*)jl_any_type;
+            }
             if (cache->targ.values != (void*)jl_nothing) {
                 jl_value_t *typetype = jl_is_type_type(ty) ? jl_tparam0(ty) : NULL;
-                if (typetype && !jl_has_free_typevars(typetype)) {
+                if (typetype) {
                     if (is_cache_leaf(typetype)) {
                         // direct lookup of leaf types
                         union jl_typemap_t ml = mtcache_hash_lookup(&cache->targ, typetype, 1, offs);

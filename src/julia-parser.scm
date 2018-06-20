@@ -1505,7 +1505,8 @@
              ((eq? nxt 'end)
               (list* 'try try-block (or catchv 'false)
                      ;; default to empty catch block in `try ... end`
-                     (or catchb (if finalb 'false '(block)))
+                     (or catchb (if finalb 'false (begin (parser-depwarn s "try without catch or finally" "")
+                                                         '(block))))
                      (if finalb (list finalb) '())))
              ((and (eq? nxt 'catch)
                    (not catchb))

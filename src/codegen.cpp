@@ -3900,6 +3900,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 expr = jl_box_int64(val);
             }
         }
+        else if (jl_is_uint8(expr)) {
+            expr = jl_box_uint8(jl_unbox_uint8(expr));
+            needroot = false;
+        }
         if (needroot && jl_is_method(ctx.linfo->def.method)) { // toplevel exprs and some integers are already rooted
             jl_add_method_root(ctx, expr);
         }
@@ -4266,7 +4270,7 @@ static Function* gen_cfun_wrapper(
     size_t world = jl_world_counter;
     bool nest = (!ff || unionall_env);
     // try to look up this function for direct invoking
-    jl_method_instance_t *lam = sigt ? jl_get_specialization1((jl_tupletype_t*)sigt, world) : NULL;
+    jl_method_instance_t *lam = sigt ? jl_get_specialization1((jl_tupletype_t*)sigt, world, 1) : NULL;
     jl_value_t *astrt = (jl_value_t*)jl_any_type;
     // infer it first, if necessary
     if (lam) {
@@ -5964,7 +5968,7 @@ static std::unique_ptr<Module> emit_function(
         }
         size_t prev_loc = 0;
         for (i = 0; i < stmtslen; i++) {
-            size_t loc = ((size_t*)jl_array_data(src->codelocs))[i];
+            size_t loc = ((int32_t*)jl_array_data(src->codelocs))[i];
             StmtProp &cur_prop = stmtprops[i];
             cur_prop.is_poploc = false;
             if (loc > 0) {
@@ -6242,7 +6246,10 @@ static std::unique_ptr<Module> emit_function(
             workstack.push_back(lname - 1);
             BasicBlock *ifnot = BB[lname];
             BasicBlock *ifso = BB[cursor+2];
-            ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
+            if (ifnot == ifso)
+                ctx.builder.CreateBr(ifnot);
+            else
+                ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
             find_next_stmt(cursor + 1);
             continue;
         }
@@ -6332,6 +6339,19 @@ static std::unique_ptr<Module> emit_function(
             // This edge was statically unreachable. Don't codegen it.
             if (!FromBB)
                 continue;
+            // We folded this branch to an unconditional branch, only codegen it once
+            if (cast<BranchInst>(FromBB->getTerminator())->isUnconditional()) {
+                bool found = false;
+                for (size_t j = 0; j < i; ++j) {
+                    size_t j_edge = jl_unbox_long(jl_array_ptr_ref(edges, j));
+                    if (j_edge == edge) {
+                        found = true;
+                        assert(jl_egal(value, jl_array_ptr_ref(values, j)));
+                    }
+                }
+                if (found)
+                    continue;
+            }
 #ifndef JL_NDEBUG
             if (FromBB) {
                 bool found_pred = false;

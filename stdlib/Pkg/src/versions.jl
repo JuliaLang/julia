@@ -229,7 +229,6 @@ end
 
 Base.:(==)(A::VersionSpec, B::VersionSpec) = A.ranges == B.ranges
 Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h + (0x2fd2ca6efa023f44 % UInt))
-Base.deepcopy_internal(vs::VersionSpec, ::IdDict) = copy(vs)
 
 function Base.print(io::IO, s::VersionSpec)
     isempty(s) && return print(io, _empty_symbol)

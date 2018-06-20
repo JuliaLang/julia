@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑, isdispatchelem
+import Core.Compiler: Const, Conditional, ⊑
+isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
 using InteractiveUtils: code_llvm
@@ -252,7 +253,7 @@ end
 end
 let ast12474 = code_typed(f12474, Tuple{Float64})
     @test isdispatchelem(ast12474[1][2])
-    @test all(x -> isdispatchelem(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
+    @test all(x -> x isa Const || isdispatchelem(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
 end
 
 
@@ -538,7 +539,7 @@ for (codetype, all_ssa) in Any[
         (code_typed(g19348, (typeof((1, 2.0)),))[1], true)]
     # make sure none of the slottypes are left as Core.Compiler.Const objects
     code = codetype[1]
-    @test all(x->isa(x, Type), code.slottypes)
+    @test all(x -> isa(x, Type) || isa(x, Const), code.slottypes)
     local notconst(@nospecialize(other)) = true
     notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
     function notconst(expr::Expr)
@@ -550,7 +551,9 @@ for (codetype, all_ssa) in Any[
     for i = 1:length(code.code)
         e = code.code[i]
         notconst(e)
-        @test isa(code.ssavaluetypes[i], Type)
+        typ = code.ssavaluetypes[i]
+        typ isa Core.Compiler.MaybeUndef && (typ = typ.typ)
+        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
     end
     test_inferred_static(codetype, all_ssa)
 end
@@ -935,7 +938,7 @@ let f, m
     m = first(methods(f))
     m.source = Base.uncompressed_ast(m)::CodeInfo
     m.source.ssavaluetypes = 3
-    m.source.codelocs = [1, 1, 1]
+    m.source.codelocs = Int32[1, 1, 1]
     m.source.code = Any[
         Expr(:call, GlobalRef(Core, :svec), 1, 2, 3),
         Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(1)),
@@ -1103,8 +1106,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
         if isa(ex, LineNumberNode)
             continue
         elseif isa(ex, Expr)
-            ex = ex::Expr
-            if Core.Compiler.is_meta_expr(ex)
+            if Core.Compiler.is_meta_expr_head(ex.head)
                 continue
             elseif ex.head === :return
                 # multiple returns
@@ -1132,7 +1134,7 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                     farg = typeof(getfield(farg.mod, farg.name))
                 end
             elseif isa(farg, Core.SSAValue)
-                farg = code.ssavaluetypes[farg.id]
+                farg = Core.Compiler.widenconst(code.ssavaluetypes[farg.id])
             else
                 farg = typeof(farg)
             end
@@ -1367,7 +1369,7 @@ function f24852_kernel_cinfo(fsig::Type)
     isdefined(method, :source) || return (nothing, :(f(x, y)))
     code_info = Base.uncompressed_ast(method)
     body = Expr(:block, code_info.code...)
-    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 1, :propagate)
+    Meta.substitute!(body, 0, Any[], sig, Any[spvals...], 1, :propagate)
     if startswith(String(method.name), "f24852")
         for a in body.args
             if a isa Expr && a.head == :(=)
@@ -1515,6 +1517,7 @@ function h25579(g)
     try
         h = -1.25
         error("continue at catch block")
+    catch
     end
     return t ? typeof(h) : typeof(h)
 end
@@ -1597,3 +1600,81 @@ end
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) == Union{}
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Type
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Type
+
+# PR 27351, make sure optimized type intersection for method invalidation handles typevars
+
+abstract type AbstractT27351 end
+struct T27351 <: AbstractT27351 end
+for i27351 in 1:15
+    @eval f27351(::Val{$i27351}, ::AbstractT27351, ::AbstractT27351) = $i27351
+end
+f27351(::T, ::T27351, ::T27351) where {T} = 16
+@test_throws MethodError f27351(Val(1), T27351(), T27351())
+
+# Domsort stress test (from JLD2.jl) - Issue #27625
+function JLD2_hash(k::Ptr{UInt8}, n::Integer=length(k), initval::UInt32=UInt32(0))
+    # Set up the internal state
+    a = b = c = 0xdeadbeef + convert(UInt32, n) + initval
+
+    ptr = k
+    @inbounds while n > 12
+        a += unsafe_load(convert(Ptr{UInt32}, ptr))
+        ptr += 4
+        b += unsafe_load(convert(Ptr{UInt32}, ptr))
+        ptr += 4
+        c += unsafe_load(convert(Ptr{UInt32}, ptr))
+        (a, b, c) = mix(a, b, c)
+        ptr += 4
+        n -= 12
+    end
+    @inbounds if n > 0
+        if n == 12
+            c += unsafe_load(convert(Ptr{UInt32}, ptr+8))
+            @goto n8
+        elseif n == 11
+            c += UInt32(unsafe_load(Ptr{UInt8}(ptr+10)))<<16
+            @goto n10
+        elseif n == 10
+            @label n10
+            c += UInt32(unsafe_load(Ptr{UInt8}(ptr+9)))<<8
+            @goto n9
+        elseif n == 9
+            @label n9
+            c += unsafe_load(ptr+8)
+            @goto n8
+        elseif n == 8
+            @label n8
+            b += unsafe_load(convert(Ptr{UInt32}, ptr+4))
+            @goto n4
+        elseif n == 7
+            @label n7
+            b += UInt32(unsafe_load(Ptr{UInt8}(ptr+6)))<<16
+            @goto n6
+        elseif n == 6
+            @label n6
+            b += UInt32(unsafe_load(Ptr{UInt8}(ptr+5)))<<8
+            @goto n5
+        elseif n == 5
+            @label n5
+            b += unsafe_load(ptr+4)
+            @goto n4
+        elseif n == 4
+            @label n4
+            a += unsafe_load(convert(Ptr{UInt32}, ptr))
+        elseif n == 3
+            @label n3
+            a += UInt32(unsafe_load(Ptr{UInt8}(ptr+2)))<<16
+            @goto n2
+        elseif n == 2
+            @label n2
+            a += UInt32(unsafe_load(Ptr{UInt8}(ptr+1)))<<8
+            @goto n1
+        elseif n == 1
+            @label n1
+            a += unsafe_load(ptr)
+        end
+        c = a + b + c
+    end
+    c
+end
+@test isa(code_typed(JLD2_hash, Tuple{Ptr{UInt8}, Int, UInt32}), Array)

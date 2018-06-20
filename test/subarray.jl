@@ -610,3 +610,13 @@ A = rand(5,5,5,5)
 V = view(A, 2:5, :, 2:5, 1:2:5)
 @test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
 @test @inferred(sum(Base.unaliascopy(V))) == sum(V) == sum(A[2:5, :, 2:5, 1:2:5])
+
+# issue #27632
+function _test_27632(A)
+    for J in CartesianIndices(size(A)[2:end])
+        A[1, J]
+    end
+    nothing
+end
+# check that this doesn't crash
+_test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))

@@ -115,6 +115,8 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
+_fieldnames(@nospecialize t) = isdefined(t, :names) ? t.names : t.name.names
+
 """
     fieldname(x::DataType, i::Integer)
 
@@ -130,7 +132,7 @@ julia> fieldname(Rational, 2)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    names = isdefined(t, :names) ? t.names : t.name.names
+    names = _fieldnames(t)
     n_fields = length(names)
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
@@ -153,7 +155,8 @@ julia> fieldnames(Rational)
 (:num, :den)
 ```
 """
-fieldnames(t::DataType) = ntuple(i -> fieldname(t, i), fieldcount(t))
+fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
+                           (_fieldnames(t)...,))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
@@ -389,6 +392,18 @@ meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 """
 isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isdispatchtuple)
+
+iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
+has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
+
+# equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
+# and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
+const _TYPE_NAME = Type.body.name
+function isdispatchelem(@nospecialize v)
+    return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
+        (isa(v, DataType) && v.name === _TYPE_NAME && !has_free_typevars(v)) # isType(v)
+end
 
 """
     isconcretetype(T)
@@ -842,9 +857,9 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
     params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        (_, code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
+        (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
-        push!(asts, uncompressed_ast(meth, code) => ty)
+        push!(asts, code => ty)
     end
     return asts
 end
@@ -860,7 +875,7 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], true, params)
+        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], params)
         ty === nothing && error("inference not successful") # inference disabled?
         push!(rt, ty)
     end

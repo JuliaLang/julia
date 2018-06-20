@@ -247,6 +247,7 @@ function make_seed()
             seed = hash(seed, parse(UInt64,
                                     read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
                                     base = 16))
+        catch
         end
         return make_seed(seed)
     end

@@ -208,7 +208,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
 
     # https://git-scm.com/docs/gitcredentials#gitcredentials-helper
     for entry in GitConfigIter(cfg, r"credential.*\.helper")
-        section, url, name, value = split(entry)
+        section, url, name, value = split_cfg_entry(entry)
         @assert name == "helper"
 
         # Only use configuration settings where the URL applies to the git credential
@@ -244,7 +244,7 @@ specified `git_cred`.
 function default_username(cfg::GitConfig, cred::GitCredential)
     # https://git-scm.com/docs/gitcredentials#gitcredentials-username
     for entry in GitConfigIter(cfg, r"credential.*\.username")
-        section, url, name, value = split(entry)
+        section, url, name, value = split_cfg_entry(entry)
         @assert name == "username"
 
         # Only use configuration settings where the URL applies to the git credential
@@ -263,7 +263,7 @@ function use_http_path(cfg::GitConfig, cred::GitCredential)
     # Note: Ideally the regular expression should use "useHttpPath"
     # https://github.com/libgit2/libgit2/issues/4390
     for entry in GitConfigIter(cfg, r"credential.*\.usehttppath")
-        section, url, name, value = split(entry)
+        section, url, name, value = split_cfg_entry(entry)
 
         ismatch(url, cred) || continue
         use_path = value == "true"

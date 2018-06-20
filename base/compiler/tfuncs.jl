@@ -994,6 +994,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
             argvals = anymap(a -> a.val, argtypes)
             try
                 return Const(f(argvals...))
+            catch
             end
         end
         iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1

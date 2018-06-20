@@ -82,7 +82,7 @@ jl_typename_t *jl_array_typename;
 jl_value_t *jl_array_uint8_type;
 jl_value_t *jl_array_any_type=NULL;
 jl_value_t *jl_array_symbol_type;
-jl_value_t *jl_array_int_type;
+jl_value_t *jl_array_int32_type;
 jl_datatype_t *jl_weakref_type;
 jl_datatype_t *jl_abstractstring_type;
 jl_datatype_t *jl_string_type;
@@ -1954,7 +1954,7 @@ void jl_init_types(void)
     jl_array_any_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_any_type, jl_box_long(1));
     jl_array_symbol_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_sym_type, jl_box_long(1));
     jl_array_uint8_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint8_type, jl_box_long(1));
-    jl_array_int_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_long_type, jl_box_long(1));
+    jl_array_int32_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_int32_type, jl_box_long(1));
 
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"), core,

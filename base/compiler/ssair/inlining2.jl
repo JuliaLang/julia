@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+struct InvokeData
+    mt::Core.MethodTable
+    entry::Core.TypeMapEntry
+    types0
+end
+
 struct InliningTodo
     idx::Int # The statement to replace
     # Properties of the call - these determine how arguments
@@ -267,7 +273,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     stmt = compact.result[idx]
     linetable_offset = length(linetable)
     # Append the linetable of the inlined function to our line table
-    inlined_at = compact.result_lines[idx]
+    inlined_at = Int(compact.result_lines[idx])
     for entry in item.linetable
         push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
@@ -547,16 +553,18 @@ function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(
     linfo
 end
 
-function rewrite_apply_exprargs!(inserter, typefunc, argexprs::Vector{Any})
+function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, sv::OptimizationState)
     new_argexprs = Any[argexprs[2]]
     # Flatten all tuples
     for arg in argexprs[3:end]
-        tupT = typefunc(arg)
+        tupT = argextype(arg, ir, sv.sp)
         t = widenconst(tupT)
         for i = 1:length(t.parameters)
             # Insert a getfield call here
             new_call = Expr(:call, Core.getfield, arg, i)
-            push!(new_argexprs, inserter(new_call, getfield_tfunc(tupT, Const(i))))
+            typ = getfield_tfunc(tupT, Const(i))
+            new_arg = insert_node!(ir, idx, typ, new_call)
+            push!(new_argexprs, new_arg)
         end
     end
     argexprs = new_argexprs
@@ -813,7 +821,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # Independent of whether we can inline, the above analysis allows us to rewrite
         # this apply call to a regular call
         if isapply
-            stmt.args = rewrite_apply_exprargs!((node, typ)->insert_node!(ir, idx, typ, node), arg->argextype(arg, ir, sv.sp), stmt.args)
+            stmt.args = rewrite_apply_exprargs!(ir, idx, stmt.args, sv)
         end
 
         if f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
@@ -935,7 +943,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             method = meth[1][3]::Method
             fully_covered = true
             case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data, calltype)
-            case == nothing && continue
+            case === nothing && continue
             push!(cases, Pair{Any,Any}(metharg, case))
         end
 
@@ -952,7 +960,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
     todo
 end
 
-function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int)
+function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int32)
     e = Expr(:call, TOP_TUPLE, args...)
     etyp = tuple_tfunc(Tuple{Any[widenconst(compact_exprtype(compact, args[i])) for i in 1:length(args)]...})
     return insert_node_here!(compact, e, etyp, line_idx)
@@ -984,10 +992,9 @@ function compute_invoke_data(@nospecialize(atypes), argexprs::Vector{Any}, sv::O
     invoke_tt = invoke_tt.parameters[1]
     invoke_types = rewrap_unionall(Tuple{ft, unwrap_unionall(invoke_tt).parameters...}, invoke_tt)
     invoke_entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt),
-                            invoke_types, sv.params.world)
+                         invoke_types, sv.params.world)
     invoke_entry === nothing && return nothing
-    invoke_data = InvokeData(mt, invoke_entry,
-                             invoke_types, nothing, nothing)
+    invoke_data = InvokeData(mt, invoke_entry, invoke_types)
     atype0 = atypes[2]
     argexpr0 = argexprs[2]
     atypes = atypes[4:end]

@@ -251,7 +251,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
             vals, vecs = eigen(A1)
             if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
-                @test vecs*diagm(0 => vals)/vecs ≈ A1 atol=sqrt(eps(float(real(one(vals[1])))))*(norm(A1,Inf)*n)^2
+                @test vecs*diagm(0 => vals)/vecs ≈ A1 atol=sqrt(eps(float(real(one(vals[1])))))*(opnorm(A1,Inf)*n)^2
             end
         end
 

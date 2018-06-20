@@ -465,6 +465,7 @@ function test_load_and_lookup_18020(n)
             ccall(:jl_load_and_lookup,
                   Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
+        catch
         end
     end
 end

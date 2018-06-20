@@ -33,6 +33,7 @@ else
                     Sys.which(checkcmd)
                     downloadcmd = checkcmd
                     break
+                catch
                 end
             end
         end

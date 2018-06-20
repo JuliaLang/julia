@@ -160,12 +160,13 @@ end
 
 
 let oldout = stdout
+    ex = Meta.@lower @dump x + y
     local rdout, wrout, out
     try
         rdout, wrout = redirect_stdout()
         out = @async read(rdout, String)
 
-        @test eval(:(@dump x + y)) === nothing
+        @test eval(ex) === nothing
 
         redirect_stdout(oldout)
         close(wrout)

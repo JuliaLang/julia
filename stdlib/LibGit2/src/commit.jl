@@ -114,6 +114,7 @@ function commit(repo::GitRepo, msg::AbstractString;
     if isempty(parent_ids)
         try # if throws then HEAD not found -> empty repo
             Base.push!(parent_ids, GitHash(repo, refname))
+        catch
         end
     end
 

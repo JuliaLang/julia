@@ -488,6 +488,12 @@ $(eval $(call LLVM_PATCH,llvm-D45008)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D45070)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0.0-ifconv-D45819)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-D46460))
+$(eval $(call LLVM_PATCH,llvm-rL332680)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL332682)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL332302)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL332694)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-rL327898)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 endif # LLVM_VER
 
 # Remove hardcoded OS X requirements in compilter-rt cmake build
@@ -574,7 +580,13 @@ endif
 endif
 else # USE_BINARYBUILDER_LLVM
 LLVM_BB_URL_BASE := https://github.com/staticfloat/LLVMBuilder/releases/download
-LLVM_BB_URL := $(LLVM_BB_URL_BASE)/v$(LLVM_VER)-$(LLVM_BB_REL)/LLVM.$(BINARYBUILDER_TRIPLET).tar.gz
+ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
+LLVM_BB_NAME := LLVM
+else
+LLVM_BB_NAME := LLVM.asserts
+endif
+LLVM_BB_URL := $(LLVM_BB_URL_BASE)/v$(LLVM_VER)-$(LLVM_BB_REL)/$(LLVM_BB_NAME).$(BINARYBUILDER_TRIPLET).tar.gz
+
 
 $(BUILDDIR)/llvm-$(LLVM_VER)-$(LLVM_BB_REL):
 	mkdir -p $@

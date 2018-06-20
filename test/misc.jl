@@ -375,14 +375,6 @@ let s = "abcα🐨\0x\0"
     end
 end
 
-# clipboard functionality
-if Sys.iswindows()
-    for str in ("Hello, world.", "∀ x ∃ y", "")
-        clipboard(str)
-        @test clipboard() == str
-    end
-end
-
 let optstring = repr("text/plain", Base.JLOptions())
     @test startswith(optstring, "JLOptions(\n")
     @test !occursin("Ptr", optstring)

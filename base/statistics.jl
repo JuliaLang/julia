@@ -17,7 +17,7 @@ julia> mean([√1, √2, √3])
 """
 function mean(f::Callable, iterable)
     y = iterate(iterable)
-    if y == nothing
+    if y === nothing
         throw(ArgumentError("mean of empty collection undefined: $(repr(iterable))"))
     end
     count = 1

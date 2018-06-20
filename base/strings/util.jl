@@ -134,16 +134,18 @@ function chomp(s::String)
     end
 end
 
-const _default_delims = [' ','\t','\n','\v','\f','\r']
-
 """
-    lstrip(s::AbstractString[, chars::Chars])
+    lstrip([pred=isspace,] str::AbstractString)
+    lstrip(str::AbstractString, chars)
 
-Return `s` with any leading whitespace and delimiters removed.
-The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
-`\\f`, and `\\r`.
-If `chars` (a character, or vector or set of characters) is provided,
-instead remove characters contained in it.
+Remove leading characters from `str`, either those specified by `chars` or those for
+which the function `pred` returns `true`.
+
+The default behaviour is to remove leading whitespace and delimiters: see
+[`isspace`](@ref) for precise details.
+
+The optional `chars` argument specifies which characters to remove: it can be a single
+character, or a vector or set of characters.
 
 # Examples
 ```jldoctest
@@ -154,22 +156,28 @@ julia> lstrip(a)
 "March"
 ```
 """
-function lstrip(s::AbstractString, chars::Chars=_default_delims)
+function lstrip(f, s::AbstractString)
     e = lastindex(s)
     for (i, c) in pairs(s)
-        !(c in chars) && return SubString(s, i, e)
+        !f(c) && return SubString(s, i, e)
     end
     SubString(s, e+1, e)
 end
+lstrip(s::AbstractString) = lstrip(isspace, s)
+lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 
 """
-    rstrip(s::AbstractString[, chars::Chars])
+    rstrip([pred=isspace,] str::AbstractString)
+    rstrip(str::AbstractString, chars)
 
-Return `s` with any trailing whitespace and delimiters removed.
-The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
-`\\f`, and `\\r`.
-If `chars` (a character, or vector or set of characters) is provided,
-instead remove characters contained in it.
+Remove trailing characters from `str`, either those specified by `chars` or those for
+which the function `pred` returns `true`.
+
+The default behaviour is to remove leading whitespace and delimiters: see
+[`isspace`](@ref) for precise details.
+
+The optional `chars` argument specifies which characters to remove: it can be a single
+character, or a vector or set of characters.
 
 # Examples
 ```jldoctest
@@ -180,19 +188,25 @@ julia> rstrip(a)
 "March"
 ```
 """
-function rstrip(s::AbstractString, chars::Chars=_default_delims)
+function rstrip(f, s::AbstractString)
     for (i, c) in Iterators.reverse(pairs(s))
-        c in chars || return SubString(s, 1, i)
+        f(c) || return SubString(s, 1, i)
     end
     SubString(s, 1, 0)
 end
+rstrip(s::AbstractString) = rstrip(isspace, s)
+rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
-    strip(s::AbstractString, [chars::Chars])
+    strip(str::AbstractString, [chars])
 
-Return `s` with any leading and trailing whitespace removed.
-If `chars` (a character, or vector or set of characters) is provided,
-instead remove characters contained in it.
+Remove leading and trailing characters from `str`.
+
+The default behaviour is to remove leading whitespace and delimiters: see
+[`isspace`](@ref) for precise details.
+
+The optional `chars` argument specifies which characters to remove: it can be a single character,
+vector or set of characters, or a predicate function.
 
 # Examples
 ```jldoctest
@@ -201,7 +215,7 @@ julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 ```
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
-strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
+strip(s::AbstractString, chars) = lstrip(rstrip(s, chars), chars)
 
 ## string padding functions ##
 
@@ -473,7 +487,7 @@ or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
 where `s` is the matched substring (when `pat`is a `Regex` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
-If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
+If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
 
@@ -487,6 +501,9 @@ julia> replace("The quick foxes run quickly.", "quick" => "slow", count=1)
 
 julia> replace("The quick foxes run quickly.", "quick" => "", count=1)
 "The  foxes run quickly."
+
+julia> replace("The quick foxes run quickly.", r"fox(es)?" => s"bus\\1")
+"The quick buses run quickly."
 ```
 """
 replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =

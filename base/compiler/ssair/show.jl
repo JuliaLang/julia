@@ -18,7 +18,8 @@ print_ssa(io::IO, val::Argument, argnames) = Base.print(io, isempty(argnames) ? 
 print_ssa(io::IO, val::GlobalRef, argnames) = Base.print(io, val)
 print_ssa(io::IO, @nospecialize(val), argnames) = Base.show(io, val)
 
-function print_node(io::IO, idx, stmt, used, argnames, maxsize; color = true, print_typ=true)
+
+function print_node(io::IO, idx::Int, @nospecialize(stmt), used, argnames, maxsize; color = true, print_typ=true)
     if idx in used
         pad = " "^(maxsize-length(string(idx)))
         Base.print(io, "%$idx $pad= ")
@@ -91,17 +92,17 @@ function print_node(io::IO, idx, stmt, used, argnames, maxsize; color = true, pr
     end
 end
 
-function compute_inlining_depth(linetable, iline)
+function compute_inlining_depth(linetable, iline::Int32)
     depth = 0
     while iline != 0
         linetable[iline].inlined_at == 0 && break
         depth += 1
         iline = linetable[iline].inlined_at
     end
-    depth
+    return depth
 end
 
-function should_print_ssa_type(node)
+function should_print_ssa_type(@nospecialize node)
     if isa(node, Expr)
         return !(node.head in (:gc_preserve_begin, :gc_preserve_end))
     end
@@ -109,18 +110,19 @@ function should_print_ssa_type(node)
            !isa(node, GotoNode) && !isa(node, ReturnNode)
 end
 
-function default_expr_type_printer(io, typ)
+function default_expr_type_printer(io::IO, @nospecialize typ)
     typ_str = try
         string(typ)
     catch
         "<error_printing>"
     end
     Base.printstyled(io, "::$(typ_str)", color=:cyan)
+    nothing
 end
 
-function compute_loc_stack(code, line)
+function compute_loc_stack(code::IRCode, line::Int32)
     stack = []
-    line === 0 && return stack
+    line == 0 && return stack
     inlined_at = code.linetable[line].inlined_at
     if inlined_at != 0
         push!(stack, inlined_at)
@@ -132,6 +134,7 @@ function compute_loc_stack(code, line)
         reverse!(stack)
     end
     push!(stack, line)
+    return stack
 end
 
 """
@@ -211,7 +214,7 @@ function compute_ir_line_annotations(code::IRCode)
         lineno = 0
         loc_method = ""
         print(buf, "│")
-        if line !== 0
+        if line != 0
             stack = compute_loc_stack(code, line)
             lineno = code.linetable[stack[1]].line
             x = min(length(last_stack), length(stack))
@@ -274,7 +277,7 @@ function compute_ir_line_annotations(code::IRCode)
         last_line = line
         (lineno != 0) && (last_lineno = lineno)
     end
-    (loc_annotations, loc_methods, loc_lineno)
+    return (loc_annotations, loc_methods, loc_lineno)
 end
 
 Base.show(io::IO, code::IRCode) = show_ir(io, code)

@@ -402,7 +402,6 @@ include("channels.jl")
 
 # utilities
 include("deepcopy.jl")
-include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
@@ -520,7 +519,6 @@ let
             :Future,
             :OldPkg,
             :LinearAlgebra,
-            :IterativeEigensolvers,
             :SparseArrays,
             :SuiteSparse,
             :SharedArrays,
@@ -646,9 +644,6 @@ end
     @deprecate_stdlib DateFormat Dates true
     @eval @deprecate_stdlib $(Symbol("@dateformat_str")) Dates true
     @deprecate_stdlib now Dates true
-
-    @deprecate_stdlib eigs IterativeEigensolvers true
-    @deprecate_stdlib svds IterativeEigensolvers true
 
     @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
     @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
@@ -864,6 +859,7 @@ end
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
     @deprecate_stdlib peakflops     InteractiveUtils true
+    @deprecate_stdlib clipboard     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
@@ -893,7 +889,6 @@ end
     @deprecate_stdlib send           Sockets true
     @deprecate_stdlib TCPSocket      Sockets true
     @deprecate_stdlib UDPSocket      Sockets true
-
 end
 end
 

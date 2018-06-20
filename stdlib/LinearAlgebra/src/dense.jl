@@ -5,7 +5,7 @@
 ## BLAS cutoff threshold constants
 
 const SCAL_CUTOFF = 2048
-const DOT_CUTOFF = 128
+#TODO const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
 
@@ -137,11 +137,11 @@ function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) w
     GC.@preserve x BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-vecnorm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
-    length(x) < ASUM_CUTOFF ? generic_vecnorm1(x) : BLAS.asum(x)
+norm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
+    length(x) < ASUM_CUTOFF ? generic_norm1(x) : BLAS.asum(x)
 
-vecnorm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
-    length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
+norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
+    length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
 """
     triu!(M, k::Integer)
@@ -509,7 +509,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         return copytri!(parent(exp(Hermitian(A))), 'U', true)
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
-    nA   = norm(A, 1)
+    nA   = opnorm(A, 1)
     Inn    = Matrix{T}(I, n, n)
     ## For sufficiently small nA, use lower order Padé-Approximations
     if (nA <= 2.1)
@@ -1201,6 +1201,7 @@ function factorize(A::StridedMatrix{T}) where T
                 if (herm & (T <: Complex)) | sym
                     try
                         return ldlt!(SymTridiagonal(diag(A), diag(A, -1)))
+                    catch
                     end
                 end
                 return lu(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
@@ -1369,8 +1370,8 @@ function cond(A::AbstractMatrix, p::Real=2)
     end
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
-_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lu(A), p, norm(A, p))
-_cond1Inf(A::AbstractMatrix, p::Real)             = norm(A, p)*norm(inv(A), p)
+_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lu(A), p, opnorm(A, p))
+_cond1Inf(A::AbstractMatrix, p::Real)             = opnorm(A, p)*opnorm(inv(A), p)
 
 ## Lyapunov and Sylvester equation
 

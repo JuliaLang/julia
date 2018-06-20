@@ -165,6 +165,7 @@ let r, t
     t = @async begin
         try
             wait(r)
+        catch
         end
         p = run(`$sleepcmd 1`, wait=false); wait(p)
         @test p.exitcode == 0

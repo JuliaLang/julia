@@ -2020,6 +2020,7 @@ AnyDict(
     "^C" => (s,o...)->begin
         try # raise the debugger if present
             ccall(:jl_raise_debugger, Int, ())
+        catch
         end
         cancel_beep(s)
         move_input_end(s)

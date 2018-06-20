@@ -770,6 +770,7 @@ begin
             global try_finally_glo_after = 1
         end
         global gothere = 1
+    catch
     end
     @test try_finally_loc_after == 0
     @test try_finally_glo_after == 1
@@ -799,7 +800,7 @@ begin
     @test retfinally() == 5
     @test glo == 18
 
-    @test try error() end === nothing
+    @test try error(); catch; end === nothing
 end
 
 # issue #12806
@@ -1270,6 +1271,7 @@ let
     function f()
         try
             return 1
+        catch
         end
     end
     @test f() == 1
@@ -1658,6 +1660,7 @@ try
     (function() end)(1)
     # should throw an argument count error
     @test false
+catch
 end
 
 # issue #4526
@@ -1881,6 +1884,7 @@ try
     # try running this code in a different context that triggers the codegen
     # assertion `assert(isboxed || v.typ == typ)`.
     f5142()
+catch
 end
 
 primitive type Int5142b 8 end
@@ -2282,6 +2286,7 @@ let
     # This can throw an error, but shouldn't segfault
     try
         issue7897!(sa, zeros(10))
+    catch
     end
 end
 
@@ -2605,6 +2610,7 @@ try
     mutable struct Foo{T}
         val::Bar{T}
     end
+catch
 end
 GC.gc()
 redirect_stdout(OLD_STDOUT)
@@ -6188,3 +6194,44 @@ function baz27365()
 end
 
 @test isa(baz27365(), Float64)
+
+# Issue #27566
+function test27566(a,b)
+    c = (b,(0,1)...)
+    test27566(a, c...)
+end
+test27566(a, b, c, d) = a.*(b, c, d)
+@test test27566(1,1) == (1,0,1)
+
+# Issue #27594
+struct Iter27594 end
+Base.iterate(::Iter27594) = (1, nothing)
+Base.iterate(::Iter27594, ::Any) = nothing
+
+function foo27594()
+    ind = 0
+    for x in (1,)
+        for y in Iter27594()
+            ind += 1
+        end
+    end
+    ind
+end
+
+@test foo27594() == 1
+
+# Issue 27597
+function f27597(y)
+    x = Int[]
+
+    if isempty(y)
+        y = 1:length(x)
+    elseif false
+        ;
+    end
+
+    length(y)
+    return y
+end
+@test f27597([1]) == [1]
+@test f27597([]) == 1:0

@@ -157,9 +157,6 @@ function choosetests(choices = [])
         filter!(x -> x != "rounding", tests)
     end
 
-    # The shift and invert solvers need SuiteSparse for sparse input
-    Base.USE_GPL_LIBS || filter!(x->x != "IterativeEigensolvers", STDLIBS)
-
     filter!(!in(skip_tests), tests)
 
     explicit_pkg     =  "OldPkg/pkg"        in tests

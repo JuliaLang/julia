@@ -341,10 +341,10 @@ function expanduser(path::AbstractString)
     y = iterate(path)
     y === nothing && return path
     c, i = y
-    if c != '~' return path end
+    c != '~' && return path
     y = iterate(path, i)
-    if y == nothing return homedir() end
-    if y[1] == '/' return homedir()*path[i:end] end
+    y === nothing && return homedir()
+    y[1] == '/' && return homedir() * path[i:end]
     throw(ArgumentError("~user tilde expansion not yet implemented"))
 end
 end
