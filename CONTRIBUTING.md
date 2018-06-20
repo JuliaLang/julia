@@ -309,4 +309,5 @@ Julia if you made code-changes that Revise cannot handle.
   - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)
   - [Using Julia on GitHub (notes for video)](https://gist.github.com/2712118#file_Julia_git_pull_request.md)
   - [General GitHub documentation](http://help.github.com)
-  - [GitHub pull request documentation](http://help.github.com/send-pull-requests)
+  - [GitHub pull request documentation](https://help.github.com/articles/creating-a-pull-request/)
+  - [GitHub Standard Fork & Pull Request Workflow ](https://gist.github.com/Chaser324/ce0505fbed06b947d962)
