@@ -429,12 +429,7 @@ function type_annotate!(sv::InferenceState)
     end
 
     if run_optimizer
-        for i = 2:length(changemap)
-            changemap[i] += changemap[i - 1]
-        end
-        if changemap[end] != 0
-            renumber_stuff!(body, changemap)
-        end
+        renumber_stuff!(body, changemap)
     end
 
     # finish marking used-undef variables
