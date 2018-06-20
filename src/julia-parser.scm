@@ -1653,7 +1653,6 @@
        (else
         (cons '|.| (reverse path)))))))
 
-;; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated s what)
   (let loop ((exprs '()))
     (let ((r (what s)))
@@ -1663,6 +1662,7 @@
          (loop (cons r exprs)))
         (else   (reverse! (cons r exprs)))))))
 
+;; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated-assignments s)
   (parse-comma-separated s parse-eq*))
 
