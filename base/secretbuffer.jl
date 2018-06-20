@@ -80,8 +80,21 @@ end
 
 show(io::IO, s::SecretBuffer) = print(io, "SecretBuffer(\"*******\")")
 
-hash(s::SecretBuffer, h::UInt) = hash(SecretBuffer, hash((s.data, s.size, s.ptr), h))
-==(s1::SecretBuffer, s2::SecretBuffer) = (view(s1.data, 1:s1.size), s1.ptr) == (view(s2.data, 1:s2.size), s2.ptr)
+# Unlike other IO objects, equality is computed by value for convenience
+==(s1::SecretBuffer, s2::SecretBuffer) = (s1.ptr == s2.ptr) && (s1.size == s2.size) && (UInt8(0) == _bufcmp(s1.data, s2.data, min(s1.size, s2.size)))
+# Also attempt a constant time buffer comparison algorithm — the length of the secret might be
+# inferred by a timing attack, but not its values.
+@noinline function _bufcmp(data1::Vector{UInt8}, data2::Vector{UInt8}, sz::Int)
+    res = UInt8(0)
+    for i = 1:sz
+        res |= xor(data1[i], data2[i])
+    end
+    return res
+end
+# All SecretBuffers hash the same to avoid leaking information or breaking consistency with ==
+const _sb_hash = UInt === UInt32 ? 0x111c0925 : 0xb06061e370557428
+hash(s::SecretBuffer, h::UInt) = hash(_sb_hash, h)
+
 
 function write(io::SecretBuffer, b::UInt8)
     if io.ptr > length(io.data)
