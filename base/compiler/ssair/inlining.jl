@@ -652,7 +652,7 @@ function analyze_method!(idx::Int, @nospecialize(f), @nospecialize(ft), @nospeci
     end
 
     @timeit "inline IR inflation" begin
-        ir2, inline_linetable = inflate_ir(src, spvals_from_meth_instance(linfo)), src.linetable
+        ir2, inline_linetable = inflate_ir(src, linfo), src.linetable
     end
     #verify_ir(ir2)
 

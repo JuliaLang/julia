@@ -253,7 +253,6 @@ end
 end
 let ast12474 = code_typed(f12474, Tuple{Float64})
     @test isdispatchelem(ast12474[1][2])
-    @test all(x -> x isa Const || isdispatchelem(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
 end
 
 
@@ -490,7 +489,6 @@ function test_inferred_static(arrow::Pair, all_ssa)
     code, rt = arrow
     @test isdispatchelem(rt)
     @test code.inferred
-    @test all(isdispatchelem, code.slottypes)
     for i = 1:length(code.code)
         e = code.code[i]
         test_inferred_static(e)
@@ -537,9 +535,7 @@ for (codetype, all_ssa) in Any[
         (code_typed(g18679, ())[1], false),
         (code_typed(h18679, ())[1], true),
         (code_typed(g19348, (typeof((1, 2.0)),))[1], true)]
-    # make sure none of the slottypes are left as Core.Compiler.Const objects
     code = codetype[1]
-    @test all(x -> isa(x, Type) || isa(x, Const), code.slottypes)
     local notconst(@nospecialize(other)) = true
     notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
     function notconst(expr::Expr)
@@ -1304,7 +1300,7 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.Params(world))
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
-    @test length(opt.src.slotflags) == length(opt.src.slotnames) == length(opt.src.slottypes)
+    @test length(opt.src.slotflags) == length(opt.src.slotnames)
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base

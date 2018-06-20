@@ -1223,7 +1223,7 @@ end
 # Tests for code_typed linetable annotations
 function compute_annotations(f, types)
     src = code_typed(f, types)[1][1]
-    ir = Core.Compiler.inflate_ir(src, Core.svec())
+    ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
     join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')

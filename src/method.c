@@ -252,7 +252,6 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
     size_t nssavalue = jl_unbox_long(ssavalue_types);
     li->slotnames = jl_alloc_vec_any(nslots);
     jl_gc_wb(li, li->slotnames);
-    li->slottypes = jl_nothing;
     li->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
     jl_gc_wb(li, li->slotflags);
     li->ssavaluetypes = jl_box_long(nssavalue);
@@ -316,7 +315,6 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->method_for_inference_limit_heuristics = NULL;
     src->slotnames = NULL;
     src->slotflags = NULL;
-    src->slottypes = NULL;
     src->ssavaluetypes = NULL;
     src->codelocs = jl_nothing;
     src->linetable = jl_nothing;
