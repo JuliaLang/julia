@@ -159,7 +159,7 @@
 (define reserved-word? (Set reserved-words))
 
 (define closing-token?
-  (let ((closer? (Set '(else elseif catch finally #\, #\) #\] #\} #\;))))
+  (let ((closer? (Set '(else elseif catch finally #\, #\) #\] #\} #\⟩ #\;))))
     (lambda (tok)
       (or (and (eq? tok 'end) (not end-symbol))
           (closer? tok)
@@ -404,7 +404,7 @@
                (let ((nxt (peek-char port)))
                  (and (not (eof-object? nxt))
                       (or (identifier-start-char? nxt)
-                          (memv nxt '(#\( #\[ #\{ #\@ #\` #\~ #\"))))))
+                          (memv nxt '(#\( #\[ #\{ #\⟨ #\@ #\` #\~ #\"))))))
           (error (string "numeric constant \"" s "\" cannot be implicitly multiplied because it ends with \".\"")))
       ;; n is #f for integers > typemax(UInt64)
       (cond (is-hex-float-literal (numchk n s) (double n))
@@ -530,7 +530,7 @@
 
           ((identifier-start-char? c)     (accum-julia-symbol c port))
 
-          ((string.find "()[]{},;\"`@" c) (read-char port))
+          ((string.find "()[]{}⟨⟩,;\"`@" c) (read-char port))
 
           ((string.find "0123456789" c)   (read-number port #f #f))
 
@@ -712,7 +712,7 @@
     (if (or (number? t) (and (symbol? t) (not (non-standalone-symbol-token? t))))
         (begin (take-token s)
                (let ((nxt (peek-token s)))
-                 (if (or (eqv? nxt #\,) (eqv? nxt #\) ) (eqv? nxt #\}) (eqv? nxt #\]))
+                 (if (or (eqv? nxt #\,) (eqv? nxt #\) ) (eqv? nxt #\}) (eqv? nxt #\]) (eqv? nxt #\⟩))
                      t
                      (begin (ts:put-back! s t spc)
                             (parse-assignment s parse-pair)))))
@@ -1069,7 +1069,7 @@
                                            (initial-reserved-word? (car expr))))))
            ;; to allow x'y as a special case
            #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
-                (not (memv t '(#\( #\[ #\{))))
+                (not (memv t '(#\( #\[ #\{ #\⟨ ))))
            )
        (not (ts:space? s))
        (not (operator? t))
@@ -2359,6 +2359,10 @@
                        ((hcat) `(bracescat (row ,@(cdr vex))))
                        ((comprehension) `(braces ,@(cdr vex)))
                        (else   `(bracescat ,@(cdr vex))))))))
+
+          ((eqv? t #\⟨ )
+           (take-token s)
+           `(anglebracket ,@(parse-call-arglist s #\⟩)))
 
           ;; string literal
           ((eqv? t #\")

@@ -193,6 +193,9 @@ export
     =>,
     ∘,
 
+# brackets
+    anglebracket,
+
 # scalar math
     @evalpoly,
     abs,

@@ -2243,6 +2243,14 @@
    '$
    (lambda (e) (error "\"$\" expression outside quote"))
 
+   'anglebracket
+   (lambda (e)
+     (if (has-parameters? (cdr e))
+         (error "unexpected semicolon inside ⟨ ⟩"))
+     (if (any assignment? (cdr e))
+         (error "unexpected assignment inside ⟨ ⟩"))
+     (expand-forms `(call (top anglebracket) ,@(cdr e))))
+
    'vect
    (lambda (e)
      (if (has-parameters? (cdr e))

@@ -905,3 +905,5 @@ julia> map(splat(+), zip(1:3,4:6))
 ```
 """
 splat(f) = args->f(args...)
+
+function anglebracket end
