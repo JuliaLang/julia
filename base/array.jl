@@ -15,6 +15,14 @@ DimensionMismatch() = DimensionMismatch("")
 
 ## Type aliases for convenience ##
 """
+    AbstractScalar{T}
+
+Supertype for zero-dimensional arrays (or array-like types) with
+elements of type `T`. Alias for [`AbstractArray{T,0}`](@ref).
+"""
+const AbstractScalar{T} = AbstractArray{T,0}
+
+"""
     AbstractVector{T}
 
 Supertype for one-dimensional arrays (or array-like types) with
@@ -48,6 +56,14 @@ const NeedsShaping = Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{On
 `N`-dimensional dense array with elements of type `T`.
 """
 Array
+
+"""
+    Scalar{T} <: AbstractScalar{T}
+
+Zero-dimensional dense array with elements of type `T`.
+Alias for [`Array{T,0}`](@ref).
+"""
+const Scalar{T} = Array{T,0}
 
 """
     Vector{T} <: AbstractVector{T}
@@ -457,6 +473,27 @@ end
 
 one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
 oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
+
+"""
+    array([T=Float64,] dims...)
+
+Create an uninitialized `Array`, with element type `T`.
+See also [`Array{T, N}`](@ref).
+
+# Examples
+```jldoctest
+julia> array`(1)
+1-element Array{Float64,1}:
+ 58.0
+
+julia> array(Int8, 2, 3)
+2×3 Array{Int8,2}:
+ 2  0  16
+ 3  1  33
+```
+"""
+array(dims...) = Array{Float64}(dims...)
+array(::Type{T}, dims...) where {T} = Array{T}(dims...)
 
 ## Conversions ##
 
