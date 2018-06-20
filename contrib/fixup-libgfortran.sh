@@ -52,9 +52,9 @@ for lib in lapack blas openblas; do
 
         # Take the directories, add them onto LIBGFORTRAN_DIRS, which we use to
         # search for these libraries in the future.
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGFORTRAN_PATH)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGCC_PATH)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBQUADMATH_PATH)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGFORTRAN_PATH 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGCC_PATH 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBQUADMATH_PATH 2>/dev/null)"
 
         # Save the SONAMES
         LIBGFORTRAN_SONAMES="$LIBGFORTRAN_SONAMES $(basename "$LIBGFORTRAN_PATH")"
