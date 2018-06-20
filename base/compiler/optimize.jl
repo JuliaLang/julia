@@ -492,34 +492,31 @@ function is_known_call_p(e::Expr, @nospecialize(pred), src, spvals)
 end
 
 function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int}, preprocess::Bool = true)
-    keepgoing = true
     if preprocess
         for i = 2:length(changemap)
             changemap[i] += changemap[i - 1]
         end
-        keepgoing = changemap[end] != 0
     end
-    if keepgoing
-        for i = 1:length(body)
-            el = body[i]
-            if isa(el, GotoNode)
-                body[i] = GotoNode(el.label + changemap[el.label])
-            elseif isa(el, SSAValue)
-                body[i] = SSAValue(el.id + changemap[el.id])
-            elseif isa(el, Expr)
-                if el.head === :gotoifnot
-                    cond = el.args[1]
-                    if isa(cond, SSAValue)
-                        el.args[1] = SSAValue(cond.id + changemap[cond.id])
-                    end
-                    tgt = el.args[2]::Int
-                    el.args[2] = tgt + changemap[tgt]
-                elseif el.head === :enter
-                    tgt = el.args[1]::Int
-                    el.args[1] = tgt + changemap[tgt]
-                elseif !is_meta_expr_head(el.head)
-                    renumber_ir_elements!(el.args, changemap, false)
+    changemap[end] != 0 || return
+    for i = 1:length(body)
+        el = body[i]
+        if isa(el, GotoNode)
+            body[i] = GotoNode(el.label + changemap[el.label])
+        elseif isa(el, SSAValue)
+            body[i] = SSAValue(el.id + changemap[el.id])
+        elseif isa(el, Expr)
+            if el.head === :gotoifnot
+                cond = el.args[1]
+                if isa(cond, SSAValue)
+                    el.args[1] = SSAValue(cond.id + changemap[cond.id])
                 end
+                tgt = el.args[2]::Int
+                el.args[2] = tgt + changemap[tgt]
+            elseif el.head === :enter
+                tgt = el.args[1]::Int
+                el.args[1] = tgt + changemap[tgt]
+            elseif !is_meta_expr_head(el.head)
+                renumber_ir_elements!(el.args, changemap, false)
             end
         end
     end
