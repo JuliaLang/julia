@@ -2,6 +2,10 @@
 
 # Parse "GIT URLs" syntax (URLs and a scp-like syntax). For details see:
 # https://git-scm.com/docs/git-clone#_git_urls_a_id_urls_a
+# Note that using a Regex like this is inherently insecure with regards to its
+# handling of passwords; we are unable to deterministically and securely erase
+# the passwords from memory after use.
+# TODO: reimplement with a Julian parser instead of leaning on this regex
 const URL_REGEX = r"""
 ^(?:(?<scheme>ssh|git|https?)://)?+
 (?:
@@ -106,6 +110,11 @@ provided the URL produced will use the alternative [scp-like syntax](https://git
   * `port::Union{AbstractString,Integer}=""`: the port number to use in the output if
     provided. Cannot be specified when using the scp-like syntax.
   * `path::AbstractString=""`: the path to use in the output if provided.
+
+!!!warning
+    Avoid using passwords in URLs. Unlike the credential objects, Julia is not able
+    to securely zero or destroy the sensitive data after use and the password may
+    remain in memory; possibly to be exposed by an uninitialized memory.
 
 # Examples
 ```jldoctest
