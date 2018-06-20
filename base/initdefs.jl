@@ -103,7 +103,7 @@ function parse_load_path(str::String)
         if isempty(env)
             first_empty && append!(envs, DEFAULT_LOAD_PATH)
             first_empty = false
-        elseif env == "@"
+        elseif env == "@" # use "@@" to do delayed expansion
             dir = current_env()
             dir !== nothing && push!(envs, dir)
         else
