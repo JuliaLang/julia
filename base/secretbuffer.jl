@@ -38,7 +38,17 @@ mutable struct SecretBuffer <: IO
     end
 end
 
-convert(::Type{SecretBuffer}, s::AbstractString) = SecretBuffer(String(s))
+"""
+    SecretBuffer(str::AbstractString)
+
+A convenience constructor to initialize a `SecretBuffer` from a non-secret string.
+
+Strings are bad at keeping secrets because they are unable to be securely
+zeroed or destroyed. Therefore, avoid using this constructor with secret data.
+Instead of starting with a string, either construct the `SecretBuffer`
+incrementally with `SecretBuffer()` and `write`, or use a `Vector{UInt8}` with
+the `Base.SecretBuffer!(::Vector{UInt8})` constructor.
+"""
 SecretBuffer(str::AbstractString) = SecretBuffer(String(str))
 function SecretBuffer(str::String)
     buf = codeunits(str)
@@ -49,6 +59,7 @@ function SecretBuffer(str::String)
     seek(s, 0)
     s
 end
+convert(::Type{SecretBuffer}, s::AbstractString) = SecretBuffer(String(s))
 
 """
     SecretBuffer!(data::Vector{UInt8})
