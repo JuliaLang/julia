@@ -604,3 +604,13 @@ mktempdir() do dir
         end
     end
 end
+
+# Issue #27550: make sure `peek` works when slurping a Char from an AbstractPipe
+open(`$catcmd`, "r+") do f
+    t = @async begin
+        write(f, "δ")
+        close(f.in)
+    end
+    @test read(f, Char) == 'δ'
+    wait(t)
+end

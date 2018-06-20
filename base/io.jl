@@ -235,9 +235,14 @@ readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
 
-readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
+for f in (
+        # peek/mark interface
+        :peek, :mark, :unmark, :reset, :ismarked,
+        # Simple reader functions
+        :readavailable, :isreadable)
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
+end
 
-isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
 iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
 close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
