@@ -232,16 +232,18 @@ end
     @test dot(Z, Z) == convert(elty, 34.0)
 end
 
-dot_(x,y) = invoke(dot, Tuple{Any,Any}, x,y)
+dot1(x,y) = invoke(dot, Tuple{Any,Any}, x,y)
+dot2(x,y) = invoke(dot, Tuple{AbstractArray,AbstractArray}, x,y)
 @testset "generic dot" begin
     AA = [1+2im 3+4im; 5+6im 7+8im]
     BB = [2+7im 4+1im; 3+8im 6+5im]
     for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
-        @test dot(A,B) == dot(vec(A),vec(B)) == dot_(A,B) == dot(float.(A),float.(B))
-        @test dot(Int[], Int[]) == 0 == dot_(Int[], Int[])
+        @test dot(A,B) == dot(vec(A),vec(B)) == dot1(A,B) == dot2(A,B) == dot(float.(A),float.(B))
+        @test dot(Int[], Int[]) == 0 == dot1(Int[], Int[]) == dot2(Int[], Int[])
         @test_throws MethodError dot(Any[], Any[])
-        @test_throws MethodError dot_(Any[], Any[])
-        for n1 = 0:2, n2 = 0:2, d in (dot, dot_)
+        @test_throws MethodError dot1(Any[], Any[])
+        @test_throws MethodError dot2(Any[], Any[])
+        for n1 = 0:2, n2 = 0:2, d in (dot, dot1, dot2)
             if n1 != n2
                 @test_throws DimensionMismatch d(1:n1, 1:n2)
             else

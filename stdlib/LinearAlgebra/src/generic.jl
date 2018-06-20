@@ -621,21 +621,6 @@ opnorm(v::TransposeAbsVec) = norm(v.parent)
 
 norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
 
-function dot(x::AbstractArray, y::AbstractArray)
-    lx = _length(x)
-    if lx != _length(y)
-        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(_length(y))."))
-    end
-    if lx == 0
-        return dot(zero(eltype(x)), zero(eltype(y)))
-    end
-    s = zero(dot(first(x), first(y)))
-    for (Ix, Iy) in zip(eachindex(x), eachindex(y))
-        @inbounds s += dot(x[Ix], y[Iy])
-    end
-    s
-end
-
 """
     dot(x, y)
     x ⋅ y
@@ -663,29 +648,23 @@ julia> dot(x, y)
 function dot(x, y) # arbitrary iterables
     ix = iterate(x)
     iy = iterate(y)
-    if ix === nothing
-        if iy !== nothing
+    if ix == nothing
+        if iy != nothing
             throw(DimensionMismatch("x and y are of different lengths!"))
         end
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
-    if iy === nothing
+    if iy == nothing
         throw(DimensionMismatch("x and y are of different lengths!"))
     end
-    (vx, xs) = ix
-    (vy, ys) = iy
-    s = dot(vx, vy)
-    while true
-        ix = iterate(x, xs)
-        iy = iterate(y, ys)
-        if (ix == nothing) || (iy == nothing)
-            break
-        end
-        (vx, xs), (vy, ys) = ix, iy
-        s += dot(vx, vy)
+    s = dot(ix[1], iy[1])
+    ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
+    while ix != nothing && iy != nothing
+        s += dot(ix[1], iy[1])
+        ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
     end
     if !(iy == nothing && ix == nothing)
-            throw(DimensionMismatch("x and y are of different lengths!"))
+        throw(DimensionMismatch("x and y are of different lengths!"))
     end
     return s
 end
@@ -709,24 +688,19 @@ julia> dot([im; im], [1; 1])
 0 - 2im
 ```
 """
-function dot(x::AbstractVector, y::AbstractVector)
-    if length(LinearIndices(x)) != length(LinearIndices(y))
-        throw(DimensionMismatch("dot product arguments have unequal lengths $(length(LinearIndices(x))) and $(length(LinearIndices(y)))"))
+function dot(x::AbstractArray, y::AbstractArray)
+    lx = _length(x)
+    if lx != _length(y)
+        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(_length(y))."))
     end
-    ix = iterate(x)
-    if ix === nothing
-        # we only need to check the first vector, since equal lengths have been asserted
+    if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
-    iy = iterate(y)
-    s = dot(ix[1], iy[1])
-    ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
-    while ix != nothing
-        s += dot(ix[1], iy[1])
-        ix = iterate(x, ix[2])
-        iy = iterate(y, iy[2])
+    s = zero(dot(first(x), first(y)))
+    for (Ix, Iy) in zip(eachindex(x), eachindex(y))
+        @inbounds s += dot(x[Ix], y[Iy])
     end
-    return s
+    s
 end
 
 
