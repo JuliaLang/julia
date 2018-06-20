@@ -177,6 +177,17 @@ end
         end
     end
     ENV["JULIA_DEBUG"] = ""
+
+    @testset "Log filtering - empty messages" begin
+        @test_logs @info nothing
+
+        # make sure `nothing` kwargs still print properly
+        logs, _ = collect_test_logs() do
+            @info "something" nothing
+        end
+        record = logs[1]
+        @test record.kwargs[:nothing] === nothing
+    end
 end
 
 #-------------------------------------------------------------------------------
