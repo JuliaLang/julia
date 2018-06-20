@@ -10,7 +10,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 
 import Base.Docs.apropos
 
-using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_type, show_unquoted, summarysize,
+using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
     to_tuple_type, signature_type, format_bytes
 
 using Markdown

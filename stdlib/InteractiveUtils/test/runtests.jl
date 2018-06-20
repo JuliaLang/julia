@@ -379,10 +379,6 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
     @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
 end
 
-# Issue #27276
-using InteractiveUtils: code_warntype_legacy_ir
-code_warntype_legacy_ir(devnull, first(code_typed(+, Tuple{Int, Int}))...)
-
 # clipboard functionality
 if Sys.iswindows() || Sys.isapple()
     for str in ("Hello, world.", "∀ x ∃ y", "")
