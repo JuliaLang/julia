@@ -447,7 +447,7 @@ securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 if Sys.iswindows()
-function getpass(prompt::AbstractString)
+function getpass(prompt::AbstractString)::SecureString
     print(prompt)
     flush(stdout)
     p = Vector{UInt8}(undef, 128) # mimic Unix getpass in ignoring more than 128-char passwords
@@ -475,11 +475,13 @@ function getpass(prompt::AbstractString)
     return ""
 end
 else
-getpass(prompt::AbstractString) = unsafe_string(ccall(:getpass, Cstring, (Cstring,), prompt))
+function getpass(prompt::AbstractString)::SecureString
+    unsafe_string(ccall(:getpass, Cstring, (Cstring,), prompt))
+end
 end
 
 """
-    prompt(message; default="", password=false) -> Union{String, Nothing}
+    prompt(message; default="", password=false) -> Union{AbstractString, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
@@ -583,7 +585,7 @@ if Sys.iswindows()
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]
         result = (String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
-                  String(transcode(UInt8, passbuf_)))
+                  SecureString(transcode(UInt8, passbuf_)))
         securezero!(passbuf_)
         securezero!(passbuf)
 

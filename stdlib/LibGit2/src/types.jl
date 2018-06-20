@@ -1180,7 +1180,7 @@ function objtype(obj_type::Consts.OBJECT)
     end
 end
 
-import Base.securezero!
+import Base.shred!
 
 abstract type AbstractCredential end
 
@@ -1193,12 +1193,10 @@ isfilled(::AbstractCredential)
 
 "Credential that support only `user` and `password` parameters"
 mutable struct UserPasswordCredential <: AbstractCredential
-    user::String
-    pass::String
+    user::SecureString
+    pass::SecureString
     function UserPasswordCredential(user::AbstractString="", pass::AbstractString="")
-        c = new(user, pass)
-        finalizer(securezero!, c)
-        return c
+        new(user, pass)
     end
 
     # Deprecated constructors
@@ -1212,9 +1210,9 @@ mutable struct UserPasswordCredential <: AbstractCredential
     UserPasswordCredential(prompt_if_incorrect::Bool) = UserPasswordCredential("","",prompt_if_incorrect)
 end
 
-function securezero!(cred::UserPasswordCredential)
-    securezero!(cred.user)
-    securezero!(cred.pass)
+function shred!(cred::UserPasswordCredential)
+    shred!(cred.user)
+    shred!(cred.pass)
     return cred
 end
 
@@ -1228,15 +1226,13 @@ end
 
 "SSH credential type"
 mutable struct SSHCredential <: AbstractCredential
-    user::String
-    pass::String
-    prvkey::String
-    pubkey::String
+    user::SecureString
+    pass::SecureString
+    prvkey::SecureString
+    pubkey::SecureString
     function SSHCredential(user::AbstractString="", pass::AbstractString="",
-                            prvkey::AbstractString="", pubkey::AbstractString="")
-        c = new(user, pass, prvkey, pubkey)
-        finalizer(securezero!, c)
-        return c
+                           prvkey::AbstractString="", pubkey::AbstractString="")
+        new(user, pass, prvkey, pubkey)
     end
 
     # Deprecated constructors
@@ -1251,11 +1247,11 @@ mutable struct SSHCredential <: AbstractCredential
     SSHCredential(prompt_if_incorrect::Bool) = SSHCredential("","","","",prompt_if_incorrect)
 end
 
-function securezero!(cred::SSHCredential)
-    securezero!(cred.user)
-    securezero!(cred.pass)
-    securezero!(cred.prvkey)
-    securezero!(cred.pubkey)
+function shred!(cred::SSHCredential)
+    shred!(cred.user)
+    shred!(cred.pass)
+    shred!(cred.prvkey)
+    shred!(cred.pubkey)
     return cred
 end
 
@@ -1278,8 +1274,8 @@ Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id
 Base.getindex(cache::CachedCredentials, cred_id) = Base.getindex(cache.cred, cred_id)
 Base.get!(cache::CachedCredentials, cred_id, default) = Base.get!(cache.cred, cred_id, default)
 
-function securezero!(p::CachedCredentials)
-    foreach(securezero!, values(p.cred))
+function shred!(p::CachedCredentials)
+    foreach(shred!, values(p.cred))
     return p
 end
 
@@ -1393,7 +1389,7 @@ function approve(p::CredentialPayload; shred::Bool=true)
         approve(p.config, cred, p.url)
     end
 
-    shred && securezero!(cred)
+    shred && shred!(cred)
     nothing
 end
 
@@ -1418,7 +1414,7 @@ function reject(p::CredentialPayload; shred::Bool=true)
         reject(p.config, cred, p.url)
     end
 
-    shred && securezero!(cred)
+    shred && shred!(cred)
     nothing
 end
 
