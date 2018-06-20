@@ -730,6 +730,8 @@ function dot(x::AbstractVector, y::AbstractVector)
 end
 
 
+anglebracket(x, y) = dot(x, y)
+
 ###########################################################################################
 
 """
