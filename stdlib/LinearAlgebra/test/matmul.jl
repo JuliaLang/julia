@@ -251,6 +251,46 @@ dot_(x,y) = invoke(dot, Tuple{Any,Any}, x,y)
     end
 end
 
+@testset "dotu" for elty in (Float32, Float64, ComplexF32, ComplexF64)
+    x = convert(Vector{elty},[1.0, 2.0, 3.0])
+    y = convert(Vector{elty},[3.5, 4.5, 5.5])
+    @test_throws DimensionMismatch dotu(x, 1:2, y, 1:3)
+    @test_throws BoundsError dotu(x, 1:4, y, 1:4)
+    @test_throws BoundsError dotu(x, 1:3, y, 2:4)
+    @test dotu(x, 1:2, y, 1:2) == convert(elty, 12.5)
+    @test transpose(x)*y == convert(elty, 29.0)
+    X = convert(Matrix{elty},[1.0 2.0; 3.0 4.0])
+    Y = convert(Matrix{elty},[1.5 2.5; 3.5 4.5])
+    @test dotu(X, Y) == convert(elty, 35.0)
+    Z = convert(Vector{Matrix{elty}},[reshape(1:4, 2, 2), fill(1, 2, 2)])
+    @test dotu(Z, Z) == convert(Matrix{elty},[9 17; 12 24])
+    @test dotu(one(elty), one(elty)) == one(elty) == dotu(ones(elty, 1), ones(elty, 1))
+    @test dotu(im*one(elty), one(elty)) == im*one(elty) == dotu(im*ones(elty, 1), ones(elty, 1))
+    @test dotu(one(elty), im*one(elty)) == im*one(elty) == dotu(ones(elty, 1), im*ones(elty, 1))
+end
+@test dotu(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
+
+dotu1(x,y) = invoke(dotu, Tuple{Any,Any}, x,y)
+dotu2(x,y) = invoke(dotu, Tuple{AbstractArray,AbstractArray}, x,y)
+@testset "generic dotu" begin
+    AA = [1+2im 3+4im; 5+6im 7+8im]
+    BB = [2+7im 4+1im; 3+8im 6+5im]
+    for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
+        @test dotu(A,B) == dotu(vec(A),vec(B)) == dotu1(A,B) == dotu2(A,B) == dotu(float.(A),float.(B)) == sum(A .* B)
+        @test dotu(Int[], Int[]) == 0 == dotu1(Int[], Int[]) == dotu2(Int[], Int[])
+        @test_throws MethodError dotu(Any[], Any[])
+        @test_throws MethodError dotu1(Any[], Any[])
+        @test_throws MethodError dotu2(Any[], Any[])
+        for n1 = 0:2, n2 = 0:2, d in (dotu, dotu1, dotu2)
+            if n1 != n2
+                @test_throws DimensionMismatch d(1:n1, 1:n2)
+            else
+                @test d(1:n1, 1:n2) ≈ norm(1:n1)^2
+            end
+        end
+    end
+end
+
 @testset "Issue 11978" begin
     A = Matrix{Matrix{Float64}}(undef, 2, 2)
     A[1,1] = Matrix(1.0I, 3, 3)

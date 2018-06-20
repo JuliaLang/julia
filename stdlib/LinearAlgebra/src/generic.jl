@@ -729,6 +729,78 @@ function dot(x::AbstractVector, y::AbstractVector)
     return s
 end
 
+"""
+    dotu(x, y)
+
+For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
+any element type for which `*` is defined), compute the unconjugated dot product, i.e. the
+sum of `x[i]*y[i]`, as if they were vectors.
+
+# Examples
+```jldoctest
+julia> dotu(1:5, 2:6)
+70
+
+julia> v = [1, im]; dotu(v, v)
+0 + 0im
+
+julia> σ = [[0 1; 1 0], [0 -im; im 0], [1 0; 0 -1]]; n = [1, 2, 3]; dotu(σ, n)
+2×2 Array{Complex{Int64},2}:
+ 3+0im   1-2im
+ 1+2im  -3+0im
+
+julia> dotu(σ[1:1], σ[1:1])
+2×2 Array{Complex{Int64},2}:
+ 1+0im  0+0im
+ 0+0im  1+0im
+
+julia> dotu(σ, σ)
+ 2×2 Array{Complex{Int64},2}:
+  3+0im  0+0im
+  0+0im  3+0im
+```
+"""
+function dotu(x, y) # arbitrary iterables
+    ix = iterate(x)
+    iy = iterate(y)
+    if ix == nothing
+        if iy != nothing
+            throw(DimensionMismatch("x and y are of different lengths!"))
+        end
+        return zero(eltype(x)) * zero(eltype(y))
+    end
+    if iy == nothing
+        throw(DimensionMismatch("x and y are of different lengths!"))
+    end
+    s = ix[1] * iy[1]
+    ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
+    while ix != nothing && iy != nothing
+        s += ix[1] * iy[1]
+        ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
+    end
+    if !(iy == nothing && ix == nothing)
+        throw(DimensionMismatch("x and y are of different lengths!"))
+    end
+    return s
+end
+
+dotu(x::Number, y::Number) = x * y
+
+function dotu(x::AbstractArray, y::AbstractArray)
+    lx = _length(x)
+    if lx != _length(y)
+        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(_length(y))."))
+    end
+    if lx == 0
+        return zero(eltype(x)) * zero(eltype(y))
+    end
+    s = zero(first(x) * first(y))
+    @inbounds for (Ix, Iy) in zip(eachindex(x), eachindex(y))
+        s += x[Ix] * y[Iy]
+    end
+    s
+end
+
 
 ###########################################################################################
 

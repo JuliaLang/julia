@@ -12,7 +12,7 @@ using Base.Sort: Forward
 using LinearAlgebra
 
 import Base: +, -, *, \, /, &, |, xor, ==
-import LinearAlgebra: mul!, ldiv!, rdiv!, chol, adjoint!, diag, eigen, dot,
+import LinearAlgebra: mul!, ldiv!, rdiv!, chol, adjoint!, diag, eigen, dot, dotu,
     issymmetric, istril, istriu, lu, tr, transpose!, tril!, triu!,
     cond, diagm, factorize, ishermitian, norm, opnorm, lmul!, rmul!, tril, triu
 

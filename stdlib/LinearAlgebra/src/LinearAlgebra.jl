@@ -80,6 +80,7 @@ export
     diagind,
     diagm,
     dot,
+    dotu,
     eigen,
     eigen!,
     eigmax,

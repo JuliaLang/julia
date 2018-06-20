@@ -299,6 +299,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 Base.:*(::AbstractMatrix, ::AbstractMatrix)
 Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 LinearAlgebra.dot
+LinearAlgebra.dotu
 LinearAlgebra.cross
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal

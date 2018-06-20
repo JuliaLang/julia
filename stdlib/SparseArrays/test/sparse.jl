@@ -356,8 +356,10 @@ end
         A = sprand(ComplexF64,10,15,0.4)
         B = sprand(ComplexF64,10,15,0.5)
         @test dot(A,B) ≈ dot(Matrix(A),Matrix(B))
+        @test dotu(A,B) ≈ dotu(Matrix(A),Matrix(B))
     end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
+    @test_throws DimensionMismatch dotu(sprand(5,5,0.2),sprand(5,6,0.2))
 end
 
 sA = sprandn(3, 7, 0.5)
