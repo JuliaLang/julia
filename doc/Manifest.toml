@@ -4,8 +4,6 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Test", "UUIDs", "Unicode"]
 git-tree-sha1 = "f3e87ca1e2df8e1e4f82ea504fddf0b9b0894f61"
-repo-rev = "9b0c3982dcdab1ba35eb5b51a4aa084754e1a0eb"
-repo-url = "https://github.com/JuliaLang/Compat.jl.git"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
 version = "0.69.0"
 
