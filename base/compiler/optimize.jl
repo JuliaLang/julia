@@ -491,7 +491,7 @@ function is_known_call_p(e::Expr, @nospecialize(pred), src, spvals)
     return (isa(f, Const) && pred(f.val)) || (isType(f) && pred(f.parameters[1]))
 end
 
-function renumber_stuff!(body::Vector{Any}, changemap::Vector{Int})
+function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int})
     for i = 2:length(changemap)
         changemap[i] += changemap[i - 1]
     end
@@ -514,7 +514,7 @@ function renumber_stuff!(body::Vector{Any}, changemap::Vector{Int})
                     tgt = el.args[1]::Int
                     el.args[1] = tgt + changemap[tgt]
                 elseif !is_meta_expr_head(el.head)
-                    renumber_stuff!(el.args, changemap)
+                    renumber_ir_elements!(el.args, changemap)
                 end
             end
         end
