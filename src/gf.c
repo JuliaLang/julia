@@ -720,7 +720,7 @@ static void jl_compilation_sig(
     if (jl_nparams(tt) >= nspec && jl_va_tuple_kind((jl_datatype_t*)definition->sig) == JL_VARARG_UNBOUND) {
         jl_svec_t *limited = jl_alloc_svec(nspec);
         jl_value_t *temp = NULL;
-        JL_GC_PUSH2(&limited, temp);
+        JL_GC_PUSH2(&limited, &temp);
         if (!*newparams) *newparams = tt->parameters;
         size_t i;
         for (i = 0; i < nspec - 1; i++) {
