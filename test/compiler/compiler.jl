@@ -1678,3 +1678,9 @@ function JLD2_hash(k::Ptr{UInt8}, n::Integer=length(k), initval::UInt32=UInt32(0
     c
 end
 @test isa(code_typed(JLD2_hash, Tuple{Ptr{UInt8}, Int, UInt32}), Array)
+
+# issue #19668
+struct Foo19668
+    Foo19668(; kwargs...) = new()
+end
+@test Base.return_types(Foo19668, ()) == [Foo19668]
