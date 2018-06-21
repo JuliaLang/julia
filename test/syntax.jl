@@ -1436,3 +1436,6 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
                      fex)
     @test macroexpand(@__MODULE__, ex) == Expr(:tuple, fex, 2)
 end
+
+# pr #27668
+@test Meta.parse("map(1) do x...; end") isa Expr
