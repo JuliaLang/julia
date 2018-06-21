@@ -18,7 +18,7 @@ struct InliningTodo
     sparams::Vector{Any} # The static parameters we computed for this call site
     metharg # ::Type
     # The LineTable and IR of the inlinee
-    linetable::Vector{LineInfoNode}
+    linetable::Vector{Any}
     ir::IRCode
     # If the function being inlined is a single basic block we can use a
     # simpler inlining algorithm. This flag determines whether that's allowed
@@ -54,7 +54,7 @@ struct UnionSplit
         new(idx, fully_covered, atype, isinvoke, cases, Int[])
 end
 
-function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
+function ssa_inlining_pass!(ir::IRCode, linetable::Vector{Any}, sv::OptimizationState)
     # Go through the function, perfoming simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
     @timeit "analysis" todo = assemble_inline_todo!(ir, linetable, sv)
@@ -266,14 +266,14 @@ function finish_cfg_inline!(state::CFGInliningState)
 end
 
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
-                         linetable::Vector{LineInfoNode}, item::InliningTodo,
+                         linetable::Vector{Any}, item::InliningTodo,
                          boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     inline_cfg = item.ir.cfg
     stmt = compact.result[idx]
-    linetable_offset = length(linetable)
+    linetable_offset = Int32(length(linetable))
     # Append the linetable of the inlined function to our line table
-    inlined_at = Int(compact.result_lines[idx])
+    inlined_at = compact.result_lines[idx]
     for entry in item.linetable
         push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
@@ -383,7 +383,7 @@ end
 const fatal_type_bound_error = ErrorException("fatal error in type inference (type bound)")
 
 function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
-                               argexprs::Vector{Any}, linetable::Vector{LineInfoNode},
+                               argexprs::Vector{Any}, linetable::Vector{Any},
                                item::UnionSplit, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     stmt, typ, line = compact.result[idx], compact.result_types[idx], compact.result_lines[idx]
     atype = item.atype
@@ -459,7 +459,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     nothing
 end
 
-function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
+function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{Any}, sv::OptimizationState)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     state = CFGInliningState(ir)
     for item in todo
@@ -727,7 +727,7 @@ function handle_single_case!(ir::IRCode, stmt::Expr, idx::Int, @nospecialize(cas
     nothing
 end
 
-function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
+function assemble_inline_todo!(ir::IRCode, linetable::Vector{Any}, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, isapply, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Any[]
     for idx in 1:length(ir.stmts)
@@ -1078,7 +1078,7 @@ end
 
 function ssa_substitute!(idx::Int, @nospecialize(val), arg_replacements::Vector{Any},
                          @nospecialize(spsig), spvals::Vector{Any},
-                         linetable_offset::Int, boundscheck::Symbol, compact::IncrementalCompact)
+                         linetable_offset::Int32, boundscheck::Symbol, compact::IncrementalCompact)
     compact.result_flags[idx] &= ~IR_FLAG_INBOUNDS
     compact.result_lines[idx] += linetable_offset
     return ssa_substitute_op!(val, arg_replacements, spsig, spvals, boundscheck)

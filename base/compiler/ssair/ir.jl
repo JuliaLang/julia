@@ -168,13 +168,13 @@ struct IRCode
     flags::Vector{UInt8}
     argtypes::Vector{Any}
     spvals::SimpleVector
-    linetable::Vector{LineInfoNode}
+    linetable::Vector{Any}
     cfg::CFG
     new_nodes::Vector{NewNode}
     meta::Vector{Any}
 
     function IRCode(stmts::Vector{Any}, types::Vector{Any}, lines::Vector{Int32}, flags::Vector{UInt8},
-            cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any},
+            cfg::CFG, linetable::Vector{Any}, argtypes::Vector{Any}, meta::Vector{Any},
             spvals::SimpleVector)
         return new(stmts, types, lines, flags, argtypes, spvals, linetable, cfg, NewNode[], meta)
     end

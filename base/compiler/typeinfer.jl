@@ -597,7 +597,7 @@ function typeinf_ext(linfo::MethodInstance, params::Params)
                     tree.slottypes = nothing
                     tree.ssavaluetypes = 0
                     tree.codelocs = Int32[1]
-                    tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
+                    tree.linetable = Any[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
                     tree.inferred = true
                     tree.ssaflags = UInt8[]
                     tree.pure = true

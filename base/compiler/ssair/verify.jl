@@ -137,7 +137,7 @@ function verify_ir(ir::IRCode)
     end
 end
 
-function verify_linetable(linetable::Vector{LineInfoNode})
+function verify_linetable(linetable::Vector{Any})
     for i in 1:length(linetable)
         line = linetable[i]
         if i <= line.inlined_at

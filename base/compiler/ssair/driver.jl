@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Core: LineInfoNode
-const NullLineInfo = LineInfoNode(@__MODULE__, Symbol(""), Symbol(""), 0, 0)
 
 if false
     import Base: Base, @show
@@ -109,7 +108,7 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, spvals:
     @timeit "domtree 1" domtree = construct_domtree(cfg)
     ir = let code = Any[nothing for _ = 1:length(code)]
              argtypes = ci.slottypes[1:(nargs+1)]
-            IRCode(code, Any[], ci.codelocs, flags, cfg, collect(LineInfoNode, ci.linetable), argtypes, meta, spvals)
+            IRCode(code, Any[], ci.codelocs, flags, cfg, ci.linetable, argtypes, meta, spvals)
         end
     @timeit "construct_ssa" ir = construct_ssa!(ci, code, ir, domtree, defuse_insts, nargs, spvals)
     return ir

@@ -34,7 +34,7 @@ function inflate_ir(ci::CodeInfo, spvals::SimpleVector)
     end
     newslottypes = ci.inferred ? copy(ci.slottypes) : Any[ Any for i = 1:length(ci.slotnames) ]
     ssavaluetypes = ci.ssavaluetypes isa Vector{Any} ? copy(ci.ssavaluetypes) : Any[ Any for i = 1:ci.ssavaluetypes ]
-    ir = IRCode(code, ssavaluetypes, copy(ci.codelocs), copy(ci.ssaflags), cfg, collect(LineInfoNode, ci.linetable),
+    ir = IRCode(code, ssavaluetypes, copy(ci.codelocs), copy(ci.ssaflags), cfg, ci.linetable,
                 newslottypes, Any[], spvals)
     return ir
 end
