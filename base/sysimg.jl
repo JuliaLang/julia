@@ -246,7 +246,6 @@ include("c.jl")
 include("io.jl")
 include("iostream.jl")
 include("iobuffer.jl")
-include("secretbuffer.jl")
 
 # strings & printing
 include("intfuncs.jl")
@@ -334,6 +333,7 @@ using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
 include("methodshow.jl")
+include("secretbuffer.jl")
 
 # core math functions
 include("floatfuncs.jl")
