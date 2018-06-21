@@ -2322,7 +2322,10 @@
                  ':
                  (if (or (ts:space? s) (eqv? nxt #\newline))
                      (error "space not allowed after \":\" used for quoting")
-                     (list 'quote (parse-atom s #f))))))
+                     (list 'quote
+                           ;; being inside quote makes `end` non-special again. issue #27690
+                           (with-bindings ((end-symbol #f))
+                                          (parse-atom s #f)))))))
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))
