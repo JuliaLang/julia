@@ -452,7 +452,7 @@ Display a message and wait for the user to input a secret, returning an `IO`
 object containing the secret.
 
 Note that on Windows, the secret might be displayed as it is typed; see
-`Base.winprompt` for securely retrieving username/password pairs from a secure
+`Base.winprompt` for securely retrieving username/password pairs from a
 graphical interface.
 """
 function getpass end
