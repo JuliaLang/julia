@@ -2071,7 +2071,7 @@ mktempdir() do dir
             # ENV credentials are valid but requires a passphrase
             withenv("SSH_KEY_PATH" => valid_p_key) do
                 challenges = [
-                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                    "Passphrase for $valid_p_key: " => "$passphrase\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_p_ex, challenges)
                 @test err == git_ok
@@ -2082,9 +2082,9 @@ mktempdir() do dir
                 # credentials. Since we don't control the internals of LibGit2 though they
                 # could also just re-call the credential callback like they do for HTTP.
                 challenges = [
-                    "Passphrase for $valid_p_key:" => "foo\n",
-                    "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
-                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                    "Passphrase for $valid_p_key: " => "foo\n",
+                    "Private key location for 'git@github.com' [$valid_p_key]: " => "\n",
+                    "Passphrase for $valid_p_key: " => "$passphrase\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_p_ex, challenges)
                 @test err == git_ok
@@ -2092,7 +2092,7 @@ mktempdir() do dir
 
                 # User sends EOF in passphrase prompt which aborts the credential request
                 challenges = [
-                    "Passphrase for $valid_p_key:" => "\x04",
+                    "Passphrase for $valid_p_key: " => "\x04",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_p_ex, challenges)
                 @test err == abort_prompt
@@ -2100,7 +2100,7 @@ mktempdir() do dir
 
                 # User provides an empty passphrase
                 challenges = [
-                    "Passphrase for $valid_p_key:" => "\n",
+                    "Passphrase for $valid_p_key: " => "\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_p_ex, challenges)
                 @test err == abort_prompt
@@ -2118,7 +2118,7 @@ mktempdir() do dir
             withenv("SSH_KEY_PATH" => valid_key) do
                 # User provides a valid username
                 challenges = [
-                    "Username for 'github.com':" => "$username\n",
+                    "Username for 'github.com': " => "$username\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_u_ex, challenges)
                 @test err == git_ok
@@ -2126,7 +2126,7 @@ mktempdir() do dir
 
                 # User sends EOF in username prompt which aborts the credential request
                 challenges = [
-                    "Username for 'github.com':" => "\x04",
+                    "Username for 'github.com': " => "\x04",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_u_ex, challenges)
                 @test err == abort_prompt
@@ -2134,8 +2134,8 @@ mktempdir() do dir
 
                 # User provides an empty username
                 challenges = [
-                    "Username for 'github.com':" => "\n",
-                    "Username for 'github.com':" => "\x04",
+                    "Username for 'github.com': " => "\n",
+                    "Username for 'github.com': " => "\x04",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_u_ex, challenges)
                 @test err == abort_prompt
@@ -2143,10 +2143,10 @@ mktempdir() do dir
 
                 # User repeatedly chooses an invalid username
                 challenges = [
-                    "Username for 'github.com':" => "foo\n",
-                    "Username for 'github.com' [foo]:" => "\n",
-                    "Private key location for 'foo@github.com' [$valid_key]:" => "\n",
-                    "Username for 'github.com' [foo]:" => "\x04",  # Need to manually abort
+                    "Username for 'github.com': " => "foo\n",
+                    "Username for 'github.com' [foo]: " => "\n",
+                    "Private key location for 'foo@github.com' [$valid_key]: " => "\n",
+                    "Username for 'github.com' [foo]: " => "\x04",  # Need to manually abort
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_u_ex, challenges)
                 @test err == abort_prompt
@@ -2156,7 +2156,7 @@ mktempdir() do dir
                 # instead of the C_NULL in the other missing username tests.
                 ssh_user_empty_ex = gen_ex(valid_cred, username="")
                 challenges = [
-                    "Username for 'github.com':" => "$username\n",
+                    "Username for 'github.com': " => "$username\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_user_empty_ex, challenges)
                 @test err == git_ok
@@ -2177,7 +2177,7 @@ mktempdir() do dir
 
                 # User provides valid credentials
                 challenges = [
-                    "Private key location for 'git@github.com':" => "$valid_key\n",
+                    "Private key location for 'git@github.com': " => "$valid_key\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
@@ -2185,8 +2185,8 @@ mktempdir() do dir
 
                 # User provides valid credentials that requires a passphrase
                 challenges = [
-                    "Private key location for 'git@github.com':" => "$valid_p_key\n",
-                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                    "Private key location for 'git@github.com': " => "$valid_p_key\n",
+                    "Passphrase for $valid_p_key: " => "$passphrase\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_p_ex, challenges)
                 @test err == git_ok
@@ -2194,7 +2194,7 @@ mktempdir() do dir
 
                 # User sends EOF in private key prompt which aborts the credential request
                 challenges = [
-                    "Private key location for 'git@github.com':" => "\x04",
+                    "Private key location for 'git@github.com': " => "\x04",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == abort_prompt
@@ -2202,8 +2202,8 @@ mktempdir() do dir
 
                 # User provides an empty private key which triggers a re-prompt
                 challenges = [
-                    "Private key location for 'git@github.com':" => "\n",
-                    "Private key location for 'git@github.com':" => "\x04",
+                    "Private key location for 'git@github.com': " => "\n",
+                    "Private key location for 'git@github.com': " => "\x04",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == abort_prompt
@@ -2212,9 +2212,9 @@ mktempdir() do dir
                 # User provides an invalid private key until prompt limit reached.
                 # Note: the prompt should not supply an invalid default.
                 challenges = [
-                    "Private key location for 'git@github.com':" => "foo\n",
-                    "Private key location for 'git@github.com' [foo]:" => "foo\n",
-                    "Private key location for 'git@github.com' [foo]:" => "foo\n",
+                    "Private key location for 'git@github.com': " => "foo\n",
+                    "Private key location for 'git@github.com' [foo]: " => "foo\n",
+                    "Private key location for 'git@github.com' [foo]: " => "foo\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == prompt_limit
@@ -2226,7 +2226,7 @@ mktempdir() do dir
             withenv("SSH_KEY_PATH" => invalid_key,
                     "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
                 challenges = [
-                    "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
+                    "Private key location for 'git@github.com' [$invalid_key]: " => "$valid_key\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
@@ -2234,9 +2234,9 @@ mktempdir() do dir
 
                 # User repeatedly chooses the default invalid private key until prompt limit reached
                 challenges = [
-                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
-                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
-                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$invalid_key]: " => "\n",
+                    "Private key location for 'git@github.com' [$invalid_key]: " => "\n",
+                    "Private key location for 'git@github.com' [$invalid_key]: " => "\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == prompt_limit
@@ -2249,8 +2249,8 @@ mktempdir() do dir
                 @test !isfile(ENV["SSH_PUB_KEY_PATH"])
 
                 challenges = [
-                    # "Private key location for 'git@github.com' [$valid_key]:" => "\n"
-                    "Public key location for 'git@github.com' [$valid_key.public]:" => "$valid_key.pub\n"
+                    # "Private key location for 'git@github.com' [$valid_key]: " => "\n"
+                    "Public key location for 'git@github.com' [$valid_key.public]: " => "$valid_key.pub\n"
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
@@ -2264,8 +2264,8 @@ mktempdir() do dir
                 @test isfile(ENV["SSH_PUB_KEY_PATH"])
 
                 challenges = [
-                    "Private key location for 'git@github.com' [$valid_key]:" => "\n"
-                    "Public key location for 'git@github.com' [$invalid_key.pub]:" => "$valid_key.pub\n"
+                    "Private key location for 'git@github.com' [$valid_key]: " => "\n"
+                    "Public key location for 'git@github.com' [$invalid_key.pub]: " => "$valid_key.pub\n"
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
@@ -2290,8 +2290,8 @@ mktempdir() do dir
 
             # User provides a valid username and password
             challenges = [
-                "Username for 'https://github.com':" => "$valid_username\n",
-                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+                "Username for 'https://github.com': " => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com': " => "$valid_password\n",
             ]
             err, auth_attempts, p = challenge_prompt(https_ex, challenges)
             @test err == git_ok
@@ -2299,7 +2299,7 @@ mktempdir() do dir
 
             # User sends EOF in username prompt which aborts the credential request
             challenges = [
-                "Username for 'https://github.com':" => "\x04",
+                "Username for 'https://github.com': " => "\x04",
             ]
             err, auth_attempts, p = challenge_prompt(https_ex, challenges)
             @test err == abort_prompt
@@ -2307,8 +2307,8 @@ mktempdir() do dir
 
             # User sends EOF in password prompt which aborts the credential request
             challenges = [
-                "Username for 'https://github.com':" => "foo\n",
-                "Password for 'https://foo@github.com':" => "\x04",
+                "Username for 'https://github.com': " => "foo\n",
+                "Password for 'https://foo@github.com': " => "\x04",
             ]
             err, auth_attempts, p = challenge_prompt(https_ex, challenges)
             @test err == abort_prompt
@@ -2317,8 +2317,8 @@ mktempdir() do dir
             # User provides an empty password which aborts the credential request since we
             # cannot tell it apart from an EOF.
             challenges = [
-                "Username for 'https://github.com':" => "foo\n",
-                "Password for 'https://foo@github.com':" => "\n",
+                "Username for 'https://github.com': " => "foo\n",
+                "Password for 'https://foo@github.com': " => "\n",
             ]
             err, auth_attempts, p = challenge_prompt(https_ex, challenges)
             @test err == abort_prompt
@@ -2327,12 +2327,12 @@ mktempdir() do dir
             # User repeatedly chooses invalid username/password until the prompt limit is
             # reached
             challenges = [
-                "Username for 'https://github.com':" => "foo\n",
-                "Password for 'https://foo@github.com':" => "bar\n",
-                "Username for 'https://github.com' [foo]:" => "foo\n",
-                "Password for 'https://foo@github.com':" => "bar\n",
-                "Username for 'https://github.com' [foo]:" => "foo\n",
-                "Password for 'https://foo@github.com':" => "bar\n",
+                "Username for 'https://github.com': " => "foo\n",
+                "Password for 'https://foo@github.com': " => "bar\n",
+                "Username for 'https://github.com' [foo]: " => "foo\n",
+                "Password for 'https://foo@github.com': " => "bar\n",
+                "Username for 'https://github.com' [foo]: " => "foo\n",
+                "Password for 'https://foo@github.com': " => "bar\n",
             ]
             err, auth_attempts, p = challenge_prompt(https_ex, challenges)
             @test err == prompt_limit
@@ -2423,8 +2423,8 @@ mktempdir() do dir
                     # Confirm the private key if any other prompting is required
                     ex = gen_ex(valid_p_cred)
                     challenges = [
-                        "Private key location for 'git@github.com' [$default_key]:" => "\n",
-                        "Passphrase for $default_key:" => "$passphrase\n",
+                        "Private key location for 'git@github.com' [$default_key]: " => "\n",
+                        "Passphrase for $default_key: " => "$passphrase\n",
                     ]
                     err, auth_attempts, p = challenge_prompt(ex, challenges)
                     @test err == git_ok
@@ -2458,7 +2458,7 @@ mktempdir() do dir
 
                 # Expand tilde during the private key prompt
                 challenges = [
-                    "Private key location for 'git@github.com':" => "~/valid\n",
+                    "Private key location for 'git@github.com': " => "~/valid\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
@@ -2473,8 +2473,8 @@ mktempdir() do dir
 
                 # Expand tilde during the public key prompt
                 challenges = [
-                    "Private key location for 'git@github.com' [$valid_key]:" => "\n",
-                    "Public key location for 'git@github.com' [$invalid_key.pub]:" => "~/valid.pub\n",
+                    "Private key location for 'git@github.com' [$valid_key]: " => "\n",
+                    "Public key location for 'git@github.com' [$invalid_key.pub]: " => "~/valid.pub\n",
                 ]
                 err, auth_attempts, p = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
@@ -2595,8 +2595,8 @@ mktempdir() do dir
             # Add a credential into the cache
             ex = gen_ex()
             challenges = [
-                "Username for 'https://github.com':" => "$valid_username\n",
-                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+                "Username for 'https://github.com': " => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com': " => "$valid_password\n",
             ]
             err, auth_attempts, p = challenge_prompt(ex, challenges)
             cache = p.cache
@@ -2609,8 +2609,8 @@ mktempdir() do dir
             # Replace a credential in the cache
             ex = gen_ex(cached_cred=invalid_cred)
             challenges = [
-                "Username for 'https://github.com' [alice]:" => "$valid_username\n",
-                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+                "Username for 'https://github.com' [alice]: " => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com': " => "$valid_password\n",
             ]
             err, auth_attempts, p = challenge_prompt(ex, challenges)
             cache = p.cache
@@ -2623,9 +2623,9 @@ mktempdir() do dir
             # Canceling a credential request should leave the cache unmodified
             ex = gen_ex(cached_cred=invalid_cred)
             challenges = [
-                "Username for 'https://github.com' [alice]:" => "foo\n",
-                "Password for 'https://foo@github.com':" => "bar\n",
-                "Username for 'https://github.com' [foo]:" => "\x04",
+                "Username for 'https://github.com' [alice]: " => "foo\n",
+                "Password for 'https://foo@github.com': " => "bar\n",
+                "Username for 'https://github.com' [foo]: " => "\x04",
             ]
             err, auth_attempts, p = challenge_prompt(ex, challenges)
             cache = p.cache
@@ -2674,8 +2674,8 @@ mktempdir() do dir
 
             # Username is supplied from the git configuration file
             challenges = [
-                "Username for 'https://github.com' [$valid_username]:" => "\n",
-                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+                "Username for 'https://github.com' [$valid_username]: " => "\n",
+                "Password for 'https://$valid_username@github.com': " => "$valid_password\n",
             ]
             err, auth_attempts, p = challenge_prompt(https_ex, challenges)
             @test err == git_ok
@@ -2770,10 +2770,10 @@ mktempdir() do dir
             end
 
             challenges = [
-                "Username for 'https://github.com':" => "$valid_username\n",
-                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
-                "Username for 'https://myhost.com':" => "$valid_username\n",
-                "Password for 'https://$valid_username@myhost.com':" => "$valid_password\n",
+                "Username for 'https://github.com': " => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com': " => "$valid_password\n",
+                "Username for 'https://myhost.com': " => "$valid_username\n",
+                "Password for 'https://$valid_username@myhost.com': " => "$valid_password\n",
             ]
             first_result, second_result = challenge_prompt(ex, challenges)
 

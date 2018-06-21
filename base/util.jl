@@ -459,7 +459,7 @@ function getpass end
 
 if Sys.iswindows()
 function getpass(prompt::AbstractString)
-    print(prompt, ':')
+    print(prompt, ": ")
     flush(stdout)
     s = SecretBuffer()
     plen = 0
@@ -479,7 +479,7 @@ function getpass(prompt::AbstractString)
 end
 else
 function getpass(prompt::AbstractString)
-    msg = string(prompt, ':')
+    msg = string(prompt, ": ")
     unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
 end
 end
@@ -494,7 +494,7 @@ then the user can enter just a newline character to select the `default`.
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
 function prompt(message::AbstractString; default::AbstractString="")
-    msg = !isempty(default) ? "$message [$default]:" : "$message:"
+    msg = !isempty(default) ? "$message [$default]: " : "$message: "
     print(msg)
     uinput = readline(keep=true)
     isempty(uinput) && return nothing  # Encountered an EOF
