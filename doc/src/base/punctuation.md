@@ -20,6 +20,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `⊻`         | bitwise xor operator                                                                        |
 | `*`         | multiply, or matrix multiply                                                                |
 | `()`        | the empty tuple                                                                             |
+| `⟨ ⟩`        | the angle bracket (calling [`anglebracket`](@ref))                                          |
 | `~`         | bitwise not operator                                                                        |
 | `\`         | backslash operator                                                                          |
 | `'`         | complex transpose operator Aᴴ                                                               |

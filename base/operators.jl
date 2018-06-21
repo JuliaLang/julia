@@ -906,4 +906,9 @@ julia> map(splat(+), zip(1:3,4:6))
 """
 splat(f) = args->f(args...)
 
+"""
+    anglebracket(x, y)
+
+The syntax `⟨x, y⟩` calls `anglebracket(x, y)`.
+"""
 function anglebracket end

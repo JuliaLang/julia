@@ -183,6 +183,7 @@ A few special expressions correspond to calls to functions with non-obvious name
 | `A[i] = x`        | [`setindex!`](@ref)     |
 | `A.n`             | [`getproperty`](@ref Base.getproperty) |
 | `A.n = x`         | [`setproperty!`](@ref Base.setproperty!) |
+| `⟨x, y⟩`           | [`anglebracket`](@ref Base.anglebracket) |
 
 ## [Anonymous Functions](@id man-anonymous-functions)
 
