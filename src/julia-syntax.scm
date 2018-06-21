@@ -2243,6 +2243,18 @@
    '$
    (lambda (e) (error "\"$\" expression outside quote"))
 
+   'anglebracket
+   (lambda (e) (expand-forms `(call (top anglebracket) ,@(cdr e))))
+
+   'floorbracket
+   (lambda (e) (expand-forms `(call (top floorbracket) ,@(cdr e))))
+
+   'ceilbracket
+   (lambda (e) (expand-forms `(call (top ceilbracket) ,@(cdr e))))
+
+   'vertbracket
+   (lambda (e) (expand-forms `(call (top vertbracket) ,@(cdr e))))
+
    'vect
    (lambda (e)
      (if (has-parameters? (cdr e))

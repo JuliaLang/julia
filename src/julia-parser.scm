@@ -2362,19 +2362,19 @@
 
           ((eqv? t #\⟨ )
            (take-token s)
-           `(call anglebracket ,@(parse-call-arglist s #\⟩)))
+           `(anglebracket ,@(parse-call-arglist s #\⟩)))
 
           ((eqv? t #\⌊ )
            (take-token s)
-           `(call floorbracket ,@(parse-call-arglist s #\⌋)))
+           `(floorbracket ,@(parse-call-arglist s #\⌋)))
 
           ((eqv? t #\⌈ )
            (take-token s)
-           `(call ceilbracket ,@(parse-call-arglist s #\⌉)))
+           `(ceilbracket ,@(parse-call-arglist s #\⌉)))
 
           ((eqv? t #\‖ )
            (take-token s)
-           `(call vertbracket ,@(parse-call-arglist s #\‖)))
+           `(vertbracket ,@(parse-call-arglist s #\‖)))
 
           ;; string literal
           ((eqv? t #\")
