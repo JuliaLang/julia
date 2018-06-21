@@ -221,7 +221,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         return Core.SSAValue(x.id + statement_offset)
     end
     if isa(x, Core.GotoNode)
-        return Core.GotoNode(x.id + statement_offset)
+        return Core.GotoNode(x.label + statement_offset)
     end
     if isa(x, Core.SlotNumber)
         id = x.id
