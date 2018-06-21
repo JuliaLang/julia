@@ -2190,19 +2190,26 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
         assert(arg1.ispointer() && arg2.ispointer());
         jl_datatype_t *sty = (jl_datatype_t*)arg1.typ;
         size_t sz = jl_datatype_size(sty);
+        Value *varg1 = maybe_decay_tracked(data_pointer(ctx, arg1));
+        Value *varg2 = maybe_decay_tracked(data_pointer(ctx, arg2));
         if (sz > 512 && !sty->layout->haspadding) {
-            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func),
-                            {
-                            maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg1)), T_pint8),
-                            maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg2)), T_pint8),
-                            ConstantInt::get(T_size, sz)
-                            });
+            varg1 = decay_derived(varg1);
+            varg2 = decay_derived(varg2);
+            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func), {
+                        maybe_bitcast(ctx, varg1, T_pint8),
+                        maybe_bitcast(ctx, varg2, T_pint8),
+                        ConstantInt::get(T_size, sz)
+                    });
             return ctx.builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
         }
         else {
             Type *atp = at->getPointerTo();
-            Value *varg1 = maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg1)), atp);
-            Value *varg2 = maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg2)), atp);
+            if (cast<PointerType>(varg1->getType())->getAddressSpace() != cast<PointerType>(varg2->getType())->getAddressSpace()) {
+                varg1 = decay_derived(varg1);
+                varg2 = decay_derived(varg2);
+            }
+            varg1 = maybe_bitcast(ctx, varg1, atp);
+            varg2 = maybe_bitcast(ctx, varg2, atp);
             jl_svec_t *types = sty->types;
             Value *answer = ConstantInt::get(T_int1, 1);
             for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
@@ -2323,8 +2330,12 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : arg2.V;
         assert(varg1 && varg2 && (arg1.isboxed || arg1.TIndex) && (arg2.isboxed || arg2.TIndex) &&
                 "Only boxed types are valid for pointer comparison.");
-        varg1 = decay_derived(varg1);
-        varg2 = decay_derived(varg2);
+        varg1 = maybe_decay_tracked(varg1);
+        varg2 = maybe_decay_tracked(varg2);
+        if (cast<PointerType>(varg1->getType())->getAddressSpace() != cast<PointerType>(varg2->getType())->getAddressSpace()) {
+            varg1 = decay_derived(varg1);
+            varg2 = decay_derived(varg2);
+        }
         return ctx.builder.CreateICmpEQ(emit_bitcast(ctx, varg1, T_pint8),
                                         emit_bitcast(ctx, varg2, T_pint8));
     }
@@ -2714,7 +2725,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj)),
                                 jl_true);
                         }
-                        Value *ptr = decay_derived(data_pointer(ctx, obj));
+                        Value *ptr = maybe_decay_tracked(data_pointer(ctx, obj));
                         *ret = typed_load(ctx, ptr, vidx, jt, obj.tbaa, false);
                         return true;
                     }
@@ -2913,7 +2924,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         else {
             size_t offs = jl_field_offset(stt, fieldidx);
-            Value *ptr = emit_bitcast(ctx, decay_derived(data_pointer(ctx, obj)), T_pprjlvalue);
+            Value *ptr = emit_bitcast(ctx, maybe_decay_tracked(data_pointer(ctx, obj)), T_pprjlvalue);
             Value *llvm_idx = ConstantInt::get(T_size, offs / sizeof(void*));
             Value *addr = ctx.builder.CreateGEP(ptr, llvm_idx);
             // emit this using the same type as emit_getfield_knownidx
@@ -2974,7 +2985,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
         break;
     case jl_returninfo_t::SRet:
         result = emit_static_alloca(ctx, cft->getParamType(0)->getContainedType(0));
-        argvals[idx] = decay_derived(result);
+        argvals[idx] = result;
         idx++;
         break;
     case jl_returninfo_t::Union:
@@ -4152,7 +4163,7 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0)
     ctx.ptlsStates = ctx.builder.CreateCall(prepare_call(jltls_states_func));
     int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void*);
     ctx.signalPage = emit_nthptr_recast(ctx, ctx.ptlsStates, nthfield, tbaa_const,
-                                        PointerType::get(T_psize, 0), false);
+                                        PointerType::get(T_psize, 0));
 }
 
 static void emit_last_age_field(jl_codectx_t &ctx)
@@ -4368,9 +4379,10 @@ static Function* gen_cfun_wrapper(
     Value *age_ok = NULL;
     if (lam) {
         Value *lam_max = ctx.builder.CreateLoad(
+                T_size,
                 ctx.builder.CreateConstInBoundsGEP1_32(
                     T_size,
-                    emit_bitcast(ctx, decay_derived(literal_pointer_val(ctx, (jl_value_t*)lam)), T_psize),
+                    emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)lam), T_psize),
                     offsetof(jl_method_instance_t, max_world) / sizeof(size_t)));
         // XXX: age is always OK if we don't have a TLS. This is a hack required due to `@threadcall` abuse.
         // and adds quite a bit of complexity here, even though it's still wrong
@@ -4603,7 +4615,7 @@ static Function* gen_cfun_wrapper(
             if (sig.sret && jlfunc_sret)
                 result = emit_bitcast(ctx, sretPtr, cft->getParamType(0));
             else
-                result = decay_derived(emit_static_alloca(ctx, cft->getParamType(0)->getContainedType(0)));
+                result = emit_static_alloca(ctx, cft->getParamType(0)->getContainedType(0));
             args.push_back(result);
         }
         for (size_t i = 0; i < nargs + 1; i++) {
@@ -5056,7 +5068,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, const jl_returnin
         break;
     case jl_returninfo_t::SRet:
         result = ctx.builder.CreateAlloca(ftype->getParamType(0)->getContainedType(0));
-        args[idx] = decay_derived(result);
+        args[idx] = result;
         idx++;
         break;
     case jl_returninfo_t::Union:
@@ -5187,7 +5199,7 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
         if (!retboxed) {
             if (rt != T_void && deserves_sret(jlrettype, rt)) {
                 props.cc = jl_returninfo_t::SRet;
-                fsig.push_back(rt->getPointerTo(AddressSpace::Derived));
+                fsig.push_back(rt->getPointerTo());
                 rt = T_void;
             }
             else {
@@ -6445,8 +6457,8 @@ static std::unique_ptr<Module> emit_function(
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());
                     assert(!TindexN);
                 } else if (dest && val.typ != (jl_value_t*)jl_bottom_type) {
-                    ctx.builder.CreateMemCpy(decay_derived(dest),
-                        decay_derived(data_pointer(ctx, val)),
+                    ctx.builder.CreateMemCpy(maybe_decay_tracked(dest),
+                        maybe_decay_tracked(data_pointer(ctx, val)),
                         jl_datatype_size(phiType),
                         jl_datatype_align(phiType),
                         false);
