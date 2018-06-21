@@ -33,6 +33,9 @@ New language features
 
   * Added `⟂` (`\perp`) operator with comparison precedence ([#24404]).
 
+  * Added angle bracket `⟨ ⟩`, it is lowered to the function call `anglebracket`.
+    You can input them via LaTeX names `\langle`(`⟨`) and `\rangle`(`⟩`) ([#27712]).
+
   * The `missing` singleton object (of type `Missing`) has been added to represent
     missing values ([#24653]). It propagates through standard operators and mathematical functions,
     and implements three-valued logic, similar to SQLs `NULL` and R's `NA`.
@@ -1624,3 +1627,4 @@ Command-line option changes
 [#27212]: https://github.com/JuliaLang/julia/issues/27212
 [#27248]: https://github.com/JuliaLang/julia/issues/27248
 [#27401]: https://github.com/JuliaLang/julia/issues/27401
+[#27712]: https://github.com/JuliaLang/julia/issues/27712
