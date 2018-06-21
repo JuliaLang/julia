@@ -72,6 +72,9 @@ Language changes
   * Juxtaposing binary, octal, and hexadecimal literals is deprecated, since it can lead to
     confusing code such as `0xapi == 0xa * pi` ([#16356]).
 
+  * Numeric literal juxtaposition now has slighty lower precedence than unary operators,
+    so for example `√2x` parses as `(√2) * x` ([#27641]).
+
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
