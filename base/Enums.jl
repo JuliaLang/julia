@@ -20,7 +20,7 @@ function membershiptest(expr, values)
     if length(values) == hi - lo + 1
         :($lo <= $expr <= $hi)
     elseif length(values) < 20
-        foldl((x1,x2)->:($x1 || ($expr == $x2)), :($expr == $(values[1])), values[2:end])
+        foldl((x1,x2)->:($x1 || ($expr == $x2)), values[2:end]; init=:($expr == $(values[1])))
     else
         :($expr in $(Set(values)))
     end

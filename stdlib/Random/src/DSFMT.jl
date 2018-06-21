@@ -146,7 +146,7 @@ end
 # compute X^e mod m
 function powxmod(e::BigInt, m::GF2X)::GF2X
     e < 0 && throw(DomainError("e must be >= 0"))
-    foldl(GF2X(1), Base.ndigits0z(e, 2)-1:-1:0) do f, i
+    foldl(Base.ndigits0z(e, 2)-1:-1:0; init=GF2X(1)) do f, i
         MPZ.tstbit(e, i) ?
             mulxmod!(sqrmod!(f, m), m) :
             sqrmod!(f, m)

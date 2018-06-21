@@ -59,7 +59,7 @@ julia> a
 Set([7, 4, 3, 5, 1])
 ```
 """
-union!(s::AbstractSet, sets...) = foldl(union!, s, sets)
+union!(s::AbstractSet, sets...) = foldl(union!, sets; init=s)
 
 max_values(::Type) = typemax(Int)
 max_values(T::Type{<:Union{Nothing,BitIntegerSmall}}) = 1 << (8*sizeof(T))
@@ -109,7 +109,7 @@ const ∩ = intersect
 Intersect all passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
 """
-intersect!(s::AbstractSet, itrs...) = foldl(intersect!, s, itrs)
+intersect!(s::AbstractSet, itrs...) = foldl(intersect!, itrs; init=s)
 intersect!(s::AbstractSet, s2::AbstractSet) = filter!(_in(s2), s)
 intersect!(s::AbstractSet, itr) =
     intersect!(s, union!(emptymutable(s, eltype(itr)), itr))
@@ -147,8 +147,8 @@ julia> a
 Set([4])
 ```
 """
-setdiff!(s::AbstractSet, itrs...) = foldl(setdiff!, s, itrs)
-setdiff!(s::AbstractSet, itr) = foldl(delete!, s, itr)
+setdiff!(s::AbstractSet, itrs...) = foldl(setdiff!, itrs; init=s)
+setdiff!(s::AbstractSet, itr) = foldl(delete!, itr; init=s)
 
 
 """
@@ -185,7 +185,7 @@ Construct the symmetric difference of the passed in sets, and overwrite `s` with
 When `s` is an array, the order is maintained.
 Note that in this case the multiplicity of elements matters.
 """
-symdiff!(s::AbstractSet, itrs...) = foldl(symdiff!, s, itrs)
+symdiff!(s::AbstractSet, itrs...) = foldl(symdiff!, itrs; init=s)
 
 function symdiff!(s::AbstractSet, itr)
     for x in itr

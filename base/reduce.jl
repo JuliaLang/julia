@@ -4,6 +4,14 @@
 
 ###### Generic (map)reduce functions ######
 
+"""
+    Base.NoInit()
+
+Singleton used for the purpose of indicating to the [`reduce`](@ref) family of functions
+that no initial value has been specified for the reduction.
+"""
+struct NoInit; end
+
 if Int === Int32
     const SmallSigned = Union{Int8,Int16}
     const SmallUnsigned = Union{UInt8,UInt16}
@@ -34,12 +42,12 @@ mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
 
 ## foldl && mapfoldl
 
-@noinline function mapfoldl_impl(f, op, v0, itr, i...)
-    # Unroll the while loop once; if v0 is known, the call to op may
+@noinline function mapfoldl_impl(f, op, init, itr, i...)
+    # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     y = iterate(itr, i...)
-    y === nothing && return v0
-    v = op(v0, f(y[1]))
+    y === nothing && return init
+    v = op(init, f(y[1]))
     while true
         y = iterate(itr, y[2])
         y === nothing && break
@@ -48,70 +56,54 @@ mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
     return v
 end
 
-"""
-    mapfoldl(f, op, v0, itr)
-
-Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`](@ref).
-`v0` will be used exactly once.
-"""
-mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr)
-
-"""
-    mapfoldl(f, op, itr)
-
-Like `mapfoldl(f, op, v0, itr)`, but using the first element of `itr` to generate `v0`.
-Specifically, `mapfoldl(f, op, itr)` produces the same result as
-`mapfoldl(f, op, f(first(itr)), drop(itr, 1))`.
-In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
-"""
-function mapfoldl(f, op, itr)
+function mapfoldl_impl(f, op, ::NoInit, itr)
     y = iterate(itr)
     if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
     (x, i) = y
-    v0 = mapreduce_first(f, op, x)
-    mapfoldl_impl(f, op, v0, itr, i)
+    init = mapreduce_first(f, op, x)
+    mapfoldl_impl(f, op, init, itr, i)
 end
 
-"""
-    foldl(op, v0, itr)
-
-Like [`reduce`](@ref), but with guaranteed left associativity. `v0` will be used
-exactly once.
-
-# Examples
-```jldoctest
-julia> foldl(=>, 0, 1:4)
-(((0=>1)=>2)=>3) => 4
-```
-"""
-foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
 
 """
-    foldl(op, itr)
+    mapfoldl(f, op, itr; init=Base.NoInit())
 
-Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In general, this
-cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
+Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`](@ref).
+If provided, `init` will be used exactly once. In general, it will be necessary to provide
+`init` to work with empty collections.
+"""
+mapfoldl(f, op, itr; init=NoInit()) = mapfoldl_impl(f, op, init, itr)
+
+"""
+    foldl(op, itr; init=Base.NoInit())
+
+Like [`reduce`](@ref), but with guaranteed left associativity. If provided, `init` will be
+used exactly once. In general, it will be necessary to provide `init` to work with empty
+collections.
 
 # Examples
 ```jldoctest
 julia> foldl(=>, 1:4)
 ((1=>2)=>3) => 4
+
+julia> foldl(=>, 1:4; init=0)
+(((0=>1)=>2)=>3) => 4
 ```
 """
-foldl(op, itr) = mapfoldl(identity, op, itr)
+foldl(op, itr; init=NoInit()) = mapfoldl(identity, op, itr; init=init)
 
 ## foldr & mapfoldr
 
-function mapfoldr_impl(f, op, v0, itr, i::Integer)
-    # Unroll the while loop once; if v0 is known, the call to op may
+function mapfoldr_impl(f, op, init, itr, i::Integer)
+    # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     if isempty(itr) || i == 0
-        return v0
+        return init
     else
         x = itr[i]
-        v  = op(f(x), v0)
+        v  = op(f(x), init)
         while i > 1
             x = itr[i -= 1]
             v = op(f(x), v)
@@ -120,24 +112,7 @@ function mapfoldr_impl(f, op, v0, itr, i::Integer)
     end
 end
 
-"""
-    mapfoldr(f, op, v0, itr)
-
-Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref).
-`v0` will be used exactly once.
-"""
-mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, lastindex(itr))
-
-"""
-    mapfoldr(f, op, itr)
-
-Like `mapfoldr(f, op, v0, itr)`, but using the first element of `itr` to generate `v0`.
-Specifically, `mapfoldr(f, op, itr)` produces the same result as
-`mapfoldr(f, op, f(last(itr)), take(itr, length(itr)-1))`.
-In general, this cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
-"""
-function mapfoldr(f, op, itr)
-    i = lastindex(itr)
+function mapfoldr_impl(f, op, ::NoInit, itr, i::Integer)
     if isempty(itr)
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
@@ -145,32 +120,32 @@ function mapfoldr(f, op, itr)
 end
 
 """
-    foldr(op, v0, itr)
+    mapfoldr(f, op, itr; init=Base.NoInit())
 
-Like [`reduce`](@ref), but with guaranteed right associativity. `v0` will be used
-exactly once.
-
-# Examples
-```jldoctest
-julia> foldr(=>, 0, 1:4)
-1 => (2=>(3=>(4=>0)))
-```
+Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref). If
+provided, `init` will be used exactly once. In general, it will be necessary to provide
+`init` to work with empty collections.
 """
-foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
+mapfoldr(f, op, itr; init=NoInit()) = mapfoldr_impl(f, op, init, itr, lastindex(itr))
+
 
 """
-    foldr(op, itr)
+    foldr(op, itr; init=Base.NoInit())
 
-Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In general, this
-cannot be used with empty collections (see [`reduce(op, itr)`](@ref)).
+Like [`reduce`](@ref), but with guaranteed right associativity. If provided, `init` will be
+used exactly once. In general, it will be necessary to provide `init` to work with empty
+collections.
 
 # Examples
 ```jldoctest
 julia> foldr(=>, 1:4)
 1 => (2=>(3=>4))
+
+julia> foldr(=>, 1:4; init=0)
+1 => (2=>(3=>(4=>0)))
 ```
 """
-foldr(op, itr) = mapfoldr(identity, op, itr)
+foldr(op, itr; init=NoInit()) = mapfoldr(identity, op, itr; init=init)
 
 ## reduce & mapreduce
 
@@ -208,23 +183,17 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
-    mapreduce(f, op, itr)
-
-Like `mapreduce(f, op, v0, itr)`. In general, this cannot be used with empty collections
-(see `reduce(op, itr)`).
-"""
-mapreduce(f, op, itr) = mapfoldl(f, op, itr)
-
-"""
-    mapreduce(f, op, v0, itr)
+    mapreduce(f, op, itr; init=Base.NoInit())
 
 Apply function `f` to each element in `itr`, and then reduce the result using the binary
-function `op`. `v0` must be a neutral element for `op` that will be returned for empty
-collections. It is unspecified whether `v0` is used for non-empty collections.
+function `op`. If provided, `init` must be a neutral element for `op` that will be returne
+for empty collections. It is unspecified whether `init` is used for non-empty collections.
+In general, it will be necessary to provide `init` to work with empty collections.
 
-[`mapreduce`](@ref) is functionally equivalent to calling `reduce(op, v0,
-map(f, itr))`, but will in general execute faster since no intermediate collection needs to
-be created. See documentation for [`reduce`](@ref) and [`map`](@ref).
+[`mapreduce`](@ref) is functionally equivalent to calling
+`reduce(op, map(f, itr); init=init)`, but will in general execute faster since no
+intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
+[`map`](@ref).
 
 # Examples
 ```jldoctest
@@ -237,7 +206,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
+mapreduce(f, op, itr; init=NoInit()) = mapfoldl(f, op, itr; init=init)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -361,11 +330,15 @@ mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 _mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
 """
-    reduce(op, v0, itr)
+    reduce(op, itr; init=Base.NoInit())
 
-Reduce the given collection `itr` with the given binary operator `op`. `v0` must be a
-neutral element for `op` that will be returned for empty collections. It is unspecified
-whether `v0` is used for non-empty collections.
+Reduce the given collection `itr` with the given binary operator `op`. If provided, the
+initial value `init` must be a neutral element for `op` that will be returned for empty
+collections. It is unspecified whether `init` is used for non-empty collections.
+
+For empty collections, providing `init` will be necessary, except for some special cases
+(e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can determine the
+neutral element of `op`.
 
 Reductions for certain commonly-used operators may have special implementations, and
 should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
@@ -382,27 +355,16 @@ elements are not reordered if you use an ordered collection.
 
 # Examples
 ```jldoctest
-julia> reduce(*, 1, [2; 3; 4])
-24
-```
-"""
-reduce(op, v0, itr) = mapreduce(identity, op, v0, itr)
-
-"""
-    reduce(op, itr)
-
-Like `reduce(op, v0, itr)`. This cannot be used with empty collections, except for some
-special cases (e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can
-determine the neutral element of `op`.
-
-# Examples
-```jldoctest
 julia> reduce(*, [2; 3; 4])
 24
+
+julia> reduce(*, [2; 3; 4]; init=-1)
+-24
 ```
 """
-reduce(op, itr) = mapreduce(identity, op, itr)
-reduce(op, a::Number) = a
+reduce(op, itr; init=NoInit()) = mapreduce(identity, op, itr; init=init)
+
+reduce(op, a::Number) = a  # Do we want this?
 
 ###### Specific reduction functions ######
 

@@ -85,7 +85,7 @@ _typename(a::DataType) = Const(a.name)
 function tuple_tail_elem(@nospecialize(init), ct)
     # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
     tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
-    return Vararg{widenconst(foldl(tmerge_maybe_vararg, init, ct))}
+    return Vararg{widenconst(foldl(tmerge_maybe_vararg, ct; init=init))}
 end
 
 function countunionsplit(atypes)

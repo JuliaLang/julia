@@ -76,8 +76,8 @@ for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
 end
 
 # reducedim_initarray is called by
-reducedim_initarray(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), v0)
-reducedim_initarray(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray(A, region, v0, T)
+reducedim_initarray(A::AbstractArray, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
+reducedim_initarray(A::AbstractArray, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
 
 function reducedim_initarray0(A::AbstractArray{T}, region, f, ops) where T
     ri = reduced_indices0(A, region)
@@ -248,9 +248,9 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
     mapreducedim!(identity, op, R, A)
 
 """
-    mapreduce(f, op[, v0], A::AbstractArray; dims)
+    mapreduce(f, op, A::AbstractArray; dims=:, init=Base.NoInit())
 
-Evaluates to the same as `reduce(op, f(v0), map(f, A); dims)`, but is generally
+Evaluates to the same as `reduce(op, map(f, A); dims=dims, init=init)`, but is generally
 faster because the intermediate array is avoided.
 
 # Examples
@@ -271,30 +271,28 @@ julia> mapreduce(isodd, |, true, a, dims=1)
  true  true  true  true
 ```
 """
-mapreduce(f, op, v0, A::AbstractArray; dims=:) = _mapreduce_dim(f, op, v0, A, dims)
+mapreduce(f, op, A::AbstractArray; dims=:, init=NoInit()) = _mapreduce_dim(f, op, init, A, dims)
 
-mapreduce(f, op, A::AbstractArray; dims=:) = _mapreduce_dim(f, op, A, dims)
+_mapreduce_dim(f, op, init, A::AbstractArray, ::Colon) = mapfoldl(f, op, A; init=init)
 
-_mapreduce_dim(f, op, v0, A::AbstractArray, ::Colon) = mapfoldl(f, op, v0, A)
+_mapreduce_dim(f, op, ::NoInit, A::AbstractArray, ::Colon) = _mapreduce(f, op, IndexStyle(A), A)
 
-_mapreduce_dim(f, op, A::AbstractArray, ::Colon) = _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce_dim(f, op, init, A::AbstractArray, dims) =
+    mapreducedim!(f, op, reducedim_initarray(A, dims, init), A)
 
-_mapreduce_dim(f, op, v0, A::AbstractArray, dims) =
-    mapreducedim!(f, op, reducedim_initarray(A, dims, v0), A)
-
-_mapreduce_dim(f, op, A::AbstractArray, dims) =
+_mapreduce_dim(f, op, ::NoInit, A::AbstractArray, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """
-    reduce(f[, v0], A; dims)
+    reduce(f, A; dims=:, init=Base.NoInit())
 
 Reduce 2-argument function `f` along dimensions of `A`. `dims` is a vector specifying the
-dimensions to reduce, and `v0` is the initial value to use in the reductions. For `+`, `*`,
-`max` and `min` the `v0` argument is optional.
+dimensions to reduce, and `init` is the initial value to use in the reductions. For `+`, `*`,
+`max` and `min` the `init` argument is optional.
 
 The associativity of the reduction is implementation-dependent; if you need a particular
-associativity, e.g. left-to-right, you should write your own loop. See documentation for
-[`reduce`](@ref).
+associativity, e.g. left-to-right, you should write your own loop or consider using
+[`foldl`](@ref) or [`foldr`](@ref). See documentation for [`reduce`](@ref).
 
 # Examples
 ```jldoctest
@@ -317,15 +315,9 @@ julia> reduce(max, a, dims=1)
  4  8  12  16
 ```
 """
-reduce(op, v0, A::AbstractArray; dims=:) = _reduce_dim(op, v0, A, dims)
+reduce(op, A::AbstractArray; dims=:, init=NoInit()) = _reduce_dim(op, init, A, dims)
 
-_reduce_dim(op, v0, A, dims) = mapreduce(identity, op, v0, A, dims=dims)
-_reduce_dim(op, v0, A, ::Colon) = mapreduce(identity, op, v0, A)
-
-reduce(op, A::AbstractArray; dims=:) = _reduce_dim(op, A, dims)
-
-_reduce_dim(op, A, dims) = mapreduce(identity, op, A, dims=dims)
-_reduce_dim(op, A, ::Colon) = mapreduce(identity, op, A)
+_reduce_dim(op, init, A, dims) = mapreduce(identity, op, A; dims = dims, init=init)
 
 ##### Specific reduction functions #####
 """

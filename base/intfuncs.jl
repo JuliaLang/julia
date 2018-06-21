@@ -79,7 +79,7 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
-lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,one(eltype(abc)),abc)
+lcm(abc::AbstractArray{<:Integer}) = reduce(lcm, abc; init=one(eltype(abc)))
 
 function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
