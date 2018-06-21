@@ -43,14 +43,14 @@ isinteractive() = (is_interactive::Bool)
 
 const DEPOT_PATH = String[]
 
-function init_depot_path(BINDIR::String = Sys.BINDIR)
+function init_depot_path()
     if haskey(ENV, "JULIA_DEPOT_PATH")
         depots = split(ENV["JULIA_DEPOT_PATH"], Sys.iswindows() ? ';' : ':')
         append!(empty!(DEPOT_PATH), map(expanduser, depots))
     else
         push!(empty!(DEPOT_PATH), joinpath(homedir(), ".julia"))
-        push!(DEPOT_PATH, abspath(BINDIR, "..", "local", "share", "julia"))
-        push!(DEPOT_PATH, abspath(BINDIR, "..", "share", "julia"))
+        push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "local", "share", "julia"))
+        push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
     end
 end
 
@@ -113,7 +113,7 @@ function parse_load_path(str::String)
     return envs
 end
 
-function init_load_path(BINDIR::String = Sys.BINDIR)
+function init_load_path()
     if Base.creating_sysimg
         load_path = ["@stdlib"]
     elseif haskey(ENV, "JULIA_LOAD_PATH")
@@ -123,6 +123,8 @@ function init_load_path(BINDIR::String = Sys.BINDIR)
     end
     append!(empty!(LOAD_PATH), load_path)
 end
+
+## atexit: register exit hooks ##
 
 const atexit_hooks = []
 
