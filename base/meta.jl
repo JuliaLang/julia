@@ -253,14 +253,14 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                                                statement_offset, boundscheck)
             end
             x.args[3] = _instantiate_type_in_env(x.args[3], type_signature, static_param_values)
-            x.args[4] = svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[4]]...)
+            x.args[4] = Core.svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[4]]...)
         elseif head === :foreigncall
             @assert !isa(type_signature, UnionAll) || !isempty(static_param_values)
             for i = 1:length(x.args)
                 if i == 2
                     x.args[2] = _instantiate_type_in_env(x.args[2], type_signature, static_param_values)
                 elseif i == 3
-                    x.args[3] = svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[3]]...)
+                    x.args[3] = Core.svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[3]]...)
                 elseif i == 4
                     @assert isa((x.args[4]::QuoteNode).value, Symbol)
                 elseif i == 5
