@@ -648,22 +648,27 @@ julia> dot(x, y)
 function dot(x, y) # arbitrary iterables
     ix = iterate(x)
     iy = iterate(y)
-    if ix == nothing
-        if iy != nothing
+    if ix === nothing
+        if iy !== nothing
             throw(DimensionMismatch("x and y are of different lengths!"))
         end
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
-    if iy == nothing
+    if iy === nothing
         throw(DimensionMismatch("x and y are of different lengths!"))
     end
-    s = dot(ix[1], iy[1])
-    ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
-    while ix != nothing && iy != nothing
-        s += dot(ix[1], iy[1])
-        ix, iy = iterate(x, ix[2]), iterate(y, iy[2])
+    (vx, xs) = ix
+    (vy, ys) = iy
+    s = dot(vx, vy)
+    while true
+        ix = iterate(x, xs)
+        iy = iterate(y, ys)
+        ix === nothing && break
+        iy === nothing && break
+        (vx, xs), (vy, ys) = ix, iy
+        s += dot(vx, vy)
     end
-    if !(iy == nothing && ix == nothing)
+    if !(iy === nothing && ix === nothing)
         throw(DimensionMismatch("x and y are of different lengths!"))
     end
     return s
