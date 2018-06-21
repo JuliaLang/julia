@@ -2918,18 +2918,21 @@ f(x) = yt(x)
     `(call (core svec) (call (core svec) ,@newtypes)
            (call (core svec) ,@(append (cddr (cadddr te)) type-sp)))))
 
-;; collect all toplevel-butlast expressions inside `e`, and return
+;; collect all toplevel-butfirst expressions inside `e`, and return
 ;; (ex . stmts), where `ex` is the expression to evaluated and
 ;; `stmts` is a list of statements to move to the top level.
-;; TODO: this implementation seems quite inefficient.
 (define (lift-toplevel e)
-  (if (atom? e) (cons e '())
-      (let* ((rec (map lift-toplevel e))
-             (e2  (map car rec))
-             (tl  (apply append (map cdr rec))))
-        (if (eq? (car e) 'toplevel-butlast)
-            (cons (last e2) (append tl (butlast (cdr e2))))
-            (cons e2 tl)))))
+  (let ((top '()))
+    (define (lift- e)
+      (if (or (atom? e) (quoted? e))
+          e
+          (let ((e (cons (car e) (map lift- (cdr e)))))
+            (if (eq? (car e) 'toplevel-butfirst)
+                (begin (set! top (cons (cddr e) top))
+                       (cadr e))
+                e))))
+    (let ((e2 (lift- e)))
+      (cons e2 (apply append (reverse top))))))
 
 (define (first-non-meta blk)
   (let loop ((xs (cdr blk)))
@@ -3200,11 +3203,12 @@ f(x) = yt(x)
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
                                (newlam    (compact-and-renumber (linearize (car exprs)))))
-                          `(toplevel-butlast
-                            ,@top-stmts
+                          `(toplevel-butfirst
                             (block ,@sp-inits
                                    (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
-                                           ,(julia-bq-macro newlam)))))))
+                                           ,(julia-bq-macro newlam)))
+                            ,@top-stmts))))
+
                  ;; local case - lift to a new type at top level
                  (let* ((exists (get namemap name #f))
                         (type-name  (or exists
@@ -3302,16 +3306,16 @@ f(x) = yt(x)
                                       type-name
                                       `(call (core apply_type) ,type-name ,@P))
                                  ,@var-exprs))))
-                   `(toplevel-butlast
-                     ,@(if exists
-                           '()
-                            (begin (and name (put! namemap name type-name))
-                                   typedef))
-                     ,@sp-inits
-                     ,@mk-method
+                   `(toplevel-butfirst
                      ,(if exists
                           '(null)
-                          (convert-assignment name mk-closure fname lam interp)))))))
+                          (convert-assignment name mk-closure fname lam interp))
+                     ,@(if exists
+                           '()
+                           (begin (and name (put! namemap name type-name))
+                                  typedef))
+                     ,@sp-inits
+                     ,@mk-method)))))
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
            (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
                      (list-tail (car (lam:vinfo e)) (length (lam:args e))))
