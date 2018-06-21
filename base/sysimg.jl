@@ -427,10 +427,8 @@ include("util.jl")
 
 creating_sysimg = true
 # set up depot & load paths to be able to find stdlib packages
-let BINDIR = Sys.BINDIR
-    init_depot_path(BINDIR)
-    init_load_path(BINDIR)
-end
+init_depot_path()
+init_load_path()
 
 include("asyncmap.jl")
 
