@@ -197,6 +197,7 @@ export
     anglebracket,
     floorbracket,
     ceilbracket,
+    vertbracket,
 
 # scalar math
     @evalpoly,

@@ -79,6 +79,8 @@ mean(A::AbstractArray; dims=:) = _mean(A, dims)
 _mean(A::AbstractArray{T}, region) where {T} = mean!(reducedim_init(t -> t/2, +, A, region), A)
 _mean(A::AbstractArray, ::Colon) = sum(A) / _length(A)
 
+anglebracket(A::AbstractArray) = mean(A)
+
 ##### median & quantiles #####
 
 """

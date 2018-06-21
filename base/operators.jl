@@ -907,5 +907,7 @@ julia> map(splat(+), zip(1:3,4:6))
 splat(f) = args->f(args...)
 
 anglebracket(x::Real, y::Real) = x * y
+anglebracket(x::Real) = x
 floorbracket(x::Real) = floor(Int, x)
 ceilbracket(x::Real) = ceil(Int, x)
+vertbracket(x::Real) = abs(x)
