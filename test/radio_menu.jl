@@ -1,10 +1,6 @@
 # Check to make sure types are imported properly
 @test RadioMenu <: TerminalMenus.AbstractMenu
 
-# Invalid Menu Params
-@test_throws ErrorException RadioMenu(["one"])
-@test_throws ErrorException RadioMenu(["one", "two", "three"], pagesize=1)
-
 # Constructor
 @test RadioMenu(["one", "two", "three"]).pagesize == 3
 @test RadioMenu(string.(1:30), pagesize=-1).pagesize == 30
@@ -38,3 +34,7 @@ TerminalMenus.writeLine(buf, radio_menu, 1, true, term_width)
 # Test using STDIN
 radio_menu = RadioMenu(string.(1:10))
 @test simulateInput(3, radio_menu, :down, :down, :enter)
+radio_menu = RadioMenu(["single option"])
+@test simulateInput(1, radio_menu, :up, :up, :down, :up, :enter)
+radio_menu = RadioMenu(string.(1:3), pagesize=1)
+@test simulateInput(3, radio_menu, :down, :down, :down, :down, :enter)
