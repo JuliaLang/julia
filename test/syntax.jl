@@ -1353,6 +1353,14 @@ end
 # issue #25994
 @test Meta.parse("[a\nfor a in b]") == Expr(:comprehension, Expr(:generator, :a, Expr(:(=), :a, :b)))
 
+# pr 27712
+@test Meta.parse("⟨⟩") == Expr(:anglebracket)
+@test Meta.parse("⟨a,b⟩") == Expr(:anglebracket, :a, :b)
+@test Meta.lower(@__MODULE__, :(⟨a;⟩)) == Expr(:error, "unexpected semicolon inside ⟨ ⟩")
+@test_throws ParseError Meta.parse("⟨a b⟩")
+@test_throws ParseError Meta.parse("⟨1 2;3 4⟩")
+@test Meta.parse("f⟨x⟩") == :(f * $(Expr(:anglebracket, :x)))
+
 # Module name cannot be a reserved word.
 @test_throws ParseError Meta.parse("module module end")
 
