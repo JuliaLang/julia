@@ -70,7 +70,7 @@ end
 # this will inherit an existing JULIA_LOAD_PATH value or if there is none, leave
 # a trailing empty entry in JULIA_LOAD_PATH which will be replaced with defaults.
 
-const DEFAULT_LOAD_PATH = ["@v#.#", "@stdlib"]
+const DEFAULT_LOAD_PATH = ["@@", "@v#.#", "@stdlib"]
 
 """
     LOAD_PATH
@@ -128,7 +128,8 @@ function init_load_path()
     elseif haskey(ENV, "JULIA_LOAD_PATH")
         load_path = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
-        load_path = DEFAULT_LOAD_PATH
+        load_path = filter!(env -> env !== nothing,
+            [env == "@" ? current_env() : env for env in DEFAULT_LOAD_PATH])
     end
     append!(empty!(LOAD_PATH), load_path)
 end
