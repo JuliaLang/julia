@@ -64,7 +64,7 @@ convert(::Type{SecretBuffer}, s::AbstractString) = SecretBuffer(String(s))
 """
     SecretBuffer!(data::Vector{UInt8})
 
-Initialize a new `SecretBuffer` with `data` and securely zero the original source argument.
+Initialize a new `SecretBuffer` from `data`, securely zeroing `data` afterwards.
 """
 function SecretBuffer!(d::Vector{UInt8})
     len = length(d)
