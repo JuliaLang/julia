@@ -1438,4 +1438,4 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
 end
 
 # pr #27668
-@test (try Meta.parse("map(1) do x...; end"); catch; 0; end) isa Expr
+@test Meta.parse("map(1) do x...; end") isa Expr
