@@ -279,10 +279,10 @@ CachingPool(workers()) do wp
     pmap(wp, i -> sum(foo) + i, 1:100);
 end
 """
-function CachingPool(fun, workers::Vector{Int})
+function CachingPool(func, workers::Vector{Int})
     pool = CachingPool(workers)
     try
-        fun(pool)
+        func(pool)
     finally
         clear!(pool)
     end
