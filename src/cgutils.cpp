@@ -1979,17 +1979,10 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     return tpl;
 }
 
-static Value *call_with_signed(jl_codectx_t &ctx, Function *sfunc, Value *v)
+static Value *call_with_attrs(jl_codectx_t &ctx, Function *func, Value *v)
 {
-    CallInst *Call = ctx.builder.CreateCall(prepare_call(sfunc), v);
-    Call->addAttribute(1, Attribute::SExt);
-    return Call;
-}
-
-static Value *call_with_unsigned(jl_codectx_t &ctx, Function *ufunc, Value *v)
-{
-    CallInst *Call = ctx.builder.CreateCall(prepare_call(ufunc), v);
-    Call->addAttribute(1, Attribute::ZExt);
+    CallInst *Call = ctx.builder.CreateCall(prepare_call(func), v);
+    Call->setAttributes(func->getAttributes());
     return Call;
 }
 
@@ -2024,34 +2017,34 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     assert(jl_is_datatype(jb));
     Value *box = NULL;
     if (jb == jl_int8_type)
-        box = call_with_signed(ctx, box_int8_func, as_value(ctx, t, vinfo));
+        box = call_with_attrs(ctx, box_int8_func, as_value(ctx, t, vinfo));
     else if (jb == jl_int16_type)
-        box = call_with_signed(ctx, box_int16_func, as_value(ctx, t, vinfo));
+        box = call_with_attrs(ctx, box_int16_func, as_value(ctx, t, vinfo));
     else if (jb == jl_int32_type)
-        box = call_with_signed(ctx, box_int32_func, as_value(ctx, t, vinfo));
+        box = call_with_attrs(ctx, box_int32_func, as_value(ctx, t, vinfo));
     else if (jb == jl_int64_type)
-        box = call_with_signed(ctx, box_int64_func, as_value(ctx, t, vinfo));
+        box = call_with_attrs(ctx, box_int64_func, as_value(ctx, t, vinfo));
     else if (jb == jl_float32_type)
         box = ctx.builder.CreateCall(prepare_call(box_float32_func), as_value(ctx, t, vinfo));
     //if (jb == jl_float64_type)
     //  box = ctx.builder.CreateCall(box_float64_func, as_value(ctx, t, vinfo);
     // for Float64, fall through to generic case below, to inline alloc & init of Float64 box. cheap, I know.
     else if (jb == jl_uint8_type)
-        box = call_with_unsigned(ctx, box_uint8_func, as_value(ctx, t, vinfo));
+        box = call_with_attrs(ctx, box_uint8_func, as_value(ctx, t, vinfo));
     else if (jb == jl_uint16_type)
-        box = call_with_unsigned(ctx, box_uint16_func, as_value(ctx, t, vinfo));
+        box = call_with_attrs(ctx, box_uint16_func, as_value(ctx, t, vinfo));
     else if (jb == jl_uint32_type)
-        box = call_with_unsigned(ctx, box_uint32_func, as_value(ctx, t, vinfo));
+        box = call_with_attrs(ctx, box_uint32_func, as_value(ctx, t, vinfo));
     else if (jb == jl_uint64_type)
-        box = call_with_unsigned(ctx, box_uint64_func, as_value(ctx, t, vinfo));
+        box = call_with_attrs(ctx, box_uint64_func, as_value(ctx, t, vinfo));
     else if (jb == jl_char_type)
-        box = call_with_unsigned(ctx, box_char_func, as_value(ctx, t, vinfo));
+        box = call_with_attrs(ctx, box_char_func, as_value(ctx, t, vinfo));
     else if (jb == jl_ssavalue_type) {
         unsigned zero = 0;
         Value *v = as_value(ctx, t, vinfo);
         assert(v->getType() == jl_ssavalue_type->struct_decl);
         v = ctx.builder.CreateExtractValue(v, makeArrayRef(&zero, 1));
-        box = call_with_unsigned(ctx, box_ssavalue_func, v);
+        box = call_with_attrs(ctx, box_ssavalue_func, v);
     }
     else if (!jb->abstract && jl_datatype_nbits(jb) == 0) {
         // singleton

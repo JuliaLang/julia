@@ -442,7 +442,7 @@ To recap, two essential properties define immutability in Julia:
       always refer to the same mutable value even though that mutable value's content may
       itself be modified.
   * An object with an immutable type may be copied freely by the compiler since its
-    immutabity makes it impossible to programmatically distinguish between the original
+    immutability makes it impossible to programmatically distinguish between the original
     object and a copy.
     * In particular, this means that small enough immutable values like integers and floats
       are typically passed to functions in registers (or stack allocated).

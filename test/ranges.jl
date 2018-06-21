@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Dates, Random
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 
 # Compare precision in a manner sensitive to subnormals, which lose
 # precision compared to widening.
@@ -185,6 +186,12 @@ end
     @test isnan(Float64(x0/x0))
     @test isnan(Float64(x0/0))
     @test isnan(Float64(x0/0.0))
+
+    x = Base.TwicePrecision(Main.TestHelpers.PhysQuantity{1}(4.0))
+    @test x.hi*2 === Main.TestHelpers.PhysQuantity{1}(8.0)
+    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
+    @test x.hi/2 === Main.TestHelpers.PhysQuantity{1}(2.0)
+    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
