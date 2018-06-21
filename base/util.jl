@@ -445,9 +445,21 @@ function securezero! end
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
+"""
+    Base.getpass(message::AbstractString) -> `Base.SecretBuffer`
+
+Display a message and wait for the user to input a secret, returning an `IO`
+object containing the secret.
+
+Note that on Windows, the secret might be displayed as it is typed; see
+`Base.winprompt` for securely retrieving username/password pairs from a secure
+graphical interface.
+"""
+function getpass end
+
 if Sys.iswindows()
 function getpass(prompt::AbstractString)
-    print(prompt)
+    print(prompt, ':')
     flush(stdout)
     s = SecretBuffer()
     plen = 0
@@ -467,35 +479,29 @@ function getpass(prompt::AbstractString)
 end
 else
 function getpass(prompt::AbstractString)
-    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), prompt))
+    msg = string(prompt, ':')
+    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
 end
 end
 
 """
-    prompt(message; default="", password=false) -> Union{String, SecretBuffer, Nothing}
+    prompt(message; default="") -> Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
-then the user can enter just a newline character to select the `default`. Alternatively,
-when the `password` keyword is `true` the characters entered by the user will not be
-displayed and it will return a `SecretBuffer` instead of a `String`.
+then the user can enter just a newline character to select the `default`.
+
+See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
-function prompt(message::AbstractString; default::AbstractString="", password::Bool=false)
-    if Sys.iswindows() && password
-        error("Command line prompt not supported for password entry on windows. Use `Base.winprompt` instead")
-    end
+function prompt(message::AbstractString; default::AbstractString="")
     msg = !isempty(default) ? "$message [$default]:" : "$message:"
-    if password
-        # `getpass` automatically chomps. We cannot tell an EOF from a '\n'.
-        uinput = getpass(msg)
-    else
-        print(msg)
-        uinput = readline(keep=true)
-        isempty(uinput) && return nothing  # Encountered an EOF
-        uinput = chomp(uinput)
-    end
+    print(msg)
+    uinput = readline(keep=true)
+    isempty(uinput) && return nothing  # Encountered an EOF
+    uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
 end
+
 
 # Windows authentication prompt
 if Sys.iswindows()

@@ -151,7 +151,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
                 response === nothing && return user_abort()
                 cred.pass = response[2]
             else
-                response = Base.prompt("Passphrase for $(cred.prvkey)", password=true)
+                response = Base.getpass("Passphrase for $(cred.prvkey)")
                 response === nothing && return user_abort()
                 cred.pass = response
                 isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
@@ -209,7 +209,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
             cred.user = response
 
             url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
-            response = Base.prompt("Password for '$url'", password=true)
+            response = Base.getpass("Password for '$url'")
             response === nothing && return user_abort()
             cred.pass = response
             isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
