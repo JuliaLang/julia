@@ -321,8 +321,8 @@ function test_dirmonitor_wait2(tval)
     end
     @sync begin
         @async begin
-            sleep(tval)
             for i = 1:3
+                sleep(tval)
                 rm("$file$i")
             end
         end
