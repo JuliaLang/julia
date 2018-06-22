@@ -219,48 +219,6 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 #    return (t..., ntuple(i -> val, N - length(t))...)
 #end
 
-# constructing from an iterator
-
-# only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Core.Compiler!
-if nameof(@__MODULE__) === :Base
-
-(::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
-
-# resolve ambiguity between preceding and following methods
-All16{E,N}(x::Tuple) where {E,N} = convert(All16{E,N}, x)
-
-function (T::All16{E,N})(itr) where {E,N}
-    len = N+16
-    elts = collect(E, Iterators.take(itr,len))
-    if length(elts) != len
-        _totuple_err(T)
-    end
-    (elts...,)
-end
-
-(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
-
-_totuple(::Type{Tuple{}}, itr, s...) = ()
-
-function _totuple_err(@nospecialize T)
-    @_noinline_meta
-    throw(ArgumentError("too few elements for tuple type $T"))
-end
-
-function _totuple(T, itr, s...)
-    @_inline_meta
-    y = iterate(itr, s...)
-    y === nothing && _totuple_err(T)
-    (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
-end
-
-_totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
-
-_totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
-
-end
-
 ## comparison ##
 
 isequal(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _isequal(t1, t2)

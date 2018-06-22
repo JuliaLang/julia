@@ -141,33 +141,6 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-# TODO: a better / more infer-able definition would pehaps be
-#   tuple_type_head(T::Type) = fieldtype(T::Type{<:Tuple}, 1)
-tuple_type_head(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
-function tuple_type_head(T::Union)
-    @_pure_meta
-    return Union{tuple_type_head(T.a), tuple_type_head(T.b)}
-end
-function tuple_type_head(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
-    return unwrapva(T.parameters[1])
-end
-
-tuple_type_tail(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
-function tuple_type_tail(T::Union)
-    @_pure_meta
-    return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
-end
-function tuple_type_tail(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
-    if isvatuple(T) && length(T.parameters) == 1
-        return T
-    end
-    return Tuple{argtail(T.parameters...)...}
-end
-
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
     @_pure_meta
@@ -243,10 +216,15 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
-convert(::Type{Tuple{}}, x::Tuple{Any, Vararg{Any}}) = throw(MethodError(convert, (Tuple{}, x)))
-convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
-    (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
+convert(::Type{T}, x::T) where {T<:Tuple} = x
+
+tuple_convert_check(T, x) = isvatuple(T) || nfields(x) === fieldcount(T) || throw(MethodError(convert, (T, x)))
+
+function convert(::Type{T}, x::NTuple{N,Any}) where {T<:Tuple,N}
+    tuple_convert_check(T, x)
+    # TODO: this is inferring Unions for concrete converts
+    return ntuple(i -> convert(fieldtype(T, i), x[i]), Val(N))
+end
 
 # TODO: the following definitions are equivalent (behaviorally) to the above method
 # I think they may be faster / more efficient for inference,

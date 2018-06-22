@@ -173,6 +173,8 @@ include("iterators.jl")
 using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
 
+include("tupleconstructor.jl") # constructing a Tuple from an iterator
+
 include("namedtuple.jl")
 
 # numeric operations
