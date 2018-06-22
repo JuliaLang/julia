@@ -1062,15 +1062,16 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
 {
     jl_value_t *intersected_type = type;
 
-    // TODO: This optimization suffers from incorrectness issues due to broken subtyping for
-    // kind types (see https://github.com/JuliaLang/julia/issues/27078). For actual `isa`
-    // calls, this optimization should already have been performed upstream anyway, but
-    // having this optimization in codegen might still be beneficial for `typeassert`s
-    // if we can make it correct.
-    //
-    // Optional<bool> known_isa;
-    // if (x.constant)
-    //     known_isa = jl_isa(x.constant, type);
+    // TODO: The commented-out part of this optimization suffers from incorrectness issues
+    // due to broken subtyping for kind types (see
+    // https://github.com/JuliaLang/julia/issues/27078). For actual `isa` calls, this
+    // optimization should already have been performed upstream anyway, but having this
+    // optimization in codegen might still be beneficial for `typeassert`s if we can make it
+    // correct.
+    Optional<bool> known_isa;
+    if (x.constant) {
+        known_isa = jl_isa(x.constant, type);
+    }
     // else if (jl_subtype(x.typ, type))
     //     known_isa = true;
     // else {
@@ -1078,15 +1079,15 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
     //     if (intersected_type == (jl_value_t*)jl_bottom_type)
     //         known_isa = false;
     // }
-    // if (known_isa) {
-    //     if (!*known_isa && msg) {
-    //         emit_type_error(ctx, x, literal_pointer_val(ctx, type), *msg);
-    //         ctx.builder.CreateUnreachable();
-    //         BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx.f);
-    //         ctx.builder.SetInsertPoint(failBB);
-    //     }
-    //     return std::make_pair(ConstantInt::get(T_int1, *known_isa), true);
-    // }
+    if (known_isa) {
+        if (!*known_isa && msg) {
+            emit_type_error(ctx, x, literal_pointer_val(ctx, type), *msg);
+            ctx.builder.CreateUnreachable();
+            BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx.f);
+            ctx.builder.SetInsertPoint(failBB);
+        }
+        return std::make_pair(ConstantInt::get(T_int1, *known_isa), true);
+    }
 
     // intersection with Type needs to be handled specially
     if (jl_has_intersect_type_not_kind(type)) {
