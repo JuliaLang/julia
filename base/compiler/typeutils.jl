@@ -31,6 +31,12 @@ function issingletontype(@nospecialize t)
     return false
 end
 
+# Subtyping currently intentionally answers certain queries incorrectly for kind types. For
+# some of these queries, this check can be used to somewhat protect against making incorrect
+# decisions based on incorrect subtyping. Note that this check, itself, is broken for
+# certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
+isnotbrokensubtype(a, b) = (!iskindtype(b) || !isType(a) || issingletontype(a.parameters[1]))
+
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
 function isknownlength(t::DataType)
@@ -52,7 +58,7 @@ end
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
 function typesubtract(@nospecialize(a), @nospecialize(b))
-    if a <: b
+    if a <: b && isnotbrokensubtype(a, b)
         return Bottom
     end
     if isa(a, Union)
