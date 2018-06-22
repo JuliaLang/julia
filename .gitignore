@@ -25,3 +25,5 @@
 *.ji
 
 .DS_Store
+
+/deps/*.pem
