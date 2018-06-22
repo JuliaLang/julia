@@ -1368,6 +1368,11 @@ end
 # issue #26717
 @test Meta.lower(@__MODULE__, :( :(:) = 2 )) == Expr(:error, "invalid assignment location \":(:)\"")
 
+# issue #27690
+# previously, this was allowed since it thought `end` was being used for indexing.
+# however the quote should disable that context.
+@test_throws ParseError Meta.parse("Any[:(end)]")
+
 # issue #17781
 let ex = Meta.lower(@__MODULE__, Meta.parse("
     A = function (s, o...)
