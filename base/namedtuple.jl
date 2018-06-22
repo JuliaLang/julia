@@ -281,7 +281,7 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) 
 end
 
 """
-    delete(nt::NamedTuple{an}, omitnames::Tuple{Vararg{Symbol}}) where {an}
+    delete(nt::NamedTuple, omitnames::Tuple{Vararg{Symbol}})
 
 Construct a copy of a named tuple `nt`, omitting the fields named in `omitnames`.
 """
