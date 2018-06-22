@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Sockets, Random
+using Sockets, Random, Test
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
