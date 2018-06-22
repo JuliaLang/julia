@@ -1809,7 +1809,7 @@ used by [`summary`](@ref) to display type information in terms of sequences of
 function calls on objects. `toplevel` is `true` if this is
 the direct call from `summary` and `false` for nested (recursive) calls.
 
-The fallback definition is to print `x` as "::\$(typeof(x))",
+The fallback definition is to print `x` as "::\\\$(typeof(x))",
 representing argument `x` in terms of its type. (The double-colon is
 omitted if `toplevel=true`.) However, you can
 specialize this function for specific types to customize printing.
