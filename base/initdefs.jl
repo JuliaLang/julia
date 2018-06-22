@@ -80,7 +80,7 @@ environments or package directories when loading code. See Code Loading.
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
 
-function current_env(dir::AbstractString = pwd())
+function current_env(dir::AbstractString)
     # look for project file in current dir and parents
     home = homedir()
     while true
@@ -93,6 +93,15 @@ function current_env(dir::AbstractString = pwd())
         old, dir = dir, dirname(dir)
         dir == old && break
     end
+end
+
+function current_env()
+    dir = try pwd()
+    catch err
+        err isa UVError || rethrow(err)
+        return nothing
+    end
+    return current_env(dir)
 end
 
 function parse_load_path(str::String)
