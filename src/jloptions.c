@@ -51,7 +51,8 @@ jl_options_t jl_options = { 0,    // quiet
 #endif
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
                             JL_OPTIONS_DEPWARN_ON,    // deprecation warning
-                            0,    // method overwrite warning
+                            JL_OPTIONS_WARN_OVERWRITE_OFF,   // method overwrite warning
+                            JL_OPTIONS_WARN_MISSING_CODE_OFF,
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
                             JL_OPTIONS_FAST_MATH_DEFAULT,
@@ -156,6 +157,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_output_bc,
            opt_depwarn,
            opt_warn_overwrite,
+           opt_warn_missing_code,
            opt_inline,
            opt_polly,
            opt_math_mode,
@@ -210,6 +212,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "output-incremental",required_argument, 0, opt_incremental },
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "warn-overwrite",  required_argument, 0, opt_warn_overwrite },
+        { "warn-missing-code", required_argument, 0, opt_warn_missing_code },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
         { "math-mode",       required_argument, 0, opt_math_mode },
@@ -541,7 +544,15 @@ restart_switch:
             else if (!strcmp(optarg,"no"))
                 jl_options.warn_overwrite = JL_OPTIONS_WARN_OVERWRITE_OFF;
             else
-                jl_errorf("julia: invalid argument to --warn-overwrite={yes|no|} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --warn-overwrite={yes|no} (%s)", optarg);
+            break;
+        case opt_warn_missing_code:
+            if (!strcmp(optarg,"yes"))
+                jl_options.warn_missing_code = JL_OPTIONS_WARN_MISSING_CODE_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_options.warn_missing_code = JL_OPTIONS_WARN_MISSING_CODE_OFF;
+            else
+                jl_errorf("julia: invalid argument to --warn-missing-code={yes|no} (%s)", optarg);
             break;
         case opt_inline:
             if (!strcmp(optarg,"yes"))

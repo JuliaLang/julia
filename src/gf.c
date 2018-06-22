@@ -1750,7 +1750,8 @@ jl_callptr_t jl_compile_method_internal(jl_method_instance_t **pli, size_t world
             li->invoke = jl_fptr_interpret_call;
             return jl_fptr_interpret_call;
         }
-        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
+        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF &&
+            jl_options.warn_missing_code == JL_OPTIONS_WARN_MISSING_CODE_ON) {
             jl_printf(JL_STDERR, "code missing for ");
             jl_static_show(JL_STDERR, (jl_value_t*)li);
             jl_printf(JL_STDERR, " : sysimg may not have been built with --compile=all\n");
