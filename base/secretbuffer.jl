@@ -183,5 +183,4 @@ function shred!(f::Function, x)
     finally
         shred!(x)
     end
-    x
 end
