@@ -188,7 +188,7 @@ emitted from a `@generated` function.
 
 The performed transformations are:
 
-- replace slot numbers in the range `1:slot_offset` with the corresponding items in `slot_replacements`
+- replace slot numbers in the range `1:length(slot_replacements)` with the corresponding items in `slot_replacements`
 - increment other slot numbers by `slot_offset`
 - substitute static parameter placeholders (e.g. `Expr(:static_parameter, 1)`) with the corresponding
 values in `static_param_values`
