@@ -60,12 +60,15 @@ function isopen end
 Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
+
 function flush end
 function wait_connected end
 function wait_readnb end
 function wait_readbyte end
 function wait_close end
 function bytesavailable end
+function copy end
+function eof end
 
 """
     readavailable(stream)
@@ -120,8 +123,6 @@ julia> rm("myfile.txt")
 ```
 """
 function iswritable end
-function copy end
-function eof end
 
 """
     read(io::IO, T)
@@ -145,7 +146,7 @@ julia> read(io, String)
 "JuliaLang is a GitHub organization"
 ```
 """
-read(stream, t)
+function read end
 
 """
     write(io::IO, x)
@@ -477,28 +478,28 @@ ENDIAN_BOM
 
 Convert the endianness of a value from Network byte order (big-endian) to that used by the Host.
 """
-ntoh(x)
+function ntoh end
 
 """
     hton(x)
 
 Convert the endianness of a value from that used by the Host to Network byte order (big-endian).
 """
-hton(x)
+function hton end
 
 """
     ltoh(x)
 
 Convert the endianness of a value from Little-endian to that used by the Host.
 """
-ltoh(x)
+function ltoh end
 
 """
     htol(x)
 
 Convert the endianness of a value from that used by the Host to Little-endian.
 """
-htol(x)
+function htol end
 
 
 """
@@ -1047,9 +1048,9 @@ function bytesavailable_until_text(io::IO, width::Integer, chars="", truncmark="
                 truncidx == 0 && (truncidx = lastidx)
                 trunc = true
                 break
-            elseif wid >= width - truncwidth
+            elseif wid > width - truncwidth
                 truncidx == 0 && (truncidx = lastidx)
-                if wid >= width
+                if wid > width
                     trunc = true
                     break
                 end
@@ -1064,6 +1065,31 @@ end
 
 bytesavailable_until_text(io::AbstractPipe, width::Integer, chars="", truncmark="…") =
     bytesavailable_until_text(pipe_reader(io), width, chars, truncmark)
+
+"""
+    textwidth(io::IO)
+
+Compute the size of the IO stream in textwidth units.
+May destroy the current IO mark.
+"""
+function textwidth(io::IO)
+    # backup current state
+    # in preparation of examining its contents,
+    # starting at the current position
+    mark(io)
+    wid = 0
+    try
+        while !eof(io)
+            c = read(io, Char)
+            wid += textwidth(c)
+        end
+    finally
+        reset(io)
+    end
+    return wid
+end
+
+textwidth(io::AbstractPipe) = textwidth(pipe_reader(io))
 
 """
     skipchars(predicate, io::IO; linecomment=nothing)

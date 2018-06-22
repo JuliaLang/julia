@@ -128,6 +128,14 @@ function bytesavailable_until_text(io::IOFormatBuffer, width::Integer, chars="",
     return nb
 end
 
+function textwidth(io::IOFormatBuffer)
+    io.buf.readable = true
+    wid = textwidth(io.buf)
+    io.buf.readable = false
+    return wid
+end
+
+
 """
     truncate(io::IOFormatBuffer, n)
 

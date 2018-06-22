@@ -99,7 +99,7 @@ end
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     print(io, summary(iter))
     isempty(iter) && return
-    print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
+    print(io, ". ", isa(iter, KeySet) ? "Keys" : "Values", ":")
     limit::Bool = get(io, :limit, false)
     if limit
         sz = displaysize(io)
@@ -114,12 +114,16 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 
     for (i, v) in enumerate(iter)
         print(io, "\n  ")
-        i == rows < length(iter) && (print(io, "⋮"); break)
+        if i == rows < length(iter)
+            print(io, "⋮")
+            break
+        end
 
         if limit
-            str = sprint(show, v, context=io, sizehint=0)
-            str = _truncate_at_width_or_chars(str, cols, "\r\n")
-            print(io, str)
+            str = IOFormatBuffer()
+            print(IOContext(str, io), v)
+            truncate_text(str, cols, "\r\n")
+            write(io, str)
         else
             show(io, v)
         end
@@ -147,16 +151,16 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        ks = Vector{AbstractString}(undef, min(rows, length(t)))
-        vs = Vector{AbstractString}(undef, min(rows, length(t)))
+        ks = [IOFormatBuffer() for _ in 1:min(rows, length(t))]
+        vs = [IOFormatBuffer() for _ in 1:min(rows, length(t))]
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(show, k, context=recur_io, sizehint=0)
-            vs[i] = sprint(show, v, context=recur_io, sizehint=0)
-            keylen = clamp(length(ks[i]), keylen, cols)
-            vallen = clamp(length(vs[i]), vallen, cols)
+            show(IOContext(ks[i], recur_io), k)
+            show(IOContext(vs[i], recur_io), v)
+            keylen = clamp(textwidth(ks[i]), keylen, cols)
+            vallen = clamp(textwidth(vs[i]), vallen, cols)
         end
         if keylen > max(div(cols, 2), cols - vallen)
             keylen = max(cld(cols, 3), cols - vallen)
@@ -168,21 +172,28 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
         if i == rows < length(t)
-            print(io, rpad("⋮", keylen), " => ⋮")
+            print(io, "⋮", " "^(keylen - 1), " => ⋮")
             break
         end
 
         if limit
-            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+            let kstr = ks[i]
+                truncate_text(kstr, keylen, "\r\n")
+                wid = textwidth(kstr)
+                keylen > wid && print(kstr, " "^(keylen - wid))
+                write(io, kstr)
+            end
         else
             key = sprint(show, k, context=recur_io, sizehint=0)
+            print(recur_io, key)
         end
-        print(recur_io, key)
         print(io, " => ")
 
         if limit
-            val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
-            print(io, val)
+            let vstr = vs[i]
+                truncate_text(vstr, cols - keylen, "\r\n")
+                write(io, vstr)
+            end
         else
             show(recur_io, v)
         end

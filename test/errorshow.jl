@@ -10,21 +10,22 @@ c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
 
 buf = IOBuffer()
-Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
+Base.show_method_candidates(buf, Base.MethodError(method_c1, (1, 1, "")))
 @test String(take!(buf)) == "\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cfile$c1line"
 @test length(methods(method_c1)) <= 3 # because of '...' in candidate printing
-Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1,(1, 1, "")))
 
-@test String(take!(buf)) == "\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)$cfile$c1line"
-Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
+Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1, (1, 1, "")))
+@test String(take!(buf)) == "\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[0m, \e[91m::AbstractString...\e[0m)$cfile$c1line"
+
+Base.show_method_candidates(buf, Base.MethodError(method_c1, (1, "", "")))
 @test String(take!(buf)) == "\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cfile$c1line"
 
 # should match
-Base.show_method_candidates(buf, Base.MethodError(method_c1,(1., "", "")))
+Base.show_method_candidates(buf, Base.MethodError(method_c1, (1., "", "")))
 @test String(take!(buf)) == "\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cfile$c1line"
 
 # Have no matches so should return empty
-Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
+Base.show_method_candidates(buf, Base.MethodError(method_c1, (1, 1, 1)))
 @test String(take!(buf)) == ""
 
 # matches the implicit constructor -> convert method

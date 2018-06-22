@@ -80,4 +80,3 @@ let io = convert(IOContext, Base.IOFormatBuffer())
     @test String(take!(buf)) == "\e[31mred\e[39m, \e[34mblue\e[39m"
 end
 
-
