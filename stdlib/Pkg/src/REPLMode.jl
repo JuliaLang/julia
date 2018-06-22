@@ -17,7 +17,7 @@ using ..Types, ..Display, ..Operations, ..API
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
                    CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
                    CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE, CMD_PRECOMPILE,
-                   CMD_INSTANTIATE, CMD_RESOLVE)
+                   CMD_INSTANTIATE, CMD_RESOLVE, CMD_ACTIVATE, CMD_DEACTIVATE)
 
 struct Command
     kind::CommandKind
@@ -26,28 +26,30 @@ end
 Base.show(io::IO, cmd::Command) = print(io, cmd.val)
 
 const cmds = Dict(
-    "help"      => CMD_HELP,
-    "?"         => CMD_HELP,
-    "status"    => CMD_STATUS,
-    "st"        => CMD_STATUS,
-    "add"       => CMD_ADD,
-    "rm"        => CMD_RM,
-    "remove"    => CMD_RM,
-    "up"        => CMD_UP,
-    "update"    => CMD_UP,
-    "test"      => CMD_TEST,
-    "gc"        => CMD_GC,
-    "preview"   => CMD_PREVIEW,
-    "init"      => CMD_INIT,
-    "build"     => CMD_BUILD,
-    "pin"       => CMD_PIN,
-    "free"      => CMD_FREE,
-    "develop"   => CMD_DEVELOP,
-    "dev"       => CMD_DEVELOP,
-    "generate"  => CMD_GENERATE,
-    "precompile" => CMD_PRECOMPILE,
+    "help"        => CMD_HELP,
+    "?"           => CMD_HELP,
+    "status"      => CMD_STATUS,
+    "st"          => CMD_STATUS,
+    "add"         => CMD_ADD,
+    "rm"          => CMD_RM,
+    "remove"      => CMD_RM,
+    "up"          => CMD_UP,
+    "update"      => CMD_UP,
+    "test"        => CMD_TEST,
+    "gc"          => CMD_GC,
+    "preview"     => CMD_PREVIEW,
+    "init"        => CMD_INIT,
+    "build"       => CMD_BUILD,
+    "pin"         => CMD_PIN,
+    "free"        => CMD_FREE,
+    "develop"     => CMD_DEVELOP,
+    "dev"         => CMD_DEVELOP,
+    "generate"    => CMD_GENERATE,
+    "precompile"  => CMD_PRECOMPILE,
     "instantiate" => CMD_INSTANTIATE,
-    "resolve"   => CMD_RESOLVE,
+    "resolve"     => CMD_RESOLVE,
+    "activate"    => CMD_ACTIVATE,
+    "deactivate"  => CMD_DEACTIVATE,
 )
 
 #################
@@ -259,23 +261,25 @@ function do_cmd!(tokens::Vector{Token}, repl)
     end
     # Using invokelatest to hide the functions from inference.
     # Otherwise it would try to infer everything here.
-    cmd.kind == CMD_INIT     ? Base.invokelatest(          do_init!, ctx, tokens) :
-    cmd.kind == CMD_HELP     ? Base.invokelatest(          do_help!, ctx, tokens, repl) :
-    cmd.kind == CMD_RM       ? Base.invokelatest(            do_rm!, ctx, tokens) :
-    cmd.kind == CMD_ADD      ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_ADD) :
-    cmd.kind == CMD_CHECKOUT ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
-    cmd.kind == CMD_DEVELOP  ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
-    cmd.kind == CMD_UP       ? Base.invokelatest(            do_up!, ctx, tokens) :
-    cmd.kind == CMD_STATUS   ? Base.invokelatest(        do_status!, ctx, tokens) :
-    cmd.kind == CMD_TEST     ? Base.invokelatest(          do_test!, ctx, tokens) :
-    cmd.kind == CMD_GC       ? Base.invokelatest(            do_gc!, ctx, tokens) :
-    cmd.kind == CMD_BUILD    ? Base.invokelatest(         do_build!, ctx, tokens) :
-    cmd.kind == CMD_PIN      ? Base.invokelatest(           do_pin!, ctx, tokens) :
-    cmd.kind == CMD_FREE     ? Base.invokelatest(          do_free!, ctx, tokens) :
-    cmd.kind == CMD_GENERATE ? Base.invokelatest(      do_generate!, ctx, tokens) :
-    cmd.kind == CMD_RESOLVE  ? Base.invokelatest(       do_resolve!, ctx, tokens) :
-    cmd.kind == CMD_PRECOMPILE ? Base.invokelatest(  do_precompile!, ctx, tokens) :
-    cmd.kind == CMD_INSTANTIATE ? Base.invokelatest(do_instantiate!, ctx, tokens) :
+    cmd.kind == CMD_INIT        ? Base.invokelatest(          do_init!, ctx, tokens) :
+    cmd.kind == CMD_HELP        ? Base.invokelatest(          do_help!, ctx, tokens, repl) :
+    cmd.kind == CMD_RM          ? Base.invokelatest(            do_rm!, ctx, tokens) :
+    cmd.kind == CMD_ADD         ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_ADD) :
+    cmd.kind == CMD_CHECKOUT    ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
+    cmd.kind == CMD_DEVELOP     ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
+    cmd.kind == CMD_UP          ? Base.invokelatest(            do_up!, ctx, tokens) :
+    cmd.kind == CMD_STATUS      ? Base.invokelatest(        do_status!, ctx, tokens) :
+    cmd.kind == CMD_TEST        ? Base.invokelatest(          do_test!, ctx, tokens) :
+    cmd.kind == CMD_GC          ? Base.invokelatest(            do_gc!, ctx, tokens) :
+    cmd.kind == CMD_BUILD       ? Base.invokelatest(         do_build!, ctx, tokens) :
+    cmd.kind == CMD_PIN         ? Base.invokelatest(           do_pin!, ctx, tokens) :
+    cmd.kind == CMD_FREE        ? Base.invokelatest(          do_free!, ctx, tokens) :
+    cmd.kind == CMD_GENERATE    ? Base.invokelatest(      do_generate!, ctx, tokens) :
+    cmd.kind == CMD_RESOLVE     ? Base.invokelatest(       do_resolve!, ctx, tokens) :
+    cmd.kind == CMD_PRECOMPILE  ? Base.invokelatest(    do_precompile!, ctx, tokens) :
+    cmd.kind == CMD_INSTANTIATE ? Base.invokelatest(   do_instantiate!, ctx, tokens) :
+    cmd.kind == CMD_ACTIVATE    ? Base.invokelatest(      do_activate!, ctx, tokens) :
+    cmd.kind == CMD_DEACTIVATE  ? Base.invokelatest(    do_deactivate!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -339,6 +343,10 @@ developed packages
 `precompile`: precompile all the project dependencies
 
 `gc`: garbage collect packages not used for a significant time
+
+`activate`: set the primary environment the package manager manipulates
+
+`deactivate`: unset the primary environment the package manager manipulates
 """
 
 const helps = Dict(
@@ -774,6 +782,15 @@ function do_resolve!(ctx::Context, tokens::Vector{Token})
     API.resolve(ctx)
 end
 
+function do_activate!(ctx::Context, tokens::Vector{Token})
+    !isempty(tokens) && cmderror("`activate` does not take any arguments")
+    API.activate()
+end
+
+function do_deactivate!(ctx::Context, tokens::Vector{Token})
+    !isempty(tokens) && cmderror("`deactivate` does not take any arguments")
+    API.deactivate()
+end
 
 ######################
 # REPL mode creation #
