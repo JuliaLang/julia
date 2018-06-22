@@ -1717,3 +1717,8 @@ Base.iterate(i::Iterator27434, ::Val{2}) = i.z, Val(3)
 Base.iterate(::Iterator27434, ::Any) = nothing
 @test @inferred splat27434(Iterator27434(1, 2, 3)) == (1, 2, 3)
 @test Core.Compiler.return_type(splat27434, Tuple{typeof(Iterators.repeated(1))}) == Union{}
+
+# issue #27078
+f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
+T27078 = Vector{Vector{T}} where T
+@test f27078(T27078) === T27078.body
