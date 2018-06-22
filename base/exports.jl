@@ -482,6 +482,7 @@ export
     firstindex,
     collect,
     count,
+    delete,
     delete!,
     deleteat!,
     eltype,
