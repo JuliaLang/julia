@@ -744,7 +744,7 @@ The REPL command `precompile` can be used to precompile all the dependencies in 
 (HelloWorld) pkg> update; precompile
 ```
 
-do update the dependencies and then precompile them.
+to update the dependencies and then precompile them.
 
 ## Preview mode
 
@@ -766,7 +766,7 @@ However, nothing would be installed and your `Project.toml` and `Manifest.toml` 
 
 ## Using someone else's project
 
-Simple clone their project using e.g. `git clone`, `cd` to the project directory and call
+Simply clone their project using e.g. `git clone`, `cd` to the project directory and call
 
 ```
 (SomeProject) pkg> instantiate
