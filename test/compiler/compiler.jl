@@ -1683,3 +1683,8 @@ struct Foo19668
     Foo19668(; kwargs...) = new()
 end
 @test Base.return_types(Foo19668, ()) == [Foo19668]
+
+# issue #27078
+f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
+T27078 = Vector{Vector{T}} where T
+@test f27078(T27078) === T27078.body
