@@ -201,6 +201,12 @@ end
 abstr_nt_22194_3()
 @test Base.return_types(abstr_nt_22194_3, ()) == Any[Any]
 
+@test Base.dropnames((a=1, b=2), (:b,)) == (a=1,)
+@test Base.dropnames((a=1, b=2), (:a,)) == (b=2,)
+@test Base.dropnames((a=1, b=2, z=20), (:b,)) == (a=1, z=20)
+@test Base.dropnames((a=1, b=2, z=20), (:b, :q, :z)) == (a=1,)
+@test Base.dropnames((a=1, b=2, z=20), (:b, :q, :z, :a)) == NamedTuple()
+
 @test Base.structdiff((a=1, b=2), (b=3,)) == (a=1,)
 @test Base.structdiff((a=1, b=2, z=20), (b=3,)) == (a=1, z=20)
 @test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1)) == (a=1,)
