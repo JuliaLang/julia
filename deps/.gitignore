@@ -4,3 +4,6 @@
 
 # Ignore CA certificate store files
 *.pem
+
+# Include checksums of CA certificate store files
+!/checksums/*.pem
