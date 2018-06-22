@@ -281,6 +281,16 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) 
 end
 
 """
+    dropnames(nt::NamedTuple{an}, omitnames::Tuple{Vararg{Symbol}}) where {an}
+
+Construct a copy of a named tuple `nt`, omitting the fields named in `omitnames`.
+"""
+function dropnames(a::NamedTuple{an}, omitnames::Tuple{Vararg{Symbol}}) where {an}
+    names = diff_names(an, omitnames)
+    NamedTuple{names}(a)
+end
+
+"""
     structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn},Type{NamedTuple{bn}}}) where {an,bn}
 
 Construct a copy of named tuple `a`, except with fields that exist in `b` removed.
