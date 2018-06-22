@@ -291,6 +291,14 @@ function delete(a::NamedTuple{an}, omitnames::Tuple{Vararg{Symbol}}) where {an}
 end
 
 """
+    delete(nt::NamedTuple, omitname::Symbol)
+
+Construct a copy of a named tuple `nt`, omitting the field named with `omitname`.
+"""
+delete(a::NamedTuple, omitname::Symbol) = delete(a, (omitname,))
+
+
+"""
     structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn},Type{NamedTuple{bn}}}) where {an,bn}
 
 Construct a copy of named tuple `a`, except with fields that exist in `b` removed.
