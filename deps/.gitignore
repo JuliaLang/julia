@@ -1,3 +1,6 @@
 /srccache
 /build
 /scratch
+
+# Ignore CA certificate store files
+*.pem
