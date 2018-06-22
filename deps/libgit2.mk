@@ -57,11 +57,15 @@ $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-$(build_datarootdir)/julia/cert.pem:
-	$(JLDOWNLOAD) $(shell pwd)/cacert-2018-01-17.pem https://curl.haxx.se/ca/cacert-2018-01-17.pem
-	$(JLCHECKSUM) $(shell pwd)/cacert-2018-01-17.pem
+cacert-$(MOZILLA_CACERT_VERSION).pem:
+	$(JLDOWNLOAD) $@ https://curl.haxx.se/ca/cacert-$(MOZILLA_CACERT_VERSION).pem
+	$(JLCHECKSUM) $@
+
+libgit2-install-mozilla-cacert: cacert-$(MOZILLA_CACERT_VERSION).pem
 	mkdir -p $(build_datarootdir)/julia
-	mv $(shell pwd)/cacert-2018-01-17.pem $@
+	cp $< $(build_datarootdir)/julia/cert.pem
+
+$(build_datarootdir)/julia/cert.pem: libgit2-install-mozilla-cacert
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
