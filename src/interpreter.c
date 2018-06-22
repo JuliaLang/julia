@@ -362,6 +362,8 @@ SECT_INTERP static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
 {
     jl_value_t *res = eval_value(stmt, s);
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
+    if (!jl_is_phinode(stmt))
+        s->last_branch = s->ip;
 }
 
 SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
@@ -398,6 +400,23 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         jl_typeassert(val, jl_fieldref_noalloc(e, 1));
 #endif
         return val;
+    }
+    if (jl_is_phinode(e)) {
+        jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(e, 0);
+        ssize_t edge = -1;
+        for (int i = 0; i < jl_array_len(edges); ++i) {
+            size_t from = jl_unbox_long(jl_arrayref(edges, i));
+            if (from == s->last_branch + 1) {
+                edge = i;
+                break;
+            }
+        }
+        if (edge == -1) {
+            // edges list doesn't contain last branch. this value should be unused.
+            return NULL;
+        }
+        jl_value_t *val = jl_arrayref((jl_array_t*)jl_fieldref_noalloc(e, 1), edge);
+        return eval_value(val, s);
     }
     if (!jl_is_expr(e))
         return e;
@@ -531,46 +550,27 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 return eval_value(jl_exprarg(stmt, 0), s);
             }
             else if (head == assign_sym) {
-                jl_value_t *sym = jl_exprarg(stmt, 0);
-                jl_value_t *rhs = NULL;
-                if (jl_is_phinode(jl_exprarg(stmt, 1))) {
-                    jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(jl_exprarg(stmt, 1), 0);
-                    ssize_t edge = -1;
-                    for (int i = 0; i < jl_array_len(edges); ++i) {
-                        size_t from = jl_unbox_long(jl_arrayref(edges, i));
-                        if (from == s->last_branch) {
-                            edge = i;
-                            break;
-                        }
-                    }
-                    if (edge == -1) {
-                        jl_error("PhiNode edges do not contain last branch");
-                    }
-                    jl_value_t *val = jl_arrayref((jl_array_t*)jl_fieldref_noalloc(jl_exprarg(stmt, 1), 1), edge);
-                    rhs = eval_value(val, s);
-                } else {
-                    rhs = eval_value(jl_exprarg(stmt, 1), s);
-                }
-                if (jl_is_ssavalue(sym)) {
-                    ssize_t id = ((jl_ssavalue_t*)sym)->id - 1;
-                    if (id >= jl_source_nssavalues(s->src) || id < 0)
-                        jl_error("assignment to invalid SSAValue location");
-                    s->locals[jl_source_nslots(s->src) + id] = rhs;
-                }
-                else if (jl_is_slot(sym)) {
-                    ssize_t n = jl_slot_number(sym);
+                jl_value_t *lhs = jl_exprarg(stmt, 0);
+                jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
+                if (jl_is_slot(lhs)) {
+                    ssize_t n = jl_slot_number(lhs);
                     assert(n <= jl_source_nslots(s->src) && n > 0);
                     s->locals[n-1] = rhs;
                 }
                 else {
-                    jl_module_t *modu = s->module;
-                    if (jl_is_globalref(sym)) {
-                        modu = jl_globalref_mod(sym);
-                        sym = (jl_value_t*)jl_globalref_name(sym);
+                    jl_module_t *modu;
+                    jl_sym_t *sym;
+                    if (jl_is_globalref(lhs)) {
+                        modu = jl_globalref_mod(lhs);
+                        sym = jl_globalref_name(lhs);
                     }
-                    assert(jl_is_symbol(sym));
+                    else {
+                        assert(jl_is_symbol(lhs));
+                        modu = s->module;
+                        sym = (jl_sym_t*)lhs;
+                    }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)sym, 1);
+                    jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
                     jl_checked_assignment(b, rhs);
                     JL_GC_POP();
                 }
