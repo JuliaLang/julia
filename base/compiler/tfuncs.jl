@@ -53,12 +53,15 @@ add_tfunc(throw, 1, 1, (@nospecialize(x)) -> Bottom, 0)
 # returns (type, isexact)
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 function instanceof_tfunc(@nospecialize(t))
-    if t === Bottom || t === typeof(Bottom)
-        return Bottom, true
-    elseif isa(t, Const)
+    if isa(t, Const)
         if isa(t.val, Type)
             return t.val, true
         end
+        return Bottom, true
+    end
+    t = widenconst(t)
+    if t === Bottom || t === typeof(Bottom) || typeintersect(t, Type) === Bottom
+        return Bottom, true
     elseif isType(t)
         tp = t.parameters[1]
         return tp, !has_free_typevars(tp)
@@ -391,7 +394,7 @@ add_tfunc(isa, 2, 2,
                   if t === Bottom
                       return Const(false)
                   elseif v ⊑ t
-                      if isexact
+                      if isexact && isnotbrokensubtype(v, t)
                           return Const(true)
                       end
                   elseif isa(v, Const) || isa(v, Conditional) || isdispatchelem(v)
@@ -399,7 +402,9 @@ add_tfunc(isa, 2, 2,
                       # (ensuring the isa is precise)
                       return Const(false)
                   elseif isexact && typeintersect(v, t) === Bottom
-                      if !iskindtype(v) #= subtyping currently intentionally answers this query incorrectly for kinds =#
+                      # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
+                      # can't be trusted for kind types so we do an extra check here
+                      if !iskindtype(v)
                           return Const(false)
                       end
                   end
