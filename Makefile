@@ -500,7 +500,7 @@ full-source-dist: light-source-dist.tmp
 
 	# Create file full-source-dist.tmp to hold all the filenames that go into the tarball
 	cp light-source-dist.tmp full-source-dist.tmp
-	-ls deps/srccache/*.tar.gz deps/srccache/*.tar.bz2 deps/srccache/*.tar.xz deps/srccache/*.tgz deps/srccache/*.zip >> full-source-dist.tmp
+	-ls deps/srccache/*.tar.gz deps/srccache/*.tar.bz2 deps/srccache/*.tar.xz deps/srccache/*.tgz deps/srccache/*.zip deps/srccache/*.pem >> full-source-dist.tmp
 
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
