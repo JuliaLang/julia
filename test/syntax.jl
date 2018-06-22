@@ -1436,3 +1436,9 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
                      fex)
     @test macroexpand(@__MODULE__, ex) == Expr(:tuple, fex, 2)
 end
+
+# issue #27129
+f27129(x = 1) = (@Base._inline_meta; x)
+for meth in methods(f27129)
+    @test ccall(:jl_uncompress_ast, Any, (Any, Any), meth, meth.source).inlineable
+end
