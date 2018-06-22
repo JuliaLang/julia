@@ -4,6 +4,7 @@
 ccall
 Core.Intrinsics.cglobal
 Base.@cfunction
+Base.CFunction
 Base.unsafe_convert
 Base.cconvert
 Base.unsafe_load

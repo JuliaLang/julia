@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using SHA
 using Test
 
@@ -276,6 +278,7 @@ for f in sha_funcs
         f(UInt32[0x23467, 0x324775])
         warn("Non-UInt8 Arrays should fail")
         nerrors += 1
+    catch
     end
 end
 

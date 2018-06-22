@@ -80,7 +80,6 @@ Expr
     1: Symbol +
     2: Int64 1
     3: Int64 1
-  typ: Any
 ```
 
 `Expr` objects may also be nested:
@@ -324,8 +323,6 @@ Expr
         1: Symbol +
         2: Int64 1
         3: Int64 2
-      typ: Any
-  typ: Any
 ```
 
 As we have seen, such expressions support interpolation with `$`.
@@ -734,7 +731,6 @@ Expr
     3: String ") should equal b ("
     4: Symbol b
     5: String ")!"
-  typ: Any
 ```
 
 So now instead of getting a plain string in `msg_body`, the macro is receiving a full expression

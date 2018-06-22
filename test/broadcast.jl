@@ -120,22 +120,22 @@ for arr in (identity, as_sub)
     @test arr(BitArray([true false])) .^ arr([0, 3]) == [true true; true false]
 
     M = arr([11 12; 21 22])
-    @test broadcast_getindex(M, [2 1; 1 2], arr([1, 2])) == [21 11; 12 22]
-    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, -1]))
-    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, 2]), [2])
-    @test broadcast_getindex(M, [2 1; 1 2],arr([2, 1]), [1]) == [22 12; 11 21]
+    @test getindex.((M,), [2 1; 1 2], arr([1, 2])) == [21 11; 12 22]
+    @test_throws BoundsError getindex.((M,), [2 1; 1 2], arr([1, -1]))
+    @test_throws BoundsError getindex.((M,), [2 1; 1 2], arr([1, 2]), [2])
+    @test getindex.((M,), [2 1; 1 2],arr([2, 1]), [1]) == [22 12; 11 21]
 
     A = arr(zeros(2,2))
-    broadcast_setindex!(A, arr([21 11; 12 22]), [2 1; 1 2], arr([1, 2]))
+    setindex!.((A,), arr([21 11; 12 22]), [2 1; 1 2], arr([1, 2]))
     @test A == M
-    broadcast_setindex!(A, 5, [1,2], [2 2])
+    setindex!.((A,), 5, [1,2], [2 2])
     @test A == [11 5; 21 5]
-    broadcast_setindex!(A, 7, [1,2], [1 2])
+    setindex!.((A,), 7, [1,2], [1 2])
     @test A == fill(7, 2, 2)
     A = arr(zeros(3,3))
-    broadcast_setindex!(A, 10:12, 1:3, 1:3)
+    setindex!.((A,), 10:12, 1:3, 1:3)
     @test A == [10 0 0; 0 11 0; 0 0 12]
-    @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
+    @test_throws BoundsError setindex!.((A,), 7, [1,-1], [1 2])
 
     for f in ((==), (<) , (!=), (<=))
         bittest(f, arr([1 0; 0 1]), arr([1, 4]))
@@ -174,10 +174,10 @@ let x = [1, 3.2, 4.7],
     @test sin.(α) == broadcast(sin, α)
     @test sin.(3.2) == broadcast(sin, 3.2) == sin(3.2)
     @test factorial.(3) == broadcast(factorial, 3)
-    @test atan2.(x, y) == broadcast(atan2, x, y)
-    @test atan2.(x, y') == broadcast(atan2, x, y')
-    @test atan2.(x, α) == broadcast(atan2, x, α)
-    @test atan2.(α, y') == broadcast(atan2, α, y')
+    @test atan.(x, y) == broadcast(atan, x, y)
+    @test atan.(x, y') == broadcast(atan, x, y')
+    @test atan.(x, α) == broadcast(atan, x, α)
+    @test atan.(α, y') == broadcast(atan, α, y')
 end
 
 # issue 14725
@@ -215,13 +215,13 @@ end
 # PR #17300: loop fusion
 @test (x->x+1).((x->x+2).((x->x+3).(1:10))) == 7:16
 let A = [sqrt(i)+j for i = 1:3, j=1:4]
-    @test atan2.(log.(A), sum(A, dims=1)) == broadcast(atan2, broadcast(log, A), sum(A, dims=1))
+    @test atan.(log.(A), sum(A, dims=1)) == broadcast(atan, broadcast(log, A), sum(A, dims=1))
 end
 let x = sin.(1:10)
-    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x.+1, x.+2)
-    @test sin.(atan2.([x.+1,x.+2]...)) == sin.(atan2.(x.+1 ,x.+2)) == @. sin(atan2(x+1,x+2))
-    @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
-    @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
+    @test atan.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan, x.+1, x.+2)
+    @test sin.(atan.([x.+1,x.+2]...)) == sin.(atan.(x.+1 ,x.+2)) == @. sin(atan(x+1,x+2))
+    @test sin.(atan.(x, 3.7)) == broadcast(x -> sin(atan(x,3.7)), x)
+    @test atan.(x, 3.7) == broadcast(x -> atan(x,3.7), x) == broadcast(atan, x, 3.7)
 end
 # Use side effects to check for loop fusion.
 let g = Int[]
@@ -235,11 +235,11 @@ end
 # fusion with splatted args:
 let x = sin.(1:10), a = [x]
     @test cos.(x) == cos.(a...)
-    @test atan2.(x,x) == atan2.(a..., a...) == atan2.([x, x]...)
-    @test atan2.(x, cos.(x)) == atan2.(a..., cos.(x)) == broadcast(atan2, x, cos.(a...)) == broadcast(atan2, a..., cos.(a...))
+    @test atan.(x,x) == atan.(a..., a...) == atan.([x, x]...)
+    @test atan.(x, cos.(x)) == atan.(a..., cos.(x)) == broadcast(atan, x, cos.(a...)) == broadcast(atan, a..., cos.(a...))
     @test ((args...)->cos(args[1])).(x) == cos.(x) == ((y,args...)->cos(y)).(x)
 end
-@test atan2.(3, 4) == atan2(3, 4) == (() -> atan2(3, 4)).()
+@test atan.(3, 4) == atan(3, 4) == (() -> atan(3, 4)).()
 # fusion with keyword args:
 let x = [1:4;]
     f17300kw(x; y=0) = x + y
@@ -430,8 +430,8 @@ abstract type ArrayData{T,N} <: AbstractArray{T,N} end
 Base.getindex(A::ArrayData, i::Integer...) = A.data[i...]
 Base.setindex!(A::ArrayData, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::ArrayData) = size(A.data)
-Base.broadcast_similar(::Broadcast.ArrayStyle{A}, ::Type{T}, inds::Tuple, bc) where {A,T} =
-    A(Array{T}(undef, length.(inds)))
+Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{A}}, ::Type{T}) where {A,T} =
+    A(Array{T}(undef, length.(axes(bc))))
 
 struct Array19745{T,N} <: ArrayData{T,N}
     data::Array{T,N}
@@ -494,8 +494,8 @@ end
 struct AD2DimStyle <: Broadcast.AbstractArrayStyle{2}; end
 AD2DimStyle(::Val{2}) = AD2DimStyle()
 AD2DimStyle(::Val{N}) where {N} = Broadcast.DefaultArrayStyle{N}()
-Base.broadcast_similar(::AD2DimStyle, ::Type{T}, inds::Tuple, bc) where {T} =
-    AD2Dim(Array{T}(undef, length.(inds)))
+Base.similar(bc::Broadcast.Broadcasted{AD2DimStyle}, ::Type{T}) where {T} =
+    AD2Dim(Array{T}(undef, length.(axes(bc))))
 Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
 
 @testset "broadcasting for custom AbstractArray" begin
@@ -725,4 +725,34 @@ let f(args...) = *(args...)
     x, y, z = (1,2), 3, (4, 5)
     @test f.(x..., y, z...) == broadcast(f, x..., y, z...) == 120
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
+end
+
+# Issue #27446: Broadcasting pair operator
+let
+    c = ["foo", "bar"]
+    d = [1,2]
+    @test Dict(c .=> d) == Dict("foo" => 1, "bar" => 2)
+end
+
+# Broadcasted iterable/indexable APIs
+let
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5))
+    @test eachindex(bc) === Base.OneTo(5)
+    @test length(bc) === 5
+    @test ndims(bc) === 1
+    @test ndims(typeof(bc)) === 1
+    @test bc[1] === bc[CartesianIndex((1,))] === 5.0
+    @test copy(bc) == [v for v in bc] == collect(bc)
+    @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
+    @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5*ones(1, 4)))
+    @test eachindex(bc) === CartesianIndices((Base.OneTo(5), Base.OneTo(4)))
+    @test length(bc) === 20
+    @test ndims(bc) === 2
+    @test ndims(typeof(bc)) === 2
+    @test bc[1,1] == bc[CartesianIndex((1,1))] === 5.0
+    @test copy(bc) == [v for v in bc] == collect(bc)
+    @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
+    @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 struct DomTreeNode
     level::Int
     children::Vector{Int}
@@ -43,17 +45,14 @@ function dominated(domtree::DomTree, root::Int)
     doms
 end
 
-start(doms::DominatedBlocks) = nothing
-
-function next(doms::DominatedBlocks, state::Nothing)
+function iterate(doms::DominatedBlocks, state::Nothing=nothing)
+    isempty(doms.worklist) && return nothing
     bb = pop!(doms.worklist)
     for dominated in doms.domtree.nodes[bb].children
         push!(doms.worklist, dominated)
     end
     return (bb, nothing)
 end
-
-done(doms::DominatedBlocks, state::Nothing) = isempty(doms.worklist)
 
 # Construct Dom Tree
 # Simple algorithm - TODO: Switch to the fast version (e.g. https://tanujkhattar.wordpress.com/2016/01/11/dominator-tree-of-a-directed-graph/)

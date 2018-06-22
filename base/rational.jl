@@ -29,6 +29,7 @@ end
 
 Divide two integers or rational numbers, giving a [`Rational`](@ref) result.
 
+# Examples
 ```jldoctest
 julia> 3 // 5
 3//5
@@ -112,6 +113,7 @@ widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
 
+# Examples
 ```jldoctest
 julia> rationalize(5.6)
 28//5
@@ -127,7 +129,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
-    isnan(x) && return zero(T)//zero(T)
+    isnan(x) && return T(x)//one(T)
     isinf(x) && return (x < 0 ? -one(T) : one(T))//zero(T)
 
     p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
@@ -190,6 +192,7 @@ rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
 
 Numerator of the rational representation of `x`.
 
+# Examples
 ```jldoctest
 julia> numerator(2//3)
 2
@@ -206,6 +209,7 @@ numerator(x::Rational) = x.num
 
 Denominator of the rational representation of `x`.
 
+# Examples
 ```jldoctest
 julia> denominator(2//3)
 3

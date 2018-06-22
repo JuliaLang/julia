@@ -88,7 +88,7 @@ function entryid(te::GitTreeEntry)
     return oid
 end
 
-function Base.count(tree::GitTree)
+function count(tree::GitTree)
     return ccall((:git_tree_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), tree.ptr)
 end
 

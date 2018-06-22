@@ -157,14 +157,19 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
         throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
     end
 
+    if m == 0
+        return C
+    end
+
     α = S.dv
     β = S.ev
     @inbounds begin
         for j = 1:n
-            x₀, x₊ = B[1, j], B[2, j]
-            β₀ = β[1]
-            C[1, j] = α[1]*x₀ + x₊*β₀
-            for i = 2:m - 1
+            x₊ = B[1, j]
+            x₀ = zero(x₊)
+            # If m == 1 then β[1] is out of bounds
+            β₀ = m > 1 ? zero(β[1]) : zero(eltype(β))
+            for i = 1:m - 1
                 x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
                 β₋, β₀ = β₀, β[i]
                 C[i, j] = β₋*x₋ + α[i]*x₀ + β₀*x₊
@@ -176,20 +181,20 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     return C
 end
 
-(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
+(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
 
-eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigfact(A::SymTridiagonal{T}) where T = eigfact!(copy_oftype(A, eigtype(T)))
+eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
+eigen(A::SymTridiagonal{T}) where T = eigen!(copy_oftype(A, eigtype(T)))
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
+eigen!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
-eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), irange)
+eigen(A::SymTridiagonal{T}, irange::UnitRange) where T =
+    eigen!(copy_oftype(A, eigtype(T)), irange)
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
+eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
-eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), vl, vu)
+eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
+    eigen!(copy_oftype(A, eigtype(T)), vl, vu)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
 eigvals(A::SymTridiagonal{T}) where T = eigvals!(copy_oftype(A, eigtype(T)))
@@ -209,7 +214,7 @@ eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigfact(A).vectors
+eigvecs(A::SymTridiagonal) = eigen(A).vectors
 
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
@@ -394,7 +399,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         end
         new{T,V}(dl, d, du)
     end
-    # constructor used in lufact!
+    # constructor used in lu!
     function Tridiagonal{T,V}(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}}
         new{T,V}(dl, d, du, du2)
     end

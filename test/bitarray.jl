@@ -776,10 +776,11 @@ timesofar("dequeue")
     @check_bit_operation (-)(b0)  Vector{Int}
     @check_bit_operation broadcast(sign, b0) BitVector
 
-    @testset "flipbits!" begin
+    @testset "in-place .!" begin
         b1 = bitrand(n1, n2)
         i1 = Array(b1)
-        @test flipbits!(b1) == .~i1
+        b1 .= .!b1
+        @test b1 == .~i1
         @test bitcheck(b1)
     end
 end
@@ -1404,14 +1405,14 @@ timesofar("permutedims")
     b1 = bitrand(s1, s2, s3, s4)
     b2 = bitrand(s1, s3, s3, s4)
     b3 = bitrand(s1, s2, s3, s1)
-    @check_bit_operation cat(2, b1, b2) BitArray{4}
-    @check_bit_operation cat(4, b1, b3) BitArray{4}
-    @check_bit_operation cat(6, b1, b1) BitArray{6}
+    @check_bit_operation cat(b1, b2, dims=2) BitArray{4}
+    @check_bit_operation cat(b1, b3, dims=4) BitArray{4}
+    @check_bit_operation cat(b1, b1, dims=6) BitArray{6}
 
     b1 = bitrand(1, v1, 1)
-    @check_bit_operation cat(2, 0, b1, 1, 1, b1) Array{Int,3}
-    @check_bit_operation cat(2, 3, b1, 4, 5, b1) Array{Int,3}
-    @check_bit_operation cat(2, false, b1, true, true, b1) BitArray{3}
+    @check_bit_operation cat(0, b1, 1, 1, b1, dims=2) Array{Int,3}
+    @check_bit_operation cat(3, b1, 4, 5, b1, dims=2) Array{Int,3}
+    @check_bit_operation cat(false, b1, true, true, b1, dims=2) BitArray{3}
 
     b1 = bitrand(n1, n2)
     for m1 = 1:(n1-1), m2 = 1:(n2-1)
@@ -1466,8 +1467,10 @@ timesofar("cat")
     @check_bit_operation diff(b1, dims=2) Matrix{Int}
 
     b1 = bitrand(n1, n1)
-    @check_bit_operation svd(b1)
-    @check_bit_operation qr(b1)
+    @test ((svdb1, svdb1A) = (svd(b1), svd(Array(b1)));
+            svdb1.U == svdb1A.U && svdb1.S == svdb1A.S && svdb1.V == svdb1A.V)
+    @test ((qrb1, qrb1A) = (qr(b1), qr(Array(b1)));
+            qrb1.Q == qrb1A.Q && qrb1.R == qrb1A.R)
 
     b1 = bitrand(v1)
     @check_bit_operation diagm(0 => b1) BitMatrix

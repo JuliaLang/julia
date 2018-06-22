@@ -14,11 +14,9 @@ export quot,
 
 quot(ex) = Expr(:quote, ex)
 
-isexpr(ex::Expr, head)          = ex.head === head
-isexpr(ex::Expr, heads::Union{Set,Vector,Tuple}) = in(ex.head, heads)
-isexpr(ex,       head)          = false
-
-isexpr(ex,       head, n::Int)  = isexpr(ex, head) && length(ex.args) == n
+isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
+isexpr(@nospecialize(ex), heads::Union{Set,Vector,Tuple}) = isa(ex, Expr) && in(ex.head, heads)
+isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) == n
 
 
 # ---- show_sexpr: print an AST as an S-expression ----
@@ -43,8 +41,10 @@ function show_sexpr(io::IO, ex::Expr, indent::Int)
         print(io, ex.head === :block ? ",\n"*" "^inner : ", ")
         show_sexpr(io, arg, inner)
     end
-    if isempty(ex.args); print(io, ",)")
-    else print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
+    if isempty(ex.args)
+        print(io, ",)")
+    else
+        print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
     end
 end
 
@@ -55,7 +55,7 @@ Show every part of the representation of the given expression. Equivalent to
 [`dump(:(expr))`](@ref dump).
 """
 macro dump(expr)
-    dump(expr)
+    return :(dump($(QuoteNode(expr))))
 end
 
 """
@@ -165,11 +165,98 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
     if isa(ex,Expr) && ex.head === :error
         return ex
     end
-    if !done(str, pos)
+    if pos <= ncodeunits(str)
         raise && throw(ParseError("extra token after end of expression"))
         return Expr(:error, "extra token after end of expression")
     end
     return ex
 end
+
+# replace slots 1:na with argexprs, static params with spvals, and increment
+# other slots by offset.
+function substitute!(
+        @nospecialize(e), na::Int, argexprs::Vector{Any},
+        @nospecialize(spsig), spvals::Vector{Any},
+        offset::Int, boundscheck::Symbol)
+    if isa(e, Core.Slot)
+        id = e.id::Int
+        if 1 <= id <= na
+            ae = argexprs[id]
+            if isa(e, Core.TypedSlot) && isa(ae, Core.Slot)
+                return Core.TypedSlot(ae.id, e.typ)
+            end
+            return ae
+        end
+        if isa(e, Core.SlotNumber)
+            return Core.SlotNumber(id + offset)
+        else
+            return Core.TypedSlot(id + offset, e.typ)
+        end
+    end
+    if isa(e, Core.NewvarNode)
+        return Core.NewvarNode(substitute!(e.slot, na, argexprs, spsig, spvals, offset, boundscheck))
+    end
+    if isa(e, Core.PhiNode)
+        values = Vector{Any}(undef, length(e.values))
+        for i = 1:length(values)
+            isassigned(e.values, i) || continue
+            values[i] = substitute!(e.values[i], na, argexprs, spsig,
+                spvals, offset, boundscheck)
+        end
+        return Core.PhiNode(e.edges, values)
+    end
+    if isa(e, Core.PiNode)
+        return Core.PiNode(substitute!(e.val, na, argexprs, spsig, spvals, offset, boundscheck), e.typ)
+    end
+    if isa(e, Expr)
+        head = e.head
+        if head === :static_parameter
+            return QuoteNode(spvals[e.args[1]])
+        elseif head === :cfunction
+            @assert !isa(spsig, UnionAll) || !isempty(spvals)
+            if !(e.args[2] isa QuoteNode) # very common no-op
+                e.args[2] = substitute!(e.args[2], na, argexprs, spsig, spvals, offset, boundscheck)
+            end
+            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
+            e.args[4] = svec(Any[
+                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                for argt
+                in e.args[4] ]...)
+        elseif head === :foreigncall
+            @assert !isa(spsig, UnionAll) || !isempty(spvals)
+            for i = 1:length(e.args)
+                if i == 2
+                    e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
+                elseif i == 3
+                    e.args[3] = svec(Any[
+                        ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                        for argt
+                        in e.args[3] ]...)
+                elseif i == 4
+                    @assert isa((e.args[4]::QuoteNode).value, Symbol)
+                elseif i == 5
+                    @assert isa(e.args[5], Int)
+                else
+                    e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset, boundscheck)
+                end
+            end
+        elseif head === :boundscheck
+            if boundscheck === :propagate
+                return e
+            elseif boundscheck === :off
+                return false
+            else
+                return true
+            end
+        elseif !is_meta_expr_head(head)
+            for i = 1:length(e.args)
+                e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset, boundscheck)
+            end
+        end
+    end
+    return e
+end
+
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
 
 end # module

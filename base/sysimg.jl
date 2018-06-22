@@ -63,15 +63,11 @@ let SOURCE_PATH = ""
 end
 INCLUDE_STATE = 1 # include = Core.include
 
-baremodule MainInclude
-export include
-include(fname::AbstractString) = Main.Base.include(Main, fname)
-end
-
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
-eval(m, x) = Core.eval(m, x)
+eval(m::Module, x) = Core.eval(m, x)
+
 VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
 convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
@@ -295,6 +291,9 @@ end
     end
 end
 
+# missing values
+include("missing.jl")
+
 # version
 include("version.jl")
 
@@ -339,7 +338,6 @@ include("methodshow.jl")
 include("floatfuncs.jl")
 include("math.jl")
 using .Math
-import .Math: gamma
 const (√)=sqrt
 const (∛)=cbrt
 
@@ -404,7 +402,6 @@ include("channels.jl")
 
 # utilities
 include("deepcopy.jl")
-include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
@@ -414,13 +411,9 @@ include("stacktraces.jl")
 using .StackTraces
 
 include("initdefs.jl")
-include("client.jl")
 
 # statistics
 include("statistics.jl")
-
-# missing values
-include("missing.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -434,10 +427,8 @@ include("util.jl")
 
 creating_sysimg = true
 # set up depot & load paths to be able to find stdlib packages
-let BINDIR = Sys.BINDIR
-    init_depot_path(BINDIR)
-    init_load_path(BINDIR)
-end
+init_depot_path()
+init_load_path()
 
 include("asyncmap.jl")
 
@@ -449,6 +440,8 @@ include("deprecated.jl")
 
 # Some basic documentation
 include("docs/basedocs.jl")
+
+include("client.jl")
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
@@ -515,7 +508,6 @@ let
             :LibGit2,
             :Logging,
             :Sockets,
-
             :Printf,
             :Profile,
             :Dates,
@@ -523,16 +515,15 @@ let
             :Random,
             :UUIDs,
             :Future,
-            :Pkg,
+            :OldPkg,
             :LinearAlgebra,
-            :IterativeEigensolvers,
             :SparseArrays,
             :SuiteSparse,
             :SharedArrays,
             :Distributed,
+            :Pkg,
             :Test,
             :REPL,
-            :Pkg3,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
@@ -652,9 +643,6 @@ end
     @eval @deprecate_stdlib $(Symbol("@dateformat_str")) Dates true
     @deprecate_stdlib now Dates true
 
-    @deprecate_stdlib eigs IterativeEigensolvers true
-    @deprecate_stdlib svds IterativeEigensolvers true
-
     @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
     @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
 
@@ -750,7 +738,6 @@ end
     # @deprecate_stdlib kron        LinearAlgebra true
     @deprecate_stdlib ldltfact    LinearAlgebra true
     @deprecate_stdlib ldltfact!   LinearAlgebra true
-    @deprecate_stdlib linreg      LinearAlgebra true
     @deprecate_stdlib logabsdet   LinearAlgebra true
     @deprecate_stdlib logdet      LinearAlgebra true
     @deprecate_stdlib lu          LinearAlgebra true
@@ -870,6 +857,7 @@ end
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
     @deprecate_stdlib peakflops     InteractiveUtils true
+    @deprecate_stdlib clipboard     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
@@ -899,7 +887,6 @@ end
     @deprecate_stdlib send           Sockets true
     @deprecate_stdlib TCPSocket      Sockets true
     @deprecate_stdlib UDPSocket      Sockets true
-
 end
 end
 

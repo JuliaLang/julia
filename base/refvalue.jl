@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ### Methods for a Ref object that can store a single value of any type
 
 mutable struct RefValue{T} <: Ref{T}

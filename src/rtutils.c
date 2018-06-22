@@ -767,9 +767,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         char *name = jl_symbol_name(jl_globalref_name(v));
         n += jl_printf(out, jl_is_identifier(name) ? ".%s" : ".:(%s)", name);
     }
-    else if (vt == jl_labelnode_type) {
-        n += jl_printf(out, "%" PRIuPTR ":", jl_labelnode_label(v));
-    }
     else if (vt == jl_gotonode_type) {
         n += jl_printf(out, "goto %" PRIuPTR, jl_gotonode_label(v));
     }
@@ -816,8 +813,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 n += jl_printf(out, ",%c", sep);
                 n += jl_static_show_x(out, jl_exprarg(e,i), depth);
             }
-            n += jl_printf(out, ")::");
-            n += jl_static_show_x(out, e->etype, depth);
+            n += jl_printf(out, ")");
         }
     }
     else if (jl_is_array_type(vt)) {

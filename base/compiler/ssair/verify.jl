@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
         arg isa String && return esc(:(println($arg)))
@@ -28,6 +30,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 error()
             end
         end
+    elseif isa(op, Union{OldSSAValue, NewSSAValue})
+        #@Base.show ir
+        @verify_error "Left over SSA marker"
+        error()
     elseif isa(op, Union{SlotNumber, TypedSlot})
         @verify_error "Left over slot detected in converted IR"
         error()
@@ -47,6 +53,7 @@ function verify_ir(ir::IRCode)
         end
         last_end = last(block.stmts)
         for p in block.preds
+            p == 0 && continue
             if !(idx in ir.cfg.blocks[p].succs)
                 @verify_error "Predeccsor $p of block $idx not in successor list"
                 error()
@@ -90,6 +97,9 @@ function verify_ir(ir::IRCode)
                         #"""
                         #error()
                     end
+                elseif isa(val, GlobalRef) || isa(val, Expr)
+                    @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
+                    error()
                 end
                 check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1)
             end
@@ -109,8 +119,14 @@ function verify_ir(ir::IRCode)
             if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
                 if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
                     if ir.lines[idx] <= 0
-                        @verify_error "Missing line number information for statement $idx of $ir"
+                        #@verify_error "Missing line number information for statement $idx of $ir"
                     end
+                end
+            end
+            if isa(stmt, Expr) && stmt.head === :(=)
+                if stmt.args[1] isa SSAValue
+                    @verify_error "SSAValue as assignment LHS"
+                    error()
                 end
             end
             for op in userefs(stmt)

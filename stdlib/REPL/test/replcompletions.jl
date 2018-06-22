@@ -3,7 +3,7 @@
 using REPL.REPLCompletions
 using Test
 using Random
-import Pkg
+import OldPkg
 
 let ex = quote
     module CompletionFoo
@@ -82,19 +82,19 @@ let ex = quote
         test_dict_ℂ = Dict(1=>2)
     end
     ex.head = :toplevel
-    eval(Main, ex)
+    Core.eval(Main, ex)
 end
 
 function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
-    # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
+    # Unlike the version in test/pkg.jl, this does not run OldPkg.init so does not
     # clone METADATA (only Pkg and LibGit2 tests should need internet access)
     tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
-        @test !isdir(Pkg.dir())
+        @test !isdir(OldPkg.dir())
         try
-            mkpath(Pkg.dir())
-            @test isdir(Pkg.dir())
+            mkpath(OldPkg.dir())
+            @test isdir(OldPkg.dir())
             fn()
         finally
             rm(tmpdir, recursive=true)
@@ -496,31 +496,56 @@ end
 # Test completion of packages
 mkp(p) = ((@assert !isdir(p)); mkpath(p))
 temp_pkg_dir_noinit() do
-    # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
-    # but not <Mod>/ if no corresponding .jl file is found
-    pkg_dir = Pkg.dir("CompletionFooPackage", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
+    push!(LOAD_PATH, OldPkg.dir())
+    try
+        # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
+        # but not <Mod>/ if no corresponding .jl file is found
+        pkg_dir = OldPkg.dir("CompletionFooPackage", "src")
+        mkp(pkg_dir)
+        touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
 
-    pkg_dir = Pkg.dir("CompletionFooPackage2.jl", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
+        pkg_dir = OldPkg.dir("CompletionFooPackage2.jl", "src")
+        mkp(pkg_dir)
+        touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
 
-    touch(Pkg.dir("CompletionFooPackage3.jl"))
+        touch(OldPkg.dir("CompletionFooPackage3.jl"))
 
-    mkp(Pkg.dir("CompletionFooPackageNone"))
-    mkp(Pkg.dir("CompletionFooPackageNone2.jl"))
+        mkp(OldPkg.dir("CompletionFooPackageNone"))
+        mkp(OldPkg.dir("CompletionFooPackageNone2.jl"))
 
-    s = "using Completion"
-    c,r = test_complete(s)
-    @test "CompletionFoo" in c #The module
-    @test "CompletionFooPackage" in c #The package
-    @test "CompletionFooPackage2" in c #The package
-    @test "CompletionFooPackage3" in c #The package
-    @test !("CompletionFooPackageNone" in c) #The package
-    @test !("CompletionFooPackageNone2" in c) #The package
-    @test s[r] == "Completion"
+        s = "using Completion"
+        c,r = test_complete(s)
+        @test "CompletionFoo" in c #The module
+        @test "CompletionFooPackage" in c #The package
+        @test "CompletionFooPackage2" in c #The package
+        @test "CompletionFooPackage3" in c #The package
+        @test !("CompletionFooPackageNone" in c) #The package
+        @test !("CompletionFooPackageNone2" in c) #The package
+        @test s[r] == "Completion"
+    finally
+        @test pop!(LOAD_PATH) == OldPkg.dir()
+    end
 end
+
+path = joinpath(tempdir(),randstring())
+pushfirst!(LOAD_PATH, path)
+try
+    mkpath(path)
+    write(joinpath(path, "Project.toml"),
+        """
+        name = "MyProj"
+
+        [deps]
+        MyPack = "09ebe64f-f76c-4f21-bef2-bd9be6c77e76"
+        """)
+        c, r, res = test_complete("using MyP")
+        @test "MyPack" in c
+        @test "MyProj" in c
+finally
+    @test popfirst!(LOAD_PATH) == path
+    rm(path, recursive=true)
+end
+
 
 path = joinpath(tempdir(),randstring())
 push!(LOAD_PATH, path)
@@ -539,15 +564,6 @@ try
     c, r, res = test_complete("using Test_p")
     @test !("Test_pack" in c)
     @test "Test_pack2" in c
-
-    # Test that it also completes on .jl files in pwd()
-    cd(Pack_folder) do
-        open("Text.txt","w") do f end
-        open("Pack.jl","w") do f end
-        c, r, res = test_complete("using ")
-        @test "Pack" in c
-        @test !("Text.txt" in c)
-    end
 finally
     @test pop!(LOAD_PATH) == path
     rm(path, recursive=true)
@@ -659,28 +675,29 @@ let s, c, r
     end
 
     # Tests detecting of files in the env path (in shell mode)
-    let path, s, c, r, file
-        oldpath = ENV["PATH"]
+    let path, file
         path = tempdir()
-        # PATH can also contain folders which we aren't actually allowed to read.
         unreadable = joinpath(tempdir(), "replcompletion-unreadable")
-        ENV["PATH"] = string(path, ":", unreadable)
 
-        file = joinpath(path, "tmp-executable")
-        touch(file)
-        chmod(file, 0o755)
-        mkdir(unreadable)
-        chmod(unreadable, 0o000)
+        try
+            file = joinpath(path, "tmp-executable")
+            touch(file)
+            chmod(file, 0o755)
+            mkdir(unreadable)
+            chmod(unreadable, 0o000)
 
-        s = "tmp-execu"
-        c,r = test_scomplete(s)
-        @test "tmp-executable" in c
-        @test r == 1:9
-        @test s[r] == "tmp-execu"
-
-        rm(file)
-        rm(unreadable)
-        ENV["PATH"] = oldpath
+            # PATH can also contain folders which we aren't actually allowed to read.
+            withenv("PATH" => string(path, ":", unreadable)) do
+                s = "tmp-execu"
+                c,r = test_scomplete(s)
+                @test "tmp-executable" in c
+                @test r == 1:9
+                @test s[r] == "tmp-execu"
+            end
+        finally
+            rm(file)
+            rm(unreadable)
+        end
     end
 
     # Make sure completion results are unique in case things are in the env path twice.

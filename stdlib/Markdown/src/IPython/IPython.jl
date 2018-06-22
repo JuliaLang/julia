@@ -31,5 +31,5 @@ latex(io::IO, tex::LaTeX) =
 latexinline(io::IO, tex::LaTeX) =
     print(io, '$', tex.formula, '$')
 
-term(io::IO, tex::LaTeX, cols) = printstyled(io, tex.formula, '\n', color=:magenta)
+term(io::IO, tex::LaTeX, cols) = printstyled(io, tex.formula, color=:magenta)
 terminline(io::IO, tex::LaTeX) = printstyled(io, tex.formula, color=:magenta)

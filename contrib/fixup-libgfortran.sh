@@ -4,7 +4,7 @@
 # Run as: fixup-libgfortran.sh [--verbose] <$private_libdir>
 
 # If we're invoked with "--verbose", create a `debug` function that prints stuff out
-if [ "$1" == "--verbose" ] || [ "$1" == "-v" ]; then
+if [ "$1" = "--verbose" ] || [ "$1" = "-v" ]; then
 shift 1
 debug() { echo "$*"; }
 else
@@ -29,11 +29,6 @@ fi
 
 private_libdir=$1
 
-if [ ! -f "$private_libdir/libarpack.$SHLIB_EXT" ]; then
-    echo "ERROR: Could not open $private_libdir/libarpack.$SHLIB_EXT" >&2
-    exit 2
-fi
-
 find_shlib()
 {
     lib_path="$1"
@@ -46,31 +41,26 @@ find_shlib()
     fi
 }
 
-private_libname()
-{
-    echo "$private_libdir/lib$1.$SHLIB_EXT"
-}
-
 # First, discover all the places where libgfortran/libgcc is, as well as their true SONAMES
-for lib in arpack lapack; do
-    if [ -f "$private_libdir/lib$lib.$SHLIB_EXT" ]; then
+for lib in lapack blas openblas; do
+    for private_libname in ${private_libdir}/lib$lib*.$SHLIB_EXT*; do
         # Find the paths to the libraries we're interested in.  These are almost
         # always within the same directory, but we like to be general.
-        LIBGFORTRAN_PATH=$(find_shlib "$(private_libname $lib)" libgfortran)
-        LIBGCC_PATH=$(find_shlib "$(private_libname $lib)" libgcc_s)
-        LIBQUADMATH_PATH=$(find_shlib "$(private_libname $lib)" libquadmath)
+        LIBGFORTRAN_PATH=$(find_shlib "$private_libname" libgfortran)
+        LIBGCC_PATH=$(find_shlib "$private_libname" libgcc_s)
+        LIBQUADMATH_PATH=$(find_shlib "$private_libname" libquadmath)
 
         # Take the directories, add them onto LIBGFORTRAN_DIRS, which we use to
         # search for these libraries in the future.
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGFORTRAN_PATH)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGCC_PATH)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBQUADMATH_PATH)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGFORTRAN_PATH 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGCC_PATH 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBQUADMATH_PATH 2>/dev/null)"
 
         # Save the SONAMES
         LIBGFORTRAN_SONAMES="$LIBGFORTRAN_SONAMES $(basename "$LIBGFORTRAN_PATH")"
         LIBGCC_SONAMES="$LIBGCC_SONAMES $(basename "$LIBGCC_PATH")"
         LIBQUADMATH_SONAMES="$LIBQUADMATH_SONAMES $(basename "$LIBQUADMATH_PATH")"
-    fi
+    done
 done
 
 # Take in a list of space-separated tokens, return a deduplicated list of the same
@@ -125,11 +115,11 @@ change_linkage()
 }
 
 # For every library that remotely touches libgfortran stuff (the libraries we
-# have copied in ourselves as well as arpack, etc...) we must
+# have copied in ourselves) we must
 # update the linkage to point to @rpath (on OSX) or $ORIGIN (on Linux) so
 # that direct links to the old libgfortran directories are instead directed
 # to the proper location, which is our $private_libdir.
-for lib in libopenblas libarpack libcholmod liblapack $SONAMES; do
+for lib in libopenblas libcholmod liblapack $SONAMES; do
     # Grab every incarnation of that library that exists within $private_libdir
     # (e.g. "libopenblas.so", and "libopenblas.so.0", etc...)
     for lib_path in $private_libdir/$lib*; do

@@ -457,9 +457,6 @@
 
 (define var-info-for assq)
 
-(define (assignment? e)
-  (and (pair? e) (eq? (car e) '=)))
-
 (define (assignment-like? e)
   (and (pair? e) (is-prec-assignment? (car e))))
 

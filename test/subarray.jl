@@ -31,6 +31,8 @@ _Agen(A, i1) = [A[j1] for j1 in i1]
 _Agen(A, i1, i2) = [A[j1,j2] for j1 in i1, j2 in i2]
 _Agen(A, i1, i2, i3) = [A[j1,j2,j3] for j1 in i1, j2 in i2, j3 in i3]
 _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 in i4]
+_Agen(A, i1, i2, i3, i4, i5) = [A[j1,j2,j3,j4,j5] for j1 in i1, j2 in i2, j3 in i3, j4 in i4, j5 in i5]
+_Agen(A, i1, i2, i3, i4, i5, i6) = [A[j1,j2,j3,j4,j5,j6] for j1 in i1, j2 in i2, j3 in i3, j4 in i4, j5 in i5, j6 in i6]
 
 function replace_colon(A::AbstractArray, I)
     Iout = Vector{Any}(undef, length(I))
@@ -494,7 +496,7 @@ end
 
 # the following segfaults with LLVM 3.8 on Windows, ref #15417
 @test Array(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
-    cat(3,[68,70,72],[406,408,410],[744,746,748])
+    cat([68,70,72],[406,408,410],[744,746,748]; dims=3)
 
 # tests @view (and replace_ref_end!)
 X = reshape(1:24,2,3,4)
@@ -608,3 +610,13 @@ A = rand(5,5,5,5)
 V = view(A, 2:5, :, 2:5, 1:2:5)
 @test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
 @test @inferred(sum(Base.unaliascopy(V))) == sum(V) == sum(A[2:5, :, 2:5, 1:2:5])
+
+# issue #27632
+function _test_27632(A)
+    for J in CartesianIndices(size(A)[2:end])
+        A[1, J]
+    end
+    nothing
+end
+# check that this doesn't crash
+_test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1))

@@ -31,18 +31,21 @@ const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)
 const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 
+const Inf = Inf64
 """
-    Inf
+    Inf, Inf64
 
 Positive infinity of type [`Float64`](@ref).
 """
-const Inf = Inf64
+Inf, Inf64
+
+const NaN = NaN64
 """
-    NaN
+    NaN, NaN64
 
 A not-a-number value of type [`Float64`](@ref).
 """
-const NaN = NaN64
+NaN, NaN64
 
 ## conversions to floating-point ##
 Float16(x::Integer) = convert(Float16, convert(Float32, x))
@@ -271,6 +274,7 @@ float(x) = AbstractFloat(x)
 Return an appropriate type to represent a value of type `T` as a floating point value.
 Equivalent to `typeof(float(zero(T)))`.
 
+# Examples
 ```jldoctest
 julia> float(Complex{Int})
 Complex{Float64}
@@ -528,6 +532,7 @@ isnan(x::Real) = false
 
 Test whether a number is finite.
 
+# Examples
 ```jldoctest
 julia> isfinite(5)
 true
@@ -762,6 +767,7 @@ default). This is defined as the gap between 1 and the next largest value repres
 `typeof(one(T))`, and is equivalent to `eps(one(T))`.  (Since `eps(T)` is a
 bound on the *relative error* of `T`, it is a "dimensionless" quantity like [`one`](@ref).)
 
+# Examples
 ```jldoctest
 julia> eps()
 2.220446049250313e-16
@@ -799,6 +805,7 @@ is the nearest floating point number to ``y``, then
 |y-x| \\leq \\operatorname{eps}(x)/2.
 ```
 
+# Examples
 ```jldoctest
 julia> eps(1.0)
 2.220446049250313e-16

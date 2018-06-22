@@ -209,8 +209,6 @@ end
 # PR 13825
 let ex = :(a + b)
     @test string(ex) == "a + b"
-    ex.typ = Integer
-    @test string(ex) == "(a + b)::Integer"
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
@@ -340,8 +338,6 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         for var in must_used_vars
             @test occursin(string(var), str)
         end
-        @test !occursin("::Any", str)
-        @test !occursin("::ANY", str)
         # Check that we are not printing the bare slot numbers
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
@@ -497,7 +493,7 @@ else
     @test h16850 === nothing
 end
 
-# PR #18888: code_typed shouldn't cache if not optimizing
+# PR #18888: code_typed shouldn't cache, return_types should
 let
     world = typemax(UInt)
     f18888() = return nothing
@@ -511,6 +507,10 @@ let
     @test !isdefined(code, :inferred)
 
     code_typed(f18888, Tuple{}; optimize=true)
+    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
+    @test !isdefined(code, :inferred)
+
+    Base.return_types(f18888, Tuple{})
     code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test isdefined(code, :inferred)
 end

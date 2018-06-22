@@ -548,8 +548,8 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
     try
         if timeout_s >= 0
             result::FDEvent = FDEvent()
-            @schedule (sleep(timeout_s); notify(wt))
-            @schedule begin
+            @async (sleep(timeout_s); notify(wt))
+            @async begin
                 try
                     result = wait(fdw, readable=readable, writable=writable)
                 catch e
@@ -584,7 +584,7 @@ function watch_file(s::AbstractString, timeout_s::Real=-1)
     fm = FileMonitor(s)
     try
         if timeout_s >= 0
-            @schedule (sleep(timeout_s); close(fm))
+            @async (sleep(timeout_s); close(fm))
         end
         return wait(fm)
     finally
@@ -628,7 +628,7 @@ function watch_folder(s::String, timeout_s::Real=-1)
             # We still take the events from the primary stream.
             fm2 = FileMonitor(s)
             try
-                @schedule (sleep(timeout_s); close(fm2))
+                @async (sleep(timeout_s); close(fm2))
                 while isopen(fm.notify) && !isready(fm.notify)
                     fm2.handle == C_NULL && return "" => FileEvent() # timeout
                     wait(fm2)
@@ -682,7 +682,7 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
     pfw = PollingFileWatcher(s, Float64(interval_seconds))
     try
         if timeout_s >= 0
-            @schedule (sleep(timeout_s); close(pfw))
+            @async (sleep(timeout_s); close(pfw))
         end
         statdiff = wait(pfw)
         if isa(statdiff[2], UVError)

@@ -790,12 +790,6 @@ catch
 end
 ```
 
-The `catch` clause is not strictly necessary; when omitted, the default return value is `nothing`.
-
-```jldoctest
-julia> try error() end # Returns nothing
-```
-
 The power of the `try/catch` construct lies in the ability to unwind a deeply nested computation
 immediately to a much higher level in the stack of calling functions. There are situations where
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
@@ -980,8 +974,8 @@ A task created explicitly by calling [`Task`](@ref) is initially not known to th
 allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
 a task waits for an event, it still gets restarted automatically when the event happens, as you
 would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily
-waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@schedule`](@ref)
-or [`@async`](@ref) macros (see [Parallel Computing](@ref) for more details).
+waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@async`](@ref)
+macro (see [Parallel Computing](@ref) for more details).
 
 ### Task states
 

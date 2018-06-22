@@ -103,8 +103,8 @@ end
 LogLevel(level::LogLevel) = level
 
 isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
-+(level::LogLevel, inc) = LogLevel(level.level+inc)
--(level::LogLevel, inc) = LogLevel(level.level-inc)
++(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
+-(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
 const BelowMinLevel = LogLevel(-1000001)
@@ -203,7 +203,7 @@ end
 macro _sourceinfo()
     esc(quote
         (__module__,
-         __source__.file == nothing ? "?" : String(__source__.file),
+         __source__.file === nothing ? "?" : String(__source__.file),
          __source__.line)
     end)
 end

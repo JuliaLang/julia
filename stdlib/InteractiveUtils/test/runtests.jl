@@ -175,7 +175,7 @@ end
 # PR #23075
 @testset "versioninfo" begin
     # check that versioninfo(io; verbose=true) doesn't error, produces some output
-    # and doesn't invoke Pkg.status which will error if JULIA_PKGDIR is set
+    # and doesn't invoke OldPkg.status which will error if JULIA_PKGDIR is set
     mktempdir() do dir
         withenv("JULIA_PKGDIR" => dir) do
             buf = PipeBuffer()
@@ -187,6 +187,12 @@ end
             @test occursin("no packages installed", ver)
             @test isempty(readdir(dir))
         end
+    end
+    let exename = `$(Base.julia_cmd()) --startup-file=no`
+        @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
+                                                    String[]), String))
+        @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
+                                                    String["JULIA_CPU_CORES=1"]), String))
     end
 end
 
@@ -325,6 +331,13 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     @test occursin(rgx, output)
 end
 
+@testset "error message" begin
+    err = ErrorException("expression is not a function call or symbol")
+    @test_throws err @code_lowered ""
+    @test_throws err @code_lowered 1
+    @test_throws err @code_lowered 1.0
+end
+
 using InteractiveUtils: editor
 
 # Issue #13032
@@ -364,4 +377,12 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
     @test editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+end
+
+# clipboard functionality
+if Sys.iswindows() || Sys.isapple()
+    for str in ("Hello, world.", "∀ x ∃ y", "")
+        clipboard(str)
+        @test clipboard() == str
+    end
 end

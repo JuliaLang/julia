@@ -22,12 +22,11 @@ Base.exit
 Base.atexit
 Base.isinteractive
 Base.summarysize
-Base.clipboard(::Any)
-Base.clipboard()
 Base.require
 Base.compilecache
 Base.__precompile__
 Base.include
+Base.MainInclude.include
 Base.include_string
 Base.include_dependency
 Base.which(::Any, ::Any)
@@ -72,6 +71,8 @@ primitive type
 
 ## Base Modules
 ```@docs
+Base.Base
+Base.Broadcast
 Base.Docs
 Base.Iterators
 Base.Libc
@@ -79,6 +80,7 @@ Base.Meta
 Base.StackTraces
 Base.Sys
 Base.Threads
+Base.GC
 ```
 
 ## All Objects
@@ -181,6 +183,7 @@ Base.Val
 Core.Vararg
 Core.Nothing
 Base.Some
+Base.something
 Base.Enums.@enum
 ```
 
@@ -201,6 +204,7 @@ Base.:(∘)
 
 ```@docs
 Core.eval
+Base.MainInclude.eval
 Base.@eval
 Base.evalfile
 Base.esc
@@ -264,6 +268,13 @@ Base.Sys.windows_version
 Base.@static
 ```
 
+## Versioning
+
+```@docs
+Base.VersionNumber
+Base.@v_str
+```
+
 ## Errors
 
 ```@docs
@@ -316,6 +327,7 @@ Base.AsyncCondition(::Function)
 ```@docs
 Base.nameof(::Module)
 Base.parentmodule
+Base.moduleroot
 Base.@__MODULE__
 Base.fullname
 Base.names
@@ -331,6 +343,7 @@ Base.functionloc(::Method)
 ```@docs
 Base.GC.gc
 Base.GC.enable
+Base.GC.@preserve
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)

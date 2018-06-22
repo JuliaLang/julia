@@ -50,6 +50,7 @@ end
     @test strip("  ") == ""
     @test strip("   ") == ""
     @test strip("\t  hi   \n") == "hi"
+    @test strip(" \u2009 hi \u2009 ") == "hi"
     @test strip("foobarfoo", ['f','o']) == "bar"
     @test strip("foobarfoo", ('f','o')) == "bar"
 
@@ -72,6 +73,11 @@ end
             @test typeof(fb) == SubString{T}
         end
     end
+
+    @test lstrip(isnumeric, "0123abc") == "abc"
+    @test rstrip(isnumeric, "abc0123") == "abc"
+    @test lstrip("ello", ['e','o']) == "llo"
+    @test rstrip("ello", ['e','o']) == "ell"
 end
 
 @testset "rsplit/split" begin
@@ -94,6 +100,7 @@ end
 
     @test split("a b c") == ["a","b","c"]
     @test split("a  b \t c\n") == ["a","b","c"]
+    @test split("α  β \u2009 γ\n") == ["α","β","γ"]
 
     @test split("a b c"; limit=2) == ["a","b c"]
     @test split("a  b \t c\n"; limit=3) == ["a","b","\t c\n"]
@@ -324,7 +331,7 @@ end
     bin_val = hex2bytes(hex_str)
 
     @test div(length(hex_str), 2) == length(bin_val)
-    @test hex_str == bytes2hex(bin_val)
+    @test hex_str == bytes2hex(bin_val) == sprint(bytes2hex, bin_val)
 
     bin_val = hex2bytes("07bf")
     @test bin_val[1] == 7

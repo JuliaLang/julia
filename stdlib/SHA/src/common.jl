@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Common update and digest functions which work across SHA1 and SHA2
 
 # update! takes in variable-length data, buffering it into blocklen()-sized pieces,

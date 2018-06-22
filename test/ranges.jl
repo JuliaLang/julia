@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Dates, Random
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 
 # Compare precision in a manner sensitive to subnormals, which lose
 # precision compared to widening.
@@ -185,6 +186,12 @@ end
     @test isnan(Float64(x0/x0))
     @test isnan(Float64(x0/0))
     @test isnan(Float64(x0/0.0))
+
+    x = Base.TwicePrecision(Main.TestHelpers.PhysQuantity{1}(4.0))
+    @test x.hi*2 === Main.TestHelpers.PhysQuantity{1}(8.0)
+    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
+    @test x.hi/2 === Main.TestHelpers.PhysQuantity{1}(2.0)
+    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -418,7 +425,7 @@ end
     end
     @test s == 2
 
-    # loops covering the full range of smaller integer types
+    # loops covering the full range of integers
     s = 0
     for i = typemin(UInt8):typemax(UInt8)
         s += 1
@@ -426,10 +433,24 @@ end
     @test s == 256
 
     s = 0
+    for i = typemin(UInt):typemax(UInt)
+        i == 10 && break
+        s += 1
+    end
+    @test s == 10
+
+    s = 0
     for i = typemin(UInt8):one(UInt8):typemax(UInt8)
         s += 1
     end
     @test s == 256
+
+    s = 0
+    for i = typemin(UInt):1:typemax(UInt)
+        i == 10 && break
+        s += 1
+    end
+    @test s == 10
 
     # loops past typemax(Int)
     n = 0
@@ -477,8 +498,10 @@ end
     @test sum(0:0.1:10) == 505.
 end
 @testset "broadcasted operations with scalars" begin
+    @test broadcast(-, 1:3) === -1:-1:-3
     @test broadcast(-, 1:3, 2) === -1:1
     @test broadcast(-, 1:3, 0.25) === 1-0.25:3-0.25
+    @test broadcast(+, 1:3) === 1:3
     @test broadcast(+, 1:3, 2) === 3:5
     @test broadcast(+, 1:3, 0.25) === 1+0.25:3+0.25
     @test broadcast(+, 1:2:6, 1) === 2:2:6
@@ -881,7 +904,6 @@ end
 end
 
 @testset "LinRange ops" begin
-    @test start(LinRange(0,3,4)) == 1
     @test 2*LinRange(0,3,4) == LinRange(0,6,4)
     @test LinRange(0,3,4)*2 == LinRange(0,6,4)
     @test LinRange(0,3,4)/3 == LinRange(0,1,4)

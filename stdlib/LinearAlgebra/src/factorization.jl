@@ -8,13 +8,8 @@ eltype(::Type{<:Factorization{T}}) where {T} = T
 size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
 size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
-macro assertposdef(A, info)
-   :($(esc(info)) == 0 ? $(esc(A)) : throw(PosDefException($(esc(info)))))
-end
-
-macro assertnonsingular(A, info)
-   :($(esc(info)) == 0 ? $(esc(A)) : throw(SingularException($(esc(info)))))
-end
+checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
+checknonsingular(info) = info == 0 || throw(SingularException(info))
 
 """
     issuccess(F::Factorization)
@@ -22,12 +17,12 @@ end
 Test that a factorization of a matrix succeeded.
 
 ```jldoctest
-julia> F = cholfact([1 0; 0 1]);
+julia> F = cholesky([1 0; 0 1]);
 
 julia> LinearAlgebra.issuccess(F)
 true
 
-julia> F = lufact([1 0; 0 0]);
+julia> F = lu([1 0; 0 0]; check = false);
 
 julia> LinearAlgebra.issuccess(F)
 false
@@ -57,6 +52,23 @@ inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, 1:nfields(F))
 Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
 Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))::Bool
+
+function Base.show(io::IO, x::Adjoint{<:Any,<:Factorization})
+    print(io, "Adjoint of ")
+    show(io, parent(x))
+end
+function Base.show(io::IO, x::Transpose{<:Any,<:Factorization})
+    print(io, "Transpose of ")
+    show(io, parent(x))
+end
+function Base.show(io::IO, ::MIME"text/plain", x::Adjoint{<:Any,<:Factorization})
+    print(io, "Adjoint of ")
+    show(io, MIME"text/plain"(), parent(x))
+end
+function Base.show(io::IO, ::MIME"text/plain", x::Transpose{<:Any,<:Factorization})
+    print(io, "Transpose of ")
+    show(io, MIME"text/plain"(), parent(x))
+end
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns

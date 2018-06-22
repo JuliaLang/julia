@@ -163,7 +163,7 @@ end
 
 function credential_identifier(url::AbstractString)
     m = match(URL_REGEX, url)
-    scheme = coalesce(m[:scheme], "")
+    scheme = something(m[:scheme], "")
     host = m[:host]
     credential_identifier(scheme, host)
 end

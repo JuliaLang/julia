@@ -62,7 +62,7 @@ end
 
 @test filemode(file) & 0o444 > 0 # readable
 @test filemode(file) & 0o222 > 0 # writable
-chmod(file, filemode(file) & 0o7555)
+@test chmod(file, filemode(file) & 0o7555) == file
 @test filemode(file) & 0o222 == 0
 chmod(file, filemode(file) | 0o222)
 @test filemode(file) & 0o111 == 0
@@ -79,10 +79,28 @@ if Sys.iswindows()
     @test filemode(file) & 0o777 == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
+    function get_umask()
+        umask = ccall(:umask, UInt32, (UInt32,), 0)
+        ccall(:umask, UInt32, (UInt32,), umask)
+        return umask
+    end
+
     mktempdir() do tmpdir
+        umask = get_umask()
         tmpfile=joinpath(tmpdir, "tempfile.txt")
+        tmpfile2=joinpath(tmpdir, "tempfile2.txt")
         touch(tmpfile)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
+        chmod(tmpfile, 0o777)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
         chmod(tmpfile, 0o707)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
         permissions=0o776
@@ -171,7 +189,7 @@ if !Sys.iswindows()
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
         @test stat(file).gid !=0
         @test stat(file).uid ==0
-        chown(file, -1, 0)
+        @test chown(file, -1, 0) == file
         @test stat(file).gid ==0
         @test stat(file).uid ==0
     else
@@ -180,7 +198,7 @@ if !Sys.iswindows()
     end
 else
     # test that chown doesn't cause any errors for Windows
-    @test chown(file, -2, -2) === nothing
+    @test chown(file, -2, -2) == file
 end
 
 ##############
@@ -977,6 +995,26 @@ rm(dir)
 
 @test !ispath(file)
 @test !ispath(dir)
+
+
+
+##################
+# Return values of mkpath, mkdir, cp, mv and touch
+####################
+mktempdir() do dir
+    name1 = joinpath(dir, "apples")
+    name2 = joinpath(dir, "bannanas")
+    @test touch(name1)==name1
+    @test mv(name1, name2) == name2
+    @test cp(name2, name1) == name1
+    namedir = joinpath(dir, "chalk")
+    namepath = joinpath(dir, "chalk","cheese","fresh")
+    @test mkdir(namedir) == namedir
+    @test mkpath(namepath) == namepath
+end
+
+
+
 
 # issue #9687
 let n = tempname()

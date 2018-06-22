@@ -90,10 +90,12 @@ struct SHA1
         return new(bytes)
     end
 end
-SHA1(s::Union{String,SubString{String}}) = SHA1(hex2bytes(s))
-string(hash::SHA1) = bytes2hex(hash.bytes)
+SHA1(s::AbstractString) = SHA1(hex2bytes(s))
 
-show(io::IO, hash::SHA1) = print(io, "SHA1(", string(hash), ")")
+string(hash::SHA1) = bytes2hex(hash.bytes)
+print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
+show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
+
 isless(a::SHA1, b::SHA1) = lexless(a.bytes, b.bytes)
 hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
 ==(a::SHA1, b::SHA1) = a.bytes == b.bytes
@@ -145,19 +147,36 @@ end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
 
-function find_env(envs::Vector)
-    for env in envs
-        path = find_env(env)
-        path != nothing && return path
+function load_path_expand(env::AbstractString)::Union{String, Nothing}
+    # named environment?
+    if startswith(env, '@')
+        # `@` in JULIA_LOAD_PATH is expanded early (at startup time)
+        # if you put a `@` in LOAD_PATH manually, it's expanded late
+        env == "@" && return current_env()
+        env == "@stdlib" && return Sys.STDLIB
+        env = replace(env, '#' => VERSION.major, count=1)
+        env = replace(env, '#' => VERSION.minor, count=1)
+        env = replace(env, '#' => VERSION.patch, count=1)
+        name = env[2:end]
+        # look for named env in each depot
+        for depot in DEPOT_PATH
+            path = joinpath(depot, "environments", name)
+            isdir(path) || continue
+            for proj in project_names
+                file = abspath(path, proj)
+                isfile_casesensitive(file) && return file
+            end
+            return path
+        end
+        isempty(DEPOT_PATH) && return nothing
+        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
     end
-end
-
-function find_env(env::AbstractString)
+    # otherwise, it's a path
     path = abspath(env)
     if isdir(path)
         # directory with a project file?
-        for name in project_names
-            file = abspath(path, name)
+        for proj in project_names
+            file = joinpath(path, proj)
             isfile_casesensitive(file) && return file
         end
     end
@@ -165,38 +184,7 @@ function find_env(env::AbstractString)
     return path
 end
 
-function find_env(env::NamedEnv)
-    # look for named env in each depot
-    for depot in DEPOT_PATH
-        isdir(depot) || continue
-        file = nothing
-        for name in project_names
-            file = abspath(depot, "environments", env.name, name)
-            isfile_casesensitive(file) && return file
-        end
-        file != nothing && env.create && return file
-    end
-end
-
-function find_env(env::CurrentEnv, dir::AbstractString = pwd())
-    # look for project file in current dir and parents
-    home = homedir()
-    while true
-        for name in project_names
-            file = joinpath(dir, name)
-            isfile_casesensitive(file) && return file
-        end
-        # bail at home directory or top of git repo
-        (dir == home || ispath(joinpath(dir, ".git"))) && break
-        old, dir = dir, dirname(dir)
-        dir == old && break
-    end
-    env.create ? joinpath(pwd(), project_names[end]) : nothing
-end
-
-find_env(env::Function) = find_env(env())
-
-load_path() = String[env for env in map(find_env, LOAD_PATH) if env ≠ nothing]
+load_path() = String[env for env in map(load_path_expand, LOAD_PATH) if env ≠ nothing]
 
 ## package identification: determine unique identity of package to be loaded ##
 
@@ -501,7 +489,8 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{Bo
                 if (m = match(re_key_to_string, line)) != nothing
                     m.captures[1] == name && return UUID(m.captures[2])
                 end
-            elseif occursin(re_section, line)
+            end
+            if occursin(re_section, line)
                 state = occursin(re_section_deps, line) ? :deps : :other
             end
         end
@@ -540,7 +529,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
             end
         end
         uuid == where || return false
-        deps == nothing && return true
+        deps === nothing && return true
         # TODO: handle inline table syntax
         if deps[1] != '[' || deps[end] != ']'
             @warn "Unexpected TOML deps format:\n$deps"
@@ -548,7 +537,7 @@ function explicit_manifest_deps_get(manifest_file::String, where::UUID, name::St
         end
         occursin(repr(name), deps) || return true
         seekstart(io) # rewind IO handle
-        manifest_file_name_uuid(manifest_file, name, io)
+        return manifest_file_name_uuid(manifest_file, name, io)
     end
 end
 
@@ -625,7 +614,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
+    base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? base_path : nothing
 end
 
@@ -731,7 +720,7 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
             modpath, modkey, build_id = dep::Tuple{String, PkgId, UInt64}
             dep = _tryrequire_from_serialized(modkey, build_id, modpath)
             if dep === nothing
-                @debug "Required dependency $modname failed to load from cache file for $modpath."
+                @debug "Required dependency $modkey failed to load from cache file for $modpath."
                 staledeps = true
                 break
             end
@@ -853,16 +842,32 @@ current `include` path but does not use it to search for files (see help for `in
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
-When searching for files, `require` first looks for package code under `Pkg.dir()`,
-then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
-all platforms, including those with case-insensitive filesystems like macOS and
-Windows.
+When searching for files, `require` first looks for package code in the global array
+`LOAD_PATH`. `require` is case-sensitive on all platforms, including those with
+case-insensitive filesystems like macOS and Windows.
+
+For more details regarding code loading, see the manual.
 """
 function require(into::Module, mod::Symbol)
     uuidkey = identify_package(into, String(mod))
     # Core.println("require($(PkgId(into)), $mod) -> $uuidkey")
-    uuidkey === nothing &&
-        throw(ArgumentError("Module $mod not found in current path.\nRun `Pkg.add(\"$mod\")` to install the $mod package."))
+    if uuidkey === nothing
+        where = PkgId(into)
+        if where.uuid === nothing
+            throw(ArgumentError("""
+                Package $mod not found in current path:
+                 - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
+                """))
+        else
+            throw(ArgumentError("""
+                Package $(where.name) does not have $mod in its dependencies:
+                 - If you have $(where.name) checked out for development and have
+                   added $mod as a dependency but haven't updated your primary
+                   environment's manifest file, try `Pkg.resolve()`.
+                 - Otherwise you may need to report an issue with $(where.name).
+                """))
+        end
+    end
     if _track_dependencies[]
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
@@ -943,7 +948,10 @@ function _require(pkg::PkgId)
         name = pkg.name
         path = locate_package(pkg)
         if path === nothing
-            throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
+            throw(ArgumentError("""
+                Package $pkg is required but does not seem to be installed:
+                 - Run `Pkg.instantiate()` to install all recorded dependencies.
+                """))
         end
 
         # attempt to load the module file via the precompile cache locations
@@ -1076,30 +1084,32 @@ function include_relative(mod::Module, _path::String)
 end
 
 """
-    include(m::Module, path::AbstractString)
+    Base.include([m::Module,] path::AbstractString)
 
-Evaluate the contents of the input source file into module `m`. Returns the result
-of the last evaluated expression of the input file. During including, a task-local include
-path is set to the directory containing the file. Nested calls to `include` will search
-relative to that path. This function is typically used to load source
+Evaluate the contents of the input source file in the global scope of module `m`.
+Every module (except those defined with `baremodule`) has its own 1-argument
+definition of `include`, which evaluates the file in that module.
+Returns the result of the last evaluated expression of the input file. During including,
+a task-local include path is set to the directory containing the file. Nested calls to
+`include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
 """
-include # defined in sysimg.jl
+Base.include # defined in sysimg.jl
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](@ref), evaluate all expressions,
+Load the file using [`Base.include`](@ref), evaluate all expressions,
 and return the value of the last one.
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
-    return eval(Module(:__anon__),
-                Expr(:toplevel,
-                     :(const ARGS = $args),
-                     :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
-                     :(eval(m, x) = $(Expr(:core, :eval))(m, x)),
-                     :(include(x) = $(Expr(:top, :include))(__anon__, x)),
-                     :(include($path))))
+    return Core.eval(Module(:__anon__),
+        Expr(:toplevel,
+             :(const ARGS = $args),
+             :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
+             :(@deprecate eval(m, x) Core.eval(m, x)),
+             :(include(x) = $(Expr(:top, :include))(__anon__, x)),
+             :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
@@ -1108,7 +1118,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     code_object = """
         while !eof(stdin)
             code = readuntil(stdin, '\\0')
-            eval(Main, Meta.parse(code))
+            eval(Meta.parse(code))
         end
         """
     io = open(pipeline(detach(`$(julia_cmd()) -O0
@@ -1121,7 +1131,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     try
         write(in, """
         begin
-        import Pkg
+        import OldPkg
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
         empty!(Base.DEPOT_PATH)
@@ -1155,7 +1165,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         close(in)
     catch ex
         close(in)
-        process_running(io) && Timer(t -> kill(io), interval = 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
+        process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
         rethrow(ex)
     end
     return io
@@ -1173,7 +1183,7 @@ function compilecache(pkg::PkgId)
     # decide where to get the source file from
     name = pkg.name
     path = locate_package(pkg)
-    path === nothing && throw(ArgumentError("$name not found in path"))
+    path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
     # decide where to put the resulting cache file
     cachefile = abspath(DEPOT_PATH[1], cache_file_entry(pkg))
     cachepath = dirname(cachefile)
@@ -1404,16 +1414,6 @@ function stale_cachefile(modpath::String, cachefile::String)
     finally
         close(io)
     end
-end
-
-"""
-    @__LINE__ -> Int
-
-`@__LINE__` expands to the line number of the location of the macrocall.
-Returns `0` if the line number could not be determined.
-"""
-macro __LINE__()
-    return __source__.line
 end
 
 """

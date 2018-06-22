@@ -29,7 +29,7 @@ static int jl_is_any(jl_value_t *t1)
 static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_t n)
 {
     size_t i;
-    for(i=0; i < n; i++) {
+    for (i = 0; i < n; i++) {
         jl_value_t *decl = jl_field_type(sig, i);
         jl_value_t *a = types[i];
         if (jl_is_type_type(a)) // decl is not Type, because it wouldn't be leafsig
@@ -58,9 +58,8 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
                         !jl_subtype(jl_tparam0(a), ((jl_tvar_t*)tp0)->ub))
                         return 0;
                 }
-                else {
-                    if (!(jl_typeof(jl_tparam0(a)) == jl_typeof(tp0) && jl_types_equal(jl_tparam0(a), tp0)))
-                        return 0;
+                else if (!jl_types_equal(jl_tparam0(a), tp0)) {
+                    return 0;
                 }
             }
             else if (!jl_is_kind(a) || !jl_is_typevar(tp0) || ((jl_tvar_t*)tp0)->ub != (jl_value_t*)jl_any_type) {
@@ -81,12 +80,13 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
     if (va) {
         jl_value_t *decl = jl_unwrap_unionall(jl_field_type(sig, i));
         if (jl_vararg_kind(decl) == JL_VARARG_INT) {
-            if (n-i != jl_unbox_long(jl_tparam1(decl)))
+            if (n - i != jl_unbox_long(jl_tparam1(decl)))
                 return 0;
         }
         jl_value_t *t = jl_tparam0(decl);
-        if (jl_is_typevar(t)) t = ((jl_tvar_t*)t)->ub;
-        for(; i < n; i++) {
+        if (jl_is_typevar(t))
+            t = ((jl_tvar_t*)t)->ub;
+        for (; i < n; i++) {
             if (!jl_subtype(types[i], t))
                 return 0;
         }
@@ -141,12 +141,12 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
             }
             else {
                 if (a != tp0) {
-                    if (jl_typeof(a) != jl_typeof(tp0))
-                        return 0;
                     jl_datatype_t *da = (jl_datatype_t*)a;
                     jl_datatype_t *dt = (jl_datatype_t*)tp0;
-                    while (jl_is_unionall(da)) da = (jl_datatype_t*)((jl_unionall_t*)da)->body;
-                    while (jl_is_unionall(dt)) dt = (jl_datatype_t*)((jl_unionall_t*)dt)->body;
+                    while (jl_is_unionall(da))
+                        da = (jl_datatype_t*)((jl_unionall_t*)da)->body;
+                    while (jl_is_unionall(dt))
+                        dt = (jl_datatype_t*)((jl_unionall_t*)dt)->body;
                     if (jl_is_datatype(da) && jl_is_datatype(dt) && da->name != dt->name)
                         return 0;
                     if (!jl_types_equal(a, tp0))
@@ -161,11 +161,11 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
     if (va) {
         jl_value_t *decl = sig[i];
         if (jl_vararg_kind(decl) == JL_VARARG_INT) {
-            if (n-i != jl_unbox_long(jl_tparam1(decl)))
+            if (n - i != jl_unbox_long(jl_tparam1(decl)))
                 return 0;
         }
         jl_value_t *t = jl_unwrap_vararg(decl);
-        for(; i < n; i++) {
+        for (; i < n; i++) {
             if (!jl_isa(args[i], t))
                 return 0;
         }
@@ -509,9 +509,19 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
             ty = jl_tparam(ttypes, offs);
         }
         if (ty) {
+            while (jl_is_typevar(ty))
+                ty = ((jl_tvar_t*)ty)->ub;
+            // approxify the tparam until we have a valid type
+            if (jl_has_free_typevars(ty)) {
+                ty = jl_unwrap_unionall(ty);
+                if (jl_is_datatype(ty))
+                    ty = ((jl_datatype_t*)ty)->name->wrapper;
+                else
+                    ty = (jl_value_t*)jl_any_type;
+            }
             if (cache->targ.values != (void*)jl_nothing) {
                 jl_value_t *typetype = jl_is_type_type(ty) ? jl_tparam0(ty) : NULL;
-                if (typetype && !jl_has_free_typevars(typetype)) {
+                if (typetype) {
                     if (is_cache_leaf(typetype)) {
                         // direct lookup of leaf types
                         union jl_typemap_t ml = mtcache_hash_lookup(&cache->targ, typetype, 1, offs);

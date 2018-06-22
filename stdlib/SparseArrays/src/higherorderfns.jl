@@ -70,6 +70,7 @@ Broadcast.BroadcastStyle(::Type{<:Adjoint{T,<:Union{SparseVector,SparseMatrixCSC
 Broadcast.BroadcastStyle(::Type{<:Transpose{T,<:Union{SparseVector,SparseMatrixCSC}} where T}) = PromoteToSparse()
 
 Broadcast.BroadcastStyle(s::SPVM, ::Broadcast.AbstractArrayStyle{0}) = s
+Broadcast.BroadcastStyle(s::SPVM, ::Broadcast.DefaultArrayStyle{0}) = s
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{1}) = PromoteToSparse()
 Broadcast.BroadcastStyle(::SPVM, ::Broadcast.DefaultArrayStyle{2}) = PromoteToSparse()
 
@@ -1080,7 +1081,7 @@ function copy(bc::Broadcasted{PromoteToSparse})
     if is_supported_sparse_broadcast(bcf.args...)
         broadcast(bcf.f, map(_sparsifystructured, bcf.args)...)
     else
-        return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{2}}, bc))
+        return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{length(axes(bc))}}, bc))
     end
 end
 

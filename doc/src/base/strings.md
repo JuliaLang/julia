@@ -21,6 +21,8 @@ Base.codeunit
 Base.codeunits
 Base.ascii
 Base.@r_str
+Base.SubstitutionString
+Base.@s_str
 Base.@raw_str
 Base.Docs.@html_str
 Base.Docs.@text_str
@@ -62,10 +64,10 @@ Base.thisind
 Base.nextind
 Base.prevind
 Base.textwidth
-Base.isalpha
 Base.isascii
 Base.iscntrl
 Base.isdigit
+Base.isletter
 Base.islowercase
 Base.isnumeric
 Base.isprint

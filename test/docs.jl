@@ -32,7 +32,7 @@ docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
+@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type"
 @test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
@@ -669,7 +669,6 @@ end
 @test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test occursin("cor", sprint(apropos, "pearson"))
 @test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
 using Profile
 @test occursin("Profile.print", sprint(apropos, "print"))

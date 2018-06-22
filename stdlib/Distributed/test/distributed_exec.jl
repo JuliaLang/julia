@@ -342,11 +342,13 @@ end
 @test [fetch(rr) for rr in rr_list] == [:OK for x in 1:ntasks]
 
 function test_channel(c)
+    @test isopen(c) == true
     put!(c, 1)
     put!(c, "Hello")
     put!(c, 5.0)
 
     @test isready(c) == true
+    @test isopen(c) == true
     @test fetch(c) == 1
     @test fetch(c) == 1   # Should not have been popped previously
     @test take!(c) == 1
@@ -354,7 +356,9 @@ function test_channel(c)
     @test fetch(c) == 5.0
     @test take!(c) == 5.0
     @test isready(c) == false
+    @test isopen(c) == true
     close(c)
+    @test isopen(c) == false
 end
 
 test_channel(Channel(10))
@@ -365,17 +369,17 @@ c=Channel{Int}(1)
 
 # test channel iterations
 function test_iteration(in_c, out_c)
-    t=@schedule for v in in_c
+    t=@async for v in in_c
         put!(out_c, v)
     end
 
-    isa(in_c, Channel) && @test isopen(in_c) == true
+    @test isopen(in_c) == true
     put!(in_c, 1)
     @test take!(out_c) == 1
     put!(in_c, "Hello")
     close(in_c)
     @test take!(out_c) == "Hello"
-    isa(in_c, Channel) && @test isopen(in_c) == false
+    @test isopen(in_c) == false
     @test_throws InvalidStateException put!(in_c, :foo)
     yield()
     @test istaskdone(t) == true
@@ -572,8 +576,8 @@ end
 n = 10
 as = [rand(4,4) for i in 1:n]
 bs = deepcopy(as)
-cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
-svdas = map(svdfact, as)
+cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svd(x)), bs))
+svdas = map(svd, as)
 for i in 1:n
     @test cs[i].U ≈ svdas[i].U
     @test cs[i].S ≈ svdas[i].S
@@ -950,6 +954,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
         if Sys.isapple()
             return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
         end
+    catch
     end
 
     return nothing
@@ -1101,7 +1106,7 @@ append!(testruns, [
 for (addp_testf, expected_errstr, env) in testruns
     old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
-    stdout_txt = @schedule filter!(readlines(stdout_out)) do s
+    stdout_txt = @async filter!(readlines(stdout_out)) do s
             return !startswith(s, "\tFrom failed worker startup:\t")
         end
     try

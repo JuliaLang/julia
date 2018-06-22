@@ -306,8 +306,10 @@ completion to be able to remove non-matching methods.
 Tab completion can also help completing fields:
 
 ```julia-repl
-julia> Pkg.a[TAB]
-add       available
+julia> import UUIDs
+
+julia> UUIDs.uuid[TAB]
+uuid1        uuid4         uuid_version
 ```
 
 Fields for output from functions can also be completed:

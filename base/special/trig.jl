@@ -564,7 +564,7 @@ ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
 ATAN2_RATIO_BIT_SHIFT(::Type{Float64}) = 20
 ATAN2_RATIO_THRESHOLD(::Type{Float64}) = 60
 
-function atan2(y::T, x::T) where T<:Union{Float32, Float64}
+function atan(y::T, x::T) where T<:Union{Float32, Float64}
     # Method :
     #    M1) Reduce y to positive by atan2(y,x)=-atan2(-y,x).
     #    M2) Reduce x to positive by (if x and y are unexceptional):
@@ -1082,7 +1082,7 @@ for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan
     end
 end
 
-for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"), (:atand, :atan, "tangent"),
+for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
                     (:asecd, :asec, "secant"), (:acscd, :acsc, "cosecant"), (:acotd, :acot, "cotangent"))
     name = string(fd)
     @eval begin
@@ -1092,3 +1092,12 @@ for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"), (:atand,
         Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg(($f)(y))
     end
 end
+
+"""
+    atand(y)
+    atand(y,x)
+
+Compute the inverse tangent of `y` or `y/x`, respectively, where the output is in degrees.
+"""
+atand(y)    = rad2deg(atan(y))
+atand(y, x) = rad2deg(atan(y,x))

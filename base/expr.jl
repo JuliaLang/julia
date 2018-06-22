@@ -35,7 +35,6 @@ end
 function copy(e::Expr)
     n = Expr(e.head)
     n.args = copy_exprargs(e.args)
-    n.typ = e.typ
     return n
 end
 
@@ -151,11 +150,9 @@ end
 ## misc syntax ##
 
 """
-    eval([m::Module], expr::Expr)
+    Core.eval(m::Module, expr)
 
-Evaluate an expression in the given module and return the result. Every `Module` (except
-those defined with `baremodule`) has its own 1-argument definition of `eval`, which
-evaluates expressions in that module.
+Evaluate an expression in the given module and return the result.
 """
 Core.eval
 

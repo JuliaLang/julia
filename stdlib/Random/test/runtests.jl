@@ -120,7 +120,9 @@ end
 for T in [UInt32, UInt64, UInt128, Int128]
     local r, s
     s = big(typemax(T)-1000) : big(typemax(T)) + 10000
-    @test rand(s) != rand(s)
+    # s is a 11001-length array
+    @test rand(s) isa BigInt
+    @test sum(rand(s, 1000) .== rand(s, 1000)) <= 20
     @test big(typemax(T)-1000) <= rand(s) <= big(typemax(T)) + 10000
     r = rand(s, 1, 2)
     @test size(r) == (1, 2)
@@ -607,7 +609,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
             if eltype(c) == Char
                 @test issubset(s, c)
             else # UInt8
-                @test issubset(s, map(Char, c))
+                @test issubset(s, Set(Char(v) for v in c))
             end
         end
     end
@@ -656,4 +658,17 @@ end
     RNG isa MersenneTwister && srand(RNG, rand(UInt128)) # for reproducibility
     r = T(1):T(108)
     @test rand(RNG, SamplerRangeFast(r)) ∈ r
+end
+
+@testset "rand! is allocation-free" begin
+    for A in (Array{Int}(undef, 20), Array{Float64}(undef, 5, 4), BitArray(undef, 20), BitArray(undef, 50, 40))
+        rand!(A)
+        @test @allocated(rand!(A)) == 0
+    end
+end
+
+@testset "eltype for UniformBits" begin
+    @test eltype(Random.UInt52()) == UInt64
+    @test eltype(Random.UInt52(UInt128)) == UInt128
+    @test eltype(Random.UInt104()) == UInt128
 end

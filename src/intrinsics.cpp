@@ -780,25 +780,35 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
                                      jl_datatype_t **newtyp, jl_value_t *xtyp);
 
 
-static jl_cgval_t emit_select_value(jl_codectx_t &ctx, jl_value_t **args, size_t nargs, jl_value_t *rt_hint)
+static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_cgval_t y, jl_value_t *rt_hint)
 {
-    if (nargs != 3)
-        jl_errorf("intrinsic #%d select_value: wrong number of arguments", select_value);
-    jl_cgval_t c = emit_expr(ctx, args[1]);
-    jl_cgval_t x = emit_expr(ctx, args[2]);
-    jl_cgval_t y = emit_expr(ctx, args[3]);
-
-    Value *isfalse = emit_condition(ctx, c, "select_value"); // emit the first argument
-    // emit X and Y arguments
+    Value *isfalse = emit_condition(ctx, c, "ifelse");
     jl_value_t *t1 = x.typ;
     jl_value_t *t2 = y.typ;
-    // check the return value was valid
+    // handle cases where the condition is irrelevant based on type info
     if (t1 == jl_bottom_type && t2 == jl_bottom_type)
         return jl_cgval_t(); // undefined
     if (t1 == jl_bottom_type)
         return y;
     if (t2 == jl_bottom_type)
         return x;
+
+    if (t1 != t2) {
+        // type inference may know something we don't, in which case it may
+        // be illegal for us to convert to rt_hint. Check first if either
+        // of the types have empty intersection with the result type,
+        // in which case, we may use the other one.
+        if (jl_type_intersection(t1, rt_hint) == jl_bottom_type)
+            return y;
+        else if (jl_type_intersection(t2, rt_hint) == jl_bottom_type)
+            return x;
+        // if they aren't the same type, consider using the expr type
+        // to instantiate a union-split optimization
+        x = convert_julia_type(ctx, x, rt_hint);
+        y = convert_julia_type(ctx, y, rt_hint);
+        t1 = x.typ;
+        t2 = y.typ;
+    }
 
     Value *ifelse_result;
     bool isboxed;
@@ -813,19 +823,6 @@ static jl_cgval_t emit_select_value(jl_codectx_t &ctx, jl_value_t **args, size_t
                 emit_unbox(ctx, llt1, x, t1));
     }
     else {
-        // type inference may know something we don't, in which case it may
-        // be illegal for us to convert to rt_hint. Check first if either
-        // of the types have empty intersection with the result type,
-        // in which case, we may use the other one.
-        if (jl_type_intersection(t1, rt_hint) == jl_bottom_type) {
-            return y;
-        } else if (jl_type_intersection(t2, rt_hint) == jl_bottom_type) {
-            return x;
-        }
-        // if they aren't the same type, consider using the expr type
-        // to instantiate a union-split optimization
-        x = convert_julia_type(ctx, x, rt_hint);
-        y = convert_julia_type(ctx, y, rt_hint);
         Value *x_tindex = x.TIndex;
         Value *y_tindex = y.TIndex;
         if (x_tindex || y_tindex) {
@@ -1309,12 +1306,14 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     assert(0 && "unreachable");
 }
 
-#define BOX_F(ct,jl_ct)                                                  \
-    box_##ct##_func = boxfunc_llvm(ft1arg(T_prjlvalue, T_##jl_ct),       \
+#define BOX_F(ct,jl_ct,rt)                                      \
+    box_##ct##_func = boxfunc_llvm(ft1arg(rt, T_##jl_ct),       \
                                    "jl_box_"#ct, &jl_box_##ct, m);
 
-#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::SExt);
-#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::ZExt);
+#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
+#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
+#define SBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
+#define UBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
 
 template<typename T>
 static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,

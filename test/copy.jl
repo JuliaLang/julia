@@ -41,13 +41,13 @@ chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
 
         @test_throws ArgumentError copyto!(dest, 1, src(), 1, -1)
 
-        @test_throws BoundsError copyto!(dest, bigsrc())
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, bigsrc())
 
-        @test_throws BoundsError copyto!(dest, 3, src())
-        @test_throws BoundsError copyto!(dest, 3, src(), 1)
-        @test_throws BoundsError copyto!(dest, 3, src(), 1, 2)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src())
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 3, src(), 1, 2)
 
-        @test_throws BoundsError copyto!(dest, 1, src(), 2, 2)
+        @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 1, src(), 2, 2)
     end
 end
 
