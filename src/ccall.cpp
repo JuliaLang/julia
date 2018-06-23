@@ -1256,7 +1256,7 @@ std::string generate_func_sig(const char *fname)
 #else
             paramattrs.push_back(AttributeSet::get(jl_LLVMContext, 1, retattrs));
 #endif
-            fargt_sig.push_back(PointerType::get(lrt, AddressSpace::Derived));
+            fargt_sig.push_back(PointerType::get(lrt, 0));
             sret = 1;
             prt = lrt;
         }
@@ -1930,6 +1930,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
         if (jl_justbits(rt)) {
             result = emit_static_alloca(ctx, lrt);
+            argvals[0] = ctx.builder.CreateBitCast(result, fargt_sig.at(0));
         }
         else {
             // XXX: result needs to be zero'd and given a GC root here
@@ -1937,8 +1938,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             result = emit_allocobj(ctx, jl_datatype_size(rt),
                                    literal_pointer_val(ctx, (jl_value_t*)rt));
             sretboxed = true;
+            gc_uses.push_back(result);
+            argvals[0] = ctx.builder.CreateIntToPtr(emit_pointer_from_objref(ctx, result), fargt_sig.at(0));
         }
-        argvals[0] = emit_bitcast(ctx, decay_derived(result), fargt_sig.at(0));
     }
 
     Instruction *stacksave = NULL;
