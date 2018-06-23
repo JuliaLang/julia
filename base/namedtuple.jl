@@ -293,7 +293,7 @@ end
 """
     delete(nt::NamedTuple, omitname::Symbol)
 
-Construct a copy of a named tuple `nt`, omitting the field named with `omitname`.
+Construct a new named tuple from `nt` by removing the field named `omitname`.
 """
 delete(a::NamedTuple, omitname::Symbol) = delete(a, (omitname,))
 
