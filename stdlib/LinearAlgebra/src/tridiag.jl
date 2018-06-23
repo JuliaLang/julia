@@ -303,7 +303,7 @@ end
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::SymTridiagonal, i::Integer, j::Integer, s::AbstractString)
-    i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
+    return (i == j - 1 || i == j || i == j + 1) ? s : Base.replace_with_centered_mark(s)
 end
 
 #Implements the inverse using the recurrence relation between principal minors
@@ -556,8 +556,8 @@ function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
 end
 
 ## structured matrix methods ##
-function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::AbstractString)
-    i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
+function Base.replace_in_print_matrix(A::Tridiagonal, i::Integer, j::Integer, s::AbstractString)
+    return (i == j - 1 || i == j || i == j + 1) ? s : Base.replace_with_centered_mark(s)
 end
 
 

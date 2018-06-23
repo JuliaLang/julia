@@ -4,20 +4,6 @@ show(io::IO, ::UndefInitializer) = print(io, "array initializer with undefined v
 
 # first a few multiline show functions for types defined before the MIME type:
 
-show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
-
-function show(io::IO, ::MIME"text/plain", r::LinRange)
-    # show for LinRange, e.g.
-    # range(1, stop=3, length=7)
-    # 7-element LinRange{Float64}:
-    #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
-    print(io, summary(r))
-    if !isempty(r)
-        println(io, ":")
-        print_range(io, r)
-    end
-end
-
 function show(io::IO, ::MIME"text/plain", f::Function)
     ft = typeof(f)
     mt = ft.name.mt
@@ -42,7 +28,7 @@ end
 
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
@@ -79,7 +65,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     print(io, summary(iter))
     isempty(iter) && return
     print(io, ". ", isa(iter, KeySet) ? "Keys" : "Values", ":")
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -87,18 +73,15 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
         cols < 4 && (cols = 4)
         cols -= 2 # For prefix "  "
         rows -= 1 # For summary
-    else
-        rows = cols = typemax(Int)
     end
 
     for (i, v) in enumerate(iter)
         print(io, "\n  ")
-        if i == rows < length(iter)
-            print(io, "⋮")
-            break
-        end
-
         if limit
+            if i == rows < length(iter)
+                print(io, "⋮")
+                break
+            end
             str = IOFormatBuffer()
             print(IOContext(str, io), v)
             truncate_text(str, cols, "\r\n")
@@ -112,7 +95,7 @@ end
 function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
@@ -144,13 +127,11 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         if keylen > max(div(cols, 2), cols - vallen)
             keylen = max(cld(cols, 3), cols - vallen)
         end
-    else
-        rows = cols = typemax(Int)
     end
 
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
-        if i == rows < length(t)
+        if limit && i == rows < length(t)
             print(io, "⋮", " "^(keylen - 1), " => ⋮")
             break
         end
@@ -163,11 +144,9 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
                 write(io, kstr)
             end
         else
-            key = sprint(show, k, context=recur_io, sizehint=0)
-            print(recur_io, key)
+            show(recur_io, k)
         end
         print(io, " => ")
-
         if limit
             let vstr = vs[i]
                 truncate_text(vstr, cols - keylen, "\r\n")
@@ -1764,38 +1743,41 @@ dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(stdout::IO, :limit =>
 `alignment(X)` returns a tuple (left,right) showing how many characters are
 needed on either side of an alignment feature such as a decimal point.
 """
-alignment(io::IO, x::Any) = (0, length(sprint(show, x, context=io, sizehint=0)))
-alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(42)` yields (2,0)"
-alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(4.23)` yields (1,3) for `4` and `.23`"
+alignment(io::IO, x::Any) = (0, textwidth(sprint(show, x, context=io)))
+alignment(io::IO, x::Number) = (textwidth(sprint(show, x, context=io)), 0)
+"`alignment(42)` yields (2, 0)"
+alignment(io::IO, x::Integer) = (textwidth(sprint(show, x, context=io)), 0)
+"`alignment(4.23)` yields (1, 3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    repr = sprint(show, x, context=io)
+    m = match(r"^(.*?)((?:[\.eE].*)?)$", repr)
+    m === nothing && return textwidth(repr)
+    return textwidth(m.captures[1]), textwidth(m.captures[2])
 end
-"`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
+"`alignment(1 + 10im)` yields (3, 5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^e][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    repr = sprint(show, x, context=io)
+    m = match(r"^(.*[^e][\+\-])(.*)$", repr)
+    m === nothing && return (textwidth(repr), 0)
+    return (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 function alignment(io::IO, x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    repr = sprint(show, x, context=io)
+    m = match(r"^(.*?/)(/.*)$", repr)
+    m === nothing && return (textwidth(repr), 0)
+    return (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 
 function alignment(io::IO, x::Pair)
-    s = sprint(show, x, context=io, sizehint=0)
+    repr = sprint(show, x, context=io)
     if has_tight_type(x) # i.e. use "=>" for display
         iocompact = IOContext(io, :compact => get(io, :compact, true))
-        left = length(sprint(show, x.first, context=iocompact, sizehint=0))
+        left = textwidth(sprint(show, x.first, context=iocompact))
         left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
         left += !get(io, :compact, false) # spaces are added around "=>"
-        (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
+        return (left + 1, textwidth(repr) - left - 1) # +1 for the "=" part of "=>"
     else
-        (0, length(s)) # as for x::Any
+        return (0, textwidth(repr)) # as for x::Any
     end
 end
 

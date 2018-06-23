@@ -31,6 +31,10 @@
 # 3) Logic for displaying type information
 
 
+## structured matrix methods ##
+replace_in_print_matrix(A::AbstractMatrix, i::Integer, j::Integer, s::AbstractString) = s
+replace_in_print_matrix(A::AbstractVector, i::Integer, j::Integer, s::AbstractString) = s
+
 ## printing with `display`
 
 """
@@ -39,9 +43,9 @@ methods. By default returns a string of the same width as original with a
 centered cdot, used in printing of structural zeros of structured matrices.
 Accept keyword args `c` for alternate single character marker.
 """
-function replace_with_centered_mark(s::AbstractString;c::AbstractChar = '⋅')
-    N = length(s)
-    return join(setindex!([" " for i=1:N],string(c),ceil(Int,N/2)))
+function replace_with_centered_mark(s::AbstractString; c::AbstractChar = '⋅')
+    N = textwidth(s)
+    return join(setindex!([" " for i = 1:N], string(c), ceil(Int, N/2)))
 end
 
 const undef_ref_alignment = (3,3)
@@ -73,13 +77,13 @@ function alignment(io::IO, X::AbstractVecOrMat,
             r = max(r, aij[2]) # right characters
         end
         push!(a, (l, r)) # one tuple per column of X, pruned to screen width
-        if length(a) > 1 && sum(map(sum,a)) + sep*length(a) >= cols_if_complete
+        if length(a) > 1 && sum(sum, a) + sep*length(a) >= cols_if_complete
             pop!(a) # remove this latest tuple if we're already beyond screen width
             break
         end
     end
     if 1 < length(a) < _length(axes(X,2))
-        while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
+        while sum(sum, a) + sep*length(a) >= cols_otherwise
             pop!(a)
         end
     end
@@ -98,17 +102,17 @@ function print_matrix_row(io::IO,
         i::Integer, cols::AbstractVector, sep::AbstractString)
     for (k, j) = enumerate(cols)
         k > length(A) && break
-        if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
+        if isassigned(X, Int(i), Int(j))
             x = X[i,j]
             a = alignment(io, x)
-            sx = sprint(show, x, context=io, sizehint=0)
+            sx = sprint(show, x, context=io)
         else
             a = undef_ref_alignment
             sx = undef_ref_str
         end
         l = repeat(" ", A[k][1]-a[1]) # pad on left and right as needed
         r = repeat(" ", A[k][2]-a[2])
-        prettysx = replace_in_print_matrix(X,i,j,sx)
+        prettysx = replace_in_print_matrix(X, i, j, sx)
         print(io, l, prettysx, r)
         if k < length(A); print(io, sep); end
     end
@@ -344,6 +348,9 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     print_array(io, X)
 end
 
+show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # but prefer the compact form for printing all ranges
+
+
 ## printing with `show`
 
 ### non-Vector arrays
@@ -439,6 +446,78 @@ function show_vector(io::IO, v, opn='[', cls=']')
         show_delim_array(io, v, "", ",", cls, false, inds[end-9], inds[end])
     else
         show_delim_array(io, v, opn, ",", cls, false)
+    end
+end
+
+
+### Special ranges
+
+"""
+`print_range(io, r)` prints out a nice looking range r in terms of its elements
+as if it were `collect(r)`, dependent on the size of the
+terminal, and taking into account whether compact numbers should be shown.
+It figures out the width in characters of each element, and if they
+end up too wide, it shows the first and last elements separated by a
+horizontal elipsis. Typical output will look like `1.0, 2.0, 3.0,…, 4.0, 5.0, 6.0`.
+
+`print_range(io, r, pre, sep, post, hdots)` uses optional
+parameters `pre` and `post` characters for each printed row,
+`sep` separator string between printed elements,
+`hdots` string for the horizontal ellipsis.
+"""
+function print_range(io::IO, r::AbstractRange,
+                     pre::AbstractString = " ",
+                     sep::AbstractString = ", ",
+                     post::AbstractString = "",
+                     hdots::AbstractString = ", \u2026, ") # horiz ellipsis
+    # This function borrows from print_matrix above
+    # and should be called by show and display
+    limit = get(io, :limit, false)
+    sz = displaysize(io)
+    if !haskey(io, :compact)
+        io = IOContext(io, :compact => true)
+    end
+    screenheight, screenwidth = sz[1] - 4, sz[2]
+    screenwidth -= length(pre) + length(post)
+    postsp = ""
+    sepsize = length(sep)
+    m = 1 # treat the range as a one-row matrix
+    n = length(r)
+    # Figure out spacing alignments for r, but only need to examine the
+    # left and right edge columns, as many as could conceivably fit on the
+    # screen, with the middle columns summarized by horz, vert, or diag ellipsis
+    maxpossiblecols = div(screenwidth, 1+sepsize) # assume each element is at least 1 char + 1 separator
+    colsr = n <= maxpossiblecols ? (1:n) : [1:div(maxpossiblecols, 2)+1; (n-div(maxpossiblecols, 2)):n]
+    rowmatrix = reshape(r[colsr], 1, length(colsr)) # treat the range as a one-row matrix for print_matrix_row
+    A = alignment(io, rowmatrix, 1:m, 1:length(rowmatrix), screenwidth, screenwidth, sepsize) # how much space range takes
+    if n <= length(A) # cols fit screen, so print out all elements
+        print(io, pre) # put in pre chars
+        print_matrix_row(io, rowmatrix, A, 1, 1:n, sep) # the entire range
+        print(io, post) # add the post characters
+    else # cols don't fit so put horiz ellipsis in the middle
+        # how many chars left after dividing width of screen in half
+        # and accounting for the horiz ellipsis
+        c = div(screenwidth-length(hdots)+1, 2)+1 # chars remaining for each side of rowmatrix
+        alignR = reverse(alignment(io, rowmatrix, 1:m, length(rowmatrix):-1:1, c, c, sepsize)) # which cols of rowmatrix to put on the right
+        c = screenwidth - sum(map(sum, alignR)) - (length(alignR)-1)*sepsize - length(hdots)
+        alignL = alignment(io, rowmatrix, 1:m, 1:length(rowmatrix), c, c, sepsize) # which cols of rowmatrix to put on the left
+        print(io, pre)   # put in pre chars
+        print_matrix_row(io, rowmatrix, alignL, 1, 1:length(alignL), sep) # left part of range
+        print(io, hdots) # horizontal ellipsis
+        print_matrix_row(io, rowmatrix, alignR, 1, length(rowmatrix)-length(alignR)+1:length(rowmatrix), sep) # right part of range
+        print(io, post)  # post chars
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", r::LinRange)
+    # show for LinRange, e.g.
+    # range(1im, stop=3im, length=7)
+    # 7-element LinRange{Complex{Int64}}:
+    #   0.0+1.0im, 0.0+1.33333im, 0.0+1.66667im, 0.0+2.0im, 0.0+2.33333im, 0.0+2.66667im, 0.0+3.0im
+    print(io, summary(r))
+    if !isempty(r)
+        println(io, ":")
+        print_range(io, r)
     end
 end
 
