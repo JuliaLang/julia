@@ -1715,6 +1715,8 @@ end
 @deprecate_moved eigs "Arpack"
 @deprecate_moved svds "Arpack"
 
+@deprecate_moved spdiagm "SparseArrays"
+
 # PR #27711
 function reduce(op, v0, itr; dims=nothing)
     if dims === nothing

@@ -689,7 +689,6 @@ end
     @deprecate_stdlib issparse   SparseArrays true
     @deprecate_stdlib sparse     SparseArrays true
     @deprecate_stdlib sparsevec  SparseArrays true
-    @deprecate_stdlib spdiagm    SparseArrays true
     @deprecate_stdlib sprand     SparseArrays true
     @deprecate_stdlib sprandn    SparseArrays true
     @deprecate_stdlib spzeros    SparseArrays true
