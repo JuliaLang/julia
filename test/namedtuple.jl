@@ -209,8 +209,8 @@ abstr_nt_22194_3()
 @test Base.delete((a=1, b=2), :b) == (a=1,)
 @test Base.delete((a=1, b=2), :a) == (b=2,)
 @test Base.delete((a=1, b=2), :z) == (a=1, b=2)
-@test typeof(Base.delete((a=1.0, b="two"), :b)) == NamedTuple{(:a,), Tuple{Float64}}
-@test typeof(Base.delete((a=1.0, b="two", c=3), (:b, :c))) == NamedTuple{(:a,), Tuple{Float64}}
+# @inferrable Base.delete((a=1, b=2), (:b,))
+# @inferrable Base.delete((a=1, b=2), :b,)
 
 
 @test Base.structdiff((a=1, b=2), (b=3,)) == (a=1,)
