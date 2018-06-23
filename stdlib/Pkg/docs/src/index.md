@@ -92,9 +92,9 @@ since that could conflict with the configuration of the main application.
 !!! note
     **Projects _vs._ Packages _vs._ Applications:**
 
-    1. Project is an umbrella term: packages and applications are kinds of projects.
-    2. Packages should have UUIDs, applications can have a UUIDs but don't need them.
-    3. Applications can provide global configuration, whereas packages cannot.
+    1. **Project** is an umbrella term: packages and applications are kinds of projects.
+    2. **Packages** should have UUIDs, applications can have a UUIDs but don't need them.
+    3. **Applications** can provide global configuration, whereas packages cannot.
 
 **Library (future work):** a compiled binary dependency (not written in Julia)
 packaged to be used by a Julia project. These are currently typically built in-
@@ -470,7 +470,8 @@ Initialized project at /Users/kristoffer/MyProject/Project.toml
     Status `Project.toml`
 ```
 
-Note that the REPL prompt changed when the new project was initiated. Since this is a newly created project, the status command show it contains no packages.
+Note that the REPL prompt changed when the new project was initiated, in other words, Pkg automatically set the current environment to the
+one that just got initiated. Since this is a newly created project, the status command show it contains no packages.
 Packages added here again in a completely separate environment from the one earlier used.
 
 ## Garbage collecting old, unused packages
@@ -512,7 +513,8 @@ To generate files for a new package, use `pkg> generate`.
 This creates a new project `HelloWorld` with the following files (visualized with the external [`tree` command](https://linux.die.net/man/1/tree)):
 
 ```jl
-julia> cd("HelloWorld")
+shell> cd HelloWorld
+
 shell> tree .
 .
 ├── Project.toml
@@ -543,9 +545,11 @@ greet() = print("Hello World!")
 end # module
 ```
 
-We can now load the project and use it:
+We can now activate the project and load the package:
 
 ```jl
+pkg> activate
+
 julia> import HelloWorld
 
 julia> HelloWorld.greet()
@@ -769,6 +773,8 @@ However, nothing would be installed and your `Project.toml` and `Manifest.toml` 
 Simple clone their project using e.g. `git clone`, `cd` to the project directory and call
 
 ```
+(v0.7) pkg> activate
+
 (SomeProject) pkg> instantiate
 ```
 

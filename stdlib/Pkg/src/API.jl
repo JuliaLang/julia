@@ -151,8 +151,8 @@ function up(ctx::Context, pkgs::Vector{PackageSpec};
     return
 end
 
-resolve() = resolve(Context())
-resolve(ctx::Context) = up(ctx, level=UPLEVEL_FIXED, mode=PKGMODE_MANIFEST, do_update_registry=false)
+resolve(ctx::Context=Context()) =
+    up(ctx, level=UPLEVEL_FIXED, mode=PKGMODE_MANIFEST, do_update_registry=false)
 
 pin(pkg::Union{String, PackageSpec}; kwargs...) = pin([pkg]; kwargs...)
 pin(pkgs::Vector{String}; kwargs...)            = pin([PackageSpec(pkg) for pkg in pkgs]; kwargs...)
@@ -411,6 +411,7 @@ function init(ctx::Context, path::String=pwd(); kwargs...)
     ctx.preview && preview_info()
     Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
     Operations.init(ctx)
+    activate(path)
     ctx.preview && preview_info()
     return
 end
@@ -545,6 +546,33 @@ function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwarg
     new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=false)
     new_apply = Operations.apply_versions(ctx, pkgs, hashes, urls)
     Operations.build_versions(ctx, union(new_apply, new_git))
+end
+
+const ACTIVE_ENV = Ref{Union{String,Nothing}}(nothing)
+
+function _activate(env::Union{String,Nothing})
+    if env === nothing
+        @warn "Current directory is not in a project, nothing activated."
+    else
+        if !isempty(LOAD_PATH) && ACTIVE_ENV[] === LOAD_PATH[1]
+            LOAD_PATH[1] = env
+        else
+            # TODO: warn if ACTIVE_ENV !== nothing ?
+            pushfirst!(LOAD_PATH, env)
+        end
+        ACTIVE_ENV[] = env
+    end
+end
+activate() = _activate(Base.current_env())
+activate(path::String) = _activate(Base.current_env(path))
+
+function deactivate()
+    if !isempty(LOAD_PATH) && ACTIVE_ENV[] === LOAD_PATH[1]
+        popfirst!(LOAD_PATH)
+    else
+        # warn if ACTIVE_ENV !== nothing ?
+    end
+    ACTIVE_ENV[] = nothing
 end
 
 end # module
