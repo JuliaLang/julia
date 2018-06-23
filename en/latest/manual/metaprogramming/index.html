@@ -321,14 +321,27 @@ julia&gt; x = 2
 2
 
 julia&gt; @m x
-1 arguments</code></pre><h2><a class="nav-anchor" id="Code-Generation-1" href="#Code-Generation-1">Code Generation</a></h2><p>When a significant amount of repetitive boilerplate code is required, it is common to generate it programmatically to avoid redundancy. In most languages, this requires an extra build step, and a separate program to generate the repetitive code. In Julia, expression interpolation and <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a> allow such code generation to take place in the normal course of program execution. For example, the following code defines a series of operators on three arguments in terms of their 2-argument forms:</p><pre><code class="language-julia">for op = (:+, :*, :&amp;, :|, :$)
+1 arguments</code></pre><h2><a class="nav-anchor" id="Code-Generation-1" href="#Code-Generation-1">Code Generation</a></h2><p>When a significant amount of repetitive boilerplate code is required, it is common to generate it programmatically to avoid redundancy. In most languages, this requires an extra build step, and a separate program to generate the repetitive code. In Julia, expression interpolation and <a href="../../base/base/#Base.MainInclude.eval"><code>eval</code></a> allow such code generation to take place in the normal course of program execution. For example, consider the following custom type</p><pre><code class="language-julia">struct MyNumber
+    x::Float64
+end
+# output
+</code></pre><p>for which we want to add a number of methods to. We can do this programmatically in the following loop:</p><pre><code class="language-julia">for op = (:sin, :cos, :tan, :log, :exp)
     eval(quote
-        ($op)(a,b,c) = ($op)(($op)(a,b),c)
+        Base.$op(a::MyNumber) = MyNumber($op(a.x))
     end)
-end</code></pre><p>In this manner, Julia acts as its own <a href="https://en.wikipedia.org/wiki/Preprocessor">preprocessor</a>, and allows code generation from inside the language. The above code could be written slightly more tersely using the <code>:</code> prefix quoting form:</p><pre><code class="language-julia">for op = (:+, :*, :&amp;, :|, :$)
-    eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
-end</code></pre><p>This sort of in-language code generation, however, using the <code>eval(quote(...))</code> pattern, is common enough that Julia comes with a macro to abbreviate this pattern:</p><pre><code class="language-julia">for op = (:+, :*, :&amp;, :|, :$)
-    @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
+end
+# output
+</code></pre><p>and we can now use those functions with our custom type:</p><pre><code class="language-julia-repl">julia&gt; x = MyNumber(π)
+MyNumber(3.141592653589793)
+
+julia&gt; sin(x)
+MyNumber(1.2246467991473532e-16)
+
+julia&gt; cos(x)
+MyNumber(-1.0)</code></pre><p>In this manner, Julia acts as its own <a href="https://en.wikipedia.org/wiki/Preprocessor">preprocessor</a>, and allows code generation from inside the language. The above code could be written slightly more tersely using the <code>:</code> prefix quoting form:</p><pre><code class="language-julia">for op = (:sin, :cos, :tan, :log, :exp)
+    eval(:(Base.$op(a::MyNumber) = MyNumber($op(a.x))))
+end</code></pre><p>This sort of in-language code generation, however, using the <code>eval(quote(...))</code> pattern, is common enough that Julia comes with a macro to abbreviate this pattern:</p><pre><code class="language-julia">for op = (:sin, :cos, :tan, :log, :exp)
+    @eval Base.$op(a::MyNumber) = MyNumber($op(a.x))
 end</code></pre><p>The <a href="../../base/base/#Base.@eval"><code>@eval</code></a> macro rewrites this call to be precisely equivalent to the above longer versions. For longer blocks of generated code, the expression argument given to <a href="../../base/base/#Base.@eval"><code>@eval</code></a> can be a block:</p><pre><code class="language-julia">@eval begin
     # multiple lines
 end</code></pre><h2><a class="nav-anchor" id="Non-Standard-String-Literals-1" href="#Non-Standard-String-Literals-1">Non-Standard String Literals</a></h2><p>Recall from <a href="../strings/#non-standard-string-literals-1">Strings</a> that string literals prefixed by an identifier are called non-standard string literals, and can have different semantics than un-prefixed string literals. For example:</p><ul><li><code>r&quot;^\s*(?:#|$)&quot;</code> produces a regular expression object rather than a string</li><li><code>b&quot;DATA\xff\u2200&quot;</code> is a byte array literal for <code>[68,65,84,65,255,226,136,128]</code>.</li></ul><p>Perhaps surprisingly, these behaviors are not hard-coded into the Julia parser or compiler. Instead, they are custom behaviors provided by a general mechanism that anyone can use: prefixed string literals are parsed as calls to specially-named macros. For example, the regular expression macro is just the following:</p><pre><code class="language-julia">macro r_str(p)
