@@ -79,6 +79,7 @@ An array of paths for `using` and `import` statements to consdier as project
 environments or package directories when loading code. See Code Loading.
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
+const ACTIVE_ENV = Ref{Union{String, Nothing}}(nothing)
 
 function current_env(dir::AbstractString)
     # look for project file in current dir and parents

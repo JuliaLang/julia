@@ -184,7 +184,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
     return path
 end
 
-load_path() = String[env for env in map(load_path_expand, LOAD_PATH) if env ≠ nothing]
+load_path() = [ACTIVE_ENV[] === nothing ? [] : ACTIVE_ENV[]; String[env for env in map(load_path_expand, LOAD_PATH) if env ≠ nothing]]
 
 ## package identification: determine unique identity of package to be loaded ##
 

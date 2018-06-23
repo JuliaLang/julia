@@ -228,10 +228,15 @@ mutable struct EnvCache
     function EnvCache(env::Union{Nothing,String}=nothing)
         if env isa Nothing
             project_file = nothing
-            for entry in LOAD_PATH
-                project_file = Base.load_path_expand(entry)
-                project_file isa String && !isdir(project_file) && break
-                project_file = nothing
+            if Base.ACTIVE_ENV[] !== nothing
+                project_file = Base.ACTIVE_ENV[]
+            end
+            if project_file == nothing
+                for entry in LOAD_PATH
+                    project_file = Base.load_path_expand(entry)
+                    project_file isa String && !isdir(project_file) && break
+                    project_file = nothing
+                end
             end
             if project_file == nothing
                 project_dir = nothing
