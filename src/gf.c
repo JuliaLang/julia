@@ -829,6 +829,10 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
     // caller must hold the mt->writelock
     jl_method_t *definition = m->func.method;
     jl_value_t *decl = (jl_value_t*)m->sig;
+    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(*cache, tt, NULL, /*inexact*/0, /*subtype*/1, jl_cachearg_offset(mt), world);
+    if (entry && entry->func.value)
+        return (jl_method_instance_t*)entry->func.value;
+
     jl_value_t *temp = NULL;
     jl_value_t *temp2 = NULL;
     jl_value_t *temp3 = NULL;
@@ -1030,12 +1034,18 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
 {
     // caller must hold the mt->writelock
     jl_typemap_entry_t *entry = NULL;
-    jl_svec_t *env = jl_emptysvec;
-    jl_method_t *func = NULL;
-    jl_tupletype_t *sig = NULL;
-    JL_GC_PUSH4(&env, &entry, &func, &sig);
+    entry = jl_typemap_assoc_by_type(mt->cache, tt, NULL, inexact, /*subtype*/1, jl_cachearg_offset(mt), world);
+    if (entry != NULL && entry != INEXACT_ENTRY && entry->func.value != NULL) {
+        assert(entry->func.linfo->min_world <= entry->min_world && entry->func.linfo->max_world >= entry->max_world &&
+                "typemap consistency error: MethodInstance doesn't apply to full range of its entry");
+        return entry->func.linfo;
+    }
 
-    entry = jl_typemap_assoc_by_type(mt->defs, tt, &env, inexact, 1, 0, world);
+    jl_svec_t *env = jl_emptysvec;
+    jl_tupletype_t *sig = NULL;
+    JL_GC_PUSH2(&env, &sig);
+
+    entry = jl_typemap_assoc_by_type(mt->defs, tt, &env, inexact, /*subtype*/1, /*offs*/0, world);
     if (entry == NULL || entry == INEXACT_ENTRY) {
         JL_GC_POP();
         return NULL;
@@ -1527,36 +1537,22 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     return tt;
 }
 
-jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
-                                               int cache, int inexact, int allow_exec, size_t world)
+static jl_method_instance_t *jl_method_lookup_by_type(
+        jl_methtable_t *mt, jl_tupletype_t *types,
+        int cache, int inexact, int allow_exec, size_t world)
 {
     jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->cache, types, NULL, 0, 1, jl_cachearg_offset(mt), world);
-    if (entry) {
+    if (entry && entry->func.value) {
         jl_method_instance_t *linfo = (jl_method_instance_t*)entry->func.value;
         assert(linfo->min_world <= entry->min_world && linfo->max_world >= entry->max_world &&
                 "typemap consistency error: MethodInstance doesn't apply to full range of its entry");
         return linfo;
     }
     JL_LOCK(&mt->writelock);
-    entry = jl_typemap_assoc_by_type(mt->cache, types, NULL, 0, 1, jl_cachearg_offset(mt), world);
-    if (entry) {
-        jl_method_instance_t *linfo = (jl_method_instance_t*)entry->func.value;
-        assert(linfo->min_world <= entry->min_world && linfo->max_world >= entry->max_world &&
-                "typemap consistency error: MethodInstance doesn't apply to full range of its entry");
-        JL_UNLOCK(&mt->writelock);
-        return linfo;
-    }
     if (jl_is_leaf_type((jl_value_t*)types))
         cache = 1;
     jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, cache, inexact, allow_exec, world);
-    if (cache) {
-        JL_UNLOCK(&mt->writelock);
-    }
-    else {
-        JL_GC_PUSH1(&sf);
-        JL_UNLOCK(&mt->writelock);
-        JL_GC_POP();
-    }
+    JL_UNLOCK(&mt->writelock);
     return sf;
 }
 
@@ -1571,24 +1567,11 @@ jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, si
     if (entry)
         return entry->func.linfo;
     JL_LOCK(&mt->writelock);
-    entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt), world);
-    if (entry) {
-        JL_UNLOCK(&mt->writelock);
-        return entry->func.linfo;
-    }
     jl_tupletype_t *tt = arg_type_tuple(args, nargs);
-    jl_method_instance_t *sf = NULL;
-    JL_GC_PUSH2(&tt, &sf);
-    sf = jl_mt_assoc_by_type(mt, tt, cache, 0, 1, world);
-    if (cache) {
-        JL_UNLOCK(&mt->writelock);
-    }
-    else {
-        JL_GC_PUSH1(&sf);
-        JL_UNLOCK(&mt->writelock);
-        JL_GC_POP();
-    }
+    JL_GC_PUSH1(&tt);
+    jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, tt, cache, /*inexect*/0, 1, world);
     JL_GC_POP();
+    JL_UNLOCK(&mt->writelock);
     return sf;
 }
 
@@ -1882,18 +1865,12 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t **args, uint32
     }
     else {
         JL_LOCK(&mt->writelock);
-        entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt), world);
-        if (entry) {
-            mfunc = entry->func.linfo;
-        }
-        else {
-            // cache miss case
-            JL_TIMING(METHOD_LOOKUP_SLOW);
-            jl_tupletype_t *tt = arg_type_tuple(args, nargs);
-            JL_GC_PUSH1(&tt);
-            mfunc = jl_mt_assoc_by_type(mt, tt, 1, 0, 1, world);
-            JL_GC_POP();
-        }
+        // cache miss case
+        JL_TIMING(METHOD_LOOKUP_SLOW);
+        jl_tupletype_t *tt = arg_type_tuple(args, nargs);
+        JL_GC_PUSH1(&tt);
+        mfunc = jl_mt_assoc_by_type(mt, tt, /*cache*/1, /*inexect*/0, /*allow_exec*/1, world);
+        JL_GC_POP();
         JL_UNLOCK(&mt->writelock);
         if (mfunc == NULL) {
 #ifdef JL_TRACE
@@ -1977,26 +1954,19 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
     }
     else {
         JL_LOCK(&method->writelock);
-        if (method->invokes.unknown != NULL)
-            tm = jl_typemap_assoc_exact(method->invokes, args, nargs, jl_cachearg_offset(mt), world);
-        if (tm) {
-            mfunc = tm->func.linfo;
+        tt = arg_type_tuple(args, nargs);
+        if (jl_is_unionall(entry->sig)) {
+            jl_value_t *ti = jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
+            assert(ti != (jl_value_t*)jl_bottom_type);
+            (void)ti;
         }
-        else {
-            tt = arg_type_tuple(args, nargs);
-            if (jl_is_unionall(entry->sig)) {
-                jl_value_t *ti = jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
-                assert(ti != (jl_value_t*)jl_bottom_type);
-                (void)ti;
-            }
-            sig = join_tsig(tt, entry->sig);
-            jl_method_t *func = entry->func.method;
+        sig = join_tsig(tt, entry->sig);
+        jl_method_t *func = entry->func.method;
 
-            if (func->invokes.unknown == NULL)
-                func->invokes.unknown = jl_nothing;
+        if (func->invokes.unknown == NULL)
+            func->invokes.unknown = jl_nothing;
 
-            mfunc = cache_method(mt, &func->invokes, entry->func.value, sig, tt, entry, world, tpenv, 1);
-        }
+        mfunc = cache_method(mt, &func->invokes, entry->func.value, sig, tt, entry, world, tpenv, 1);
         JL_UNLOCK(&method->writelock);
     }
     JL_GC_POP();
