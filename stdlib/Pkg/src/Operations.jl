@@ -430,22 +430,24 @@ function install_git(
     version::Union{VersionNumber,Nothing},
     version_path::String
 )::Nothing
-    creds = LibGit2.CachedCredentials()
-    clones_dir = joinpath(depots()[1], "clones")
-    ispath(clones_dir) || mkpath(clones_dir)
-    repo_path = joinpath(clones_dir, string(uuid))
-    repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-        GitTools.clone(urls[1], repo_path; isbare=true, header = "[$uuid] $name from $(urls[1])", credentials=creds)
-    end
-    git_hash = LibGit2.GitHash(hash.bytes)
-    for url in urls
-        try LibGit2.with(LibGit2.GitObject, repo, git_hash) do g
-            end
-            break # object was found, we can stop
-        catch err
-            err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+    repo, git_hash = Base.shred!(LibGit2.CachedCredentials()) do creds
+        clones_dir = joinpath(depots()[1], "clones")
+        ispath(clones_dir) || mkpath(clones_dir)
+        repo_path = joinpath(clones_dir, string(uuid))
+        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+            GitTools.clone(urls[1], repo_path; isbare=true, header = "[$uuid] $name from $(urls[1])", credentials=creds)
         end
-        GitTools.fetch(repo, url, refspecs=refspecs, credentials=creds)
+        git_hash = LibGit2.GitHash(hash.bytes)
+        for url in urls
+            try LibGit2.with(LibGit2.GitObject, repo, git_hash) do g
+                end
+                break # object was found, we can stop
+            catch err
+                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+            end
+            GitTools.fetch(repo, url, refspecs=refspecs, credentials=creds)
+        end
+        return repo, git_hash
     end
     tree = try
         LibGit2.GitObject(repo, git_hash)

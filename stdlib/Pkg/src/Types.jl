@@ -417,43 +417,110 @@ end
 casesensitive_isdir(dir::String) = isdir_windows_workaround(dir) && dir in readdir(joinpath(dir, ".."))
 
 function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
-    creds = LibGit2.CachedCredentials()
-    env = ctx.env
-    new_uuids = UUID[]
-    for pkg in pkgs
-        pkg.repo == nothing && continue
-        pkg.special_action = PKGSPEC_DEVELOPED
-        isempty(pkg.repo.url) && set_repo_for_pkg!(env, pkg)
+    Base.shred!(LibGit2.CachedCredentials()) do creds
+        env = ctx.env
+        new_uuids = UUID[]
+        for pkg in pkgs
+            pkg.repo == nothing && continue
+            pkg.special_action = PKGSPEC_DEVELOPED
+            isempty(pkg.repo.url) && set_repo_for_pkg!(env, pkg)
 
 
-        if isdir_windows_workaround(pkg.repo.url)
-            # Developing a local package, just point `pkg.path` to it
-            pkg.path = abspath(pkg.repo.url)
-            folder_already_downloaded = true
-            project_path = pkg.repo.url
-            parse_package!(ctx, pkg, project_path)
-        else
-            # We save the repo in case another environement wants to
-            # develop from the same repo, this avoids having to reclone it
-            # from scratch.
-            clone_path = joinpath(depots()[1], "clones")
-            mkpath(clone_path)
-            repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
+            if isdir_windows_workaround(pkg.repo.url)
+                # Developing a local package, just point `pkg.path` to it
+                pkg.path = abspath(pkg.repo.url)
+                folder_already_downloaded = true
+                project_path = pkg.repo.url
+                parse_package!(ctx, pkg, project_path)
+            else
+                # We save the repo in case another environement wants to
+                # develop from the same repo, this avoids having to reclone it
+                # from scratch.
+                clone_path = joinpath(depots()[1], "clones")
+                mkpath(clone_path)
+                repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
+                repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+                    r = GitTools.clone(pkg.repo.url, repo_path)
+                    GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                    r, true
+                end
+                if !just_cloned
+                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                end
+                close(repo)
+
+                # Copy the repo to a temporary place and check out the rev
+                project_path = mktempdir()
+                cp(repo_path, project_path; force=true)
+                repo = LibGit2.GitRepo(project_path)
+                rev = pkg.repo.rev
+                if isempty(rev)
+                    if LibGit2.isattached(repo)
+                        rev = LibGit2.branch(repo)
+                    else
+                        rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                    end
+                end
+                gitobject, isbranch = checkout_rev!(repo, rev)
+                close(repo); close(gitobject)
+
+                parse_package!(ctx, pkg, project_path)
+                dev_pkg_path = joinpath(Pkg.devdir(), pkg.name)
+                if isdir(dev_pkg_path)
+                    if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
+                        cmderror("Path `$(dev_pkg_path)` exists but it does not contain `src/$(pkg.name).jl")
+                    else
+                        @info "Path `$(dev_pkg_path)` exists and looks like the correct package, using existing path instead of cloning"
+                    end
+                else
+                    mkpath(dev_pkg_path)
+                    mv(project_path, dev_pkg_path; force=true)
+                    push!(new_uuids, pkg.uuid)
+                end
+                pkg.path = dev_pkg_path
+            end
+            @assert pkg.path != nothing
+        end
+        return new_uuids
+    end
+end
+
+function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
+    Base.shred!(LibGit2.CachedCredentials()) do creds
+        env = ctx.env
+        new_uuids = UUID[]
+        for pkg in pkgs
+            pkg.repo == nothing && continue
+            pkg.special_action = PKGSPEC_REPO_ADDED
+            isempty(pkg.repo.url) && set_repo_for_pkg!(env, pkg)
+            clones_dir = joinpath(depots()[1], "clones")
+            mkpath(clones_dir)
+            repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
             repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-                r = GitTools.clone(pkg.repo.url, repo_path)
+                r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
                 GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
                 r, true
             end
-            if !just_cloned
-                GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+            info = manifest_info(env, pkg.uuid)
+            pinned = (info != nothing && get(info, "pinned", false))
+            if upgrade_or_add && !pinned && !just_cloned
+                rev = pkg.repo.rev
+                try
+                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                catch e
+                    e isa LibGit2.GitError || rethrow(e)
+                    cmderror("failed to fetch from $(pkg.repo.url), error: $e")
+                end
             end
-            close(repo)
+            if upgrade_or_add && !pinned
+                rev = pkg.repo.rev
+            else
+                # Not upgrading so the rev should be the current git-tree-sha
+                rev = info["git-tree-sha1"]
+                pkg.version = VersionNumber(info["version"])
+            end
 
-            # Copy the repo to a temporary place and check out the rev
-            project_path = mktempdir()
-            cp(repo_path, project_path; force=true)
-            repo = LibGit2.GitRepo(project_path)
-            rev = pkg.repo.rev
+            # see if we can get rev as a branch
             if isempty(rev)
                 if LibGit2.isattached(repo)
                     rev = LibGit2.branch(repo)
@@ -462,110 +529,45 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                 end
             end
             gitobject, isbranch = checkout_rev!(repo, rev)
-            close(repo); close(gitobject)
-
-            parse_package!(ctx, pkg, project_path)
-            dev_pkg_path = joinpath(Pkg.devdir(), pkg.name)
-            if isdir(dev_pkg_path)
-                if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
-                    cmderror("Path `$(dev_pkg_path)` exists but it does not contain `src/$(pkg.name).jl")
-                else
-                    @info "Path `$(dev_pkg_path)` exists and looks like the correct package, using existing path instead of cloning"
+            if !isbranch
+                # If the user gave a shortened commit SHA, might as well update it to the full one
+                pkg.repo.rev = string(LibGit2.GitHash(gitobject))
+            end
+            git_tree = LibGit2.peel(LibGit2.GitTree, gitobject)
+            @assert git_tree isa LibGit2.GitTree
+            pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
+            version_path = nothing
+            folder_already_downloaded = false
+            if has_uuid(pkg) && has_name(pkg)
+                version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
+                isdir(version_path) && (folder_already_downloaded = true)
+                info = manifest_info(env, pkg.uuid)
+                if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
+                    # Same tree sha and this version already downloaded, nothing left to do
+                    pkg.version = VersionNumber(info["version"])
+                    continue
                 end
+            end
+            if folder_already_downloaded
+                project_path = version_path
             else
-                mkpath(dev_pkg_path)
-                mv(project_path, dev_pkg_path; force=true)
+                project_path = mktempdir()
+                opts = LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE,
+                    target_directory=Base.unsafe_convert(Cstring, project_path))
+                LibGit2.checkout_tree(repo, git_tree, options=opts)
+            end
+            close(repo); close(git_tree); close(gitobject)
+            parse_package!(ctx, pkg, project_path)
+            if !folder_already_downloaded
+                version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
+                mkpath(version_path)
+                mv(project_path, version_path; force=true)
                 push!(new_uuids, pkg.uuid)
             end
-            pkg.path = dev_pkg_path
+            @assert pkg.version isa VersionNumber
         end
-        @assert pkg.path != nothing
+        return new_uuids
     end
-    return new_uuids
-end
-
-function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgrade_or_add::Bool=true)
-    creds = LibGit2.CachedCredentials()
-    env = ctx.env
-    new_uuids = UUID[]
-    for pkg in pkgs
-        pkg.repo == nothing && continue
-        pkg.special_action = PKGSPEC_REPO_ADDED
-        isempty(pkg.repo.url) && set_repo_for_pkg!(env, pkg)
-        clones_dir = joinpath(depots()[1], "clones")
-        mkpath(clones_dir)
-        repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
-        repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-            r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
-            GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
-            r, true
-        end
-        info = manifest_info(env, pkg.uuid)
-        pinned = (info != nothing && get(info, "pinned", false))
-        if upgrade_or_add && !pinned && !just_cloned
-            rev = pkg.repo.rev
-            try
-                GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
-            catch e
-                e isa LibGit2.GitError || rethrow(e)
-                cmderror("failed to fetch from $(pkg.repo.url), error: $e")
-            end
-        end
-        if upgrade_or_add && !pinned
-            rev = pkg.repo.rev
-        else
-            # Not upgrading so the rev should be the current git-tree-sha
-            rev = info["git-tree-sha1"]
-            pkg.version = VersionNumber(info["version"])
-        end
-
-        # see if we can get rev as a branch
-        if isempty(rev)
-            if LibGit2.isattached(repo)
-                rev = LibGit2.branch(repo)
-            else
-                rev = string(LibGit2.GitHash(LibGit2.head(repo)))
-            end
-        end
-        gitobject, isbranch = checkout_rev!(repo, rev)
-        if !isbranch
-            # If the user gave a shortened commit SHA, might as well update it to the full one
-            pkg.repo.rev = string(LibGit2.GitHash(gitobject))
-        end
-        git_tree = LibGit2.peel(LibGit2.GitTree, gitobject)
-        @assert git_tree isa LibGit2.GitTree
-        pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
-        version_path = nothing
-        folder_already_downloaded = false
-        if has_uuid(pkg) && has_name(pkg)
-            version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
-            isdir(version_path) && (folder_already_downloaded = true)
-            info = manifest_info(env, pkg.uuid)
-            if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
-                # Same tree sha and this version already downloaded, nothing left to do
-                pkg.version = VersionNumber(info["version"])
-                continue
-            end
-        end
-        if folder_already_downloaded
-            project_path = version_path
-        else
-            project_path = mktempdir()
-            opts = LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE,
-                target_directory=Base.unsafe_convert(Cstring, project_path))
-            LibGit2.checkout_tree(repo, git_tree, options=opts)
-        end
-        close(repo); close(git_tree); close(gitobject)
-        parse_package!(ctx, pkg, project_path)
-        if !folder_already_downloaded
-            version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
-            mkpath(version_path)
-            mv(project_path, version_path; force=true)
-            push!(new_uuids, pkg.uuid)
-        end
-        @assert pkg.version isa VersionNumber
-    end
-    return new_uuids
 end
 
 function parse_package!(ctx, pkg, project_path)
@@ -790,12 +792,13 @@ function registries(; clone_default=true)::Vector{String}
     if clone_default
         if !ispath(user_regs)
             mkpath(user_regs)
-            creds = LibGit2.CachedCredentials()
-            printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
-            for (reg, url) in DEFAULT_REGISTRIES
-                path = joinpath(user_regs, reg)
-                repo = GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)
-                close(repo)
+            Base.shred!(LibGit2.CachedCredentials()) do creds
+                printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
+                for (reg, url) in DEFAULT_REGISTRIES
+                    path = joinpath(user_regs, reg)
+                    repo = GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)
+                    close(repo)
+                end
             end
         end
     end
