@@ -283,7 +283,7 @@ end
 """
     delete(nt::NamedTuple, omitnames::Tuple{Vararg{Symbol}})
 
-Construct a copy of a named tuple `nt`, omitting the fields named in `omitnames`.
+Construct a new named tuple by omitting the fields in `omitnames` from `nt`.
 """
 function delete(a::NamedTuple{an}, omitnames::Tuple{Vararg{Symbol}}) where {an}
     names = diff_names(an, omitnames)
