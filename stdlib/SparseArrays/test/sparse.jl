@@ -343,86 +343,6 @@ dA = Array(sA)
     @test A == B
 end
 
-@testset "conj" begin
-    cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
-    @test Array(conj.(cA)) == conj(Array(cA))
-    @test Array(conj!(copy(cA))) == conj(Array(cA))
-end
-
-@testset "SparseMatrixCSC [c]transpose[!] and permute[!]" begin
-    smalldim = 5
-    largedim = 10
-    nzprob = 0.4
-    (m, n) = (smalldim, smalldim)
-    A = sprand(m, n, nzprob)
-    X = similar(A)
-    C = copy(transpose(A))
-    p = randperm(m)
-    q = randperm(n)
-    @testset "common error checking of [c]transpose! methods (ftranspose!)" begin
-        @test_throws DimensionMismatch transpose!(A[:, 1:(smalldim - 1)], A)
-        @test_throws DimensionMismatch transpose!(A[1:(smalldim - 1), 1], A)
-        @test_throws ArgumentError transpose!((B = similar(A); resize!(B.rowval, nnz(A) - 1); B), A)
-        @test_throws ArgumentError transpose!((B = similar(A); resize!(B.nzval, nnz(A) - 1); B), A)
-    end
-    @testset "common error checking of permute[!] methods / source-perm compat" begin
-        @test_throws DimensionMismatch permute(A, p[1:(end - 1)], q)
-        @test_throws DimensionMismatch permute(A, p, q[1:(end - 1)])
-    end
-    @testset "common error checking of permute[!] methods / source-dest compat" begin
-        @test_throws DimensionMismatch permute!(A[1:(m - 1), :], A, p, q)
-        @test_throws DimensionMismatch permute!(A[:, 1:(m - 1)], A, p, q)
-        @test_throws ArgumentError permute!((Y = copy(X); resize!(Y.rowval, nnz(A) - 1); Y), A, p, q)
-        @test_throws ArgumentError permute!((Y = copy(X); resize!(Y.nzval, nnz(A) - 1); Y), A, p, q)
-    end
-    @testset "common error checking of permute[!] methods / source-workmat compat" begin
-        @test_throws DimensionMismatch permute!(X, A, p, q, C[1:(m - 1), :])
-        @test_throws DimensionMismatch permute!(X, A, p, q, C[:, 1:(m - 1)])
-        @test_throws ArgumentError permute!(X, A, p, q, (D = copy(C); resize!(D.rowval, nnz(A) - 1); D))
-        @test_throws ArgumentError permute!(X, A, p, q, (D = copy(C); resize!(D.nzval, nnz(A) - 1); D))
-    end
-    @testset "common error checking of permute[!] methods / source-workcolptr compat" begin
-        @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(undef, length(A.colptr) - 1))
-    end
-    @testset "common error checking of permute[!] methods / permutation validity" begin
-        @test_throws ArgumentError permute!(A, (r = copy(p); r[2] = r[1]; r), q)
-        @test_throws ArgumentError permute!(A, (r = copy(p); r[2] = m + 1; r), q)
-        @test_throws ArgumentError permute!(A, p, (r = copy(q); r[2] = r[1]; r))
-        @test_throws ArgumentError permute!(A, p, (r = copy(q); r[2] = n + 1; r))
-    end
-    @testset "overall functionality of [c]transpose[!] and permute[!]" begin
-        for (m, n) in ((smalldim, smalldim), (smalldim, largedim), (largedim, smalldim))
-            A = sprand(m, n, nzprob)
-            At = copy(transpose(A))
-            # transpose[!]
-            fullAt = Array(transpose(A))
-            @test copy(transpose(A)) == fullAt
-            @test transpose!(similar(At), A) == fullAt
-            # adjoint[!]
-            C = A + im*A/2
-            fullCh = Array(C')
-            @test copy(C') == fullCh
-            @test adjoint!(similar(sparse(fullCh)), C) == fullCh
-            # permute[!]
-            p = randperm(m)
-            q = randperm(n)
-            fullPAQ = Array(A)[p,q]
-            @test permute(A, p, q) == sparse(Array(A[p,q]))
-            @test permute!(similar(A), A, p, q) == fullPAQ
-            @test permute!(similar(A), A, p, q, similar(At)) == fullPAQ
-            @test permute!(copy(A), p, q) == fullPAQ
-            @test permute!(copy(A), p, q, similar(At)) == fullPAQ
-            @test permute!(copy(A), p, q, similar(At), similar(A.colptr)) == fullPAQ
-        end
-    end
-end
-
-@testset "transpose of SubArrays" begin
-    A = view(sprandn(10, 10, 0.3), 1:4, 1:4)
-    @test copy(transpose(Array(A))) == Array(transpose(A))
-    @test copy(adjoint(Array(A))) == Array(adjoint(A))
-end
-
 @testset "exp" begin
     A = sprandn(5,5,0.2)
     @test ℯ.^A ≈ ℯ.^Array(A)
@@ -583,7 +503,7 @@ end
         @test I == imag.(S) == imag(S)
         @test conj(Array(S)) == conj.(S) == conj(S)
         @test real.(spR) == R
-        @test nnz(imag.(spR)) == nnz(imag(spR)) == 0
+        @test nnz(imag.(spR)) == 0
         @test abs.(S) == abs.(D)
         @test abs2.(S) == abs2.(D)
 
@@ -1115,26 +1035,6 @@ Base.isless(x::CustomType, y::CustomType) = isless(x.x, y.x)
     end
 end
 
-@testset "rotations" begin
-    a = sparse( [1,1,2,3], [1,3,4,1], [1,2,3,4] )
-
-    @test rot180(a,2) == a
-    @test rot180(a,1) == sparse( [3,3,2,1], [4,2,1,4], [1,2,3,4] )
-    @test rotr90(a,1) == sparse( [1,3,4,1], [3,3,2,1], [1,2,3,4] )
-    @test rotl90(a,1) == sparse( [4,2,1,4], [1,1,2,3], [1,2,3,4] )
-    @test rotl90(a,2) == rot180(a)
-    @test rotr90(a,2) == rot180(a)
-    @test rotl90(a,3) == rotr90(a)
-    @test rotr90(a,3) == rotl90(a)
-
-    #ensure we have preserved the correct dimensions!
-
-    a = sparse(1.0I, 3, 5)
-    @test size(rot180(a)) == (3,5)
-    @test size(rotr90(a)) == (5,3)
-    @test size(rotl90(a)) == (5,3)
-end
-
 function test_getindex_algs(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int) where {Tv,Ti}
     # Sorted vectors for indexing rows.
     # Similar to getindex_general but without the transpose trick.
@@ -1331,14 +1231,6 @@ end
     @test one(sparse([1 1; 1 1]))::SparseMatrixCSC == [1 0; 0 1]
 end
 
-@testset "istriu/istril" begin
-    local A = fill(1, 5, 5)
-    @test istriu(sparse(triu(A)))
-    @test !istriu(sparse(A))
-    @test istril(sparse(tril(A)))
-    @test !istril(sparse(A))
-end
-
 @testset "droptol" begin
     local A = guardsrand(1234321) do
         triu(sprand(10, 10, 0.2))
@@ -1393,136 +1285,6 @@ end
     @test nnz(dropzeros!(sparse([1, 2, 3],[1, 2, 3],[0.0, 1.0, 2.0]))) == 2
 end
 
-@testset "trace" begin
-    @test_throws DimensionMismatch tr(spzeros(5,6))
-    @test tr(sparse(1.0I, 5, 5)) == 5
-end
-
-@testset "spdiagm" begin
-    x = fill(1, 2)
-    @test spdiagm(0 => x, -1 => x) == [1 0 0; 1 1 0; 0 1 0]
-    @test spdiagm(0 => x,  1 => x) == [1 1 0; 0 1 1; 0 0 0]
-
-    for (x, y) in ((rand(5), rand(4)),(sparse(rand(5)), sparse(rand(4))))
-        @test spdiagm(-1 => x)::SparseMatrixCSC         == diagm(-1 => x)
-        @test spdiagm( 0 => x)::SparseMatrixCSC         == diagm( 0 => x) == sparse(Diagonal(x))
-        @test spdiagm(-1 => x)::SparseMatrixCSC         == diagm(-1 => x)
-        @test spdiagm(0 => x, -1 => y)::SparseMatrixCSC == diagm(0 => x, -1 => y)
-        @test spdiagm(0 => x,  1 => y)::SparseMatrixCSC == diagm(0 => x,  1 => y)
-    end
-    # promotion
-    @test spdiagm(0 => [1,2], 1 => [3.5], -1 => [4+5im]) == [1 3.5; 4+5im 2]
-end
-
-@testset "diag" begin
-    for T in (Float64, ComplexF64)
-        S1 = sprand(T,  5,  5, 0.5)
-        S2 = sprand(T, 10,  5, 0.5)
-        S3 = sprand(T,  5, 10, 0.5)
-        for S in (S1, S2, S3)
-            local A = Matrix(S)
-            @test diag(S)::SparseVector{T,Int} == diag(A)
-            for k in -size(S,1):size(S,2)
-                @test diag(S, k)::SparseVector{T,Int} == diag(A, k)
-            end
-            @test_throws ArgumentError diag(S, -size(S,1)-1)
-            @test_throws ArgumentError diag(S,  size(S,2)+1)
-        end
-    end
-    # test that stored zeros are still stored zeros in the diagonal
-    S = sparse([1,3],[1,3],[0.0,0.0]); V = diag(S)
-    @test V.nzind == [1,3]
-    @test V.nzval == [0.0,0.0]
-end
-
-@testset "expandptr" begin
-    local A = sparse(1.0I, 5, 5)
-    @test SparseArrays.expandptr(A.colptr) == 1:5
-    A[1,2] = 1
-    @test SparseArrays.expandptr(A.colptr) == [1; 2; 2; 3; 4; 5]
-    @test_throws ArgumentError SparseArrays.expandptr([2; 3])
-end
-
-@testset "triu/tril" begin
-    n = 5
-    local A = sprand(n, n, 0.2)
-    AF = Array(A)
-    @test Array(triu(A,1)) == triu(AF,1)
-    @test Array(tril(A,1)) == tril(AF,1)
-    @test Array(triu!(copy(A), 2)) == triu(AF,2)
-    @test Array(tril!(copy(A), 2)) == tril(AF,2)
-    @test_throws ArgumentError tril(A, -n - 2)
-    @test_throws ArgumentError tril(A, n)
-    @test_throws ArgumentError triu(A, -n)
-    @test_throws ArgumentError triu(A, n + 2)
-    @test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -5)
-    @test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 4)
-    @test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -3)
-    @test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 6)
-
-    # fkeep trim option
-    @test isequal(length(tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -1).rowval), 0)
-end
-
-@testset "ishermitian/issymmetric" begin
-    local A
-    # real matrices
-    A = sparse(1.0I, 5, 5)
-    @test ishermitian(A) == true
-    @test issymmetric(A) == true
-    A[1,3] = 1.0
-    @test ishermitian(A) == false
-    @test issymmetric(A) == false
-    A[3,1] = 1.0
-    @test ishermitian(A) == true
-    @test issymmetric(A) == true
-
-    # complex matrices
-    A = sparse((1.0 + 1.0im)I, 5, 5)
-    @test ishermitian(A) == false
-    @test issymmetric(A) == true
-    A[1,4] = 1.0 + im
-    @test ishermitian(A) == false
-    @test issymmetric(A) == false
-
-    A = sparse(ComplexF64(1)I, 5, 5)
-    A[3,2] = 1.0 + im
-    @test ishermitian(A) == false
-    @test issymmetric(A) == false
-    A[2,3] = 1.0 - im
-    @test ishermitian(A) == true
-    @test issymmetric(A) == false
-
-    A = sparse(zeros(5,5))
-    @test ishermitian(A) == true
-    @test issymmetric(A) == true
-
-    # explicit zeros
-    A = sparse(ComplexF64(1)I, 5, 5)
-    A[3,1] = 2
-    A.nzval[2] = 0.0
-    @test ishermitian(A) == true
-    @test issymmetric(A) == true
-
-    # 15504
-    m = n = 5
-    colptr = [1, 5, 9, 13, 13, 17]
-    rowval = [1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5]
-    nzval = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0]
-    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
-    @test issymmetric(A) == true
-    A.nzval[end - 3]  = 2.0
-    @test issymmetric(A) == false
-
-    # 16521
-    @test issymmetric(sparse([0 0; 1 0])) == false
-    @test issymmetric(sparse([0 1; 0 0])) == false
-    @test issymmetric(sparse([0 0; 1 1])) == false
-    @test issymmetric(sparse([1 0; 1 0])) == false
-    @test issymmetric(sparse([0 1; 1 0])) == true
-    @test issymmetric(sparse([1 1; 1 0])) == true
-end
-
 @testset "equality ==" begin
     A1 = sparse(1.0I, 10, 10)
     A2 = sparse(1.0I, 10, 10)
@@ -1547,14 +1309,6 @@ end
     nonzeros(A1)[2:5].=0
     @test A1==A2
     @test sparse([1,1,0])!=sparse([0,1,1])
-end
-
-@testset "UniformScaling" begin
-    local A = sprandn(10, 10, 0.5)
-    @test A + I == Array(A) + I
-    @test I + A == I + Array(A)
-    @test A - I == Array(A) - I
-    @test I - A == I - Array(A)
 end
 
 @testset "issue #12177, error path if triplet vectors are not all the same length" begin
@@ -1669,7 +1423,7 @@ end
     N = 4
     densevec = fill(1., N)
     densemat = diagm(0 => densevec)
-    spmat = spdiagm(0 => densevec)
+    spmat = sparse(densemat)
     # Test that concatenations of pairs of sparse matrices yield sparse arrays
     @test issparse(vcat(spmat, spmat))
     @test issparse(hcat(spmat, spmat))
@@ -1748,11 +1502,6 @@ end
 @testset "issue #18974" begin
     S = sparse(Diagonal(Int64(1):Int64(4)))
     @test eltype(sin.(S)) == Float64
-end
-
-# Check calling of unary minus method specialized for SparseMatrixCSCs
-@testset "issue #19503" begin
-    @test which(-, (SparseMatrixCSC,)).module == SparseArrays
 end
 
 @testset "issue #14398" begin

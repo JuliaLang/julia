@@ -849,8 +849,6 @@ function ftranspose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f::Fu
     end
     halfperm!(X, A, 1:A.n, f)
 end
-transpose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, identity)
-adjoint!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, conj)
 
 function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
     X = SparseMatrixCSC(A.n, A.m,
@@ -859,10 +857,6 @@ function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
                         Vector{Tv}(undef, nnz(A)))
     halfperm!(X, A, 1:A.n, f)
 end
-adjoint(A::SparseMatrixCSC) = Adjoint(A)
-transpose(A::SparseMatrixCSC) = Transpose(A)
-Base.copy(A::Adjoint{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, conj)
-Base.copy(A::Transpose{<:Any,<:SparseMatrixCSC}) = ftranspose(A.parent, identity)
 
 """
     unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
@@ -1238,21 +1232,6 @@ function fkeep!(A::SparseMatrixCSC, f, trim::Bool = true)
     A
 end
 
-function tril!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
-    if !(-A.m - 1 <= k <= A.n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-A.m - 1) and at most $(A.n - 1) in an $(A.m)-by-$(A.n) matrix")))
-    end
-    fkeep!(A, (i, j, x) -> i + k >= j, trim)
-end
-function triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
-    if !(-A.m + 1 <= k <= A.n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-A.m + 1) and at most $(A.n + 1) in an $(A.m)-by-$(A.n) matrix")))
-    end
-    fkeep!(A, (i, j, x) -> j >= i + k, trim)
-end
-
 droptol!(A::SparseMatrixCSC, tol; trim::Bool = true) =
     fkeep!(A, (i, j, x) -> abs(x) > tol, trim)
 
@@ -1545,24 +1524,6 @@ end
 
 sparse(s::UniformScaling, dims::Dims{2}) = SparseMatrixCSC(s, dims)
 sparse(s::UniformScaling, m::Integer, n::Integer) = sparse(s, Dims((m, n)))
-
-# TODO: More appropriate location?
-conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
-(-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
-
-# the rest of real, conj, imag are handled correctly via AbstractArray methods
-conj(A::SparseMatrixCSC{<:Complex}) =
-    SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), conj(A.nzval))
-imag(A::SparseMatrixCSC{Tv,Ti}) where {Tv<:Real,Ti} = spzeros(Tv, Ti, A.m, A.n)
-
-## Binary arithmetic and boolean operators
-(+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(+, A, B)
-(-)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(-, A, B)
-
-(+)(A::SparseMatrixCSC, B::Array) = Array(A) + B
-(+)(A::Array, B::SparseMatrixCSC) = A + Array(B)
-(-)(A::SparseMatrixCSC, B::Array) = Array(A) - B
-(-)(A::Array, B::SparseMatrixCSC) = A - Array(B)
 
 ## full equality
 function ==(A1::SparseMatrixCSC, A2::SparseMatrixCSC)
@@ -3134,227 +3095,6 @@ function blockdiag(X::SparseMatrixCSC...)
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-## Structure query functions
-issymmetric(A::SparseMatrixCSC) = is_hermsym(A, identity)
-
-ishermitian(A::SparseMatrixCSC) = is_hermsym(A, conj)
-
-function is_hermsym(A::SparseMatrixCSC, check::Function)
-    m, n = size(A)
-    if m != n; return false; end
-
-    colptr = A.colptr
-    rowval = A.rowval
-    nzval = A.nzval
-    tracker = copy(A.colptr)
-    for col = 1:A.n
-        # `tracker` is updated such that, for symmetric matrices,
-        # the loop below starts from an element at or below the
-        # diagonal element of column `col`"
-        for p = tracker[col]:colptr[col+1]-1
-            val = nzval[p]
-            row = rowval[p]
-
-            # Ignore stored zeros
-            if val == 0
-                continue
-            end
-
-            # If the matrix was symmetric we should have updated
-            # the tracker to start at the diagonal or below. Here
-            # we are above the diagonal so the matrix can't be symmetric.
-            if row < col
-                return false
-            end
-
-            # Diagonal element
-            if row == col
-                if val != check(val)
-                    return false
-                end
-            else
-                offset = tracker[row]
-
-                # If the matrix is unsymmetric, there might not exist
-                # a rowval[offset]
-                if offset > length(rowval)
-                    return false
-                end
-
-                row2 = rowval[offset]
-
-                # row2 can be less than col if the tracker didn't
-                # get updated due to stored zeros in previous elements.
-                # We therefore "catch up" here while making sure that
-                # the elements are actually zero.
-                while row2 < col
-                    if nzval[offset] != 0
-                        return false
-                    end
-                    offset += 1
-                    row2 = rowval[offset]
-                    tracker[row] += 1
-                end
-
-                # Non zero A[i,j] exists but A[j,i] does not exist
-                if row2 > col
-                    return false
-                end
-
-                # A[i,j] and A[j,i] exists
-                if row2 == col
-                    if val != check(nzval[offset])
-                        return false
-                    end
-                    tracker[row] += 1
-                end
-            end
-        end
-    end
-    return true
-end
-
-function istriu(A::SparseMatrixCSC)
-    m, n = size(A)
-    colptr = A.colptr
-    rowval = A.rowval
-    nzval  = A.nzval
-
-    for col = 1:min(n, m-1)
-        l1 = colptr[col+1]-1
-        for i = 0 : (l1 - colptr[col])
-            if rowval[l1-i] <= col
-                break
-            end
-            if nzval[l1-i] != 0
-                return false
-            end
-        end
-    end
-    return true
-end
-
-function istril(A::SparseMatrixCSC)
-    m, n = size(A)
-    colptr = A.colptr
-    rowval = A.rowval
-    nzval  = A.nzval
-
-    for col = 2:n
-        for i = colptr[col] : (colptr[col+1]-1)
-            if rowval[i] >= col
-                break
-            end
-            if nzval[i] != 0
-                return false
-            end
-        end
-    end
-    return true
-end
-
-
-function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
-    ncoeffs = 0
-    for p in kv
-        ncoeffs += length(p.second)
-    end
-    I = Vector{Int}(undef, ncoeffs)
-    J = Vector{Int}(undef, ncoeffs)
-    V = Vector{promote_type(map(x -> eltype(x.second), kv)...)}(undef, ncoeffs)
-    i = 0
-    for p in kv
-        dia = p.first
-        vect = p.second
-        numel = length(vect)
-        if dia < 0
-            row = -dia
-            col = 0
-        elseif dia > 0
-            row = 0
-            col = dia
-        else
-            row = 0
-            col = 0
-        end
-        r = 1+i:numel+i
-        I[r] = row+1:row+numel
-        J[r] = col+1:col+numel
-        copyto!(view(V, r), vect)
-        i += numel
-    end
-    return I, J, V
-end
-
-"""
-    spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
-
-Construct a square sparse diagonal matrix from `Pair`s of vectors and diagonals.
-Vector `kv.second` will be placed on the `kv.first` diagonal.
-
-# Examples
-```jldoctest
-julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
-5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:
-  [2, 1]  =  1
-  [1, 2]  =  4
-  [3, 2]  =  2
-  [2, 3]  =  3
-  [4, 3]  =  3
-  [3, 4]  =  2
-  [5, 4]  =  4
-  [4, 5]  =  1
-```
-"""
-function spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
-    I, J, V = spdiagm_internal(kv...)
-    n = max(dimlub(I), dimlub(J))
-    return sparse(I, J, V, n, n)
-end
-
-## expand a colptr or rowptr into a dense index vector
-function expandptr(V::Vector{<:Integer})
-    if V[1] != 1 throw(ArgumentError("first index must be one")) end
-    res = similar(V, (Int64(V[end]-1),))
-    for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1); res[j] = i end
-    res
-end
-
-
-function diag(A::SparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
-    m, n = size(A)
-    k = Int(d)
-    if !(-m <= k <= n)
-        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) ",
-            "and at most $n in an $m-by-$n matrix")))
-    end
-    l = k < 0 ? min(m+k,n) : min(n-k,m)
-    r, c = k <= 0 ? (-k, 0) : (0, k) # start row/col -1
-    ind = Vector{Ti}()
-    val = Vector{Tv}()
-    for i in 1:l
-        r += 1; c += 1
-        r1 = Int(A.colptr[c])
-        r2 = Int(A.colptr[c+1]-1)
-        r1 > r2 && continue
-        r1 = searchsortedfirst(A.rowval, r, r1, r2, Forward)
-        ((r1 > r2) || (A.rowval[r1] != r)) && continue
-        push!(ind, i)
-        push!(val, A.nzval[r1])
-    end
-    return SparseVector{Tv,Ti}(l, ind, val)
-end
-
-function tr(A::SparseMatrixCSC{Tv}) where Tv
-    n = LinearAlgebra.checksquare(A)
-    s = zero(Tv)
-    for i in 1:n
-        s += A[i,i]
-    end
-    return s
-end
-
-
 # Sort all the indices in each column of a CSC sparse matrix
 # sortSparseMatrixCSC!(A, sortindices = :sortcols)        # Sort each column with sort()
 # sortSparseMatrixCSC!(A, sortindices = :doubletranspose) # Sort with a double transpose
@@ -3412,37 +3152,6 @@ function sortSparseMatrixCSC!(A::SparseMatrixCSC{Tv,Ti}; sortindices::Symbol = :
     return A
 end
 
-## rotations
-
-function rot180(A::SparseMatrixCSC)
-    I,J,V = findnz(A)
-    m,n = size(A)
-    for i=1:length(I)
-        I[i] = m - I[i] + 1
-        J[i] = n - J[i] + 1
-    end
-    return sparse(I,J,V,m,n)
-end
-
-function rotr90(A::SparseMatrixCSC)
-    I,J,V = findnz(A)
-    m,n = size(A)
-    #old col inds are new row inds
-    for i=1:length(I)
-        I[i] = m - I[i] + 1
-    end
-    return sparse(J, I, V, n, m)
-end
-
-function rotl90(A::SparseMatrixCSC)
-    I,J,V = findnz(A)
-    m,n = size(A)
-    #old row inds are new col inds
-    for i=1:length(J)
-        J[i] = n - J[i] + 1
-    end
-    return sparse(J, I, V, n, m)
-end
 
 ## hashing
 
@@ -3488,9 +3197,3 @@ function hash(A::SparseMatrixCSC{T}, h::UInt) where T
     h = hashrun(lastnz, runlength, h) # Hash previous run
     hashrun(0, length(A)-lastidx, h)  # Hash zeros at end
 end
-
-## Uniform matrix arithmetic
-
-(+)(A::SparseMatrixCSC, J::UniformScaling) = A + sparse(J, size(A)...)
-(-)(A::SparseMatrixCSC, J::UniformScaling) = A - sparse(J, size(A)...)
-(-)(J::UniformScaling, A::SparseMatrixCSC) = sparse(J, size(A)...) - A
