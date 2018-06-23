@@ -470,7 +470,8 @@ Initialized project at /Users/kristoffer/MyProject/Project.toml
     Status `Project.toml`
 ```
 
-Note that the REPL prompt changed when the new project was initiated. Since this is a newly created project, the status command show it contains no packages.
+Note that the REPL prompt changed when the new project was initiated, in other words, Pkg automatically set the current environment to the
+one that just got initiated. Since this is a newly created project, the status command show it contains no packages.
 Packages added here again in a completely separate environment from the one earlier used.
 
 ## Garbage collecting old, unused packages
@@ -544,9 +545,11 @@ greet() = print("Hello World!")
 end # module
 ```
 
-We can now load the project and use it:
+We can now activate the project and load the package:
 
 ```jl
+pkg> activate
+
 julia> import HelloWorld
 
 julia> HelloWorld.greet()

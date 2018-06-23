@@ -783,8 +783,15 @@ function do_resolve!(ctx::Context, tokens::Vector{Token})
 end
 
 function do_activate!(ctx::Context, tokens::Vector{Token})
-    !isempty(tokens) && cmderror("`activate` does not take any arguments")
-    API.activate()
+    if isempty(tokens)
+        return API.activate()
+    else
+        token = popfirst!(tokens)
+        if !isempty(tokens) || !(token isa String)
+            cmderror("`activate` takes an optional path to the env to activate")
+        end
+        return API.activate(abspath(token))
+    end
 end
 
 function do_deactivate!(ctx::Context, tokens::Vector{Token})
