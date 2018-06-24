@@ -4,10 +4,10 @@
 
 matprod(x, y) = x*y + x*y
 
-# Dot products
+# dot products
 
-vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
-vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
+dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
+dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
 function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)

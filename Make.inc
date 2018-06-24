@@ -222,6 +222,8 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 # BinaryBuilder options
 # TODO: Autodiscover triplet
 USE_BINARYBUILDER_LLVM := 0
+# Use the Assertions build
+BINARYBUILDER_LLVM_ASSERTS := 0
 BINARYBUILDER_TRIPLET :=
 
 # LLVM Options

@@ -1156,7 +1156,7 @@ static void add_intrinsic_properties(enum intrinsic f, unsigned nargs, void (*pf
 
 static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
 {
-    jl_value_t *i = jl_box32(jl_intrinsic_type, (int32_t)f);
+    jl_value_t *i = jl_permbox32(jl_intrinsic_type, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
     jl_set_const(inm, sym, i);
     jl_module_export(inm, sym);

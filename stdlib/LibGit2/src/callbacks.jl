@@ -151,7 +151,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
                 response === nothing && return user_abort()
                 cred.pass = response[2]
             else
-                response = Base.prompt("Passphrase for $(cred.prvkey)", password=true)
+                response = Base.getpass("Passphrase for $(cred.prvkey)")
                 response === nothing && return user_abort()
                 cred.pass = response
                 isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
@@ -167,7 +167,6 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     if !revised
         return exhausted_abort()
     end
-
     return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
@@ -187,10 +186,9 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     if p.use_git_helpers && (!revised || !isfilled(cred))
         git_cred = GitCredential(p.config, p.url)
 
-        # Use `deepcopy` to ensure zeroing the `git_cred` doesn't also zero the `cred`s copy
-        cred.user = deepcopy(something(git_cred.username, ""))
-        cred.pass = deepcopy(something(git_cred.password, ""))
-        securezero!(git_cred)
+        cred.user = something(git_cred.username, "")
+        cred.pass = something(git_cred.password, "")
+        Base.shred!(git_cred)
         revised = true
 
         p.use_git_helpers = false
@@ -211,7 +209,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
             cred.user = response
 
             url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
-            response = Base.prompt("Password for '$url'", password=true)
+            response = Base.getpass("Password for '$url'")
             response === nothing && return user_abort()
             cred.pass = response
             isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline

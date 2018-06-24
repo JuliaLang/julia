@@ -323,11 +323,11 @@ end
 codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
 function string(a::Union{String,AbstractChar}...)
-    sprint() do io
-        for x in a
-            print(io, x)
-        end
+    io = IOBuffer()
+    for x in a
+        print(io, x)
     end
+    return String(resize!(io.data, io.size))
 end
 
 function repeat(s::String, r::Integer)

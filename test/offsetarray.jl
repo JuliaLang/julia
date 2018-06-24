@@ -376,9 +376,9 @@ I = findall(!iszero, z)
 @test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
-@test vecnorm(v) ≈ vecnorm(parent(v))
-@test vecnorm(A) ≈ vecnorm(parent(A))
-@test vecdot(v, v) ≈ vecdot(v0, v0)
+@test norm(v) ≈ norm(parent(v))
+@test norm(A) ≈ norm(parent(A))
+@test dot(v, v) ≈ dot(v0, v0)
 
 # Prior to its removal from Base, cumsum_kbn was used here. To achieve the same level of
 # accuracy in the tests, we need to use BigFloats with enlarged precision.

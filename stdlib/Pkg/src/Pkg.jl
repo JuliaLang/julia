@@ -25,12 +25,29 @@ include("Operations.jl")
 include("API.jl")
 include("REPLMode.jl")
 
-import .API: add, rm, up, test, gc, init, build, installed, pin, free, checkout, develop, generate, instantiate, resolve
-import .Display: status
-const update = up
+# Define new variables so tab comleting Pkg. works.
+const add         = API.add
+const rm          = API.rm
+const up          = API.up
+const test        = API.test
+const gc          = API.gc
+const init        = API.init
+const build       = API.build
+const installed   = API.installed
+const pin         = API.pin
+const free        = API.free
+const checkout    = API.checkout
+const develop     = API.develop
+const generate    = API.generate
+const instantiate = API.instantiate
+const resolve     = API.resolve
+const status      = Display.status
+const update      = up
+const activate    = API.activate
+const deactivate  = API.deactivate
+
 # legacy CI script support
 import .API: clone, dir
-
 
 import .REPLMode: @pkg_str
 export @pkg_str

@@ -177,23 +177,23 @@ file = joinpath(dir, "afile.txt")
 function test_init_afile()
     @test isempty(FileWatching.watched_folders)
     @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 2
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.3
+    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
     @test length(FileWatching.watched_folders) == 1
     @test unwatch_folder(dir) === nothing
     @test isempty(FileWatching.watched_folders)
     @test 0.001 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 2
-    @test 0.001 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.3
+    @test 0.001 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
     @test unwatch_folder(dir) === nothing
     @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 4
-    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 1.3
+    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 1.5
     # like touch, but lets the operating system update the timestamp
     # for greater precision on some platforms (windows)
     @test close(open(file, "w")) === nothing
-    @test @elapsed(@test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))) <= 0.3
+    @test @elapsed(@test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))) <= 0.5
     @test close(open(file, "w")) === nothing
     sleep(3)
     let c
-        @test @elapsed(c = watch_folder(dir, 0)) <= 0.3
+        @test @elapsed(c = watch_folder(dir, 0)) <= 0.5
         if F_GETPATH
             @test c.first == F_PATH
             @test c.second.changed ⊻ c.second.renamed
@@ -205,8 +205,8 @@ function test_init_afile()
         end
     end
     @test unwatch_folder(dir) === nothing
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.3
-    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 1.3
+    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 1.5
     @test length(FileWatching.watched_folders) == 1
     nothing
 end
@@ -321,8 +321,8 @@ function test_dirmonitor_wait2(tval)
     end
     @sync begin
         @async begin
-            sleep(tval)
             for i = 1:3
+                sleep(tval)
                 rm("$file$i")
             end
         end
@@ -385,7 +385,7 @@ let changes = []
     while true
         let c
             timeout = Sys.iswindows() ? 0.1 : 0.0
-            @test @elapsed(c = watch_folder(dir, timeout)) < 0.3
+            @test @elapsed(c = watch_folder(dir, timeout)) < 0.5
             push!(changes, c)
             (c.second::FileWatching.FileEvent).timedout && break
         end

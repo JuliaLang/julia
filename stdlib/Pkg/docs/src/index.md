@@ -58,7 +58,7 @@ official release again.
 
 **Project:** a source tree with a standard layout, including a `src` directory
 for the main body of Julia code, a `test` directory for testing the project,
-`docs` for documentation files, and optionally a `build` directory for a build
+`docs` for documentation files, and optionally a `deps` directory for a build
 script and its outputs. A project will typically also have a project file and
 may optionally have a manifest file:
 
@@ -92,9 +92,9 @@ since that could conflict with the configuration of the main application.
 !!! note
     **Projects _vs._ Packages _vs._ Applications:**
 
-    1. Project is an umbrella term: packages and applications are kinds of projects.
-    2. Packages should have UUIDs, applications can have a UUIDs but don't need them.
-    3. Applications can provide global configuration, whereas packages cannot.
+    1. **Project** is an umbrella term: packages and applications are kinds of projects.
+    2. **Packages** should have UUIDs, applications can have a UUIDs but don't need them.
+    3. **Applications** can provide global configuration, whereas packages cannot.
 
 **Library (future work):** a compiled binary dependency (not written in Julia)
 packaged to be used by a Julia project. These are currently typically built in-
@@ -172,7 +172,7 @@ which is populated at startup based on the value of the `JULIA_DEPOT_PATH`
 environment variable. The first entry is the “user depot” and should be writable
 by and owned by the current user. The user depot is where: registries are
 cloned, new package versions are installed, named environments are created and
-updated, package repos are cloned, new compiled package image files are saved,
+updated, package repos are cloned, newly compiled package image files are saved,
 log files are written, development packages are checked out by default, and
 global configuration data is saved. Later entries in the depot path are treated
 as read-only and are appropriate for registries, packages, etc. installed and
@@ -193,7 +193,318 @@ Since we haven't created our own project yet, we are in the default project, loc
 To return to the `julia>` prompt, either press backspace when the input line is empty or press Ctrl+C.
 Help is available by calling `pkg> help`.
 
-To generate files for a new project, use `pkg> generate`.
+The documentation here describes using Pkg from the REPL mode. Documentation of using
+the Pkg API (by calling `Pkg.` functions) is in progress of being written.
+
+### Adding packages
+
+There are two ways of adding packages, either using the `add` command or the `dev` command.
+The most frequently used one is `add` and its usage is described first.
+
+#### Adding registered packages
+
+In the Pkg REPL packages can be added with the `add` command followed by the name of the package, for example:
+
+```
+(v0.7) pkg> add Example
+   Cloning default registries into /Users/kristoffer/.julia/registries
+   Cloning registry Uncurated from "https://github.com/JuliaRegistries/Uncurated.git"
+  Updating registry at `~/.julia/registries/Uncurated`
+  Updating git-repo `https://github.com/JuliaRegistries/Uncurated.git`
+ Resolving package versions...
+  Updating `~/.julia/environments/v0.7/Project.toml`
+  [7876af07] + Example v0.5.1
+  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  [7876af07] + Example v0.5.1
+  [8dfed614] + Test
+```
+
+Here we added the package Example to the current project. In this example, we are using a fresh Julia installation,
+and this is our first time adding a package using Pkg. By default, Pkg clones Julia's Uncurated registry,
+and uses this registry to look up packages requested for inclusion in the current environment.
+The status update shows a short form of the package UUID to the left, then the package name, and the version.
+Since standard libraries (e.g. `Test`) are shipped with Julia, they do not have a version. The project status contains the packages
+you have added yourself, in this case, `Example`:
+
+```
+(v0.7) pkg> st
+    Status `Project.toml`
+  [7876af07] Example v0.5.1
+```
+
+The manifest status, in addition, includes the dependencies of explicitly added packages.
+
+```
+(v0.7) pkg> st --manifest
+    Status `Manifest.toml`
+  [7876af07] Example v0.5.1
+  [8dfed614] Test
+```
+
+It is possible to add multiple packages in one command as `pkg> add A B C`.
+
+After a package is added to the project, it can be loaded in Julia:
+
+```
+julia> using Example
+
+julia> Example.hello("User")
+"Hello, User"
+```
+
+A specific version can be installed by appending a version after a `@` symbol, e.g. `@v0.4`, to the package name:
+
+```
+(v0.7) pkg> add Example@0.4
+ Resolving package versions...
+  Updating `~/.julia/environments/v0.7/Project.toml`
+  [7876af07] + Example v0.4.1
+  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  [7876af07] + Example v0.4.1
+```
+
+If the master branch (or a certain commit SHA) of `Example` has a hotfix that has not yet included in a registered version,
+we can explicitly track a branch (or commit) by appending `#branch` (or `#commit`) to the package name:
+
+```
+(v0.7) pkg> add Example#master
+  Updating git-repo `https://github.com/JuliaLang/Example.jl.git`
+ Resolving package versions...
+  Updating `~/.julia/environments/v0.7/Project.toml`
+  [7876af07] ~ Example v0.5.1 ⇒ v0.5.1+ #master [https://github.com/JuliaLang/Example.jl.git]
+  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  [7876af07] ~ Example v0.5.1 ⇒ v0.5.1+ #master [https://github.com/JuliaLang/Example.jl.git]
+```
+
+The status output now shows that we are tracking the `master` branch of `Example`.
+When updating packages, we will pull updates from that branch.
+
+To go back to tracking the registry version of `Example`, the command `free` is used:
+
+```
+(v0.7) pkg> free Example
+ Resolving package versions...
+  Updating `~/.julia/environments/v0.7/Project.toml`
+  [7876af07] ~ Example v0.5.1+ #master [https://github.com/JuliaLang/Example.jl.git] ⇒ v0.5.1
+  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  [7876af07] ~ Example v0.5.1+ #master [https://github.com/JuliaLang/Example.jl.git] ⇒ v0.5.1
+```
+
+
+#### Adding unregistered packages
+
+If a package is not in a registry, it can still be added by instead of the package name giving the URL to the repository to `add`.
+
+```
+(v0.7) pkg> add https://github.com/fredrikekre/ImportMacros.jl
+  Updating git-repo `https://github.com/fredrikekre/ImportMacros.jl`
+ Resolving package versions...
+Downloaded MacroTools ─ v0.4.1
+  Updating `~/.julia/environments/v0.7/Project.toml`
+  [e6797606] + ImportMacros v0.0.0 # [https://github.com/fredrikekre/ImportMacros.jl]
+  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  [e6797606] + ImportMacros v0.0.0 # [https://github.com/fredrikekre/ImportMacros.jl]
+  [1914dd2f] + MacroTools v0.4.1
+```
+
+The dependencies of the unregistered package (here `MacroTools`) got installed.
+For unregistered packages we could have given a branch (or commit SHA) to track using `#`, just like for registered packages.
+
+
+#### Adding a local package
+
+Instead of giving a URL of a git repo to `add` we could instead have given a local path to a git repo.
+This works similarly to adding a URL. The local repository will be tracked (at some branch) and updates
+from that local repo are pulled when packages are updated.
+Note that changes to files in the local package repository will not immediately be reflected when loading that package.
+The changes would have to be committed and the packages updated in order to pull in the changes.
+
+#### Developing packages
+
+By only using `add` your Manifest will always have a "reproducible state", in other words, as long as the repositories and registries used are still accessible
+it is possible to retrieve the exact state of all the dependencies in the project. This has the advantage that you can send your project (`Project.toml`
+and `Manifest.toml`) to someone else and they can "instantiate" that project in the same state as you had it locally.
+However, when you are developing a package, it is more convenient to load packages at their current state at some path. For this reason, the `dev` command exists.
+
+Let's try to `dev` a registered package:
+
+```
+(v0.7) pkg> dev Example
+  Updating git-repo `https://github.com/JuliaLang/Example.jl.git`
+ Resolving package versions...
+  Updating `~/.julia/environments/v0.7/Project.toml`
+  [7876af07] + Example v0.5.1+ [`~/.julia/dev/Example`]
+  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  [7876af07] + Example v0.5.1+ [`~/.julia/dev/Example`]
+```
+
+The `dev` command fetches a full clone of the package to `~/.julia/dev/` (the path can be changed by setting the environment variable `JULIA_PKG_DEVDIR`).
+When importing `Example` julia will now import it from `~/.julia/dev/Example` and whatever local changes have been made to the files in that path are consequently
+reflected in the code loaded. When we used `add` we said that we tracked the package repository, we here say that we track the path itself.
+Note that the package manager will never touch any of the files at a tracked path. It is therefore up to you to pull updates, change branches etc.
+If we try to `dev` a package at some branch that already exists at `~/.julia/dev/` the package manager we will simply use the existing path.
+For example:
+
+```
+(v0.7) pkg> dev Example#master
+  Updating git-repo `https://github.com/JuliaLang/Example.jl.git`
+[ Info: Path `/Users/kristoffer/.julia/dev/Example` exists and looks like the correct package, using existing path instead of cloning
+```
+
+Note the info message saying that it is using the existing path. This means that you cannot use `dev` to e.g. change branches of
+an already developed package.
+
+If `dev` is used on a local path, that path to that package is recorded and used when loading that package.
+
+To stop tracking a path and use the registered version again, use `free`
+
+```
+(v0.7) pkg> free Example
+ Resolving package versions...
+  Updating `~/.julia/environments/v0.7/Project.toml`
+  [7876af07] ↓ Example v0.5.1+ [`~/.julia/dev/Example`] ⇒ v0.5.1
+  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  [7876af07] ↓ Example v0.5.1+ [`~/.julia/dev/Example`] ⇒ v0.5.1
+```
+
+It should be pointed out that by using `dev` your project is now inherently stateful.
+Its state depends on the current content of the files at the path and the manifest cannot be "instantiated" by someone else without
+knowing the exact content of all the packages that are tracking a path.
+
+Note that if you add a dependency to a package that tracks a local path, the Manifest (which contains the whole dependency graph) will become
+out of sync with the actual dependency graph. This means that the package will not be able to load that dependency since it is not recorded
+in the Manifest. To update sync the Manifest, use the REPL command `resolve`.
+
+### Removing packages
+
+Packages can be removed from the current project by using `pkg> rm Package`.
+This will only remove packages that exist in the project, to remove a package that only
+exists as a dependency use `pkg> rm --manifest DepPackage`.
+Note that this will remove all packages that depends on `DepPackage`.
+
+### Updating packages
+
+When new versions of packages the project is using are released, it is a good idea to update. Simply calling `up` will try to update *all* the dependencies of the project
+to the latest compatible version. Sometimes this is not what you want. You can specify a subset of the dependencies to upgrade by giving them as arguments to `up`, e.g:
+
+```
+(v0.7) pkg> up Example
+```
+
+The version of all other packages direct dependencies will stay the same. If you only want to update the minor version of packages, to reduce the risk that your project breaks, you can give the `--minor` flag, e.g:
+
+```
+(v0.7) pkg> up --minor Example
+```
+
+Packages that track a repository are not updated when a minor upgrade is done.
+Packages that track a path are never touched by the package manager.
+
+### Pinning a package
+
+A pinned package will never be updated. A package can be pinned using `pin` as for example
+
+```
+(v0.7) pkg> pin Example
+ Resolving package versions...
+  Updating `~/.julia/environments/v0.7/Project.toml`
+  [7876af07] ~ Example v0.5.1 ⇒ v0.5.1 ⚲
+  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  [7876af07] ~ Example v0.5.1 ⇒ v0.5.1 ⚲
+```
+
+Note the pin symbol `⚲` showing that the package is pinned. Removing the pin is done using `free`
+
+```
+(v0.7) pkg> free Example
+  Updating `~/.julia/environments/v0.7/Project.toml`
+  [7876af07] ~ Example v0.5.1 ⚲ ⇒ v0.5.1
+  Updating `~/.julia/environments/v0.7/Manifest.toml`
+  [7876af07] ~ Example v0.5.1 ⚲ ⇒ v0.5.1
+```
+
+### Testing packages
+
+The tests for a package can be run using `test`command:
+
+```
+(v0.7) pkg> test Example
+   Testing Example
+   Testing Example tests passed
+```
+
+### Building packages
+
+The build step of a package is automatically run when a package is first installed.
+The output of the build process is directed to a file.
+To explicitly run the build step for a package the `build` command is used:
+
+```
+(v0.7) pkg> build MbedTLS
+  Building MbedTLS → `~/.julia/packages/MbedTLS/h1Vu/deps/build.log`
+
+shell> cat ~/.julia/packages/MbedTLS/h1Vu/deps/build.log
+┌ Warning: `wait(t::Task)` is deprecated, use `fetch(t)` instead.
+│   caller = macro expansion at OutputCollector.jl:63 [inlined]
+└ @ Core OutputCollector.jl:63
+...
+[ Info: using prebuilt binaries
+```
+
+## Creating your own projects
+
+So far we have added packages to the default project at `~/.julia/environments/v0.7`, it is, however, easy to create other, independent, projects.
+It should be pointed out if two projects uses the same package at the same version, the content of this package is not duplicated.
+This is done using the `init` command. Below we make a new directory and create a new project in it:
+
+```
+shell> mkdir MyProject
+
+shell> cd MyProject
+/Users/kristoffer/MyProject
+
+(v0.7) pkg> init
+Initialized project at /Users/kristoffer/MyProject/Project.toml
+
+(MyProject) pkg> st
+    Status `Project.toml`
+```
+
+Note that the REPL prompt changed when the new project was initiated, in other words, Pkg automatically set the current environment to the
+one that just got initiated. Since this is a newly created project, the status command show it contains no packages.
+Packages added here again in a completely separate environment from the one earlier used.
+
+## Garbage collecting old, unused packages
+
+As packages are updated and projects are deleted, installed packages that were once used will inevitably
+become old and not used from any existing project.
+Pkg keeps a log of all projects used so it can go through the log and see exactly which projects still exist
+and what packages those projects used. The rest can be deleted.
+This is done with the `gc` command:
+
+```
+(v0.7) pkg> gc
+    Active manifests at:
+        `/Users/kristoffer/BinaryProvider/Manifest.toml`
+        ...
+        `/Users/kristoffer/Compat.jl/Manifest.toml`
+   Deleted /Users/kristoffer/.julia/packages/BenchmarkTools/1cAj: 146.302 KiB
+   Deleted /Users/kristoffer/.julia/packages/Cassette/BXVB: 795.557 KiB
+   ...
+   Deleted /Users/kristoffer/.julia/packages/WeakRefStrings/YrK6: 27.328 KiB
+   Deleted 36 package installations: 113.205 MiB
+```
+
+Note that only packages in `~/.julia/packages` are deleted.
+
+## Creating your own packages
+
+A package is a project with a `name`, `uuid` and `version` entry in the `Project.toml` file `src/PackageName.jl` file that defines the module `PackageName`.
+This file is executed when the package is loaded.
+
+### Generating files for a package
+
+To generate files for a new package, use `pkg> generate`.
 
 ```
 (v0.7) pkg> generate HelloWorld
@@ -202,7 +513,8 @@ To generate files for a new project, use `pkg> generate`.
 This creates a new project `HelloWorld` with the following files (visualized with the external [`tree` command](https://linux.die.net/man/1/tree)):
 
 ```jl
-julia> cd("HelloWorld")
+shell> cd HelloWorld
+
 shell> tree .
 .
 ├── Project.toml
@@ -233,16 +545,18 @@ greet() = print("Hello World!")
 end # module
 ```
 
-We can now load the project and use it:
+We can now activate the project and load the package:
 
 ```jl
+pkg> activate
+
 julia> import HelloWorld
 
 julia> HelloWorld.greet()
 Hello World!
 ```
 
-### Adding packages to the project
+### Adding dependencies to the project
 
 Let’s say we want to use the standard library package `Random` and the registered package `JSON` in our project.
 We simply `add` these packages (note how the prompt now shows the name of the newly generated project,
@@ -285,91 +599,148 @@ julia> HelloWorld.greet_alien()
 Hello aT157rHV
 ```
 
-Sometimes we might want to use the very latest, unreleased version of a package, or perhaps a specific branch in the package
-git repository. We can use e.g. the `master` branch of `JSON` by specifying the branch after a `#` when adding the package:
+### Adding a build step to the package.
+
+The build step is executed the first time a package is installed or when explicitly invoked with `build`.
+A package is built by executing the file `deps/build.jl`.
 
 ```
-(HelloWorld) pkg> add JSON#master
-   Cloning package from https://github.com/JuliaIO/JSON.jl.git
+shell> cat deps/build.log
+I am being built...
+
+(HelloWorld) pkg> build
+  Building HelloWorld → `deps/build.log`
  Resolving package versions...
-  Updating "~/Documents/HelloWorld/Project.toml"
- [682c06a0] ~ JSON v0.17.1 ⇒ v0.17.1+ #master
-  Updating "~/Documents/HelloWorld/Manifest.toml"
- [682c06a0] ~ JSON v0.17.1 ⇒ v0.17.1+ #master
+
+shell> cat deps/build.log
+I am being built...
 ```
 
-If we want to use a package that has not been registered in a registry, we can `add` its git repository url:
+If the build step fails, the output of the build step is printed to the console
 
 ```
-(HelloWorld) pkg> add https://github.com/fredrikekre/ImportMacros.jl
-  Cloning package from https://github.com/fredrikekre/ImportMacros.jl
+shell> cat deps/build.jl
+error("Ooops")
+
+(HelloWorld) pkg> build
+  Building HelloWorld → `deps/build.log`
  Resolving package versions...
-Downloaded MacroTools ─ v0.4.0
-  Updating "~/Documents/HelloWorld/Project.toml"
- [5adcef86] + ImportMacros v0.1.0 #master
-   Updating "~/Documents/HelloWorld/Manifest.toml"
- [5adcef86] + ImportMacros v0.1.0 #master
- [1914dd2f] + MacroTools v0.4.0
+┌ Error: Error building `HelloWorld`:
+│ ERROR: LoadError: Ooops
+│ Stacktrace:
+│  [1] error(::String) at ./error.jl:33
+│  [2] top-level scope at none:0
+│  [3] include at ./boot.jl:317 [inlined]
+│  [4] include_relative(::Module, ::String) at ./loading.jl:1071
+│  [5] include(::Module, ::String) at ./sysimg.jl:29
+│  [6] include(::String) at ./client.jl:393
+│  [7] top-level scope at none:0
+│ in expression starting at /Users/kristoffer/.julia/dev/Pkg/HelloWorld/deps/build.jl:1
+└ @ Pkg.Operations Operations.jl:938
 ```
 
-The dependencies of the unregistered package (here `MacroTools`) got installed.
-For unregistered packages we could have given a branch (or commit SHA) to track using `#`, just like for registered packages.
+### Adding tests to the package
 
-
-## Developing packages
-
-Let’s say we found a bug in one of our dependencies, e.g. `JSON` that we want to fix. We can get the full git-repo using the `develop` command
+When a package is tested the file `test/runtests.jl` is executed.
 
 ```
-(HelloWorld) pkg> develop JSON
-    Cloning package from https://github.com/JuliaIO/JSON.jl.git
-  Resolving package versions...
-   Updating "~/Documents/HelloWorld/Project.toml"
- [682c06a0] + JSON v0.17.1+ [~/.julia/dev/JSON]
-...
-```
-
-By default, the package gets cloned to the `~/.julia/dev` folder but can also be set by the `JULIA_PKG_DEVDIR` environment variable.
-When we have fixed the bug and checked that `JSON` now works correctly with our project, we can make a PR to the `JSON` repository.
-When the PR has been merged we can go over to track the master branch and finally when a new release of `JSON` is made, we can go back to using the versioned `JSON` using the command `free` and `update` (see next section):
-
-```
-(HelloWorld) pkg> free JSON
+shell> cat test/runtests.jl
+println("Testing...")
+(HelloWorld) pkg> test
+   Testing HelloWorld
  Resolving package versions...
-  Updating "~/Documents/HelloWorld/Project.toml"
- [682c06a0] ~ JSON v0.17.1+ #master ⇒ v0.17.1
-  Updating "~/Documents/HelloWorld/Manifest.toml"
- [682c06a0] ~ JSON v0.17.1+ #master ⇒ v0.17.1
+Testing...
+   Testing HelloWorld tests passed
 ```
 
-It is also possible to give a local path as the argument to `develop` which will not clone anything but simply use that directory for the package.
+#### Test-specific dependencies
 
-Overriding the dependency path for a non-registered package is done by giving the git-repo url as an argument to `develop`.
-
-## Updating dependencies
-
-When new versions of packages the project is using are released, it is a good idea to update. Simply calling `up` will try to update *all* the dependencies of the project. Sometimes this is not what you want. You can specify a subset of the dependencies to upgrade by giving them as arguments to `up`, e.g:
+Sometimes one might to want to use some packages only at testing time but not enforce a dependency on them when the package is used.
+This is possible by adding dependencies to a "test target" to the Project file. Here we add the `Test` standard library as a
+test-only dependency by adding the following to the Project file:
 
 ```
-(HelloWorld) pkg> up JSON
+[target.test.deps]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 ```
 
-The version of all other direct dependencies will stay the same. If you only want to update the minor version of packages, to reduce the risk that your project breaks, you can give the `--minor` flag, e.g:
+We can now use `Test` in the test script and we can see that it gets installed on testing:
 
 ```
-(HelloWorld) pkg> up --minor JSON
+shell> cat test/runtests.jl
+using Test
+@test 1 == 1
+
+(HelloWorld) pkg> test
+   Testing HelloWorld
+ Resolving package versions...
+  Updating `/var/folders/64/76tk_g152sg6c6t0b4nkn1vw0000gn/T/tmpPzUPPw/Project.toml`
+  [d8327f2a] + HelloWorld v0.1.0 [`~/.julia/dev/Pkg/HelloWorld`]
+  [8dfed614] + Test
+  Updating `/var/folders/64/76tk_g152sg6c6t0b4nkn1vw0000gn/T/tmpPzUPPw/Manifest.toml`
+  [d8327f2a] + HelloWorld v0.1.0 [`~/.julia/dev/Pkg/HelloWorld`]
+   Testing HelloWorld tests passed```
 ```
 
-Packages that track a branch are not updated when a minor upgrade is done.
-Developed packages are never touched by the package manager.
+### Compatibility
 
-If you just want to install the packages that are given by the current `Manifest.toml` use
+Compatibility refers to the ability to restrict what version of the dependencies that your project is compatible with.
+If the compatibility for a dependency is not given, the project is assumed to be compatible with all versions of that dependency.
+
+Compatibility for a dependency is entered in the `Project.toml` file as for example:
+
+```toml
+[compat]
+Example = "0.4.3"
+```
+
+After a compatibility entry is put into the project file, `up` can be used to apply it.
+
+The format of the version specifier is described in detail below.
+
+!!! info
+  There is currently no way to give compatibility from the Pkg REPL mode so for now, one has to manually edit the project file.
+
+#### Version specifier format
+
+Similar to other package managers, the Julia package manager respects [semantic versioning](https://semver.org/) (semver).
+As an example, a version specifier is given as e.g. `1.2.3` is therefore assumed to be compatible with the versions `[1.2.3 - 2.0.0)` where `)` is a non-inclusive upper bound.
+More specifically, a version specifier is either given as a **caret specifier**, e.g. `^1.2.3`  or a **tilde specifier** `~1.2.3`.
+Caret specifiers are the default and hence `1.2.3 == ^1.2.3`. The difference between a caret and tilde is described in the next section.
+
+##### Caret specifiers
+
+A caret specifier allows upgrade that would be compatible according to semver.
+An updated dependency is considered compatible if the new version does not modify the left-most non zero digit in the version specifier.
+
+Some examples are shown below.
 
 ```
-(HelloWorld) pkg> instantiate
+^1.2.3 = [1.2.3, 2.0.0)
+^1.2 = [1.2.0, 2.0.0)
+^1 =  [1.0.0, 2.0.0)
+^0.2.3 = [0.2.3, 0.3.0)
+^0.0.3 = [0.0.3, 0.0.4)
+^0.0 = [0.0.0, 0.1.0)
+^0 = [0.0.0, 1.0.0)
 ```
 
-## Precompiling the project
+While the semver specification says that all versions with a major version of 0 are incompatible with each other, we have made that choice that
+a version given as `0.a.b` is considered compatible with `0.a.c` if `a != 0` and  `c >= b`.
+
+##### Tilde specifiers
+
+A tilde specifier provides more limited upgrade possibilities. With a tilde, only the last specified digit is allowed to increment by one.
+This gives the following example.
+
+```
+~1.2.3 = [1.2.3, 1.2.4)
+~1.2 = [1.2.0, 1.3.0)
+~1 = [1.0.0, 2.0.0)
+```
+
+
+## Precompiling a project
 
 The REPL command `precompile` can be used to precompile all the dependencies in the project. You can for example do
 
@@ -395,72 +766,17 @@ or
 ```
 
 will show you the effects of adding `Plots`, or doing a full upgrade, respectively, would have on your project.
-However, nothing would be installed and your `Project.toml` and `Manfiest.toml` are untouched.
+However, nothing would be installed and your `Project.toml` and `Manifest.toml` are untouched.
 
 ## Using someone else's project
 
 Simple clone their project using e.g. `git clone`, `cd` to the project directory and call
 
 ```
+(v0.7) pkg> activate
+
 (SomeProject) pkg> instantiate
 ```
 
 If the project contains a manifest, this will install the packages in the same state that is given by that manifest.
 Otherwise, it will resolve the latest versions of the dependencies compatible with the project.
-
-## Compatibility
-
-Compatibility refers to the ability to restrict what version of the dependencies that your project is compatible with.
-If the compatibility for a dependency is not given, the project is assumed to be compatible with all versions of that dependency.
-
-Compatibility for a dependency is entered in the `Project.toml` file as for example:
-
-```toml
-[compat]
-Example = "0.4.3"
-```
-
-After a compatibility entry is put into the project file, `up` can be used to apply it.
-
-The format of the version specifier is described in detail below.
-
-!!! info
-  There is currently no way to give compatibility from the Pkg REPL mode so for now, one has to manually edit the project file.
-
-### Version specifier format
-
-Similar to other package managers, the Julia package manager respects [semantic versioning](https://semver.org/) (semver).
-As an example, a version specifier is given as e.g. `1.2.3` is therefore assumed to be compatible with the versions `[1.2.3 - 2.0.0)` where `)` is a non-inclusive upper bound.
-More specifically, a version specifier is either given as a **caret specifier**, e.g. `^1.2.3`  or a **tilde specifier** `~1.2.3`.
-Caret specifiers are the default and hence `1.2.3 == ^1.2.3`. The difference between a caret and tilde is described in the next section.
-
-#### Caret specifiers
-
-A caret specifier allows upgrade that would be compatible according to semver.
-An updated dependency is considered compatible if the new version does not modify the left-most non zero digit in the version specifier.
-
-Some examples are shown below.
-
-```
-^1.2.3 = [1.2.3, 2.0.0)
-^1.2 = [1.2.0, 2.0.0)
-^1 =  [1.0.0, 2.0.0)
-^0.2.3 = [0.2.3, 0.3.0)
-^0.0.3 = [0.0.3, 0.0.4)
-^0.0 = [0.0.0, 0.1.0)
-^0 = [0.0.0, 1.0.0)
-```
-
-While the semver specification says that all versions with a major version of 0 are incompatible with each other, we have made that choice that
-a version given as `0.a.b` is considered compatible with `0.a.c` if `a != 0` and  `c >= b`.
-
-#### Tilde specifiers
-
-A tilde specifier provides more limited upgrade possibilities. With a tilde, only the last specified digit is allowed to increment by one.
-This gives the following example.
-
-```
-~1.2.3 = [1.2.3, 1.2.4)
-~1.2 = [1.2.0, 1.3.0)
-~1 = [1.0.0, 2.0.0)
-```

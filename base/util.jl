@@ -441,68 +441,67 @@ will always be called.
 """
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
-securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
+"""
+    Base.getpass(message::AbstractString) -> `Base.SecretBuffer`
+
+Display a message and wait for the user to input a secret, returning an `IO`
+object containing the secret.
+
+Note that on Windows, the secret might be displayed as it is typed; see
+`Base.winprompt` for securely retrieving username/password pairs from a
+graphical interface.
+"""
+function getpass end
+
 if Sys.iswindows()
 function getpass(prompt::AbstractString)
-    print(prompt)
+    print(prompt, ": ")
     flush(stdout)
-    p = Vector{UInt8}(undef, 128) # mimic Unix getpass in ignoring more than 128-char passwords
-                          # (also avoids any potential memory copies arising from push!)
-    try
-        plen = 0
-        while true
-            c = ccall(:_getch, UInt8, ())
-            if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
-                break # EOF or return
-            elseif c == 0x00 || c == 0xe0
-                ccall(:_getch, UInt8, ()) # ignore function/arrow keys
-            elseif c == UInt8('\b') && plen > 0
-                plen -= 1 # delete last character on backspace
-            elseif !iscntrl(Char(c)) && plen < 128
-                p[plen += 1] = c
-            end
+    s = SecretBuffer()
+    plen = 0
+    while true
+        c = UInt8(ccall(:_getch, Cint, ()))
+        if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
+            break # EOF or return
+        elseif c == 0x00 || c == 0xe0
+            ccall(:_getch, Cint, ()) # ignore function/arrow keys
+        elseif c == UInt8('\b') && plen > 0
+            plen -= 1 # delete last character on backspace
+        elseif !iscntrl(Char(c)) && plen < 128
+            write(s, c)
         end
-        return unsafe_string(pointer(p), plen) # use unsafe_string rather than String(p[1:plen])
-                                               # to be absolutely certain we never make an extra copy
-    finally
-        securezero!(p)
     end
-
-    return ""
+    return  s
 end
 else
-getpass(prompt::AbstractString) = unsafe_string(ccall(:getpass, Cstring, (Cstring,), prompt))
+function getpass(prompt::AbstractString)
+    msg = string(prompt, ": ")
+    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
+end
 end
 
 """
-    prompt(message; default="", password=false) -> Union{String, Nothing}
+    prompt(message; default="") -> Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
-then the user can enter just a newline character to select the `default`. Alternatively,
-when the `password` keyword is `true` the characters entered by the user will not be
-displayed.
+then the user can enter just a newline character to select the `default`.
+
+See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
-function prompt(message::AbstractString; default::AbstractString="", password::Bool=false)
-    if Sys.iswindows() && password
-        error("Command line prompt not supported for password entry on windows. Use `Base.winprompt` instead")
-    end
-    msg = !isempty(default) ? "$message [$default]:" : "$message:"
-    if password
-        # `getpass` automatically chomps. We cannot tell an EOF from a '\n'.
-        uinput = getpass(msg)
-    else
-        print(msg)
-        uinput = readline(keep=true)
-        isempty(uinput) && return nothing  # Encountered an EOF
-        uinput = chomp(uinput)
-    end
+function prompt(message::AbstractString; default::AbstractString="")
+    msg = !isempty(default) ? "$message [$default]: " : "$message: "
+    print(msg)
+    uinput = readline(keep=true)
+    isempty(uinput) && return nothing  # Encountered an EOF
+    uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
 end
+
 
 # Windows authentication prompt
 if Sys.iswindows()
@@ -583,7 +582,7 @@ if Sys.iswindows()
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]
         result = (String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
-                  String(transcode(UInt8, passbuf_)))
+                  SecretBuffer!(transcode(UInt8, passbuf_)))
         securezero!(passbuf_)
         securezero!(passbuf)
 

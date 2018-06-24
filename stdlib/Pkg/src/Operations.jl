@@ -430,22 +430,24 @@ function install_git(
     version::Union{VersionNumber,Nothing},
     version_path::String
 )::Nothing
-    creds = LibGit2.CachedCredentials()
-    clones_dir = joinpath(depots()[1], "clones")
-    ispath(clones_dir) || mkpath(clones_dir)
-    repo_path = joinpath(clones_dir, string(uuid))
-    repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-        GitTools.clone(urls[1], repo_path; isbare=true, header = "[$uuid] $name from $(urls[1])", credentials=creds)
-    end
-    git_hash = LibGit2.GitHash(hash.bytes)
-    for url in urls
-        try LibGit2.with(LibGit2.GitObject, repo, git_hash) do g
-            end
-            break # object was found, we can stop
-        catch err
-            err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+    repo, git_hash = Base.shred!(LibGit2.CachedCredentials()) do creds
+        clones_dir = joinpath(depots()[1], "clones")
+        ispath(clones_dir) || mkpath(clones_dir)
+        repo_path = joinpath(clones_dir, string(uuid))
+        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+            GitTools.clone(urls[1], repo_path; isbare=true, header = "[$uuid] $name from $(urls[1])", credentials=creds)
         end
-        GitTools.fetch(repo, url, refspecs=refspecs, credentials=creds)
+        git_hash = LibGit2.GitHash(hash.bytes)
+        for url in urls
+            try LibGit2.with(LibGit2.GitObject, repo, git_hash) do g
+                end
+                break # object was found, we can stop
+            catch err
+                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+            end
+            GitTools.fetch(repo, url, refspecs=refspecs, credentials=creds)
+        end
+        return repo, git_hash
     end
     tree = try
         LibGit2.GitObject(repo, git_hash)
@@ -529,7 +531,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UU
         success, path = exc_or_success, bt_or_path
         if success
             vstr = pkg.version != nothing ? "v$(pkg.version)" : "[$h]"
-            printpkgstyle(ctx, :Downloaded, string(rpad(pkg.name * " ", max_name + 2, "─"), " ", vstr))
+            printpkgstyle(ctx, :Installed, string(rpad(pkg.name * " ", max_name + 2, "─"), " ", vstr))
         else
             push!(missed_packages, (pkg, path))
         end
@@ -628,7 +630,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
         delete!(info, "repo-rev")
     elseif special_action == PKGSPEC_FREED
         if get(info, "pinned", false)
-           delete!(info, "pinned")
+            delete!(info, "pinned")
         else
             delete!(info, "repo-url")
             delete!(info, "repo-rev")
@@ -670,10 +672,10 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
                 end
                 registry_resolve!(env, dep_pkgs)
                 ensure_resolved(env, dep_pkgs; registry=true)
-                for dep_pkg in dep_pkgs
-                    dep_pkg.name == "julia" && continue
-                    deps[dep_pkg.name] = string(dep_pkg.uuid)
-                end
+            end
+            for dep_pkg in dep_pkgs
+                dep_pkg.name == "julia" && continue
+                deps[dep_pkg.name] = string(dep_pkg.uuid)
             end
         end
         if !isempty(deps)
@@ -805,21 +807,43 @@ function collect_target_deps!(ctx::Context, pkgs::Vector{PackageSpec}, pkg::Pack
         path = haskey(info, "path") ? project_rel_path(ctx, info["path"]) : find_installed(pkg.name, pkg.uuid, SHA1(info["git-tree-sha1"]))
     end
 
-    if !haskey(ctx.env.project, "targets")
-        if target == "test"
-            pkg2_test_target_compatibility!(ctx, path, pkgs)
+    project_path = nothing
+    for project_name in Base.project_names
+        project_path_cand = joinpath(path, project_name)
+        if isfile(project_path_cand)
+            project_path = project_path_cand
+            break
         end
-        return pkgs
     end
-    targets = ctx.env.project["targets"]
-    haskey(targets, target) || return pkgs
-    targets = ctx.env.project["targets"]
-    target_info = targets[target]
-    haskey(target_info, "deps") || return pkgs
-    targets = ctx.env.project["targets"]
-    deps = target_info["deps"]
-    for (pkg, uuid) in deps
-        push!(pkgs, PackageSpec(pkg, UUID(uuid)))
+    project = nothing
+    if project_path !== nothing
+        project = read_project(project_path)
+    end
+
+    # Pkg2 compatibiity with test/REQUIRE
+    has_project_test_target = false
+    if project !== nothing
+        if haskey(project, "targets")
+            has_project_test_target = true
+        end
+    end
+    if target == "test" && !has_project_test_target
+        pkg2_test_target_compatibility!(ctx, path, pkgs)
+        return
+    end
+
+    # Collect target deps from Project
+    if project !== nothing
+        targets = project["targets"]
+        haskey(targets, target) || return pkgs
+        targets = project["targets"]
+        target_info = targets[target]
+        haskey(target_info, "deps") || return pkgs
+        targets = project["targets"]
+        deps = target_info["deps"]
+        for (pkg, uuid) in deps
+            push!(pkgs, PackageSpec(pkg, UUID(uuid)))
+        end
     end
     return nothing
 end
@@ -935,7 +959,18 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
                 success(pipeline(cmd, stdout=log, stderr=log))
             end
             if !ok
-                @error("Error building `$name`; see log file for further info")
+                n_lines = isinteractive() ? 100 : 5000
+                # TODO: Extract last n  lines more efficiently
+                log_lines = readlines(log_file)
+                log_show = join(log_lines[max(1, length(log_lines) - n_lines):end], '\n')
+                full_log_at, last_lines =
+                if length(log_lines) > n_lines
+                    "\n\nFull log at $log_file",
+                    ", showing the last $n_lines of log"
+                else
+                    "", ""
+                end
+                @error "Error building `$name`$last_lines: \n$log_show$full_log_at"
             end
         end
         with_dependencies_loadable_at_toplevel(ctx, PackageSpec(name, uuid, version); might_need_to_resolve=might_need_to_resolve) do

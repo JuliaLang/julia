@@ -43,7 +43,7 @@ jobs:
           contrib/download_cmake.sh &&
           make -j3 -C deps || make
       - run: | # build julia, output ccache stats when done
-          make -j3 all &&
+          make -j3 release &&
           make prefix=/tmp/julia install &&
           ccache -s &&
           make build-stats

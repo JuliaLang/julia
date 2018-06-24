@@ -546,7 +546,7 @@ temp_pkg_dir() do
 
         OldPkg.add(package)
         msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
-            "import OldPkg; push!(LOAD_PATH, OldPkg.dir); redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); using Example; OldPkg.update(\"$package\")"`), String)
+            "import OldPkg; push!(LOAD_PATH, OldPkg.dir()); redirect_stderr(stdout); using Logging; global_logger(SimpleLogger(stdout)); using Example; OldPkg.update(\"$package\")"`), String)
         @test occursin(Regex("- $package.*Restart Julia to use the updated versions","s"), msg)
     end
 

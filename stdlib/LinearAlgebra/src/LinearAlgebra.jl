@@ -126,6 +126,7 @@ export
     qr!,
     lq,
     lq!,
+    opnorm,
     rank,
     rdiv!,
     schur,
@@ -143,8 +144,6 @@ export
     triu,
     tril!,
     triu!,
-    vecdot,
-    vecnorm,
 
 # Operators
     \,

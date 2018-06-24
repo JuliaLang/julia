@@ -429,12 +429,7 @@ function type_annotate!(sv::InferenceState)
     end
 
     if run_optimizer
-        for i = 2:length(changemap)
-            changemap[i] += changemap[i - 1]
-        end
-        if changemap[end] != 0
-            renumber_stuff!(body, changemap)
-        end
+        renumber_ir_elements!(body, changemap)
     end
 
     # finish marking used-undef variables
@@ -596,7 +591,7 @@ function typeinf_ext(linfo::MethodInstance, params::Params)
                     tree.slotflags = fill(0x00, Int(method.nargs))
                     tree.slottypes = nothing
                     tree.ssavaluetypes = 0
-                    tree.codelocs = Int[1]
+                    tree.codelocs = Int32[1]
                     tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
                     tree.inferred = true
                     tree.ssaflags = UInt8[]

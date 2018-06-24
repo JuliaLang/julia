@@ -71,12 +71,7 @@ function just_construct_ssa(ci::CodeInfo, code::Vector{Any}, nargs::Int, spvals:
         idx += 1
         oldidx += 1
     end
-    for i = 2:length(changemap)
-        changemap[i] += changemap[i-1]
-    end
-    if changemap[end] != 0
-        renumber_stuff!(code, changemap)
-    end
+    renumber_ir_elements!(code, changemap)
 
     inbounds_depth = 0 # Number of stacked inbounds
     meta = Any[]

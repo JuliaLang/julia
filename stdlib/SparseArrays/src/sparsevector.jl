@@ -1320,7 +1320,7 @@ for f in [:sum, :maximum, :minimum], op in [:abs, :abs2]
     end
 end
 
-vecnorm(x::SparseVectorUnion, p::Real=2) = vecnorm(nonzeros(x), p)
+norm(x::SparseVectorUnion, p::Real=2) = norm(nonzeros(x), p)
 
 ### linalg.jl
 
@@ -1391,9 +1391,9 @@ function dot(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,
     length(y) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(y)
     nzval = nonzeros(y)
-    s = zero(Tx) * zero(Ty)
+    s = dot(zero(Tx), zero(Ty))
     for i = 1:length(nzind)
-        s += conj(x[nzind[i]]) * nzval[i]
+        s += dot(x[nzind[i]], nzval[i])
     end
     return s
 end
@@ -1403,9 +1403,9 @@ function dot(x::SparseVectorUnion{Tx}, y::AbstractVector{Ty}) where {Tx<:Number,
     length(x) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
-    s = zero(Tx) * zero(Ty)
+    s = dot(zero(Tx), zero(Ty))
     @inbounds for i = 1:length(nzind)
-        s += conj(nzval[i]) * y[nzind[i]]
+        s += dot(nzval[i], y[nzind[i]])
     end
     return s
 end

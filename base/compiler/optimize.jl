@@ -415,8 +415,9 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
                     # impossible
                     # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                     return argcost
-                elseif f == Main.Core.arrayref
-                    return plus_saturate(argcost, isknowntype(extyp) ? 4 : params.inline_nonleaf_penalty)
+                elseif f == Main.Core.arrayref && length(ex.args) >= 3
+                    atyp = argextype(ex.args[3], src, spvals)
+                    return plus_saturate(argcost, isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty)
                 end
                 fidx = findfirst(x->x===f, T_FFUNC_KEY)
                 if fidx === nothing
@@ -490,7 +491,13 @@ function is_known_call_p(e::Expr, @nospecialize(pred), src, spvals)
     return (isa(f, Const) && pred(f.val)) || (isType(f) && pred(f.parameters[1]))
 end
 
-function renumber_stuff!(body::Vector{Any}, changemap::Vector{Int})
+function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int}, preprocess::Bool = true)
+    if preprocess
+        for i = 2:length(changemap)
+            changemap[i] += changemap[i - 1]
+        end
+    end
+    changemap[end] != 0 || return
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
@@ -509,7 +516,7 @@ function renumber_stuff!(body::Vector{Any}, changemap::Vector{Int})
                 tgt = el.args[1]::Int
                 el.args[1] = tgt + changemap[tgt]
             elseif !is_meta_expr_head(el.head)
-                renumber_stuff!(el.args, changemap)
+                renumber_ir_elements!(el.args, changemap, false)
             end
         end
     end

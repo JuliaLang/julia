@@ -6,10 +6,9 @@
 
 (:)(start::T, stop::T) where {T} = (:)(start, oftype(stop-start, 1), stop)
 
-# first promote start and stop, leaving step alone
+# promote start and stop, leaving step alone
 (:)(start::A, step, stop::C) where {A<:Real,C<:Real} =
     (:)(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
-(:)(start::T, step::Real, stop::T) where {T<:Real} = (:)(promote(start, step, stop)...)
 
 # AbstractFloat specializations
 (:)(a::T, b::T) where {T<:AbstractFloat} = (:)(a, T(1), b)
@@ -143,18 +142,19 @@ function steprange_last(start::T, step, stop) where T
         if (step > z) != (stop > start)
             last = steprange_last_empty(start, step, stop)
         else
-            diff = stop - start
-            if T<:Signed && (diff > zero(diff)) != (stop > start)
-                # handle overflowed subtraction with unsigned rem
-                if diff > zero(diff)
-                    remain = -convert(T, unsigned(-diff) % step)
-                else
-                    remain = convert(T, unsigned(diff) % step)
-                end
+            # Compute absolute value of difference between `start` and `stop`
+            # (to simplify handling both signed and unsigned T and checking for signed overflow):
+            absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
+
+            # Compute remainder as a nonnegative number:
+            if T <: Signed && absdiff < zero(absdiff)
+                # handle signed overflow with unsigned rem
+                remain = convert(T, unsigned(absdiff) % absstep)
             else
-                remain = steprem(start,stop,step)
+                remain = absdiff % absstep
             end
-            last = stop - remain
+            # Move `stop` closer to `start` if there is a remainder:
+            last = stop > start ? stop - remain : stop + remain
         end
     end
     last
@@ -175,8 +175,6 @@ end
 # For types where x+oneunit(x) may not be well-defined
 steprange_last_empty(start, step, stop) = start - step
 
-steprem(start,stop,step) = (stop-start) % step
-
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
 struct UnitRange{T<:Real} <: AbstractUnitRange{T}
@@ -194,8 +192,17 @@ unitrange_last(start::T, stop::T) where {T} =
                           convert(T,start-oneunit(stop-start)))
 
 if isdefined(Main, :Base)
-    getindex(t::Tuple, r::AbstractUnitRange{<:Real}) =
-        (o = first(r) - 1; ntuple(n -> t[o + n], length(r)))
+    function getindex(t::Tuple, r::AbstractUnitRange{<:Real})
+        n = length(r)
+        n == 0 && return ()
+        a = Vector{eltype(t)}(undef, n)
+        o = first(r) - 1
+        for i = 1:n
+            el = t[o + i]
+            @inbounds a[i] = el
+        end
+        (a...,)
+    end
 end
 
 """
@@ -376,7 +383,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 ```
 """
 step(r::StepRange) = r.step
-step(r::AbstractUnitRange{T}) where{T} = oneunit(T)
+step(r::AbstractUnitRange{T}) where{T} = oneunit(T) - zero(T)
 step(r::StepRangeLen{T}) where {T} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
 
@@ -390,8 +397,8 @@ function unsafe_length(r::StepRange)
     isempty(r) ? zero(n) : n
 end
 length(r::StepRange) = unsafe_length(r)
-unsafe_length(r::AbstractUnitRange) = Integer(last(r) - first(r) + 1)
-unsafe_length(r::OneTo) = r.stop
+unsafe_length(r::AbstractUnitRange) = Integer(last(r) - first(r) + step(r))
+unsafe_length(r::OneTo) = Integer(r.stop - zero(r.stop))
 length(r::AbstractUnitRange) = unsafe_length(r)
 length(r::OneTo) = unsafe_length(r)
 length(r::StepRangeLen) = r.len
@@ -403,8 +410,10 @@ function length(r::StepRange{T}) where T<:Union{Int,UInt,Int64,UInt64}
         return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
     elseif r.step < -1
         return checked_add(convert(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
+    elseif r.step > 0
+        return checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
     else
-        checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
+        return checked_add(div(checked_sub(r.start, r.stop), -r.step), one(T))
     end
 end
 

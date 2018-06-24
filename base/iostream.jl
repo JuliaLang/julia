@@ -508,15 +508,7 @@ function read(s::IOStream, nb::Integer; all::Bool=true)
     resize!(b, nr)
 end
 
-## Character streams ##
-
-function peekchar(s::IOStream)
-    chref = Ref{UInt32}()
-    if ccall(:ios_peekutf8, Cint, (Ptr{Cvoid}, Ptr{UInt32}), s, chref) < 0
-        return typemax(Char)
-    end
-    return Char(chref[])
-end
+## peek ##
 
 function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Cvoid},), s)

@@ -582,9 +582,7 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            for dir in [LOAD_PATH; pwd(); Base.find_env(LOAD_PATH)]
-                dir isa Function && (dir = dir())
-                dir isa AbstractString || continue
+            for dir in Base.load_path()
                 if basename(dir) in Base.project_names && isfile(dir)
                     append!(suggestions, project_deps_get_completion_candidates(s, dir))
                 end

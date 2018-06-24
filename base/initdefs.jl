@@ -43,90 +43,98 @@ isinteractive() = (is_interactive::Bool)
 
 const DEPOT_PATH = String[]
 
-function init_depot_path(BINDIR::String = Sys.BINDIR)
+function init_depot_path()
     if haskey(ENV, "JULIA_DEPOT_PATH")
         depots = split(ENV["JULIA_DEPOT_PATH"], Sys.iswindows() ? ';' : ':')
         append!(empty!(DEPOT_PATH), map(expanduser, depots))
     else
         push!(empty!(DEPOT_PATH), joinpath(homedir(), ".julia"))
-        push!(DEPOT_PATH, abspath(BINDIR, "..", "local", "share", "julia"))
-        push!(DEPOT_PATH, abspath(BINDIR, "..", "share", "julia"))
+        push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "local", "share", "julia"))
+        push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
     end
 end
 
-## load-path types ##
+## LOAD_PATH ##
 
-abstract type AbstractEnv end
+# split on `:` (or `;` on Windows)
+# first empty entry is replaced with DEFAULT_LOAD_PATH, the rest are skipped
+# entries starting with `@` are named environments:
+#  - the first three `#`s in a named environment are replaced with version numbers
+#  - `@stdlib` is a special name for the standard library and expands to its path
 
-struct CurrentEnv <: AbstractEnv
-    create::Bool
-    CurrentEnv(; create::Bool=false) = new(create)
-end
+# if you want a current env setup, use direnv and
+# have your .envrc do something like this:
+#
+#   export JULIA_LOAD_PATH="$(pwd):$JULIA_LOAD_PATH"
+#
+# this will inherit an existing JULIA_LOAD_PATH value or if there is none, leave
+# a trailing empty entry in JULIA_LOAD_PATH which will be replaced with defaults.
 
-struct NamedEnv <: AbstractEnv
-    name::String
-    create::Bool
-    NamedEnv(name::String; create::Bool=false) = new(name, create)
-end
-
-function show(io::IO, env::CurrentEnv)
-    print(io, CurrentEnv, "(")
-    env.create && print(io, "create=true")
-    print(io, ")")
-end
-
-function show(io::IO, env::NamedEnv)
-    print(io, NamedEnv, "(", repr(env.name))
-    env.create && print(io, ", create=true")
-    print(io, ")")
-end
-
-function parse_env(env::Union{String,SubString{String}})
-    isempty(env) && return Any[]
-    env == "@" && return CurrentEnv()
-    env == "@!" && return CurrentEnv(create=true)
-    if env[1] == '@'
-        create = env[2] == '!'
-        name = env[2+create:end]
-        name = replace(name, '#' => VERSION.major, count=1)
-        name = replace(name, '#' => VERSION.minor, count=1)
-        name = replace(name, '#' => VERSION.patch, count=1)
-        return NamedEnv(name, create=create)
-    end
-    return env # literal path
-end
+const DEFAULT_LOAD_PATH = ["@@", "@v#.#", "@stdlib"]
 
 """
     LOAD_PATH
 
-An array of paths as strings or custom loader objects for the `require`
-function and `using` and `import` statements to consider when loading
-code.
+An array of paths for `using` and `import` statements to consdier as project
+environments or package directories when loading code. See Code Loading.
 """
-const LOAD_PATH = Any[]
+const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
+
+function current_env(dir::AbstractString)
+    # look for project file in current dir and parents
+    home = homedir()
+    while true
+        for proj in project_names
+            file = joinpath(dir, proj)
+            isfile_casesensitive(file) && return file
+        end
+        # bail at home directory or top of git repo
+        (dir == home || ispath(joinpath(dir, ".git"))) && break
+        old, dir = dir, dirname(dir)
+        dir == old && break
+    end
+end
+
+function current_env()
+    dir = try pwd()
+    catch err
+        err isa UVError || rethrow(err)
+        return nothing
+    end
+    return current_env(dir)
+end
 
 function parse_load_path(str::String)
-    envs = Any[split(str, Sys.iswindows() ? ';' : ':');]
-    for (i, env) in enumerate(envs)
-        if '|' in env
-            envs[i] = Any[parse_env(e) for e in split(env, '|')]
+    envs = String[]
+    isempty(str) && return envs
+    first_empty = true
+    for env in split(str, Sys.iswindows() ? ';' : ':')
+        if isempty(env)
+            first_empty && append!(envs, DEFAULT_LOAD_PATH)
+            first_empty = false
+        elseif env == "@" # use "@@" to do delayed expansion
+            dir = current_env()
+            dir !== nothing && push!(envs, dir)
         else
-            envs[i] = parse_env(env)
+            push!(envs, env)
         end
     end
     return envs
 end
 
-const default_named = parse_load_path("@v#.#.#|@v#.#|@v#|@default|@!v#.#")
-
-function init_load_path(BINDIR::String = Sys.BINDIR)
-    vers = "v$(VERSION.major).$(VERSION.minor)"
-    stdlib = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
-    load_path = Base.creating_sysimg           ? Any[stdlib] :
-                haskey(ENV, "JULIA_LOAD_PATH") ? parse_load_path(ENV["JULIA_LOAD_PATH"]) :
-                                                 Any[CurrentEnv(); default_named; stdlib]
+function init_load_path()
+    if Base.creating_sysimg
+        load_path = ["@stdlib"]
+    elseif haskey(ENV, "JULIA_LOAD_PATH")
+        load_path = parse_load_path(ENV["JULIA_LOAD_PATH"])
+    else
+        load_path = filter!(env -> env !== nothing,
+            [env == "@" ? current_env() : env for env in DEFAULT_LOAD_PATH])
+    end
     append!(empty!(LOAD_PATH), load_path)
 end
+
+## atexit: register exit hooks ##
 
 const atexit_hooks = []
 

@@ -1158,6 +1158,9 @@ end
 
     # issue #25857
     @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
+
+    # issues #25466 & #26256
+    @test replstr([:A => [1]]) == "1-element Array{Pair{Symbol,Array{$Int,1}},1}:\n :A => [1]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin

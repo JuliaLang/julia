@@ -308,32 +308,56 @@ end
     end
 end
 
-@testset "matrix multiplication and kron" begin
+@testset "matrix multiplication" begin
     for i = 1:5
         a = sprand(10, 5, 0.7)
         b = sprand(5, 15, 0.3)
         @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
         @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
         @test maximum(abs.(SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
-        @test Array(kron(a,b)) == kron(Array(a), Array(b))
-        @test Array(kron(Array(a),b)) == kron(Array(a), Array(b))
-        @test Array(kron(a,Array(b))) == kron(Array(a), Array(b))
-        c = sparse(rand(Float32,5,5))
-        d = sparse(rand(Float64,5,5))
-        @test Array(kron(c,d)) == kron(Array(c),Array(d))
         f = Diagonal(rand(5))
         @test Array(a*f) == Array(a)*f
         @test Array(f*b) == f*Array(b)
     end
 end
 
-@testset "sparse Frobenius inner product" begin
+@testset "kronecker product" begin
+    for (m,n) in ((5,10), (13,8), (14,10))
+        a = sprand(m, 5, 0.4); a_d = Matrix(a)
+        b = sprand(n, 6, 0.3); b_d = Matrix(b)
+        x = sprand(m, 0.4); x_d = Vector(x)
+        y = sprand(n, 0.3); y_d = Vector(y)
+        # mat ⊗ mat
+        @test Array(kron(a, b)) == kron(a_d, b_d)
+        @test Array(kron(a_d, b)) == kron(a_d, b_d)
+        @test Array(kron(a, b_d)) == kron(a_d, b_d)
+        # vec ⊗ vec
+        @test Vector(kron(x, y)) == kron(x_d, y_d)
+        @test Vector(kron(x_d, y)) == kron(x_d, y_d)
+        @test Vector(kron(x, y_d)) == kron(x_d, y_d)
+        # mat ⊗ vec
+        @test Array(kron(a, y)) == kron(a_d, y_d)
+        @test Array(kron(a_d, y)) == kron(a_d, y_d)
+        @test Array(kron(a, y_d)) == kron(a_d, y_d)
+        # vec ⊗ mat
+        @test Array(kron(x, b)) == kron(x_d, b_d)
+        @test Array(kron(x_d, b)) == kron(x_d, b_d)
+        @test Array(kron(x, b_d)) == kron(x_d, b_d)
+        # test different types
+        z = convert(SparseVector{Float16, Int8}, y); z_d = Vector(z)
+        @test Vector(kron(x, z)) == kron(x_d, z_d)
+        @test Array(kron(a, z)) == kron(a_d, z_d)
+        @test Array(kron(z, b)) == kron(z_d, b_d)
+    end
+end
+
+@testset "sparse Frobenius dot/inner product" begin
     for i = 1:5
         A = sprand(ComplexF64,10,15,0.4)
         B = sprand(ComplexF64,10,15,0.5)
-        @test vecdot(A,B) ≈ vecdot(Matrix(A),Matrix(B))
+        @test dot(A,B) ≈ dot(Matrix(A),Matrix(B))
     end
-    @test_throws DimensionMismatch vecdot(sprand(5,5,0.2),sprand(5,6,0.2))
+    @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
 end
 
 sA = sprandn(3, 7, 0.5)
@@ -1544,8 +1568,8 @@ end
     @test norm(A) == zero(eltype(A))
     A = sparse([1.0])
     @test norm(A) == 1.0
-    @test_throws ArgumentError norm(sprand(5,5,0.2),3)
-    @test_throws ArgumentError norm(sprand(5,5,0.2),2)
+    @test_throws ArgumentError opnorm(sprand(5,5,0.2),3)
+    @test_throws ArgumentError opnorm(sprand(5,5,0.2),2)
 end
 
 @testset "ishermitian/issymmetric" begin
@@ -1667,30 +1691,30 @@ end
     Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
     Ar = sprandn(10,10,.1)
     Ai = ceil.(Int,Ar*100)
-    @test norm(Ac,1) ≈ norm(Array(Ac),1)
-    @test norm(Ac,Inf) ≈ norm(Array(Ac),Inf)
-    @test vecnorm(Ac) ≈ vecnorm(Array(Ac))
-    @test norm(Ar,1) ≈ norm(Array(Ar),1)
-    @test norm(Ar,Inf) ≈ norm(Array(Ar),Inf)
-    @test vecnorm(Ar) ≈ vecnorm(Array(Ar))
-    @test norm(Ai,1) ≈ norm(Array(Ai),1)
-    @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
-    @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
+    @test opnorm(Ac,1) ≈ opnorm(Array(Ac),1)
+    @test opnorm(Ac,Inf) ≈ opnorm(Array(Ac),Inf)
+    @test norm(Ac) ≈ norm(Array(Ac))
+    @test opnorm(Ar,1) ≈ opnorm(Array(Ar),1)
+    @test opnorm(Ar,Inf) ≈ opnorm(Array(Ar),Inf)
+    @test norm(Ar) ≈ norm(Array(Ar))
+    @test opnorm(Ai,1) ≈ opnorm(Array(Ai),1)
+    @test opnorm(Ai,Inf) ≈ opnorm(Array(Ai),Inf)
+    @test norm(Ai) ≈ norm(Array(Ai))
     Ai = trunc.(Int, Ar*100)
-    @test norm(Ai,1) ≈ norm(Array(Ai),1)
-    @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
-    @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
+    @test opnorm(Ai,1) ≈ opnorm(Array(Ai),1)
+    @test opnorm(Ai,Inf) ≈ opnorm(Array(Ai),Inf)
+    @test norm(Ai) ≈ norm(Array(Ai))
     Ai = round.(Int, Ar*100)
-    @test norm(Ai,1) ≈ norm(Array(Ai),1)
-    @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
-    @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
+    @test opnorm(Ai,1) ≈ opnorm(Array(Ai),1)
+    @test opnorm(Ai,Inf) ≈ opnorm(Array(Ai),Inf)
+    @test norm(Ai) ≈ norm(Array(Ai))
     # make certain entries in nzval beyond
     # the range specified in colptr do not
-    # impact vecnorm of a sparse matrix
+    # impact norm of a sparse matrix
     foo = sparse(1.0I, 4, 4)
     resize!(foo.nzval, 5)
     setindex!(foo.nzval, NaN, 5)
-    @test vecnorm(foo) == 2.0
+    @test norm(foo) == 2.0
 end
 
 @testset "sparse matrix cond" begin
@@ -1700,10 +1724,10 @@ end
     @test cond(A, 1) == 1.0
     # For a discussion of the tolerance, see #14778
     if Base.USE_GPL_LIBS
-        @test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(Array(Ar)), 1) < 3
-        @test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(Array(Ac)), 1) < 3
-        @test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(Array(Ar)), Inf) < 3
-        @test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(Array(Ac)), Inf) < 3
+        @test 0.99 <= cond(Ar, 1) \ opnorm(Ar, 1) * opnorm(inv(Array(Ar)), 1) < 3
+        @test 0.99 <= cond(Ac, 1) \ opnorm(Ac, 1) * opnorm(inv(Array(Ac)), 1) < 3
+        @test 0.99 <= cond(Ar, Inf) \ opnorm(Ar, Inf) * opnorm(inv(Array(Ar)), Inf) < 3
+        @test 0.99 <= cond(Ac, Inf) \ opnorm(Ac, Inf) * opnorm(inv(Array(Ac)), Inf) < 3
     end
     @test_throws ArgumentError cond(A,2)
     @test_throws ArgumentError cond(A,3)
@@ -1713,21 +1737,21 @@ end
     @test_throws DimensionMismatch cond(Arect, Inf)
 end
 
-@testset "sparse matrix normestinv" begin
+@testset "sparse matrix opnormestinv" begin
     srand(1234)
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
     Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
     Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
-        # NOTE: normestinv is probabilistic, so requires a fixed seed (set above in srand(1234))
-        @test SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
-        @test SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
-        @test SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
-        @test_throws ArgumentError SparseArrays.normestinv(Ac,0)
-        @test_throws ArgumentError SparseArrays.normestinv(Ac,21)
+        # NOTE: opnormestinv is probabilistic, so requires a fixed seed (set above in srand(1234))
+        @test SparseArrays.opnormestinv(Ac,3) ≈ opnorm(inv(Array(Ac)),1) atol=1e-4
+        @test SparseArrays.opnormestinv(Aci,3) ≈ opnorm(inv(Array(Aci)),1) atol=1e-4
+        @test SparseArrays.opnormestinv(Ar) ≈ opnorm(inv(Array(Ar)),1) atol=1e-4
+        @test_throws ArgumentError SparseArrays.opnormestinv(Ac,0)
+        @test_throws ArgumentError SparseArrays.opnormestinv(Ac,21)
     end
-    @test_throws DimensionMismatch SparseArrays.normestinv(sprand(3,5,.9))
+    @test_throws DimensionMismatch SparseArrays.opnormestinv(sprand(3,5,.9))
 end
 
 @testset "issue #13008" begin

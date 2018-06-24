@@ -20,7 +20,7 @@ srand(123)
     @test -one(UniformScaling(2)) == UniformScaling(-1)
     @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
     @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
-    @test norm(UniformScaling(1+im)) ≈ sqrt(2)
+    @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
 @testset "conjugation of UniformScaling" begin

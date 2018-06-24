@@ -426,7 +426,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     nstmts = sum(length(ir.cfg.blocks[i].stmts) for i in result_order if i !== 0)
     result_stmts = Vector{Any}(undef, nstmts + ncritbreaks + nnewfallthroughs)
     result_types = Any[Any for i = 1:length(result_stmts)]
-    result_ltable = fill(0, length(result_stmts))
+    result_ltable = fill(Int32(0), length(result_stmts))
     result_flags = fill(0x00, length(result_stmts))
     inst_rename = Vector{Any}(undef, length(ir.stmts))
     for i = 1:length(ir.new_nodes)
@@ -436,7 +436,9 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     crit_edge_breaks_fixup = Tuple{Int, Int}[]
     for (new_bb, bb) in pairs(result_order)
         if bb == 0
-            new_bbs[new_bb] = BasicBlock((bb_start_off+1):(bb_start_off+1), [new_bb-1], [result_stmts[bb_start_off].dest])
+            @assert isa(result_stmts[bb_start_off+1], GotoNode)
+            # N.B.: The .label has already been renamed when it was created.
+            new_bbs[new_bb] = BasicBlock((bb_start_off+1):(bb_start_off+1), [new_bb-1], [result_stmts[bb_start_off+1].label])
             bb_start_off += 1
             continue
         end
@@ -496,7 +498,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         entry = ir.new_nodes[i]
         new_new_nodes[i] = NewNode(inst_rename[entry.pos].id, entry.attach_after, entry.typ,
             renumber_ssa!(isa(entry.node, PhiNode) ?
-                rename_phinode_edges(entry.node, 0, result_order, bb_rename) : entry.node,
+                rename_phinode_edges(entry.node, block_for_inst(ir.cfg, entry.pos), result_order, bb_rename) : entry.node,
                 inst_rename, true),
             entry.line)
     end

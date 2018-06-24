@@ -333,6 +333,7 @@ using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
 include("methodshow.jl")
+include("secretbuffer.jl")
 
 # core math functions
 include("floatfuncs.jl")
@@ -402,7 +403,6 @@ include("channels.jl")
 
 # utilities
 include("deepcopy.jl")
-include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
@@ -428,10 +428,8 @@ include("util.jl")
 
 creating_sysimg = true
 # set up depot & load paths to be able to find stdlib packages
-let BINDIR = Sys.BINDIR
-    init_depot_path(BINDIR)
-    init_load_path(BINDIR)
-end
+init_depot_path()
+init_load_path()
 
 include("asyncmap.jl")
 
@@ -860,6 +858,7 @@ end
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
     @deprecate_stdlib peakflops     InteractiveUtils true
+    @deprecate_stdlib clipboard     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
@@ -889,7 +888,6 @@ end
     @deprecate_stdlib send           Sockets true
     @deprecate_stdlib TCPSocket      Sockets true
     @deprecate_stdlib UDPSocket      Sockets true
-
 end
 end
 

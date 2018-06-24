@@ -511,6 +511,13 @@ This section lists changes that do not have deprecation warnings.
     This change makes `@schedule` redundant with `@async`, so `@schedule` has been
     deprecated ([#27164]).
 
+ * `norm(A::AbstractMatrix, p=2)` computes no longer the operator/matrix norm but the `norm` of `A`
+   as for other iterables, i.e. as if it were a vector. Especially, `norm(A::AbstractMatrix)` is the
+   Frobenius norm. To compute the operator/matrix norm, use the new function `opnorm` ([#27401]).
+
+  * `dot(u, v)` now acts recursively. Instead of `sum(u[i]' * v[i] for i in ...)`, it computes
+    `sum(dot(u[i], v[i]) for i in ...)`, similarly to `vecdot` before ([#27401]).
+
 Library improvements
 --------------------
 
@@ -690,6 +697,9 @@ Library improvements
 
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
     the buffer ([#25944]).
+
+  * `lstrip` and `rstrip` now accept a predicate function that defaults to `isspace`
+    ([#27309]).
 
   * `trunc`, `floor`, `ceil`, and `round` specify `digits`, `sigdigits` and `base` using
     keyword arguments. ([#26156], [#26670])
@@ -1271,6 +1281,12 @@ Deprecated or removed
 
   * The functions `eigs` and `svds` have been moved to the `Arpack.jl` package ([#27616]).
 
+  * `vecdot` and `vecnorm` are deprecated in favor of `dot` and `norm`, respectively ([#27401]).
+
+  * `clipboard` has been moved to the `InteractiveUtils` standard library package
+    (along with other utilities mostly used at the interactive prompt, such as `edit`
+    and `less`) ([#27635]).
+
 Command-line option changes
 ---------------------------
 
@@ -1607,3 +1623,4 @@ Command-line option changes
 [#27189]: https://github.com/JuliaLang/julia/issues/27189
 [#27212]: https://github.com/JuliaLang/julia/issues/27212
 [#27248]: https://github.com/JuliaLang/julia/issues/27248
+[#27401]: https://github.com/JuliaLang/julia/issues/27401

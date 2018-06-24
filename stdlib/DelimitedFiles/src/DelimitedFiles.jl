@@ -10,7 +10,7 @@ module DelimitedFiles
 
 using Mmap
 
-import Base: _default_delims, tryparse_internal, show
+import Base: tryparse_internal, show
 
 export readdlm, writedlm
 
