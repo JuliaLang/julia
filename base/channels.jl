@@ -1,7 +1,6 @@
 abstract type AbstractChannel end
 
 
-const VectorChannel{T} = Union{BufferedChannel{T}, UnbufferedChannel{T}} where T
 
 
 """
@@ -33,7 +32,7 @@ end
 
 function BufferedChannel{T}(sz::Integer) where T
 	if sz <= 0
-		throw(ArgumentError("Channel size must be a positive integer or Inf. Use an UnbufferedChannel for no buffer (size zero)."))
+		throw(ArgumentError("BufferedChannel size must be a positive integer or Inf. Use an UnbufferedChannel for no buffer (size zero)."))
 	end
 	BufferedChannel(Condition(), Condition(), :open, nothing, Vector{T}(), sz)
 end
@@ -70,11 +69,16 @@ function UnbufferedChannel{T}() where T
 	return ch
 end
 
+
+const VectorChannel{T} = Union{BufferedChannel{T}, UnbufferedChannel{T}} where T
+
+
 """
 Channel{T}(sz)
 
 Constructs a [BufferedChannel](@ref) or [UnbufferedChannel](@ref) depending on if `sz` is zero or not.
 """
+const Channel{T} = BufferedChannel{T}  #HACK: just to keep existing code working
 Channel{T}(sz) where T = sz == 0 ? UnbufferedChannel{T}() : BufferedChannel{T}(sz)
 Channel(sz) = Channel{Any}(sz)
 
@@ -277,7 +281,7 @@ push!(c::VectorChannel, v) = put!(c, v)
 Wait for and get the first available item from the channel. Does not
 remove the item. `fetch` is unsupported on an unbuffered (0-size) channel.
 """
-fetch(c::BufferedChannel)
+function fetch(c::BufferedChannel)
     wait(c)
     first(c.data)
 end
@@ -302,7 +306,7 @@ Remove and return a value from a [`Channel`](@ref).
 Blocks until a [`put!`](@ref) is performed by a different
 task.
 """
-function take_unbuffered(c::UnbufferedChannel{T}) where T
+function take!(c::UnbufferedChannel{T}) where T
     check_channel_state(c)
     push!(c.takers, current_task())
     try

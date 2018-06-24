@@ -172,8 +172,6 @@ precompile(Tuple{typeof(Distributed.call_on_owner), typeof(Distributed.put_ref),
 precompile(Tuple{typeof(Distributed.put_ref), Distributed.RRID, Distributed.WorkerPool})
 precompile(Tuple{typeof(Base.put!), Distributed.RemoteValue, Distributed.WorkerPool})
 precompile(Tuple{typeof(Base.put!), Base.Channel{Any}, Distributed.WorkerPool})
-precompile(Tuple{typeof(Base.put_buffered), Base.Channel{Any}, Distributed.WorkerPool})
-precompile(Tuple{typeof(Base.put_unbuffered), Base.Channel{Any}, Distributed.WorkerPool})
 precompile(Tuple{typeof(Base.push!), Distributed.WorkerPool, Int64})
 precompile(Tuple{typeof(Serialization.serialize), Distributed.ClusterSerializer{Sockets.TCPSocket}, Distributed.RemoteDoMsg})
 precompile(Tuple{typeof(Serialization.serialize), Distributed.ClusterSerializer{Sockets.TCPSocket}, typeof(Distributed.set_valid_processes)})
