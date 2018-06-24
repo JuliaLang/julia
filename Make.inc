@@ -167,6 +167,12 @@ else
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
+# Override `JULIA_COMMIT` to `JULIA_VERSION` if we're on a tagged commit
+ifeq ($(shell git describe --tags --exact-match > /dev/null 2>&1 && echo true),t
+rue)
+JULIA_COMMIT := $(JULIA_VERSION)
+endif
+
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
 
