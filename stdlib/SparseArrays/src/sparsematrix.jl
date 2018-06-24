@@ -1115,7 +1115,7 @@ For expert drivers and additional information, see [`permute!`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = spdiagm(0 => [1, 2, 3, 4], 1 => [5, 6, 7])
+julia> A = sparse([1, 2, 3, 4, 1, 2, 3], [1, 2, 3, 4, 2, 3, 4], [1, 2, 3, 4, 5, 6, 7])
 4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
   [1, 1]  =  1
   [1, 2]  =  5

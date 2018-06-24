@@ -144,7 +144,7 @@ end
     # dense matrices, or dense vectors
     densevec = fill(1., N)
     densemat = diagm(0 => densevec)
-    spmat = spdiagm(0 => densevec)
+    spmat = sparse(densemat)
     for specialmat in specialmats
         # --> Tests applicable only to pairs of matrices
         for othermat in (spmat, densemat)

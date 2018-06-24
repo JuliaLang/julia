@@ -34,7 +34,7 @@ using Random: GLOBAL_RNG, AbstractRNG, randsubseq, randsubseq!
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blockdiag, droptol!, dropzeros!, dropzeros,
-    issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm,
+    issparse, nonzeros, nzrange, rowvals, sparse, sparsevec,
     sprand, sprandn, spzeros, nnz, permute, findnz
 
 include("abstractsparse.jl")
