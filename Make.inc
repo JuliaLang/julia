@@ -168,8 +168,7 @@ JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
 # Override `JULIA_COMMIT` to `JULIA_VERSION` if we're on a tagged commit
-ifeq ($(shell git describe --tags --exact-match > /dev/null 2>&1 && echo true),t
-rue)
+ifeq ($(shell git describe --tags --exact-match > /dev/null 2>&1 && echo true),true)
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
