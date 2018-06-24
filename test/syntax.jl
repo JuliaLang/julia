@@ -1447,3 +1447,11 @@ f27129(x = 1) = (@Base._inline_meta; x)
 for meth in methods(f27129)
     @test ccall(:jl_uncompress_ast, Any, (Any, Any), meth, meth.source).inlineable
 end
+
+# issue #27710
+struct Foo27710{T} end
+function test27710()
+    types(::Foo27710{T}) where T = T
+    T = types(Foo27710{Int64}())
+end
+@test test27710() === Int64
