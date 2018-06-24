@@ -577,12 +577,16 @@ function show(io::IO, p::Pair)
     iocompact = IOContext(io, :compact => get(io, :compact, true))
     has_tight_type(p) || return show_default(iocompact, p)
 
+    typeinfo = get(io, :typeinfo, Any)
+    typeinfos = typeinfo <: Pair && p isa typeinfo ?
+        (fieldtype(typeinfo, 1), fieldtype(typeinfo, 2)) : (Any, Any)
+
     isdelimited(iocompact, p.first) || print(io, "(")
-    show(iocompact, p.first)
+    show(IOContext(iocompact, :typeinfo => typeinfos[1]), p.first)
     isdelimited(iocompact, p.first) || print(io, ")")
     print(io, compact ? "=>" : " => ")
     isdelimited(iocompact, p.second) || print(io, "(")
-    show(iocompact, p.second)
+    show(IOContext(iocompact, :typeinfo => typeinfos[2]), p.second)
     isdelimited(iocompact, p.second) || print(io, ")")
     nothing
 end
