@@ -614,7 +614,7 @@ function show(io::IO, m::Module)
     if is_root_module(m)
         print(io, nameof(m))
     else
-        print(io, join(fullname(m),"."))
+        join(io, fullname(m), ".")
     end
 end
 

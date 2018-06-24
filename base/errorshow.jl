@@ -220,7 +220,7 @@ function show_methoderror(io::IO, ex::MethodError)
         end
         print(io, "(")
         for (i, typ) in enumerate(arg_types_param)
-            print(io, "::$typ")
+            print(io, "::", typ)
             i == length(arg_types_param) || print(io, ", ")
         end
         if !isempty(kwargs)
@@ -424,10 +424,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         end
                         if get(io, :color, false)
                             with_format(error_color(), iob) do iob
-                                print(iob, "::$sigstr")
+                                print(iob, "::", sigstr)
                             end
                         else
-                            print(iob, "!Matched::$sigstr")
+                            print(iob, "!Matched::", sigstr)
                         end
                     end
                 end
