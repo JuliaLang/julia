@@ -60,7 +60,7 @@ precompile(Tuple{getfield(Base, Symbol("#kw##printstyled")), NamedTuple{(:bold, 
 precompile(Tuple{getfield(Base, Symbol("#kw##printstyled")), NamedTuple{(:bold, :color), Tuple{Bool, Symbol}}, typeof(Base.printstyled), REPL.Terminals.TTYTerminal, String})
 precompile(Tuple{getfield(Base, Symbol("#kw##printstyled")), NamedTuple{(:color,), Tuple{Symbol}}, typeof(Base.printstyled), Base.IOContext{Base.GenericIOBuffer{Array{UInt8, 1}}}, String})
 precompile(Tuple{getfield(Base, Symbol("#kw##show_trace_entry")), NamedTuple{(:prefix,), Tuple{String}}, typeof(Base.show_trace_entry), Base.IOContext{REPL.Terminals.TTYTerminal}, Base.StackTraces.StackFrame, Int64})
-precompile(Tuple{getfield(Base, Symbol("#kw##with_output_color")), NamedTuple{(:bold,), Tuple{Bool}}, typeof(Base.with_output_color), typeof(Base.print), Symbol, Base.IOContext{Base.GenericIOBuffer{Array{UInt8, 1}}}, String, String})
+precompile(Tuple{getfield(Base, Symbol("#kw##with_format")), NamedTuple{(:bold,), Tuple{Bool}}, typeof(Base.with_format), typeof(Base.print), Symbol, Base.IOContext{Base.GenericIOBuffer{Array{UInt8, 1}}}, String, String})
 precompile(Tuple{getfield(Base.Cartesian, Symbol("#@ncall")), LineNumberNode, Module, Int64, Symbol, Symbol, Expr})
 precompile(Tuple{getfield(Base.Cartesian, Symbol("#@nexprs")), LineNumberNode, Module, Int64, Expr})
 precompile(Tuple{getfield(Base.Meta, Symbol("#kw##parse")), NamedTuple{(:raise, :depwarn), Tuple{Bool, Bool}}, typeof(Base.Meta.parse), String, Int64})
@@ -571,5 +571,6 @@ precompile(Tuple{typeof(REPL.setup_interface), REPL.LineEditREPL, Bool, Array{Ba
 precompile(Tuple{typeof(REPL.setup_interface), REPL.LineEditREPL, Bool, Base.Dict{Any, Any}})
 precompile(Tuple{typeof(Random.__init__)})
 precompile(Tuple{typeof(eval), Module, Expr})
+precompile(Tuple{typeof(Base.showerror), IOContext{Base.IOFormatBuffer}, MethodError})
 end
 end

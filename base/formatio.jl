@@ -79,7 +79,7 @@ or an integer between 0 and 255 inclusive. Note that not all terminals support 2
 If the keyword `bold` is given as `true`, the result will be printed in bold.
 """
 printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    with_output_color(print, color, io, msg...; bold=bold)
+    with_format(print, color, io, msg...; bold=bold)
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
 
@@ -162,22 +162,37 @@ function truncate(io::IOFormatBuffer, n::Integer)
     return io
 end
 
-function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
+function with_format(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOContext(IOFormatBuffer(), io)
     try
-        with_output_color(f, color, buf, args...; bold = bold)
+        with_format(f, color, buf, args...; bold = bold)
     finally
         write(io, buf.io)
     end
     nothing
 end
 
-function with_output_color(f::Function, color::Union{Int, Symbol}, buf::IOContext{IOFormatBuffer}, args...; bold::Bool = false)
+function with_format(f::Function, color::Union{Int, Symbol}, buf::IOContext{IOFormatBuffer}, args...; bold::Bool = false)
     let id = push!(buf.io, color)
         bold && push!(buf.io, :bold)
         f(buf, args...)
         pop!(buf.io, id)
     end
+end
+
+function with_format(f::Function, io::IO, args...)
+    buf = IOContext(IOFormatBuffer(), io)
+    try
+        f(buf, args...)
+    finally
+        write(io, buf.io)
+    end
+    nothing
+end
+
+function with_format(f::Function, buf::IOContext{IOFormatBuffer}, args...)
+    f(buf, args...)
+    nothing
 end
 
 # record the start position for the region `fmt`

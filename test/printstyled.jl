@@ -39,7 +39,7 @@ end
 let
     global c_18711 = 0
     buf = IOContext(IOBuffer(), :hascontext => true)
-    Base.with_output_color(:red, buf) do buf
+    Base.with_format(:red, buf) do buf
         global c_18711
         get(buf, :hascontext, false) && (c_18711 += 1)
     end
@@ -58,11 +58,11 @@ let buf = IOBuffer()
 end
 
 let buf = IOBuffer()
-    Base.with_output_color(:red, IOContext(buf, :color => true)) do io; print(io, "red",
+    Base.with_format(:red, IOContext(buf, :color => true)) do io; print(io, "red",
         Base.text_colors[:underline], " underline")
-    Base.with_output_color(:blue, io) do io; print(io, " blue")
-    Base.with_output_color(:bold, io) do io; print(io, " bold")
-    Base.with_output_color(:green, io) do io; print(io, " green\ngreen")
+    Base.with_format(:blue, io) do io; print(io, " blue")
+    Base.with_format(:bold, io) do io; print(io, " bold")
+    Base.with_format(:green, io) do io; print(io, " green\ngreen")
     end; print(io, " bold",
         Base.text_colors[:underline], " underline")
     end; print(io, " blue")

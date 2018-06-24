@@ -72,7 +72,7 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        with_output_color(get(io, :color, false) ? error_color() : :nothing, io) do io
+        with_format(get(io, :color, false) ? error_color() : :nothing, io) do io
             showerror(io, ex)
         end
     finally
@@ -155,6 +155,12 @@ end
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
 function showerror(io::IO, ex::MethodError)
+    with_format(io) do io # mono-morphize the rest of this method implementation (on io::IOContext{IOFormatBuffer})
+        show_methoderror(io, ex)
+    end
+end
+
+function show_methoderror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
     is_arg_types = isa(ex.args, DataType)
@@ -266,13 +272,19 @@ function showerror(io::IO, ex::MethodError)
     end
 end
 
-striptype(::Type{T}) where {T} = T
-striptype(::Any) = nothing
+# from T = Type{S}, extract S, if applicable, given that the argument T came from either Core.Typeof or invoke
+function striptype(@nospecialize T)
+    uwT = unwrap_unionall(T)
+    if T isa DataType && T.name === Type.body.name
+        return rewrap_unionall(uwT.parameters[1], T)
+    end
+    return nothing # failed to compute instanceof(T)
+end
 
-function showerror_ambiguous(io::IO, meth, f, args)
+function showerror_ambiguous(io::IO, @nospecialize(meth), @nospecialize(f), @nospecialize(args))
     print(io, "MethodError: ", f, "(")
     p = args.parameters
-    for (i,a) in enumerate(p)
+    for (i, a) in enumerate(p)
         print(io, "::", a)
         i < length(p) && print(io, ", ")
     end
@@ -293,10 +305,11 @@ end
 #Useful in Base submodule __init__ functions where stderr isn't defined yet.
 function showerror_nostdio(err, msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
-    ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, msg)
-    ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, ":\n")
-    ccall(:jl_static_show, Csize_t, (Ptr{Cvoid},Any), stderr_stream, err)
-    ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
+    ccall(:jl_printf, Cint, (Ptr{Cvoid}, Cstring), stderr_stream, msg)
+    ccall(:jl_printf, Cint, (Ptr{Cvoid}, Cstring), stderr_stream, ":\n")
+    ccall(:jl_static_show, Csize_t, (Ptr{Cvoid}, Any), stderr_stream, err)
+    ccall(:jl_printf, Cint, (Ptr{Cvoid}, Cstring), stderr_stream, "\n")
+    nothing
 end
 
 function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
@@ -368,7 +381,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
                     if get(io, :color, false)
-                        Base.with_output_color(Base.error_color(), iob) do iob
+                        with_format(error_color(), iob) do iob
                             print(iob, "::", sigstr)
                         end
                     else
@@ -410,7 +423,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                             print(iob, ", ")
                         end
                         if get(io, :color, false)
-                            Base.with_output_color(Base.error_color(), iob) do iob
+                            with_format(error_color(), iob) do iob
                                 print(iob, "::$sigstr")
                             end
                         else
@@ -422,7 +435,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 if isdefined(ft.name.mt, :kwsorter)
                     kwsorter_t = typeof(ft.name.mt.kwsorter)
                     kwords = kwarg_decl(method, kwsorter_t)
-                    length(kwords) > 0 && print(iob, "; ", join(kwords, ", "))
+                    if length(kwords) > 0
+                        print(iob, "; ")
+                        join(iob, kwords, ", ")
+                    end
                 end
                 print(iob, ")")
                 show_method_params(iob, tv)
@@ -437,9 +453,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         end
                     end
                     if !isempty(unexpected)
-                        Base.with_output_color(Base.error_color(), iob) do iob
+                        with_format(error_color(), iob) do iob
                             plur = length(unexpected) > 1 ? "s" : ""
-                            print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
+                            print(iob, " got unsupported keyword argument$plur \"")
+                            join(iob, unexpected, "\", \"")
+                            print(iob, "\"")
                         end
                     end
                 end
@@ -452,7 +470,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     end
 
     if !isempty(lines) # Display up to three closest candidates
-        Base.with_output_color(:normal, io) do io
+        with_format(:normal, io) do io
             println(io)
             print(io, "Closest candidates are:")
             sort!(lines, by = x -> -x[2])
@@ -474,6 +492,7 @@ function show_trace_entry(io, frame, n; prefix = "")
     print(io, "\n", prefix)
     show(io, frame, full_path=true)
     n > 1 && print(io, " (repeats ", n, " times)")
+    nothing
 end
 
 # Contains file name and file number. Gets set when a backtrace

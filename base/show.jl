@@ -1498,7 +1498,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         return
     end
     sig = unwrap_unionall(sig).parameters
-    Base.with_output_color(color, io) do io
+    with_format(color, io) do io
         ft = sig[1]
         uw = unwrap_unionall(ft)
         if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
