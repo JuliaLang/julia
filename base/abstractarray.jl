@@ -99,6 +99,9 @@ keys(a::AbstractVector) = LinearIndices(a)
 keytype(a::AbstractArray) = CartesianIndex{ndims(a)}
 keytype(a::AbstractVector) = Int
 
+keytype(A::Type{<:AbstractArray}) = CartesianIndex{ndims(A)}
+keytype(A::Type{<:AbstractVector}) = Int
+
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
