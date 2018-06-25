@@ -1075,7 +1075,7 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(EOFError())
     else
         val, state = vs
-        s.nextvalstate = iterate(s.itr, state)
+        Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
         s.taken += 1
         return val
     end

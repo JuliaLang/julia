@@ -1133,12 +1133,18 @@ These are some minor points that might help in tight inner loops.
 
 Sometimes you can enable better optimization by promising certain program properties.
 
-  * Use `@inbounds` to eliminate array bounds checking within expressions. Be certain before doing
+  * Use [`@inbounds`](@ref) to eliminate array bounds checking within expressions. Be certain before doing
     this. If the subscripts are ever out of bounds, you may suffer crashes or silent corruption.
-  * Use `@fastmath` to allow floating point optimizations that are correct for real numbers, but lead
+  * Use [`@fastmath`](@ref) to allow floating point optimizations that are correct for real numbers, but lead
     to differences for IEEE numbers. Be careful when doing this, as this may change numerical results.
     This corresponds to the `-ffast-math` option of clang.
-  * Write `@simd` in front of `for` loops that are amenable to vectorization. **This feature is experimental**
+  * Write [`@simd`](@ref) in front of `for` loops to promise that the iterations are independent and may be
+    reordered.  Note that in many cases, Julia can automatically vectorize code without the `@simd` macro;
+    it is only beneficial in cases where such a transformation would otherwise be illegal, including cases
+    like allowing floating-point re-associativity and ignoring dependent memory accesses (`@simd ivdep`).
+    Again, be very careful when asserting `@simd` as erroneously annotating a loop with dependent iterations
+    may result in unexpected results. In particular, note that `setindex!` on some `AbstractArray` subtypes is
+    inherently dependent upon iteration order. **This feature is experimental**
     and could change or disappear in future versions of Julia.
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
@@ -1146,9 +1152,9 @@ and may cause a segmentation fault if bounds checking is turned off. Use `Linear
 instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
 
 !!!note
-    While `@simd` needs to be placed directly in front of a loop, both `@inbounds` and `@fastmath`
-    can be applied to several statements at once, e.g. using `begin` ... `end`, or even to a whole
-    function.
+    While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`
+    can be applied to either single expressions or all the expressions that appear within nested blocks of code, e.g.,
+    using `@inbounds begin` or `@inbounds for ...`.
 
 Here is an example with both `@inbounds` and `@simd` markup (we here use `@noinline` to prevent
 the optimizer from trying to be too clever and defeat our benchmark):
@@ -1194,33 +1200,7 @@ GFlop/sec        = 1.9467069505224963
 GFlop/sec (SIMD) = 17.578554163920018
 ```
 
-(`GFlop/sec` measures the performance, and larger numbers are better.) The range for a `@simd for`
-loop should be a one-dimensional range. A variable used for accumulating, such as `s` in the example,
-is called a *reduction variable*. By using `@simd`, you are asserting several properties of the
-loop:
-
-  * It is safe to execute iterations in arbitrary or overlapping order, with special consideration
-    for reduction variables.
-  * Floating-point operations on reduction variables can be reordered, possibly causing different
-    results than without `@simd`.
-  * No iteration ever waits on another iteration to make forward progress.
-
-A loop containing `break`, `continue`, or `@goto` will cause a compile-time error.
-
-Using `@simd` merely gives the compiler license to vectorize. Whether it actually does so depends
-on the compiler. To actually benefit from the current implementation, your loop should have the
-following additional properties:
-
-  * The loop must be an innermost loop.
-  * The loop body must be straight-line code. This is why `@inbounds` is currently needed for all
-    array accesses. The compiler can sometimes turn short `&&`, `||`, and `?:` expressions into straight-line
-    code, if it is safe to evaluate all operands unconditionally. Consider using the [`ifelse`](@ref)
-    function instead of `?:` in the loop if it is safe to do so.
-  * Accesses must have a stride pattern and cannot be "gathers" (random-index reads) or "scatters"
-    (random-index writes).
-  * The stride should be unit stride.
-  * In some simple cases, for example with 2-3 arrays accessed in a loop, the LLVM auto-vectorization
-    may kick in automatically, leading to no further speedup with `@simd`.
+(`GFlop/sec` measures the performance, and larger numbers are better.)
 
 Here is an example with all three kinds of markup. This program first calculates the finite difference
 of a one-dimensional array, and then evaluates the L2-norm of the result:

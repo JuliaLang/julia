@@ -53,7 +53,7 @@ function choosetests(choices = [])
         "enums", "cmdlineargs", "int",
         "checked", "bitset", "floatfuncs", "precompile", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "specificity", "codegen",
+        "channels", "iostream", "secretbuffer", "specificity", "codegen",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 

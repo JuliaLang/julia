@@ -70,7 +70,7 @@ end
 # this will inherit an existing JULIA_LOAD_PATH value or if there is none, leave
 # a trailing empty entry in JULIA_LOAD_PATH which will be replaced with defaults.
 
-const DEFAULT_LOAD_PATH = ["@v#.#", "@stdlib"]
+const DEFAULT_LOAD_PATH = ["@@", "@v#.#", "@stdlib"]
 
 """
     LOAD_PATH
@@ -80,7 +80,7 @@ environments or package directories when loading code. See Code Loading.
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
 
-function current_env(dir::AbstractString = pwd())
+function current_env(dir::AbstractString)
     # look for project file in current dir and parents
     home = homedir()
     while true
@@ -95,6 +95,15 @@ function current_env(dir::AbstractString = pwd())
     end
 end
 
+function current_env()
+    dir = try pwd()
+    catch err
+        err isa UVError || rethrow(err)
+        return nothing
+    end
+    return current_env(dir)
+end
+
 function parse_load_path(str::String)
     envs = String[]
     isempty(str) && return envs
@@ -103,7 +112,7 @@ function parse_load_path(str::String)
         if isempty(env)
             first_empty && append!(envs, DEFAULT_LOAD_PATH)
             first_empty = false
-        elseif env == "@"
+        elseif env == "@" # use "@@" to do delayed expansion
             dir = current_env()
             dir !== nothing && push!(envs, dir)
         else
@@ -119,7 +128,8 @@ function init_load_path()
     elseif haskey(ENV, "JULIA_LOAD_PATH")
         load_path = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
-        load_path = DEFAULT_LOAD_PATH
+        load_path = filter!(env -> env !== nothing,
+            [env == "@" ? current_env() : env for env in DEFAULT_LOAD_PATH])
     end
     append!(empty!(LOAD_PATH), load_path)
 end

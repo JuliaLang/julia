@@ -653,7 +653,7 @@ struct RandomStruct23964 end
     @test_throws ArgumentError rand(RandomStruct23964())
 end
 
-@testset "rand(::$RNG, ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
+@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
                                                  T ∈ (Int32, UInt32, Int64, Int128, UInt128)
     RNG isa MersenneTwister && srand(RNG, rand(UInt128)) # for reproducibility
     r = T(1):T(108)

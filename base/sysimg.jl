@@ -333,6 +333,7 @@ using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
 include("methodshow.jl")
+include("secretbuffer.jl")
 
 # core math functions
 include("floatfuncs.jl")

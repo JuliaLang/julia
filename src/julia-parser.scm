@@ -724,9 +724,14 @@
            (and (or (eq? (car ex) 'where) (eq? (car ex) '|::|))
                 (eventually-call? (cadr ex))))))
 
+(define (add-line-number blk linenode)
+  (if (and (pair? blk) (eq? (car blk) 'block))
+      `(block ,linenode ,@(cdr blk))
+      `(block ,linenode ,blk)))
+
 (define (short-form-function-loc ex lno)
   (if (eventually-call? (cadr ex))
-      `(= ,(cadr ex) (block (line ,lno ,current-filename) ,(caddr ex)))
+      `(= ,(cadr ex) ,(add-line-number (caddr ex) `(line ,lno ,current-filename)))
       ex))
 
 (define (parse-assignment s down)
@@ -1125,7 +1130,7 @@
          ;; -> is unusual: it binds tightly on the left and
          ;; loosely on the right.
          (let ((lno (line-number-node s)))
-           `(-> ,ex (block ,lno ,(parse-eq* s)))))
+           `(-> ,ex ,(add-line-number (parse-eq* s) lno))))
         (else
          ex)))))
 
@@ -2322,7 +2327,10 @@
                  ':
                  (if (or (ts:space? s) (eqv? nxt #\newline))
                      (error "space not allowed after \":\" used for quoting")
-                     (list 'quote (parse-atom s #f))))))
+                     (list 'quote
+                           ;; being inside quote makes `end` non-special again. issue #27690
+                           (with-bindings ((end-symbol #f))
+                                          (parse-atom s #f)))))))
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))

@@ -1907,22 +1907,31 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
     if (li == NULL)
         return 0;
-    jl_code_info_t *src = NULL;
-    if (!jl_is_rettype_inferred(li))
-        src = jl_type_infer(&li, world, 0);
-    if (li->invoke != jl_fptr_const_return) {
-        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc) {
-            // If we are saving LLVM or native code, generate the LLVM IR so that it'll
-            // be included in the saved LLVM module.
-            jl_compile_linfo(&li, src, world, &jl_default_cgparams);
+    if (jl_generating_output()) {
+        jl_code_info_t *src = NULL;
+        // If we are saving ji files (e.g. package pre-compilation or intermediate sysimg build steps),
+        // don't bother generating anything since it won't be saved.
+        if (!jl_is_rettype_inferred(li))
+            src = jl_type_infer(&li, world, 0);
+        if (li->invoke != jl_fptr_const_return) {
+            if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc) {
+                // If we are saving LLVM or native code, generate the LLVM IR so that it'll
+                // be included in the saved LLVM module.
+                jl_compile_linfo(&li, src, world, &jl_default_cgparams);
+                if (jl_typeinf_func && li->def.method->module == ((jl_datatype_t*)jl_typeof(jl_typeinf_func))->name->module) {
+                    size_t world = jl_typeinf_world;
+                    // if it's part of the compiler, also attempt to compile for the compiler world too
+                    jl_method_instance_t *li = jl_get_specialization1(types, world, 1);
+                    if (li != NULL)
+                        jl_compile_linfo(&li, NULL, world, &jl_default_cgparams);
+                }
+            }
         }
-        else if (!jl_options.outputji) {
-            // If we are only saving ji files (e.g. package pre-compilation for now),
-            // don't bother generating anything since it won't be saved.
-            // Otherwise (this branch), assuming we are at runtime (normal JIT) and
-            // we should generate the native code.
-            (void)jl_compile_method_internal(&li, world);
-        }
+    }
+    else {
+        // Otherwise (this branch), assuming we are at runtime (normal JIT) and
+        // we should generate the native code immediately in preparation for use.
+        (void)jl_compile_method_internal(&li, world);
     }
     return 1;
 }
