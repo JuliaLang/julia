@@ -552,6 +552,9 @@ Library improvements
     [ANSI color codes](https://en.wikipedia.org/wiki/ANSI_escape_code) ([#25067]),
     rather than using the undocumented `Base.have_color` global flag.
 
+  * `print_with_color` has been deprecated in favor of
+    `printstyled([io], xs...; bold=false, color=:normal)` for printing styled text ([#25522]).
+
   * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
     If this argument is used they return a string consisting of first/last `nchar`
     characters from the original string ([#23960]).
