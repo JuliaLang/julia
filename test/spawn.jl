@@ -478,17 +478,17 @@ end
     stderr=catcmd)) == "ERROR: correct19864"
 
 ## Deadlock in spawning a cmd (#22832)
-# FIXME?
-#let stdout = Pipe(), stdin = Pipe()
-#    Base.link_pipe(stdout, julia_only_read=true)
-#    Base.link_pipe(stdin, julia_only_write=true)
-#    p = spawn(pipeline(catcmd, stdin=stdin, stdout=stdout, stderr=DevNull))
-#    @async begin # feed cat with 2 MB of data (zeros)
-#        write(stdin, zeros(UInt8, 1048576 * 2))
-#        close(stdin)
-#    end
-#    sleep(0.5) # give cat a chance to fill the write buffer for stdout
-#    close(stdout.in) # make sure we can still close the write end
-#    @test sizeof(readstring(stdout)) == 1048576 * 2 # make sure we get all the data
-#    @test success(p)
-#end
+let out = Pipe(), inpt = Pipe()
+    Base.link_pipe(out, julia_only_read=true)
+    Base.link_pipe(inpt, julia_only_write=true)
+    p = spawn(pipeline(catcmd, stdin=inpt, stdout=out, stderr=DevNull))
+    @async begin # feed cat with 2 MB of data (zeros)
+        write(inpt, zeros(UInt8, 1048576 * 2))
+        close(inpt)
+    end
+    sleep(1) # give cat a chance to fill the write buffer for stdout
+    close(inpt.out)
+    close(out.in) # make sure we can still close the write end
+    @test sizeof(read(out)) == 1048576 * 2 # make sure we get all the data
+    @test success(p)
+end
