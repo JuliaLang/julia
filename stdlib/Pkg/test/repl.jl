@@ -32,12 +32,11 @@ end
 
 mktempdir() do project_path
     cd(project_path) do
-        pushfirst!(LOAD_PATH, project_path)
-        try
-            withenv("USER" => "Test User") do
-                pkg"generate HelloWorld"
-                cd("HelloWorld")
-                LibGit2.init(".")
+        withenv("USER" => "Test User") do
+            pkg"generate HelloWorld"
+            LibGit2.init(".")
+            cd("HelloWorld")
+            with_current_env() do
                 pkg"st"
                 @eval using HelloWorld
                 Base.invokelatest(HelloWorld.greet)
@@ -45,8 +44,6 @@ mktempdir() do project_path
                 Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "PackageWithBuildSpecificTestDeps"))")
                 Pkg.test("PackageWithBuildSpecificTestDeps")
             end
-        finally
-            popfirst!(LOAD_PATH)
         end
     end
 end
@@ -141,8 +138,6 @@ end # cd
 end # temp_pkg_dir
 
 
-locate_name(pkg) = Base.locate_package(Base.identify_package(pkg))
-
 temp_pkg_dir() do project_path; cd(project_path) do
     mktempdir() do tmp
         mktempdir() do depot_dir
@@ -161,15 +156,15 @@ temp_pkg_dir() do project_path; cd(project_path) do
                     Pkg.REPLMode.pkgstr("develop $(p1_new_path)")
                     Pkg.REPLMode.pkgstr("develop $(p2_new_path)")
                     Pkg.REPLMode.pkgstr("build; precompile")
-                    @test locate_name("UnregisteredWithProject") == joinpath(p1_new_path, "src", "UnregisteredWithProject.jl")
-                    @test locate_name("UnregisteredWithoutProject") == joinpath(p2_new_path, "src", "UnregisteredWithoutProject.jl")
+                    @test Base.find_package("UnregisteredWithProject") == joinpath(p1_new_path, "src", "UnregisteredWithProject.jl")
+                    @test Base.find_package("UnregisteredWithoutProject") == joinpath(p2_new_path, "src", "UnregisteredWithoutProject.jl")
                     @test Pkg.installed()["UnregisteredWithProject"] == v"0.1.0"
                     @test Pkg.installed()["UnregisteredWithoutProject"] == v"0.0.0"
                     Pkg.test("UnregisteredWithoutProject")
                     Pkg.test("UnregisteredWithProject")
 
                     pkg"develop Example#c37b675"
-                    @test locate_name("Example") ==  joinpath(tmp, "Example", "src", "Example.jl")
+                    @test Base.find_package("Example") ==  joinpath(tmp, "Example", "src", "Example.jl")
                     Pkg.test("Example")
                 end
             finally
@@ -179,35 +174,33 @@ temp_pkg_dir() do project_path; cd(project_path) do
         end # withenv
     end # mktempdir
     # nested
-    try
-        pushfirst!(LOAD_PATH, "@.")
-        mktempdir() do other_dir
-            mktempdir() do tmp; cd(tmp) do
-                withenv("USER" => "Test User") do
-                    pkg"generate HelloWorld"
-                    cd("HelloWorld") do
+    mktempdir() do other_dir
+        mktempdir() do tmp;
+            cd(tmp)
+            withenv("USER" => "Test User") do
+                pkg"generate HelloWorld"
+                cd("HelloWorld") do
+                    with_current_env() do
                         pkg"generate SubModule1"
                         pkg"generate SubModule2"
                         pkg"develop SubModule1"
                         mkdir("tests")
-                        cd("tests") do
-                            pkg"develop ../SubModule2"
-                        end
+                        cd("tests")
+                        pkg"develop ../SubModule2"
                         @test Pkg.installed()["SubModule1"] == v"0.1.0"
                         @test Pkg.installed()["SubModule2"] == v"0.1.0"
                     end
-                    cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
                 end
-            end end
-            # Check that these didnt generate absolute paths in the Manifest by copying
-            # to another directory
-            cd(joinpath(other_dir, "HelloWorld")) do
-                @test locate_name("SubModule1") == joinpath(pwd(), "SubModule1", "src", "SubModule1.jl")
-                @test locate_name("SubModule2") == joinpath(pwd(), "SubModule2", "src", "SubModule2.jl")
+                cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
+                cd(joinpath(other_dir, "HelloWorld"))
+                with_current_env() do
+                    # Check that these didnt generate absolute paths in the Manifest by copying
+                    # to another directory
+                    @test Base.find_package("SubModule1") == joinpath(pwd(), "SubModule1", "src", "SubModule1.jl")
+                    @test Base.find_package("SubModule2") == joinpath(pwd(), "SubModule2", "src", "SubModule2.jl")
+                end
             end
         end
-    finally
-        popfirst!(LOAD_PATH)
     end
 end # cd
 end # temp_pkg_dir
@@ -222,103 +215,93 @@ end
 
 # Autocompletions
 temp_pkg_dir() do project_path; cd(project_path) do
-    try
-        pushfirst!(LOAD_PATH, ".")
-        Pkg.Types.registries()
-        pkg"init"
-        c, r = test_complete("add Exam")
-        @test "Example" in c
-        c, r = test_complete("rm Exam")
-        @test isempty(c)
-        Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "RequireDependency"))")
+    Pkg.Types.registries()
+    pkg"init"
+    c, r = test_complete("add Exam")
+    @test "Example" in c
+    c, r = test_complete("rm Exam")
+    @test isempty(c)
+    Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "RequireDependency"))")
 
-        c, r = test_complete("rm RequireDep")
-        @test "RequireDependency" in c
-        c, r = test_complete("rm -p RequireDep")
-        @test "RequireDependency" in c
-        c, r = test_complete("rm --project RequireDep")
-        @test "RequireDependency" in c
-        c, r = test_complete("rm Exam")
-        @test isempty(c)
-        c, r = test_complete("rm -p Exam")
-        @test isempty(c)
-        c, r = test_complete("rm --project Exam")
-        @test isempty(c)
+    c, r = test_complete("rm RequireDep")
+    @test "RequireDependency" in c
+    c, r = test_complete("rm -p RequireDep")
+    @test "RequireDependency" in c
+    c, r = test_complete("rm --project RequireDep")
+    @test "RequireDependency" in c
+    c, r = test_complete("rm Exam")
+    @test isempty(c)
+    c, r = test_complete("rm -p Exam")
+    @test isempty(c)
+    c, r = test_complete("rm --project Exam")
+    @test isempty(c)
 
-        c, r = test_complete("rm -m RequireDep")
-        @test "RequireDependency" in c
-        c, r = test_complete("rm --manifest RequireDep")
-        @test "RequireDependency" in c
-        c, r = test_complete("rm -m Exam")
-        @test "Example" in c
-        c, r = test_complete("rm --manifest Exam")
-        @test "Example" in c
+    c, r = test_complete("rm -m RequireDep")
+    @test "RequireDependency" in c
+    c, r = test_complete("rm --manifest RequireDep")
+    @test "RequireDependency" in c
+    c, r = test_complete("rm -m Exam")
+    @test "Example" in c
+    c, r = test_complete("rm --manifest Exam")
+    @test "Example" in c
 
-        c, r = test_complete("rm RequireDep")
-        @test "RequireDependency" in c
-        c, r = test_complete("rm Exam")
-        @test isempty(c)
-        c, r = test_complete("rm -m Exam")
-        c, r = test_complete("rm -m Exam")
-        @test "Example" in c
+    c, r = test_complete("rm RequireDep")
+    @test "RequireDependency" in c
+    c, r = test_complete("rm Exam")
+    @test isempty(c)
+    c, r = test_complete("rm -m Exam")
+    c, r = test_complete("rm -m Exam")
+    @test "Example" in c
 
-        pkg"add Example"
-        c, r = test_complete("rm Exam")
-        @test "Example" in c
-        c, r = test_complete("add --man")
-        @test "--manifest" in c
-        c, r = test_complete("rem")
-        @test "remove" in c
-        @test apply_completion("rm E") == "rm Example"
-        @test apply_completion("add Exampl") == "add Example"
+    pkg"add Example"
+    c, r = test_complete("rm Exam")
+    @test "Example" in c
+    c, r = test_complete("add --man")
+    @test "--manifest" in c
+    c, r = test_complete("rem")
+    @test "remove" in c
+    @test apply_completion("rm E") == "rm Example"
+    @test apply_completion("add Exampl") == "add Example"
 
-        c, r = test_complete("preview r")
-        @test "remove" in c
-        c, r = test_complete("help r")
-        @test "remove" in c
-        @test !("rm" in c)
-
-    finally
-        popfirst!(LOAD_PATH)
-    end
+    c, r = test_complete("preview r")
+    @test "remove" in c
+    c, r = test_complete("help r")
+    @test "remove" in c
+    @test !("rm" in c)
 end end
 
 temp_pkg_dir() do project_path; cd(project_path) do
     mktempdir() do tmp
         cp(joinpath(@__DIR__, "test_packages", "BigProject"), joinpath(tmp, "BigProject"))
-        cd(joinpath(tmp, "BigProject")) do
-            try
-                pushfirst!(LOAD_PATH, pwd())
-                pkg"dev SubModule"
-                pkg"dev SubModule2"
-                pkg"add Random"
-                pkg"add Example"
-                pkg"build"
-                @eval using BigProject
-                pkg"build BigProject"
-                @test_throws CommandError pkg"add BigProject"
-                pkg"test SubModule"
-                pkg"test SubModule2"
-                pkg"test BigProject"
-                pkg"test"
-                current_example = Pkg.API.installed()["Example"]
-                old_project = read("Project.toml", String)
-                open("Project.toml"; append=true) do io
-                    print(io, """
+        cd(joinpath(tmp, "BigProject"))
+        with_current_env() do
+            pkg"dev SubModule"
+            pkg"dev SubModule2"
+            pkg"add Random"
+            pkg"add Example"
+            pkg"build"
+            @eval using BigProject
+            pkg"build BigProject"
+            @test_throws CommandError pkg"add BigProject"
+            pkg"test SubModule"
+            pkg"test SubModule2"
+            pkg"test BigProject"
+            pkg"test"
+            current_json = Pkg.API.installed()["JSON"]
+            old_project = read("Project.toml", String)
+            open("Project.toml"; append=true) do io
+                print(io, """
 
-                    [compat]
-                    Example = "0.4.0"
-                    """
-                    )
-                end
-                pkg"up"
-                @test Pkg.API.installed()["Example"].minor == 4
-                write("Project.toml", old_project)
-                pkg"up"
-                @test Pkg.API.installed()["Example"] ==     current_example
-            finally
-                popfirst!(LOAD_PATH)
+                [compat]
+                JSON = "0.16.0"
+                """
+                )
             end
+            pkg"up"
+            @test Pkg.API.installed()["JSON"].minor == 16
+            write("Project.toml", old_project)
+            pkg"up"
+            @test Pkg.API.installed()["JSON"] == current_json
         end
     end
 end; end

@@ -237,12 +237,9 @@ temp_pkg_dir() do project_path
         mktempdir() do dir
             cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
             cd(joinpath(dir, "UnregisteredWithProject")) do
-                try
-                    Pkg.activate(".")
+               with_current_env() do
                     Pkg.up()
                     @test haskey(Pkg.installed(), "Example")
-                finally
-                    Pkg.activate()
                 end
             end
         end
@@ -277,12 +274,9 @@ temp_pkg_dir() do project_path
         mktempdir() do dir
             cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
             cd(joinpath(dir, "UnregisteredWithProject")) do
-                try
-                    pushfirst!(LOAD_PATH, Base.current_project())
+                with_current_env() do
                     Pkg.add("Test") # test https://github.com/JuliaLang/Pkg.jl/issues/324
                     Pkg.test()
-                finally
-                    popfirst!(LOAD_PATH)
                 end
             end
         end

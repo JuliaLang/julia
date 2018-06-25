@@ -47,3 +47,12 @@ function write_build(path, content)
     mkpath(dirname(build_filename))
     write(build_filename, content)
 end
+
+function with_current_env(f)
+    pushfirst!(LOAD_PATH, "@.")
+    try
+        f()
+    finally
+        popfirst!(LOAD_PATH)
+    end
+end
