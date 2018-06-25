@@ -1179,7 +1179,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(Array{Real}, Type{AbstractArray{Int}}) === Const(false)
     @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Real, 2})) === Const(true)
     @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Int, 2})) === Const(false)
-    @test isa_tfunc(DataType, Int) === Bool # could be improved
+    @test isa_tfunc(DataType, Int) === Const(false)
     @test isa_tfunc(DataType, Const(Type{Int})) === Bool
     @test isa_tfunc(DataType, Const(Type{Array})) === Bool
     @test isa_tfunc(UnionAll, Const(Type{Int})) === Bool # could be improved
@@ -1245,7 +1245,7 @@ let subtype_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
     @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
     let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
-        @test subtype_tfunc(c, Const(Bool)) === Bool # any result is ok
+        @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
     end
     @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
     @test subtype_tfunc(Type{Val{1}}, DataType) === Bool
