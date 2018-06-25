@@ -771,8 +771,8 @@ like `length`, `getindex`, *e.g.* `1[] == 1`). In particular, if `x = 0.0` is
 defined as a scalar, it is an error to attempt to change its value via
 `x[] = 1.0`. A scalar `x` can be converted into a zero-dimensional array
 containing it via `fill(x)`, and conversely, a zero-dimensional array `a` can
-be converted to the contained scalar via `a[]`. Another difference is that 
-a scalar can participate in linear algebra operations such as `2 * rand(2,2)`, 
+be converted to the contained scalar via `a[]`. Another difference is that
+a scalar can participate in linear algebra operations such as `2 * rand(2,2)`,
 but the analogous operation with a zero-dimensional array
 `fill(2) * rand(2,2)` is an error.
 
