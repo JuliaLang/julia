@@ -736,10 +736,10 @@ julia> @sync for i in 1:3
 
 ### Zero-dimensional arrays
 
-Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similar 
-to scalars, but there are important differences. They deserve a special mention 
-because they are a special case which makes logical sense given the generic 
-definition of arrays, but might be a bit unintuitive at first. The following 
+Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similar
+to scalars, but there are important differences. They deserve a special mention
+because they are a special case which makes logical sense given the generic
+definition of arrays, but might be a bit unintuitive at first. The following
 line defines a zero-dimensional array:
 
 ```
@@ -754,13 +754,13 @@ the same size (`size(A) == ()`), and length (`length(A) == 1`). In particular,
 zero-dimensional arrays are not empty. If you find this unintuitive, here are
 some ideas that might help to understand Julia's definition.
 
-* Zero-dimensional arrays are the "point" to vector's "line" and matrix's 
-"plane". Just as a line has no area (but still represents a set of things), a 
+* Zero-dimensional arrays are the "point" to vector's "line" and matrix's
+"plane". Just as a line has no area (but still represents a set of things), a
 point has no length or any dimensions at all (but still represents a thing).
 * We define `prod(())` to be 1, and the total number of elements in an array is
 the product of the size. The size of a zero-dimensional array is `()`, and
 therefore its length is `1`.
-* Zero-dimensional arrays don't natively have any dimensions into which you 
+* Zero-dimensional arrays don't natively have any dimensions into which you
 index -- they’re just `A[]`. We can apply the same "trailing one" rule for them
 as for all other array dimensionalities, so you can indeed index them as
 `A[1]`, `A[1,1]`, etc.
