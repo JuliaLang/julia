@@ -655,7 +655,7 @@ Testing...
 
 #### Test-specific dependencies
 
-Sometimes one might to want to use some packages only at testing time but not enforce a dependency on them when the package is used.
+Sometimes one might want to use some packages only at testing time but not enforce a dependency on them when the package is used.
 This is possible by adding dependencies to a "test target" to the Project file. Here we add the `Test` standard library as a
 test-only dependency by adding the following to the Project file:
 
@@ -748,7 +748,7 @@ The REPL command `precompile` can be used to precompile all the dependencies in 
 (HelloWorld) pkg> update; precompile
 ```
 
-do update the dependencies and then precompile them.
+to update the dependencies and then precompile them.
 
 ## Preview mode
 
@@ -770,7 +770,7 @@ However, nothing would be installed and your `Project.toml` and `Manifest.toml` 
 
 ## Using someone else's project
 
-Simple clone their project using e.g. `git clone`, `cd` to the project directory and call
+Simply clone their project using e.g. `git clone`, `cd` to the project directory and call
 
 ```
 (v0.7) pkg> activate
