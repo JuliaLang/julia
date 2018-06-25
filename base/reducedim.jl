@@ -248,7 +248,7 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
     mapreducedim!(identity, op, R, A)
 
 """
-    mapreduce(f, op, A::AbstractArray; dims=:, init=Base.NoInit())
+    mapreduce(f, op, A::AbstractArray; dims=:, [init])
 
 Evaluates to the same as `reduce(op, map(f, A); dims=dims, init=init)`, but is generally
 faster because the intermediate array is avoided.
@@ -271,24 +271,24 @@ julia> mapreduce(isodd, |, true, a, dims=1)
  true  true  true  true
 ```
 """
-mapreduce(f, op, A::AbstractArray; dims=:, init=NoInit()) = _mapreduce_dim(f, op, init, A, dims)
+mapreduce(f, op, A::AbstractArray; dims=:, kw...) = _mapreduce_dim(f, op, kw.data, A, dims)
 
-_mapreduce_dim(f, op, init, A::AbstractArray, ::Colon) = mapfoldl(f, op, A; init=init)
+_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArray, ::Colon) = mapfoldl(f, op, A; nt...)
 
-_mapreduce_dim(f, op, ::NoInit, A::AbstractArray, ::Colon) = _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArray, ::Colon) = _mapreduce(f, op, IndexStyle(A), A)
 
-_mapreduce_dim(f, op, init, A::AbstractArray, dims) =
-    mapreducedim!(f, op, reducedim_initarray(A, dims, init), A)
+_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArray, dims) =
+    mapreducedim!(f, op, reducedim_initarray(A, dims, nt.init), A)
 
-_mapreduce_dim(f, op, ::NoInit, A::AbstractArray, dims) =
+_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArray, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """
-    reduce(f, A; dims=:, init=Base.NoInit())
+    reduce(f, A; dims=:, [init])
 
 Reduce 2-argument function `f` along dimensions of `A`. `dims` is a vector specifying the
-dimensions to reduce, and `init` is the initial value to use in the reductions. For `+`, `*`,
-`max` and `min` the `init` argument is optional.
+dimensions to reduce, and the keyword argument `init` is the initial value to use in the
+reductions. For `+`, `*`, `max` and `min` the `init` argument is optional.
 
 The associativity of the reduction is implementation-dependent; if you need a particular
 associativity, e.g. left-to-right, you should write your own loop or consider using
@@ -315,9 +315,7 @@ julia> reduce(max, a, dims=1)
  4  8  12  16
 ```
 """
-reduce(op, A::AbstractArray; dims=:, init=NoInit()) = _reduce_dim(op, init, A, dims)
-
-_reduce_dim(op, init, A, dims) = mapreduce(identity, op, A; dims = dims, init=init)
+reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
 
 ##### Specific reduction functions #####
 """

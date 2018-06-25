@@ -4,14 +4,6 @@
 
 ###### Generic (map)reduce functions ######
 
-"""
-    Base.NoInit()
-
-Singleton used for the purpose of indicating to the [`reduce`](@ref) family of functions
-that no initial value has been specified for the reduction.
-"""
-struct NoInit; end
-
 if Int === Int32
     const SmallSigned = Union{Int8,Int16}
     const SmallUnsigned = Union{UInt8,UInt16}
@@ -42,7 +34,8 @@ mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
 
 ## foldl && mapfoldl
 
-@noinline function mapfoldl_impl(f, op, init, itr, i...)
+@noinline function mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, itr, i...)
+    init = nt.init
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     y = iterate(itr, i...)
@@ -56,32 +49,32 @@ mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
     return v
 end
 
-function mapfoldl_impl(f, op, ::NoInit, itr)
+function mapfoldl_impl(f, op, nt::NamedTuple{()}, itr)
     y = iterate(itr)
     if y === nothing
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
     (x, i) = y
     init = mapreduce_first(f, op, x)
-    mapfoldl_impl(f, op, init, itr, i)
+    mapfoldl_impl(f, op, (init=init,), itr, i)
 end
 
 
 """
-    mapfoldl(f, op, itr; init=Base.NoInit())
+    mapfoldl(f, op, itr; [init])
 
 Like [`mapreduce`](@ref), but with guaranteed left associativity, as in [`foldl`](@ref).
-If provided, `init` will be used exactly once. In general, it will be necessary to provide
+If provided, the keyword argument `init` will be used exactly once. In general, it will be
+necessary to provide `init` to work with empty collections.
+"""
+mapfoldl(f, op, itr; kw...) = mapfoldl_impl(f, op, kw.data, itr)
+
+"""
+    foldl(op, itr; [init])
+
+Like [`reduce`](@ref), but with guaranteed left associativity. If provided, the keyword
+argument `init` will be used exactly once. In general, it will be necessary to provide
 `init` to work with empty collections.
-"""
-mapfoldl(f, op, itr; init=NoInit()) = mapfoldl_impl(f, op, init, itr)
-
-"""
-    foldl(op, itr; init=Base.NoInit())
-
-Like [`reduce`](@ref), but with guaranteed left associativity. If provided, `init` will be
-used exactly once. In general, it will be necessary to provide `init` to work with empty
-collections.
 
 # Examples
 ```jldoctest
@@ -92,11 +85,12 @@ julia> foldl(=>, 1:4; init=0)
 (((0=>1)=>2)=>3) => 4
 ```
 """
-foldl(op, itr; init=NoInit()) = mapfoldl(identity, op, itr; init=init)
+foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 ## foldr & mapfoldr
 
-function mapfoldr_impl(f, op, init, itr, i::Integer)
+function mapfoldr_impl(f, op, nt::NamedTuple{(:init,)}, itr, i::Integer)
+    init = nt.init
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     if isempty(itr) || i == 0
@@ -112,29 +106,29 @@ function mapfoldr_impl(f, op, init, itr, i::Integer)
     end
 end
 
-function mapfoldr_impl(f, op, ::NoInit, itr, i::Integer)
+function mapfoldr_impl(f, op, ::NamedTuple{()}, itr, i::Integer)
     if isempty(itr)
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
-    return mapfoldr_impl(f, op, mapreduce_first(f, op, itr[i]), itr, i-1)
+    return mapfoldr_impl(f, op, (init=mapreduce_first(f, op, itr[i]),), itr, i-1)
 end
 
 """
-    mapfoldr(f, op, itr; init=Base.NoInit())
+    mapfoldr(f, op, itr; [init])
 
 Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr`](@ref). If
-provided, `init` will be used exactly once. In general, it will be necessary to provide
+provided, the keyword argument `init` will be used exactly once. In general, it will be
+necessary to provide `init` to work with empty collections.
+"""
+mapfoldr(f, op, itr; kw...) = mapfoldr_impl(f, op, kw.data, itr, lastindex(itr))
+
+
+"""
+    foldr(op, itr; [init])
+
+Like [`reduce`](@ref), but with guaranteed right associativity. If provided, the keyword
+argument `init` will be used exactly once. In general, it will be necessary to provide
 `init` to work with empty collections.
-"""
-mapfoldr(f, op, itr; init=NoInit()) = mapfoldr_impl(f, op, init, itr, lastindex(itr))
-
-
-"""
-    foldr(op, itr; init=Base.NoInit())
-
-Like [`reduce`](@ref), but with guaranteed right associativity. If provided, `init` will be
-used exactly once. In general, it will be necessary to provide `init` to work with empty
-collections.
 
 # Examples
 ```jldoctest
@@ -145,7 +139,7 @@ julia> foldr(=>, 1:4; init=0)
 1 => (2=>(3=>(4=>0)))
 ```
 """
-foldr(op, itr; init=NoInit()) = mapfoldr(identity, op, itr; init=init)
+foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 
 ## reduce & mapreduce
 
@@ -183,7 +177,7 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
-    mapreduce(f, op, itr; init=Base.NoInit())
+    mapreduce(f, op, itr; [init])
 
 Apply function `f` to each element in `itr`, and then reduce the result using the binary
 function `op`. If provided, `init` must be a neutral element for `op` that will be returne
@@ -206,7 +200,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, itr; init=NoInit()) = mapfoldl(f, op, itr; init=init)
+mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -330,7 +324,7 @@ mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 _mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
 """
-    reduce(op, itr; init=Base.NoInit())
+    reduce(op, itr; [init])
 
 Reduce the given collection `itr` with the given binary operator `op`. If provided, the
 initial value `init` must be a neutral element for `op` that will be returned for empty
@@ -362,7 +356,7 @@ julia> reduce(*, [2; 3; 4]; init=-1)
 -24
 ```
 """
-reduce(op, itr; init=NoInit()) = mapreduce(identity, op, itr; init=init)
+reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
 
 reduce(op, a::Number) = a  # Do we want this?
 
