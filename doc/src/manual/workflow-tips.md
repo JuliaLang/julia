@@ -10,8 +10,7 @@ your experience at the command line.
 
 ### A basic editor/REPL workflow
 
-The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
-line. A common pattern includes the following elements:
+The most basic Julia workflows involve using a text editor in conjunction with the `julia` REPL. To keep the REPL session in sync with code changes made by the editor, there are multiple options. The package [Revise.jl](https://github.com/timholy/Revise.jl) can be used to manage this synchrony automatically. Alternatively, the following setup is recommended: 
 
   * **Put code under development in a temporary module.** Create a file, say `Tmp.jl`, and include
     within it
@@ -23,14 +22,14 @@ line. A common pattern includes the following elements:
 
     end
     ```
+    
   * **Put your test code in another file.** Create another file, say `tst.jl`, which begins with
 
     ```julia
     import Tmp
     ```
 
-    and includes tests for the contents of `Tmp`.
-    Alternatively, you can wrap the contents of your test file in a module, as
+    and includes tests for the contents of `Tmp`. The value of using import versus using is that you can call `reload("Tmp")` instead of having to restart the REPL when your definitions change. Of course, the cost is the need to prepend `Tmp.` to uses of names defined in your module (you can lower that cost by keeping your module name short). If the module name is long, you can also alias it after importing, for example `ShrtNm = MyVeryLongModuleName`. Then you can refer to your symbols using `ShrtNm.func` instead of `MyVeryLongModuleName.func`. Everytime you reload the module, you must also update the binding `ShrtNm = MyVeryLongModuleName`, or else `ShrtNm` will refer to the old definitions. Alternatively, you can wrap the contents of your test file in a module, as
 
     ```
     module Tst
@@ -44,8 +43,14 @@ line. A common pattern includes the following elements:
     The advantage is that you can now do `using Tmp` in your test code and can therefore avoid prepending
     `Tmp.` everywhere. The disadvantage is that code can no longer be selectively copied to the REPL
     without some tweaking.
-  * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `tst.jl`.
-
+    
+  * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `tst.jl`. Occasionally restart the REPL, issuing
+  
+    ```
+    reload("Tmp")
+    include("tst.jl")
+    ```
+    
 ### Simplify initialization
 
 To simplify restarting the REPL, put project-specific initialization code in a file, say `_init.jl`,
