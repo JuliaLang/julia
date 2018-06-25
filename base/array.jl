@@ -678,7 +678,7 @@ end
 
 ## Iteration ##
 
-iterate(A::Array, i=1) = (i % UInt) - 1 < length(A) ? (@inbounds A[i], i + 1) : nothing
+iterate(A::Array, i=1) = (@_inline_meta; (i % UInt) - 1 < length(A) ? (@inbounds A[i], i + 1) : nothing)
 
 ## Indexing: getindex ##
 
