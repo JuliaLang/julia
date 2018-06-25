@@ -872,3 +872,22 @@ julia> r
  -1.20921  -0.383393
   0.0      -0.910506
 ```
+
+### Zero-dimensional arrays
+
+Zero-dimensional arrays are very similar to scalars, but there are important differences. The following line defines a zero-dimensional array:
+
+```
+julia> A = zeros()
+0-dimensional Array{Float64,0}:
+0.0
+```
+
+A zero-dimension array is a mutable container that contains one element which can be set by `A[] = 1.0` and retrieved with `A[]`. All zero-dimensional arrays have the same size (`size(A) == ()`), and length (`length(A) == 1`). Therefore zero-dimensional arrays are not empty. This might be contrary to what one might first expect, so here are some ideas that might help to understand Julia's definition.
+
+* Zero-dimensional arrays are the "point" to vector's "line" and matrix's "plane". Just as a line has no area (but still represents a set of things), a point has no length or any dimensions at all (but still represents a thing).
+* We define `prod(())` to be 1, and the total number of elements in an array is the product of the size. The size of a zero-dimensional array is `()`, and therefore its length is `1`.
+* Zero-dimensional arrays don't natively have any dimensions into which you index -- they’re just `A[]`. We can apply the same "trailing one" rule for them as for all other array dimensionalities, so you can indeed index them as `A[1]`, `A[1,1]`, etc.
+
+Zero-dimensional arrays are different from containers. Scalars are not mutable containers (even though they are iterable and define things like `length`, `getindex`, *e.g.* `1[] == 1`). In particular, if `x = 0.0` is a scalar, it is an error to set its value via `x[] = 1.0`. A scalar `x` can be converted into a zero-dimensional array containing it via `fill(x)`, and conversely, a zero-dimensional array `a` can be converted to the contained scalar via `a[]`.
+
