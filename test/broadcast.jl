@@ -727,6 +727,26 @@ let f(args...) = *(args...)
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
 end
 
+@testset "Issue #27775: Broadcast!ing over nested scalar operations" begin
+    a = zeros(2)
+    a .= 1 ./ (1 + 2)
+    @test a == [1/3, 1/3]
+    a .= 1 ./ (1 .+ 3)
+    @test a == [1/4, 1/4]
+    a .= sqrt.(1 ./ 2)
+    @test a == [sqrt(1/2), sqrt(1/2)]
+    rng = MersenneTwister(1234)
+    a .= rand.(rng)
+    rng = MersenneTwister(1234)
+    @test a == [rand(rng), rand(rng)]
+    @test a[1] != a[2]
+    rng = MersenneTwister(1234)
+    broadcast!(rand, a, rng)
+    rng = MersenneTwister(1234)
+    @test a == [rand(rng), rand(rng)]
+    @test a[1] != a[2]
+end
+
 # Issue #27446: Broadcasting pair operator
 let
     c = ["foo", "bar"]
