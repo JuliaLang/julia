@@ -539,8 +539,8 @@ end
 
 #### from a range
 
-for T in BitInteger_types # eval because of ambiguity otherwise
-    @eval Sampler(rng::MersenneTwister, r::UnitRange{$T}, ::Val{1}) =
+for T in BitInteger_types, R=(1, Inf) # eval because of ambiguity otherwise
+    @eval Sampler(rng::MersenneTwister, r::UnitRange{$T}, ::Val{$R}) =
         SamplerRangeFast(r)
 end
 

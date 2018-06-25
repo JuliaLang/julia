@@ -53,10 +53,10 @@ number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest
 julia> srand(0); randstring()
-"Qgt7sUOP"
+"0IPrGg0J"
 
 julia> randstring(MersenneTwister(0), 'a':'z', 6)
-"oevnou"
+"aszvqk"
 
 julia> randstring("ACGT")
 "TATCGGTC"
