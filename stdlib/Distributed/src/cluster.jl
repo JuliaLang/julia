@@ -42,8 +42,7 @@ mutable struct WorkerConfig
 
     function WorkerConfig()
         wc = new()
-        for n in 1:length(WorkerConfig.types)
-            T = eltype(fieldtype(WorkerConfig, n))
+        for n in 1:fieldcount(WorkerConfig)
             setfield!(wc, n, nothing)
         end
         wc
@@ -116,10 +115,10 @@ function check_worker_state(w::Worker)
         else
             w.ct_time = time()
             if myid() > w.id
-                @schedule exec_conn_func(w)
+                @async exec_conn_func(w)
             else
                 # route request via node 1
-                @schedule remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
+                @async remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
             end
             wait_for_conn(w)
         end
@@ -145,7 +144,7 @@ function wait_for_conn(w)
         timeout =  worker_timeout() - (time() - w.ct_time)
         timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
 
-        @schedule (sleep(timeout); notify(w.c_state; all=true))
+        @async (sleep(timeout); notify(w.c_state; all=true))
         wait(w.c_state)
         w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
     end
@@ -201,7 +200,7 @@ function start_worker(out::IO, cookie::AbstractString=readline(stdin))
     else
         sock = listen(interface, LPROC.bind_port)
     end
-    @schedule while isopen(sock)
+    @async while isopen(sock)
         client = accept(sock)
         process_messages(client, client, true)
     end
@@ -232,7 +231,7 @@ end
 
 
 function redirect_worker_output(ident, stream)
-    @schedule while !eof(stream)
+    @async while !eof(stream)
         line = readline(stream)
         if startswith(line, "      From worker ")
             # stdout's of "additional" workers started from an initial worker on a host are not available
@@ -266,7 +265,7 @@ function read_worker_host_port(io::IO)
     leader = String[]
     try
         while ntries > 0
-            readtask = @schedule readline(io)
+            readtask = @async readline(io)
             yield()
             while !istaskdone(readtask) && ((time() - t0) < timeout)
                 sleep(0.05)
@@ -397,13 +396,13 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
     # call manager's `launch` is a separate task. This allows the master
     # process initiate the connection setup process as and when workers come
     # online
-    t_launch = @schedule launch(manager, params, launched, launch_ntfy)
+    t_launch = @async launch(manager, params, launched, launch_ntfy)
 
     @sync begin
         while true
             if isempty(launched)
                 istaskdone(t_launch) && break
-                @schedule (sleep(1); notify(launch_ntfy))
+                @async (sleep(1); notify(launch_ntfy))
                 wait(launch_ntfy)
             end
 
@@ -451,7 +450,7 @@ function setup_launched_worker(manager, wconfig, launched_q)
     # When starting workers on remote multi-core hosts, `launch` can (optionally) start only one
     # process on the remote machine, with a request to start additional workers of the
     # same type. This is done by setting an appropriate value to `WorkerConfig.cnt`.
-    cnt = coalesce(wconfig.count, 1)
+    cnt = something(wconfig.count, 1)
     if cnt === :auto
         cnt = wconfig.environ[:cpu_cores]
     end
@@ -466,7 +465,7 @@ end
 function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launched_q)
     @sync begin
         exename = notnothing(fromconfig.exename)
-        exeflags = coalesce(fromconfig.exeflags, ``)
+        exeflags = something(fromconfig.exeflags, ``)
         cmd = `$exename $exeflags`
 
         new_addresses = remotecall_fetch(launch_additional, frompid, cnt, cmd)
@@ -551,7 +550,7 @@ function create_worker(manager, wconfig)
     elseif PGRP.topology == :custom
         # wait for requested workers to be up before connecting to them.
         filterfunc(x) = (x.id != 1) && isdefined(x, :config) &&
-            (notnothing(x.config.ident) in coalesce(wconfig.connect_idents, []))
+            (notnothing(x.config.ident) in something(wconfig.connect_idents, []))
 
         wlist = filter(filterfunc, PGRP.workers)
         while wconfig.connect_idents !== nothing &&
@@ -567,15 +566,15 @@ function create_worker(manager, wconfig)
     end
 
     all_locs = map(x -> isa(x, Worker) ?
-                   (coalesce(x.config.connect_at, ()), x.id) :
+                   (something(x.config.connect_at, ()), x.id) :
                    ((), x.id, true),
                    join_list)
     send_connection_hdr(w, true)
-    enable_threaded_blas = coalesce(wconfig.enable_threaded_blas, false)
+    enable_threaded_blas = something(wconfig.enable_threaded_blas, false)
     join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, enable_threaded_blas, isclusterlazy())
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
-    @schedule manage(w.manager, w.id, w.config, :register)
+    @async manage(w.manager, w.id, w.config, :register)
     wait(rr_ntfy_join)
     lock(client_refs) do
         delete!(PGRP.refs, ntfy_oid)
@@ -622,7 +621,7 @@ function check_master_connect()
     if ccall(:jl_running_on_valgrind,Cint,()) != 0
         return
     end
-    @schedule begin
+    @async begin
         start = time()
         while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
             sleep(1.0)
@@ -694,7 +693,7 @@ function topology(t)
     t
 end
 
-isclusterlazy() = coalesce(PGRP.lazy, false)
+isclusterlazy() = something(PGRP.lazy, false)
 
 get_bind_addr(pid::Integer) = get_bind_addr(worker_from_id(pid))
 get_bind_addr(w::LocalProcess) = LPROC.bind_addr
@@ -845,13 +844,13 @@ function rmprocs(pids...; waitfor=typemax(Int))
 
     pids = vcat(pids...)
     if waitfor == 0
-        t = @schedule _rmprocs(pids, typemax(Int))
+        t = @async _rmprocs(pids, typemax(Int))
         yield()
         return t
     else
         _rmprocs(pids, waitfor)
         # return a dummy task object that user code can wait on.
-        return @schedule nothing
+        return @async nothing
     end
 end
 
@@ -1046,6 +1045,9 @@ function disable_nagle(sock)
     end
 end
 
+wp_bind_addr(p::LocalProcess) = p.bind_addr
+wp_bind_addr(p) = p.config.bind_addr
+
 function check_same_host(pids)
     if myid() != 1
         return remotecall_fetch(check_same_host, 1, pids)
@@ -1056,8 +1058,8 @@ function check_same_host(pids)
         if all(p -> (p==1) || (isa(map_pid_wrkr[p].manager, LocalManager)), pids)
             return true
         else
-            first_bind_addr = notnothing(map_pid_wrkr[pids[1]].config.bind_addr)
-            return all(p -> (p != 1) && (notnothing(map_pid_wrkr[p].config.bind_addr) == first_bind_addr), pids[2:end])
+            first_bind_addr = notnothing(wp_bind_addr(map_pid_wrkr[pids[1]]))
+            return all(p -> notnothing(wp_bind_addr(map_pid_wrkr[p])) == first_bind_addr, pids[2:end])
         end
     end
 end
@@ -1153,8 +1155,8 @@ end
 
 function load_machine_file(path::AbstractString)
     machines = []
-    for line in split(read(path, String),'\n'; keep=false)
-        s = split(line, '*'; keep = false)
+    for line in split(read(path, String),'\n'; keepempty=false)
+        s = split(line, '*'; keepempty=false)
         map!(strip, s, s)
         if length(s) > 1
             cnt = all(isdigit, s[1]) ? parse(Int,s[1]) : Symbol(s[1])

@@ -26,7 +26,7 @@ end
 function HTML(xs...)
     HTML() do io
         for x in xs
-            show(io, MIME"text/html"(), x)
+            print(io, x)
         end
     end
 end

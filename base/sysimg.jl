@@ -7,9 +7,6 @@ using Core.Intrinsics, Core.IR
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 
-getproperty(x, f::Symbol) = getfield(x, f)
-setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
-
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
@@ -17,6 +14,9 @@ getproperty(x::Module, f::Symbol) = getfield(x, f)
 setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
 getproperty(x::Type, f::Symbol) = getfield(x, f)
 setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
+
+getproperty(Core.@nospecialize(x), f::Symbol) = getfield(x, f)
+setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
 
 function include_relative end
 function include(mod::Module, path::AbstractString)
@@ -53,7 +53,7 @@ let SOURCE_PATH = ""
     global _include
     function _include(mod::Module, path)
         prev = SOURCE_PATH
-        path = joinpath(dirname(prev), path)
+        path = normpath(joinpath(dirname(prev), path))
         push!(_included_files, (mod, abspath(path)))
         SOURCE_PATH = path
         result = Core.include(mod, path)
@@ -63,15 +63,11 @@ let SOURCE_PATH = ""
 end
 INCLUDE_STATE = 1 # include = Core.include
 
-baremodule MainInclude
-export include
-include(fname::AbstractString) = Main.Base.include(Main, fname)
-end
-
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
-eval(m, x) = Core.eval(m, x)
+eval(m::Module, x) = Core.eval(m, x)
+
 VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
 convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
@@ -135,13 +131,6 @@ using .Checked
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
-# Define the broadcast function, which is mostly implemented in
-# broadcast.jl, so that we can overload broadcast methods for
-# specific array types etc.
-#  --Here, just define fallback routines for broadcasting with no arguments
-broadcast(f) = f()
-broadcast!(f, X::AbstractArray) = (@inbounds for I in eachindex(X); X[I] = f(); end; X)
-
 # array structures
 include("indices.jl")
 include("array.jl")
@@ -155,6 +144,7 @@ include("reinterpretarray.jl")
 # type and dimensionality specified, accepting dims as series of Integers
 Vector{T}(::UndefInitializer, m::Integer) where {T} = Vector{T}(undef, Int(m))
 Matrix{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Matrix{T}(undef, Int(m), Int(n))
+Array{T,N}(::UndefInitializer, d::Vararg{Integer,N}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # type but not dimensionality specified, accepting dims as series of Integers
 Array{T}(::UndefInitializer, m::Integer) where {T} = Array{T,1}(undef, Int(m))
 Array{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Array{T,2}(undef, Int(m), Int(n))
@@ -163,6 +153,9 @@ Array{T}(::UndefInitializer, d::Integer...) where {T} = Array{T}(undef, convert(
 # dimensionality but not type specified, accepting dims as series of Integers
 Vector(::UndefInitializer, m::Integer) = Vector{Any}(undef, Int(m))
 Matrix(::UndefInitializer, m::Integer, n::Integer) = Matrix{Any}(undef, Int(m), Int(n))
+# Dimensions as a single tuple
+Array{T}(::UndefInitializer, d::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
+Array{T,N}(::UndefInitializer, d::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # empty vector constructor
 Vector() = Vector{Any}(undef, 0)
 
@@ -233,9 +226,9 @@ include("strings/string.jl")
 
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
-StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReshapedArray{T,N,A}
 StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
-StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
+StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,StridedReinterpretArray}} = ReshapedArray{T,N,A}
+StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray,StridedReinterpretArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
 StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
 StridedVector{T} = Union{DenseArray{T,1}, StridedSubArray{T,1}, StridedReshapedArray{T,1}, StridedReinterpretArray{T,1}}
@@ -298,6 +291,9 @@ end
     end
 end
 
+# missing values
+include("missing.jl")
+
 # version
 include("version.jl")
 
@@ -326,27 +322,6 @@ include("weakkeydict.jl")
 include("logging.jl")
 using .CoreLogging
 
-# To limit dependency on rand functionality (implemented in the Random
-# module), Crand is used in file.jl, and could be used in error.jl
-# (but it breaks a test)
-"""
-    Crand([T::Type])
-
-Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
-by composing two calls to `Crand()`. `T` can be `UInt32` or `Float64`.
-"""
-Crand() = ccall(:rand, Cuint, ())
-# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
-Crand(::Type{UInt32}) = ((Crand() % UInt32) << 16) ⊻ (Crand() % UInt32)
-Crand(::Type{Float64}) = Crand(UInt32) / 2^32
-
-"""
-    Csrand([seed])
-
-Interface with the C `srand(seed)` function.
-"""
-Csrand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
-
 # functions defined in Random
 function rand end
 function randn end
@@ -358,12 +333,12 @@ using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
 include("methodshow.jl")
+include("secretbuffer.jl")
 
 # core math functions
 include("floatfuncs.jl")
 include("math.jl")
 using .Math
-import .Math: gamma
 const (√)=sqrt
 const (∛)=cbrt
 
@@ -371,6 +346,7 @@ INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
+include("accumulate.jl")
 
 # basic data structures
 include("ordering.jl")
@@ -427,7 +403,6 @@ include("channels.jl")
 
 # utilities
 include("deepcopy.jl")
-include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
@@ -437,13 +412,9 @@ include("stacktraces.jl")
 using .StackTraces
 
 include("initdefs.jl")
-include("client.jl")
 
 # statistics
 include("statistics.jl")
-
-# missing values
-include("missing.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -457,10 +428,8 @@ include("util.jl")
 
 creating_sysimg = true
 # set up depot & load paths to be able to find stdlib packages
-let BINDIR = Sys.BINDIR
-    init_depot_path(BINDIR)
-    init_load_path(BINDIR)
-end
+init_depot_path()
+init_load_path()
 
 include("asyncmap.jl")
 
@@ -472,6 +441,8 @@ include("deprecated.jl")
 
 # Some basic documentation
 include("docs/basedocs.jl")
+
+include("client.jl")
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
@@ -497,8 +468,8 @@ function __init__()
             ENV["OPENBLAS_NUM_THREADS"] = cpu_cores
         end # otherwise, trust that openblas will pick CPU_CORES anyways, without any intervention
     end
-    # for the few uses of Crand in Base:
-    Csrand()
+    # for the few uses of Libc.rand in Base:
+    Libc.srand()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
@@ -538,7 +509,6 @@ let
             :LibGit2,
             :Logging,
             :Sockets,
-
             :Printf,
             :Profile,
             :Dates,
@@ -546,16 +516,15 @@ let
             :Random,
             :UUIDs,
             :Future,
-            :Pkg,
+            :OldPkg,
             :LinearAlgebra,
-            :IterativeEigensolvers,
             :SparseArrays,
             :SuiteSparse,
             :SharedArrays,
             :Distributed,
+            :Pkg,
             :Test,
             :REPL,
-            :Pkg3,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
@@ -675,9 +644,6 @@ end
     @eval @deprecate_stdlib $(Symbol("@dateformat_str")) Dates true
     @deprecate_stdlib now Dates true
 
-    @deprecate_stdlib eigs IterativeEigensolvers true
-    @deprecate_stdlib svds IterativeEigensolvers true
-
     @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
     @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
 
@@ -773,7 +739,6 @@ end
     # @deprecate_stdlib kron        LinearAlgebra true
     @deprecate_stdlib ldltfact    LinearAlgebra true
     @deprecate_stdlib ldltfact!   LinearAlgebra true
-    @deprecate_stdlib linreg      LinearAlgebra true
     @deprecate_stdlib logabsdet   LinearAlgebra true
     @deprecate_stdlib logdet      LinearAlgebra true
     @deprecate_stdlib lu          LinearAlgebra true
@@ -813,8 +778,8 @@ end
     @deprecate_stdlib triu        LinearAlgebra true
     @deprecate_stdlib vecdot      LinearAlgebra true
     @deprecate_stdlib vecnorm     LinearAlgebra true
-    # @deprecate_stdlib ⋅           LinearAlgebra true
-    # @deprecate_stdlib ×           LinearAlgebra true
+    @deprecate_stdlib $(:⋅)       LinearAlgebra true
+    @deprecate_stdlib $(:×)       LinearAlgebra true
 
     ## types that were re-exported from Base
     @deprecate_stdlib Diagonal        LinearAlgebra true
@@ -893,6 +858,7 @@ end
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
     @deprecate_stdlib peakflops     InteractiveUtils true
+    @deprecate_stdlib clipboard     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
@@ -922,7 +888,6 @@ end
     @deprecate_stdlib send           Sockets true
     @deprecate_stdlib TCPSocket      Sockets true
     @deprecate_stdlib UDPSocket      Sockets true
-
 end
 end
 

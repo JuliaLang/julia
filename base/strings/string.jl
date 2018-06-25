@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    StringIndexError(str, i)
+
+An error occurred when trying to access `str` at index `i` that is not valid.
+"""
 struct StringIndexError <: Exception
     string::AbstractString
     index::Integer
@@ -136,7 +141,8 @@ function _nextind_str(s, i::Int)
         return i′ < i ? nextind(s, i′) : i+1
     end
     # first continuation byte
-    @inbounds b = codeunit(s, i += 1)
+    (i += 1) > n && return i
+    @inbounds b = codeunit(s, i)
     b & 0xc0 ≠ 0x80 && return i
     ((i += 1) > n) | (l < 0xe0) && return i
     # second continuation byte
@@ -165,7 +171,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@propagate_inbounds function next(s::String, i::Int)
+@propagate_inbounds function iterate(s::String, i::Int=firstindex(s))
+    i > ncodeunits(s) && return nothing
     b = codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
@@ -316,11 +323,11 @@ end
 codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
 function string(a::Union{String,AbstractChar}...)
-    sprint() do io
-        for x in a
-            print(io, x)
-        end
+    io = IOBuffer()
+    for x in a
+        print(io, x)
     end
+    return String(resize!(io.data, io.size))
 end
 
 function repeat(s::String, r::Integer)

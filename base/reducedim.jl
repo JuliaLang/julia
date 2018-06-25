@@ -116,7 +116,7 @@ function _reducedim_init(f, op, fv, fop, A, region)
     if T !== Any && applicable(zero, T)
         x = f(zero(T))
         z = op(fv(x), fv(x))
-        Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
+        Tr = typeof(z) == typeof(x) && !isbitstype(T) ? T : typeof(z)
     else
         z = fv(fop(f, A))
         Tr = typeof(z)
@@ -169,7 +169,7 @@ function check_reducedims(R, A)
     had_nonreduc = false
     for i = 1:ndims(A)
         Ri, Ai = axes(R, i), axes(A, i)
-        sRi, sAi = length(Ri), length(Ai)
+        sRi, sAi = _length(Ri), _length(Ai)
         if sRi == 1
             if sAi > 1
                 if had_nonreduc
@@ -210,7 +210,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     if has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
         nslices = div(_length(A), lsiz)
-        ibase = first(linearindices(A))-1
+        ibase = first(LinearIndices(A))-1
         for i = 1:nslices
             @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
             ibase += lsiz
@@ -218,7 +218,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
         return R
     end
     indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
-    keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
+    keep, Idefault = Broadcast.shapeindexer(indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(indices1(R))
@@ -431,6 +431,7 @@ Compute the maximum value of an array over the given dimensions. See also the
 [`max(a,b)`](@ref) function to take the maximum of two or more arguments,
 which can be applied elementwise to arrays via `max.(a,b)`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -667,9 +668,9 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
     # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
     indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(Rval))
-    keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
+    keep, Idefault = Broadcast.shapeindexer(indsRt)
     ks = keys(A)
-    k, kss = next(ks, start(ks))
+    y = iterate(ks)
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
         i1 = first(indices1(Rval))
@@ -678,12 +679,13 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             tmpRv = Rval[i1,IR]
             tmpRi = Rind[i1,IR]
             for i in axes(A,1)
+                k, kss = y::Tuple
                 tmpAv = A[i,IA]
                 if tmpRi == zi || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
                     tmpRv = tmpAv
                     tmpRi = k
                 end
-                k, kss = next(ks, kss)
+                y = iterate(ks, kss)
             end
             Rval[i1,IR] = tmpRv
             Rind[i1,IR] = tmpRi
@@ -692,6 +694,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             for i in axes(A, 1)
+                k, kss = y::Tuple
                 tmpAv = A[i,IA]
                 tmpRv = Rval[i,IR]
                 tmpRi = Rind[i,IR]
@@ -699,7 +702,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
-                k, kss = next(ks, kss)
+                y = iterate(ks, kss)
             end
         end
     end
@@ -746,10 +749,10 @@ function _findmin(A, region)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        (similar(A, ri), similar(dims->zeros(eltype(keys(A)), dims), ri))
+        (similar(A, ri), zeros(eltype(keys(A)), ri))
     else
         findminmax!(isless, fill!(similar(A, ri), first(A)),
-                    similar(dims->zeros(eltype(keys(A)), dims), ri), A)
+                    zeros(eltype(keys(A)), ri), A)
     end
 end
 
@@ -795,11 +798,61 @@ function _findmax(A, region)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        similar(A, ri), similar(dims->zeros(eltype(keys(A)), dims), ri)
+        similar(A, ri), zeros(eltype(keys(A)), ri)
     else
         findminmax!(isgreater, fill!(similar(A, ri), first(A)),
-                    similar(dims->zeros(eltype(keys(A)), dims), ri), A)
+                    zeros(eltype(keys(A)), ri), A)
     end
 end
 
-reducedim1(R, A) = length(indices1(R)) == 1
+reducedim1(R, A) = _length(indices1(R)) == 1
+
+"""
+    argmin(A; dims) -> indices
+
+For an array input, return the indices of the minimum elements over the given dimensions.
+`NaN` is treated as less than all other values.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2; 3 4]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> argmin(A, dims=1)
+1×2 Array{CartesianIndex{2},2}:
+ CartesianIndex(1, 1)  CartesianIndex(1, 2)
+
+julia> argmin(A, dims=2)
+2×1 Array{CartesianIndex{2},2}:
+ CartesianIndex(1, 1)
+ CartesianIndex(2, 1)
+```
+"""
+argmin(A::AbstractArray; dims=:) = findmin(A; dims=dims)[2]
+
+"""
+    argmax(A; dims) -> indices
+
+For an array input, return the indices of the maximum elements over the given dimensions.
+`NaN` is treated as greater than all other values.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2; 3 4]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> argmax(A, dims=1)
+1×2 Array{CartesianIndex{2},2}:
+ CartesianIndex(2, 1)  CartesianIndex(2, 2)
+
+julia> argmax(A, dims=2)
+2×1 Array{CartesianIndex{2},2}:
+ CartesianIndex(1, 2)
+ CartesianIndex(2, 2)
+```
+"""
+argmax(A::AbstractArray; dims=:) = findmax(A; dims=dims)[2]

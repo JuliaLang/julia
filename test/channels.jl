@@ -64,36 +64,18 @@ end
     @test sum(results) == 15
 end
 
-@testset "channel iterator with done()" begin
-# Test channel iterator with done() being called multiple times
-# This needs to be explicitly tested since `take!` is called
-# in `done()` and not `next()`
-    c = Channel(32)
-    foreach(i -> put!(c, i), 1:10)
-    close(c)
-    s = start(c)
-    @test done(c, s) == false
-    res = Int[]
-    while !done(c, s)
-        local v
-        @test done(c,s) == false
-        v, s = next(c, s)
-        push!(res, v)
-    end
-    @test res == Int[1:10...]
-end
-
+# Tests for channels bound to tasks.
 using Distributed
 @testset "channels bound to tasks" for N in [0, 10]
     # Normal exit of task
     c=Channel(N)
-    bind(c, @schedule (yield();nothing))
+    bind(c, @async (yield();nothing))
     @test_throws InvalidStateException take!(c)
     @test !isopen(c)
 
     # Error exception in task
     c=Channel(N)
-    bind(c, @schedule (yield();error("foo")))
+    bind(c, @async (yield();error("foo")))
     @test_throws ErrorException take!(c)
     @test !isopen(c)
 
@@ -256,7 +238,7 @@ end
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         """
     # test for invalid state in Workqueue during yield
-    t = @schedule nothing
+    t = @async nothing
     t.state = :invalid
     try
         newstderr = redirect_stderr()
@@ -270,7 +252,7 @@ end
 end
 
 @testset "schedule_and_wait" begin
-    t = @schedule(nothing)
+    t = @async(nothing)
     ct = current_task()
     testobject = "testobject"
     # note: there is a low probability this test could fail, due to receiving network traffic simultaneously

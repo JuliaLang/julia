@@ -151,7 +151,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
                 response === nothing && return user_abort()
                 cred.pass = response[2]
             else
-                response = Base.prompt("Passphrase for $(cred.prvkey)", password=true)
+                response = Base.getpass("Passphrase for $(cred.prvkey)")
                 response === nothing && return user_abort()
                 cred.pass = response
                 isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
@@ -167,7 +167,6 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     if !revised
         return exhausted_abort()
     end
-
     return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
@@ -187,10 +186,9 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     if p.use_git_helpers && (!revised || !isfilled(cred))
         git_cred = GitCredential(p.config, p.url)
 
-        # Use `deepcopy` to ensure zeroing the `git_cred` doesn't also zero the `cred`s copy
-        cred.user = deepcopy(coalesce(git_cred.username, ""))
-        cred.pass = deepcopy(coalesce(git_cred.password, ""))
-        securezero!(git_cred)
+        cred.user = something(git_cred.username, "")
+        cred.pass = something(git_cred.password, "")
+        Base.shred!(git_cred)
         revised = true
 
         p.use_git_helpers = false
@@ -211,7 +209,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
             cred.user = response
 
             url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
-            response = Base.prompt("Password for '$url'", password=true)
+            response = Base.getpass("Password for '$url'")
             response === nothing && return user_abort()
             cred.pass = response
             isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
@@ -260,13 +258,9 @@ For addition details see the LibGit2 guide on
 [authenticating against a server](https://libgit2.github.com/docs/guides/authentication/).
 """
 function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
-                              username_ptr::Cstring,
-                              allowed_types::Cuint, payload_ptr::Ptr{Cvoid})
+                              username_ptr::Cstring, allowed_types::Cuint,
+                              p::CredentialPayload)
     err = Cint(0)
-
-    # get `CredentialPayload` object from payload pointer
-    @assert payload_ptr != C_NULL
-    p = unsafe_pointer_to_objref(payload_ptr)::CredentialPayload
 
     # Parse URL only during the first call to this function. Future calls will use the
     # information cached inside the payload.
@@ -274,8 +268,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
         p.url = unsafe_string(url_ptr)
         m = match(URL_REGEX, p.url)
 
-        p.scheme = coalesce(m[:scheme], "")
-        p.username = coalesce(m[:user], "")
+        p.scheme = something(m[:scheme], "")
+        p.username = something(m[:user], "")
         p.host = m[:host]
 
         # When an explicit credential is supplied we will make sure to use the given
@@ -340,6 +334,13 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     return err
 end
 
+function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
+                              username_ptr::Cstring, allowed_types::Cuint,
+                              payloads::Dict)
+    p = payloads[:credentials]
+    return credentials_callback(libgit2credptr, url_ptr, username_ptr, allowed_types, p)
+end
+
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
                         oid_ptr::Ptr{GitHash}, is_merge::Cuint, payload::Ptr{Cvoid})
     fhead_vec = unsafe_pointer_to_objref(payload)::Vector{FetchHead}
@@ -349,8 +350,8 @@ function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
 end
 
 "C function pointer for `mirror_callback`"
-mirror_cb() = cfunction(mirror_callback, Cint, Tuple{Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}})
+mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}))
 "C function pointer for `credentials_callback`"
-credentials_cb() = cfunction(credentials_callback, Cint, Tuple{Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Ptr{Cvoid}})
+credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any))
 "C function pointer for `fetchhead_foreach_callback`"
-fetchhead_foreach_cb() = cfunction(fetchhead_foreach_callback, Cint, Tuple{Cstring, Cstring, Ptr{GitHash}, Cuint, Ptr{Cvoid}})
+fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Ptr{Cvoid}))

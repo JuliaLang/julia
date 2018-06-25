@@ -142,11 +142,11 @@ function term(io::IO, md::Table, columns)
     padcells!(cells, md.align, len = ansi_length)
     for i = 1:length(cells)
         join(io, cells[i], " ")
-        println(io)
         if i == 1
-            join(io, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
             println(io)
+            join(io, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
         end
+        i < length(cells) && println(io)
     end
 end
 

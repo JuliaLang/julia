@@ -17,9 +17,9 @@ the exported interfaces of Julia.
 
 As an overview, the steps are:
 
-  * replace many uses of `size` with `indices`
-  * replace `1:length(A)` with `eachindex(A)`, or in some cases `linearindices(A)`
-  * replace `length(A)` with `length(linearindices(A))`
+  * replace many uses of `size` with `axes`
+  * replace `1:length(A)` with `eachindex(A)`, or in some cases `LinearIndices(A)`
+  * replace `length(A)` with `length(LinearIndices(A))`
   * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, axes(B))`
 
 These are described in more detail below.
@@ -52,7 +52,7 @@ To ensure that such errors are caught, in Julia 0.5 both `length` and `size`**sh
 error when passed an array with non-1 indexing.  This is designed to force users of such arrays
 to check the code, and inspect it for whether it needs to be generalized.
 
-### Using `indices` for bounds checks and loop iteration
+### Using `axes` for bounds checks and loop iteration
 
 `axes(A)` (reminiscent of `size(A)`) returns a tuple of `AbstractUnitRange` objects, specifying
 the range of valid indices along each dimension of `A`.  When `A` has unconventional indexing,
@@ -61,7 +61,7 @@ is `axes(A, d)`.
 
 Base implements a custom range type, `OneTo`, where `OneTo(n)` means the same thing as `1:n` but
 in a form that guarantees (via the type system) that the lower index is 1. For any new [`AbstractArray`](@ref)
-type, this is the default returned by `indices`, and it indicates that this array type uses "conventional"
+type, this is the default returned by `axes`, and it indicates that this array type uses "conventional"
 1-based indexing.  Note that if you don't want to be bothered supporting arrays with non-1 indexing,
 you can add the following line:
 
@@ -74,21 +74,21 @@ at the top of any function.
 For bounds checking, note that there are dedicated functions `checkbounds` and `checkindex` which
 can sometimes simplify such tests.
 
-### Linear indexing (`linearindices`)
+### Linear indexing (`LinearIndices`)
 
 
 Some algorithms are most conveniently (or efficiently) written in terms of a single linear index, `A[i]` even if `A` is multi-dimensional. Regardless of the array's native indices, linear indices always range from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)): does `v[i]` mean linear indexing , or Cartesian indexing with the array's native indices?
 
-For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `linearindices(A)`. This will return `axes(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
+For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `LinearIndices(A)`. This will return `axes(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
 
 By this definition, 1-dimensional arrays always use Cartesian indexing with the array's native indices. To help enforce this, it's worth noting that the index conversion functions will throw an error if shape indicates a 1-dimensional array with unconventional indexing (i.e., is a `Tuple{UnitRange}` rather than a tuple of `OneTo`). For arrays with conventional indexing, these functions continue to work the same as always.
 
-Using `indices` and `linearindices`, here is one way you could rewrite `mycopy!`:
+Using `axes` and `LinearIndices`, here is one way you could rewrite `mycopy!`:
 
 ```julia
 function mycopy!(dest::AbstractVector, src::AbstractVector)
     axes(dest) == axes(src) || throw(DimensionMismatch("vectors must match"))
-    for i in linearindices(src)
+    for i in LinearIndices(src)
         @inbounds dest[i] = src[i]
     end
     dest
@@ -151,7 +151,7 @@ omit the `@boundscheck` annotation so the check always runs).
 
 ### Custom `AbstractUnitRange` types
 
-If you're writing a non-1 indexed array type, you will want to specialize `indices` so it returns
+If you're writing a non-1 indexed array type, you will want to specialize `axes` so it returns
 a `UnitRange`, or (perhaps better) a custom `AbstractUnitRange`.  The advantage of a custom type
 is that it "signals" the allocation type for functions like `similar`. If we're writing an array
 type for which indexing will start at 0, we likely want to begin by creating a new `AbstractUnitRange`,
@@ -166,9 +166,9 @@ create a `ModuleA.ZeroArray`, whereas `ModuleB.ZeroRange` indicates a `ModuleB.Z
 Note that the Julia package [CustomUnitRanges.jl](https://github.com/JuliaArrays/CustomUnitRanges.jl)
 can sometimes be used to avoid the need to write your own `ZeroRange` type.
 
-### Specializing `indices`
+### Specializing `axes`
 
-Once you have your `AbstractUnitRange` type, then specialize `indices`:
+Once you have your `AbstractUnitRange` type, then specialize `axes`:
 
 ```julia
 Base.axes(A::ZeroArray) = map(n->ZeroRange(n), A.size)

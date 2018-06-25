@@ -5,7 +5,7 @@ module REPLCompletions
 export completions, shell_completions, bslash_completions
 
 using Base.Meta
-using Base: propertynames, coalesce
+using Base: propertynames, something
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -42,7 +42,7 @@ function complete_symbol(sym, ffunc)
     lookup_module = true
     t = Union{}
     val = nothing
-    if coalesce(findlast(in(non_identifier_chars), sym), 0) < coalesce(findlast(isequal('.'), sym), 0)
+    if something(findlast(in(non_identifier_chars), sym), 0) < something(findlast(isequal('.'), sym), 0)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
 
@@ -234,12 +234,12 @@ end
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces = 0
     r = reverse(s)
-    i = start(r)
+    i = firstindex(r)
     in_single_quotes = false
     in_double_quotes = false
     in_back_ticks = false
-    while !done(r, i)
-        c, i = next(r, i)
+    while i <= ncodeunits(r)
+        c, i = iterate(r, i)
         if !in_single_quotes && !in_double_quotes && !in_back_ticks
             if c == c_start
                 braces += 1
@@ -254,13 +254,13 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
             end
         else
             if !in_back_ticks && !in_double_quotes &&
-                c == '\'' && !done(r, i) && next(r, i)[1] != '\\'
+                c == '\'' && i <= ncodeunits(r) && iterate(r, i)[1] != '\\'
                 in_single_quotes = !in_single_quotes
             elseif !in_back_ticks && !in_single_quotes &&
-                c == '"' && !done(r, i) && next(r, i)[1] != '\\'
+                c == '"' && i <= ncodeunits(r) && iterate(r, i)[1] != '\\'
                 in_double_quotes = !in_double_quotes
             elseif !in_single_quotes && !in_double_quotes &&
-                c == '`' && !done(r, i) && next(r, i)[1] != '\\'
+                c == '`' && i <= ncodeunits(r) && iterate(r, i)[1] != '\\'
                 in_back_ticks = !in_back_ticks
             end
         end
@@ -268,7 +268,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     end
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(s, i)
-    startind = nextind(s, coalesce(findprev(in(non_identifier_chars), s, method_name_end), 0))
+    startind = nextind(s, something(findprev(in(non_identifier_chars), s, method_name_end), 0))
     return (startind:lastindex(s), method_name_end)
 end
 
@@ -321,7 +321,7 @@ function get_type_call(expr::Expr)
     m = first(mt)
     # Typeinference
     params = Core.Compiler.Params(world)
-    return_type = Core.Compiler.typeinf_type(m[3], m[1], m[2], true, params)
+    return_type = Core.Compiler.typeinf_type(m[3], m[1], m[2], params)
     return_type === nothing && return (Any, false)
     return (return_type, true)
 end
@@ -423,8 +423,8 @@ function afterusing(string::String, startpos::Int)
 end
 
 function bslash_completions(string, pos)
-    slashpos = coalesce(findprev(isequal('\\'), string, pos), 0)
-    if (coalesce(findprev(in(bslash_separators), string, pos), 0) < slashpos &&
+    slashpos = something(findprev(isequal('\\'), string, pos), 0)
+    if (something(findprev(in(bslash_separators), string, pos), 0) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
         # latex / emoji symbol substitution
         s = string[slashpos:pos]
@@ -486,6 +486,31 @@ end
     return matches
 end
 
+function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)
+    loading_candidates = String[]
+    open(project_file) do io
+        state = :top
+        for line in eachline(io)
+            if state == :top
+                if occursin(Base.re_section, line)
+                    state = occursin(Base.re_section_deps, line) ? :deps : :other
+                elseif (m = match(Base.re_name_to_string, line)) != nothing
+                    root_name = String(m.captures[1])
+                    startswith(root_name, pkgstarts) && push!(loading_candidates, root_name)
+                end
+            elseif state == :deps
+                if (m = match(Base.re_key_to_string, line)) != nothing
+                    dep_name = m.captures[1]
+                    startswith(dep_name, pkgstarts) && push!(loading_candidates, dep_name)
+                end
+            elseif occursin(Base.re_section, line)
+                state = occursin(Base.re_section_deps, line) ? :deps : :other
+            end
+        end
+    end
+    return loading_candidates
+end
+
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
@@ -516,7 +541,7 @@ function completions(string, pos)
 
         if inc_tag == :string &&
            length(paths) == 1 &&  # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1],
+           !isdir(expanduser(replace(string[startpos:prevind(string, first(r))] * paths[1],
                                      r"\\ " => " "))) &&  # except if it's a directory
            (length(string) <= pos ||
             string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
@@ -537,14 +562,14 @@ function completions(string, pos)
         frange, method_name_end = find_start_brace(partial)
         ex = Meta.parse(partial[frange] * ")", raise=false, depwarn=false)
         if isa(ex, Expr) && ex.head==:call
-            return complete_methods(ex), start(frange):method_name_end, false
+            return complete_methods(ex), first(frange):method_name_end, false
         end
     elseif inc_tag == :comment
         return String[], 0:-1, false
     end
 
-    dotpos = coalesce(findprev(isequal('.'), string, pos), 0)
-    startpos = nextind(string, coalesce(findprev(in(non_identifier_chars), string, pos), 0))
+    dotpos = something(findprev(isequal('.'), string, pos), 0)
+    startpos = nextind(string, something(findprev(in(non_identifier_chars), string, pos), 0))
 
     ffunc = (mod,x)->true
     suggestions = String[]
@@ -557,9 +582,11 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            for dir in [LOAD_PATH; pwd()]
-                dir isa Function && (dir = dir())
-                dir isa AbstractString && isdir(dir) || continue
+            for dir in Base.load_path()
+                if basename(dir) in Base.project_names && isfile(dir)
+                    append!(suggestions, project_deps_get_completion_candidates(s, dir))
+                end
+                isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&
                         pname != "REQUIRE" && startswith(pname, s)
@@ -605,7 +632,7 @@ function completions(string, pos)
                     c_start='['; c_end=']'
                 end
                 frange, end_of_identifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
-                startpos = start(frange)
+                startpos = first(frange)
                 i = prevind(string, startpos)
             elseif c in ["\'\"\`"...]
                 s = "$c$c"*string[startpos:pos]

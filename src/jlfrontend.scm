@@ -87,9 +87,13 @@
                                      ,@(map (lambda (v) `(implicit-global ,v)) gv)
                                      ,ex))))))
           (if (and (null? (cdadr (caddr th)))
-                   (= 0 (cadddr (caddr th))))
-              ;; if no locals, return just body of function
-              (cadddr th)
+                   (and (length= (lam:body th) 2)
+                        (let ((retval (cadadr (lam:body th))))
+                          (or (and (pair? retval) (eq? (car retval) 'lambda))
+                              (simple-atom? retval)))))
+              ;; generated functions use the pattern (body (return (lambda ...))), which
+              ;; needs to be unwrapped to just the lambda (CodeInfo).
+              (cadadr (lam:body th))
               `(thunk ,th))))))
 
 (define *in-expand* #f)
@@ -98,7 +102,8 @@
   (and (pair? e)
        (or (memq (car e) '(toplevel line module import importall using export
                                     error incomplete))
-           (and (eq? (car e) 'global) (every symbol? (cdr e))))))
+           (and (eq? (car e) 'global) (every symbol? (cdr e))
+                (every (lambda (x) (not (memq x '(true false)))) (cdr e))))))
 
 (define (expand-toplevel-expr e)
   (cond ((or (atom? e) (toplevel-only-expr? e))
@@ -110,12 +115,8 @@
            (if (not last)
                (begin (reset-gensyms)
                       (set! *in-expand* #t)))
-           (let ((ex (expand-toplevel-expr-- e)))
-             (set! *in-expand* last)
-             (if (and (length= ex 2) (eq? (car ex) 'body))
-                 ;; (body (return x)) => x
-                 (cadadr ex)
-                 ex))))))
+           (begin0 (expand-toplevel-expr-- e)
+                   (set! *in-expand* last))))))
 
 ;; construct default definitions of `eval` for non-bare modules
 ;; called by jl_eval_module_expr
@@ -130,10 +131,15 @@
           (block
            ,loc
            (call (core eval) ,name ,x)))
-       (= (call eval m ,x)
-          (block
-           ,loc
-           (call (core eval) m ,x)))
+       (if (&& (call (top isdefined) (core Main) (quote Base))
+               (call (top isdefined) (|.| (core Main) (quote Base)) (quote @deprecate)))
+           (call eval
+                 (quote
+                  (macrocall (|.| (|.| (core Main) (quote Base)) (quote @deprecate))
+                             (line 0 none)
+                             (call eval m x)
+                             (call (|.| Core (quote eval)) m x) ; should be (core eval), but format as Core.eval(m, x) for deprecation warning
+                             false))))
        (= (call include ,x)
           (block
            ,loc

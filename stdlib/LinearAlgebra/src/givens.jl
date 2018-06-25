@@ -374,16 +374,16 @@ end
 # TODO: None of the following disambiguation methods are great. They should perhaps
 # instead be MethodErrors, or revised.
 #
-# dismabiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj of AbstractRotation)
+# disambiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj of AbstractRotation)
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-# dismabiguation methods: *(Adj/Trans of AbsTri or RealHermSymComplex{Herm|Sym}, Adj of AbstractRotation)
+# disambiguation methods: *(Adj/Trans of AbsTri or RealHermSymComplex{Herm|Sym}, Adj of AbstractRotation)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-# dismabiguation methods: *(Diag/AbsTri, Adj of AbstractRotation)
+# disambiguation methods: *(Diag/AbsTri, Adj of AbstractRotation)
 *(A::Diagonal, B::Adjoint{<:Any,<:AbstractRotation}) = A * copy(B)
 *(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractRotation}) = A * copy(B)

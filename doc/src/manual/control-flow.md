@@ -584,7 +584,7 @@ below all interrupt the normal flow of control.
 | [`TypeError`](@ref)           |
 | [`UndefRefError`](@ref)       |
 | [`UndefVarError`](@ref)       |
-| `UnicodeError`                |
+| [`StringIndexError`](@ref)    |
 
 For example, the [`sqrt`](@ref) function throws a [`DomainError`](@ref) if applied to a negative
 real value:
@@ -739,8 +739,8 @@ julia> f(-1)
 It is important to note that in real code computing this function, one would compare `x` to zero
 instead of catching an exception. The exception is much slower than simply comparing and branching.
 
-`try/catch` statements also allow the `Exception` to be saved in a variable. In this contrived
-example, the following example calculates the square root of the second element of `x` if `x`
+`try/catch` statements also allow the `Exception` to be saved in a variable. The following
+contrived example calculates the square root of the second element of `x` if `x`
 is indexable, otherwise assumes `x` is a real number and returns its square root:
 
 ```jldoctest
@@ -788,12 +788,6 @@ try bad()
 catch
     x
 end
-```
-
-The `catch` clause is not strictly necessary; when omitted, the default return value is `nothing`.
-
-```jldoctest
-julia> try error() end # Returns nothing
 ```
 
 The power of the `try/catch` construct lies in the ability to unwind a deeply nested computation
@@ -936,7 +930,7 @@ True kernel threads are discussed under the topic of [Parallel Computing](@ref).
 
 ### Core task operations
 
-Let us explore the low level construct [`yieldto`](@ref) to underestand how task switching works.
+Let us explore the low level construct [`yieldto`](@ref) to understand how task switching works.
 `yieldto(task,value)` suspends the current task, switches to the specified `task`, and causes
 that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
 is the only operation required to use task-style control flow; instead of calling and returning
@@ -980,8 +974,8 @@ A task created explicitly by calling [`Task`](@ref) is initially not known to th
 allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
 a task waits for an event, it still gets restarted automatically when the event happens, as you
 would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily
-waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@schedule`](@ref)
-or [`@async`](@ref) macros (see [Parallel Computing](@ref) for more details).
+waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@async`](@ref)
+macro (see [Parallel Computing](@ref) for more details).
 
 ### Task states
 

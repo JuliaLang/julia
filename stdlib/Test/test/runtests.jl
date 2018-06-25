@@ -837,3 +837,8 @@ h25835(;x=1,y=1) = x isa Int ? x*y : (rand(Bool) ? 1.0 : 1)
     @test @inferred(h25835(x=2,y=3)) == 6
     @test_throws ErrorException @inferred(h25835(x=1.0,y=1.0)) == 1
 end
+
+@testset "splatting in isapprox" begin
+    a = [1, 2, 3]
+    @test isapprox(identity.((a, a))...)
+end

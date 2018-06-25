@@ -44,10 +44,11 @@ function move_to_node1(t)
         splice!(tests, findfirst(isequal(t), tests))
         push!(node1_tests, t)
     end
+    nothing
 end
 
-# Base.compile only works from node 1, so compile test is handled specially
-move_to_node1("compile")
+# Base.compilecache only works from node 1, so precompile test is handled specially
+move_to_node1("precompile")
 move_to_node1("SharedArrays")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
@@ -191,7 +192,7 @@ cd(dirname(@__FILE__)) do
         isa(e, InterruptException) || rethrow(e)
         # If the test suite was merely interrupted, still print the
         # summary, which can be useful to diagnose what's going on
-        foreach(task->try; schedule(task, InterruptException(); error=true); end, all_tasks)
+        foreach(task->try; schedule(task, InterruptException(); error=true); catch; end, all_tasks)
         foreach(wait, all_tasks)
     finally
         if isa(stdin, Base.TTY)

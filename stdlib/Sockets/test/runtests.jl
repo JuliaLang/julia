@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Sockets, Random
+using Sockets, Random, Test
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
@@ -397,30 +397,32 @@ end
 @testset "connect!" begin
     # test the method matching connect!(::TCPSocket, ::Sockets.InetAddr{T<:Base.IPAddr})
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-
-        function test_connect(addr::Sockets.InetAddr)
-            srv = listen(addr)
-
-            @async try c = accept(srv); close(c) catch end
-            yield()
-
-            t0 = TCPSocket()
-            t = t0
-            @assert t === t0
-
-            try
-                t = connect(addr)
-            finally
-                close(srv)
-            end
-
-            test = t !== t0
-            close(t)
-
-            return test
+        srv = listen(addr)
+        c = Condition()
+        r = @async try; close(accept(srv)); finally; notify(c); end
+        try
+            close(connect(addr))
+            fetch(c)
+        finally
+            close(srv)
         end
+        fetch(r)
+    end
 
-        @test test_connect(addr)
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
+        srv = listen(addr)
+        r = @async close(srv)
+        @test_throws Base.UVError("accept", Base.UV_ECONNABORTED) accept(srv)
+        fetch(r)
+    end
+
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
+        srv = listen(addr)
+        s = Sockets.TCPSocket()
+        Sockets.connect!(s, addr)
+        r = @async close(s)
+        @test_throws Base.UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
+        fetch(r)
     end
 end
 

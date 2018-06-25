@@ -79,10 +79,85 @@ mktempdir() do dir
     end
 end
 
+## unit tests of project parsing ##
+
 import Base: SHA1, PkgId, load_path, identify_package, locate_package, version_slug, dummy_uuid
 import UUIDs: UUID, uuid4, uuid_version
 import Random: shuffle, randstring
 using Test
+
+let shastr = "ab"^20
+    hash = SHA1(shastr)
+    @test hash == eval(Meta.parse(repr(hash))) # check show method
+    @test string(hash) == shastr
+    @test "check $hash" == "check $shastr"
+end
+
+let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
+    uuid = UUID(uuidstr)
+    @test uuid == eval(Meta.parse(repr(uuid))) # check show method
+    @test string(uuid) == uuidstr == sprint(print, uuid)
+    @test "check $uuid" == "check $uuidstr"
+end
+
+function subset(v::Vector{T}, m::Int) where T
+    T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
+end
+
+function perm(p::Vector, i::Int)
+    for j = length(p):-1:1
+        i, k = divrem(i, j)
+        p[j], p[k+1] = p[k+1], p[j]
+    end
+    return p
+end
+
+@testset "explicit_project_deps_get" begin
+    mktempdir() do dir
+        project_file = joinpath(dir, "Project.toml")
+        touch(project_file) # dummy_uuid calls realpath
+        # various UUIDs to work with
+        proj_uuid = dummy_uuid(project_file)
+        root_uuid = uuid4()
+        this_uuid = uuid4()
+        # project file to subset/permute
+        lines = split("""
+        name = "Root"
+        uuid = "$root_uuid"
+        [deps]
+        This = "$this_uuid"
+        """, '\n')
+        N = length(lines)
+        # test every permutation of every subset of lines
+        for m = 0:2^N-1
+            s = subset(lines, m) # each subset of lines
+            for i = 1:factorial(count_ones(m))
+                p = perm(s, i) # each permutation of the subset
+                open(project_file, write=true) do io
+                    for line in p
+                        println(io, line)
+                    end
+                end
+                # look at lines and their order
+                n = findfirst(line -> startswith(line, "name"), p)
+                u = findfirst(line -> startswith(line, "uuid"), p)
+                d = findfirst(line -> line == "[deps]", p)
+                t = findfirst(line -> startswith(line, "This"), p)
+                # look up various packages by name
+                root = Base.explicit_project_deps_get(project_file, "Root")
+                this = Base.explicit_project_deps_get(project_file, "This")
+                that = Base.explicit_project_deps_get(project_file, "That")
+                # test that the correct answers are given
+                @test root == (something(n, N+1) ≥ something(d, N+1) ? false :
+                               something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
+                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : false)
+                @test that == false
+            end
+        end
+    end
+end
+
+## functional testing of package identification, location & loading ##
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
@@ -415,14 +490,14 @@ function test_find(
     end
 end
 
-@testset "identify_package with one env in load path" begin
+@testset "find_package with one env in load path" begin
     for (env, (_, _, roots, graph, paths)) in envs
         push!(empty!(LOAD_PATH), env)
         test_find(roots, graph, paths)
     end
 end
 
-@testset "identify_package with two envs in load path" begin
+@testset "find_package with two envs in load path" begin
     for x = false:true,
         (env1, (_, _, roots1, graph1, paths1)) in (x ? envs : rand(envs, 10)),
         (env2, (_, _, roots2, graph2, paths2)) in (x ? rand(envs, 10) : envs)
@@ -434,7 +509,7 @@ end
     end
 end
 
-@testset "identify_package with three envs in load path" begin
+@testset "find_package with three envs in load path" begin
     for (env1, (_, _, roots1, graph1, paths1)) in rand(envs, 10),
         (env2, (_, _, roots2, graph2, paths2)) in rand(envs, 10),
         (env3, (_, _, roots3, graph3, paths3)) in rand(envs, 10)
@@ -445,6 +520,9 @@ end
         test_find(roots, graph, paths)
     end
 end
+
+# normalization of paths by include (#26424)
+@test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
 
 ## cleanup after tests ##
 

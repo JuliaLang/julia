@@ -69,8 +69,9 @@ import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismat
 import Libdl
 
 # utility routines
-function vendor()
-    lib = Libdl.dlopen_e(Base.libblas_name)
+let lib = C_NULL
+global function vendor()
+    lib == C_NULL && (lib = Libdl.dlopen_e(Base.libblas_name))
     vend = :unknown
     if lib != C_NULL
         if Libdl.dlsym_e(lib, :openblas_set_num_threads) != C_NULL
@@ -80,22 +81,22 @@ function vendor()
         elseif Libdl.dlsym_e(lib, :MKL_Set_Num_Threads) != C_NULL
             vend = :mkl
         end
-        Libdl.dlclose(lib)
     end
     return vend
+end
 end
 
 if vendor() == :openblas64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
-    openblas_get_config() = strip(unsafe_string(ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
 else
     macro blasfunc(x)
         return Expr(:quote, x)
     end
-    openblas_get_config() = strip(unsafe_string(ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
 end
+
+openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), Base.libblas_name), Ptr{UInt8}, () )))
 
 """
     set_num_threads(n)

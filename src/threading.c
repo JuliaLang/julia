@@ -303,13 +303,12 @@ static void ti_init_master_thread(void)
 }
 
 // all threads call this function to run user code
-static jl_value_t *ti_run_fun(const jl_generic_fptr_t *fptr, jl_method_instance_t *mfunc,
+static jl_value_t *ti_run_fun(jl_callptr_t fptr, jl_method_instance_t *mfunc,
                               jl_value_t **args, uint32_t nargs)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
-        (void)jl_assume(fptr->jlcall_api != JL_API_CONST);
-        jl_call_fptr_internal(fptr, mfunc, args, nargs);
+        fptr(mfunc, args, nargs);
     }
     JL_CATCH {
         // Lock this output since we know it'll likely happen on multiple threads
@@ -420,7 +419,7 @@ void ti_threadfun(void *arg)
                 JL_GC_PUSH1(&last_m);
                 ptls->current_module = work->current_module;
                 ptls->world_age = work->world_age;
-                ti_run_fun(&work->fptr, work->mfunc, work->args, work->nargs);
+                ti_run_fun(work->fptr, work->mfunc, work->args, work->nargs);
                 ptls->current_module = last_m;
                 ptls->world_age = last_age;
                 JL_GC_POP();
@@ -691,17 +690,19 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
 
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
 
+    size_t world = jl_get_ptls_states()->world_age;
     threadwork.command = TI_THREADWORK_RUN;
     threadwork.mfunc = jl_lookup_generic(args, nargs,
-                                         jl_int32hash_fast(jl_return_address()), ptls->world_age);
+                                         jl_int32hash_fast(jl_return_address()), world);
     // Ignore constant return value for now.
-    if (jl_compile_method_internal(&threadwork.fptr, threadwork.mfunc))
+    threadwork.fptr = jl_compile_method_internal(&threadwork.mfunc, world);
+    if (threadwork.fptr == jl_fptr_const_return)
         return jl_nothing;
     threadwork.args = args;
     threadwork.nargs = nargs;
     threadwork.ret = jl_nothing;
     threadwork.current_module = ptls->current_module;
-    threadwork.world_age = ptls->world_age;
+    threadwork.world_age = world;
 
 #if PROFILE_JL_THREADING
     uint64_t tcompile = uv_hrtime();
@@ -718,7 +719,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
 #endif
 
     // this thread must do work too (TODO: reduction?)
-    tw->ret = ti_run_fun(&threadwork.fptr, threadwork.mfunc, args, nargs);
+    tw->ret = ti_run_fun(threadwork.fptr, threadwork.mfunc, args, nargs);
 
 #if PROFILE_JL_THREADING
     uint64_t trun = uv_hrtime();
@@ -809,10 +810,11 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
     jl_method_instance_t *mfunc = jl_lookup_generic(args, nargs,
                                                     jl_int32hash_fast(jl_return_address()),
                                                     jl_get_ptls_states()->world_age);
-    jl_generic_fptr_t fptr;
-    if (jl_compile_method_internal(&fptr, mfunc))
+    size_t world = jl_get_ptls_states()->world_age;
+    jl_callptr_t fptr = jl_compile_method_internal(&mfunc, world);
+    if (fptr == jl_fptr_const_return)
         return jl_nothing;
-    return ti_run_fun(&fptr, mfunc, args, nargs);
+    return ti_run_fun(fptr, mfunc, args, nargs);
 }
 
 void jl_init_threading(void)

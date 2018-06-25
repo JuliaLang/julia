@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function needs_USE_GPL_LIBS(s::String)
     occursin("CHOLMOD", s) && return true
     return false

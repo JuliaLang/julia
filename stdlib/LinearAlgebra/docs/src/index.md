@@ -198,7 +198,7 @@ Legend:
 
 ### Matrix factorizations
 
-| Matrix type               | LAPACK | [`eig`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
+| Matrix type               | LAPACK | [`eigen`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
 |:------------------------- |:------ |:------------- |:----------------- |:----------------- |:------------- |:----------------- |
 | [`Symmetric`](@ref)       | SY     |               | ARI               |                   |               |                   |
 | [`Hermitian`](@ref)       | HE     |               | ARI               |                   |               |                   |
@@ -299,7 +299,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 Base.:*(::AbstractMatrix, ::AbstractMatrix)
 Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 LinearAlgebra.dot
-LinearAlgebra.vecdot
 LinearAlgebra.cross
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
@@ -312,47 +311,39 @@ LinearAlgebra.LowerTriangular
 LinearAlgebra.UpperTriangular
 LinearAlgebra.UniformScaling
 LinearAlgebra.lu
-LinearAlgebra.lufact
-LinearAlgebra.lufact!
-LinearAlgebra.chol
-LinearAlgebra.cholfact
-LinearAlgebra.cholfact!
+LinearAlgebra.lu!
+LinearAlgebra.cholesky
+LinearAlgebra.cholesky!
 LinearAlgebra.lowrankupdate
 LinearAlgebra.lowrankdowndate
 LinearAlgebra.lowrankupdate!
 LinearAlgebra.lowrankdowndate!
-LinearAlgebra.ldltfact
-LinearAlgebra.ldltfact!
+LinearAlgebra.ldlt
+LinearAlgebra.ldlt!
 LinearAlgebra.qr
 LinearAlgebra.qr!
-LinearAlgebra.qrfact
-LinearAlgebra.qrfact!
 LinearAlgebra.QR
 LinearAlgebra.QRCompactWY
 LinearAlgebra.QRPivoted
-LinearAlgebra.lqfact!
-LinearAlgebra.lqfact
+LinearAlgebra.lq!
 LinearAlgebra.lq
-LinearAlgebra.bkfact
-LinearAlgebra.bkfact!
-LinearAlgebra.eig
+LinearAlgebra.bunchkaufman
+LinearAlgebra.bunchkaufman!
 LinearAlgebra.eigvals
 LinearAlgebra.eigvals!
 LinearAlgebra.eigmax
 LinearAlgebra.eigmin
 LinearAlgebra.eigvecs
-LinearAlgebra.eigfact
-LinearAlgebra.eigfact!
-LinearAlgebra.hessfact
-LinearAlgebra.hessfact!
-LinearAlgebra.schurfact
-LinearAlgebra.schurfact!
+LinearAlgebra.eigen
+LinearAlgebra.eigen!
+LinearAlgebra.hessenberg
+LinearAlgebra.hessenberg!
+LinearAlgebra.schur!
 LinearAlgebra.schur
 LinearAlgebra.ordschur
 LinearAlgebra.ordschur!
-LinearAlgebra.svdfact
-LinearAlgebra.svdfact!
 LinearAlgebra.svd
+LinearAlgebra.svd!
 LinearAlgebra.svdvals
 LinearAlgebra.svdvals!
 LinearAlgebra.Givens
@@ -366,7 +357,7 @@ LinearAlgebra.diag
 LinearAlgebra.diagm
 LinearAlgebra.rank
 LinearAlgebra.norm
-LinearAlgebra.vecnorm
+LinearAlgebra.opnorm
 LinearAlgebra.normalize!
 LinearAlgebra.normalize
 LinearAlgebra.cond
@@ -379,7 +370,6 @@ Base.inv(::AbstractMatrix)
 LinearAlgebra.pinv
 LinearAlgebra.nullspace
 Base.kron
-LinearAlgebra.linreg
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
 LinearAlgebra.log(::StridedMatrix)
 LinearAlgebra.sqrt(::StridedMatrix{<:Real})

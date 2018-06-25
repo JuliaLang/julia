@@ -5,7 +5,7 @@ PCRE_CFLAGS := -O3
 PCRE_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
 $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre2-$(PCRE_VER).tar.bz2
+	$(JLDOWNLOAD) $@ https://ftp.pcre.org/pub/pcre/pcre2-$(PCRE_VER).tar.bz2
 
 $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
@@ -23,7 +23,7 @@ $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled: $(BUILDDIR)/pcre2-$(PCRE_VER)/buil
 	$(MAKE) -C $(dir $<) $(LIBTOOL_CCLD)
 	echo 1 > $@
 
-$(BUILDDIR)/pcre2-$(PCRE_VER)/checked: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
+$(BUILDDIR)/pcre2-$(PCRE_VER)/build-checked: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
 ifneq ($(OS),WINNT)
 	$(MAKE) -C $(dir $@) check -j1

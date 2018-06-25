@@ -53,7 +53,7 @@ function hashheader(stream::IO, md::MD)
         eatindent(stream) || return false
         level = 0
         while startswith(stream, '#') level += 1 end
-        level < 1 || level > 6 && return false
+        (level < 1 || level > 6) && return false
 
         c = ' '
         # Allow empty headers, but require a space
@@ -250,12 +250,11 @@ end
 mutable struct List
     items::Vector{Any}
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
-
-    List(x::AbstractVector, b::Integer) = new(x, b)
-    List(x::AbstractVector) = new(x, -1)
-    List(b::Integer) = new(Any[], b)
+    loose::Bool # TODO: Renderers should use this field
 end
-
+List(x::AbstractVector, b::Integer) = List(x, b, false)
+List(x::AbstractVector) = List(x, -1)
+List(b::Integer) = List(Any[], b)
 List(xs...) = List(vcat(xs...))
 
 isordered(list::List) = list.ordered >= 0
@@ -302,8 +301,8 @@ function list(stream::IO, block::MD)
                     println(buffer)
                 end
             else
-                newline = false
                 if startswith(stream, " "^indent)
+                    newline && (list.loose = true)
                     # Indented text that is part of the current list item.
                     print(buffer, readline(stream, keep=true))
                 else
@@ -314,11 +313,13 @@ function list(stream::IO, block::MD)
                         break
                     else
                         # Start of a new list item.
+                        newline && (list.loose = true)
                         count += 1
                         count > 1 && pushitem!(list, buffer)
                         print(buffer, readline(stream, keep=true))
                     end
                 end
+                newline = false
             end
         end
         count == length(list.items) || pushitem!(list, buffer)

@@ -126,8 +126,8 @@ As in the example above, we recommend following some simple conventions when wri
        Note that whitespace in your doctest is significant! The doctest will fail if you misalign the
        output of pretty-printing an array, for example.
 
-   You can then run `make -C doc doctest` to run all the doctests in the Julia Manual, which will
-   ensure that your example works.
+   You can then run `make -C doc doctest=true` to run all the doctests in the Julia Manual and API
+   documentation, which will ensure that your example works.
 
    To indicate that the output result is truncated, you may write
    `[...]` at the line where checking should stop. This is useful to

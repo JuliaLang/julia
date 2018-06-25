@@ -280,7 +280,7 @@ end
 
 function *(x::TwicePrecision, v::Number)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    x * TwicePrecision{typeof(x.hi*v)}(v)
+    x * TwicePrecision(oftype(x.hi*v, v))
 end
 function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
@@ -298,7 +298,7 @@ end
 *(x::TwicePrecision, y::TwicePrecision) = *(promote(x, y)...)
 
 function /(x::TwicePrecision, v::Number)
-    x / TwicePrecision{typeof(x.hi/v)}(v)
+    x / TwicePrecision(oftype(x.hi/v, v))
 end
 
 function /(x::TwicePrecision, y::TwicePrecision)

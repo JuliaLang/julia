@@ -126,7 +126,7 @@ function syms_2b_sent(s::ClusterSerializer, identifier)
     for sym in check_syms
         v = getfield(Main, sym)
 
-        if isbits(v)
+        if isbitstype(typeof(v))
             push!(lst, sym)
         else
             oid = objectid(v)
@@ -146,7 +146,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
 
     oid = objectid(v)
     record_v = true
-    if isbits(v)
+    if isbitstype(typeof(v))
         record_v = false
     elseif !haskey(s.glbs_sent, oid)
         # set up a finalizer the first time this object is sent
@@ -212,6 +212,7 @@ function original_ex(s::ClusterSerializer, ex_str, remote_stktrace)
     local pid_str = ""
     try
         pid_str = string(" from worker ", worker_id_from_socket(s.io))
+    catch
     end
 
     stk_str = remote_stktrace ? "Remote" : "Local"

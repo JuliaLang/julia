@@ -21,7 +21,7 @@ A `MersenneTwister` or `RandomDevice` RNG can generate random numbers of the fol
 [`UInt32`](@ref), [`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref), [`UInt128`](@ref),
 [`BigInt`](@ref) (or complex numbers of those types).
 Random floating point numbers are generated uniformly in ``[0, 1)``. As `BigInt` represents
-unbounded integers, the interval must be specified (e.g. `rand(big(1:6))`).
+unbounded integers, the interval must be specified (e.g. `rand(big.(1:6))`).
 
 ```@docs
 Random.srand

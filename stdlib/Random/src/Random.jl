@@ -72,6 +72,7 @@ for UI = (:UInt10, :UInt10Raw, :UInt23, :UInt23Raw, :UInt52, :UInt52Raw,
     end
 end
 
+Base.eltype(::Type{<:UniformBits{T}}) where {T} = T
 
 ### floats
 
@@ -198,19 +199,18 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 
 #### scalars
 
-rand(rng::AbstractRNG, X) = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=GLOBAL_RNG, ::Type{X}=Float64) where {X} =
-    rand(rng, Sampler(rng, X, Val(1)))
+rand(rng::AbstractRNG, X)                                      = rand(rng, Sampler(rng, X, Val(1)))
+rand(rng::AbstractRNG=GLOBAL_RNG, ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))
 
-rand(X) = rand(GLOBAL_RNG, X)
+rand(X)                   = rand(GLOBAL_RNG, X)
 rand(::Type{X}) where {X} = rand(GLOBAL_RNG, X)
 
 #### arrays
 
-rand!(A::AbstractArray{T}, X) where {T} = rand!(GLOBAL_RNG, A, X)
+rand!(A::AbstractArray{T}, X) where {T}             = rand!(GLOBAL_RNG, A, X)
 rand!(A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(GLOBAL_RNG, A, X)
 
-rand!(rng::AbstractRNG, A::AbstractArray{T}, X) where {T} = rand!(rng, A, Sampler(rng, X))
+rand!(rng::AbstractRNG, A::AbstractArray{T}, X) where {T}             = rand!(rng, A, Sampler(rng, X))
 rand!(rng::AbstractRNG, A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(rng, A, Sampler(rng, X))
 
 function rand!(rng::AbstractRNG, A::AbstractArray{T}, sp::Sampler) where T

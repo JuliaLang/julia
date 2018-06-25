@@ -2,16 +2,16 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import .Base: eltype, length, size, start, done, next, first, last, in, getindex,
+    import .Base: eltype, length, size, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
-                 ndims, IteratorSize, convert, show
+                 ndims, IteratorSize, convert, show, iterate
 
     import .Base: +, -, *
     import .Base: simd_outer_range, simd_inner_length, simd_index
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
     using .Base.Iterators: Reverse
 
-    export CartesianIndex, CartesianIndices, LinearIndices
+    export CartesianIndex, CartesianIndices
 
     """
         CartesianIndex(i, j, k...)   -> I
@@ -140,17 +140,17 @@ module IteratorsMD
 
     # nextind and prevind with CartesianIndex
     function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
-        _, ni = next(CartesianIndices(axes(a)), i)
-        return ni
+        iter = CartesianIndices(axes(a))
+        return CartesianIndex(inc(i.I, first(iter).I, last(iter).I))
     end
     function Base.prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
-        _, ni = next(Iterators.reverse(CartesianIndices(axes(a))), i)
-        return ni
+        iter = CartesianIndices(axes(a))
+        return CartesianIndex(dec(i.I, last(iter).I, first(iter).I))
     end
 
     # Iteration over the elements of CartesianIndex cannot be supported until its length can be inferred,
     # see #23719
-    Base.start(::CartesianIndex) =
+    Base.iterate(::CartesianIndex) =
         error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
 
     # Iteration
@@ -218,8 +218,6 @@ module IteratorsMD
     end
 
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
-    CartesianIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} =
-        CartesianIndices{N,typeof(inds)}(inds)
     CartesianIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
         CartesianIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
 
@@ -249,8 +247,16 @@ module IteratorsMD
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     # AbstractArray implementation
+    Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.indices1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
-    @inline Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R} = CartesianIndex(first.(iter.indices) .- 1 .+ I)
+    @inline function Base.getindex(iter::CartesianIndices{N,<:NTuple{N,Base.OneTo}}, I::Vararg{Int, N}) where {N}
+        @boundscheck checkbounds(iter, I...)
+        CartesianIndex(I)
+    end
+    @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
+        @boundscheck checkbounds(iter, I...)
+        CartesianIndex(I .- first.(Base.indices1.(iter.indices)) .+ first.(iter.indices))
+    end
 
     ndims(R::CartesianIndices) = ndims(typeof(R))
     ndims(::Type{CartesianIndices{N}}) where {N} = N
@@ -268,16 +274,19 @@ module IteratorsMD
     eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
     IteratorSize(::Type{<:CartesianIndices{N}}) where {N} = Base.HasShape{N}()
 
-    @inline function start(iter::CartesianIndices)
+    @inline function iterate(iter::CartesianIndices)
         iterfirst, iterlast = first(iter), last(iter)
         if any(map(>, iterfirst.I, iterlast.I))
-            return iterlast+one(iterlast)
+            return nothing
         end
-        iterfirst
+        iterfirst, iterfirst
     end
-    @inline function next(iter::CartesianIndices, state)
-        state, CartesianIndex(inc(state.I, first(iter).I, last(iter).I))
+    @inline function iterate(iter::CartesianIndices, state)
+        nextstate = CartesianIndex(inc(state.I, first(iter).I, last(iter).I))
+        nextstate.I[end] > last(iter.indices[end]) && return nothing
+        nextstate, nextstate
     end
+
     # increment & carry
     @inline inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
     @inline inc(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int}) = (state[1]+1,)
@@ -288,12 +297,9 @@ module IteratorsMD
         newtail = inc(tail(state), tail(start), tail(stop))
         (start[1], newtail...)
     end
-    @inline done(iter::CartesianIndices, state) = state.I[end] > last(iter.indices[end])
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
-    start(iter::CartesianIndices{0}) = false
-    next(iter::CartesianIndices{0}, state) = CartesianIndex(), true
-    done(iter::CartesianIndices{0}, state) = state
+    iterate(iter::CartesianIndices{0}, done=false) = done ? nothing : (CartesianIndex(), true)
 
     size(iter::CartesianIndices) = map(dimlength, first(iter).I, last(iter).I)
     dimlength(start, stop) = stop-start+1
@@ -315,7 +321,7 @@ module IteratorsMD
     end
 
     simd_inner_length(iter::CartesianIndices{0}, ::CartesianIndex) = 1
-    simd_inner_length(iter::CartesianIndices, I::CartesianIndex) = length(iter.indices[1])
+    simd_inner_length(iter::CartesianIndices, I::CartesianIndex) = Base._length(iter.indices[1])
 
     simd_index(iter::CartesianIndices{0}, ::CartesianIndex, I1::Int) = first(iter)
     @inline function simd_index(iter::CartesianIndices, Ilast::CartesianIndex, I1::Int)
@@ -347,16 +353,20 @@ module IteratorsMD
     end
 
     # reversed CartesianIndices iteration
-    @inline function start(r::Reverse{<:CartesianIndices})
+
+    @inline function iterate(r::Reverse{<:CartesianIndices})
         iterfirst, iterlast = last(r.itr), first(r.itr)
         if any(map(<, iterfirst.I, iterlast.I))
-            return iterlast-1
+            return nothing
         end
-        iterfirst
+        iterfirst, iterfirst
     end
-    @inline function next(r::Reverse{<:CartesianIndices}, state)
-        state, CartesianIndex(dec(state.I, last(r.itr).I, first(r.itr).I))
+    @inline function iterate(r::Reverse{<:CartesianIndices}, state)
+        nextstate = CartesianIndex(dec(state.I, last(r.itr).I, first(r.itr).I))
+        nextstate.I[end] < first(r.itr.indices[end]) && return nothing
+        nextstate, nextstate
     end
+
     # decrement & carry
     @inline dec(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
     @inline dec(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int}) = (state[1]-1,)
@@ -367,57 +377,10 @@ module IteratorsMD
         newtail = dec(tail(state), tail(start), tail(stop))
         (start[1], newtail...)
     end
-    @inline done(r::Reverse{<:CartesianIndices}, state) = state.I[end] < first(r.itr.indices[end])
     # 0-d cartesian ranges are special-cased to iterate once and only once
-    start(iter::Reverse{<:CartesianIndices{0}}) = false
-    next(iter::Reverse{<:CartesianIndices{0}}, state) = CartesianIndex(), true
-    done(iter::Reverse{<:CartesianIndices{0}}, state) = state
+    iterate(iter::Reverse{<:CartesianIndices{0}}, state=false) = state ? nothing : (CartesianIndex(), true)
 
-    """
-        LinearIndices(inds::CartesianIndices) -> R
-        LinearIndices(sz::Dims) -> R
-        LinearIndices(istart:istop, jstart:jstop, ...) -> R
-
-    Define a mapping between cartesian indices and the corresponding linear index into a `CartesianIndices`.
-
-    # Example
-
-    The main purpose of this type is intuitive conversion from cartesian to linear indexing:
-
-    ```jldoctest
-    julia> linear = LinearIndices((1:3, 1:2))
-    LinearIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}} with indices 1:3×1:2:
-     1  4
-     2  5
-     3  6
-
-    julia> linear[1,2]
-    4
-    ```
-    """
-    struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
-        indices::R
-    end
-
-    LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
-    LinearIndices(::Tuple{}) = LinearIndices(CartesianIndices(()))
-    LinearIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(index::CartesianIndex) = LinearIndices(CartesianIndices(index))
-    LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(CartesianIndices(sz))
-    LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} = LinearIndices(CartesianIndices(inds))
-    LinearIndices(A::AbstractArray) = LinearIndices(CartesianIndices(A))
-
-    # AbstractArray implementation
-    Base.IndexStyle(::Type{LinearIndices{N,R}}) where {N,R} = IndexCartesian()
-    Base.axes(iter::LinearIndices{N,R}) where {N,R} = iter.indices
-    Base.size(iter::LinearIndices{N,R}) where {N,R} = length.(iter.indices)
-    @inline function Base.getindex(iter::LinearIndices{N,R}, I::Vararg{Int, N}) where {N,R}
-        dims = length.(iter.indices)
-        #without the inbounds, this is slower than Base._sub2ind(iter.indices, I...)
-        @inbounds result = reshape(1:prod(dims), dims)[(I .- first.(iter.indices) .+ 1)...]
-        return result
-    end
+    Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
 end  # IteratorsMD
 
 
@@ -500,7 +463,7 @@ index_dimsum() = ()
 index_lengths() = ()
 @inline index_lengths(::Real, rest...) = (1, index_lengths(rest...)...)
 @inline index_lengths(A::AbstractArray, rest...) = (length(A), index_lengths(rest...)...)
-@inline index_lengths(A::Slice, rest...) = (length(indices1(A)), index_lengths(rest...)...)
+@inline index_lengths(A::Slice, rest...) = (_length(indices1(A)), index_lengths(rest...)...)
 
 # shape of array to create for getindex() with indices I, dropping scalars
 # returns a Tuple{Vararg{AbstractUnitRange}} of indices
@@ -533,28 +496,28 @@ show(io::IO, r::LogicalIndex) = print(io, "Base.LogicalIndex(", r.mask, ")")
 # Thus the iteration state contains an index iterator and its state. We also
 # keep track of the count of elements since we already know how many there
 # should be -- this way we don't need to look at future indices to check done.
-@inline function start(L::LogicalIndex{Int})
-    r = linearindices(L.mask)
-    return (r, start(r), 1)
+@inline function iterate(L::LogicalIndex{Int})
+    r = LinearIndices(L.mask)
+    iterate(L, (1, r))
 end
-@inline function start(L::LogicalIndex{<:CartesianIndex})
+@inline function iterate(L::LogicalIndex{<:CartesianIndex})
     r = CartesianIndices(axes(L.mask))
-    return (r, start(r), 1)
+    iterate(L, (1, r))
 end
-@propagate_inbounds function next(L::LogicalIndex, s)
+@propagate_inbounds function iterate(L::LogicalIndex, s)
     # We're looking for the n-th true element, using iterator r at state i
-    r, i, n = s
+    n = s[1]
+    n > length(L) && return nothing
     while true
-        done(r, i) # Call done(r, i) for the iteration protocol, but trust done(L, s) was called
-        idx, i = next(r, i)
-        L.mask[idx] && return (idx, (r, i, n+1))
+        idx, i = iterate(tail(s)...)
+        s = (n+1, s[2], i)
+        L.mask[idx] && return (idx, s)
     end
 end
-done(L::LogicalIndex, s) = s[3] > length(L)
 # When wrapping a BitArray, lean heavily upon its internals -- this is a common
 # case. Just use the Int index and count as its state.
-@inline start(L::LogicalIndex{Int,<:BitArray}) = (0, 1)
-@inline function next(L::LogicalIndex{Int,<:BitArray}, s)
+@inline function iterate(L::LogicalIndex{Int,<:BitArray}, s=(0,1))
+    s[2] > length(L) && return nothing
     i, n = s
     Bc = L.mask.chunks
     while true
@@ -565,10 +528,9 @@ done(L::LogicalIndex, s) = s[3] > length(L)
         i += 1
     end
 end
-@inline done(L::LogicalIndex{Int,<:BitArray}, s) = s[2] > length(L)
 
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
-    linearindices(A) == linearindices(I.mask)
+    eachindex(IndexLinear(), A) == eachindex(IndexLinear(), I.mask)
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = axes(A) == axes(I.mask)
 @inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == axes(I.mask)
 checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = false
@@ -641,10 +603,14 @@ end
     quote
         @_inline_meta
         D = eachindex(dest)
-        Ds = start(D)
+        Dy = iterate(D)
         @inbounds @nloops $N j d->I[d] begin
-            d, Ds = next(D, Ds)
-            dest[d] = @ncall $N getindex src j
+            # This condition is never hit, but at the moment
+            # the optimizer is not clever enough to split the union without it
+            Dy === nothing && return dest
+            (idx, state) = Dy
+            dest[idx] = @ncall $N getindex src j
+            Dy = iterate(D, state)
         end
         return dest
     end
@@ -660,431 +626,35 @@ function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractA
     A
 end
 
-_iterable(v::AbstractArray) = v
-_iterable(v) = Iterators.repeated(v)
+_iterable(X::AbstractArray, I...) = X
 @generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
     N = length(I)
     quote
-        x′ = _iterable(unalias(A, x))
+        x′ = unalias(A, _iterable(x, I...))
         @nexprs $N d->(I_d = unalias(A, I[d]))
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
-        xs = start(x′)
+        Xy = iterate(x′)
         @inbounds @nloops $N i d->I_d begin
-            v, xs = next(x′, xs)
-            @ncall $N setindex! A v i
+            # This is never reached, but serves as an assumption for
+            # the optimizer that it does not need to emit error paths
+            Xy === nothing && break
+            (val, state) = Xy
+            @ncall $N setindex! A val i
+            Xy = iterate(x′, state)
         end
         A
     end
-end
-
-# see discussion in #18364 ... we try not to widen type of the resulting array
-# from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
-rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S<:Number} = promote_op(op, T, S)
-rcum_promote_type(op, ::Type{T}) where {T<:Number} = rcum_promote_type(op, T,T)
-rcum_promote_type(op, ::Type{T}) where {T} = T
-
-# handle sums of Vector{Bool} and similar.   it would be nice to handle
-# any AbstractArray here, but it's not clear how that would be possible
-rcum_promote_type(op, ::Type{Array{T,N}}) where {T,N} = Array{rcum_promote_type(op,T), N}
-
-# accumulate_pairwise slightly slower then accumulate, but more numerically
-# stable in certain situations (e.g. sums).
-# it does double the number of operations compared to accumulate,
-# though for cheap operations like + this does not have much impact (20%)
-function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
-    @inbounds if n < 128
-        s_ = v[i1]
-        c[i1] = op(s, s_)
-        for i = i1+1:i1+n-1
-            s_ = op(s_, v[i])
-            c[i] = op(s, s_)
-        end
-    else
-        n2 = n >> 1
-        s_ = _accumulate_pairwise!(op, c, v, s, i1, n2)
-        s_ = op(s_, _accumulate_pairwise!(op, c, v, op(s, s_), i1+n2, n-n2))
-    end
-    return s_
-end
-
-function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector) where Op
-    li = linearindices(v)
-    li != linearindices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))
-    n = length(li)
-    n == 0 && return result
-    i1 = first(li)
-    @inbounds result[i1] = v1 = v[i1]
-    n == 1 && return result
-    _accumulate_pairwise!(op, result, v, v1, i1+1, n-1)
-    return result
-end
-
-function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = similar(v, rcum_promote_type(op, T))
-    return accumulate_pairwise!(op, out, v)
-end
-
-function cumsum!(out, v::AbstractVector; dims::Integer=1)
-    # we dispatch on the possibility of numerical stability issues
-    _cumsum!(out, v, dims, ArithmeticStyle(eltype(out)))
-end
-
-function _cumsum!(out, v, dim, ::ArithmeticRounds)
-    dim == 1 ? accumulate_pairwise!(+, out, v) : copyto!(out, v)
-end
-function _cumsum!(out, v, dim, ::ArithmeticUnknown)
-    _cumsum!(out, v, dim, ArithmeticRounds())
-end
-function _cumsum!(out, v, dim, ::ArithmeticStyle)
-    dim == 1 ? accumulate!(+, out, v) : copyto!(out, v)
-end
-
-"""
-    cumsum(A; dims::Integer)
-
-Cumulative sum along the dimension `dims`. See also [`cumsum!`](@ref)
-to use a preallocated output array, both for performance and to control the precision of the
-output (e.g. to avoid overflow).
-
-# Examples
-```jldoctest
-julia> a = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> cumsum(a, dims=1)
-2×3 Array{Int64,2}:
- 1  2  3
- 5  7  9
-
-julia> cumsum(a, dims=2)
-2×3 Array{Int64,2}:
- 1  3   6
- 4  9  15
-```
-"""
-function cumsum(A::AbstractArray{T}; dims::Union{Nothing,Integer}=nothing) where T
-    if dims === nothing
-        depwarn("`cumsum(A::AbstractArray)` is deprecated, use `cumsum(A, dims=1)` instead.", :cumsum)
-        dims = 1
-    end
-    out = similar(A, rcum_promote_type(+, T))
-    cumsum!(out, A, dims=dims)
-end
-
-"""
-    cumsum(x::AbstractVector)
-
-Cumulative sum a vector. See also [`cumsum!`](@ref)
-to use a preallocated output array, both for performance and to control the precision of the
-output (e.g. to avoid overflow).
-
-# Examples
-```jldoctest
-julia> cumsum([1, 1, 1])
-3-element Array{Int64,1}:
- 1
- 2
- 3
-
-julia> cumsum([fill(1, 2) for i in 1:3])
-3-element Array{Array{Int64,1},1}:
- [1, 1]
- [2, 2]
- [3, 3]
-```
-"""
-cumsum(x::AbstractVector) = cumsum(x, dims=1)
-
-"""
-    cumsum!(B, A; dims::Integer)
-
-Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. See also [`cumsum`](@ref).
-"""
-cumsum!(B, A; dims::Integer) = accumulate!(+, B, A, dims=dims)
-
-"""
-    cumprod(A; dims::Integer)
-
-Cumulative product along the dimension `dim`. See also
-[`cumprod!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow).
-
-# Examples
-```jldoctest
-julia> a = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> cumprod(a, dims=1)
-2×3 Array{Int64,2}:
- 1   2   3
- 4  10  18
-
-julia> cumprod(a, dims=2)
-2×3 Array{Int64,2}:
- 1   2    6
- 4  20  120
-```
-"""
-function cumprod(A::AbstractArray; dims::Union{Nothing,Integer}=nothing)
-    if dims === nothing
-        depwarn("`cumprod(A::AbstractArray)` is deprecated, use `cumprod(A, dims=1)` instead.", :cumprod)
-        dims = 1
-    end
-    return accumulate(*, A, dims=dims)
-end
-
-"""
-    cumprod(x::AbstractVector)
-
-Cumulative product of a vector. See also
-[`cumprod!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow).
-
-# Examples
-```jldoctest
-julia> cumprod(fill(1//2, 3))
-3-element Array{Rational{Int64},1}:
- 1//2
- 1//4
- 1//8
-
-julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
-3-element Array{Array{Rational{Int64},2},1}:
- [1//3 1//3; 1//3 1//3]
- [2//9 2//9; 2//9 2//9]
- [4//27 4//27; 4//27 4//27]
-```
-"""
-cumprod(x::AbstractVector) = cumprod(x, dims=1)
-
-"""
-    cumprod!(B, A; dims::Integer)
-
-Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
-See also [`cumprod`](@ref).
-"""
-cumprod!(B, A; dims::Integer) = accumulate!(*, B, A, dims=dims)
-
-"""
-    cumprod!(y::AbstractVector, x::AbstractVector)
-
-Cumulative product of a vector `x`, storing the result in `y`.
-See also [`cumprod`](@ref).
-"""
-cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
-
-"""
-    accumulate(op, A; dims::Integer)
-
-Cumulative operation `op` along the dimension `dims`. See also
-[`accumulate!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow). For common operations
-there are specialized variants of `accumulate`, see:
-[`cumsum`](@ref), [`cumprod`](@ref)
-
-# Examples
-```jldoctest
-julia> accumulate(+, fill(1, 3, 3), dims=1)
-3×3 Array{Int64,2}:
- 1  1  1
- 2  2  2
- 3  3  3
-
-julia> accumulate(+, fill(1, 3, 3), dims=2)
-3×3 Array{Int64,2}:
- 1  2  3
- 1  2  3
- 1  2  3
-```
-"""
-function accumulate(op, A; dims::Integer)
-    out = similar(A, rcum_promote_type(op, eltype(A)))
-    accumulate!(op, out, A, dims=dims)
-end
-
-"""
-    accumulate(op, x::AbstractVector)
-
-Cumulative operation `op` on a vector. See also
-[`accumulate!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow). For common operations
-there are specialized variants of `accumulate`, see:
-[`cumsum`](@ref), [`cumprod`](@ref)
-
-# Examples
-```jldoctest
-julia> accumulate(+, [1,2,3])
-3-element Array{Int64,1}:
- 1
- 3
- 6
-
-julia> accumulate(*, [1,2,3])
-3-element Array{Int64,1}:
- 1
- 2
- 6
-```
-"""
-accumulate(op, x::AbstractVector) = accumulate(op, x, dims=1)
-
-"""
-    accumulate!(op, B, A; dims::Integer)
-
-Cumulative operation `op` on `A` along the dimension `dims`, storing the result in `B`.
-See also [`accumulate`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1 2; 3 4];
-
-julia> B = [0 0; 0 0];
-
-julia> accumulate!(-, B, A, dims=1);
-
-julia> B
-2×2 Array{Int64,2}:
-  1   2
- -2  -2
-
-julia> accumulate!(-, B, A, dims=2);
-
-julia> B
-2×2 Array{Int64,2}:
- 1  -1
- 3  -1
-```
-"""
-function accumulate!(op, B, A; dims::Integer)
-    dim = dims
-    dim > 0 || throw(ArgumentError("dim must be a positive integer"))
-    inds_t = axes(A)
-    axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
-    dim > ndims(A) && return copyto!(B, A)
-    isempty(inds_t[dim]) && return B
-    if dim == 1
-        # We can accumulate to a temporary variable, which allows
-        # register usage and will be slightly faster
-        ind1 = inds_t[1]
-        @inbounds for I in CartesianIndices(tail(inds_t))
-            tmp = convert(eltype(B), A[first(ind1), I])
-            B[first(ind1), I] = tmp
-            for i_1 = first(ind1)+1:last(ind1)
-                tmp = op(tmp, A[i_1, I])
-                B[i_1, I] = tmp
-            end
-        end
-    else
-        R1 = CartesianIndices(axes(A)[1:dim-1])   # not type-stable
-        R2 = CartesianIndices(axes(A)[dim+1:end])
-        _accumulate!(op, B, A, R1, inds_t[dim], R2) # use function barrier
-    end
-    return B
-end
-
-"""
-    accumulate!(op, y, x::AbstractVector)
-
-Cumulative operation `op` on a vector `x`, storing the result in `y`.
-See also [`accumulate`](@ref).
-
-# Examples
-``jldoctest
-julia> x = [1, 0, 2, 0, 3];
-
-julia> y = [0, 0, 0, 0, 0];
-
-julia> accumulate!(+, y, x);
-
-julia> y
-5-element Array{Int64,1}:
- 1
- 1
- 3
- 3
- 6
-```
-"""
-function accumulate!(op::Op, y, x::AbstractVector) where Op
-    isempty(x) && return y
-    v1 = first(x)
-    _accumulate1!(op, y, v1, x, 1)
-end
-
-@noinline function _accumulate!(op, B, A, R1, ind, R2)
-    # Copy the initial element in each 1d vector along dimension `dim`
-    ii = first(ind)
-    @inbounds for J in R2, I in R1
-        B[I, ii, J] = A[I, ii, J]
-    end
-    # Accumulate
-    @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
-        B[I, i, J] = op(B[I, i-1, J], A[I, i, J])
-    end
-    B
-end
-
-"""
-    accumulate(op, v0, x::AbstractVector)
-
-Like `accumulate`, but using a starting element `v0`. The first entry of the result will be
-`op(v0, first(A))`.
-
-# Examples
-```jldoctest
-julia> accumulate(+, 100, [1,2,3])
-3-element Array{Int64,1}:
- 101
- 103
- 106
-
-julia> accumulate(min, 0, [1,2,-1])
-3-element Array{Int64,1}:
-  0
-  0
- -1
-```
-"""
-function accumulate(op, v0, x::AbstractVector)
-    T = rcum_promote_type(op, typeof(v0), eltype(x))
-    out = similar(x, T)
-    accumulate!(op, out, v0, x)
-end
-
-function accumulate!(op, y, v0, x::AbstractVector)
-    isempty(x) && return y
-    v1 = op(v0, first(x))
-    _accumulate1!(op, y, v1, x, 1)
-end
-
-function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
-    dim > 0 || throw(ArgumentError("dim must be a positive integer"))
-    inds = linearindices(A)
-    inds == linearindices(B) || throw(DimensionMismatch("linearindices of A and B don't match"))
-    dim > 1 && return copyto!(B, A)
-    i1 = inds[1]
-    cur_val = v1
-    B[i1] = cur_val
-    @inbounds for i in inds[2:end]
-        cur_val = op(cur_val, A[i])
-        B[i] = cur_val
-    end
-    return B
 end
 
 diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 
 """
     diff(A::AbstractVector)
-    diff(A::AbstractMatrix, dim::Integer)
+    diff(A::AbstractMatrix; dims::Integer)
 
 Finite difference operator of matrix or vector `A`. If `A` is a matrix,
-specify the dimension over which to operate with the `dim` argument.
+specify the dimension over which to operate with the `dims` keyword argument.
 
 # Examples
 ```jldoctest
@@ -1093,7 +663,7 @@ julia> a = [2 4; 6 16]
  2   4
  6  16
 
-julia> diff(a,2)
+julia> diff(a, dims=2)
 2×1 Array{Int64,2}:
   2
  10
@@ -1105,13 +675,17 @@ julia> diff(vec(a))
  12
 ```
 """
-function diff(A::AbstractMatrix, dim::Integer)
-    if dim == 1
+function diff(A::AbstractMatrix; dims::Union{Integer,Nothing}=nothing)
+    if dims === nothing
+        depwarn("`diff(A::AbstractMatrix)` is deprecated, use `diff(A, dims=1)` instead.", :diff)
+        dims = 1
+    end
+    if dims == 1
         [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
-    elseif dim == 2
+    elseif dims == 2
         [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
     else
-        throw(ArgumentError("dimension dim must be 1 or 2, got $dim"))
+        throw(ArgumentError("dimension must be 1 or 2, got $dims"))
     end
 end
 
@@ -1321,7 +895,7 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
                              inds::Tuple{AbstractUnitRange,Vararg{Any}},
                              shiftamt::Tuple{Integer,Vararg{Any}})
     ind1, d = inds[1], shiftamt[1]
-    s = mod(d, length(ind1))
+    s = mod(d, _length(ind1))
     sf, sl = first(ind1)+s, last(ind1)-s
     r1, r2 = first(ind1):sf-1, sf:last(ind1)
     r3, r4 = first(ind1):sl, sl+1:last(ind1)
@@ -1369,7 +943,7 @@ true
 function circcopy!(dest, src)
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
     indssrc, indsdest = axes(src), axes(dest)
-    if (szsrc = map(length, indssrc)) != (szdest = map(length, indsdest))
+    if (szsrc = map(_length, indssrc)) != (szdest = map(_length, indsdest))
         throw(DimensionMismatch("src and dest must have the same sizes (got $szsrc and $szdest)"))
     end
     shift = map((isrc, idest)->first(isrc)-first(idest), indssrc, indsdest)
@@ -1381,7 +955,7 @@ end
 @inline function _circcopy!(dest, rdest, indsdest::Tuple{AbstractUnitRange,Vararg{Any}},
                             src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})
     indd1, inds1 = indsdest[1], indssrc[1]
-    l = length(indd1)
+    l = _length(indd1)
     s = mod(first(inds1)-first(indd1), l)
     sdf = first(indd1)+s
     rd1, rd2 = first(indd1):sdf-1, sdf:last(indd1)
@@ -1597,19 +1171,26 @@ end
     end
 end
 
-@inline function setindex!(B::BitArray, x,
-        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
-    J = to_indices(B, (I0, I...))
-    @boundscheck checkbounds(B, J...)
-    _unsafe_setindex!(B, x, J...)
-end
 @propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
         I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
 
-@generated function _unsafe_setindex!(B::BitArray, x,
-        I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)
+## fill! contiguous views of BitArrays with a single value
+function fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}}}, x)
+    B = V.parent
+    I0 = V.indices[1]
+    l0 = length(I0)
+    l0 == 0 && return V
+    fill_chunks!(B.chunks, Bool(x), first(I0), l0)
+    return V
+end
+
+fill!(V::SubArray{Bool, <:Any, <:BitArray, Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, x) =
+    _unsafe_fill_indices!(V.parent, x, V.indices...)
+
+@generated function _unsafe_fill_indices!(B::BitArray, x,
+        I0::AbstractUnitRange{Int}, I::Union{Int,AbstractUnitRange{Int}}...)
     N = length(I)
     quote
         y = Bool(x)
@@ -1722,9 +1303,9 @@ end
 hash(x::Prehashed) = x.hash
 
 """
-    unique(A::AbstractArray, dim::Int)
+    unique(A::AbstractArray; dims::Int)
 
-Return unique regions of `A` along dimension `dim`.
+Return unique regions of `A` along dimension `dims`.
 
 # Examples
 ```jldoctest
@@ -1743,7 +1324,7 @@ julia> unique(A)
   true
  false
 
-julia> unique(A, 2)
+julia> unique(A, dims=2)
 2×1×2 Array{Bool,3}:
 [:, :, 1] =
   true
@@ -1753,18 +1334,21 @@ julia> unique(A, 2)
   true
  false
 
-julia> unique(A, 3)
+julia> unique(A, dims=3)
 2×2×1 Array{Bool,3}:
 [:, :, 1] =
   true   true
  false  false
 ```
 """
-@generated function unique(A::AbstractArray{T,N}, dim::Int) where {T,N}
-    inds = inds -> zeros(UInt, inds)
+unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
+
+_unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
+
+@generated function _unique_dims(A::AbstractArray{T,N}, dim::Integer) where {T,N}
     quote
         1 <= dim <= $N || return copy(A)
-        hashes = similar($inds, axes(A, dim))
+        hashes = zeros(UInt, axes(A, dim))
 
         # Compute hash for each row
         k = 0
@@ -1781,7 +1365,7 @@ julia> unique(A, 3)
         uniquerows = collect(values(firstrow))
 
         # Check for collisions
-        collided = similar(falses, axes(A, dim))
+        collided = falses(axes(A, dim))
         @inbounds begin
             @nloops $N i A d->(if d == dim
                 k = i_d
@@ -1859,7 +1443,9 @@ julia> extrema(A, (1,2))
 """
 function extrema(A::AbstractArray, dims)
     sz = [size(A)...]
-    sz[[dims...]] = 1
+    for d in dims
+        sz[d] = 1
+    end
     B = Array{Tuple{eltype(A),eltype(A)}}(undef, sz...)
     return extrema!(B, A)
 end
@@ -1893,6 +1479,6 @@ function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any,
     print(io, "pairs(::$T)")
 end
 
-function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, <:AbstractVector}, toplevel)
+function Base.showarg(io::IO, r::Iterators.Pairs{<:CartesianIndex, <:Any, <:Any, T}, toplevel) where T<:AbstractVector
     print(io, "pairs(IndexCartesian(), ::$T)")
 end

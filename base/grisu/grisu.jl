@@ -3,7 +3,7 @@
 module Grisu
 
 export print_shortest
-export DIGITS, grisu
+export DIGITS, DIGITSs, grisu
 
 const SHORTEST = 1
 const FIXED = 2
@@ -11,16 +11,22 @@ const PRECISION = 3
 
 const DIGITS = Vector{UInt8}(undef, 309+17)
 
-include(joinpath("grisu", "float.jl"))
-include(joinpath("grisu", "fastshortest.jl"))
-include(joinpath("grisu", "fastprecision.jl"))
-include(joinpath("grisu", "fastfixed.jl"))
-include(joinpath("grisu", "bignums.jl"))
-include(joinpath("grisu", "bignum.jl"))
+# thread-safe code should use a per-thread DIGITS buffer DIGITSs[Threads.threadid()]
+const DIGITSs = [DIGITS]
+function __init__()
+    Threads.resize_nthreads!(DIGITSs)
+end
+
+include("grisu/float.jl")
+include("grisu/fastshortest.jl")
+include("grisu/fastprecision.jl")
+include("grisu/fastfixed.jl")
+include("grisu/bignums.jl")
+include("grisu/bignum.jl")
 
 const BIGNUMS = [Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum()]
 
-function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITS,bignums=BIGNUMS)
+function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITSs[Threads.threadid()],bignums=BIGNUMS)
     if signbit(v)
         neg = true
         v = -v
@@ -65,7 +71,7 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, compact)
         return
     end
     typed && isa(x,Float16) && print(io, "Float16(")
-    (len,pt,neg),buffer = grisu(x,mode,n),DIGITS
+    (len,pt,neg),buffer = grisu(x,mode,n),DIGITSs[Threads.threadid()]
     pdigits = pointer(buffer)
     if mode == PRECISION
         while len > 1 && buffer[len] == 0x30
@@ -153,7 +159,7 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
     isnan(x) && return print(io, "NaN")
     x < 0 && print(io,'-')
     isinf(x) && return print(io, "Inf")
-    (len,pt,neg),buffer = grisu(x,mode,n),DIGITS
+    (len,pt,neg),buffer = grisu(x,mode,n),DIGITSs[Threads.threadid()]
     pdigits = pointer(buffer)
     e = pt-len
     k = -9<=e<=9 ? 1 : 2

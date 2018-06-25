@@ -358,6 +358,7 @@ static void jl_exit_thread0(int state)
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    int errno_save = errno;
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
 #if !defined(JL_DISABLE_LIBUNWIND)
     if (request == 1) {
@@ -388,6 +389,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     else if (request == 3) {
         jl_call_in_ctx(ptls, jl_exit_thread0_cb, sig, ctx);
     }
+    errno = errno_save;
 }
 
 #if defined(HAVE_TIMER)

@@ -27,7 +27,7 @@ end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-function gcd(a::T, b::T) where T<:Union{Int64,UInt64,Int128,UInt128}
+function gcd(a::T, b::T) where T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
     @noinline throw1(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
     a == 0 && return abs(b)
     b == 0 && return abs(a)
@@ -807,6 +807,27 @@ function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
     s*s > x ? s-1 : s
 end
 
+"""
+    factorial(n::Integer)
+
+Factorial of `n`. If `n` is an [`Integer`](@ref), the factorial is computed as an
+integer (promoted to at least 64 bits). Note that this may overflow if `n` is not small,
+but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
+
+# Examples
+```jldoctest
+julia> factorial(6)
+720
+
+julia> factorial(21)
+ERROR: OverflowError: 21 is too large to look up in the table
+Stacktrace:
+[...]
+
+julia> factorial(big(21))
+51090942171709440000
+```
+"""
 function factorial(n::Integer)
     n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
     f::typeof(n*n) = 1

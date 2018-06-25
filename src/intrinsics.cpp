@@ -779,6 +779,136 @@ struct math_builder {
 static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **argvalues, size_t nargs,
                                      jl_datatype_t **newtyp, jl_value_t *xtyp);
 
+
+static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_cgval_t y, jl_value_t *rt_hint)
+{
+    Value *isfalse = emit_condition(ctx, c, "ifelse");
+    jl_value_t *t1 = x.typ;
+    jl_value_t *t2 = y.typ;
+    // handle cases where the condition is irrelevant based on type info
+    if (t1 == jl_bottom_type && t2 == jl_bottom_type)
+        return jl_cgval_t(); // undefined
+    if (t1 == jl_bottom_type)
+        return y;
+    if (t2 == jl_bottom_type)
+        return x;
+
+    if (t1 != t2) {
+        // type inference may know something we don't, in which case it may
+        // be illegal for us to convert to rt_hint. Check first if either
+        // of the types have empty intersection with the result type,
+        // in which case, we may use the other one.
+        if (jl_type_intersection(t1, rt_hint) == jl_bottom_type)
+            return y;
+        else if (jl_type_intersection(t2, rt_hint) == jl_bottom_type)
+            return x;
+        // if they aren't the same type, consider using the expr type
+        // to instantiate a union-split optimization
+        x = convert_julia_type(ctx, x, rt_hint);
+        y = convert_julia_type(ctx, y, rt_hint);
+        t1 = x.typ;
+        t2 = y.typ;
+    }
+
+    Value *ifelse_result;
+    bool isboxed;
+    Type *llt1 = julia_type_to_llvm(t1, &isboxed);
+    if (t1 != t2)
+        isboxed = true;
+    if (!isboxed) {
+        if (type_is_ghost(llt1))
+            return x;
+        ifelse_result = ctx.builder.CreateSelect(isfalse,
+                emit_unbox(ctx, llt1, y, t1),
+                emit_unbox(ctx, llt1, x, t1));
+    }
+    else {
+        Value *x_tindex = x.TIndex;
+        Value *y_tindex = y.TIndex;
+        if (x_tindex || y_tindex) {
+            if (!x.isghost)
+                x = value_to_pointer(ctx, x);
+            if (!y.isghost)
+                y = value_to_pointer(ctx, y);
+            Value *x_vboxed = x.Vboxed;
+            Value *y_vboxed = y.Vboxed;
+            Value *x_ptr = (x.isghost ? NULL : data_pointer(ctx, x));
+            Value *y_ptr = (y.isghost ? NULL : data_pointer(ctx, y));
+            if (!x.isghost && x.constant)
+                x_vboxed = boxed(ctx, x);
+            if (!y.isghost && y.constant)
+                y_vboxed = boxed(ctx, y);
+            if (!x_ptr && !y_ptr) {
+                ifelse_result = NULL;
+            }
+            else if (!x_ptr) {
+                ifelse_result = y_ptr;
+            }
+            else if (!y_ptr) {
+                ifelse_result = x_ptr;
+            }
+            else {
+                x_ptr = decay_derived(x_ptr);
+                y_ptr = decay_derived(y_ptr);
+                if (x_ptr->getType() != y_ptr->getType())
+                    y_ptr = ctx.builder.CreateBitCast(y_ptr, x_ptr->getType());
+                ifelse_result = ctx.builder.CreateSelect(isfalse, y_ptr, x_ptr);
+            }
+            Value *tindex;
+            if (!x_tindex && x.constant) {
+                x_tindex = ConstantInt::get(T_int8, 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(x.constant), rt_hint));
+            }
+            if (!y_tindex && y.constant) {
+                y_tindex = ConstantInt::get(T_int8, 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(y.constant), rt_hint));
+            }
+            if (x_tindex && y_tindex) {
+                tindex = ctx.builder.CreateSelect(isfalse, y_tindex, x_tindex);
+            }
+            else {
+                PHINode *ret = PHINode::Create(T_int8, 2);
+                BasicBlock *post = BasicBlock::Create(jl_LLVMContext, "post", ctx.f);
+                BasicBlock *compute = BasicBlock::Create(jl_LLVMContext, "compute_tindex", ctx.f);
+                // compute tindex if we select the previously-boxed value
+                if (x_tindex) {
+                    assert(y.isboxed && y.V);
+                    ctx.builder.CreateCondBr(isfalse, compute, post);
+                    ret->addIncoming(x_tindex, ctx.builder.GetInsertBlock());
+                    ctx.builder.SetInsertPoint(compute);
+                    tindex = compute_tindex_unboxed(ctx, y, rt_hint);
+                }
+                else {
+                    assert(x.isboxed);
+                    ctx.builder.CreateCondBr(isfalse, post, compute);
+                    ret->addIncoming(y_tindex, ctx.builder.GetInsertBlock());
+                    ctx.builder.SetInsertPoint(compute);
+                    tindex = compute_tindex_unboxed(ctx, x, rt_hint);
+                }
+                tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
+                ret->addIncoming(tindex, compute);
+                ctx.builder.CreateBr(post);
+                ctx.builder.SetInsertPoint(post);
+                ctx.builder.Insert(ret);
+                tindex = ret;
+            }
+            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, tbaa_data);
+            ret.isimmutable = x.isimmutable && y.isimmutable;
+            if (x_vboxed || y_vboxed) {
+                if (!x_vboxed)
+                    x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));
+                if (!y_vboxed)
+                    y_vboxed = ConstantPointerNull::get(cast<PointerType>(x_vboxed->getType()));
+                ret.Vboxed = ctx.builder.CreateSelect(isfalse, y_vboxed, x_vboxed);
+            }
+            return ret;
+        }
+        ifelse_result = ctx.builder.CreateSelect(isfalse,
+                boxed(ctx, y),
+                boxed(ctx, x));
+    }
+    jl_value_t *jt = (t1 == t2 ? t1 : rt_hint);
+    return mark_julia_type(ctx, ifelse_result, isboxed, jt);
+}
+
 static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **args, size_t nargs)
 {
     assert(f < num_intrinsics);
@@ -829,42 +959,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return generic_cast(ctx, f, generic_fptrunc, argv, false, false);
     case fpext:
         return generic_cast(ctx, f, generic_fpext, argv, false, false);
-
-    case select_value: {
-        Value *isfalse = emit_condition(ctx, argv[0], "select_value"); // emit the first argument
-        // emit X and Y arguments
-        const jl_cgval_t &x = argv[1];
-        const jl_cgval_t &y = argv[2];
-        jl_value_t *t1 = x.typ;
-        jl_value_t *t2 = y.typ;
-        // check the return value was valid
-        if (t1 == jl_bottom_type && t2 == jl_bottom_type)
-            return jl_cgval_t(); // undefined
-        if (t1 == jl_bottom_type)
-            return y;
-        if (t2 == jl_bottom_type)
-            return x;
-
-        Value *ifelse_result;
-        bool isboxed;
-        Type *llt1 = julia_type_to_llvm(t1, &isboxed);
-        if (t1 != t2)
-            isboxed = true;
-        if (!isboxed) {
-            if (type_is_ghost(llt1))
-                return x;
-            ifelse_result = ctx.builder.CreateSelect(isfalse,
-                    emit_unbox(ctx, llt1, y, t1),
-                    emit_unbox(ctx, llt1, x, t1));
-        }
-        else {
-            ifelse_result = ctx.builder.CreateSelect(isfalse,
-                    boxed(ctx, y),
-                    boxed(ctx, x));
-        }
-        jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
-        return mark_julia_type(ctx, ifelse_result, isboxed, jt);
-    }
 
     case not_int: {
         const jl_cgval_t &x = argv[0];
@@ -1212,12 +1306,14 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     assert(0 && "unreachable");
 }
 
-#define BOX_F(ct,jl_ct)                                                  \
-    box_##ct##_func = boxfunc_llvm(ft1arg(T_prjlvalue, T_##jl_ct),       \
+#define BOX_F(ct,jl_ct,rt)                                      \
+    box_##ct##_func = boxfunc_llvm(ft1arg(rt, T_##jl_ct),       \
                                    "jl_box_"#ct, &jl_box_##ct, m);
 
-#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::SExt);
-#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::ZExt);
+#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
+#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
+#define SBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
+#define UBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
 
 template<typename T>
 static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,

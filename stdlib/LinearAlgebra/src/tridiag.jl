@@ -115,18 +115,9 @@ similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T
 # similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 #Elementary operations
-broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
-broadcast(::typeof(round), M::SymTridiagonal) = SymTridiagonal(round.(M.dv), round.(M.ev))
-broadcast(::typeof(trunc), M::SymTridiagonal) = SymTridiagonal(trunc.(M.dv), trunc.(M.ev))
-broadcast(::typeof(floor), M::SymTridiagonal) = SymTridiagonal(floor.(M.dv), floor.(M.ev))
-broadcast(::typeof(ceil), M::SymTridiagonal) = SymTridiagonal(ceil.(M.dv), ceil.(M.ev))
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
-broadcast(::typeof(round), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(round.(T, M.dv), round.(T, M.ev))
-broadcast(::typeof(trunc), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(trunc.(T, M.dv), trunc.(T, M.ev))
-broadcast(::typeof(floor), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(floor.(T, M.dv), floor.(T, M.ev))
-broadcast(::typeof(ceil), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(ceil.(T, M.dv), ceil.(T, M.ev))
 
 transpose(S::SymTridiagonal) = S
 adjoint(S::SymTridiagonal{<:Real}) = S
@@ -166,14 +157,19 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
         throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
     end
 
+    if m == 0
+        return C
+    end
+
     α = S.dv
     β = S.ev
     @inbounds begin
         for j = 1:n
-            x₀, x₊ = B[1, j], B[2, j]
-            β₀ = β[1]
-            C[1, j] = α[1]*x₀ + x₊*β₀
-            for i = 2:m - 1
+            x₊ = B[1, j]
+            x₀ = zero(x₊)
+            # If m == 1 then β[1] is out of bounds
+            β₀ = m > 1 ? zero(β[1]) : zero(eltype(β))
+            for i = 1:m - 1
                 x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
                 β₋, β₀ = β₀, β[i]
                 C[i, j] = β₋*x₋ + α[i]*x₀ + β₀*x₊
@@ -185,20 +181,20 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     return C
 end
 
-(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
+(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
 
-eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigfact(A::SymTridiagonal{T}) where T = eigfact!(copy_oftype(A, eigtype(T)))
+eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
+eigen(A::SymTridiagonal{T}) where T = eigen!(copy_oftype(A, eigtype(T)))
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
+eigen!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
-eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), irange)
+eigen(A::SymTridiagonal{T}, irange::UnitRange) where T =
+    eigen!(copy_oftype(A, eigtype(T)), irange)
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
+eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
-eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), vl, vu)
+eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
+    eigen!(copy_oftype(A, eigtype(T)), vl, vu)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
 eigvals(A::SymTridiagonal{T}) where T = eigvals!(copy_oftype(A, eigtype(T)))
@@ -218,7 +214,7 @@ eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigfact(A).vectors
+eigvecs(A::SymTridiagonal) = eigen(A).vectors
 
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
@@ -403,7 +399,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         end
         new{T,V}(dl, d, du)
     end
-    # constructor used in lufact!
+    # constructor used in lu!
     function Tridiagonal{T,V}(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}}
         new{T,V}(dl, d, du, du2)
     end
@@ -497,24 +493,11 @@ similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), sim
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
 
 #Elementary operations
-broadcast(::typeof(abs), M::Tridiagonal) = Tridiagonal(abs.(M.dl), abs.(M.d), abs.(M.du))
-broadcast(::typeof(round), M::Tridiagonal) = Tridiagonal(round.(M.dl), round.(M.d), round.(M.du))
-broadcast(::typeof(trunc), M::Tridiagonal) = Tridiagonal(trunc.(M.dl), trunc.(M.d), trunc.(M.du))
-broadcast(::typeof(floor), M::Tridiagonal) = Tridiagonal(floor.(M.dl), floor.(M.d), floor.(M.du))
-broadcast(::typeof(ceil), M::Tridiagonal) = Tridiagonal(ceil.(M.dl), ceil.(M.d), ceil.(M.du))
 for func in (:conj, :copy, :real, :imag)
     @eval function ($func)(M::Tridiagonal)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du))
     end
 end
-broadcast(::typeof(round), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(round.(T, M.dl), round.(T, M.d), round.(T, M.du))
-broadcast(::typeof(trunc), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(trunc.(T, M.dl), trunc.(T, M.d), trunc.(T, M.du))
-broadcast(::typeof(floor), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(floor.(T, M.dl), floor.(T, M.d), floor.(T, M.du))
-broadcast(::typeof(ceil), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(ceil.(T, M.dl), ceil.(T, M.d), ceil.(T, M.du))
 
 adjoint(S::Tridiagonal) = Adjoint(S)
 transpose(S::Tridiagonal) = Transpose(S)
@@ -576,6 +559,7 @@ end
 function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::AbstractString)
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
+
 
 #tril and triu
 

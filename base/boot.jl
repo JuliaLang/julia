@@ -82,7 +82,6 @@
 #mutable struct Expr
 #    head::Symbol
 #    args::Array{Any,1}
-#    typ::Any
 #end
 
 #struct LineNumberNode
@@ -90,8 +89,12 @@
 #    file::Any # nominally Union{Symbol,Nothing}
 #end
 
-#struct LabelNode
-#    label::Int
+#struct LineInfoNode
+#    mod::Module
+#    method::Symbol
+#    file::Symbol
+#    line::Int
+#    inlined_at::Int
 #end
 
 #struct GotoNode
@@ -106,6 +109,14 @@
 #struct PhiNode
 #    edges::Vector{Any}
 #    values::Vector{Any}
+#end
+
+#struct PhiCNode
+#    values::Vector{Any}
+#end
+
+#struct UpsilonNode
+#    val
 #end
 
 #struct QuoteNode
@@ -151,9 +162,9 @@ export
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
     UndefKeywordError,
     # AST representation
-    Expr, QuoteNode, LineNumberNode, GlobalRef, PiNode, PhiNode,
+    Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
-    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
+    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval, ifelse,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     <:, typeof, isa, typeassert,
@@ -305,7 +316,6 @@ getptls() = ccall(:jl_get_ptls_states, Ptr{Cvoid}, ())
 
 include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
-eval(@nospecialize(e)) = eval(Main, e)
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
 kwfunc(@nospecialize(f)) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
@@ -345,7 +355,6 @@ end
 VecElement(arg::T) where {T} = VecElement{T}(arg)
 
 _new(typ::Symbol, argty::Symbol) = eval(Core, :($typ(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
-_new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :Any)
@@ -357,6 +366,11 @@ eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
 eval(Core, :(PhiNode(edges::Array{Any, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
 eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
+eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
+eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
+eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
+eval(Core, :(LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int) =
+             $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
@@ -421,19 +435,25 @@ Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
-export CodeInfo, MethodInstance, GotoNode, LabelNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot
+export CodeInfo, MethodInstance, GotoNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
 
-import Core: CodeInfo, MethodInstance, GotoNode, LabelNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot
+import Core: CodeInfo, MethodInstance, GotoNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
+
 end
 
 # docsystem basics
+const unescape = Symbol("hygienic-scope")
 macro doc(x...)
-    atdoc(__source__, __module__, x...)
+    docex = atdoc(__source__, __module__, x...)
+    isa(docex, Expr) && docex.head === :escape && return docex
+    return Expr(:escape, Expr(unescape, docex, typeof(atdoc).name.module))
 end
 macro __doc__(x)
-    Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
+    return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
 atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
@@ -544,11 +564,11 @@ end
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, T::Type, val) = (@_noinline_meta; throw(InexactError(f, T, val)))
+throw_inexacterror(f::Symbol, T::Type, @nospecialize(val)) = (@_noinline_meta; throw(InexactError(f, T, val)))
 
 function is_top_bit_set(x)
     @_inline_meta
-    eq_int(trunc_int(Int8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(Int8, 1))
+    eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
 end
 
 function is_top_bit_set(x::Union{Int8,UInt8})

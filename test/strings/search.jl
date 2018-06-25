@@ -328,3 +328,8 @@ end
 @test @inferred findall(isequal('a'), "éa") == [3]
 @test @inferred findall(isequal('€'), "€€") == [1, 4]
 @test @inferred isempty(findall(isequal('é'), ""))
+
+# issue #18109
+s_18109 = "fooα🐨βcd3"
+@test findlast(isequal('o'), s_18109) == 3
+@test findfirst(isequal('d'), s_18109) == 13

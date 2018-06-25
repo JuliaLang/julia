@@ -97,6 +97,7 @@ Return the type that represents the real part of a value of type `T`.
 e.g: for `T == Complex{R}`, returns `R`.
 Equivalent to `typeof(real(zero(T)))`.
 
+# Examples
 ```jldoctest
 julia> real(Complex{Int})
 Int64
@@ -512,7 +513,7 @@ julia> rad2deg(angle(-1 - im))
 -135.0
 ```
 """
-angle(z::Complex) = atan2(imag(z), real(z))
+angle(z::Complex) = atan(imag(z), real(z))
 
 function log(z::Complex{T}) where T<:AbstractFloat
     T1::T  = 1.25
@@ -808,7 +809,7 @@ function asin(z::Complex)
     end
     ξ = zr == 0       ? zr :
         !isfinite(zr) ? oftype(zr,pi)/2 * sign(zr) :
-        atan2(zr, real(sqrt(1-z)*sqrt(1+z)))
+        atan(zr, real(sqrt(1-z)*sqrt(1+z)))
     η = asinh(copysign(imag(sqrt(conj(1-z))*sqrt(1+z)), imag(z)))
     Complex(ξ,η)
 end
@@ -829,7 +830,7 @@ function acos(z::Complex{<:AbstractFloat})
     elseif zr==-Inf && zi===-0.0
         return Complex(oftype(zi,pi), -zr)
     end
-    ξ = 2*atan2(real(sqrt(1-z)), real(sqrt(1+z)))
+    ξ = 2*atan(real(sqrt(1-z)), real(sqrt(1+z)))
     η = asinh(imag(sqrt(conj(1+z))*sqrt(1-z)))
     if isinf(zr) && isinf(zi) ξ -= oftype(η,pi)/4 * sign(zr) end
     Complex(ξ,η)
@@ -890,7 +891,7 @@ function acosh(z::Complex)
         return Complex(oftype(zr,Inf), oftype(zi, -pi))
     end
     ξ = asinh(real(sqrt(conj(z-1))*sqrt(z+1)))
-    η = 2atan2(imag(sqrt(z-1)),real(sqrt(z+1)))
+    η = 2*atan(imag(sqrt(z-1)),real(sqrt(z+1)))
     if isinf(zr) && isinf(zi)
         η -= oftype(η,pi)/4 * sign(zi) * sign(zr)
     end
@@ -941,7 +942,9 @@ atanh(z::Complex) = atanh(float(z))
 #Rounding complex numbers
 #Requires two different RoundingModes for the real and imaginary components
 """
-    round(z, RoundingModeReal, RoundingModeImaginary)
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]])
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; digits=, base=10)
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; sigdigits=, base=10)
 
 Return the nearest integral value of the same type as the complex-valued `z` to `z`,
 breaking ties using the specified [`RoundingMode`](@ref)s. The first
@@ -954,16 +957,11 @@ julia> round(3.14 + 4.5im)
 3.0 + 4.0im
 ```
 """
-function round(z::Complex{<:AbstractFloat}, ::RoundingMode{MR}, ::RoundingMode{MI}) where {MR,MI}
-    Complex(round(real(z), RoundingMode{MR}()),
-            round(imag(z), RoundingMode{MI}()))
+function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; kwargs...)
+    Complex(round(real(z), rr; kwargs...),
+            round(imag(z), ri; kwargs...))
 end
-round(z::Complex) = Complex(round(real(z)), round(imag(z)))
 
-function round(z::Complex, digits::Integer; base::Integer = 10)
-    Complex(round(real(z), digits, base = base),
-            round(imag(z), digits, base = base))
-end
 
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))

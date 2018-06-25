@@ -2,22 +2,65 @@
 
 # tests for Core.Compiler correctness and precision
 import Core.Compiler: Const, Conditional, ⊑
+isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
 # demonstrate some of the type-size limits
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 0) == Ref{Complex{T} where T}
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
+@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
-    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 10) == comparison
-    @test Core.Compiler.limit_type_size(sig, ref, comparison,  10) == ref
-    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{ref}
-    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison},  10) == sig
+    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 100, 10) == comparison
+    @test Core.Compiler.limit_type_size(sig, ref, comparison, 100, 10) == ref
+    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 10) == Tuple{ref}
+    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  10) == sig
 end
 
+# PR 22120
+function tmerge_test(a, b, r, commutative=true)
+    @test r == Core.Compiler.tuplemerge(a, b)
+    if commutative
+        @test r == Core.Compiler.tuplemerge(b, a)
+    else
+        @test_broken r == Core.Compiler.tuplemerge(b, a)
+    end
+end
+tmerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
+tmerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
+tmerge_test(Tuple{Vararg{Int}}, Tuple{String}, Tuple)
+tmerge_test(Tuple{Int}, Tuple{Int, Int},
+    Tuple{Vararg{Int}})
+tmerge_test(Tuple{Integer}, Tuple{Int, Int},
+    Tuple{Vararg{Integer}})
+tmerge_test(Tuple{}, Tuple{Int, Int},
+    Tuple{Vararg{Int}})
+tmerge_test(Tuple{}, Tuple{Complex},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF64},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{Vararg{ComplexF32}}, Tuple{Vararg{ComplexF64}},
+    Tuple{Vararg{Complex}})
+tmerge_test(Tuple{}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF32, ComplexF32, ComplexF32}, Tuple{ComplexF32, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{}, Tuple{Union{ComplexF64, ComplexF32}, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Union{ComplexF32, ComplexF64}}})
+tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Complex}}, false)
+tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
+    Tuple{Vararg{Complex}})
+@test Core.Compiler.tmerge(Tuple{}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Nothing, Tuple{Vararg{ComplexF32}}}
+@test Core.Compiler.tmerge(Int32, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Int32, Nothing, Tuple{ComplexF32, ComplexF32}}
+@test Core.Compiler.tmerge(Union{Int32, Nothing, Tuple{ComplexF32}}, Union{Int16, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Int16, Int32, Nothing, Tuple{Vararg{ComplexF32}}}
 
 # issue 9770
 @noinline x9770() = false
@@ -205,13 +248,12 @@ end
 
 # issue #12474
 @generated function f12474(::Any)
-    :(for i in 1
-      end)
+    return :(for i in 1
+        end)
 end
-let
-    ast12474 = code_typed(f12474, Tuple{Float64})
-    @test isconcretetype(ast12474[1][2])
-    @test all(isconcretetype, ast12474[1][1].slottypes)
+let ast12474 = code_typed(f12474, Tuple{Float64})
+    @test isdispatchelem(ast12474[1][2])
+    @test all(x -> x isa Const || isdispatchelem(Core.Compiler.typesubtract(x, Nothing)), ast12474[1][1].slottypes)
 end
 
 
@@ -436,24 +478,25 @@ function is_typed_expr(e::Expr)
     end
     return false
 end
+is_typed_expr(@nospecialize other) = false
 test_inferred_static(@nospecialize(other)) = true
-test_inferred_static(slot::TypedSlot) = @test isconcretetype(slot.typ)
+test_inferred_static(slot::TypedSlot) = @test isdispatchelem(slot.typ)
 function test_inferred_static(expr::Expr)
-    if is_typed_expr(expr)
-        @test isconcretetype(expr.typ)
-    end
     for a in expr.args
         test_inferred_static(a)
     end
 end
-function test_inferred_static(arrow::Pair)
+function test_inferred_static(arrow::Pair, all_ssa)
     code, rt = arrow
-    @test isconcretetype(rt)
+    @test isdispatchelem(rt)
     @test code.inferred
-    @test all(isconcretetype, code.slottypes)
-    @test all(isconcretetype, code.ssavaluetypes)
-    for e in code.code
+    @test all(isdispatchelem, code.slottypes)
+    for i = 1:length(code.code)
+        e = code.code[i]
         test_inferred_static(e)
+        if all_ssa && is_typed_expr(e)
+            @test isdispatchelem(code.ssavaluetypes[i])
+        end
     end
 end
 
@@ -466,6 +509,7 @@ function f18679()
             return a[1]
         end
     end
+    error()
 end
 g18679(x::Tuple) = ()
 g18679() = g18679(any_undef_global::Union{Int, Tuple{}})
@@ -484,39 +528,55 @@ function g19348(x)
     a, b = x
     g = 1
     g = 2
-    c = Base.indexed_next(x, g, g)
+    c = Base.indexed_iterate(x, g, g)
     return a + b + c[1]
 end
 
-for codetype in Any[
-        code_typed(f18679, ())[1],
-        code_typed(g18679, ())[1],
-        code_typed(h18679, ())[1],
-        code_typed(g19348, (typeof((1, 2.0)),))[1]]
+for (codetype, all_ssa) in Any[
+        (code_typed(f18679, ())[1], true),
+        (code_typed(g18679, ())[1], false),
+        (code_typed(h18679, ())[1], true),
+        (code_typed(g19348, (typeof((1, 2.0)),))[1], true)]
     # make sure none of the slottypes are left as Core.Compiler.Const objects
     code = codetype[1]
-    @test all(x->isa(x, Type), code.slottypes)
+    @test all(x -> isa(x, Type) || isa(x, Const), code.slottypes)
     local notconst(@nospecialize(other)) = true
     notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
     function notconst(expr::Expr)
-        @test isa(expr.typ, Type)
         for a in expr.args
             notconst(a)
         end
     end
-    for e in code.code
+    local i
+    for i = 1:length(code.code)
+        e = code.code[i]
         notconst(e)
+        typ = code.ssavaluetypes[i]
+        typ isa Core.Compiler.MaybeUndef && (typ = typ.typ)
+        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
     end
-    test_inferred_static(code)
+    test_inferred_static(codetype, all_ssa)
 end
 @test f18679() === ()
 @test_throws UndefVarError(:any_undef_global) g18679()
 @test h18679() === nothing
 
 
-# issue #5575
-f5575() = zeros(Type[Float64][1], 1)
+# issue #5575: inference with abstract types on a reasonably complex method tree
+zeros5575(::Type{T}, dims::Tuple{Vararg{Any,N}}) where {T,N} = Array{T,N}(dims)
+zeros5575(dims::Tuple) = zeros5575(Float64, dims)
+zeros5575(::Type{T}, dims...) where {T} = zeros5575(T, dims)
+zeros5575(a::AbstractArray) = zeros5575(a, Float64)
+zeros5575(a::AbstractArray, ::Type{T}) where {T} = zeros5575(a, T, size(a))
+zeros5575(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} = zeros5575(T, dims)
+zeros5575(a::AbstractArray, ::Type{T}, dims...) where {T} = zeros5575(T, dims)
+zeros5575(dims...) = zeros5575(dims)
+f5575() = zeros5575(Type[Float64][1], 1)
 @test Base.return_types(f5575, ())[1] == Vector
+
+g5575() = zeros(Type[Float64][1], 1)
+@test_broken Base.return_types(g5575, ())[1] == Vector # This should be fixed by removing deprecations
+
 
 # make sure Tuple{unknown} handles the possibility that `unknown` is a Vararg
 function maybe_vararg_tuple_1()
@@ -877,11 +937,12 @@ let f, m
     f() = 0
     m = first(methods(f))
     m.source = Base.uncompressed_ast(m)::CodeInfo
-    m.source.ssavaluetypes = 2
+    m.source.ssavaluetypes = 3
+    m.source.codelocs = Int32[1, 1, 1]
     m.source.code = Any[
-        Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
-        Expr(:(=), SSAValue(1), Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0))),
-        Expr(:return, SSAValue(1))
+        Expr(:call, GlobalRef(Core, :svec), 1, 2, 3),
+        Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(1)),
+        Expr(:return, SSAValue(2))
     ]
     @test @inferred(f()) == 6
 end
@@ -1031,9 +1092,9 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
     if Base.JLOptions().code_coverage == 0
-        @test linfo.jlcall_api == 2
+        @test Core.Compiler.invoke_api(linfo) == 2
     end
-    if linfo.jlcall_api == 2
+    if Core.Compiler.invoke_api(linfo) == 2
         @test linfo.inferred_const == val
         return
     end
@@ -1045,8 +1106,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
         if isa(ex, LineNumberNode)
             continue
         elseif isa(ex, Expr)
-            ex = ex::Expr
-            if Core.Compiler.is_meta_expr(ex)
+            if Core.Compiler.is_meta_expr_head(ex.head)
                 continue
             elseif ex.head === :return
                 # multiple returns
@@ -1074,7 +1134,7 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                     farg = typeof(getfield(farg.mod, farg.name))
                 end
             elseif isa(farg, Core.SSAValue)
-                farg = code.ssavaluetypes[farg.id + 1]
+                farg = Core.Compiler.widenconst(code.ssavaluetypes[farg.id])
             else
                 farg = typeof(farg)
             end
@@ -1298,73 +1358,118 @@ function _generated_stub(gen::Symbol, args::Vector{Any}, params::Vector{Any}, li
     return Expr(:meta, :generated, stub)
 end
 
-f24852_kernel(x, y) = x * y
+f24852_kernel1(x, y::Tuple) = x * y[1][1][1]
+f24852_kernel2(x, y::Tuple) = f24852_kernel1(x, (y,))
+f24852_kernel3(x, y::Tuple) = f24852_kernel2(x, (y,))
+f24852_kernel(x, y::Number) = f24852_kernel3(x, (y,))
 
-function f24852_kernel_cinfo(x, y)
-    sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f24852_kernel),x,y}, -1, typemax(UInt))[1]
+function f24852_kernel_cinfo(fsig::Type)
+    world = typemax(UInt) # FIXME
+    sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
+    isdefined(method, :source) || return (nothing, :(f(x, y)))
     code_info = Base.uncompressed_ast(method)
-    body = Expr(:block, code_info.code...)
-    Base.Core.Compiler.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
+    Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 1, 0, :propagate)
+    if startswith(String(method.name), "f24852")
+        for a in code_info.code
+            if a isa Expr && a.head == :(=)
+                a = a.args[2]
+            end
+            if a isa Expr && length(a.args) === 3 && a.head === :call
+                pushfirst!(a.args, Core.SlotNumber(1))
+            end
+        end
+    end
+    pushfirst!(code_info.slotnames, Symbol("#self#"))
+    pushfirst!(code_info.slotflags, 0x00)
     return method, code_info
 end
 
-function f24852_gen_cinfo_uninflated(X, Y, f, x, y)
-    _, code_info = f24852_kernel_cinfo(x, y)
+function f24852_gen_cinfo_uninflated(X, Y, _, f, x, y)
+    _, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
     return code_info
 end
 
-function f24852_gen_cinfo_inflated(X, Y, f, x, y)
-    method, code_info = f24852_kernel_cinfo(x, y)
-    code_info.signature_for_inference_heuristics = Core.Compiler.svec(f, (x, y), typemax(UInt))
+function f24852_gen_cinfo_inflated(X, Y, _, f, x, y)
+    method, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
+    code_info.method_for_inference_limit_heuristics = method
     return code_info
 end
 
-function f24852_gen_expr(X, Y, f, x, y)
-    return :(f24852_kernel(x::$X, y::$Y))
+function f24852_gen_expr(X, Y, _, f, x, y) # deparse f(x::X, y::Y) where {X, Y}
+    if f === typeof(f24852_kernel)
+        f2 = :f24852_kernel3
+    elseif f === typeof(f24852_kernel3)
+        f2 = :f24852_kernel2
+    elseif f === typeof(f24852_kernel2)
+        f2 = :f24852_kernel1
+    elseif f === typeof(f24852_kernel1)
+        return :((x::$X) * (y::$Y)[1][1][1])
+    else
+        return :(error(repr(f)))
+    end
+    return :(f24852_late_expr($f2, x::$X, (y::$Y,)))
 end
 
 @eval begin
-    function f24852_late_expr(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:f24852_late_expr, :x, :y],
+    function f24852_late_expr(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_late_inflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:f24852_late_inflated, :x, :y],
+    function f24852_late_inflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_late_uninflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:f24852_late_uninflated, :x, :y],
+    function f24852_late_uninflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
 end
 
 @eval begin
-    function f24852_early_expr(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:f24852_early_expr, :x, :y],
+    function f24852_early_expr(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_early_inflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:f24852_early_inflated, :x, :y],
+    function f24852_early_inflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
-    function f24852_early_uninflated(x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:f24852_early_uninflated, :x, :y],
+    function f24852_early_uninflated(f, x::X, y::Y) where {X, Y}
+        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
                           Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated_only))
+        #= no body =#
     end
 end
 
 x, y = rand(), rand()
 result = f24852_kernel(x, y)
 
-@test result === f24852_late_expr(x, y)
-@test result === f24852_late_uninflated(x, y)
-@test result === f24852_late_inflated(x, y)
+@test result === f24852_late_expr(f24852_kernel, x, y)
+@test Base.return_types(f24852_late_expr, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === f24852_late_uninflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === f24852_late_uninflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
 
-@test result === f24852_early_expr(x, y)
-@test result === f24852_early_uninflated(x, y)
-@test result === f24852_early_inflated(x, y)
+@test result === f24852_early_expr(f24852_kernel, x, y)
+@test Base.return_types(f24852_early_expr, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === f24852_early_uninflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_early_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
+@test result === @inferred f24852_early_inflated(f24852_kernel, x, y)
+@test Base.return_types(f24852_early_inflated, typeof((f24852_kernel, x, y))) == Any[Float64]
 
-# TODO: test that `expand_early = true` + inflated `signature_for_inference_heuristics`
+# TODO: test that `expand_early = true` + inflated `method_for_inference_limit_heuristics`
 # can be used to tighten up some inference result.
 
 # Test that Conditional doesn't get widened to Bool too quickly
@@ -1382,13 +1487,11 @@ i = 1
 while !Meta.isexpr(opt25261[i], :gotoifnot); global i += 1; end
 foundslot = false
 for expr25261 in opt25261[i:end]
-    Meta.isexpr(expr25261, :(=)) || continue
-    isa(expr25261.args[2], Union{GlobalRef, Expr}) && continue
-    # This should be the assignment to the SSAValue into the getfield
-    # call - make sure it's a TypedSlot
-    @test isa(expr25261.args[2], TypedSlot)
-    @test expr25261.args[2].typ === Tuple{Int, Int}
-    global foundslot = true
+    if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
+        # This should be the assignment to the SSAValue into the getfield
+        # call - make sure it's a TypedSlot
+        global foundslot = true
+    end
 end
 @test foundslot
 
@@ -1413,6 +1516,7 @@ function h25579(g)
     try
         h = -1.25
         error("continue at catch block")
+    catch
     end
     return t ? typeof(h) : typeof(h)
 end
@@ -1423,3 +1527,159 @@ f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
 g26172(::Val{0}) = ()
 g26172(v) = (nothing, g26172(f26172(v))...)
 @test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)
+
+# 26826 constant prop through varargs
+
+struct Foo26826{A,B}
+    a::A
+    b::B
+end
+
+x26826 = rand()
+
+apply26826(f, args...) = f(args...)
+
+# We use getproperty to drive these tests because it requires constant
+# propagation in order to lower to a well-inferred getfield call.
+f26826(x) = apply26826(Base.getproperty, Foo26826(1, x), :b)
+
+@test @inferred(f26826(x26826)) === x26826
+
+getfield26826(x, args...) = Base.getproperty(x, getfield(args, 2))
+
+g26826(x) = getfield26826(x, :a, :b)
+
+@test @inferred(g26826(Foo26826(1, x26826))) === x26826
+
+# Somewhere in here should be a single getfield call, and it should be inferred as Float64.
+# If this test is broken (especially if inference is getting a correct, but loose result,
+# like a Union) then it's potentially an indication that the optimizer isn't hitting the
+# InferenceResult cache properly for varargs methods.
+typed_code = Core.Compiler.code_typed(f26826, (Float64,))[1].first
+found_well_typed_getfield_call = false
+let i
+    for i = 1:length(typed_code.code)
+        stmt = typed_code.code[i]
+        rhs = Meta.isexpr(stmt, :(=)) ? stmt.args[2] : stmt
+        if Meta.isexpr(rhs, :call) && rhs.args[1] == GlobalRef(Base, :getfield) && typed_code.ssavaluetypes[i] === Float64
+            global found_well_typed_getfield_call = true
+        end
+    end
+end
+
+@test found_well_typed_getfield_call
+
+# 27059 fix fieldtype vararg and union handling
+
+f27059(::Type{T}) where T = i -> fieldtype(T, i)
+T27059 = Tuple{Float64,Vararg{Float32}}
+@test f27059(T27059)(2) === fieldtype(T27059, 2) === Float32
+@test f27059(Union{T27059,Tuple{Vararg{Symbol}}})(2) === Union{Float32,Symbol}
+@test fieldtype(Union{Tuple{Int,Symbol},Tuple{Float64,String}}, 1) === Union{Int,Float64}
+@test fieldtype(Union{Tuple{Int,Symbol},Tuple{Float64,String}}, 2) === Union{Symbol,String}
+@test fieldtype(Union{Tuple{T,Symbol},Tuple{S,String}} where {T<:Number,S<:T}, 1) === Union{S,T} where {T<:Number,S<:T}
+
+# PR #27068, improve `ifelse` inference
+
+@noinline _f_ifelse_isa_() = rand(Bool) ? 1 : nothing
+function _g_ifelse_isa_()
+    x = _f_ifelse_isa_()
+    ifelse(isa(x, Nothing), 1, x)
+end
+@test Base.return_types(_g_ifelse_isa_, ()) == [Int]
+
+# Equivalence of Const(T.instance) and T for singleton types
+@test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
+
+# Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union}}) == Type{Union{}}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Int}) == Union{}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) == Union{}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Type
+
+# PR 27351, make sure optimized type intersection for method invalidation handles typevars
+
+abstract type AbstractT27351 end
+struct T27351 <: AbstractT27351 end
+for i27351 in 1:15
+    @eval f27351(::Val{$i27351}, ::AbstractT27351, ::AbstractT27351) = $i27351
+end
+f27351(::T, ::T27351, ::T27351) where {T} = 16
+@test_throws MethodError f27351(Val(1), T27351(), T27351())
+
+# Domsort stress test (from JLD2.jl) - Issue #27625
+function JLD2_hash(k::Ptr{UInt8}, n::Integer=length(k), initval::UInt32=UInt32(0))
+    # Set up the internal state
+    a = b = c = 0xdeadbeef + convert(UInt32, n) + initval
+
+    ptr = k
+    @inbounds while n > 12
+        a += unsafe_load(convert(Ptr{UInt32}, ptr))
+        ptr += 4
+        b += unsafe_load(convert(Ptr{UInt32}, ptr))
+        ptr += 4
+        c += unsafe_load(convert(Ptr{UInt32}, ptr))
+        (a, b, c) = mix(a, b, c)
+        ptr += 4
+        n -= 12
+    end
+    @inbounds if n > 0
+        if n == 12
+            c += unsafe_load(convert(Ptr{UInt32}, ptr+8))
+            @goto n8
+        elseif n == 11
+            c += UInt32(unsafe_load(Ptr{UInt8}(ptr+10)))<<16
+            @goto n10
+        elseif n == 10
+            @label n10
+            c += UInt32(unsafe_load(Ptr{UInt8}(ptr+9)))<<8
+            @goto n9
+        elseif n == 9
+            @label n9
+            c += unsafe_load(ptr+8)
+            @goto n8
+        elseif n == 8
+            @label n8
+            b += unsafe_load(convert(Ptr{UInt32}, ptr+4))
+            @goto n4
+        elseif n == 7
+            @label n7
+            b += UInt32(unsafe_load(Ptr{UInt8}(ptr+6)))<<16
+            @goto n6
+        elseif n == 6
+            @label n6
+            b += UInt32(unsafe_load(Ptr{UInt8}(ptr+5)))<<8
+            @goto n5
+        elseif n == 5
+            @label n5
+            b += unsafe_load(ptr+4)
+            @goto n4
+        elseif n == 4
+            @label n4
+            a += unsafe_load(convert(Ptr{UInt32}, ptr))
+        elseif n == 3
+            @label n3
+            a += UInt32(unsafe_load(Ptr{UInt8}(ptr+2)))<<16
+            @goto n2
+        elseif n == 2
+            @label n2
+            a += UInt32(unsafe_load(Ptr{UInt8}(ptr+1)))<<8
+            @goto n1
+        elseif n == 1
+            @label n1
+            a += unsafe_load(ptr)
+        end
+        c = a + b + c
+    end
+    c
+end
+@test isa(code_typed(JLD2_hash, Tuple{Ptr{UInt8}, Int, UInt32}), Array)
+
+# issue #19668
+struct Foo19668
+    Foo19668(; kwargs...) = new()
+end
+@test Base.return_types(Foo19668, ()) == [Foo19668]

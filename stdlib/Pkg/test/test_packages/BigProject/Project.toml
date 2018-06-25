@@ -1,0 +1,9 @@
+authors = ["Some One <someone@email.com>"]
+name = "BigProject"
+uuid = "da7e1942-2519-11e8-2822-f5508ce758f0"
+version = "0.1.0"
+
+[deps]
+
+[targets.test.deps]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

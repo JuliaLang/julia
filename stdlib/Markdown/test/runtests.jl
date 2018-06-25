@@ -226,11 +226,11 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 # Terminal (markdown) output
 
 # multiple whitespace is ignored
-@test sprint(term, md"a  b") == "  a b\n"
-@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)\n"
-@test sprint(term, md"[x](@ref)") == "  x\n"
-@test sprint(term, md"[x](@ref something)") == "  x\n"
-@test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)\n"
+@test sprint(term, md"a  b") == "  a b"
+@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)"
+@test sprint(term, md"[x](@ref)") == "  x"
+@test sprint(term, md"[x](@ref something)") == "  x"
+@test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
 
 # enumeration is normalized
 let doc = Markdown.parse(
@@ -312,7 +312,7 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n      \n    •    list2\n      \n"
+        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n\n    •    list2"
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -1066,14 +1066,18 @@ let text =
     end
 end
 
-# different output depending on whether color is requested:
+# issue 20225, check this can print
+@test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
+
+# different output depending on whether color is requested:	+# issue 20225, check this can print
 let buf = IOBuffer()
+    @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
     show(buf, "text/plain", md"*emph*")
-    @test String(take!(buf)) == "  emph\n"
+    @test String(take!(buf)) == "  emph"
     show(buf, "text/markdown", md"*emph*")
     @test String(take!(buf)) == "*emph*\n"
     show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
-    @test String(take!(buf)) == "  \e[4memph\e[24m\n"
+    @test String(take!(buf)) == "  \e[4memph\e[24m"
 end
 
 # table rendering with term #25213
@@ -1081,7 +1085,7 @@ t = """
     a   |   b
     :-- | --:
     1   |   2"""
-@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2\n"
+@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2"
 
 # test Base.copy
 let
@@ -1095,4 +1099,12 @@ let
     @test !haskey(md.meta, :foo)
     md.meta[:foo] = 42
     @test !haskey(md′.meta, :foo)
+end
+
+let
+    v = Markdown.parse("foo\n\n- 1\n- 2\n\n- 3\n\n\n- 1\n- 2\n\nbar\n\n- 1\n\n  2\n- 4\n\nbuz\n\n- 1\n- 2\n  3\n- 4\n")
+    @test v.content[2].loose
+    @test !v.content[3].loose
+    @test v.content[5].loose
+    @test !v.content[7].loose
 end

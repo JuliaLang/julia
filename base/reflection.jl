@@ -115,6 +115,8 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
+_fieldnames(@nospecialize t) = isdefined(t, :names) ? t.names : t.name.names
+
 """
     fieldname(x::DataType, i::Integer)
 
@@ -130,7 +132,7 @@ julia> fieldname(Rational, 2)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    names = isdefined(t, :names) ? t.names : t.name.names
+    names = _fieldnames(t)
     n_fields = length(names)
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
@@ -153,7 +155,8 @@ julia> fieldnames(Rational)
 (:num, :den)
 ```
 """
-fieldnames(t::DataType) = ntuple(i -> fieldname(t, i), fieldcount(t))
+fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
+                           (_fieldnames(t)...,))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
@@ -352,11 +355,11 @@ function isprimitivetype(@nospecialize(t::Type))
 end
 
 """
-    isbits(T)
+    isbitstype(T)
 
 Return `true` if type `T` is a "plain data" type,
 meaning it is immutable and contains no references to other values,
-only `primitive` types and other `isbits` types.
+only `primitive` types and other `isbitstype` types.
 Typical examples are numeric types such as [`UInt8`](@ref),
 [`Float64`](@ref), and [`Complex{Float64}`](@ref).
 This category of types is significant since they are valid as type parameters,
@@ -365,14 +368,20 @@ and have a defined layout that is compatible with C.
 
 # Examples
 ```jldoctest
-julia> isbits(Complex{Float64})
+julia> isbitstype(Complex{Float64})
 true
 
-julia> isbits(Complex)
+julia> isbitstype(Complex)
 false
 ```
 """
-isbits(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+
+"""
+    isbits(x)
+
+Return `true` if `x` is an instance of an `isbitstype` type.
+"""
 isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
 
 """
@@ -383,6 +392,18 @@ meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 """
 isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isdispatchtuple)
+
+iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
+has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
+
+# equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
+# and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
+const _TYPE_NAME = Type.body.name
+function isdispatchelem(@nospecialize v)
+    return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
+        (isa(v, DataType) && v.name === _TYPE_NAME && !has_free_typevars(v)) # isType(v)
+end
 
 """
     isconcretetype(T)
@@ -467,7 +488,6 @@ Compute a type that contains the intersection of `T` and `S`. Usually this will 
 smallest such type or one close to it.
 """
 typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
-typeseq(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; a<:b && b<:a)
 
 """
     fieldoffset(type, i)
@@ -543,6 +563,13 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
+argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
+function argument_mt(@nospecialize t)
+    dt = argument_datatype(t)
+    (dt === nothing || !isdefined(dt.name, :mt)) && return nothing
+    dt.name.mt
+end
+
 """
     fieldcount(t::Type)
 
@@ -551,7 +578,7 @@ An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
     if t isa UnionAll || t isa Union
-        t = ccall(:jl_argument_datatype, Any, (Any,), t)
+        t = argument_datatype(t)
         if t === nothing
             error("type does not have a definite number of fields")
         end
@@ -682,9 +709,8 @@ end
 
 length(m::MethodList) = length(m.ms)
 isempty(m::MethodList) = isempty(m.ms)
-start(m::MethodList) = start(m.ms)
-done(m::MethodList, s) = done(m.ms, s)
-next(m::MethodList, s) = next(m.ms, s)
+iterate(m::MethodList, s...) = iterate(m.ms, s...)
+eltype(::Type{MethodList}) = Method
 
 function MethodList(mt::Core.MethodTable)
     ms = Method[]
@@ -831,9 +857,9 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
     params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        (_, code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
+        (code, ty) = Core.Compiler.typeinf_code(meth, x[1], x[2], optimize, params)
         code === nothing && error("inference not successful") # inference disabled?
-        push!(asts, uncompressed_ast(meth, code) => ty)
+        push!(asts, code => ty)
     end
     return asts
 end
@@ -849,7 +875,7 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     params = Core.Compiler.Params(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], true, params)
+        ty = Core.Compiler.typeinf_type(meth, x[1], x[2], params)
         ty === nothing && error("inference not successful") # inference disabled?
         push!(rt, ty)
     end

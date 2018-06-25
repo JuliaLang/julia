@@ -6,20 +6,21 @@ module InteractiveUtils
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, peakflops, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native
+    @code_typed, @code_lowered, @code_llvm, @code_native, Pkg, clipboard
 
 import Base.Docs.apropos
 
-using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_type, show_unquoted, summarysize,
+using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
     to_tuple_type, signature_type, format_bytes
 
 using Markdown
 using LinearAlgebra  # for peakflops
-import Pkg
+import Pkg, OldPkg
 
 include("editless.jl")
 include("codeview.jl")
 include("macros.jl")
+include("clipboard.jl")
 
 """
     varinfo(m::Module=Main, pattern::Regex=r"")
@@ -68,10 +69,10 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     if verbose
         lsb = ""
         if Sys.islinux()
-            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)) end
+            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)); catch; end
         end
         if Sys.iswindows()
-            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)) end
+            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)); catch; end
         end
         if !isempty(lsb)
             println(io, "      ", lsb)
@@ -95,7 +96,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
 
     if verbose
         println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io, "  Uptime: $(Sys.uptime()) sec") end
+        try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
         print(io, "  Load Avg: ")
         Base.print_matrix(io, Sys.loadavg()')
         println(io)
@@ -104,26 +105,23 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
 
-    println(io, "Environment:")
-    for (k,v) in ENV
-        if occursin(r"JULIA", String(k))
-            println(io, "  $(k) = $(v)")
-        end
-    end
-    if verbose
-        for (k,v) in ENV
-            if occursin(r"PATH|FLAG|^TERM$|HOME", String(k))
-                println(io, "  $(k) = $(v)")
-            end
+    env_strs = [String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"JULIA", k)];
+                (verbose ?
+                 String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"PATH|FLAG|^TERM$|HOME", k)] :
+                 [])]
+    if !isempty(env_strs)
+        println(io, "Environment:")
+        for str in env_strs
+            println(io, str)
         end
     end
     if packages || verbose
         println(io, "Packages:")
-        println(io, "  Package Directory: ", Pkg.dir())
+        println(io, "  Package Directory: ", OldPkg.dir())
         print(io, "  Package Status:")
-        if isdir(Pkg.dir())
+        if isdir(OldPkg.dir())
             println(io, "")
-            Pkg.status(io)
+            OldPkg.status(io)
         else
             println(io, " no packages installed")
         end

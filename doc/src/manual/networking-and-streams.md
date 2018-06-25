@@ -186,9 +186,13 @@ julia> open("hello.txt") do f
 
 ## A simple TCP example
 
-Let's jump right in with a simple example involving TCP sockets. Let's first create a simple server:
+Let's jump right in with a simple example involving TCP sockets.
+This functionality is in a standard library package called `Sockets`.
+Let's first create a simple server:
 
 ```julia-repl
+julia> using Sockets
+
 julia> @async begin
            server = listen(2000)
            while true
@@ -266,7 +270,7 @@ julia> @async begin
            while true
                sock = accept(server)
                @async while isopen(sock)
-                   write(sock,readline(sock))
+                   write(sock, readline(sock, keep=true))
                end
            end
        end
@@ -275,8 +279,8 @@ Task (runnable) @0x00007fd31dc12e60
 julia> clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
-julia> @async while true
-           write(stdout,readline(clientside))
+julia> @async while isopen(clientside)
+           write(stdout, readline(clientside, keep=true))
        end
 Task (runnable) @0x00007fd31dc11870
 

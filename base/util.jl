@@ -296,6 +296,70 @@ end
 
 ## printing with color ##
 
+const text_colors = AnyDict(
+    :black         => "\033[30m",
+    :red           => "\033[31m",
+    :green         => "\033[32m",
+    :yellow        => "\033[33m",
+    :blue          => "\033[34m",
+    :magenta       => "\033[35m",
+    :cyan          => "\033[36m",
+    :white         => "\033[37m",
+    :light_black   => "\033[90m", # gray
+    :light_red     => "\033[91m",
+    :light_green   => "\033[92m",
+    :light_yellow  => "\033[93m",
+    :light_blue    => "\033[94m",
+    :light_magenta => "\033[95m",
+    :light_cyan    => "\033[96m",
+    :normal        => "\033[0m",
+    :default       => "\033[39m",
+    :bold          => "\033[1m",
+    :underline     => "\033[4m",
+    :blink         => "\033[5m",
+    :reverse       => "\033[7m",
+    :hidden        => "\033[8m",
+    :nothing       => "",
+)
+
+for i in 0:255
+    text_colors[i] = "\033[38;5;$(i)m"
+end
+
+const disable_text_style = AnyDict(
+    :bold      => "\033[22m",
+    :underline => "\033[24m",
+    :blink     => "\033[25m",
+    :reverse   => "\033[27m",
+    :hidden    => "\033[28m",
+    :normal    => "",
+    :default   => "",
+    :nothing   => "",
+)
+
+# Create a docstring with an automatically generated list
+# of colors.
+available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
+const possible_formatting_symbols = [:normal, :bold, :default]
+available_text_colors = cat(
+    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
+    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
+    dims=1)
+
+const available_text_colors_docstring =
+    string(join([string("`:", key,"`")
+                 for key in available_text_colors], ",\n", ", or \n"))
+
+"""Dictionary of color codes for the terminal.
+
+Available colors are: $available_text_colors_docstring as well as the integers 0 to 255 inclusive.
+
+The color `:default` will print text in the default color while the color `:normal`
+will print text with all text properties (like boldness) reset.
+Printing with the color `:nothing` will print the string without modifications.
+"""
+text_colors
+
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
     iscolor = get(io, :color, false)
@@ -336,7 +400,7 @@ printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) 
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
 
-function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
@@ -377,68 +441,67 @@ will always be called.
 """
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
-securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
+"""
+    Base.getpass(message::AbstractString) -> `Base.SecretBuffer`
+
+Display a message and wait for the user to input a secret, returning an `IO`
+object containing the secret.
+
+Note that on Windows, the secret might be displayed as it is typed; see
+`Base.winprompt` for securely retrieving username/password pairs from a
+graphical interface.
+"""
+function getpass end
+
 if Sys.iswindows()
 function getpass(prompt::AbstractString)
-    print(prompt)
+    print(prompt, ": ")
     flush(stdout)
-    p = Vector{UInt8}(undef, 128) # mimic Unix getpass in ignoring more than 128-char passwords
-                          # (also avoids any potential memory copies arising from push!)
-    try
-        plen = 0
-        while true
-            c = ccall(:_getch, UInt8, ())
-            if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
-                break # EOF or return
-            elseif c == 0x00 || c == 0xe0
-                ccall(:_getch, UInt8, ()) # ignore function/arrow keys
-            elseif c == UInt8('\b') && plen > 0
-                plen -= 1 # delete last character on backspace
-            elseif !iscntrl(Char(c)) && plen < 128
-                p[plen += 1] = c
-            end
+    s = SecretBuffer()
+    plen = 0
+    while true
+        c = UInt8(ccall(:_getch, Cint, ()))
+        if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
+            break # EOF or return
+        elseif c == 0x00 || c == 0xe0
+            ccall(:_getch, Cint, ()) # ignore function/arrow keys
+        elseif c == UInt8('\b') && plen > 0
+            plen -= 1 # delete last character on backspace
+        elseif !iscntrl(Char(c)) && plen < 128
+            write(s, c)
         end
-        return unsafe_string(pointer(p), plen) # use unsafe_string rather than String(p[1:plen])
-                                               # to be absolutely certain we never make an extra copy
-    finally
-        securezero!(p)
     end
-
-    return ""
+    return  s
 end
 else
-getpass(prompt::AbstractString) = unsafe_string(ccall(:getpass, Cstring, (Cstring,), prompt))
+function getpass(prompt::AbstractString)
+    msg = string(prompt, ": ")
+    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
+end
 end
 
 """
-    prompt(message; default="", password=false) -> Union{String, Nothing}
+    prompt(message; default="") -> Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
-then the user can enter just a newline character to select the `default`. Alternatively,
-when the `password` keyword is `true` the characters entered by the user will not be
-displayed.
+then the user can enter just a newline character to select the `default`.
+
+See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
-function prompt(message::AbstractString; default::AbstractString="", password::Bool=false)
-    if Sys.iswindows() && password
-        error("Command line prompt not supported for password entry on windows. Use `Base.winprompt` instead")
-    end
-    msg = !isempty(default) ? "$message [$default]:" : "$message:"
-    if password
-        # `getpass` automatically chomps. We cannot tell an EOF from a '\n'.
-        uinput = getpass(msg)
-    else
-        print(msg)
-        uinput = readline(keep=true)
-        isempty(uinput) && return nothing  # Encountered an EOF
-        uinput = chomp(uinput)
-    end
+function prompt(message::AbstractString; default::AbstractString="")
+    msg = !isempty(default) ? "$message [$default]: " : "$message: "
+    print(msg)
+    uinput = readline(keep=true)
+    isempty(uinput) && return nothing  # Encountered an EOF
+    uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
 end
+
 
 # Windows authentication prompt
 if Sys.iswindows()
@@ -519,7 +582,7 @@ if Sys.iswindows()
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]
         result = (String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
-                  String(transcode(UInt8, passbuf_)))
+                  SecretBuffer!(transcode(UInt8, passbuf_)))
         securezero!(passbuf_)
         securezero!(passbuf)
 
@@ -679,7 +742,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$ncores"
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()

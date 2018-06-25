@@ -37,11 +37,8 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
 
         copy(A::$t) = $t(copy(A.data))
 
-        broadcast(::typeof(big), A::$t) = $t(big.(A.data))
-
         real(A::$t{<:Real}) = A
         real(A::$t{<:Complex}) = (B = real(A.data); $t(B))
-        broadcast(::typeof(abs), A::$t) = $t(abs.(A.data))
     end
 end
 
@@ -1955,7 +1952,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         ArgumentError("p must be a real number in (-1,1), got $p")
     end
 
-    normA0 = norm(A0, 1)
+    normA0 = opnorm(A0, 1)
     rmul!(A0, 1/normA0)
 
     theta = [1.53e-5, 2.25e-3, 1.92e-2, 6.08e-2, 1.25e-1, 2.03e-1, 2.84e-1]
@@ -2053,8 +2050,8 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     AmI = A - I
-    d2 = sqrt(norm(AmI^2, 1))
-    d3 = cbrt(norm(AmI^3, 1))
+    d2 = sqrt(opnorm(AmI^2, 1))
+    d3 = cbrt(opnorm(AmI^3, 1))
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
@@ -2065,9 +2062,9 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     while !foundm
         more = false
         if s > s0
-            d3 = cbrt(norm(AmI^3, 1))
+            d3 = cbrt(opnorm(AmI^3, 1))
         end
-        d4 = norm(AmI^4, 1)^(1/4)
+        d4 = opnorm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
             local j
@@ -2086,7 +2083,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         end
 
         if !more
-            d5 = norm(AmI^5, 1)^(1/5)
+            d5 = opnorm(AmI^5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
@@ -2159,7 +2156,7 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         R[i,i+1] = i / sqrt((2 * i)^2 - 1)
         R[i+1,i] = R[i,i+1]
     end
-    x,V = eig(R)
+    x,V = eigen(R)
     w = Vector{Float64}(undef, m)
     for i = 1:m
         x[i] = (x[i] + 1) / 2
@@ -2253,8 +2250,8 @@ function invsquaring(A0::UpperTriangular, theta)
     end
 
     AmI = A - I
-    d2 = sqrt(norm(AmI^2, 1))
-    d3 = cbrt(norm(AmI^3, 1))
+    d2 = sqrt(opnorm(AmI^2, 1))
+    d3 = cbrt(opnorm(AmI^3, 1))
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
@@ -2265,9 +2262,9 @@ function invsquaring(A0::UpperTriangular, theta)
     while !foundm
         more = false
         if s > s0
-            d3 = cbrt(norm(AmI^3, 1))
+            d3 = cbrt(opnorm(AmI^3, 1))
         end
-        d4 = norm(AmI^4, 1)^(1/4)
+        d4 = opnorm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
             local j
@@ -2290,7 +2287,7 @@ function invsquaring(A0::UpperTriangular, theta)
         end
 
         if !more
-            d5 = norm(AmI^5, 1)^(1/5)
+            d5 = opnorm(AmI^5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
@@ -2435,10 +2432,10 @@ function logabsdet(A::Union{UpperTriangular{T},LowerTriangular{T}}) where T
     return abs_det, sgn
 end
 
-eigfact(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
+eigen(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 
 # Generic singular systems
-for func in (:svd, :svdfact, :svdfact!, :svdvals)
+for func in (:svd, :svd!, :svdvals)
     @eval begin
         ($func)(A::AbstractTriangular) = ($func)(copyto!(similar(parent(A)), A))
     end
@@ -2446,20 +2443,20 @@ end
 
 factorize(A::AbstractTriangular) = A
 
-# dismabiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
+# disambiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
 *(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Ajd of AbstractTriangular)
+# disambiguation methods: *(Adj/Trans of AbstractTriangular, Trans/Ajd of AbstractTriangular)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractTriangular}) = copy(A) * B
-# dismabiguation methods: *(Adj/Trans of AbstractTriangular, Adj/Trans of AbsVec or AbsMat)
+# disambiguation methods: *(Adj/Trans of AbstractTriangular, Adj/Trans of AbsVec or AbsMat)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVector}) = transpose(transpose(B) * transpose(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractVector}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
-# dismabiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj/Trans of AbstractTriangular)
+# disambiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj/Trans of AbstractTriangular)
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:AbstractTriangular}) = adjoint(adjoint(B) * adjoint(A))
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:AbstractTriangular}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractTriangular}) = transpose(transpose(B) * transpose(A))

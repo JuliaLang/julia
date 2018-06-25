@@ -8,6 +8,7 @@
 Subtype operator: returns `true` if and only if all values of type `T1` are
 also of type `T2`.
 
+# Examples
 ```jldoctest
 julia> Float64 <: AbstractFloat
 true
@@ -33,6 +34,7 @@ const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 Return the supertype of DataType `T`.
 
+# Examples
 ```jldoctest
 julia> supertype(Int32)
 Signed
@@ -150,7 +152,7 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    typeseq(T, S)
+    T<:S && S<:T
 end
 function !=(T::Type, S::Type)
     @_pure_meta
@@ -227,7 +229,7 @@ julia> a ≢ a
 false
 ```
 """
-!==(x, y) = !(x === y)
+!==(@nospecialize(x), @nospecialize(y)) = !(x === y)
 const ≢ = !==
 
 """
@@ -242,6 +244,7 @@ New numeric types with a canonical partial order should implement this function 
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
 (x < y) | (x == y)
+
 # Examples
 ```jldoctest
 julia> 'a' < 'b'
@@ -348,7 +351,7 @@ julia> ifelse(1 > 2, 1, 2)
 2
 ```
 """
-ifelse(c::Bool, x, y) = select_value(c, x, y)
+ifelse
 
 """
     cmp(x,y)
@@ -804,21 +807,38 @@ function which computes the boolean negation of `f`.
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
-julia> filter(isalpha, str)
+julia> filter(isletter, str)
 "εδxyδfxfyε"
 
-julia> filter(!isalpha, str)
+julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
 """
 !(f::Function) = (x...)->!f(x...)
 
 """
+    Fix1(f, x)
+
+A type representing a partially-applied version of the two-argument function
+`f`, with the first argument fixed to the value "x". In other words,
+`Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+"""
+struct Fix1{F,T} <: Function
+    f::F
+    x::T
+
+    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+end
+
+(f::Fix1)(y) = f.f(f.x, y)
+
+"""
     Fix2(f, x)
 
-A type representing a partially-applied version of function `f`, with the second
-argument fixed to the value "x".
-In other words, `Fix2(f, x)` behaves similarly to `y->f(y, x)`.
+A type representing a partially-applied version of the two-argument function
+`f`, with the second argument fixed to the value "x". In other words,
+`Fix2(f, x)` behaves similarly to `y->f(y, x)`.
 """
 struct Fix2{F,T} <: Function
     f::F

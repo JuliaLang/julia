@@ -179,6 +179,13 @@
                               ""))
                         "")
                     (string.rep "    " ilvl) "end"))
+	   ((do)
+	    (let ((call (cadr e))
+		  (args (cdr (cadr (caddr e))))
+		  (body (caddr (caddr e))))
+	      (deparse-block (string (deparse call) " do" (if (null? args) "" " ")
+				     (deparse-arglist args))
+			     (cdr body) ilvl)))
            ((struct)
             (string (if (eq? (cadr e) 'true) "mutable " "")
                     "struct "
@@ -222,7 +229,8 @@
            ((copyast)      (deparse (cadr e)))
            ((quote inert)
             (if (and (symbol? (cadr e))
-                     (not (= (string.char (string (cadr e)) 0) #\=)))
+                     (not (memv (string.char (string (cadr e)) 0)
+                                '(#\= #\:))))
                 (string ":" (deparse (cadr e)))
                 (string ":(" (deparse (cadr e)) ")")))
            (else
@@ -268,8 +276,11 @@
 (define (bad-formal-argument v)
   (error (string #\" (deparse v) #\" " is not a valid function argument name")))
 
+(define (valid-name? s)
+  (not (memq s '(true false ccall cglobal))))
+
 (define (arg-name v)
-  (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
+  (cond ((and (symbol? v) (valid-name? v))
          v)
         ((not (pair? v))
          (bad-formal-argument v))
@@ -445,9 +456,6 @@
 (define (vinfo:set-called! v a)  (set-car! (cddr v) (set-bit (caddr v) 64 a)))
 
 (define var-info-for assq)
-
-(define (assignment? e)
-  (and (pair? e) (eq? (car e) '=)))
 
 (define (assignment-like? e)
   (and (pair? e) (is-prec-assignment? (car e))))
