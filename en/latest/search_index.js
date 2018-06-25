@@ -7397,7 +7397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -19469,7 +19469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Test-specific dependencies",
     "category": "section",
-    "text": "Sometimes one might to want to use some packages only at testing time but not enforce a dependency on them when the package is used. This is possible by adding dependencies to a \"test target\" to the Project file. Here we add the Test standard library as a test-only dependency by adding the following to the Project file:[target.test.deps]\nTest = \"8dfed614-e22c-5e08-85e1-65c5234f0b40\"We can now use Test in the test script and we can see that it gets installed on testing:shell> cat test/runtests.jl\nusing Test\n@test 1 == 1\n\n(HelloWorld) pkg> test\n   Testing HelloWorld\n Resolving package versions...\n  Updating `/var/folders/64/76tk_g152sg6c6t0b4nkn1vw0000gn/T/tmpPzUPPw/Project.toml`\n  [d8327f2a] + HelloWorld v0.1.0 [`~/.julia/dev/Pkg/HelloWorld`]\n  [8dfed614] + Test\n  Updating `/var/folders/64/76tk_g152sg6c6t0b4nkn1vw0000gn/T/tmpPzUPPw/Manifest.toml`\n  [d8327f2a] + HelloWorld v0.1.0 [`~/.julia/dev/Pkg/HelloWorld`]\n   Testing HelloWorld tests passed```"
+    "text": "Sometimes one might want to use some packages only at testing time but not enforce a dependency on them when the package is used. This is possible by adding dependencies to a \"test target\" to the Project file. Here we add the Test standard library as a test-only dependency by adding the following to the Project file:[target.test.deps]\nTest = \"8dfed614-e22c-5e08-85e1-65c5234f0b40\"We can now use Test in the test script and we can see that it gets installed on testing:shell> cat test/runtests.jl\nusing Test\n@test 1 == 1\n\n(HelloWorld) pkg> test\n   Testing HelloWorld\n Resolving package versions...\n  Updating `/var/folders/64/76tk_g152sg6c6t0b4nkn1vw0000gn/T/tmpPzUPPw/Project.toml`\n  [d8327f2a] + HelloWorld v0.1.0 [`~/.julia/dev/Pkg/HelloWorld`]\n  [8dfed614] + Test\n  Updating `/var/folders/64/76tk_g152sg6c6t0b4nkn1vw0000gn/T/tmpPzUPPw/Manifest.toml`\n  [d8327f2a] + HelloWorld v0.1.0 [`~/.julia/dev/Pkg/HelloWorld`]\n   Testing HelloWorld tests passed```"
 },
 
 {
@@ -19509,7 +19509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Precompiling a project",
     "category": "section",
-    "text": "The REPL command precompile can be used to precompile all the dependencies in the project. You can for example do(HelloWorld) pkg> update; precompiledo update the dependencies and then precompile them."
+    "text": "The REPL command precompile can be used to precompile all the dependencies in the project. You can for example do(HelloWorld) pkg> update; precompileto update the dependencies and then precompile them."
 },
 
 {
@@ -19525,7 +19525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Pkg",
     "title": "Using someone else\'s project",
     "category": "section",
-    "text": "Simple clone their project using e.g. git clone, cd to the project directory and call(v0.7) pkg> activate\n\n(SomeProject) pkg> instantiateIf the project contains a manifest, this will install the packages in the same state that is given by that manifest. Otherwise, it will resolve the latest versions of the dependencies compatible with the project."
+    "text": "Simply clone their project using e.g. git clone, cd to the project directory and call(v0.7) pkg> activate\n\n(SomeProject) pkg> instantiateIf the project contains a manifest, this will install the packages in the same state that is given by that manifest. Otherwise, it will resolve the latest versions of the dependencies compatible with the project."
 },
 
 {
