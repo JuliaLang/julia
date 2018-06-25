@@ -638,19 +638,20 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
             if !isa(body, Type) && !isa(body, TypeVar)
                 return Any
             end
-            has_free_typevars(body) || return body
-            if isa(argtypes[2], Const)
-                tv = argtypes[2].val
-            elseif isa(argtypes[2], PartialTypeVar)
-                ptv = argtypes[2]
-                tv = ptv.tv
-                canconst = false
-            else
-                return Any
+            if has_free_typevars(body)
+                if isa(argtypes[2], Const)
+                    tv = argtypes[2].val
+                elseif isa(argtypes[2], PartialTypeVar)
+                    ptv = argtypes[2]
+                    tv = ptv.tv
+                    canconst = false
+                else
+                    return Any
+                end
+                !isa(tv, TypeVar) && return Any
+                body = UnionAll(tv, body)
             end
-            !isa(tv, TypeVar) && return Any
-            theunion = UnionAll(tv, body)
-            ret = canconst ? AbstractEvalConstant(theunion) : Type{theunion}
+            ret = canconst ? AbstractEvalConstant(body) : Type{body}
             return ret
         end
         return Any
