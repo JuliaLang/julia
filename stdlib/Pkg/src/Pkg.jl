@@ -44,7 +44,6 @@ const resolve     = API.resolve
 const status      = Display.status
 const update      = up
 const activate    = API.activate
-const deactivate  = API.deactivate
 
 # legacy CI script support
 import .API: clone, dir

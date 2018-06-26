@@ -550,29 +550,26 @@ end
 
 const ACTIVE_ENV = Ref{Union{String,Nothing}}(nothing)
 
-function _activate(env::Union{String,Nothing})
-    if env === nothing
-        @warn "Current directory is not in a project, nothing activated."
-    else
+function activate(path::Union{String,Nothing}=nothing)
+    if path === nothing # reset to default LOAD_PATH
         if !isempty(LOAD_PATH) && ACTIVE_ENV[] === LOAD_PATH[1]
-            LOAD_PATH[1] = env
-        else
-            # TODO: warn if ACTIVE_ENV !== nothing ?
-            pushfirst!(LOAD_PATH, env)
+            popfirst!(LOAD_PATH)
         end
-        ACTIVE_ENV[] = env
+        ACTIVE_ENV[] = nothing
+    else # activate the env found in path
+        env = Base.current_env(path)
+        if env === nothing
+            @warn "Current directory is not in a project, nothing activated."
+        else
+            if !isempty(LOAD_PATH) && ACTIVE_ENV[] === LOAD_PATH[1]
+                LOAD_PATH[1] = env
+            else
+                pushfirst!(LOAD_PATH, env)
+            end
+            ACTIVE_ENV[] = env
+        end
     end
-end
-activate() = _activate(Base.current_env())
-activate(path::String) = _activate(Base.current_env(path))
-
-function deactivate()
-    if !isempty(LOAD_PATH) && ACTIVE_ENV[] === LOAD_PATH[1]
-        popfirst!(LOAD_PATH)
-    else
-        # warn if ACTIVE_ENV !== nothing ?
-    end
-    ACTIVE_ENV[] = nothing
+    return ACTIVE_ENV[]
 end
 
 end # module

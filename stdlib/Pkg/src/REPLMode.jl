@@ -49,7 +49,6 @@ const cmds = Dict(
     "instantiate" => CMD_INSTANTIATE,
     "resolve"     => CMD_RESOLVE,
     "activate"    => CMD_ACTIVATE,
-    "deactivate"  => CMD_DEACTIVATE,
 )
 
 #################
@@ -279,7 +278,6 @@ function do_cmd!(tokens::Vector{Token}, repl)
     cmd.kind == CMD_PRECOMPILE  ? Base.invokelatest(    do_precompile!, ctx, tokens) :
     cmd.kind == CMD_INSTANTIATE ? Base.invokelatest(   do_instantiate!, ctx, tokens) :
     cmd.kind == CMD_ACTIVATE    ? Base.invokelatest(      do_activate!, ctx, tokens) :
-    cmd.kind == CMD_DEACTIVATE  ? Base.invokelatest(    do_deactivate!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -345,8 +343,6 @@ developed packages
 `gc`: garbage collect packages not used for a significant time
 
 `activate`: set the primary environment the package manager manipulates
-
-`deactivate`: unset the primary environment the package manager manipulates
 """
 
 const helps = Dict(
@@ -792,11 +788,6 @@ function do_activate!(ctx::Context, tokens::Vector{Token})
         end
         return API.activate(abspath(token))
     end
-end
-
-function do_deactivate!(ctx::Context, tokens::Vector{Token})
-    !isempty(tokens) && cmderror("`deactivate` does not take any arguments")
-    API.deactivate()
 end
 
 ######################

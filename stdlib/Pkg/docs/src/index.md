@@ -548,7 +548,7 @@ end # module
 We can now activate the project and load the package:
 
 ```jl
-pkg> activate
+pkg> activate .
 
 julia> import HelloWorld
 
@@ -773,7 +773,7 @@ However, nothing would be installed and your `Project.toml` and `Manifest.toml` 
 Simply clone their project using e.g. `git clone`, `cd` to the project directory and call
 
 ```
-(v0.7) pkg> activate
+(v0.7) pkg> activate .
 
 (SomeProject) pkg> instantiate
 ```
