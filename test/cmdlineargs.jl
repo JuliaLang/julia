@@ -418,7 +418,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
-            @test Base.current_env() === nothing
+            @test Base.current_project() === nothing
             @test success(`$exename -e "exit(0)"`)
             for load_path in ["", "@", "@@"]
                 withenv("JULIA_LOAD_PATH" => load_path) do

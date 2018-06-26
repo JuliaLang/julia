@@ -927,22 +927,15 @@ function completions(full, index)
 end
 
 function promptf()
-    env = try
-        EnvCache()
+    project_file = Base.active_project()
+    try
+        env = EnvCache(project_file)
+        name = (env.pkg != nothing && !isempty(env.pkg.name) ?
+            env.pkg.name : basename(dirname(project_file)))
+        return "($name) pkg> "
     catch
-        nothing
     end
-    prefix = ""
-    if env !== nothing
-        proj_dir = dirname(env.project_file)
-        if startswith(pwd(), proj_dir) && env.pkg != nothing && !isempty(env.pkg.name)
-            name = env.pkg.name
-        else
-            name = basename(proj_dir)
-        end
-        prefix = string("(", name, ") ")
-    end
-    return prefix * "pkg> "
+    return "pkg> "
 end
 
 # Set up the repl Pkg REPLMode

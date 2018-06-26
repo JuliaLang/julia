@@ -54,9 +54,9 @@ function init_depot_path()
     end
 end
 
-## LOAD_PATH ##
+## LOAD_PATH, HOME_PROJECT & ACTIVE_PROJECT ##
 
-# split on `:` (or `;` on Windows)
+# JULIA_LOAD_PATH: split on `:` (or `;` on Windows)
 # first empty entry is replaced with DEFAULT_LOAD_PATH, the rest are skipped
 # entries starting with `@` are named environments:
 #  - the first three `#`s in a named environment are replaced with version numbers
@@ -70,7 +70,7 @@ end
 # this will inherit an existing JULIA_LOAD_PATH value or if there is none, leave
 # a trailing empty entry in JULIA_LOAD_PATH which will be replaced with defaults.
 
-const DEFAULT_LOAD_PATH = ["@@", "@v#.#", "@stdlib"]
+const DEFAULT_LOAD_PATH = ["@v#.#", "@stdlib"]
 
 """
     LOAD_PATH
@@ -79,8 +79,10 @@ An array of paths for `using` and `import` statements to consdier as project
 environments or package directories when loading code. See Code Loading.
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
+const HOME_PROJECT = Ref{Union{String,Nothing}}(nothing)
+const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing)
 
-function current_env(dir::AbstractString)
+function current_project(dir::AbstractString)
     # look for project file in current dir and parents
     home = homedir()
     while true
@@ -95,13 +97,13 @@ function current_env(dir::AbstractString)
     end
 end
 
-function current_env()
+function current_project()
     dir = try pwd()
     catch err
         err isa UVError || rethrow(err)
         return nothing
     end
-    return current_env(dir)
+    return current_project(dir)
 end
 
 function parse_load_path(str::String)
@@ -113,7 +115,7 @@ function parse_load_path(str::String)
             first_empty && append!(envs, DEFAULT_LOAD_PATH)
             first_empty = false
         elseif env == "@" # use "@@" to do delayed expansion
-            dir = current_env()
+            dir = current_project()
             dir !== nothing && push!(envs, dir)
         else
             push!(envs, env)
@@ -124,14 +126,88 @@ end
 
 function init_load_path()
     if Base.creating_sysimg
-        load_path = ["@stdlib"]
+        paths = ["@stdlib"]
     elseif haskey(ENV, "JULIA_LOAD_PATH")
-        load_path = parse_load_path(ENV["JULIA_LOAD_PATH"])
+        paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
-        load_path = filter!(env -> env !== nothing,
-            [env == "@" ? current_env() : env for env in DEFAULT_LOAD_PATH])
+        paths = filter!(env -> env !== nothing,
+            [env == "@" ? current_project() : env for env in DEFAULT_LOAD_PATH])
     end
-    append!(empty!(LOAD_PATH), load_path)
+    project = get(ENV, "JULIA_PROJECT", nothing)
+    HOME_PROJECT[] =
+        project == ""  ? nothing :
+        project == "@" ? current_project() : project
+    append!(empty!(LOAD_PATH), paths)
+end
+
+## load path expansion: turn LOAD_PATH entries into concrete paths ##
+
+function load_path_expand(env::AbstractString)::Union{String, Nothing}
+    # named environment?
+    if startswith(env, '@')
+        # `@` in JULIA_LOAD_PATH is expanded early (at startup time)
+        # if you put a `@` in LOAD_PATH manually, it's expanded late
+        (env == "@" || env == "@@") && return current_project()
+        env == "@stdlib" && return Sys.STDLIB
+        env = replace(env, '#' => VERSION.major, count=1)
+        env = replace(env, '#' => VERSION.minor, count=1)
+        env = replace(env, '#' => VERSION.patch, count=1)
+        name = env[2:end]
+        # look for named env in each depot
+        for depot in DEPOT_PATH
+            path = joinpath(depot, "environments", name)
+            isdir(path) || continue
+            for proj in project_names
+                file = abspath(path, proj)
+                isfile_casesensitive(file) && return file
+            end
+            return path
+        end
+        isempty(DEPOT_PATH) && return nothing
+        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+    end
+    # otherwise, it's a path
+    path = abspath(env)
+    if isdir(path)
+        # directory with a project file?
+        for proj in project_names
+            file = joinpath(path, proj)
+            isfile_casesensitive(file) && return file
+        end
+    end
+    # package dir or path to project file
+    return path
+end
+load_path_expand(::Nothing) = nothing
+
+function active_project(search_load_path::Bool=true)
+    for project in (ACTIVE_PROJECT[], HOME_PROJECT[])
+        project = load_path_expand(project)
+        project === nothing && continue
+        if !isfile_casesensitive(project)
+            project = absath(project, "Project.toml")
+        end
+        return project
+    end
+    search_load_path || return
+    for project in LOAD_PATH
+        project = load_path_expand(project)
+        project === nothing && continue
+        isfile_casesensitive(project) && return project
+        ispath(project) && continue
+        basename(project) in project_names && return project
+    end
+end
+
+function load_path()
+    paths = String[]
+    path = active_project(false)
+    path !== nothing && push!(paths, path)
+    for env in LOAD_PATH
+        path = load_path_expand(env)
+        path !== nothing && path ∉ paths && push!(paths, path)
+    end
+    return paths
 end
 
 ## atexit: register exit hooks ##
