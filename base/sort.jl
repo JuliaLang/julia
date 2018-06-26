@@ -1135,7 +1135,7 @@ end
 module Float
 using ..Sort
 using ...Order
-using ..Base: @inbounds, AbstractVector, Vector, last, axes
+using ..Base: @inbounds, AbstractVector, Vector, last, axes, Missing
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!
@@ -1156,16 +1156,27 @@ lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
 lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
+isnan(o::DirectOrdering, x::Missing) = false
 isnan(o::Perm, i::Integer) = isnan(o.order,o.data[i])
 
-function nans2left!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
+ismissing(o::DirectOrdering, x::Floats) = false
+ismissing(o::DirectOrdering, x::Missing) = true
+ismissing(o::Perm, i::Int) = ismissing(o.order,o.data[i])
+
+allowsmissing(::AbstractVector{T}, ::DirectOrdering) where {T} = T >: Missing
+allowsmissing(::AbstractVector{Int},
+              ::Perm{<:DirectOrdering,<:AbstractVector{T}}) where {T} =
+    T >: Missing
+
+function specials2left!(testf::Function, v::AbstractVector, o::Ordering,
+                        lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = lo
-    @inbounds while i <= hi && isnan(o,v[i])
+    @inbounds while i <= hi && testf(o,v[i])
         i += 1
     end
     j = i + 1
     @inbounds while j <= hi
-        if isnan(o,v[j])
+        if testf(o,v[j])
             v[i], v[j] = v[j], v[i]
             i += 1
         end
@@ -1173,14 +1184,15 @@ function nans2left!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1))
     end
     return i, hi
 end
-function nans2right!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
+function specials2right!(testf::Function, v::AbstractVector, o::Ordering,
+                         lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
     i = hi
-    @inbounds while lo <= i && isnan(o,v[i])
+    @inbounds while lo <= i && testf(o,v[i])
         i -= 1
     end
     j = i - 1
     @inbounds while lo <= j
-        if isnan(o,v[j])
+        if testf(o,v[j])
             v[i], v[j] = v[j], v[i]
             i -= 1
         end
@@ -1189,17 +1201,42 @@ function nans2right!(v::AbstractVector, o::Ordering, lo::Integer=first(axes(v,1)
     return lo, i
 end
 
-nans2end!(v::AbstractVector, o::ForwardOrdering) = nans2right!(v,o)
-nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v,o)
-nans2end!(v::AbstractVector{<:Integer}, o::Perm{<:ForwardOrdering}) = nans2right!(v,o)
-nans2end!(v::AbstractVector{<:Integer}, o::Perm{<:ReverseOrdering}) = nans2left!(v,o)
+function specials2left!(v::AbstractVector, a::Algorithm, o::Ordering)
+    lo, hi = first(axes(v,1)), last(axes(v,1))
+    if allowsmissing(v, o)
+        i, _ = specials2left!((v, o) -> ismissing(v, o) || isnan(v, o), v, o, lo, hi)
+        sort!(v, lo, i-1, a, o)
+        return i, hi
+    else
+        return specials2left!(isnan, v, o, lo, hi)
+    end
+end
+function specials2right!(v::AbstractVector, a::Algorithm, o::Ordering)
+    lo, hi = first(axes(v,1)), last(axes(v,1))
+    if allowsmissing(v, o)
+        _, i = specials2right!((v, o) -> ismissing(v, o) || isnan(v, o), v, o, lo, hi)
+        sort!(v, i+1, hi, a, o)
+        return lo, i
+    else
+        return specials2right!(isnan, v, o, lo, hi)
+    end
+end
+
+specials2end!(v::AbstractVector, a::Algorithm, o::ForwardOrdering) =
+    specials2right!(v, a, o)
+specials2end!(v::AbstractVector, a::Algorithm, o::ReverseOrdering) =
+    specials2left!(v, a, o)
+specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ForwardOrdering}) =
+    specials2right!(v, a, o)
+specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ReverseOrdering}) =
+    specials2left!(v, a, o)
 
 issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
 issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
-    i, j = lo, hi = nans2end!(v,o)
+    i, j = lo, hi = specials2end!(v,a,o)
     @inbounds while true
         while i <= j &&  issignleft(o,v[i]); i += 1; end
         while i <= j && !issignleft(o,v[j]); j -= 1; end
@@ -1216,8 +1253,10 @@ end
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
     sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
 
-sort!(v::AbstractVector{<:Floats}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
-sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Floats}}) = fpsort!(v,a,o)
+sort!(v::AbstractVector{<:Union{Floats, Missing}}, a::Algorithm, o::DirectOrdering) =
+    fpsort!(v,a,o)
+sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Union{Floats, Missing}}}) =
+    fpsort!(v,a,o)
 
 end # module Sort.Float
 
