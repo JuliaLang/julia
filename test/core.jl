@@ -5981,6 +5981,13 @@ for U in unboxedunions
     end
 end
 
+# issue #27767
+let A=Vector{Union{Int, Missing}}(undef, 1)
+    resize!(A, 2)
+    @test length(A) == 2
+    @test A[2] === missing
+end
+
 end # module UnionOptimizations
 
 # issue #6614, argument destructuring
