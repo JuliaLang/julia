@@ -97,8 +97,7 @@ function cmp(a::String, b::String)
 end
 
 function ==(a::String, b::String)
-    al = sizeof(a)
-    al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
+    a === b
 end
 
 typemin(::Type{String}) = ""
