@@ -1933,6 +1933,16 @@ typedef struct {
     // parameters: LLVMBasicBlockRef as Ptr{Cvoid}, LLVMValueRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *raise_exception;
+
+    // emit function: start emission of a new function
+    // parameters: MethodInstance, CodeInfo, world age as UInt
+    // return value: none
+    jl_value_t *emit_function;
+
+    // emitted function: end emission of a new function
+    // parameters: MethodInstance, CodeInfo, world age as UInt
+    // return value: none
+    jl_value_t *emitted_function;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 

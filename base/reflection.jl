@@ -819,15 +819,19 @@ struct CodegenParams
     module_setup::Any
     module_activation::Any
     raise_exception::Any
+    emit_function::Any
+    emitted_function::Any
 
     CodegenParams(;cached::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
-                   module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
+                   module_setup=nothing, module_activation=nothing, raise_exception=nothing,
+                   emit_function=nothing, emitted_function=nothing) =
         new(Cint(cached),
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
-            module_setup, module_activation, raise_exception)
+            module_setup, module_activation, raise_exception,
+            emit_function, emitted_function)
 end
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
