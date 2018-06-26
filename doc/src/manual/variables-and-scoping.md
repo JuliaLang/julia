@@ -262,7 +262,11 @@ julia> counter()
 2
 ```
 
-See also the closures in the examples in the next two sections.
+See also the closures in the examples in the next two sections. A variable
+such as `x` in the first example and `state` in the second that is inherited
+from the enclosing scope by the inner function is sometimes called a
+*captured* variable. Captured variables can present performance challenges
+discussed in [performance tips](@ref man-performance-tips).
 
 The distinction between inheriting global scope and nesting local scope
 can lead to some slight differences between functions
