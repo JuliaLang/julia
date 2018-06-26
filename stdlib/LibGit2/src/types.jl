@@ -1361,6 +1361,12 @@ end
 
 CredentialPayload(p::CredentialPayload) = p
 
+function Base.shred!(p::CredentialPayload)
+    # Note: Avoid shredding the `explicit` or `cache` fields as these are just references
+    # and it is not our responsibility to shred them.
+    p.credential !== nothing && Base.shred!(p.credential)
+    p.credential = nothing
+end
 
 """
     reset!(payload, [config]) -> CredentialPayload

@@ -294,6 +294,8 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
             reject(cred_payload)
+        else
+            Base.shred!(cred_payload)
         end
         rethrow()
     finally
@@ -350,6 +352,8 @@ function push(repo::GitRepo; remote::AbstractString="origin",
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
             reject(cred_payload)
+        else
+            Base.shred!(cred_payload)
         end
         rethrow()
     finally
@@ -584,6 +588,8 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
         catch err
             if isa(err, GitError) && err.code == Error.EAUTH
                 reject(cred_payload)
+            else
+                Base.shred!(cred_payload)
             end
             rethrow()
         end
