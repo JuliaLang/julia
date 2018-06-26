@@ -1043,12 +1043,6 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec})
 end
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; new_git = UUID[])
-    # if julia is passed as a package the solver gets tricked;
-    # this catches the error early on
-    any(pkg->(pkg.uuid == uuid_julia), pkgs) &&
-        cmderror("Trying to add julia as a package")
-    any(pkg -> Types.collides_with_project(ctx.env, pkg), pkgs) &&
-        cmderror("Cannot add package with the same name or uuid as the project")
     # copy added name/UUIDs into project
     for pkg in pkgs
         ctx.env.project["deps"][pkg.name] = string(pkg.uuid)

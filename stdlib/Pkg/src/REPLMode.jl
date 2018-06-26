@@ -562,9 +562,10 @@ end
 
 function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKind)
     @assert cmd in (CMD_ADD, CMD_DEVELOP)
+    mode = cmd == CMD_ADD ? :add : :develop
     # tokens: package names and/or uuids, optionally followed by version specs
     isempty(tokens) &&
-        cmderror("`add` – list packages to add")
+        cmderror("`$mode` – list packages to $mode")
     pkgs = PackageSpec[]
     prev_token_was_package = false
     while !isempty(tokens)
@@ -589,11 +590,11 @@ function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKin
                 pkgs[end].repo.rev = token.rev
             end
         elseif token isa Option
-            cmderror("`add` doesn't take options: $token")
+            cmderror("`$mode` doesn't take options: $token")
         end
         prev_token_was_package = parsed_package
     end
-    return API.add_or_develop(ctx, pkgs, mode=(cmd == CMD_ADD ? :add : :develop))
+    return API.add_or_develop(ctx, pkgs, mode=mode)
 end
 
 function do_up!(ctx::Context, tokens::Vector{Token})

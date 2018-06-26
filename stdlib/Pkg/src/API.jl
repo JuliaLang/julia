@@ -25,6 +25,12 @@ add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Cont
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, kwargs...)
     Context!(ctx; kwargs...)
+
+    # if julia is passed as a package the solver gets tricked;
+    # this catches the error early on
+    any(pkg->(pkg.name == "julia"), pkgs) &&
+        cmderror("Trying to $mode julia as a package")
+
     ctx.preview && preview_info()
     if mode == :develop
         new_git = handle_repos_develop!(ctx, pkgs)
@@ -36,6 +42,10 @@ function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, k
     registry_resolve!(ctx.env, pkgs)
     stdlib_resolve!(ctx, pkgs)
     ensure_resolved(ctx.env, pkgs, registry=true)
+
+    any(pkg -> Types.collides_with_project(ctx.env, pkg), pkgs) &&
+        cmderror("Cannot $mode package with the same name or uuid as the project")
+
     Operations.add_or_develop(ctx, pkgs; new_git=new_git)
     ctx.preview && preview_info()
     return
