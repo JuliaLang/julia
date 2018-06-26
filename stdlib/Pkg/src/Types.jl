@@ -594,9 +594,10 @@ function parse_package!(ctx, pkg, project_path)
         reg_uuids = registered_uuids(env, pkg.name)
         is_registered = !isempty(reg_uuids)
         if !is_registered
-            # This is an unregistered old style package, give it a random UUID and a version
+            # This is an unregistered old style package, give it a UUID and a version
             if !has_uuid(pkg)
-                pkg.uuid = UUIDs.uuid1()
+                uuid_unreg_pkg = UUID(0xa9a2672e746f11e833ef119c5b888869)
+                pkg.uuid = uuid5(uuid_unreg_pkg, pkg.name)
                 @info "Assigning UUID $(pkg.uuid) to $(pkg.name)"
             end
             pkg.version = v"0.0"
