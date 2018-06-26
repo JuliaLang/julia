@@ -58,9 +58,7 @@ float(::Type{<:AbstractIrrational}) = Float64
 
 <(::Irrational{s}, ::Irrational{s}) where {s} = false
 function <(x::AbstractIrrational, y::AbstractIrrational)
-    # If two different Irrationals round to the same Float64, then explicit
-    # < methods are needed for those inputs, as the below assertation will fail.
-    @assert Float64(x) != Float64(y)
+    Float64(x) != Float64(y) || throw(MethodError(<, (x, y)))
     return Float64(x) < Float64(y)
 end
 
