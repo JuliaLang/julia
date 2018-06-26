@@ -56,6 +56,17 @@ float(::Type{<:AbstractIrrational}) = Float64
 ==(::Irrational{s}, ::Irrational{s}) where {s} = true
 ==(::AbstractIrrational, ::AbstractIrrational) = false
 
+<(::Irrational{s}, ::Irrational{s}) where {s} = false
+function <(x::AbstractIrrational, y::AbstractIrrational)
+    # If two different Irrationals round to the same Float64, then explicit
+    # < methods are needed for those inputs, as the below assertation will fail.
+    @assert Float64(x) != Float64(y)
+    return Float64(x) < Float64(y)
+end
+
+<=(::Irrational{s}, ::Irrational{s}) where {s} = true
+<=(x::AbstractIrrational, y::AbstractIrrational) = x==y || x<y
+
 # Irrationals, by definition, can't have a finite representation equal them exactly
 ==(x::AbstractIrrational, y::Real) = false
 ==(x::Real, y::AbstractIrrational) = false
