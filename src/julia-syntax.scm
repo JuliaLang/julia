@@ -3142,11 +3142,11 @@ f(x) = yt(x)
                    ((memq sym (lam:sp lam)) e)
                    (cv
                     (if (and (vinfo:asgn cv) (vinfo:capt cv))
-                      (let ((access (if interp
-                                      `($ (call (core QuoteNode) ,sym))
-                                      `(call (core getfield) ,fname (inert ,sym)))))
+                        (let ((access (if interp
+                                          `($ (call (core QuoteNode) ,sym))
+                                          `(call (core getfield) ,fname (inert ,sym)))))
                           `(call (core isdefined) ,access (inert contents)))
-                      'true))
+                        'true))
                    (vi
                     (if (and (vinfo:asgn vi) (vinfo:capt vi))
                         `(call (core isdefined) ,sym (inert contents))
@@ -3159,8 +3159,8 @@ f(x) = yt(x)
                   (vis   (if short '(() () ()) (lam:vinfo lam2)))
                   (cvs   (map car (cadr vis)))
                   (local? (lambda (s) (and lam (symbol? s)
-                               (or (assq s (car  (lam:vinfo lam)))
-                                   (assq s (cadr (lam:vinfo lam)))))))
+                                           (or (assq s (car  (lam:vinfo lam)))
+                                               (assq s (cadr (lam:vinfo lam)))))))
                   (local (local? name))
                   (sig      (and (not short) (caddr e)))
                   (sp-inits (if (or short (not (eq? (car sig) 'block)))
@@ -3230,17 +3230,41 @@ f(x) = yt(x)
                                                     alldefs))))
                         (capt-sp (simple-sort (intersect all-capt-vars all-sparams))) ; the intersection is the list of sparams that need to be captured
                         (capt-vars (diff all-capt-vars capt-sp)) ; remove capt-sp from capt-vars
+                        (moved-vars  ;; signature-local vars that should be moved to the top-level
+                         (if lam2
+                             (delete-duplicates
+                              (expr-find-all
+                               (lambda (s) (and (symbol? s)
+                                                (not (eq? name s))
+                                                (not (memq s capt-sp))
+                                                (if (and (length> (lam:args lam) 0) (local? s))
+                                                    ;; local variable used in signature. either move it,
+                                                    ;; or give an error if there are uses outside the sig.
+                                                    (if (or (expr-contains-p (lambda (v) (eq? v s))
+                                                                             (lam:body lam)
+                                                                             (lambda (ex) (not (or (eq? ex (caddr e))
+                                                                                                   (and (pair? ex)
+                                                                                                        (eq? (car ex) 'local))))))
+                                                            ;; var must be assigned within the signature block.
+                                                            ;; otherwise it might not be assigned at all.
+                                                            (not
+                                                             (expr-contains-p (lambda (e)
+                                                                                (and (pair? e)
+                                                                                     (memq (car e) '(= method))
+                                                                                     (eq? (cadr e) s)))
+                                                                              (caddr e))))
+                                                        (error (string "local variable " s
+                                                                       " cannot be used in closure declaration"))
+                                                        #t)
+                                                    #f)))
+                               (caddr e)
+                               identity))
+                             '()))
                         (find-locals-in-method-sig (lambda (methdef)
                                                      (expr-find-all
                                                       (lambda (s) (and (symbol? s)
                                                                        (not (eq? name s))
                                                                        (not (memq s capt-sp))
-                                                                       (if (and (local? s) (length> (lam:args lam) 0))
-                                                                           ;; error for local variables except in toplevel thunks
-                                                                           (error (string "local variable " s
-                                                                                          " cannot be used in closure declaration"))
-                                                                           #t)
-                                                                       ;; allow captured variables
                                                                        (memq s (lam:sp lam))))
                                                       (caddr methdef)
                                                       identity)))
@@ -3256,7 +3280,7 @@ f(x) = yt(x)
                                                    (if (is-var-boxed? v lam)
                                                        '(core Box)
                                                        (make-ssavalue)))
-                                                  capt-vars))
+                                                 capt-vars))
                                 (para (append closure-param-syms
                                               (filter (lambda (v) (ssavalue? v)) fieldtypes)))
                                 (fieldnames (append closure-param-names (filter (lambda (v) (not (is-var-boxed? v lam))) capt-vars))))
@@ -3264,22 +3288,22 @@ f(x) = yt(x)
                                (type-for-closure type-name capt-vars '(core Function))
                                (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function)))))
                         (mk-method ;; expression to make the method
-                          (if short '()
-                              (let* ((iskw ;; TODO jb/functions need more robust version of this
-                                      (contains (lambda (x) (eq? x 'kwftype)) sig))
-                                     (renamemap (map cons closure-param-names closure-param-syms))
-                                     (arg-defs (replace-vars
-                                                (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
-                                                renamemap)))
-                                    (append (map (lambda (gs tvar)
-                                                   (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
-                                                  closure-param-syms closure-param-names)
-                                            `((method #f ,(cl-convert arg-defs fname lam namemap toplevel interp)
-                                                  ,(convert-lambda lam2
-                                                                   (if iskw
-                                                                       (caddr (lam:args lam2))
-                                                                       (car (lam:args lam2)))
-                                                                   #f closure-param-names)))))))
+                         (if short '()
+                             (let* ((iskw ;; TODO jb/functions need more robust version of this
+                                     (contains (lambda (x) (eq? x 'kwftype)) sig))
+                                    (renamemap (map cons closure-param-names closure-param-syms))
+                                    (arg-defs (replace-vars
+                                               (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
+                                               renamemap)))
+                               (append (map (lambda (gs tvar)
+                                              (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
+                                            closure-param-syms closure-param-names)
+                                       `((method #f ,(cl-convert arg-defs fname lam namemap toplevel interp)
+                                                 ,(convert-lambda lam2
+                                                                  (if iskw
+                                                                      (caddr (lam:args lam2))
+                                                                      (car (lam:args lam2)))
+                                                                  #f closure-param-names)))))))
                         (mk-closure  ;; expression to make the closure
                          (let* ((var-exprs (map (lambda (v)
                                                   (let ((cv (assq v (cadr (lam:vinfo lam)))))
@@ -3300,6 +3324,11 @@ f(x) = yt(x)
                                       type-name
                                       `(call (core apply_type) ,type-name ,@P))
                                  ,@var-exprs))))
+                   (if (pair? moved-vars)
+                       (set-car! (lam:vinfo lam)
+                                 (filter (lambda (vi)
+                                           (not (memq (car vi) moved-vars)))
+                                         (car (lam:vinfo lam)))))
                    `(toplevel-butfirst
                      ,(if exists
                           '(null)
@@ -3308,16 +3337,17 @@ f(x) = yt(x)
                            '()
                            (begin (and name (put! namemap name type-name))
                                   typedef))
+                     ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                      ,@sp-inits
                      ,@mk-method)))))
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
            (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
                      (list-tail (car (lam:vinfo e)) (length (lam:args e))))
            (let ((body (map-cl-convert (cdr (lam:body e)) 'anon
-                                 (lambda-optimize-vars! e)
-                                 (table)
-                                 (null? (cadr e)) ;; only toplevel thunks have 0 args
-                                 interp)))
+                                       (lambda-optimize-vars! e)
+                                       (table)
+                                       (null? (cadr e)) ;; only toplevel thunks have 0 args
+                                       interp)))
              `(lambda ,(cadr e)
                 (,(clear-capture-bits (car (lam:vinfo e)))
                  () ,@(cddr (lam:vinfo e)))
@@ -3793,7 +3823,9 @@ f(x) = yt(x)
 
             ((newvar)
              ;; avoid duplicate newvar nodes
-             (if (not (and (pair? code) (equal? (car code) e)))
+             (if (and (not (and (pair? code) (equal? (car code) e)))
+                      ;; exclude deleted vars
+                      (assq (cadr e) (car (lam:vinfo lam))))
                  (emit e)
                  #f))
             ((global) ; keep global declarations as statements
@@ -3804,6 +3836,9 @@ f(x) = yt(x)
                    (emit e))))
             ((local-def) #f)
             ((local) #f)
+            ((moved-local)
+             (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,(cadr e) Any 2))))
+             #f)
             ((implicit-global) #f)
             ((const)
              (if (or (assq (cadr e) (car  (lam:vinfo lam)))
