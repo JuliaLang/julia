@@ -15,7 +15,6 @@ const _REF_NAME = Ref.body.name
 #########
 
 function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
-    atype = limit_tuple_type(atype, sv.params)
     atype_params = unwrap_unionall(atype).parameters
     ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_first_argument_datatype here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
@@ -114,7 +113,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     method = match[3]::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
-    length(argtypes) >= nargs || return Any # probably limit_tuple_type made this non-matching method apparently match
+    length(argtypes) >= nargs || return Any
     haveconst = false
     for a in argtypes
         if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
@@ -388,7 +387,7 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
     valtype = statetype = Bottom
     ret = Any[]
     stateordonet = widenconst(stateordonet)
-    while !(Nothing <: stateordonet) && length(ret) < sv.params.MAX_TUPLETYPE_LEN
+    while !(Nothing <: stateordonet) && length(ret) < sv.params.MAX_TUPLE_SPLAT
         if !isa(stateordonet, DataType) || !(stateordonet <: Tuple) || isvatuple(stateordonet) || length(stateordonet.parameters) != 2
             break
         end
@@ -457,11 +456,6 @@ function abstract_apply(@nospecialize(aft), fargs::Vector{Any}, aargtypes::Vecto
         ctypes = ctypes´
     end
     for ct in ctypes
-        if length(ct) > sv.params.MAX_TUPLETYPE_LEN
-            tail = tuple_tail_elem(Bottom, ct[sv.params.MAX_TUPLETYPE_LEN:end])
-            resize!(ct, sv.params.MAX_TUPLETYPE_LEN)
-            ct[end] = tail
-        end
         if isa(aft, Const)
             rt = abstract_call(aft.val, (), ct, vtypes, sv)
         elseif isconstType(aft)

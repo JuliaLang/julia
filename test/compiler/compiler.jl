@@ -1030,7 +1030,7 @@ function count_specializations(method::Method)
     return n::Int
 end
 
-# demonstrate that inference can complete without waiting for MAX_TUPLETYPE_LEN or MAX_TYPE_DEPTH
+# demonstrate that inference can complete without waiting for MAX_TYPE_DEPTH
 copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
