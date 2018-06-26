@@ -2687,6 +2687,49 @@ mktempdir() do dir
             Base.shred!(valid_cred)
         end
 
+        @testset "HTTPS git helper password" begin
+            if GIT_INSTALLED
+                url = "https://github.com/test/package.jl"
+
+                valid_username = "julia"
+                valid_password = randstring(16)
+                valid_cred = LibGit2.UserPasswordCredential(valid_username, valid_password)
+
+                cred_file = joinpath(dir, "test-credentials")
+                config_path = joinpath(dir, config_file)
+                write(config_path, """
+                    [credential]
+                        helper = store --file $cred_file
+                    """)
+
+                # Directly write to the cleartext credential store. Note: we are not using
+                # the LibGit2.approve message to avoid any posibility of the tests
+                # accidentally writing to a user's global store.
+                write(cred_file, "https://$valid_username:$valid_password@github.com")
+
+                https_ex = quote
+                    include($LIBGIT2_HELPER_PATH)
+                    LibGit2.with(LibGit2.GitConfig($config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                        payload = CredentialPayload(nothing,
+                                                    nothing, cfg,
+                                                    allow_git_helpers=true)
+                        credential_loop($valid_cred, $url, nothing, payload, shred=false)
+                    end
+                end
+
+                # Username will be provided by the credential helper
+                challenges = []
+                err, auth_attempts, p = challenge_prompt(https_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 1
+
+                # Verify credential wasn't accidentally zeroed (#24731)
+                @test p.credential == valid_cred
+
+                Base.shred!(valid_cred)
+            end
+        end
+
         @testset "Incompatible explicit credentials" begin
             # User provides a user/password credential where a SSH credential is required.
             valid_cred = LibGit2.UserPasswordCredential("foo", "bar")
