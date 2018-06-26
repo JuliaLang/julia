@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test, Random
+
 module TestBroadcastInternals
 
 using Base.Broadcast: check_broadcast_axes, check_broadcast_shape, newindex, _bcs
@@ -736,12 +738,12 @@ end
     a .= sqrt.(1 ./ 2)
     @test a == [sqrt(1/2), sqrt(1/2)]
     rng = MersenneTwister(1234)
-    a .= rand.(rng)
+    a .= rand.((rng,))
     rng = MersenneTwister(1234)
     @test a == [rand(rng), rand(rng)]
     @test a[1] != a[2]
     rng = MersenneTwister(1234)
-    broadcast!(rand, a, rng)
+    broadcast!(rand, a, (rng,))
     rng = MersenneTwister(1234)
     @test a == [rand(rng), rand(rng)]
     @test a[1] != a[2]

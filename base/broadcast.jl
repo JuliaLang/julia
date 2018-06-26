@@ -777,11 +777,10 @@ end
 # Performance optimization for the common identity scalar case: dest .= val
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0}})
     # Typically, we must independently execute bc for every storage location in `dest`, but:
-    if bc.f === identity &&       # if the function is known to be constant AND
-        bc.args isa Tuple{Any} && # it has the expected single input argument AND
-        isflat(bc)                # the Broadcasted argument isn't hiding a nested function
-        # THEN we can just extract the result of the `bc` and `fill!` it
-        return fill!(dest, bc[CartesianIndex()])
+    # IF we're in the common no-op identity case with no nested args (like `dest .= val`),
+    if bc.f === identity && bc.args isa Tuple{Any} && isflat(bc)
+        # THEN we can just extract the argument and `fill!` the destination with it
+        return fill!(dest, bc.args[1][])
     else
         # Otherwise, fall back to the default implementation like above
         return copyto!(dest, convert(Broadcasted{Nothing}, bc))
