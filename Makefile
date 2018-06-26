@@ -356,7 +356,6 @@ endif
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
 	# Copy system image
-	-$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
