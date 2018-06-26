@@ -1286,6 +1286,12 @@ end
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
 end
 
+@testset "Issue #26608" begin
+    @test_throws BoundsError (Int8(-100):Int8(100))[400]
+    @test_throws BoundsError (-100:100)[typemax(UInt)]
+    @test_throws BoundsError (false:true)[3]
+end
+
 module NonStandardIntegerRangeTest
 
 using Test

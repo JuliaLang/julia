@@ -478,11 +478,23 @@ end
 
 ## indexing
 
+_in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
+
 function getindex(v::UnitRange{T}, i::Integer) where T
     @_inline_meta
-    ret = convert(T, first(v) + i - 1)
-    @boundscheck ((i > 0) & (ret <= v.stop) & (ret >= v.start)) || throw_boundserror(v, i)
-    ret
+    val = convert(T, v.start + i - 1)
+    @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
+    val
+end
+
+const OverflowSafe = Union{Bool,Int8,Int16,Int32,Int64,Int128,
+                           UInt8,UInt16,UInt32,UInt64,UInt128}
+
+function getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
+    @_inline_meta
+    val = v.start + i - 1
+    @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
+    val % T
 end
 
 function getindex(v::OneTo{T}, i::Integer) where T
