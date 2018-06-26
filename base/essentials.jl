@@ -141,7 +141,7 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-tuple_type_head(T::Type) = fieldtype(T::Type{<:Tuple}, 1)
+tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
 function tuple_type_tail(T::Type)
     @_pure_meta
