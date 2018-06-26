@@ -1683,3 +1683,27 @@ struct Foo19668
     Foo19668(; kwargs...) = new()
 end
 @test Base.return_types(Foo19668, ()) == [Foo19668]
+
+# issue #27316 - inference shouldn't hang on these
+f27316(::Vector) = nothing
+f27316(::Any) = f27316(Any[][1]), f27316(Any[][1])
+@test Tuple{Nothing,Nothing} <: Base.return_types(f27316, Tuple{Int})[1] == Tuple{Union{Nothing, Tuple{Any,Any}},Union{Nothing, Tuple{Any,Any}}} # we may be able to improve this bound in the future
+function g27316()
+    x = nothing
+    while rand() < 0.5
+        x = (x,)
+    end
+    return x
+end
+@test Tuple{Tuple{Nothing}} <: Base.return_types(g27316, Tuple{})[1] == Any # we may be able to improve this bound in the future
+const R27316 = Tuple{Tuple{Vector{T}}} where T
+h27316_(x) = (x,)
+h27316_(x::Tuple{Vector}) = (Any[x][1],)::R27316 # a UnionAll of a Tuple, not vice versa!
+function h27316()
+    x = [1]
+    while rand() < 0.5
+        x = h27316_(x)
+    end
+    return x
+end
+@test Tuple{Tuple{Vector{Int}}} <: Base.return_types(h27316, Tuple{})[1] == Union{Vector{Int}, Tuple{Any}} # we may be able to improve this bound in the future

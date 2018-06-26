@@ -4,7 +4,7 @@
 # limitation parameters #
 #########################
 
-const MAX_TYPEUNION_LEN = 4
+const MAX_TYPEUNION_COMPLEXITY = 3
 const MAX_INLINE_CONST_SIZE = 256
 
 #########################
@@ -346,12 +346,9 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         # XXX: this should never happen
         return Any
     end
-    # if we didn't start with any unions, then always OK to form one now
-    if !(typea isa Union || typeb isa Union)
-        # except if we might have switched Union and Tuple below, or would do so
-        if (isconcretetype(typea) && isconcretetype(typeb)) || !(typea <: Tuple && typeb <: Tuple)
-            return Union{typea, typeb}
-        end
+    # it's always ok to form a Union of two concrete types
+    if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
+        return Union{typea, typeb}
     end
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list
@@ -399,7 +396,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
     end
     u = Union{types...}
-    if unionlen(u) <= MAX_TYPEUNION_LEN
+    if unioncomplexity(u) <= MAX_TYPEUNION_COMPLEXITY
         # don't let type unions get too big, if the above didn't reduce it enough
         return u
     end
@@ -426,7 +423,7 @@ function tuplemerge(a::DataType, b::DataType)
     p = Vector{Any}(undef, lt + vt)
     for i = 1:lt
         ui = Union{ap[i], bp[i]}
-        if unionlen(ui) < MAX_TYPEUNION_LEN
+        if unioncomplexity(ui) < MAX_TYPEUNION_COMPLEXITY
             p[i] = ui
         else
             p[i] = Any
