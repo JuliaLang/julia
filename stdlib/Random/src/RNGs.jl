@@ -137,6 +137,7 @@ true
 MersenneTwister(seed=nothing) =
     srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
+
 function copy!(dst::MersenneTwister, src::MersenneTwister)
     copyto!(resize!(dst.seed, length(src.seed)), src.seed)
     copy!(dst.state, src.state)
@@ -160,6 +161,14 @@ copy(src::MersenneTwister) =
 
 hash(r::MersenneTwister, h::UInt) =
     foldr(hash, h, (r.seed, r.state, r.vals, r.ints, r.idxF, r.idxI))
+
+function fillcache_zeros!(r::MersenneTwister)
+    # the use of this function is not strictly necessary, but it makes
+    # comparing two MersenneTwister RNGs easier
+    fill!(r.vals, 0.0)
+    fill!(r.ints, zero(UInt128))
+    r
+end
 
 
 ### low level API
@@ -271,9 +280,8 @@ function srand(r::MersenneTwister, seed::Vector{UInt32})
     copyto!(resize!(r.seed, length(seed)), seed)
     dsfmt_init_by_array(r.state, r.seed)
     mt_setempty!(r)
-    fill!(r.vals, 0.0) # not strictly necessary, but why not, makes comparing two MT easier
     mt_setempty!(r, UInt128)
-    fill!(r.ints, 0)
+    fillcache_zeros!(r)
     return r
 end
 
@@ -563,7 +571,7 @@ randjump(r::MersenneTwister, steps::Integer, len::Integer) =
 
 
 _randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X) =
-    MersenneTwister(copy(r.seed), DSFMT.dsfmt_jump(r.state, jumppoly))
+    fillcache_zeros!(MersenneTwister(copy(r.seed), DSFMT.dsfmt_jump(r.state, jumppoly)))
 
 function _randjump(mt::MersenneTwister, jumppoly::DSFMT.GF2X, len::Integer)
     mts = MersenneTwister[]
