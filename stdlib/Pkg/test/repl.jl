@@ -45,6 +45,17 @@ mktempdir() do project_path
                 Pkg.test("PackageWithBuildSpecificTestDeps")
             end
         end
+
+        pkg"dev Example"
+        devdir = joinpath(DEPOT_PATH[1], "dev", "Example")
+        @test isdir(devdir)
+        rm(devdir; recursive=true)
+        @test !isdir(devdir)
+        pkg"dev Example#DO_NOT_REMOVE"
+        @test isdir(devdir)
+        LibGit2.with(LibGit2.GitRepo(devdir)) do repo
+            @test LibGit2.branch(repo) == "DO_NOT_REMOVE"
+        end
     end
 end
 

@@ -447,7 +447,14 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                         rev = string(LibGit2.GitHash(LibGit2.head(repo)))
                     end
                 end
-                gitobject, isbranch = checkout_rev!(repo, rev)
+                gitobject, isbranch = get_object_branch(repo, rev)
+                LibGit2.transact(repo) do r
+                    if isbranch
+                        LibGit2.branch!(r, rev, track=LibGit2.Consts.REMOTE_ORIGIN)
+                    else
+                        LibGit2.checkout!(r, string(LibGit2.GitHash(gitobject)))
+                    end
+                end
                 close(repo); close(gitobject)
 
                 parse_package!(ctx, pkg, project_path)
@@ -514,7 +521,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
                     rev = string(LibGit2.GitHash(LibGit2.head(repo)))
                 end
             end
-            gitobject, isbranch = checkout_rev!(repo, rev)
+            gitobject, isbranch = get_object_branch(repo, rev)
             if !isbranch
                 # If the user gave a shortened commit SHA, might as well update it to the full one
                 pkg.repo.rev = string(LibGit2.GitHash(gitobject))
@@ -613,7 +620,7 @@ function set_repo_for_pkg!(env, pkg)
     _, pkg.repo.url = Types.registered_info(env, pkg.uuid, "repo")[1]
 end
 
-function checkout_rev!(repo, rev)
+function get_object_branch(repo, rev)
     gitobject = nothing
     isbranch = false
     try
