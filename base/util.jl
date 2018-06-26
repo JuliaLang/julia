@@ -446,7 +446,7 @@ function securezero! end
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString) -> `Base.SecretBuffer`
+    Base.getpass(message::AbstractString) -> Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
 object containing the secret.
@@ -475,7 +475,7 @@ function getpass(prompt::AbstractString)
             write(s, c)
         end
     end
-    return  s
+    return s
 end
 else
 function getpass(prompt::AbstractString)
