@@ -173,7 +173,7 @@ less than the period (e.g. ``steps ≪ 2^19937-1``).
 """
 function calc_jump(steps::Integer,
                    charpoly::GF2X=CharPoly[])::GF2X
-    steps < 0 && throw(DomainError("jump steps must be < 0 (got $steps)"))
+    steps < 0 && throw(DomainError("jump steps must be >= 0 (got $steps)"))
     get!(JumpPolys, steps) do
         powxmod(big(steps), charpoly)
     end
