@@ -1064,6 +1064,21 @@ mktempdir() do dir
                 @test tree["$test_dir/"] == tree[test_dir]
                 @test isa(tree[test_file], LibGit2.GitBlob)
                 @test_throws KeyError tree["nonexistent"]
+
+                # test workaround for git_tree_walk issue
+                # https://github.com/libgit2/libgit2/issues/4693
+                ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring),
+                      Cint(LibGit2.Error.Invalid), "previous error")
+                try
+                    # file needs to exist in tree in order to trigger the stop walk condition
+                    tree[test_file]
+                catch err
+                    if isa(err, LibGit2.Error.GitError) && err.class == LibGit2.Error.Invalid
+                        @test false
+                    else
+                        rethrow(err)
+                    end
+                end
             end
         end
 

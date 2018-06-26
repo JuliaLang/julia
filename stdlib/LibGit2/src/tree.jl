@@ -167,6 +167,10 @@ function Base.getindex(tree::GitTree, target::AbstractString)
         if path == target
             # we found the target, save the oid and stop the walk
             oid = entryid(entry)
+            # workaround for issue: https://github.com/libgit2/libgit2/issues/4693
+            ccall((:giterr_set_str, :libgit2), Cvoid,
+                  (Cint, Cstring), Cint(Error.Callback),
+                  "git_tree_walk callback returned -1")
             return -1
         elseif entrytype(entry) == GitTree && !startswith(target, path)
             # this subtree isn't relevant, so skip it
