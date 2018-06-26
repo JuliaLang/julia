@@ -1073,9 +1073,11 @@ hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Ba
 #   f(x) = 0 when x == 0
 #
 macro unarymap_nz2z_z2z(op, TF)
-    esc(quote
-        function $(op)(x::AbstractSparseVector{Tv,Ti}) where Tv<:$(TF) where Ti<:Integer
-            R = typeof($(op)(zero(Tv)))
+    _op = esc(op)
+    _TF = esc(TF)
+    quote
+        function $(_op)(x::AbstractSparseVector{Tv,Ti}) where {Tv<:$(_TF),Ti<:Integer}
+            R = typeof($(_op)(zero(Tv)))
             xnzind = nonzeroinds(x)
             xnzval = nonzeros(x)
             m = length(xnzind)
@@ -1085,7 +1087,7 @@ macro unarymap_nz2z_z2z(op, TF)
             ir = 0
             @inbounds for j = 1:m
                 i = xnzind[j]
-                v = $(op)(xnzval[j])
+                v = $(_op)(xnzval[j])
                 if v != zero(v)
                     ir += 1
                     ynzind[ir] = i
@@ -1096,7 +1098,7 @@ macro unarymap_nz2z_z2z(op, TF)
             resize!(ynzval, ir)
             SparseVector(length(x), ynzind, ynzval)
         end
-    end)
+    end
 end
 
 ### Binary Map

@@ -3102,8 +3102,8 @@ function sortSparseMatrixCSC!(A::SparseMatrixCSC{Tv,Ti}; sortindices::Symbol = :
     if sortindices == :doubletranspose
         nB, mB = size(A)
         B = SparseMatrixCSC(mB, nB, Vector{Ti}(undef, nB+1), similar(A.rowval), similar(A.nzval))
-        transpose!(B, A)
-        transpose!(A, B)
+        ftranspose!(B, A, identity)
+        ftranspose!(A, B, identity)
         return A
     end
 
