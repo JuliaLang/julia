@@ -51,8 +51,12 @@ own licenses:
 - [LLVM](http://releases.llvm.org/6.0.0/LICENSE.TXT) [BSD-3, effectively]
 - [UTF8PROC](https://github.com/JuliaStrings/utf8proc) [MIT]
 
-Julia's `stdlib` uses the following external libraries, which have
-their own licenses:
+The following components included in `stdlib` have their own separate licenses:
+
+- stdlib/SuiteSparse/umfpack.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
+- stdlib/SuiteSparse/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
+
+Julia's `stdlib` uses the following external libraries, which have their own licenses:
 
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt) [BSD-3]
 - [OPENLIBM](https://github.com/JuliaMath/openlibm/blob/master/LICENSE.md) [MIT, BSD-2, ISC]
@@ -65,6 +69,7 @@ their own licenses:
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE) [BSD-3]
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt) [BSD-3]
 - [PCRE](http://www.pcre.org/licence.txt) [BSD-3]
+- [SUITESPARSE](http://suitesparse.com) [mix of LGPL2+ and GPL2+; see individual module licenses]
 
 Julia's build process uses the following external tools:
 
