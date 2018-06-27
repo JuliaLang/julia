@@ -97,7 +97,6 @@ DefaultArrayStyle{M}(::Val{N}) where {N,M} = DefaultArrayStyle{N}()
 const DefaultVectorStyle = DefaultArrayStyle{1}
 const DefaultMatrixStyle = DefaultArrayStyle{2}
 BroadcastStyle(::Type{<:AbstractArray{T,N}}) where {T,N} = DefaultArrayStyle{N}()
-BroadcastStyle(::Type{<:Ref}) = DefaultArrayStyle{0}()
 BroadcastStyle(::Type{T}) where {T} = DefaultArrayStyle{ndims(T)}()
 
 # `ArrayConflict` is an internal type signaling that two or more different `AbstractArrayStyle`
@@ -204,7 +203,6 @@ Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{Bool}) =
 ## Computing the result's axes. Most types probably won't need to specialize this.
 broadcast_axes() = ()
 broadcast_axes(A::Tuple) = (OneTo(length(A)),)
-broadcast_axes(A::Ref) = ()
 @inline broadcast_axes(A) = axes(A)
 """
     Base.broadcast_axes(A)
