@@ -175,8 +175,9 @@ function cholesky!(A::StridedMatrix, ::Val{false}=Val(false); check::Bool = true
 end
 
 function cholesky(A::Diagonal, ::Val{false} = Val(false))
-    Diagonal([d > 0 ? √d : throw(PosDefException(i))
-              for (i, d) in enumerate(diag(A))])
+    Cholesky(Diagonal([d > 0 ? √d : throw(PosDefException(i))
+                       for (i, d) in enumerate(diag(A))]),
+             'U', zero(BlasInt))
 end
 
 ## With pivoting

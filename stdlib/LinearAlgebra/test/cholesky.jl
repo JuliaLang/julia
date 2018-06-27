@@ -275,8 +275,9 @@ end
     d = 1:3
     D = Diagonal(d)
     CD = cholesky(D)
-    @test CD isa Diagonal{Float64, Vector{Float64}}
-    @test diag(CD) == .√d
+    @test CD isa Cholesky
+    @test CD.U isa UpperTriangular
+    @test CD.U == Diagonal(.√d)
     @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
 end
 
