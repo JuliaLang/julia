@@ -1248,3 +1248,13 @@ h_line() = f_line()
     │╻╷ f_line
     ││╻  g_line
     ││╻  g_line""")
+
+# issue #27352
+@test_throws MethodError print(nothing)
+@test_throws MethodError print(stdout, nothing)
+@test_throws MethodError string(nothing)
+@test_throws MethodError string(1, "", nothing)
+@test_throws MethodError let x = nothing; "x = $x" end
+@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+@test_throws MethodError `/bin/foo $nothing`
+@test_throws MethodError `$nothing`

@@ -88,7 +88,7 @@ function print_node(io::IO, idx::Int, @nospecialize(stmt), used, argnames, maxsi
         Base.print(io, join(String[sprint(io->print_ssa(io, arg, argnames)) for arg in stmt.args], ", "))
         Base.print(io, ")")
     else
-        Base.print(io, stmt)
+        Base.show(io, stmt)
     end
 end
 
