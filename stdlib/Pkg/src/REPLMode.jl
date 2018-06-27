@@ -371,9 +371,9 @@ const helps = Dict(
     the project file is summarized.
     """, CMD_GENERATE => md"""
 
-        create name
+        generate pkgname
 
-    Create a project called `name` in the current folder.
+    Create a project called `pkgname` in the current folder.
     """,
     CMD_ADD => md"""
 
