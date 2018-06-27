@@ -174,6 +174,10 @@ function cholesky!(A::StridedMatrix, ::Val{false}=Val(false); check::Bool = true
     end
 end
 
+function cholesky(A::Diagonal, ::Val{false} = Val(false))
+    Diagonal([d > 0 ? √d : throw(PosDefException(i))
+              for (i, d) in enumerate(diag(A))])
+end
 
 ## With pivoting
 ### BLAS/LAPACK element types

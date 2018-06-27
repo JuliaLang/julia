@@ -271,4 +271,13 @@ end
     @test_throws ArgumentError cholesky!(Hermitian(rand(Float16, 5,5)), Val(true))
 end
 
+@testset "cholesky Diagonal" begin
+    d = 1:3
+    D = Diagonal(d)
+    CD = cholesky(D)
+    @test CD isa Diagonal{Float64, Vector{Float64}}
+    @test diag(CD) == .√d
+    @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
+end
+
 end # module TestCholesky
