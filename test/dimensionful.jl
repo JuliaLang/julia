@@ -38,13 +38,12 @@ sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
 for f in (:isfinite, :isnan, :isreal)
     @eval Base.$f(x::Furlong) = $f(x.val)
 end
-for f in (:real,:imag,:complex,:middle,:+,:-)
+for f in (:real,:imag,:complex,:+,:-)
     @eval Base.$f(x::Furlong{p}) where {p} = Furlong{p}($f(x.val))
 end
 
-import Base: +, -, ==, !=, <, <=, isless, isequal, *, /, //, div, rem, mod, ^,
-             middle, hypot
-for op in (:+, :-, :middle, :hypot)
+import Base: +, -, ==, !=, <, <=, isless, isequal, *, /, //, div, rem, mod, ^, hypot
+for op in (:+, :-, :hypot)
     @eval function $op(x::Furlong{p}, y::Furlong{p}) where {p}
         v = $op(x.val, y.val)
         Furlong{p}(v)

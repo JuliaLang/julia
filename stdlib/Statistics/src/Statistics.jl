@@ -1,5 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Statistics
+
+Standard library module for basic statistics functionality.
+"""
+module Statistics
+
+using LinearAlgebra, SparseArrays
+
+export cor, cov, std, stdm, var, varm, mean!, mean,
+    median!, median, middle, quantile!, quantile
+
 ##### mean #####
 
 """
@@ -15,7 +27,7 @@ julia> mean([√1, √2, √3])
 1.3820881233139908
 ```
 """
-function mean(f::Callable, iterable)
+function mean(f::Base.Callable, iterable)
     y = iterate(iterable)
     if y === nothing
         throw(ArgumentError("mean of empty collection undefined: $(repr(iterable))"))
@@ -23,7 +35,7 @@ function mean(f::Callable, iterable)
     count = 1
     value, state = y
     f_value = f(value)
-    total = reduce_first(add_sum, f_value)
+    total = Base.reduce_first(Base.add_sum, f_value)
     y = iterate(iterable, state)
     while y !== nothing
         value, state = y
@@ -34,7 +46,7 @@ function mean(f::Callable, iterable)
     return total/count
 end
 mean(iterable) = mean(identity, iterable)
-mean(f::Callable, A::AbstractArray) = sum(f, A) / _length(A)
+mean(f::Base.Callable, A::AbstractArray) = sum(f, A) / Base._length(A)
 
 """
     mean!(r, v)
@@ -60,7 +72,7 @@ julia> mean!([1. 1.], v)
 """
 function mean!(R::AbstractArray, A::AbstractArray)
     sum!(R, A; init=true)
-    x = max(1, _length(R)) // _length(A)
+    x = max(1, Base._length(R)) // Base._length(A)
     R .= R .* x
     return R
 end
@@ -76,8 +88,15 @@ Compute the mean of whole array `v`, or optionally along the given dimensions.
 """
 mean(A::AbstractArray; dims=:) = _mean(A, dims)
 
-_mean(A::AbstractArray{T}, region) where {T} = mean!(reducedim_init(t -> t/2, +, A, region), A)
-_mean(A::AbstractArray, ::Colon) = sum(A) / _length(A)
+_mean(A::AbstractArray{T}, region) where {T} = mean!(Base.reducedim_init(t -> t/2, +, A, region), A)
+_mean(A::AbstractArray, ::Colon) = sum(A) / Base._length(A)
+
+function mean(r::AbstractRange{<:Real})
+    isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
+    (first(r) + last(r)) / 2
+end
+
+median(r::AbstractRange{<:Real}) = mean(r)
 
 ##### variances #####
 
@@ -136,12 +155,12 @@ centralize_sumabs2(A::AbstractArray, m, ifirst::Int, ilast::Int) =
 
 function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::AbstractArray) where S
     # following the implementation of _mapreducedim! at base/reducedim.jl
-    lsiz = check_reducedims(R,A)
+    lsiz = Base.check_reducedims(R,A)
     isempty(R) || fill!(R, zero(S))
     isempty(A) && return R
 
-    if has_fast_linear_indexing(A) && lsiz > 16
-        nslices = div(_length(A), lsiz)
+    if Base.has_fast_linear_indexing(A) && lsiz > 16
+        nslices = div(Base._length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i = 1:nslices
             @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
@@ -149,10 +168,10 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
         end
         return R
     end
-    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
+    indsAt, indsRt = Base.safe_tail(axes(A)), Base.safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsRt)
-    if reducedim1(R, A)
-        i1 = first(indices1(R))
+    if Base.reducedim1(R, A)
+        i1 = first(Base.indices1(R))
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
@@ -177,7 +196,7 @@ function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; correcte
     if isempty(A)
         fill!(R, convert(S, NaN))
     else
-        rn = div(_length(A), _length(R)) - Int(corrected)
+        rn = div(Base._length(A), Base._length(R)) - Int(corrected)
         centralize_sumabs2!(R, A, m)
         R .= R .* (1 // rn)
     end
@@ -199,12 +218,12 @@ whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x
 varm(A::AbstractArray, m::AbstractArray; corrected::Bool=true, dims=:) = _varm(A, m, corrected, dims)
 
 _varm(A::AbstractArray{T}, m, corrected::Bool, region) where {T} =
-    varm!(reducedim_init(t -> abs2(t)/2, +, A, region), A, m; corrected=corrected)
+    varm!(Base.reducedim_init(t -> abs2(t)/2, +, A, region), A, m; corrected=corrected)
 
 varm(A::AbstractArray, m; corrected::Bool=true) = _varm(A, m, corrected, :)
 
 function _varm(A::AbstractArray{T}, m, corrected::Bool, ::Colon) where T
-    n = _length(A)
+    n = Base._length(A)
     n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
@@ -228,10 +247,10 @@ The mean `mean` over the region may be provided.
 var(A::AbstractArray; corrected::Bool=true, mean=nothing, dims=:) = _var(A, corrected, mean, dims)
 
 _var(A::AbstractArray, corrected::Bool, mean, dims) =
-    varm(A, coalesce(mean, Base.mean(A, dims=dims)); corrected=corrected, dims=dims)
+    varm(A, something(mean, Statistics.mean(A, dims=dims)); corrected=corrected, dims=dims)
 
 _var(A::AbstractArray, corrected::Bool, mean, ::Colon) =
-    real(varm(A, coalesce(mean, Base.mean(A)); corrected=corrected))
+    real(varm(A, something(mean, Statistics.mean(A)); corrected=corrected))
 
 varm(iterable, m; corrected::Bool=true) = _var(iterable, corrected, m)
 
@@ -329,7 +348,7 @@ stdm(iterable, m; corrected::Bool=true) =
 _conj(x::AbstractArray{<:Real}) = x
 _conj(x::AbstractArray) = conj(x)
 
-_getnobs(x::AbstractVector, vardim::Int) = _length(x)
+_getnobs(x::AbstractVector, vardim::Int) = Base._length(x)
 _getnobs(x::AbstractMatrix, vardim::Int) = size(x, vardim)
 
 function _getnobs(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int)
@@ -357,7 +376,7 @@ unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
 
 # covzm (with centered data)
 
-covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x) / (_length(x) - Int(corrected))
+covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x) / (Base._length(x) - Int(corrected))
 function covzm(x::AbstractMatrix, vardim::Int=1; corrected::Bool=true)
     C = unscaled_covzm(x, vardim)
     T = promote_type(typeof(first(C) / 1), eltype(C))
@@ -367,7 +386,7 @@ function covzm(x::AbstractMatrix, vardim::Int=1; corrected::Bool=true)
     return A
 end
 covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
-    unscaled_covzm(x, y) / (_length(x) - Int(corrected))
+    unscaled_covzm(x, y) / (Base._length(x) - Int(corrected))
 function covzm(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1; corrected::Bool=true)
     C = unscaled_covzm(x, y, vardim)
     T = promote_type(typeof(first(C) / 1), eltype(C))
@@ -396,7 +415,7 @@ covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1; corr
 Compute the variance of the vector `x`. If `corrected` is `true` (the default) then the sum
 is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
 """
-cov(x::AbstractVector; corrected::Bool=true) = covm(x, Base.mean(x); corrected=corrected)
+cov(x::AbstractVector; corrected::Bool=true) = covm(x, mean(x); corrected=corrected)
 
 """
     cov(X::AbstractMatrix; dims::Int=1, corrected::Bool=true)
@@ -417,7 +436,7 @@ default), computes ``\\frac{1}{n-1}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``
 `false`, computes ``\\frac{1}{n}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``.
 """
 cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
-    covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected)
+    covm(x, mean(x), y, mean(y); corrected=corrected)
 
 """
     cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; dims::Int=1, corrected::Bool=true)
@@ -550,7 +569,7 @@ cor(X::AbstractMatrix; dims::Int=1) = corm(X, _vmean(X, dims), dims)
 
 Compute the Pearson correlation between the vectors `x` and `y`.
 """
-cor(x::AbstractVector, y::AbstractVector) = corm(x, Base.mean(x), y, Base.mean(y))
+cor(x::AbstractVector, y::AbstractVector) = corm(x, mean(x), y, mean(y))
 
 """
     cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; dims=1)
@@ -626,7 +645,7 @@ function median!(v::AbstractVector)
         end
     end
     inds = axes(v, 1)
-    n = _length(inds)
+    n = Base._length(inds)
     mid = div(first(inds)+last(inds),2)
     if isodd(n)
         return middle(partialsort!(v,mid))
@@ -653,7 +672,7 @@ median(v::AbstractArray; dims=:) = _median(v, dims)
 
 _median(v::AbstractArray, dims) = mapslices(median!, v, dims = dims)
 
-_median(v::AbstractArray{T}, ::Colon) where {T} = median!(copyto!(Array{T,1}(undef, _length(v)), v))
+_median(v::AbstractArray{T}, ::Colon) where {T} = median!(copyto!(Array{T,1}(undef, Base._length(v)), v))
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
@@ -721,7 +740,7 @@ function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
         hi = ceil(Int,1+maxp*(lv-1))
 
         # only need to perform partial sort
-        sort!(v, 1, lv, Sort.PartialQuickSort(lo:hi), Base.Sort.Forward)
+        sort!(v, 1, lv, Base.Sort.PartialQuickSort(lo:hi), Base.Sort.Forward)
     end
     isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
     return v
@@ -776,4 +795,112 @@ for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 """
 quantile(v::AbstractVector, p; sorted::Bool=false) =
-    quantile!(sorted ? v : copymutable(v), p; sorted=sorted)
+    quantile!(sorted ? v : Base.copymutable(v), p; sorted=sorted)
+
+
+##### SparseArrays optimizations #####
+
+function cov(X::SparseMatrixCSC; dims::Int=1, corrected::Bool=true)
+    vardim = dims
+    a, b = size(X)
+    n, p = vardim == 1 ? (a, b) : (b, a)
+
+    # The covariance can be decomposed into two terms
+    # 1/(n - 1) ∑ (x_i - x̄)*(x_i - x̄)' = 1/(n - 1) (∑ x_i*x_i' - n*x̄*x̄')
+    # which can be evaluated via a sparse matrix-matrix product
+
+    # Compute ∑ x_i*x_i' = X'X using sparse matrix-matrix product
+    out = Matrix(unscaled_covzm(X, vardim))
+
+    # Compute x̄
+    x̄ᵀ = mean(X, dims=vardim)
+
+    # Subtract n*x̄*x̄' from X'X
+    @inbounds for j in 1:p, i in 1:p
+        out[i,j] -= x̄ᵀ[i] * x̄ᵀ[j]' * n
+    end
+
+    # scale with the sample size n or the corrected sample size n - 1
+    return rmul!(out, inv(n - corrected))
+end
+
+# This is the function that does the reduction underlying var/std
+function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, means::AbstractArray) where {S,Tv,Ti}
+    lsiz = Base.check_reducedims(R,A)
+    size(means) == size(R) || error("size of means must match size of R")
+    isempty(R) || fill!(R, zero(S))
+    isempty(A) && return R
+
+    colptr = A.colptr
+    rowval = A.rowval
+    nzval = A.nzval
+    m = size(A, 1)
+    n = size(A, 2)
+
+    if size(R, 1) == size(R, 2) == 1
+        # Reduction along both columns and rows
+        R[1, 1] = centralize_sumabs2(A, means[1])
+    elseif size(R, 1) == 1
+        # Reduction along rows
+        @inbounds for col = 1:n
+            mu = means[col]
+            r = convert(S, (m-colptr[col+1]+colptr[col])*abs2(mu))
+            @simd for j = colptr[col]:colptr[col+1]-1
+                r += abs2(nzval[j] - mu)
+            end
+            R[1, col] = r
+        end
+    elseif size(R, 2) == 1
+        # Reduction along columns
+        rownz = fill(convert(Ti, n), m)
+        @inbounds for col = 1:n
+            @simd for j = colptr[col]:colptr[col+1]-1
+                row = rowval[j]
+                R[row, 1] += abs2(nzval[j] - means[row])
+                rownz[row] -= 1
+            end
+        end
+        for i = 1:m
+            R[i, 1] += rownz[i]*abs2(means[i])
+        end
+    else
+        # Reduction along a dimension > 2
+        @inbounds for col = 1:n
+            lastrow = 0
+            @simd for j = colptr[col]:colptr[col+1]-1
+                row = rowval[j]
+                for i = lastrow+1:row-1
+                    R[i, col] = abs2(means[i, col])
+                end
+                R[row, col] = abs2(nzval[j] - means[row, col])
+                lastrow = row
+            end
+            for i = lastrow+1:m
+                R[i, col] = abs2(means[i, col])
+            end
+        end
+    end
+    return R
+end
+
+
+##### deprecations #####
+
+# PR #21709
+@deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
+@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, dims=vardim, corrected=corrected)
+@deprecate cov(X::AbstractVector, Y::AbstractVector, corrected::Bool) cov(X, Y, corrected=corrected)
+@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, dims=vardim, corrected=corrected)
+
+# issue #25501
+@deprecate mean(A::AbstractArray, dims)                              mean(A, dims=dims)
+@deprecate varm(A::AbstractArray, m::AbstractArray, dims; kwargs...) varm(A, m; kwargs..., dims=dims)
+@deprecate var(A::AbstractArray, dims; kwargs...)                    var(A; kwargs..., dims=dims)
+@deprecate std(A::AbstractArray, dims; kwargs...)                    std(A; kwargs..., dims=dims)
+@deprecate cov(X::AbstractMatrix, dim::Int; kwargs...)               cov(X; kwargs..., dims=dim)
+@deprecate cov(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int; kwargs...) cov(x, y; kwargs..., dims=dim)
+@deprecate cor(X::AbstractMatrix, dim::Int)                          cor(X, dims=dim)
+@deprecate cor(x::AbstractVecOrMat, y::AbstractVecOrMat, dim::Int)   cor(x, y, dims=dim)
+@deprecate median(A::AbstractArray, dims; kwargs...)                 median(A; kwargs..., dims=dims)
+
+end # module

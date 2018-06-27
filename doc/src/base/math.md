@@ -177,21 +177,3 @@ Base.widemul
 Base.Math.@evalpoly
 Base.FastMath.@fastmath
 ```
-
-## Statistics
-
-```@docs
-Base.mean
-Base.mean!
-Base.std
-Base.stdm
-Base.var
-Base.varm
-Base.middle
-Base.median
-Base.median!
-Base.quantile
-Base.quantile!
-Base.cov
-Base.cor
-```

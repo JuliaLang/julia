@@ -1422,7 +1422,7 @@ function prune_graph!(graph::Graph)
 
     # Done
 
-    log_event_global!(graph, "pruned graph — stats (n. of packages, mean connectivity): before = ($np,$(mean(spp))) after = ($new_np,$(mean(new_spp)))")
+    log_event_global!(graph, "pruned graph — stats (n. of packages, mean connectivity): before = ($np,$(sum(spp)/length(spp))) after = ($new_np,$(sum(new_spp)/length(new_spp)))")
 
     # Replace old data with new
     data.pkgs = new_pkgs

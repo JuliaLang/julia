@@ -5,6 +5,7 @@ using .Main.TestHelpers.OAs
 using DelimitedFiles
 using Random
 using LinearAlgebra
+using Statistics
 
 const OAs_name = join(fullname(OAs), ".")
 

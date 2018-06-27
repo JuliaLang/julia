@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Random, LinearAlgebra
+using Statistics, Test, Random, LinearAlgebra, SparseArrays
 
 @testset "middle" begin
     @test middle(3) === 3.0
@@ -77,6 +77,15 @@ end
         @test mean(x) == mean(g) == typemax(T)
         @test mean(identity, x) == mean(identity, g) == typemax(T)
         @test mean(x, dims=2) == [typemax(T)]'
+    end
+end
+
+@testset "mean/median for ranges" begin
+    for f in (mean, median)
+        for n = 2:5
+            @test f(2:n) == f([2:n;])
+            @test f(2:0.1:n) ≈ f([2:0.1:n;])
+        end
     end
 end
 
@@ -185,6 +194,19 @@ end
 
     @test std([1//1, 2//1]) isa Float64
     @test std([1//1, 2//1], dims=1) isa Vector{Float64}
+
+    @testset "var: empty cases" begin
+        A = Matrix{Int}(undef, 0,1)
+        @test var(A) === NaN
+
+        @test isequal(var(A, dims=1), fill(NaN, 1, 1))
+        @test isequal(var(A, dims=2), fill(NaN, 0, 1))
+        @test isequal(var(A, dims=(1, 2)), fill(NaN, 1, 1))
+        @test isequal(var(A, dims=3), fill(NaN, 0, 1))
+    end
+
+    # issue #6672
+    @test std(AbstractFloat[1,2,3], dims=1) == [1.0]
 end
 
 function safe_cov(x, y, zm::Bool, cr::Bool)
@@ -231,46 +253,46 @@ Y = [6.0  2.0;
             y1 = vec(Y[1,:])
         end
 
-        c = zm ? Base.covm(x1, 0, corrected=cr) :
+        c = zm ? Statistics.covm(x1, 0, corrected=cr) :
                  cov(x1, corrected=cr)
         @test isa(c, Float64)
         @test c ≈ Cxx[1,1]
         @inferred cov(x1, corrected=cr)
 
-        @test cov(X) == Base.covm(X, mean(X, dims=1))
-        C = zm ? Base.covm(X, 0, vd, corrected=cr) :
+        @test cov(X) == Statistics.covm(X, mean(X, dims=1))
+        C = zm ? Statistics.covm(X, 0, vd, corrected=cr) :
                  cov(X, dims=vd, corrected=cr)
         @test size(C) == (k, k)
         @test C ≈ Cxx
         @inferred cov(X, dims=vd, corrected=cr)
 
-        @test cov(x1, y1) == Base.covm(x1, mean(x1), y1, mean(y1))
-        c = zm ? Base.covm(x1, 0, y1, 0, corrected=cr) :
+        @test cov(x1, y1) == Statistics.covm(x1, mean(x1), y1, mean(y1))
+        c = zm ? Statistics.covm(x1, 0, y1, 0, corrected=cr) :
                  cov(x1, y1, corrected=cr)
         @test isa(c, Float64)
         @test c ≈ Cxy[1,1]
         @inferred cov(x1, y1, corrected=cr)
 
         if vd == 1
-            @test cov(x1, Y) == Base.covm(x1, mean(x1), Y, mean(Y, dims=1))
+            @test cov(x1, Y) == Statistics.covm(x1, mean(x1), Y, mean(Y, dims=1))
         end
-        C = zm ? Base.covm(x1, 0, Y, 0, vd, corrected=cr) :
+        C = zm ? Statistics.covm(x1, 0, Y, 0, vd, corrected=cr) :
                  cov(x1, Y, dims=vd, corrected=cr)
         @test size(C) == (1, k)
         @test vec(C) ≈ Cxy[1,:]
         @inferred cov(x1, Y, dims=vd, corrected=cr)
 
         if vd == 1
-            @test cov(X, y1) == Base.covm(X, mean(X, dims=1), y1, mean(y1))
+            @test cov(X, y1) == Statistics.covm(X, mean(X, dims=1), y1, mean(y1))
         end
-        C = zm ? Base.covm(X, 0, y1, 0, vd, corrected=cr) :
+        C = zm ? Statistics.covm(X, 0, y1, 0, vd, corrected=cr) :
                  cov(X, y1, dims=vd, corrected=cr)
         @test size(C) == (k, 1)
         @test vec(C) ≈ Cxy[:,1]
         @inferred cov(X, y1, dims=vd, corrected=cr)
 
-        @test cov(X, Y) == Base.covm(X, mean(X, dims=1), Y, mean(Y, dims=1))
-        C = zm ? Base.covm(X, 0, Y, 0, vd, corrected=cr) :
+        @test cov(X, Y) == Statistics.covm(X, mean(X, dims=1), Y, mean(Y, dims=1))
+        C = zm ? Statistics.covm(X, 0, Y, 0, vd, corrected=cr) :
                  cov(X, Y, dims=vd, corrected=cr)
         @test size(C) == (k, k)
         @test C ≈ Cxy
@@ -312,41 +334,41 @@ end
             y1 = vec(Y[1,:])
         end
 
-        c = zm ? Base.corm(x1, 0) : cor(x1)
+        c = zm ? Statistics.corm(x1, 0) : cor(x1)
         @test isa(c, Float64)
         @test c ≈ Cxx[1,1]
         @inferred cor(x1)
 
-        @test cor(X) == Base.corm(X, mean(X, dims=1))
-        C = zm ? Base.corm(X, 0, vd) : cor(X, dims=vd)
+        @test cor(X) == Statistics.corm(X, mean(X, dims=1))
+        C = zm ? Statistics.corm(X, 0, vd) : cor(X, dims=vd)
         @test size(C) == (k, k)
         @test C ≈ Cxx
         @inferred cor(X, dims=vd)
 
-        @test cor(x1, y1) == Base.corm(x1, mean(x1), y1, mean(y1))
-        c = zm ? Base.corm(x1, 0, y1, 0) : cor(x1, y1)
+        @test cor(x1, y1) == Statistics.corm(x1, mean(x1), y1, mean(y1))
+        c = zm ? Statistics.corm(x1, 0, y1, 0) : cor(x1, y1)
         @test isa(c, Float64)
         @test c ≈ Cxy[1,1]
         @inferred cor(x1, y1)
 
         if vd == 1
-            @test cor(x1, Y) == Base.corm(x1, mean(x1), Y, mean(Y, dims=1))
+            @test cor(x1, Y) == Statistics.corm(x1, mean(x1), Y, mean(Y, dims=1))
         end
-        C = zm ? Base.corm(x1, 0, Y, 0, vd) : cor(x1, Y, dims=vd)
+        C = zm ? Statistics.corm(x1, 0, Y, 0, vd) : cor(x1, Y, dims=vd)
         @test size(C) == (1, k)
         @test vec(C) ≈ Cxy[1,:]
         @inferred cor(x1, Y, dims=vd)
 
         if vd == 1
-            @test cor(X, y1) == Base.corm(X, mean(X, dims=1), y1, mean(y1))
+            @test cor(X, y1) == Statistics.corm(X, mean(X, dims=1), y1, mean(y1))
         end
-        C = zm ? Base.corm(X, 0, y1, 0, vd) : cor(X, y1, dims=vd)
+        C = zm ? Statistics.corm(X, 0, y1, 0, vd) : cor(X, y1, dims=vd)
         @test size(C) == (k, 1)
         @test vec(C) ≈ Cxy[:,1]
         @inferred cor(X, y1, dims=vd)
 
-        @test cor(X, Y) == Base.corm(X, mean(X, dims=1), Y, mean(Y, dims=1))
-        C = zm ? Base.corm(X, 0, Y, 0, vd) : cor(X, Y, dims=vd)
+        @test cor(X, Y) == Statistics.corm(X, mean(X, dims=1), Y, mean(Y, dims=1))
+        C = zm ? Statistics.corm(X, 0, Y, 0, vd) : cor(X, Y, dims=vd)
         @test size(C) == (k, k)
         @test C ≈ Cxy
         @inferred cor(X, Y, dims=vd)
@@ -440,8 +462,13 @@ end
 end
 
 # dimensional correctness
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
 using .Main.TestHelpers: Furlong
+
+Statistics.middle(x::Furlong{p}) where {p} = Furlong{p}(middle(x.val))
+Statistics.middle(x::Furlong{p}, y::Furlong{p}) where {p} = Furlong{p}(middle(x.val, y.val))
+
 @testset "Unitful elements" begin
     r = Furlong(1):Furlong(1):Furlong(2)
     a = Vector(r)
@@ -471,9 +498,9 @@ end
 
 @testset "Promotion in covzm. Issue #8080" begin
     A = [1 -1 -1; -1 1 1; -1 1 -1; 1 -1 -1; 1 -1 1]
-    @test Base.covzm(A) - mean(A, dims=1)'*mean(A, dims=1)*size(A, 1)/(size(A, 1) - 1) ≈ cov(A)
+    @test Statistics.covzm(A) - mean(A, dims=1)'*mean(A, dims=1)*size(A, 1)/(size(A, 1) - 1) ≈ cov(A)
     A = [1//1 -1 -1; -1 1 1; -1 1 -1; 1 -1 -1; 1 -1 1]
-    @test (A'A - size(A, 1)*Base.mean(A, dims=1)'*Base.mean(A, dims=1))/4 == cov(A)
+    @test (A'A - size(A, 1)*mean(A, dims=1)'*mean(A, dims=1))/4 == cov(A)
 end
 
 @testset "Mean along dimension of empty array" begin
@@ -492,4 +519,84 @@ end
     @test var(x) ≈ vec(var([x[1] x[2]], dims=2))
     @test std(x) ≈ vec(std([x[1] x[2]], dims=2))
     @test cov(x) ≈ cov([x[1] x[2]], dims=2)
+end
+
+@testset "var of sparse array" begin
+    se33 = SparseMatrixCSC{Float64}(I, 3, 3)
+    sA = sprandn(3, 7, 0.5)
+    pA = sparse(rand(3, 7))
+
+    for arr in (se33, sA, pA)
+        farr = Array(arr)
+        @test var(arr) ≈ var(farr)
+        @test var(arr, dims=1) ≈ var(farr, dims=1)
+        @test var(arr, dims=2) ≈ var(farr, dims=2)
+        @test var(arr, dims=(1, 2)) ≈ [var(farr)]
+        @test isequal(var(arr, dims=3), var(farr, dims=3))
+    end
+
+    @testset "empty cases" begin
+        @test var(sparse(Int[])) === NaN
+        @test isequal(var(spzeros(0, 1), dims=1), var(Matrix{Int}(I, 0, 1), dims=1))
+        @test isequal(var(spzeros(0, 1), dims=2), var(Matrix{Int}(I, 0, 1), dims=2))
+        @test isequal(var(spzeros(0, 1), dims=(1, 2)), var(Matrix{Int}(I, 0, 1), dims=(1, 2)))
+        @test isequal(var(spzeros(0, 1), dims=3), var(Matrix{Int}(I, 0, 1), dims=3))
+    end
+end
+
+# Faster covariance function for sparse matrices
+# Prevents densifying the input matrix when subtracting the mean
+# Test against dense implementation
+# PR https://github.com/JuliaLang/julia/pull/22735
+# Part of this test needed to be hacked due to the treatment
+# of Inf in sparse matrix algebra
+# https://github.com/JuliaLang/julia/issues/22921
+# The issue will be resolved in
+# https://github.com/JuliaLang/julia/issues/22733
+@testset "optimizing sparse $elty covariance" for elty in (Float64, Complex{Float64})
+    n = 10
+    p = 5
+    np2 = div(n*p, 2)
+    nzvals, x_sparse = guardsrand(1) do
+        if elty <: Real
+            nzvals = randn(np2)
+        else
+            nzvals = complex.(randn(np2), randn(np2))
+        end
+        nzvals, sparse(rand(1:n, np2), rand(1:p, np2), nzvals, n, p)
+    end
+    x_dense  = convert(Matrix{elty}, x_sparse)
+    @testset "Test with no Infs and NaNs, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
+                                                                                 corrected in (true, false)
+        @test cov(x_sparse, dims=vardim, corrected=corrected) ≈
+              cov(x_dense , dims=vardim, corrected=corrected)
+    end
+
+    @testset "Test with $x11, vardim=$vardim, corrected=$corrected" for x11 in (NaN, Inf),
+                                                                     vardim in (1, 2),
+                                                                  corrected in (true, false)
+        x_sparse[1,1] = x11
+        x_dense[1 ,1] = x11
+
+        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
+        @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+    end
+
+    @testset "Test with NaN and Inf, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
+                                                                            corrected in (true, false)
+        x_sparse[1,1] = Inf
+        x_dense[1 ,1] = Inf
+        x_sparse[2,1] = NaN
+        x_dense[2 ,1] = NaN
+
+        cov_sparse = cov(x_sparse, dims=vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , dims=vardim, corrected=corrected)
+        @test cov_sparse[(1 + vardim):end, (1 + vardim):end] ≈
+              cov_dense[ (1 + vardim):end, (1 + vardim):end]
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+    end
 end
