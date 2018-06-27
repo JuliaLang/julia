@@ -613,7 +613,7 @@ all/many future usages of the other functions in module Foo that depend on calli
 
 ## Nothingness and missing values
 
-### How does "null" or "nothingness" work in Julia?
+### [How does "null", "nothingness" or "missingness" work in Julia?](@id faq-nothing)
 
 Unlike many languages (for example, C and Java), Julia objects cannot be "null" by default.
 When a reference (variable, object field, or array element) is uninitialized, accessing it
@@ -627,10 +627,14 @@ this convention, and that the REPL does not print anything for it. Some language
 would not otherwise have a value also yield `nothing`, for example `if false; end`.
 
 For situations where a value `x` of type `T` exists only sometimes, the `Union{T, Nothing}`
-type can be used. If the value itself can be `nothing` (notably, when `T` is `Any`),
+type can be used for function arguments, object fields and array element types
+as the equivalent of [`Nullable`, `Option` or `Maybe`](https://en.wikipedia.org/wiki/Nullable_type)
+in other languages. If the value itself can be `nothing` (notably, when `T` is `Any`),
 the `Union{Some{T}, Nothing}` type is more appropriate since `x == nothing` then indicates
 the absence of a value, and `x == Some(nothing)` indicates the presence of a value equal
-to `nothing`.
+to `nothing`. The [`something`](@ref) function allows unwrapping `Some` objects and
+using a default value instead of `nothing` arguments. Note that the compiler is able to
+generate efficient code when working with `Union{T, Nothing}` arguments or fields.
 
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
 [`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.

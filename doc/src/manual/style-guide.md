@@ -119,27 +119,6 @@ is typical for such functions to also return the modified array for convenience.
 
 Types such as `Union{Function,AbstractString}` are often a sign that some design could be cleaner.
 
-## Avoid type Unions in fields
-
-When creating a type such as:
-
-```julia
-mutable struct MyType
-    ...
-    x::Union{Nothing,T}
-end
-```
-
-ask whether the option for `x` to be `nothing` (of type `Nothing`) is really necessary. Here are
-some alternatives to consider:
-
-  * Find a safe default value to initialize `x` with
-  * Introduce another type that lacks `x`
-  * If there are many fields like `x`, store them in a dictionary
-  * Determine whether there is a simple rule for when `x` is `nothing`. For example, often the field
-    will start as `nothing` but get initialized at some well-defined point. In that case, consider
-    leaving it undefined at first.
-
 ## Avoid elaborate container types
 
 It is usually not much help to construct arrays like the following:
