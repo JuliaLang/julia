@@ -282,7 +282,7 @@ escaped by a prepending backslash (`\"` is also escaped by default in the first 
 julia> escape_string("aaa\\nbbb")
 "aaa\\\\nbbb"
 
-julia> escape_string("\\xfe\\xff") # invalid unicode
+julia> escape_string("\\xfe\\xff") # invalid utf-8
 "\\\\xfe\\\\xff"
 
 julia> escape_string(string('\\u2135','\\0')) # unambiguous
