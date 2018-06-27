@@ -424,6 +424,7 @@ include("uuid.jl")
 include("loading.jl")
 
 # misc useful functions & macros
+include("formatio.jl")
 include("util.jl")
 
 creating_sysimg = true

@@ -81,7 +81,7 @@ end
 
 function _term_header(io::IO, md, char, columns)
     text = terminline_string(io, md.text)
-    with_output_color(:bold, io) do io
+    with_format(:bold, io) do io
         print(io, ' '^margin)
         line_no, lastline_width = print_wrapped(io, text,
                                                 width=columns - 4margin; pre=" ")
@@ -102,7 +102,7 @@ function term(io::IO, md::Header{l}, columns) where l
 end
 
 function term(io::IO, md::Code, columns)
-    with_output_color(:cyan, io) do io
+    with_format(:cyan, io) do io
         L = lines(md.code)
         for i in eachindex(L)
             print(io, ' '^margin, L[i])
@@ -136,11 +136,11 @@ function terminline(io::IO, md::AbstractString)
 end
 
 function terminline(io::IO, md::Bold)
-    with_output_color(terminline, :bold, io, md.text)
+    with_format(terminline, :bold, io, md.text)
 end
 
 function terminline(io::IO, md::Italic)
-    with_output_color(terminline, :underline, io, md.text)
+    with_format(terminline, :underline, io, md.text)
 end
 
 function terminline(io::IO, md::LineBreak)
@@ -151,7 +151,7 @@ function terminline(io::IO, md::Image)
     terminline(io, "(Image: $(md.alt))")
 end
 
-terminline(io::IO, f::Footnote) = with_output_color(terminline, :bold, io, "[^$(f.id)]")
+terminline(io::IO, f::Footnote) = with_format(terminline, :bold, io, "[^$(f.id)]")
 
 function terminline(io::IO, md::Link)
     url = !Base.startswith(md.url, "@ref") ? " ($(md.url))" : ""

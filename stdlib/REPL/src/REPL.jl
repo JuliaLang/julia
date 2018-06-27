@@ -132,11 +132,11 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
-function print_response(repl::AbstractREPL, @nospecialize(val), bt, show_value::Bool, have_color::Bool)
+function print_response(repl::AbstractREPL, @nospecialize(val), bt, show_value::Bool)
     repl.waserror = bt !== nothing
-    print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
+    print_response(outstream(repl), val, bt, show_value, specialdisplay(repl))
 end
-function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
+function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, specialdisplay=nothing)
     Base.sigatomic_begin()
     while true
         try
@@ -191,16 +191,16 @@ end
 ## BasicREPL ##
 
 mutable struct BasicREPL <: AbstractREPL
-    terminal::TextTerminal
+    terminal::AbstractTerminal
     waserror::Bool
-    BasicREPL(t) = new(t,false)
+    BasicREPL(t) = new(t, false)
 end
 
 outstream(r::BasicREPL) = r.terminal
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
-    dopushdisplay = !in(d,Base.Multimedia.displays)
+    dopushdisplay = !in(d, Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
     hit_eof = false
@@ -236,7 +236,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             put!(repl_channel, (ast, 1))
             val, bt = take!(response_channel)
             if !ends_with_semicolon(line)
-                print_response(repl, val, bt, true, false)
+                print_response(repl, val, bt, true)
             end
         end
         write(repl.terminal, '\n')
@@ -250,7 +250,6 @@ end
 ## User Options
 
 mutable struct Options
-    hascolor::Bool
     extra_keymap::Union{Dict,Vector{<:Dict}}
     # controls the presumed tab width of code pasted into the REPL.
     # Must satisfy `0 < tabwidth <= 16`.
@@ -271,7 +270,6 @@ mutable struct Options
 end
 
 Options(;
-        hascolor = true,
         extra_keymap = AnyDict[],
         tabwidth = 8,
         kill_ring_max = 100,
@@ -282,7 +280,7 @@ Options(;
         backspace_align = true, backspace_adjust = backspace_align,
         confirm_exit = false,
         auto_indent = true) =
-            Options(hascolor, extra_keymap, tabwidth,
+            Options(extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
                     beep_colors, beep_use_current,
@@ -295,8 +293,7 @@ const GlobalOptions = Options()
 ## LineEditREPL ##
 
 mutable struct LineEditREPL <: AbstractREPL
-    t::TextTerminal
-    hascolor::Bool
+    t::AbstractTerminal
     prompt_color::String
     input_color::String
     answer_color::String
@@ -312,17 +309,19 @@ mutable struct LineEditREPL <: AbstractREPL
     mistate::Union{MIState,Nothing}
     interface::ModalInterface
     backendref::REPLBackendRef
-    LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
-        new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, Options(), nothing)
+    LineEditREPL(t, prompt_color, input_color, answer_color, shell_color, help_color, history_file, in_shell,
+            in_help, envcolors) =
+        new(t, prompt_color, input_color, answer_color, shell_color, help_color, history_file, in_shell,
+            in_help, envcolors, false, nothing, Options(), nothing)
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 
-LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
-    LineEditREPL(t, hascolor,
+function LineEditREPL(t::AbstractTerminal, envcolors::Bool=false)
+    hascolor = get(t, :color, false)
+    return LineEditREPL(t,
         hascolor ? Base.text_colors[:green] : "",
         hascolor ? Base.input_color() : "",
         hascolor ? Base.answer_color() : "",
@@ -330,6 +329,7 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
         hascolor ? Base.text_colors[:yellow] : "",
         false, false, false, envcolors
     )
+end
 
 mutable struct REPLCompletionProvider <: CompletionProvider end
 mutable struct ShellCompletionProvider <: CompletionProvider end
@@ -703,7 +703,7 @@ function respond(f, repl, main; pass_empty = false)
                 bt = catch_backtrace()
             end
             if !ends_with_semicolon(line) || bt !== nothing
-                print_response(repl, val, bt, true, Base.have_color)
+                print_response(repl, val, bt, true)
             end
         end
         prepare_next(repl)
@@ -714,7 +714,7 @@ end
 
 function reset(repl::LineEditREPL)
     raw!(repl.t, false)
-    print(repl.t,Base.text_colors[:normal])
+    print(repl.t, Base.text_colors[:normal])
 end
 
 function prepare_next(repl::LineEditREPL)
@@ -749,19 +749,17 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
-setup_interface(
-    repl::LineEditREPL;
-    # those keyword arguments may be deprecated eventually in favor of the Options mechanism
-    hascolor::Bool = repl.options.hascolor,
-    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
-) = setup_interface(repl, hascolor, extra_repl_keymap)
+setup_interface(repl::LineEditREPL;
+        # those keyword arguments may be deprecated eventually in favor of the Options mechanism
+        extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap) =
+    setup_interface(repl, extra_repl_keymap)
 
 # This non keyword method can be precompiled which is important
 function setup_interface(
     repl::LineEditREPL,
-    hascolor::Bool,
     extra_repl_keymap::Union{Dict,Vector{<:Dict}},
 )
+    hascolor = get(outstream(repl), :color, false)
     ###
     #
     # This function returns the main interface that describes the REPL
@@ -845,7 +843,7 @@ function setup_interface(
             end
             hist_from_file(hp, f, hist_path)
         catch e
-            print_response(repl, e, catch_backtrace(), true, Base.have_color)
+            print_response(repl, e, catch_backtrace(), true)
             println(outstream(repl))
             @info "Disabling history file for this session"
             repl.history_file = false
@@ -1027,13 +1025,6 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     dopushdisplay && popdisplay(d)
 end
 
-if isdefined(Base, :banner_color)
-    banner(io, t) = banner(io, hascolor(t))
-    banner(io, x::Bool) = print(io, x ? Base.banner_color : Base.banner_plain)
-else
-    banner(io,t) = Base.banner(io)
-end
-
 ## StreamREPL ##
 
 mutable struct StreamREPL <: AbstractREPL
@@ -1042,9 +1033,16 @@ mutable struct StreamREPL <: AbstractREPL
     input_color::String
     answer_color::String
     waserror::Bool
-    StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
+    StreamREPL(stream, pc, ic, ac) = new(stream, pc, ic, ac, false)
 end
-StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input_color(), Base.answer_color())
+function StreamREPL(stream::IO)
+    hascolor = get(stream, :color, false)
+    return StreamREPL(stream,
+        hascolor ? Base.text_colors[:green] : "",
+        hascolor ? Base.input_color() : "",
+        hascolor ? Base.answer_color() : "")
+end
+
 run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream
@@ -1106,15 +1104,15 @@ function ends_with_semicolon(line::AbstractString)
 end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
-    have_color = Base.have_color
-    banner(repl.stream, have_color)
+    Base.banner(repl.stream)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
     while !eof(repl.stream)
+        have_color = Base.have_color # TODO: get(repl.stream, :color, false)
         if have_color
-            print(repl.stream,repl.prompt_color)
+            print(repl.stream, repl.prompt_color)
         end
         print(repl.stream, "julia> ")
         if have_color
@@ -1129,7 +1127,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
             put!(repl_channel, (ast, 1))
             val, bt = take!(response_channel)
             if !ends_with_semicolon(line)
-                print_response(repl, val, bt, true, have_color)
+                print_response(repl, val, bt, true)
             end
         end
     end

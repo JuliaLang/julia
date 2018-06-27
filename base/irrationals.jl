@@ -165,8 +165,9 @@ big(::Type{<:AbstractIrrational}) = BigFloat
 
 # align along = for nice Array printing
 function alignment(io::IO, x::AbstractIrrational)
-    ctx = IOContext(io, :compact=>true)
-    m = match(r"^(.*?)(=.*)$", sprint(show, x, context=ctx, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=ctx, sizehint=0)), 0) :
-    (length(m.captures[1]), length(m.captures[2]))
+    ctx = IOContext(io, :compact => true)
+    repr = sprint(show, x, context=ctx)
+    m = match(r"^(.*?)(=.*)$", repr)
+    m === nothing && return (textwidth(repr), 0)
+    return (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end

@@ -13,13 +13,13 @@ isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), 
 import .Main.TestHelpers
 
 # no need to have animation in tests
-REPL.GlobalOptions.region_animation_duration=0.001
+REPL.GlobalOptions.region_animation_duration = 0.001
 
 ## helper functions
 
 function new_state()
     term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-    LineEdit.init_state(term, LineEdit.ModalInterface([LineEdit.Prompt("test> ")]))
+    return LineEdit.init_state(term, LineEdit.ModalInterface([LineEdit.Prompt("test> ")]))
 end
 
 charseek(buf, i) = seek(buf, nextind(content(buf), 0, i+1)-1)

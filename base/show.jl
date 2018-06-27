@@ -4,20 +4,6 @@ show(io::IO, ::UndefInitializer) = print(io, "array initializer with undefined v
 
 # first a few multiline show functions for types defined before the MIME type:
 
-show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
-
-function show(io::IO, ::MIME"text/plain", r::LinRange)
-    # show for LinRange, e.g.
-    # range(1, stop=3, length=7)
-    # 7-element LinRange{Float64}:
-    #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
-    print(io, summary(r))
-    if !isempty(r)
-        println(io, ":")
-        print_range(io, r)
-    end
-end
-
 function show(io::IO, ::MIME"text/plain", f::Function)
     ft = typeof(f)
     mt = ft.name.mt
@@ -40,11 +26,46 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
+function show(io::IO, t::AbstractDict{K,V}) where V where K
+    recur_io = IOContext(io, :SHOWN_SET => t)
+    limit = get(io, :limit, false)::Bool
+    if !haskey(io, :compact)
+        recur_io = IOContext(recur_io, :compact => true)
+    end
+
+    # show in a Julia-syntax-like form: Dict(k=>v, ...)
+    if isempty(t)
+        print(io, typeof(t), "()")
+    else
+        if isconcretetype(K) && isconcretetype(V)
+            print(io, typeof(t).name)
+        else
+            print(io, typeof(t))
+        end
+        print(io, '(')
+        if !show_circular(io, t)
+            first = true
+            n = 0
+            for pair in t
+                first || print(io, ", ")
+                first = false
+                show(recur_io, pair)
+                n += 1
+                if limit && n >= 10
+                    print(io, "…")
+                    break
+                end
+            end
+        end
+        print(io, ')')
+    end
+end
+
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     print(io, summary(iter))
     isempty(iter) && return
-    print(io, ". ", isa(iter,KeySet) ? "Keys" : "Values", ":")
-    limit::Bool = get(io, :limit, false)
+    print(io, ". ", isa(iter, KeySet) ? "Keys" : "Values", ":")
+    limit = get(io, :limit, false)::Bool
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -52,18 +73,19 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
         cols < 4 && (cols = 4)
         cols -= 2 # For prefix "  "
         rows -= 1 # For summary
-    else
-        rows = cols = typemax(Int)
     end
 
     for (i, v) in enumerate(iter)
         print(io, "\n  ")
-        i == rows < length(iter) && (print(io, "⋮"); break)
-
         if limit
-            str = sprint(show, v, context=io, sizehint=0)
-            str = _truncate_at_width_or_chars(str, cols, "\r\n")
-            print(io, str)
+            if i == rows < length(iter)
+                print(io, "⋮")
+                break
+            end
+            str = IOFormatBuffer()
+            print(IOContext(str, io), v)
+            truncate_text(str, cols, "\r\n")
+            write(io, str)
         else
             show(io, v)
         end
@@ -73,7 +95,7 @@ end
 function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
@@ -91,39 +113,45 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        ks = Vector{AbstractString}(undef, min(rows, length(t)))
-        vs = Vector{AbstractString}(undef, min(rows, length(t)))
+        ks = [IOFormatBuffer() for _ in 1:min(rows, length(t))]
+        vs = [IOFormatBuffer() for _ in 1:min(rows, length(t))]
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(show, k, context=recur_io, sizehint=0)
-            vs[i] = sprint(show, v, context=recur_io, sizehint=0)
-            keylen = clamp(length(ks[i]), keylen, cols)
-            vallen = clamp(length(vs[i]), vallen, cols)
+            show(IOContext(ks[i], recur_io), k)
+            show(IOContext(vs[i], recur_io), v)
+            keylen = clamp(textwidth(ks[i]), keylen, cols)
+            vallen = clamp(textwidth(vs[i]), vallen, cols)
         end
         if keylen > max(div(cols, 2), cols - vallen)
             keylen = max(cld(cols, 3), cols - vallen)
         end
-    else
-        rows = cols = typemax(Int)
     end
 
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
-        i == rows < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
-
-        if limit
-            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
-        else
-            key = sprint(show, k, context=recur_io, sizehint=0)
+        if limit && i == rows < length(t)
+            print(io, "⋮", " "^(keylen - 1), " => ⋮")
+            break
         end
-        print(recur_io, key)
-        print(io, " => ")
 
         if limit
-            val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
-            print(io, val)
+            let kstr = ks[i]
+                truncate_text(kstr, keylen, "\r\n")
+                wid = textwidth(kstr)
+                keylen > wid && print(kstr, " "^(keylen - wid))
+                write(io, kstr)
+            end
+        else
+            show(recur_io, k)
+        end
+        print(io, " => ")
+        if limit
+            let vstr = vs[i]
+                truncate_text(vstr, cols - keylen, "\r\n")
+                write(io, vstr)
+            end
         else
             show(recur_io, v)
         end
@@ -175,31 +203,26 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     end
 end
 
-# (Note that TTY and TTYTerminal io types have a :color property.)
-unwrapcontext(io::IO) = io, get(io,:color,false) ? ImmutableDict{Symbol,Any}(:color, true) : ImmutableDict{Symbol,Any}()
-unwrapcontext(io::IOContext) = io.io, io.dict
+IOContext(io::IOContext, dict::ImmutableDict) = typeof(io)(io.io, dict)
+IOContext(io::IO, dict::ImmutableDict) = IOContext{typeof(io)}(io, dict)
 
-function IOContext(io::IO, dict::ImmutableDict)
-    io0 = unwrapcontext(io)[1]
-    IOContext{typeof(io0)}(io0, dict)
-end
-
-convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)
+convert(::Type{IOContext}, io::IOContext) = io
+convert(::Type{IOContext}, io::IO) = IOContext(io, ImmutableDict{Symbol, Any}())
 
 # rename to IOContext when deprecation of `IOContext(io::IO; kws...)` is removed
 _IOContext(io::IO) = convert(IOContext, io)
 
-function IOContext(io::IO, KV::Pair)
-    io0, d = unwrapcontext(io)
-    IOContext(io0, ImmutableDict{Symbol,Any}(d, KV[1], KV[2]))
-end
+IOContext(io::IOContext, KV::Pair) = IOContext(io.io, ImmutableDict{Symbol, Any}(io.dict, KV[1], KV[2]))
+IOContext(io::IO, KV::Pair) = IOContext(io, ImmutableDict{Symbol, Any}(KV[1], KV[2]))
+
 
 """
     IOContext(io::IO, context::IOContext)
 
 Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
 """
-IOContext(io::IO, context::IO) = IOContext(unwrapcontext(io)[1], unwrapcontext(context)[2])
+IOContext(io::IO, context::IOContext) = IOContext(io, context.dict)
+IOContext(io::IO, context::IO) = _IOContext(io)
 
 """
     IOContext(io::IO, KV::Pair...)
@@ -595,7 +618,7 @@ function show(io::IO, m::Module)
     if is_root_module(m)
         print(io, nameof(m))
     else
-        print(io, join(fullname(m),"."))
+        join(io, fullname(m), ".")
     end
 end
 
@@ -911,9 +934,13 @@ const indent_width = 4
 
 is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 
-emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
-    printstyled(io, str; color=col, bold=true) :
-    print(io, uppercase(str))
+function emphasize(io, str::AbstractString, col = Base.error_color())
+    if get(io, :color, false)
+        printstyled(io, str; color=col, bold=true)
+    else
+        print(io, uppercase(str))
+    end
+end
 
 show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
 show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")
@@ -1476,7 +1503,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
         return
     end
     sig = unwrap_unionall(sig).parameters
-    Base.with_output_color(color, io) do io
+    with_format(color, io) do io
         ft = sig[1]
         uw = unwrap_unionall(ft)
         if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
@@ -1721,38 +1748,41 @@ dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(stdout::IO, :limit =>
 `alignment(X)` returns a tuple (left,right) showing how many characters are
 needed on either side of an alignment feature such as a decimal point.
 """
-alignment(io::IO, x::Any) = (0, length(sprint(show, x, context=io, sizehint=0)))
-alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(42)` yields (2,0)"
-alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-"`alignment(4.23)` yields (1,3) for `4` and `.23`"
+alignment(io::IO, x::Any) = (0, textwidth(sprint(show, x, context=io)))
+alignment(io::IO, x::Number) = (textwidth(sprint(show, x, context=io)), 0)
+"`alignment(42)` yields (2, 0)"
+alignment(io::IO, x::Integer) = (textwidth(sprint(show, x, context=io)), 0)
+"`alignment(4.23)` yields (1, 3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    repr = sprint(show, x, context=io)
+    m = match(r"^(.*?)((?:[\.eE].*)?)$", repr)
+    m === nothing && return textwidth(repr)
+    return textwidth(m.captures[1]), textwidth(m.captures[2])
 end
-"`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
+"`alignment(1 + 10im)` yields (3, 5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^e][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    repr = sprint(show, x, context=io)
+    m = match(r"^(.*[^e][\+\-])(.*)$", repr)
+    m === nothing && return (textwidth(repr), 0)
+    return (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 function alignment(io::IO, x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    repr = sprint(show, x, context=io)
+    m = match(r"^(.*?/)(/.*)$", repr)
+    m === nothing && return (textwidth(repr), 0)
+    return (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 
 function alignment(io::IO, x::Pair)
-    s = sprint(show, x, context=io, sizehint=0)
+    repr = sprint(show, x, context=io)
     if has_tight_type(x) # i.e. use "=>" for display
         iocompact = IOContext(io, :compact => get(io, :compact, true))
-        left = length(sprint(show, x.first, context=iocompact, sizehint=0))
+        left = textwidth(sprint(show, x.first, context=iocompact))
         left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
         left += !get(io, :compact, false) # spaces are added around "=>"
-        (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
+        return (left + 1, textwidth(repr) - left - 1) # +1 for the "=" part of "=>"
     else
-        (0, length(s)) # as for x::Any
+        return (0, textwidth(repr)) # as for x::Any
     end
 end
 

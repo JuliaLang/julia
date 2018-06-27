@@ -306,7 +306,7 @@ function task_done_hook(t::Task)
         if !suppress_excp_printing(t)
             let bt = t.backtrace
                 # run a new task to print the error for us
-                @async with_output_color(Base.error_color(), stderr) do io
+                @async with_format(Base.error_color(), IOContext(stderr, :color => have_color)) do io
                     print(io, "ERROR (unhandled task failure): ")
                     showerror(io, result, bt)
                     println(io)

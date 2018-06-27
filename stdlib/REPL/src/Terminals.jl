@@ -4,7 +4,6 @@ module Terminals
 
 export
     AbstractTerminal,
-    TextTerminal,
     UnixTerminal,
     TerminalBuffer,
     TTYTerminal,
@@ -21,13 +20,12 @@ export
     end_keypad_transmit_mode,
     getX,
     getY,
-    hascolor,
+    supports_color,
     pos,
     raw!
 
 import Base:
     check_open, # stream.jl
-    displaysize,
     flush,
     pipe_reader,
     pipe_writer,
@@ -38,63 +36,58 @@ import Base:
 
 abstract type AbstractTerminal <: Base.AbstractPipe end
 
-## TextTerminal ##
-
-abstract type TextTerminal <: AbstractTerminal end
-
 # Terminal interface:
-pipe_reader(::TextTerminal) = error("Unimplemented")
-pipe_writer(::TextTerminal) = error("Unimplemented")
-displaysize(::TextTerminal) = error("Unimplemented")
-cmove(t::TextTerminal, x, y) = error("Unimplemented")
-getX(t::TextTerminal) = error("Unimplemented")
-getY(t::TextTerminal) = error("Unimplemented")
-pos(t::TextTerminal) = (getX(t), getY(t))
+pipe_reader(::AbstractTerminal) = error("Unimplemented")
+pipe_writer(::AbstractTerminal) = error("Unimplemented")
+cmove(t::AbstractTerminal, x, y) = error("Unimplemented")
+getX(t::AbstractTerminal) = error("Unimplemented")
+getY(t::AbstractTerminal) = error("Unimplemented")
+pos(t::AbstractTerminal) = (getX(t), getY(t))
 
 # Relative moves (Absolute position fallbacks)
-cmove_up(t::TextTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
+cmove_up(t::AbstractTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
 cmove_up(t) = cmove_up(t, 1)
 
-cmove_down(t::TextTerminal, n) = cmove(getX(t), max(height(t), getY(t)+n))
+cmove_down(t::AbstractTerminal, n) = cmove(getX(t), max(height(t), getY(t)+n))
 cmove_down(t) = cmove_down(t, 1)
 
-cmove_left(t::TextTerminal, n) = cmove(max(1, getX(t)-n), getY(t))
+cmove_left(t::AbstractTerminal, n) = cmove(max(1, getX(t)-n), getY(t))
 cmove_left(t) = cmove_left(t, 1)
 
-cmove_right(t::TextTerminal, n) = cmove(max(width(t), getX(t)+n), getY(t))
+cmove_right(t::AbstractTerminal, n) = cmove(max(width(t), getX(t)+n), getY(t))
 cmove_right(t) = cmove_right(t, 1)
 
-cmove_line_up(t::TextTerminal, n) = cmove(1, max(1, getY(t)-n))
+cmove_line_up(t::AbstractTerminal, n) = cmove(1, max(1, getY(t)-n))
 cmove_line_up(t) = cmove_line_up(t, 1)
 
-cmove_line_down(t::TextTerminal, n) = cmove(1, max(height(t), getY(t)+n))
+cmove_line_down(t::AbstractTerminal, n) = cmove(1, max(height(t), getY(t)+n))
 cmove_line_down(t) = cmove_line_down(t, 1)
 
-cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
+cmove_col(t::AbstractTerminal, c) = cmove(c, getY(t))
 
 # Defaults
-hascolor(::TextTerminal) = false
+supports_color(::AbstractTerminal) = false
 
 # Utility Functions
-width(t::TextTerminal) = displaysize(t)[2]
-height(t::TextTerminal) = displaysize(t)[1]
+width(t::AbstractTerminal) = displaysize(t)[2]
+height(t::AbstractTerminal) = displaysize(t)[1]
 
 # For terminals with buffers
-flush(t::TextTerminal) = nothing
+flush(t::AbstractTerminal) = flush(pipe_writer(t))
 
-clear(t::TextTerminal) = error("Unimplemented")
-clear_line(t::TextTerminal, row) = error("Unimplemented")
-clear_line(t::TextTerminal) = error("Unimplemented")
+clear(t::AbstractTerminal) = error("Unimplemented")
+clear_line(t::AbstractTerminal, row) = error("Unimplemented")
+clear_line(t::AbstractTerminal) = error("Unimplemented")
 
-raw!(t::TextTerminal, raw::Bool) = error("Unimplemented")
+raw!(t::AbstractTerminal, raw::Bool) = error("Unimplemented")
 
-beep(t::TextTerminal) = nothing
-enable_bracketed_paste(t::TextTerminal) = nothing
-disable_bracketed_paste(t::TextTerminal) = nothing
+beep(t::AbstractTerminal) = nothing
+enable_bracketed_paste(t::AbstractTerminal) = nothing
+disable_bracketed_paste(t::AbstractTerminal) = nothing
 
 ## UnixTerminal ##
 
-abstract type UnixTerminal <: TextTerminal end
+abstract type UnixTerminal <: AbstractTerminal end
 
 pipe_reader(t::UnixTerminal) = t.in_stream
 pipe_writer(t::UnixTerminal) = t.out_stream
@@ -148,30 +141,45 @@ end
 @eval clear_line(t::UnixTerminal) = write(t.out_stream, $"\r$(CSI)0K")
 beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
-Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
+"""
+    supports_color(t::AbstractTerminal)
 
-if Sys.iswindows()
-    hascolor(t::TTYTerminal) = true
-else
-    function hascolor(t::TTYTerminal)
-        startswith(t.term_type, "xterm") && return true
-        try
-            @static if Sys.KERNEL == :FreeBSD
-                return success(`tput AF 0`)
+Return whether terminal `t` supports ANSI formatting codes
+"""
+supports_color(t::TTYTerminal) = supports_color(t.term_type)
+
+function supports_color(term_type::String)
+    if isempty(term_type) || term_type == "dumb"
+        return false
+    end
+    @static if Sys.iswindows()
+        return true
+    else
+        startswith(term_type, "xterm") && return true # fast-path, because this is usually true
+        set_a_foreground = @static if Sys.KERNEL == :FreeBSD
+                "AF"
             else
-                return success(`tput setaf 0`)
+                "setaf"
             end
-        catch
-            return false
-        end
+        cmd = pipeline(`tput -T $term_type $set_a_foreground 0`, stderr=devnull)
+        return "$(CSI)30m" == try
+                read(cmd, String)
+            catch
+                ""
+            end
     end
 end
 
-# use cached value of have_color
-Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))
-Base.haskey(t::TTYTerminal, key) = haskey(pipe_writer(t), key)
-Base.getindex(t::TTYTerminal, key) = getindex(pipe_writer(t), key)
-Base.get(t::TTYTerminal, key, default) = get(pipe_writer(t), key, default)
+# pass through value of IOContext properties
+# Normally, `IOContext` should be the outermost wrapper,
+# However, the REPL module unfortunately constrains its type signatures to subtype AbstractTerminal
+Base.in(key_value::Pair, t::AbstractTerminal) = in(key_value, pipe_writer(t))
+Base.haskey(t::AbstractTerminal, key) = haskey(pipe_writer(t), key)
+Base.getindex(t::AbstractTerminal, key) = getindex(pipe_writer(t), key)
+Base.get(t::AbstractTerminal, key, default) = get(pipe_writer(t), key, default)
+Base.displaysize(t::AbstractTerminal) = displaysize(pipe_writer(t))
+Base.IOContext(t::AbstractTerminal, KV::Pair) = Base.IOContext(pipe_writer(t), KV)
+convert(::Type{IOContext}, io::AbstractTerminal) = convert(IOContext, pipe_writer(t))
 
 Base.peek(t::TTYTerminal) = Base.peek(t.in_stream)
 

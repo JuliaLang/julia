@@ -98,8 +98,8 @@ end
 
 
 ## structured matrix methods ##
-function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::AbstractString)
-    i==j ? s : Base.replace_with_centered_mark(s)
+function Base.replace_in_print_matrix(A::Diagonal, i::Integer, j::Integer, s::AbstractString)
+    return i == j ? s : Base.replace_with_centered_mark(s)
 end
 
 parent(D::Diagonal) = D.diag

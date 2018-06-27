@@ -60,12 +60,15 @@ function isopen end
 Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
+
 function flush end
 function wait_connected end
 function wait_readnb end
 function wait_readbyte end
 function wait_close end
 function bytesavailable end
+function copy end
+function eof end
 
 """
     readavailable(stream)
@@ -120,8 +123,6 @@ julia> rm("myfile.txt")
 ```
 """
 function iswritable end
-function copy end
-function eof end
 
 """
     read(io::IO, T)
@@ -145,7 +146,7 @@ julia> read(io, String)
 "JuliaLang is a GitHub organization"
 ```
 """
-read(stream, t)
+function read end
 
 """
     write(io::IO, x)
@@ -259,6 +260,33 @@ julia> bytesavailable(io)
 ```
 """
 bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io))
+
+"""
+    position(s)
+
+Get the current position of a stream.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
+julia> seek(io, 5);
+
+julia> position(io)
+5
+
+julia> skip(io, 10);
+
+julia> position(io)
+15
+
+julia> seekend(io);
+
+julia> position(io)
+35
+```
+"""
+position(io::AbstractPipe) = position(pipe_reader(io))
 
 """
     eof(stream) -> Bool
@@ -450,28 +478,28 @@ ENDIAN_BOM
 
 Convert the endianness of a value from Network byte order (big-endian) to that used by the Host.
 """
-ntoh(x)
+function ntoh end
 
 """
     hton(x)
 
 Convert the endianness of a value from that used by the Host to Network byte order (big-endian).
 """
-hton(x)
+function hton end
 
 """
     ltoh(x)
 
 Convert the endianness of a value from Little-endian to that used by the Host.
 """
-ltoh(x)
+function ltoh end
 
 """
     htol(x)
 
 Convert the endianness of a value from that used by the Host to Little-endian.
 """
-htol(x)
+function htol end
 
 
 """
@@ -912,7 +940,9 @@ Add a mark at the current position of stream `s`. Return the marked position.
 See also [`unmark`](@ref), [`reset`](@ref), [`ismarked`](@ref).
 """
 function mark(io::IO)
-    io.mark = position(io)
+    p = position(io)
+    io.mark = p
+    return p
 end
 
 """

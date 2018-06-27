@@ -5,17 +5,16 @@ module FakeTerminals
 import REPL
 
 mutable struct FakeTerminal <: REPL.Terminals.UnixTerminal
-    in_stream::Base.IO
-    out_stream::Base.IO
-    err_stream::Base.IO
-    hascolor::Bool
+    in_stream::IO
+    out_stream::IO
+    err_stream::IO
+    supports_color::Bool
     raw::Bool
-    FakeTerminal(stdin,stdout,stderr,hascolor=true) =
-        new(stdin,stdout,stderr,hascolor,false)
+    FakeTerminal(stdin, stdout, stderr, supports_color::Bool=true) =
+        new(stdin, stdout, stderr, supports_color, false)
 end
 
-REPL.Terminals.hascolor(t::FakeTerminal) = t.hascolor
+REPL.Terminals.supports_color(t::FakeTerminal) = t.supports_color
 REPL.Terminals.raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
-REPL.Terminals.size(t::FakeTerminal) = (24, 80)
 
 end

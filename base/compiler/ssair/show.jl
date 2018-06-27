@@ -382,8 +382,8 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             end
             print_sep = true
             floop = false
-            Base.with_output_color(:yellow, io) do io′
-                print_node(io′, node_idx, new_node.node, used, argnames, maxsize; color = false, print_typ=false)
+            Base.with_format(:yellow, io) do io′
+                print_node(io′, node_idx, new_node.node, used, argnames, maxsize; color = false, print_typ = false)
             end
             if should_print_ssa_type(new_node.node) && node_idx in used
                 expr_type_printer(io, new_node.typ)

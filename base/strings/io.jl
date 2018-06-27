@@ -232,26 +232,29 @@ julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 `strings` can be any iterable over elements `x` which are convertible to strings
 via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 """
-function join(io::IO, strings, delim, last)
-    a = Iterators.Stateful(strings)
-    isempty(a) && return
-    print(io, popfirst!(a))
-    for str in a
-        print(io, isempty(a) ? last : delim)
-        print(io, str)
+function join(io::IO, strings, delim="", last=delim)
+    first = true
+    local prev
+    for str in strings
+        if @isdefined prev
+            first ? (first = false) : print(io, delim)
+            print(io, prev)
+        end
+        prev = str
+    end
+    if @isdefined prev
+        first || print(io, last)
+        print(io, prev)
     end
 end
-function join(io::IO, strings, delim)
-    a = Iterators.Stateful(strings)
-    for str in a
-        print(io, str)
-        !isempty(a) && print(io, delim)
-    end
-end
-join(io::IO, strings) = join(io, strings, "")
-# Hack around https://github.com/JuliaLang/julia/issues/26871
-join(io::IO, strings::Tuple{}, delim) = nothing
-join(io::IO, strings::Tuple{}, delim, last) = nothing
+# Alternate fall-back definition
+#function join(io::IO, strings, delim="")
+#    first = true
+#    for str in strings
+#        first ? (first = false) : print(io, delim)
+#        print(io, str)
+#    end
+#end
 
 join(strings) = sprint(join, strings)
 join(strings, delim) = sprint(join, strings, delim)
@@ -514,3 +517,102 @@ function String(chars::AbstractVector{<:AbstractChar})
         end
     end
 end
+
+
+"""
+    truncate_text(io::IO, at_width, at_chars, truncmark)
+
+Truncate the content in the buffer in the buffer to `at_width` units wide,
+or at the first occurrence of any of the characters in `at_chars`.
+Append `truncmark`, if there is room for it, if truncation occurs.
+
+See also [`bytesavailable_until_text`](@ref).
+"""
+function truncate_text(io::IO, at_width::Integer, at_chars="", truncmark="…")
+    nb = bytesavailable_until_text(io, at_width, at_chars, truncmark)
+    if nb < bytesavailable(io)
+        truncate(io, nb)
+        if nb > 0
+            mark(io)
+            seekend(io)
+            write(io, truncmark)
+            reset(io)
+        end
+    end
+    return io
+end
+
+"""
+    bytesavailable_until_text(io::IO, width, chars=Set(), truncmark="…")
+
+Compute the number of bytes in the buffer until either
+the text is `width` units wide, minus the textwidth of `truncmark`,
+or any of the characters in `chars` is encountered.
+May destroy the current IO mark.
+Return the number of bytes available for reading without exceeding
+width (even after appending truncmark) or returning a char in chars.
+"""
+function bytesavailable_until_text(io::IO, width::Integer, chars="", truncmark="…")
+    truncwidth = textwidth(truncmark)
+    if width <= 0 || width < truncwidth
+        return 0
+    end
+
+    # backup current state
+    # in preparation of examining its contents,
+    # starting at the current position
+    mark(io)
+    trunc = false
+    wid = 0
+    truncidx = 0
+    try
+        while !eof(io)
+            lastidx = position(io)
+            c = read(io, Char)
+            wid += textwidth(c)
+            if c in chars
+                truncidx == 0 && (truncidx = lastidx)
+                trunc = true
+                break
+            elseif wid > width - truncwidth
+                truncidx == 0 && (truncidx = lastidx)
+                if wid > width
+                    trunc = true
+                    break
+                end
+            end
+        end
+    finally
+        reset(io)
+    end
+
+    return (trunc ? truncidx - position(io) : bytesavailable(io))
+end
+
+bytesavailable_until_text(io::AbstractPipe, width::Integer, chars="", truncmark="…") =
+    bytesavailable_until_text(pipe_reader(io), width, chars, truncmark)
+
+"""
+    textwidth(io::IO)
+
+Compute the size of the IO stream in textwidth units.
+May destroy the current IO mark.
+"""
+function textwidth(io::IO)
+    # backup current state
+    # in preparation of examining its contents,
+    # starting at the current position
+    mark(io)
+    wid = 0
+    try
+        while !eof(io)
+            c = read(io, Char)
+            wid += textwidth(c)
+        end
+    finally
+        reset(io)
+    end
+    return wid
+end
+
+textwidth(io::AbstractPipe) = textwidth(pipe_reader(io))

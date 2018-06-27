@@ -2117,21 +2117,21 @@ function setup_prefix_keymap(hp, parent_prompt)
     (p, pkeymap)
 end
 
-function deactivate(p::TextInterface, s::ModeState, termbuf, term::TextTerminal)
+function deactivate(p::TextInterface, s::ModeState, termbuf, term::AbstractTerminal)
     clear_input_area(termbuf, s)
     s
 end
 
-function activate(p::TextInterface, s::ModeState, termbuf, term::TextTerminal)
+function activate(p::TextInterface, s::ModeState, termbuf, term::AbstractTerminal)
     s.ias = InputAreaState(0, 0)
     refresh_line(s, termbuf)
 end
 
-function activate(p::TextInterface, s::MIState, termbuf, term::TextTerminal)
+function activate(p::TextInterface, s::MIState, termbuf, term::AbstractTerminal)
     @assert p == mode(s)
     activate(p, state(s), termbuf, term)
 end
-activate(m::ModalInterface, s::MIState, termbuf, term::TextTerminal) =
+activate(m::ModalInterface, s::MIState, termbuf, term::AbstractTerminal) =
     activate(mode(s), s, termbuf, term)
 
 commit_changes(t::UnixTerminal, termbuf) = write(t, take!(termbuf.out_stream))
@@ -2207,7 +2207,7 @@ function init_state(terminal, m::ModalInterface)
 end
 
 
-function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=init_state(terminal, m))
+function run_interface(terminal::AbstractTerminal, m::ModalInterface, s::MIState=init_state(terminal, m))
     while !s.aborted
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
@@ -2291,7 +2291,7 @@ keymap_data(s::PromptState, prompt::Prompt) = prompt.repl
 keymap(ms::MIState, m::ModalInterface) = keymap(state(ms), mode(ms))
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
-function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
+function prompt!(term::AbstractTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
     Base.reseteof(term)
     raw!(term, true)
     enable_bracketed_paste(term)

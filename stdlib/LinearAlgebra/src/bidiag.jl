@@ -124,12 +124,14 @@ function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
 end
 
 ## structured matrix methods ##
-function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::AbstractString)
+function Base.replace_in_print_matrix(A::Bidiagonal, i::Integer, j::Integer, s::AbstractString)
+    i == j && return s
     if A.uplo == 'U'
-        i==j || i==j-1 ? s : Base.replace_with_centered_mark(s)
+        i == j - 1 && return s
     else
-        i==j || i==j+1 ? s : Base.replace_with_centered_mark(s)
+        i == j + 1 && return s
     end
+    return Base.replace_with_centered_mark(s)
 end
 
 #Converting from Bidiagonal to dense Matrix

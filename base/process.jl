@@ -104,7 +104,7 @@ function show(io::IO, cmd::Cmd)
     print(io, '`')
     print(io, join(map(cmd.exec) do arg
         replace(sprint() do io
-            with_output_color(:underline, io) do io
+            with_format(:underline, io) do io
                 print_shell_word(io, arg, shell_special)
             end
         end, '`' => "\\`")
