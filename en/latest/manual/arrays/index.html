@@ -70,7 +70,7 @@ julia&gt; [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 ERROR: syntax: invalid iteration specification</code></pre><p>All comma-separated expressions after <code>for</code> are interpreted as ranges. Adding parentheses lets us add a third argument to <a href="../../base/collections/#Base.map"><code>map</code></a>:</p><pre><code class="language-julia-repl">julia&gt; map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
 2×2 Array{Tuple{Float64,Int64},2}:
  (0.5, 1)       (0.333333, 3)
- (0.333333, 2)  (0.25, 4)</code></pre><p>Ranges in generators and comprehensions can depend on previous ranges by writing multiple <code>for</code> keywords:</p><pre><code class="language-julia-repl">julia&gt; [(i,j) for i=1:3 for j=1:i]
+ (0.333333, 2)  (0.25, 4)</code></pre><p>Generators are implemented via inner functions. As in other cases of inner functions in the language, variables from the enclosing scope can be &quot;captured&quot; in the inner function.  For example, <code>sum(p[i] - q[i] for i=1:n)</code> captures the three variables <code>p</code>, <code>q</code> and <code>n</code> from the enclosing scope. Captured variables can present performance challenges described in <a href="../performance-tips/#man-performance-tips-1">performance tips</a>.</p><p>Ranges in generators and comprehensions can depend on previous ranges by writing multiple <code>for</code> keywords:</p><pre><code class="language-julia-repl">julia&gt; [(i,j) for i=1:3 for j=1:i]
 6-element Array{Tuple{Int64,Int64},1}:
  (1, 1)
  (2, 1)

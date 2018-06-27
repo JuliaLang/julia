@@ -105,7 +105,7 @@ julia&gt; counter()
 1
 
 julia&gt; counter()
-2</code></pre><p>See also the closures in the examples in the next two sections.</p><p>The distinction between inheriting global scope and nesting local scope can lead to some slight differences between functions defined in local vs. global scopes for variable assignments. Consider the modification of the last example by moving <code>bar</code> to the global scope:</p><pre><code class="language-julia-repl">julia&gt; x, y = 1, 2;
+2</code></pre><p>See also the closures in the examples in the next two sections. A variable such as <code>x</code> in the first example and <code>state</code> in the second that is inherited from the enclosing scope by the inner function is sometimes called a <em>captured</em> variable. Captured variables can present performance challenges discussed in <a href="../performance-tips/#man-performance-tips-1">performance tips</a>.</p><p>The distinction between inheriting global scope and nesting local scope can lead to some slight differences between functions defined in local vs. global scopes for variable assignments. Consider the modification of the last example by moving <code>bar</code> to the global scope:</p><pre><code class="language-julia-repl">julia&gt; x, y = 1, 2;
 
 julia&gt; function bar()
            x = 10 # local, no longer a closure variable
