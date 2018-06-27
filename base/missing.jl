@@ -175,8 +175,8 @@ skipmissing(itr) = SkipMissing(itr)
 
 Return an array of `skipmissing` iterators sliced along `dims`.
 
-A function which reduces each iterator can be broadcast over the resulting array. 
-Note that if all the values along a slice are `missing`, an error will result, since 
+A function which reduces each iterator can be broadcast over the resulting array.
+Note that if all the values along a slice are `missing`, an error will result, since
 broadcasting over an empty set is undefined.
 
 # Examples
@@ -191,7 +191,7 @@ julia> B = reshape(A, (2,2,2))
 2×2×2 Array{Union{Missing, Int64},3}:
 [:, :, 1] =
  1   missing
- 5  6       
+ 5  6
 
 [:, :, 2] =
  3         4
