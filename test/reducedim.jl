@@ -127,6 +127,7 @@ end
     @test prod(A) === 1
     @test_throws ArgumentError minimum(A)
     @test_throws ArgumentError maximum(A)
+    @test var(A) === NaN
 
     @test isequal(sum(A, dims=1), zeros(Int, 1, 1))
     @test isequal(sum(A, dims=2), zeros(Int, 0, 1))
@@ -136,6 +137,10 @@ end
     @test isequal(prod(A, dims=2), fill(1, 0, 1))
     @test isequal(prod(A, dims=(1, 2)), fill(1, 1, 1))
     @test isequal(prod(A, dims=3), fill(1, 0, 1))
+    @test isequal(var(A, dims=1), fill(NaN, 1, 1))
+    @test isequal(var(A, dims=2), fill(NaN, 0, 1))
+    @test isequal(var(A, dims=(1, 2)), fill(NaN, 1, 1))
+    @test isequal(var(A, dims=3), fill(NaN, 0, 1))
 
     for f in (minimum, maximum)
         @test_throws ArgumentError f(A, dims=1)
@@ -315,6 +320,7 @@ end
 
 # issue #6672
 @test sum(Real[1 2 3; 4 5.3 7.1], dims=2) == reshape([6, 16.4], 2, 1)
+@test std(AbstractFloat[1,2,3], dims=1) == [1.0]
 @test sum(Any[1 2;3 4], dims=1) == [4 6]
 @test sum(Vector{Int}[[1,2],[4,3]], dims=1)[1] == [5,5]
 

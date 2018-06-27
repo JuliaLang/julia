@@ -374,6 +374,9 @@ I = findall(!iszero, z)
 @test mean(x->2x, A_3_3) == 10
 @test mean(A_3_3, dims=1) == median(A_3_3, dims=1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
 @test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
+@test var(A_3_3) == 7.5
+@test std(A_3_3, dims=1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
+@test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
 @test norm(v) ≈ norm(parent(v))
