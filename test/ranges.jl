@@ -829,14 +829,6 @@ end
     @test length(map(identity, UInt64(1):UInt64(5))) == 5
     @test length(map(identity, UInt128(1):UInt128(5))) == 5
 end
-@testset "mean/median" begin
-    for f in (mean, median)
-        for n = 2:5
-            @test f(2:n) == f([2:n;])
-            @test f(2:0.1:n) ≈ f([2:0.1:n;])
-        end
-    end
-end
 @testset "issue #8531" begin
     smallint = (Int === Int64 ?
                 (Int8,UInt8,Int16,UInt16,Int32,UInt32) :

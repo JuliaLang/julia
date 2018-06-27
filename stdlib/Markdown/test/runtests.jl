@@ -427,20 +427,20 @@ end
 
 ref(x) = Reference(x)
 
-ref(mean)
+ref(sum)
 
 show(io::IO, m::MIME"text/plain", r::Reference) =
     print(io, "$(r.ref) (see Julia docs)")
 
-mean_ref = md"Behaves like $(ref(mean))"
-@test plain(mean_ref) == "Behaves like mean (see Julia docs)\n"
-@test html(mean_ref) == "<p>Behaves like mean &#40;see Julia docs&#41;</p>\n"
+sum_ref = md"Behaves like $(ref(sum))"
+@test plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
+@test html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
 
 show(io::IO, m::MIME"text/html", r::Reference) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
     end
-@test html(mean_ref) == "<p>Behaves like <a href=\"test\">mean &#40;see Julia docs&#41;</a></p>\n"
+@test html(sum_ref) == "<p>Behaves like <a href=\"test\">sum &#40;see Julia docs&#41;</a></p>\n"
 
 @test md"""
 ````julia
