@@ -170,6 +170,41 @@ julia> collect(skipmissing([1 missing; 2 missing]))
 """
 skipmissing(itr) = SkipMissing(itr)
 
+"""
+    skipmissing(array, dims)
+
+Return an array of `skipmissing` iterators sliced along `dims`.
+
+A function which reduces each iterator can be broadcast over the resulting array. 
+Note that if all the values along a slice are `missing`, an error will result, since 
+broadcasting over an empty set is undefined.
+
+# Examples
+```jldoctest
+julia> A = [1 missing 3 4; 5 6 missing 8];
+
+julia> sum.(skipmissing(A, 1))
+1×4 Array{Int64,2}:
+ 6  6  3  12
+
+julia> B = reshape(A, (2,2,2))
+2×2×2 Array{Union{Missing, Int64},3}:
+[:, :, 1] =
+ 1   missing
+ 5  6       
+
+[:, :, 2] =
+ 3         4
+  missing  8
+
+julia> maximum.(skipmissing(B, (1,3)))
+1×2×1 Array{Int64,3}:
+[:, :, 1] =
+ 5  8
+```
+"""
+skipmissing(v, dims) = mapslices(skipmissing, v, dims)
+
 struct SkipMissing{T}
     x::T
 end
