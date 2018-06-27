@@ -91,7 +91,7 @@ julia&gt; NaN &lt; NaN
 false
 
 julia&gt; NaN &gt; NaN
-false</code></pre><p>and can cause especial headaches with <a href="../arrays/#Arrays-1">Arrays</a>:</p><pre><code class="language-julia-repl">julia&gt; [1 NaN] == [1 NaN]
+false</code></pre><p>and can cause especial headaches with <a href="../arrays/#man-multi-dim-arrays-1">arrays</a>:</p><pre><code class="language-julia-repl">julia&gt; [1 NaN] == [1 NaN]
 false</code></pre><p>Julia provides additional functions to test numbers for special values, which can be useful in situations like hash key comparisons:</p><table><tr><th>Function</th><th>Tests if</th></tr><tr><td><a href="../../base/base/#Base.isequal"><code>isequal(x, y)</code></a></td><td><code>x</code> and <code>y</code> are identical</td></tr><tr><td><a href="../../base/numbers/#Base.isfinite"><code>isfinite(x)</code></a></td><td><code>x</code> is a finite number</td></tr><tr><td><a href="../../base/numbers/#Base.isinf"><code>isinf(x)</code></a></td><td><code>x</code> is infinite</td></tr><tr><td><a href="../../base/numbers/#Base.isnan"><code>isnan(x)</code></a></td><td><code>x</code> is not a number</td></tr></table><p><a href="../../base/base/#Base.isequal"><code>isequal</code></a> considers <code>NaN</code>s equal to each other:</p><pre><code class="language-julia-repl">julia&gt; isequal(NaN, NaN)
 true
 
