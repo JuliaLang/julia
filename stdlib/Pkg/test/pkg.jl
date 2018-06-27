@@ -201,6 +201,23 @@ temp_pkg_dir() do project_path
         end
     end
 
+    @testset "protocols" begin
+        mktempdir() do devdir
+            withenv("JULIA_PKG_DEVDIR" => devdir) do
+                try
+                    Pkg.setprotocol!("notarealprotocol")
+                    # Pkg.develop is broken, update to use when fixed
+                    @test_throws CommandError pkg"develop Example"
+                    Pkg.setprotocol!()
+                    pkg"develop Example"
+                    @test isinstalled(TEST_PKG)
+                finally
+                    Pkg.setprotocol!()
+                end
+            end
+        end
+    end
+
     @testset "check logging" begin
         usage = Pkg.TOML.parse(String(read(joinpath(Pkg.logdir(), "manifest_usage.toml"))))
         @test any(x -> startswith(x, joinpath(project_path, "Manifest.toml")), keys(usage))

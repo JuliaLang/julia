@@ -65,6 +65,20 @@ function transfer_progress(progress::Ptr{LibGit2.TransferProgress}, p::Any)
     return Cint(0)
 end
 
+
+const GITHUB_REGEX =
+    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
+const GIT_PROTOCOL = Ref{Union{String, Nothing}}("https")
+
+setprotocol!(proto::Union{Nothing, AbstractString}=nothing) = GIT_PROTOCOL[] = proto
+
+# TODO: extend this to more urls
+function normalize_url(url::AbstractString)
+    m = match(GITHUB_REGEX, url)
+    (m === nothing || GIT_PROTOCOL[] === nothing) ?
+        url : "$(GIT_PROTOCOL[])://github.com/$(m.captures[1]).git"
+end
+
 function clone(url, source_path; header=nothing, kwargs...)
     Pkg.Types.printpkgstyle(stdout, :Cloning, header == nothing ? "git-repo `$url`" : header)
     transfer_payload = MiniProgressBar(header = "Fetching:", color = Base.info_color())
@@ -74,12 +88,14 @@ function clone(url, source_path; header=nothing, kwargs...)
             transfer_payload,
         )
     )
+    url = normalize_url(url)
     print(stdout, "\e[?25l") # disable cursor
     try
         return LibGit2.clone(url, source_path; callbacks=callbacks, kwargs...)
-    catch e
+    catch err
         rm(source_path; force=true, recursive=true)
-        rethrow(e)
+        err isa LibGit2.GitError || rethrow(err)
+        Pkg.Typs.cmderror("failed to clone from $(url), error: $err")
     finally
         print(stdout, "\033[2K") # clear line
         print(stdout, "\e[?25h") # put back cursor
@@ -92,6 +108,7 @@ function fetch(repo::LibGit2.GitRepo, remoteurl=nothing; header=nothing, kwargs.
             LibGit2.url(remote)
         end
     end
+    remoteurl = normalize_url(remoteurl)
     Pkg.Types.printpkgstyle(stdout, :Updating, header == nothing ? "git-repo `$remoteurl`" : header)
     transfer_payload = MiniProgressBar(header = "Fetching:", color = Base.info_color())
     callbacks = LibGit2.Callbacks(
@@ -103,6 +120,9 @@ function fetch(repo::LibGit2.GitRepo, remoteurl=nothing; header=nothing, kwargs.
     print(stdout, "\e[?25l") # disable cursor
     try
         return LibGit2.fetch(repo; remoteurl=remoteurl, callbacks=callbacks, kwargs...)
+    catch err
+        err isa LibGit2.GitError || rethrow(err)
+        Pkg.Types.cmderror("failed to fetch from $(remoteurl), error: $err")
     finally
         print(stdout, "\033[2K") # clear line
         print(stdout, "\e[?25h") # put back cursor
