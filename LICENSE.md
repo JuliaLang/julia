@@ -37,22 +37,29 @@ Julia includes code from the following projects, which have their own licenses:
 - [NetBSD](http://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
 - [Python](https://docs.python.org/2/license.html) (for strtod implementation on Windows) [BSD-3, effectively]
 
+The following components included in Julia `Base` have their own separate licenses:
+
+- base/grisu/* [BSD-3] (see [double-conversion](https://github.com/google/double-conversion/blob/master/LICENSE))
+- base/special/{exp,rem_pio2,hyperbolic}.jl [Freely distributable with preserved copyright notice] (see [FDLIBM](http://www.netlib.org/fdlibm))
+
 The Julia language links to the following external libraries, which have their
 own licenses:
 
 - [FEMTOLISP](https://github.com/JeffBezanson/femtolisp) [BSD-3]
 - [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master) [MIT]
 - [LIBUV](https://github.com/joyent/libuv/blob/master/LICENSE) [MIT]
-- [LLVM](http://releases.llvm.org/3.9.0/LICENSE.TXT) [BSD-3, effectively]
-- [UTF8PROC](https://github.com/JuliaLang/utf8proc) [MIT]
+- [LLVM](http://releases.llvm.org/6.0.0/LICENSE.TXT) [BSD-3, effectively]
+- [UTF8PROC](https://github.com/JuliaStrings/utf8proc) [MIT]
 
+The following components included in `stdlib` have their own separate licenses:
 
-Julia's standard library uses the following external libraries, which have
-their own licenses:
+- stdlib/SuiteSparse/umfpack.jl (see [SUITESPARSE](http://suitesparse.com))
+- stdlib/SuiteSparse/cholmod.jl (see [SUITESPARSE](http://suitesparse.com))
 
-- [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE) [BSD-3]
+Julia's `stdlib` uses the following external libraries, which have their own licenses:
+
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt) [BSD-3]
-- [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md) [MIT, BSD-2, ISC]
+- [OPENLIBM](https://github.com/JuliaMath/openlibm/blob/master/LICENSE.md) [MIT, BSD-2, ISC]
 - [GMP](http://gmplib.org/manual/Copying.html#Copying) [LGPL3+ or GPL2+]
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING) [GPL2+ with unlimited linking exception]
 - [CURL](https://curl.haxx.se/docs/copyright.html) [MIT/X derivative]
@@ -62,24 +69,12 @@ their own licenses:
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE) [BSD-3]
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt) [BSD-3]
 - [PCRE](http://www.pcre.org/licence.txt) [BSD-3]
-- [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html) [mix of LGPL2+ and GPL2+; see individual module licenses]
-
-
-The following components of Julia's standard library have separate licenses:
-
-- base/grisu/* (see [double-conversion](https://github.com/google/double-conversion/blob/master/LICENSE))
-- base/sparse/umfpack.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
-- base/sparse/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
-- base/special/exp.jl (see [FDLIBM](http://www.netlib.org/fdlibm/e_exp.c) [Freely distributable with preserved copyright notice])
-- base/special/rem_pio2.jl (see [FDLIBM](http://www.netlib.org/fdlibm/e_rem_pio2.c) [Freely distributable with preserved copyright notice])
-- base/special/hyperbolic.jl (see [FDLIBM]) [Freely distributable with preserved copyright notice])
-
+- [SUITESPARSE](http://suitesparse.com) [mix of LGPL2+ and GPL2+; see individual module licenses]
 
 Julia's build process uses the following external tools:
 
-- [PATCHELF](http://hydra.nixos.org/build/1524660/download/1/README)
+- [PATCHELF](https://nixos.org/patchelf.html)
 - [OBJCONV](http://www.agner.org/optimize/#objconv)
-
 
 Julia bundles the following external programs and libraries on some platforms:
 
