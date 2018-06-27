@@ -1143,6 +1143,46 @@ isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)
 isdiag(x::Number) = true
 
 
+"""
+    linreg(x, y)
+
+Perform simple linear regression using Ordinary Least Squares. Returns `a` and `b` such
+that `a + b*x` is the closest straight line to the given points `(x, y)`, i.e., such that
+the squared error between `y` and `a + b*x` is minimized.
+
+# Examples
+```julia
+using PyPlot
+x = 1.0:12.0
+y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
+a, b = linreg(x, y)          # Linear regression
+plot(x, y, "o")              # Plot (x, y) points
+plot(x, a + b*x)             # Plot line determined by linear regression
+```
+
+See also:
+
+`\\`, [`cov`](@ref), [`std`](@ref), [`mean`](@ref).
+
+"""
+function linreg(x::AbstractVector, y::AbstractVector)
+    # Least squares given
+    # Y = a + b*X
+    # where
+    # b = cov(X, Y)/var(X)
+    # a = mean(Y) - b*mean(X)
+    if size(x) != size(y)
+        throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), " *
+            "but these must be the same size"))
+    end
+    mx = mean(x)
+    my = mean(y)
+    # don't need to worry about the scaling (n vs n - 1) since they cancel in the ratio
+    b = Base.covm(x, mx, y, my)/Base.varm(x, mx)
+    a = my - b*mx
+    return (a, b)
+end
+
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
