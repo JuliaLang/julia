@@ -53,8 +53,8 @@ own licenses:
 
 The following components included in `stdlib` have their own separate licenses:
 
-- stdlib/SuiteSparse/umfpack.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
-- stdlib/SuiteSparse/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
+- stdlib/SuiteSparse/umfpack.jl (see [SUITESPARSE](http://suitesparse.com))
+- stdlib/SuiteSparse/cholmod.jl (see [SUITESPARSE](http://suitesparse.com))
 
 Julia's `stdlib` uses the following external libraries, which have their own licenses:
 
