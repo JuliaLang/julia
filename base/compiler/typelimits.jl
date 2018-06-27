@@ -11,21 +11,6 @@ const MAX_INLINE_CONST_SIZE = 256
 # limitation heuristics #
 #########################
 
-limit_tuple_type(@nospecialize(t), params::Params) = limit_tuple_type_n(t, params.MAX_TUPLETYPE_LEN)
-
-function limit_tuple_type_n(@nospecialize(t), lim::Int)
-    if isa(t, UnionAll)
-        return UnionAll(t.var, limit_tuple_type_n(t.body, lim))
-    end
-    p = t.parameters
-    n = length(p)
-    if n > lim
-        tail = reduce(typejoin, Bottom, Any[p[lim:(n-1)]..., unwrapva(p[n])])
-        return Tuple{p[1:(lim-1)]..., Vararg{tail}}
-    end
-    return t
-end
-
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
 # the outermost tuple type is permitted to have up to `allowed_tuplelen` parameters

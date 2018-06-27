@@ -843,7 +843,7 @@ add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
 function invoke_tfunc(@nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
     argument_mt(ft) === nothing && return Any
-    argtype = typeintersect(types, limit_tuple_type(argtype, sv.params))
+    argtype = typeintersect(types, argtype)
     if argtype === Bottom
         return Bottom
     end

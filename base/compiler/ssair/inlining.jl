@@ -838,11 +838,11 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         end
         isinvoke = (invoke_data !== nothing)
 
-        atype_unlimited = argtypes_to_type(atypes)
+        atype = argtypes_to_type(atypes)
 
         # In :invoke, make sure that the arguments we're passing are a subtype of the
         # signature we're invoking.
-        (invoke_data === nothing || atype_unlimited <: invoke_data.types0) || continue
+        (invoke_data === nothing || atype <: invoke_data.types0) || continue
 
         # Bail out here if inlining is disabled
         sv.params.inlining || continue
@@ -852,20 +852,13 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             continue
         end
 
-        # Compute the limited type if necessary
-        if length(atype_unlimited.parameters) - 1 > sv.params.MAX_TUPLETYPE_LEN
-            atype = limit_tuple_type(atype_unlimited, sv.params)
-        else
-            atype = atype_unlimited
-        end
-
         # Ok, now figure out what method to call
         if invoke_data !== nothing
             method = invoke_data.entry.func
             (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
-                                    atype_unlimited, method.sig)::SimpleVector
+                                    atype, method.sig)::SimpleVector
             methsp = methsp::SimpleVector
-            result = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data,
+            result = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype, isinvoke, isapply, invoke_data,
                                      calltype)
             handle_single_case!(ir, stmt, idx, result, isinvoke, todo, sv)
             continue
@@ -942,7 +935,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             methsp = meth[1][2]::SimpleVector
             method = meth[1][3]::Method
             fully_covered = true
-            case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data, calltype)
+            case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype, isinvoke, isapply, invoke_data, calltype)
             case === nothing && continue
             push!(cases, Pair{Any,Any}(metharg, case))
         end
@@ -955,7 +948,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             continue
         end
         length(cases) == 0 && continue
-        push!(todo, UnionSplit(idx, fully_covered, atype_unlimited, isinvoke, cases))
+        push!(todo, UnionSplit(idx, fully_covered, atype, isinvoke, cases))
     end
     todo
 end
