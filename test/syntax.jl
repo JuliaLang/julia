@@ -1455,3 +1455,37 @@ function test27710()
     T = types(Foo27710{Int64}())
 end
 @test test27710() === Int64
+
+# issue #27268
+function f27268()
+    g(col::AbstractArray{<:Real}) = col
+end
+function f27268_2()
+    g(col::AbstractArray{T} where T<:Real) = col
+end
+@test f27268()([1]) == [1]
+@test f27268_2()([1]) == [1]
+@test_throws MethodError f27268()([""])
+@test_throws MethodError f27268_2()([""])
+
+@test_throws ErrorException("syntax: local variable x cannot be used in closure declaration") @eval begin
+    function g27268()
+        x = 1
+        h(::Val{x}) = 1
+    end
+end
+
+types27268 = (Int64,Int8)
+function h27268()
+    function g(::Union{map(t->Array{t,N},types27268)...} where N)
+    end
+end
+@test first(methods(h27268())).sig == Tuple{typeof(h27268()), Union{Array{Int64,N}, Array{Int8,N}} where N}
+
+let val(::Type{Val{X}}) where {X} = X, f
+    function f()
+        function g(::Val{x->2x})
+        end
+    end
+    @test val(first(methods(f())).sig.parameters[2])(21) == 42
+end
