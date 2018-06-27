@@ -55,7 +55,7 @@ function verify_ir(ir::IRCode)
         for p in block.preds
             p == 0 && continue
             if !(idx in ir.cfg.blocks[p].succs)
-                @verify_error "Predeccsor $p of block $idx not in successor list"
+                @verify_error "Predecessor $p of block $idx not in successor list"
                 error()
             end
         end
@@ -74,6 +74,14 @@ function verify_ir(ir::IRCode)
     for (bb, idx) in bbidxiter(ir)
         stmt = ir.stmts[idx]
         stmt === nothing && continue
+        foreachssa(stmt) do ssa
+            x = ir.stmts[ssa.id]
+            if x isa GotoIfNot || x isa GotoNode || x isa ReturnNode ||
+               (x isa Expr && (x.head == :leave || x.head == :gc_preserve_end))
+                @verify_error "Non value statement $(ssa.id) (defined as $(ir.stmts[ssa.id])) used as a value in statement $idx: $stmt"
+                error()
+            end
+        end
         if isa(stmt, PhiNode)
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)
