@@ -1005,4 +1005,5 @@ function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatri
     end
 end
 
-eigen(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eigen() for sparse matrices.")
+eigen(A::SparseMatrixCSC) =
+    error("eigen(A) not supported for sparse matrices. Use for example eigs(A) from the Arpack package instead.")
