@@ -5326,6 +5326,11 @@ static std::unique_ptr<Module> emit_function(
     jl_array_t *stmts = ctx.code;
     size_t stmtslen = jl_array_dim0(stmts);
 
+    if (JL_HOOK_TEST(ctx.params, emit_function)) {
+        JL_HOOK_CALL(ctx.params, emit_function, 3, (jl_value_t*)ctx.linfo,
+                     (jl_value_t*)ctx.source, jl_box_ulong(world));
+    }
+
     // step 1b. unpack debug information
     int coverage_mode = jl_options.code_coverage;
     int malloc_log_mode = jl_options.malloc_log;
@@ -6656,6 +6661,11 @@ static std::unique_ptr<Module> emit_function(
         }
         ctx.roots = NULL;
         JL_UNLOCK(&m->writelock);
+    }
+
+    if (JL_HOOK_TEST(ctx.params, emitted_function)) {
+        JL_HOOK_CALL(ctx.params, emitted_function, 3, (jl_value_t*)ctx.linfo,
+                     (jl_value_t*)ctx.source, jl_box_ulong(world));
     }
 
     JL_GC_POP();
