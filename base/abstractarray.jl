@@ -1825,7 +1825,7 @@ foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
 ## dims specifies which dimensions will be transformed. for example
 ## dims==1:2 will call f on all slices A[:,:,...]
 """
-    mapslices(f, A, dims)
+    mapslices(f, A; dims)
 
 Transform the given dimensions of array `A` using function `f`. `f` is called on each slice
 of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the
@@ -1853,7 +1853,7 @@ julia> a = reshape(Vector(1:16),(2,2,2,2))
  13  15
  14  16
 
-julia> mapslices(sum, a, [1,2])
+julia> mapslices(sum, a, dims = [1,2])
 1×1×2×2 Array{Int64,4}:
 [:, :, 1, 1] =
  10
@@ -1868,10 +1868,12 @@ julia> mapslices(sum, a, [1,2])
  58
 ```
 """
-mapslices(f, A::AbstractArray, dims) = mapslices(f, A, [dims...])
-function mapslices(f, A::AbstractArray, dims::AbstractVector)
+function mapslices(f, A::AbstractArray; dims)
     if isempty(dims)
         return map(f,A)
+    end
+    if !isa(dims, AbstractVector)
+        dims = [dims...]
     end
 
     dimsA = [axes(A)...]

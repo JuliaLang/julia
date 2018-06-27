@@ -1373,6 +1373,7 @@ export readandwrite
 @deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, v0, A, dims=dims)
 @deprecate reducedim(op, A::AbstractArray, dims)           reduce(op, A, dims=dims)
 @deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, v0, A, dims=dims)
+@deprecate mapslices(op, A::AbstractArray, dims)           mapslices(op, A, dims=dims)
 
 @deprecate sort(A::AbstractArray, dim::Integer; kwargs...) sort(A; kwargs..., dims=dim)
 

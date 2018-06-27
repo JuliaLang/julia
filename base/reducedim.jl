@@ -95,8 +95,8 @@ function reducedim_initarray0(A::AbstractArray{T}, region, f, ops) where T
     end
 end
 
-reducedim_initarray0_empty(A::AbstractArray, region, f, ops) = mapslices(x->ops(f.(x)), A, region)
-reducedim_initarray0_empty(A::AbstractArray, region,::typeof(identity), ops) = mapslices(ops, A, region)
+reducedim_initarray0_empty(A::AbstractArray, region, f, ops) = mapslices(x->ops(f.(x)), A, dims = region)
+reducedim_initarray0_empty(A::AbstractArray, region,::typeof(identity), ops) = mapslices(ops, A, dims = region)
 
 # TODO: better way to handle reducedim initialization
 #

@@ -170,7 +170,7 @@ equivalent to calculating mean of two median elements.
 """
 median(v::AbstractArray; dims=:) = _median(v, dims)
 
-_median(v::AbstractArray, dims) = mapslices(median!, v, dims)
+_median(v::AbstractArray, dims) = mapslices(median!, v, dims = dims)
 
 _median(v::AbstractArray{T}, ::Colon) where {T} = median!(copyto!(Array{T,1}(undef, _length(v)), v))
 
