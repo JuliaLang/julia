@@ -1489,3 +1489,15 @@ let val(::Type{Val{X}}) where {X} = X, f
     end
     @test val(first(methods(f())).sig.parameters[2])(21) == 42
 end
+
+# issue #27807
+module A27807
+macro m()
+    quote
+        function foo(x::T, y::S) where T<:Number where S<:Number
+            return one(T), zero(S)
+        end
+    end
+end
+end
+@test A27807.@m()(1,1.0) === (1, 0.0)
