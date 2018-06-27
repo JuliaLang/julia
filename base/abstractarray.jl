@@ -1188,6 +1188,9 @@ typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Matrix{T}(undef, 1,le
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 
+# FIXME: this alias would better be Union{AbstractVector{T}, Tuple{Vararg{T}}}
+# and method signatures should do AbstractVecOrTuple{<:T} when they want covariance,
+# but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
 function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
