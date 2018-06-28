@@ -6,7 +6,7 @@ using Random
 
 function safe_mapslices(op, A, region)
     newregion = intersect(region, 1:ndims(A))
-    return isempty(newregion) ? A : mapslices(op, A, newregion)
+    return isempty(newregion) ? A : mapslices(op, A, dims = newregion)
 end
 safe_sum(A::Array{T}, region) where {T} = safe_mapslices(sum, A, region)
 safe_prod(A::Array{T}, region) where {T} = safe_mapslices(prod, A, region)
