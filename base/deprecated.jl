@@ -237,7 +237,7 @@ end
 Get the *dynamically* current `Module`, which is the `Module` code is currently being read
 from. In general, this is not the same as the module containing the call to this function.
 
-DEPRECATED: use @__MODULE__ instead
+DEPRECATED: use `@__MODULE__` instead
 """
 @noinline function current_module()
     depwarn("`current_module()` is deprecated, use `@__MODULE__` instead.", :current_module)
