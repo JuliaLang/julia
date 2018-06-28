@@ -71,7 +71,7 @@ end
 
 function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks, du, phinodes, fidx, curblock)
     curblock = find_curblock(domtree, allblocks, curblock)
-    def = reduce(max, 0, stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock)
+    def = reduce(max, stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock; init=0)
     def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
 end
 
@@ -680,7 +680,7 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         # not to include any intermediaries that have dead uses. As a result, missing uses will only ever
         # show up in the nuses_total count.
         nleaves = length(defuse.uses) + length(defuse.defs) + length(defuse.ccall_preserve_uses)
-        nuses_total = compact.used_ssas[idx] + mapreduce(idx->compact.used_ssas[idx], +, 0, intermediaries) - length(intermediaries)
+        nuses_total = compact.used_ssas[idx] + mapreduce(idx->compact.used_ssas[idx], +, intermediaries; init=0) - length(intermediaries)
         nleaves == nuses_total || continue
         # Find the type for this allocation
         defexpr = ir[SSAValue(idx)]

@@ -2364,7 +2364,7 @@ _shrink_filter!(keep) = _unique_filter!(∈, pop!, keep)
 
 function _grow!(pred!, v::AbstractVector, itrs)
     filter!(pred!, v) # uniquify v
-    foldl(v, itrs) do v, itr
+    foldl(itrs; init=v) do v, itr
         mapfilter(pred!, push!, itr, v)
     end
 end

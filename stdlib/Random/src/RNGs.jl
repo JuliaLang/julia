@@ -160,7 +160,7 @@ copy(src::MersenneTwister) =
     r1.idxF == r2.idxF && r1.idxI == r2.idxI
 
 hash(r::MersenneTwister, h::UInt) =
-    foldr(hash, h, (r.seed, r.state, r.vals, r.ints, r.idxF, r.idxI))
+    foldr(hash, (r.seed, r.state, r.vals, r.ints, r.idxF, r.idxI); init=h)
 
 function fillcache_zeros!(r::MersenneTwister)
     # the use of this function is not strictly necessary, but it makes

@@ -616,7 +616,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             return rewrap_unionall(unwrapva(s.types[1]), s00)
         end
         # union together types of all fields
-        return reduce(tmerge, Bottom, map(t -> rewrap_unionall(unwrapva(t), s00), s.types))
+        return reduce(tmerge, map(t -> rewrap_unionall(unwrapva(t), s00), s.types); init=Bottom)
     end
     fld = name.val
     if isa(fld,Symbol)
@@ -688,8 +688,8 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
         if !(Int <: name || Symbol <: name)
             return Bottom
         end
-        return reduce(tmerge, Bottom,
-                      Any[ fieldtype_tfunc(s0, Const(i)) for i = 1:length(ftypes) ])
+        return reduce(tmerge, Any[ fieldtype_tfunc(s0, Const(i)) for i = 1:length(ftypes) ];
+                      init=Bottom)
     end
 
     fld = name.val

@@ -716,6 +716,10 @@ Library improvements
   * Added an optimized method of `vecdot` for taking the Frobenius inner product
     of sparse matrices. ([#27470])
 
+  * The initial element `v0` in `reduce(op, v0, itr)` has been replaced with an `init`
+    optional keyword argument, as in `reduce(op, itr; init=v0)`. Similarly for `foldl`,
+    `foldr`, `mapreduce`, `mapfoldl` and `mapfoldr`. ([#27711])
+
 Compiler/Runtime improvements
 -----------------------------
 
