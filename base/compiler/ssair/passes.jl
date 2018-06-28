@@ -399,12 +399,13 @@ function lift_comparison!(compact::IncrementalCompact, idx::Int,
     end
 
     lifted_val = perform_lifting!(compact, visited_phinodes, cmp, lifting_cache, Bool, lifted_leaves, val)
+    @assert lifted_val !== nothing
 
     #global assertion_counter
     #assertion_counter::Int += 1
     #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), lifted_val), nothing, 0, true)
     #return
-    compact[idx] = lifted_val
+    compact[idx] = lifted_val.x
 end
 
 struct LiftedPhi
@@ -478,13 +479,12 @@ function perform_lifting!(compact::IncrementalCompact,
     if isa(stmt_val, Union{SSAValue, OldSSAValue})
         stmt_val = simple_walk(compact, stmt_val)
     end
+
     if stmt_val in keys(lifted_leaves)
         stmt_val = lifted_leaves[stmt_val]
-        @assert stmt_val !== nothing
-        stmt_val = stmt_val.x
     else
         isa(stmt_val, Union{SSAValue, OldSSAValue}) && stmt_val in keys(reverse_mapping)
-        stmt_val = lifted_phis[reverse_mapping[stmt_val]].ssa
+        stmt_val = RefValue{Any}(lifted_phis[reverse_mapping[stmt_val]].ssa)
     end
 
     return stmt_val
@@ -661,14 +661,20 @@ function getfield_elim_pass!(ir::IRCode, domtree)
 
         # Insert the undef check if necessary
         if any_undef && !is_unchecked
-            insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, :getfield, val))
+            if val === nothing
+                insert_node!(compact, SSAValue(idx), Nothing, Expr(:throw_undef_if_not, :getfield, false))
+            else
+                insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, :getfield, val.x))
+            end
+        else
+            @assert val !== nothing
         end
 
         global assertion_counter
         assertion_counter::Int += 1
         #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), val), nothing, 0, true)
         #continue
-        compact[idx] = val
+        compact[idx] = val === nothing ? nothing : val.x
     end
 
     ir = finish(compact)
