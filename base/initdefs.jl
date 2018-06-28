@@ -133,7 +133,9 @@ function init_load_path()
         paths = filter!(env -> env !== nothing,
             [env == "@" ? current_project() : env for env in DEFAULT_LOAD_PATH])
     end
-    project = get(ENV, "JULIA_PROJECT", nothing)
+    project = (JLOptions().project != C_NULL ?
+        unsafe_string(Base.JLOptions().project) :
+        get(ENV, "JULIA_PROJECT", nothing))
     HOME_PROJECT[] =
         project == ""  ? nothing :
         project == "@" ? current_project() : project
