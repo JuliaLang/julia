@@ -275,12 +275,12 @@ static void ti_initthread(int16_t tid)
     }
     ptls->defer_signal = 0;
     void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
-    memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
     if (bt_data == NULL) {
         jl_printf(JL_STDERR, "could not allocate backtrace buffer\n");
         gc_debug_critical_error();
         abort();
     }
+    memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
     ptls->bt_data = (uintptr_t*)bt_data;
     jl_init_thread_heap(ptls);
     jl_install_thread_signal_handler(ptls);

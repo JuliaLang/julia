@@ -51,12 +51,12 @@ size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t ma
            if (!jl_unw_step(cursor, &ip[n], &thesp, &thefp))
                break;
            if (sp)
-                sp[n] = thesp;
-            if (add_interp_frames && jl_is_enter_interpreter_frame(ip[n])) {
-                n += jl_capture_interp_frame(&ip[n], thesp, thefp, maxsize-n-1) + 1;
-            } else {
-                n++;
-            }
+               sp[n] = thesp;
+           if (add_interp_frames && jl_is_enter_interpreter_frame(ip[n])) {
+               n += jl_capture_interp_frame(&ip[n], thesp, thefp, maxsize-n-1) + 1;
+           } else {
+               n++;
+           }
         }
         n++;
 #if !defined(_OS_WINDOWS_)
