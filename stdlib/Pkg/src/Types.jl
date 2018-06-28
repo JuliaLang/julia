@@ -526,10 +526,8 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
                 end
             end
             gitobject, isbranch = get_object_branch(repo, rev)
-            if !isbranch
-                # If the user gave a shortened commit SHA, might as well update it to the full one
-                pkg.repo.rev = string(LibGit2.GitHash(gitobject))
-            end
+            # If the user gave a shortened commit SHA, might as well update it to the full one
+            pkg.repo.rev = isbranch ? rev : string(LibGit2.GitHash(gitobject))
             git_tree = LibGit2.peel(LibGit2.GitTree, gitobject)
             @assert git_tree isa LibGit2.GitTree
             pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
