@@ -5,8 +5,8 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
-showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
+replstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), MIME("text/plain"), x), x)
+showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), x), x)
 
 @testset "IOContext" begin
     io = IOBuffer()
@@ -1016,6 +1016,25 @@ end
         "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
     @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
         "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
+end
+
+@testset "arrays printing follows the :compact property when specified" begin
+    x = 3.141592653589793
+    @test showstr(x) == "3.141592653589793"
+    @test showstr([x, x]) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
+    @test showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
+    @test showstr([x x; x x]) == showstr([x x; x x], :compact => true) ==
+        "[3.14159 3.14159; 3.14159 3.14159]"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
+    @test replstr([x, x]) == replstr([x, x], :compact => false) ==
+        "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
+    @test replstr([x, x], :compact => true) ==
+        "2-element Array{Float64,1}:\n 3.14159\n 3.14159"
+    @test replstr([x x; x x]) == replstr([x x; x x], :compact => true) ==
+        "2×2 Array{Float64,2}:\n 3.14159  3.14159\n 3.14159  3.14159"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
 end
 
 @testset "Array printing with limited rows" begin
