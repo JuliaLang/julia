@@ -759,15 +759,15 @@ zero-dimensional arrays are not empty. If you find this unintuitive, here are
 some ideas that might help to understand Julia's definition.
 
 * Zero-dimensional arrays are the "point" to vector's "line" and matrix's
-"plane". Just as a line has no area (but still represents a set of things), a
-point has no length or any dimensions at all (but still represents a thing).
+  "plane". Just as a line has no area (but still represents a set of things), a
+  point has no length or any dimensions at all (but still represents a thing).
 * We define `prod(())` to be 1, and the total number of elements in an array is
-the product of the size. The size of a zero-dimensional array is `()`, and
-therefore its length is `1`.
+  the product of the size. The size of a zero-dimensional array is `()`, and
+  therefore its length is `1`.
 * Zero-dimensional arrays don't natively have any dimensions into which you
-index -- they’re just `A[]`. We can apply the same "trailing one" rule for them
-as for all other array dimensionalities, so you can indeed index them as
-`A[1]`, `A[1,1]`, etc.
+  index -- they’re just `A[]`. We can apply the same "trailing one" rule for them
+  as for all other array dimensionalities, so you can indeed index them as
+  `A[1]`, `A[1,1]`, etc.
 
 It is also important to understand the differences to ordinary scalars. Scalars
 are not mutable containers (even though they are iterable and define things
