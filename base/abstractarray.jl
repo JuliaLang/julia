@@ -1210,7 +1210,12 @@ typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Matrix{T}(undef, 1,le
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 
-function typed_vcat(::Type{T}, V::AbstractVector...) where T
+# FIXME: this alias would better be Union{AbstractVector{T}, Tuple{Vararg{T}}}
+# and method signatures should do AbstractVecOrTuple{<:T} when they want covariance,
+# but that solution currently fails (see #27188 and #27224)
+AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
+
+function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     n::Int = 0
     for Vk in V
         n += length(Vk)
@@ -1226,10 +1231,12 @@ function typed_vcat(::Type{T}, V::AbstractVector...) where T
     a
 end
 
+typed_hcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_hcat(T, A)
+
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
-function typed_hcat(::Type{T}, A::AbstractVecOrMat...) where T
+function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     nargs = length(A)
     nrows = size(A[1], 1)
     ncols = 0
@@ -1266,7 +1273,7 @@ end
 vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
 vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
-function typed_vcat(::Type{T}, A::AbstractVecOrMat...) where T
+function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
@@ -1285,6 +1292,14 @@ function typed_vcat(::Type{T}, A::AbstractVecOrMat...) where T
     end
     return B
 end
+
+typed_vcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_vcat(T, A)
+
+reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}) =
+    _typed_vcat(mapreduce(eltype, promote_type, A), A)
+
+reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
+    _typed_hcat(mapreduce(eltype, promote_type, A), A)
 
 ## cat: general case
 

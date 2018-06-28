@@ -398,3 +398,20 @@ test18695(r) = sum( t^2 for t in r )
 @test prod(Char[]) == ""
 @test prod(Char['a']) == "a"
 @test prod(Char['a','b']) == "ab"
+
+@testset "optimized reduce(vcat/hcat, A) for arrays" begin
+    for args in ([1:2], [[1, 2]], [1:2, 3:4], [[3, 4, 5], 1:2], [1:2, [3.5, 4.5]],
+                 [[1 2], [3 4; 5 6]], [reshape([1, 2], 2, 1), 3:4])
+        X = reduce(vcat, args)
+        Y = vcat(args...)
+        @test X == Y
+        @test typeof(X) === typeof(Y)
+    end
+    for args in ([1:2], [[1, 2]], [1:2, 3:4], [[3, 4, 5], 1:3], [1:2, [3.5, 4.5]],
+                 [[1 2; 3 4], [5 6; 7 8]], [1:2, [5 6; 7 8]], [[5 6; 7 8], [1, 2]])
+        X = reduce(hcat, args)
+        Y = hcat(args...)
+        @test X == Y
+        @test typeof(X) === typeof(Y)
+    end
+end
