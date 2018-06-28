@@ -6267,3 +6267,6 @@ get27770(n::Nullable27770, v::Handle27770) = n.hasvalue ? n.value : v
 
 foo27770() = get27770(Nullable27770(), Handle27770())
 @test foo27770().ptr == Ptr{Cvoid}(UInt(0xfeedface))
+
+bar27770() = Nullable27770().value
+@test_throws UndefRefError bar27770()
