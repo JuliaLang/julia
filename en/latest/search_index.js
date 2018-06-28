@@ -4073,22 +4073,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/faq/#Arrays-1",
-    "page": "Frequently Asked Questions",
-    "title": "Arrays",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "manual/faq/#What-are-the-differences-between-zero-dimensional-arrays-and-scalars?-1",
-    "page": "Frequently Asked Questions",
-    "title": "What are the differences between zero-dimensional arrays and scalars?",
-    "category": "section",
-    "text": "Zero-dimensional arrays are arrays of the form Array{T,0}. They behave similar to scalars, but there are important differences. They deserve a special mention because they are a special case which makes logical sense given the generic definition of arrays, but might be a bit unintuitive at first. The following line defines a zero-dimensional array:julia> A = zeros()\n0-dimensional Array{Float64,0}:\n0.0In this example, A is a mutable container that contains one element, which can be set by A[] = 1.0 and retrieved with A[]. All zero-dimensional arrays have the same size (size(A) == ()), and length (length(A) == 1). In particular, zero-dimensional arrays are not empty. If you find this unintuitive, here are some ideas that might help to understand Julia\'s definition.Zero-dimensional arrays are the \"point\" to vector\'s \"line\" and matrix\'s\"plane\". Just as a line has no area (but still represents a set of things), a point has no length or any dimensions at all (but still represents a thing).We define prod(()) to be 1, and the total number of elements in an array isthe product of the size. The size of a zero-dimensional array is (), and therefore its length is 1.Zero-dimensional arrays don\'t natively have any dimensions into which youindex – they’re just A[]. We can apply the same \"trailing one\" rule for them as for all other array dimensionalities, so you can indeed index them as A[1], A[1,1], etc.It is also important to understand the differences to ordinary scalars. Scalars are not mutable containers (even though they are iterable and define things like length, getindex, e.g. 1[] == 1). In particular, if x = 0.0 is defined as a scalar, it is an error to attempt to change its value via x[] = 1.0. A scalar x can be converted into a zero-dimensional array containing it via fill(x), and conversely, a zero-dimensional array a can be converted to the contained scalar via a[]. Another difference is that a scalar can participate in linear algebra operations such as 2 * rand(2,2), but the analogous operation with a zero-dimensional array fill(2) * rand(2,2) is an error."
-},
-
-{
     "location": "manual/faq/#Julia-Releases-1",
     "page": "Frequently Asked Questions",
     "title": "Julia Releases",
@@ -7405,7 +7389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -20237,7 +20221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sockets",
     "title": "Base.bind",
     "category": "function",
-    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\n"
+    "text": "bind(chnl::Channel, task::Task)\n\nAssociate the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @async foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @async (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n[...]\n\n\n\n\n\nbind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\n\n\n"
 },
 
 {
