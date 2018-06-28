@@ -18,7 +18,7 @@ safe_maxabs(A::Array{T}, region) where {T} = safe_mapslices(maximum, abs.(A), re
 safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), region)
 
 Areduc = rand(3, 4, 5, 6)
-for region in Any[
+@testset "test reductions over region: $region" for region in Any[
     1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
     # println("region = $region")
@@ -318,10 +318,10 @@ end
 @test sum(Any[1 2;3 4], dims=1) == [4 6]
 @test sum(Vector{Int}[[1,2],[4,3]], dims=1)[1] == [5,5]
 
-# issue #10461
-Areduc = rand(3, 4, 5, 6)
-for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
+@testset "Issue #10461. region=$region" for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
                                                      2 3], "hello"]
+    Areduc = rand(3, 4, 5, 6)
+
     @test_throws ArgumentError sum(Areduc, dims=region)
     @test_throws ArgumentError prod(Areduc, dims=region)
     @test_throws ArgumentError maximum(Areduc, dims=region)
