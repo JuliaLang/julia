@@ -61,18 +61,21 @@ end
 
 temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git")
-    @test tokens[1][2] == "git@github.com:JuliaLang/Example.jl.git"
+    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
     tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git#master")
-    @test tokens[1][2] == "git@github.com:JuliaLang/Example.jl.git"
+    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
     @test tokens[1][3].rev == "master"
     tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git#c37b675")
-    @test tokens[1][2] == "git@github.com:JuliaLang/Example.jl.git"
+    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
     @test tokens[1][3].rev == "c37b675"
     tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git@v0.5.0")
-    @test tokens[1][2] == "git@github.com:JuliaLang/Example.jl.git"
+    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
     @test repr(tokens[1][3]) == "VersionRange(\"0.5.0\")"
     tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git@0.5.0")
-    @test tokens[1][2] == "git@github.com:JuliaLang/Example.jl.git"
+    @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
+    @test repr(tokens[1][3]) == "VersionRange(\"0.5.0\")"
+    tokens = Pkg.REPLMode.tokenize("add git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git@0.5.0")
+    @test tokens[1][2] ==              "git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git"
     @test repr(tokens[1][3]) == "VersionRange(\"0.5.0\")"
     pkg"init"
     pkg"add Example"
