@@ -1616,8 +1616,6 @@ end
 # non-trivial, so use Arrays for output
 Base.reducedim_initarray(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R} =
     fill(v0, Base.reduced_indices(A,region))
-Base.reducedim_initarray0(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R} =
-    fill(v0, Base.reduced_indices0(A,region))
 
 # General mapreduce
 function _mapreducezeros(f, op, ::Type{T}, nzeros::Int, v0) where T

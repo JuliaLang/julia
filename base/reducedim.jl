@@ -79,25 +79,6 @@ end
 reducedim_initarray(A::AbstractArray, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
 reducedim_initarray(A::AbstractArray, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
 
-function reducedim_initarray0(A::AbstractArray{T}, region, f, ops) where T
-    ri = reduced_indices0(A, region)
-    if isempty(A)
-        if prod(length, reduced_indices(A, region)) != 0
-            reducedim_initarray0_empty(A, region, f, ops) # ops over empty slice of A
-        else
-            R = f == identity ? T : Core.Compiler.return_type(f, (T,))
-            similar(A, R, ri)
-        end
-    else
-        R = f == identity ? T : typeof(f(first(A)))
-        si = similar(A, R, ri)
-        mapfirst!(f, si, A)
-    end
-end
-
-reducedim_initarray0_empty(A::AbstractArray, region, f, ops) = mapslices(x->ops(f.(x)), A, dims = region)
-reducedim_initarray0_empty(A::AbstractArray, region,::typeof(identity), ops) = mapslices(ops, A, dims = region)
-
 # TODO: better way to handle reducedim initialization
 #
 # The current scheme is basically following Steven G. Johnson's original implementation
@@ -124,8 +105,33 @@ function _reducedim_init(f, op, fv, fop, A, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-reducedim_init(f, op::typeof(max), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, maximum)
-reducedim_init(f, op::typeof(min), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, minimum)
+# initialization when computing minima and maxima requires a little care
+for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
+    @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
+        # First compute the reduce indices. This will throw an ArgumentError
+        # if any region is invalid
+        ri = reduced_indices(A, region)
+
+        # Next, throw if reduction is over a region with length zero
+        any(i -> isempty(axes(A, i)), region) && _empty_reduce_error()
+
+        # Make a view of the first slice of the region
+        A1 = view(A, ri...)
+
+        if isempty(A1)
+            # If the slice is empty just return non-view version as the initial array
+            return copy(A1)
+        else
+            # otherwise use the min/max of the first slice as initial value
+            v0 = mapreduce(f, $f2, A1)
+
+            # but NaNs need to be avoided as intial values
+            v0 = v0 != v0 ? typeof(v0)($initval) : v0
+
+            return reducedim_initarray(A, region, v0)
+        end
+    end
+end
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
