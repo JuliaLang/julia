@@ -662,9 +662,9 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         # Insert the undef check if necessary
         if any_undef && !is_unchecked
             if val === nothing
-                insert_node!(compact, SSAValue(idx), Nothing, Expr(:throw_undef_if_not, :getfield, false))
+                insert_node!(compact, SSAValue(idx), Nothing, Expr(:throw_undef_if_not, Symbol("##getfield##"), false))
             else
-                insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, :getfield, val.x))
+                insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, Symbol("##getfield##"), val.x))
             end
         else
             @assert val !== nothing
