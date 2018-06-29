@@ -476,3 +476,21 @@ end
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
 # TODO: these methods will yield row matrices, rather than adjoint/transpose vectors
+
+function cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
+    info = 0
+    function Dchecked(i, d)
+        if (d isa Complex && d ≠ 0) || (d isa Real && d > 0)
+            √d
+        elseif check
+            throw(PosDefException(i))
+        else
+            if info == 0
+                info = i
+            end
+            zero(float(d))
+        end
+    end
+    Cholesky(Diagonal([Dchecked(i, d) for (i, d) in enumerate(diag(A))]),
+             'U', convert(BlasInt, info))
+end

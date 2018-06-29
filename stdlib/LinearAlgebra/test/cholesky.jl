@@ -272,13 +272,35 @@ end
 end
 
 @testset "cholesky Diagonal" begin
-    d = 1:3
+    # real
+    d = abs.(randn(3)) + 0.1
     D = Diagonal(d)
     CD = cholesky(D)
-    @test CD isa Cholesky
-    @test CD.U isa UpperTriangular
+    @test CD isa Cholesky{Float64}
+    @test CD.U isa UpperTriangular{Float64}
     @test CD.U == Diagonal(.√d)
+    @test CD.info == 0
+
+    # real, failing
     @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
+    Dnpd = cholesky(Diagonal([1.0, -2.0]); check = false)
+    @test Dnpd.info == 2
+
+    # complex
+    d = cis.(rand(3) .* 2*π)
+    d .*= abs.(randn(3) .+ 0.1)
+    D = Diagonal(d)
+    CD = cholesky(D)
+    @test CD isa Cholesky{Complex{Float64}}
+    @test CD.U isa UpperTriangular{Complex{Float64}}
+    @test CD.U == Diagonal(.√d)
+    @test CD.info == 0
+
+    # complex, failing
+    D[2, 2] = 0
+    @test_throws PosDefException cholesky(D)
+    Dnpd = cholesky(D; check = false)
+    @test Dnpd.info == 2
 end
 
 end # module TestCholesky

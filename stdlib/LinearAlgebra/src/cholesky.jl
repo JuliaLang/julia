@@ -174,12 +174,6 @@ function cholesky!(A::StridedMatrix, ::Val{false}=Val(false); check::Bool = true
     end
 end
 
-function cholesky(A::Diagonal, ::Val{false} = Val(false))
-    Cholesky(Diagonal([d > 0 ? √d : throw(PosDefException(i))
-                       for (i, d) in enumerate(diag(A))]),
-             'U', zero(BlasInt))
-end
-
 ## With pivoting
 ### BLAS/LAPACK element types
 function cholesky!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
