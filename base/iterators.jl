@@ -9,8 +9,8 @@ module Iterators
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
-    tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
+    @inline, @eval, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
+    front, tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
     IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
     LinearIndices, (:), |, +, -, !==, !, <=, <, missing
 
@@ -391,6 +391,42 @@ IteratorEltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEl
 reverse(z::Zip1) = Zip1(reverse(z.a))
 reverse(z::Zip2) = Zip2(reverse(z.a), reverse(z.b))
 reverse(z::Zip) = Zip(reverse(z.a), reverse(z.z))
+
+# pzip
+struct PZip{Z <: Zip2}
+    z::Z
+end
+
+"""
+    Iterators.pzip(inds..., val)
+
+This iterator behaves like
+
+    (i => v for (i..., v) in zip(zip(inds...), v))
+
+i.e. it generates a `Pair` of zipped together indices (the `ids` arguments) and
+a corresponding value (from the `val` iterator).
+"""
+function pzip(a, b, x...)
+    vals = (a, b, x...)
+    PZip(zip(zip(front(vals)...), last(vals)))
+end
+
+function iterate(p::PZip, state...)
+    y = iterate(p.z, state...)
+    y === nothing && return nothing
+    val, state = y
+    Pair(val...), state
+end
+
+IteratorSize(::Type{PZip{Z}}) where {Z} = IteratorSize(Z)
+IteratorEltype(::Type{PZip{Z}}) where {Z} = IteratorEltype(Z)
+eltype(z::PZip{<:Zip2{I1, I2}}) where {I1, I2} = Pair{eltype(I1), eltype(I2)}
+reverse(z::PZip) = PZip(reverse(z.z))
+
+for fn in (:isdone, :size, :axes, :length)
+    @eval $(fn)(z::PZip) = $(fn)(z.z)
+end
 
 # filter
 

@@ -643,6 +643,7 @@ export
 
     enumerate,  # re-exported from Iterators
     zip,
+    pzip,
 
 # object identity and equality
     copy,

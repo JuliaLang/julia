@@ -541,3 +541,14 @@ end
 	@test !isempty(a)
     end
 end
+
+@testset "pzip" begin
+    @test_throws MethodError pzip(1:2)
+    @test_throws DimensionMismatch collect(pzip(1:2, 3:-1:1, 3:4))
+    @test collect(pzip(1:2, 3:4)) == [(1,)=>3, (2,)=>4]
+    @test collect(pzip(1:2, 3:-1:2, 3:4)) == [(1,3)=>3, (2,2)=>4]
+    @test collect(pzip([1 2; 3 4], [5 6; 7 8])) == [
+        (1,)=>5 (2,)=>6;
+        (3,)=>7 (4,)=>8
+    ]
+end
