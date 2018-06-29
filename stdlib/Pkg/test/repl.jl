@@ -144,8 +144,6 @@ end # temp_pkg_dir
 locate_name(pkg) = Base.locate_package(Base.identify_package(pkg))
 
 temp_pkg_dir() do project_path; cd(project_path) do
-    touch("Project.toml")
-    touch("Manifest.toml")
     mktempdir() do tmp
         mktempdir() do depot_dir
             old_depot = copy(DEPOT_PATH)
@@ -182,7 +180,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
     end # mktempdir
     # nested
     try
-        pushfirst!(LOAD_PATH, "@")
+        pushfirst!(LOAD_PATH, "@.")
         mktempdir() do other_dir
             mktempdir() do tmp; cd(tmp) do
                 withenv("USER" => "Test User") do
@@ -290,7 +288,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
         cp(joinpath(@__DIR__, "test_packages", "BigProject"), joinpath(tmp, "BigProject"))
         cd(joinpath(tmp, "BigProject")) do
             try
-                pushfirst!(LOAD_PATH, ".")
+                pushfirst!(LOAD_PATH, pwd())
                 pkg"dev SubModule"
                 pkg"dev SubModule2"
                 pkg"add Random"

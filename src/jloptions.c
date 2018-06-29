@@ -403,7 +403,7 @@ restart_switch:
                 jl_error("julia: failed to allocate memory");
             break;
         case opt_project:
-            jl_options.project = optarg ? strdup(optarg) : "@";
+            jl_options.project = optarg ? strdup(optarg) : "@.";
             break;
         case opt_color:
             if (!strcmp(optarg, "yes"))

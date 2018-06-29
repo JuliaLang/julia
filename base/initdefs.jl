@@ -70,7 +70,7 @@ end
 # this will inherit an existing JULIA_LOAD_PATH value or if there is none, leave
 # a trailing empty entry in JULIA_LOAD_PATH which will be replaced with defaults.
 
-const DEFAULT_LOAD_PATH = ["@v#.#", "@stdlib"]
+const DEFAULT_LOAD_PATH = ["@", "@v#.#", "@stdlib"]
 
 """
     LOAD_PATH
@@ -114,7 +114,7 @@ function parse_load_path(str::String)
         if isempty(env)
             first_empty && append!(envs, DEFAULT_LOAD_PATH)
             first_empty = false
-        elseif env == "@" # use "@@" to do delayed expansion
+        elseif env == "@."
             dir = current_project()
             dir !== nothing && push!(envs, dir)
         else
@@ -131,14 +131,14 @@ function init_load_path()
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
         paths = filter!(env -> env !== nothing,
-            [env == "@" ? current_project() : env for env in DEFAULT_LOAD_PATH])
+            [env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
     end
     project = (JLOptions().project != C_NULL ?
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
     HOME_PROJECT[] =
-        project == ""  ? nothing :
-        project == "@" ? current_project() : project
+        project == "" ? nothing :
+        project == "@." ? current_project() : project
     append!(empty!(LOAD_PATH), paths)
 end
 
@@ -149,7 +149,8 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
     if startswith(env, '@')
         # `@` in JULIA_LOAD_PATH is expanded early (at startup time)
         # if you put a `@` in LOAD_PATH manually, it's expanded late
-        (env == "@" || env == "@@") && return current_project()
+        env == "@" && return active_project(false)
+        env == "@." && return current_project()
         env == "@stdlib" && return Sys.STDLIB
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
@@ -184,15 +185,17 @@ load_path_expand(::Nothing) = nothing
 
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[], HOME_PROJECT[])
+        project == "@" && continue
         project = load_path_expand(project)
         project === nothing && continue
         if !isfile_casesensitive(project)
-            project = absath(project, "Project.toml")
+            project = abspath(project, "Project.toml")
         end
         return project
     end
     search_load_path || return
     for project in LOAD_PATH
+        project == "@" && continue
         project = load_path_expand(project)
         project === nothing && continue
         isfile_casesensitive(project) && return project
@@ -203,8 +206,6 @@ end
 
 function load_path()
     paths = String[]
-    path = active_project(false)
-    path !== nothing && push!(paths, path)
     for env in LOAD_PATH
         path = load_path_expand(env)
         path !== nothing && path ∉ paths && push!(paths, path)
