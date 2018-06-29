@@ -420,7 +420,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
             rm(testdir)
             @test Base.current_project() === nothing
             @test success(`$exename -e "exit(0)"`)
-            for load_path in ["", "@", "@@"]
+            for load_path in ["", "@", "@."]
                 withenv("JULIA_LOAD_PATH" => load_path) do
                     @test success(`$exename -e "exit(!(Base.load_path() == []))"`)
                 end
