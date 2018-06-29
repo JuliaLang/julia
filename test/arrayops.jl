@@ -2283,11 +2283,11 @@ end
     @test accumulate(min, [1 0; 0 1], dims=1) == [1 0; 0 0]
     @test accumulate(min, [1 0; 0 1], dims=2) == [1 0; 0 0]
 
-    @test isa(accumulate(+,     Int[]) , Vector{Int})
-    @test isa(accumulate(+, 1., Int[]) , Vector{Float64})
-    @test accumulate(+, 1, [1,2]) == [2, 4]
+    @test isa(accumulate(+, Int[]), Vector{Int})
+    @test isa(accumulate(+, Int[]; init=1.), Vector{Float64})
+    @test accumulate(+, [1,2]; init=1) == [2, 4]
     arr = randn(4)
-    @test accumulate(*, 1, arr) ≈ accumulate(*, arr)
+    @test accumulate(*, arr; init=1) ≈ accumulate(*, arr)
 
     N = 5
     for arr in [rand(Float64, N), rand(Bool, N), rand(-2:2, N)]
@@ -2313,7 +2313,7 @@ end
     @test accumulate(+, oarr).parent == accumulate(+, arr)
 
     @inferred accumulate(+, randn(3))
-    @inferred accumulate(+, 1, randn(3))
+    @inferred accumulate(+, randn(3); init=1)
 
     # asymmetric operation
     op(x,y) = 2x+y
@@ -2321,7 +2321,7 @@ end
     @test accumulate(op, [10 20 30], dims=2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 
     #25506
-    @test accumulate((acc, x) -> acc+x[1], 0, [(1,2), (3,4), (5,6)]) == [1, 4, 9]
+    @test accumulate((acc, x) -> acc+x[1], [(1,2), (3,4), (5,6)]; init=0) == [1, 4, 9]
     @test accumulate(*, ['a', 'b']) == ["a", "ab"]
     @inferred accumulate(*, String[])
     @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=1) == ["a" "b"; "ac" "bd"]
