@@ -49,15 +49,6 @@ branches:
     - /^v\d+\.\d+\.\d+$/
 notifications:
     email: false
-    irc:
-        channels:
-            - "chat.freenode.net#julia-notifications"
-        on_success: change
-        on_failure: always
-    webhooks:
-        urls:
-          - http://status.julialang.org/put/travis
-          - http://julia.mit.edu:8000/travis-hook
 before_install:
     - make check-whitespace
     - if [ `uname` = "Linux" ]; then
