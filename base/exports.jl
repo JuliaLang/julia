@@ -485,6 +485,7 @@ export
     delete,
     delete!,
     deleteat!,
+    deleteindicies,
     eltype,
     empty!,
     empty,
