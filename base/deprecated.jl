@@ -1367,9 +1367,9 @@ export readandwrite
 @deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
 
 @deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
-@deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, v0, A, dims=dims)
+@deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, A, init=v0, dims=dims)
 @deprecate reducedim(op, A::AbstractArray, dims)           reduce(op, A, dims=dims)
-@deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, v0, A, dims=dims)
+@deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, A, init=v0, dims=dims)
 @deprecate mapslices(op, A::AbstractArray, dims)           mapslices(op, A, dims=dims)
 
 @deprecate sort(A::AbstractArray, dim::Integer; kwargs...) sort(A; kwargs..., dims=dim)
@@ -1722,6 +1722,9 @@ end
 @deprecate mapreduce(f, op, v0, itr) mapreduce(f, op, itr; init=v0)
 @deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
 @deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
+# also deprecate the old deprecations
+@deprecate mapreduce(f, op, v0, A; dims=dims) mapreduce(f, op, A; init = v0, dims=dims)
+@deprecate reduce(op, v0, A; dims=dims) reduce(op, A; init=v0, dims=dims)
 
 # END 0.7 deprecations
 
