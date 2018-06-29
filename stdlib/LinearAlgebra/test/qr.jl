@@ -174,7 +174,7 @@ end
 @testset "Issue 7304" begin
     A = [-√.5 -√.5; -√.5 √.5]
     Q = rectangularQ(qr(A).Q)
-    @test vecnorm(A-Q) < eps()
+    @test norm(A-Q) < eps()
 end
 
 @testset "qr on AbstractVector" begin

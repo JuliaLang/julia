@@ -9,14 +9,6 @@ const SHORTEST = 1
 const FIXED = 2
 const PRECISION = 3
 
-const DIGITS = Vector{UInt8}(undef, 309+17)
-
-# thread-safe code should use a per-thread DIGITS buffer DIGITSs[Threads.threadid()]
-const DIGITSs = [DIGITS]
-function __init__()
-    Threads.resize_nthreads!(DIGITSs)
-end
-
 include("grisu/float.jl")
 include("grisu/fastshortest.jl")
 include("grisu/fastprecision.jl")
@@ -24,9 +16,19 @@ include("grisu/fastfixed.jl")
 include("grisu/bignums.jl")
 include("grisu/bignum.jl")
 
+const DIGITS = Vector{UInt8}(undef, 309+17)
 const BIGNUMS = [Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum()]
 
-function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITSs[Threads.threadid()],bignums=BIGNUMS)
+# thread-safe code should use a per-thread DIGITS buffer DIGITSs[Threads.threadid()]
+const DIGITSs = [DIGITS]
+const BIGNUMSs = [BIGNUMS]
+function __init__()
+    Threads.resize_nthreads!(DIGITSs)
+    Threads.resize_nthreads!(BIGNUMSs)
+end
+
+
+function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITSs[Threads.threadid()],bignums=BIGNUMSs[Threads.threadid()])
     if signbit(v)
         neg = true
         v = -v

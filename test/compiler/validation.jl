@@ -89,22 +89,6 @@ end
     @test errors[1].kind === Core.Compiler.SLOTFLAGS_MISMATCH
 end
 
-@testset "SLOTTYPES_MISMATCH" begin
-    c = code_typed(f22938, (Int,Int,Int,Int))[1][1]
-    pop!(c.slottypes)
-    errors = Core.Compiler.validate_code(c)
-    @test length(errors) == 1
-    @test errors[1].kind === Core.Compiler.SLOTTYPES_MISMATCH
-end
-
-@testset "SLOTTYPES_MISMATCH_UNINFERRED" begin
-    c = Core.Compiler.copy_code_info(c0)
-    c.slottypes = 1
-    errors = Core.Compiler.validate_code(c)
-    @test length(errors) == 1
-    @test errors[1].kind === Core.Compiler.SLOTTYPES_MISMATCH_UNINFERRED
-end
-
 @testset "SSAVALUETYPES_MISMATCH" begin
     c = code_typed(f22938, (Int,Int,Int,Int))[1][1]
     empty!(c.ssavaluetypes)

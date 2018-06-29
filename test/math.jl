@@ -763,6 +763,44 @@ end
     end
 end
 
+@testset "atand" begin
+    for T in (Float32, Float64)
+        r = T(randn())
+        absr = abs(r)
+
+        # Tests related to the 1-argument version of `atan`.
+        # ==================================================
+
+        @test atand(T(Inf))  === T(90.0)
+        @test atand(-T(Inf)) === -T(90.0)
+        @test atand(zero(T)) === T(0.0)
+        @test atand(one(T))  === T(45.0)
+        @test atand(-one(T)) === -T(45.0)
+
+        # Tests related to the 2-argument version of `atan`.
+        # ==================================================
+
+        # If `x` is one, then `atand(y,x)` must be equal to `atand(y)`.
+        @test atand(T(r), one(T))    === atand(T(r))
+
+        # `y` zero.
+        @test atand(zero(T), absr)   === zero(T)
+        @test atand(-zero(T), absr)  === -zero(T)
+        @test atand(zero(T), -absr)  === T(180.0)
+        @test atand(-zero(T), -absr) === -T(180.0)
+
+        # `x` zero and `y` not zero.
+        @test atand(one(T), zero(T))  === T(90.0)
+        @test atand(-one(T), zero(T)) === -T(90.0)
+
+        # `x` and `y` equal for each quadrant.
+        @test atand(+absr, +absr) === T(45.0)
+        @test atand(-absr, +absr) === -T(45.0)
+        @test atand(+absr, -absr) === T(135.0)
+        @test atand(-absr, -absr) === -T(135.0)
+    end
+end
+
 @testset "acos #23283" begin
     for T in (Float32, Float64)
         @test acos(zero(T)) === T(pi)/2

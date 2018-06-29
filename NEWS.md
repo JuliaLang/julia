@@ -72,6 +72,9 @@ Language changes
   * Juxtaposing binary, octal, and hexadecimal literals is deprecated, since it can lead to
     confusing code such as `0xapi == 0xa * pi` ([#16356]).
 
+  * Numeric literal juxtaposition now has slighty lower precedence than unary operators,
+    so for example `√2x` parses as `(√2) * x` ([#27641]).
+
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
@@ -219,6 +222,9 @@ Language changes
   * Assignment syntax (`a=b`) inside square bracket expressions (e.g. `A[...]`, `[x, y]`)
     is deprecated. It will likely be reclaimed in a later version for passing keyword
     arguments. Note this does not affect updating operators like `+=` ([#25631]).
+
+  * `try` blocks without `catch` or `finally` are no longer allowed. An explicit empty
+    `catch` block should be written instead ([#27554]).
 
 Breaking changes
 ----------------
@@ -508,6 +514,13 @@ This section lists changes that do not have deprecation warnings.
     This change makes `@schedule` redundant with `@async`, so `@schedule` has been
     deprecated ([#27164]).
 
+ * `norm(A::AbstractMatrix, p=2)` computes no longer the operator/matrix norm but the `norm` of `A`
+   as for other iterables, i.e. as if it were a vector. Especially, `norm(A::AbstractMatrix)` is the
+   Frobenius norm. To compute the operator/matrix norm, use the new function `opnorm` ([#27401]).
+
+  * `dot(u, v)` now acts recursively. Instead of `sum(u[i]' * v[i] for i in ...)`, it computes
+    `sum(dot(u[i], v[i]) for i in ...)`, similarly to `vecdot` before ([#27401]).
+
 Library improvements
 --------------------
 
@@ -541,6 +554,9 @@ Library improvements
   * `get(io, :color, false)` can now be used to query whether a stream `io` supports
     [ANSI color codes](https://en.wikipedia.org/wiki/ANSI_escape_code) ([#25067]),
     rather than using the undocumented `Base.have_color` global flag.
+
+  * `print_with_color` has been deprecated in favor of
+    `printstyled([io], xs...; bold=false, color=:normal)` for printing styled text ([#25522]).
 
   * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
     If this argument is used they return a string consisting of first/last `nchar`
@@ -688,6 +704,9 @@ Library improvements
   * `IOBuffer` can take the `sizehint` keyword argument to suggest a capacity of
     the buffer ([#25944]).
 
+  * `lstrip` and `rstrip` now accept a predicate function that defaults to `isspace`
+    ([#27309]).
+
   * `trunc`, `floor`, `ceil`, and `round` specify `digits`, `sigdigits` and `base` using
     keyword arguments. ([#26156], [#26670])
 
@@ -699,6 +718,10 @@ Library improvements
 
   * Added an optimized method of `kron` for taking the tensor product of two
     `Diagonal` matrices. ([27581])
+
+  * The initial element `v0` in `reduce(op, v0, itr)` has been replaced with an `init`
+    optional keyword argument, as in `reduce(op, itr; init=v0)`. Similarly for `foldl`,
+    `foldr`, `mapreduce`, `mapfoldl` and `mapfoldr`. ([#27711])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -1130,9 +1153,6 @@ Deprecated or removed
     `normalize`, and moved to the new `Unicode` standard library module.
     `graphemes` has also been moved to that module ([#25021]).
 
-  * The functions `eigs` and `svds` have been moved to the `IterativeEigensolvers` standard
-    library module ([#24714]).
-
   * Sparse array functionality has moved to the `SparseArrays` standard library module ([#25249]).
 
   * Linear algebra functionality, and specifically the `LinAlg` module has moved to the
@@ -1271,6 +1291,14 @@ Deprecated or removed
     [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl) ([#27459], [#27473]).
 
   * `atan2` is now a 2-argument method of `atan` ([#27248]).
+
+  * The functions `eigs` and `svds` have been moved to the `Arpack.jl` package ([#27616]).
+
+  * `vecdot` and `vecnorm` are deprecated in favor of `dot` and `norm`, respectively ([#27401]).
+
+  * `clipboard` has been moved to the `InteractiveUtils` standard library package
+    (along with other utilities mostly used at the interactive prompt, such as `edit`
+    and `less`) ([#27635]).
 
 Command-line option changes
 ---------------------------
@@ -1608,3 +1636,4 @@ Command-line option changes
 [#27189]: https://github.com/JuliaLang/julia/issues/27189
 [#27212]: https://github.com/JuliaLang/julia/issues/27212
 [#27248]: https://github.com/JuliaLang/julia/issues/27248
+[#27401]: https://github.com/JuliaLang/julia/issues/27401

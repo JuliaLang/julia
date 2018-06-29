@@ -1156,8 +1156,16 @@ end
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 
+    # issue #27680
+    @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+              "Set(Tuple{Float64,Float64}[(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
+              "Set(Tuple{Float64,Float64}[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
+
     # issue #25857
     @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
+
+    # issues #25466 & #26256
+    @test replstr([:A => [1]]) == "1-element Array{Pair{Symbol,Array{$Int,1}},1}:\n :A => [1]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1220,7 +1228,7 @@ end
 # Tests for code_typed linetable annotations
 function compute_annotations(f, types)
     src = code_typed(f, types)[1][1]
-    ir = Core.Compiler.inflate_ir(src, Core.svec())
+    ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
     join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
@@ -1240,3 +1248,13 @@ h_line() = f_line()
     │╻╷ f_line
     ││╻  g_line
     ││╻  g_line""")
+
+# issue #27352
+@test_throws MethodError print(nothing)
+@test_throws MethodError print(stdout, nothing)
+@test_throws MethodError string(nothing)
+@test_throws MethodError string(1, "", nothing)
+@test_throws MethodError let x = nothing; "x = $x" end
+@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+@test_throws MethodError `/bin/foo $nothing`
+@test_throws MethodError `$nothing`

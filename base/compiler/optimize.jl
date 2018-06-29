@@ -15,6 +15,7 @@ mutable struct OptimizationState
     max_valid::UInt
     params::Params
     sp::SimpleVector # static parameters
+    slottypes::Vector{Any}
     const_api::Bool
     function OptimizationState(frame::InferenceState)
         s_edges = frame.stmt_edges[1]
@@ -27,7 +28,7 @@ mutable struct OptimizationState
                    s_edges::Vector{Any},
                    src, frame.mod, frame.nargs,
                    frame.min_valid, frame.max_valid,
-                   frame.params, frame.sp, false)
+                   frame.params, frame.sp, frame.slottypes, false)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo,
                                params::Params)
@@ -37,10 +38,8 @@ mutable struct OptimizationState
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
         end
-        if src.slottypes === nothing
-            nslots = length(src.slotnames)
-            src.slottypes = Any[ Any for i = 1:nslots ]
-        end
+        nslots = length(src.slotnames)
+        slottypes = Any[ Any for i = 1:nslots ]
         s_edges = []
         # cache some useful state computations
         toplevel = !isa(linfo.def, Method)
@@ -57,7 +56,7 @@ mutable struct OptimizationState
                    s_edges::Vector{Any},
                    src, inmodule, nargs,
                    min_world(linfo), max_world(linfo),
-                   params, spvals_from_meth_instance(linfo), false)
+                   params, spvals_from_meth_instance(linfo), slottypes, false)
         end
 end
 
@@ -134,7 +133,7 @@ function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
         end
     end
     if !inlineable
-        inlineable = inline_worthy(me.src.code, me.src, me.sp, me.params, cost_threshold + bonus)
+        inlineable = inline_worthy(me.src.code, me.src, me.sp, me.slottypes, me.params, cost_threshold + bonus)
     end
     return inlineable
 end
@@ -266,16 +265,14 @@ function statement_effect_free(@nospecialize(e), me::OptimizationState, @nospeci
     return effect_free(e, me, false, etype)
 end
 
-effect_free(@nospecialize(e), s::InferenceState, allow_volatile::Bool, @nospecialize(etype)) =
-    effect_free(e, s.src, s.sp, allow_volatile, etype)
-
 effect_free(@nospecialize(e), s::OptimizationState, allow_volatile::Bool, @nospecialize(etype)) =
-    effect_free(e, s.src, s.sp, allow_volatile, etype)
+    effect_free(e, s.src, s.sp, allow_volatile, etype, s.slottypes)
 
 # detect some important side-effect-free calls (allow_volatile=true)
 # and some affect-free calls (allow_volatile=false) -- affect_free means the call
 # cannot be affected by previous calls, except assignment nodes
-function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile::Bool, @nospecialize(etype))
+function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile::Bool, @nospecialize(etype),
+                     slottypes::Vector{Any} = empty_slottypes)
     if isa(e, GlobalRef)
         return (isdefined(e.mod, e.name) && (allow_volatile || isconst(e.mod, e.name)))
     elseif isa(e, Slot)
@@ -295,18 +292,18 @@ function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile
         end
         ea = e.args
         if head === :call
-            if is_known_call_p(e, is_pure_builtin, src, spvals)
+            if is_known_call_p(e, is_pure_builtin, src, spvals, slottypes)
                 if !allow_volatile
-                    if is_known_call(e, arrayref, src, spvals) || is_known_call(e, arraylen, src, spvals)
+                    if is_known_call(e, arrayref, src, spvals, slottypes) || is_known_call(e, arraylen, src, spvals, slottypes)
                         return false
-                    elseif is_known_call(e, getfield, src, spvals)
+                    elseif is_known_call(e, getfield, src, spvals, slottypes)
                         nargs = length(ea)
                         (3 <= nargs <= 4) || return false
                         # TODO: check ninitialized
                         if !isa(etype, Const) && !isconstType(etype)
                             # first argument must be immutable to ensure e is affect_free
                             a = ea[2]
-                            typ = unwrap_unionall(widenconst(argextype(a, src, spvals)))
+                            typ = unwrap_unionall(widenconst(argextype(a, src, spvals, slottypes)))
                             if isType(typ)
                                 # all fields of subtypes of Type are effect-free
                                 # (including the non-inferrable uid field)
@@ -317,8 +314,8 @@ function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile
                     end
                 end
                 # fall-through
-            elseif is_known_call(e, _apply, src, spvals) && length(ea) > 1
-                ft = argextype(ea[2], src, spvals)
+            elseif is_known_call(e, _apply, src, spvals, slottypes) && length(ea) > 1
+                ft = argextype(ea[2], src, spvals, slottypes)
                 if !isa(ft, Const) || (!contains_is(_PURE_BUILTINS, ft.val) &&
                                        ft.val !== Core.sizeof)
                     return false
@@ -329,7 +326,7 @@ function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile
             end
         elseif head === :new
             a = ea[1]
-            typ = argextype(a, src, spvals)
+            typ = argextype(a, src, spvals, slottypes)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
@@ -340,7 +337,7 @@ function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile
             end
             fieldcount(typ) >= length(ea) - 1 || return false
             for fld_idx in 1:(length(ea) - 1)
-                eT = argextype(ea[fld_idx + 1], src, spvals)
+                eT = argextype(ea[fld_idx + 1], src, spvals, slottypes)
                 fT = fieldtype(typ, fld_idx)
                 eT ⊑ fT || return false
             end
@@ -357,7 +354,7 @@ function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile
             return false
         end
         for a in ea
-            if !effect_free(a, src, spvals, allow_volatile, argextype(a, src, spvals))
+            if !effect_free(a, src, spvals, allow_volatile, argextype(a, src, spvals, slottypes))
                 return false
             end
         end
@@ -375,7 +372,7 @@ plus_saturate(x, y) = max(x, y, x+y)
 # known return type
 isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
 
-function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector, params::Params)
+function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any}, params::Params)
     head = ex.head
     if is_meta_expr_head(head) || head == :copyast # not sure if copyast is right
         return 0
@@ -383,7 +380,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
     argcost = 0
     for a in ex.args
         if a isa Expr
-            argcost = plus_saturate(argcost, statement_cost(a, -1, src, spvals, params))
+            argcost = plus_saturate(argcost, statement_cost(a, -1, src, spvals, slottypes, params))
         end
     end
     if head == :return || head == :(=)
@@ -391,7 +388,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
     end
     extyp = line == -1 ? Any : src.ssavaluetypes[line]
     if head == :call
-        ftyp = argextype(ex.args[1], src, spvals)
+        ftyp = argextype(ex.args[1], src, spvals, slottypes)
         if isa(ftyp, Type)
             return argcost
         end
@@ -415,8 +412,9 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
                     # impossible
                     # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                     return argcost
-                elseif f == Main.Core.arrayref
-                    return plus_saturate(argcost, isknowntype(extyp) ? 4 : params.inline_nonleaf_penalty)
+                elseif f == Main.Core.arrayref && length(ex.args) >= 3
+                    atyp = argextype(ex.args[3], src, spvals, slottypes)
+                    return plus_saturate(argcost, isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty)
                 end
                 fidx = findfirst(x->x===f, T_FFUNC_KEY)
                 if fidx === nothing
@@ -453,13 +451,13 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
     return argcost
 end
 
-function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, params::Params,
-                       cost_threshold::Integer=params.inline_cost_threshold)
+function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any},
+                       params::Params, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost = 0
     for line = 1:length(body)
         stmt = body[line]
         if stmt isa Expr
-            thiscost = statement_cost(stmt, line, src, spvals, params)::Int
+            thiscost = statement_cost(stmt, line, src, spvals, slottypes, params)::Int
         elseif stmt isa GotoNode
             # loops are generally always expensive
             # but assume that forward jumps are already counted for from
@@ -474,23 +472,29 @@ function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, 
     return bodycost <= cost_threshold
 end
 
-function is_known_call(e::Expr, @nospecialize(func), src, spvals)
+function is_known_call(e::Expr, @nospecialize(func), src, spvals::SimpleVector, slottypes::Vector{Any} = empty_slottypes)
     if e.head !== :call
         return false
     end
-    f = argextype(e.args[1], src, spvals)
+    f = argextype(e.args[1], src, spvals, slottypes)
     return isa(f, Const) && f.val === func
 end
 
-function is_known_call_p(e::Expr, @nospecialize(pred), src, spvals)
+function is_known_call_p(e::Expr, @nospecialize(pred), src, spvals::SimpleVector, slottypes::Vector{Any})
     if e.head !== :call
         return false
     end
-    f = argextype(e.args[1], src, spvals)
+    f = argextype(e.args[1], src, spvals, slottypes)
     return (isa(f, Const) && pred(f.val)) || (isType(f) && pred(f.parameters[1]))
 end
 
-function renumber_stuff!(body::Vector{Any}, changemap::Vector{Int})
+function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int}, preprocess::Bool = true)
+    if preprocess
+        for i = 2:length(changemap)
+            changemap[i] += changemap[i - 1]
+        end
+    end
+    changemap[end] != 0 || return
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
@@ -509,7 +513,7 @@ function renumber_stuff!(body::Vector{Any}, changemap::Vector{Int})
                 tgt = el.args[1]::Int
                 el.args[1] = tgt + changemap[tgt]
             elseif !is_meta_expr_head(el.head)
-                renumber_stuff!(el.args, changemap)
+                renumber_ir_elements!(el.args, changemap, false)
             end
         end
     end

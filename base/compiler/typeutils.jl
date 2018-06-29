@@ -85,7 +85,7 @@ _typename(a::DataType) = Const(a.name)
 function tuple_tail_elem(@nospecialize(init), ct)
     # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
     tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
-    return Vararg{widenconst(foldl(tmerge_maybe_vararg, init, ct))}
+    return Vararg{widenconst(foldl(tmerge_maybe_vararg, ct; init=init))}
 end
 
 function countunionsplit(atypes)
@@ -124,3 +124,20 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
     end
     return tunion
 end
+
+# unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
+# counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
+unioncomplexity(u::Union) = 1 + unioncomplexity(u.a) + unioncomplexity(u.b)
+function unioncomplexity(t::DataType)
+    t.name === Tuple.name || return 0
+    c = 0
+    for ti in t.parameters
+        ci = unioncomplexity(ti)
+        if ci > c
+            c = ci
+        end
+    end
+    return c
+end
+unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
+unioncomplexity(@nospecialize(x)) = 0

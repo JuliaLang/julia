@@ -5,6 +5,7 @@ using .Main.TestHelpers.OAs
 using DelimitedFiles
 using Random
 using LinearAlgebra
+using Statistics
 
 const OAs_name = join(fullname(OAs), ".")
 
@@ -374,11 +375,14 @@ I = findall(!iszero, z)
 @test mean(x->2x, A_3_3) == 10
 @test mean(A_3_3, dims=1) == median(A_3_3, dims=1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
 @test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
+@test var(A_3_3) == 7.5
+@test std(A_3_3, dims=1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
+@test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
-@test vecnorm(v) ≈ vecnorm(parent(v))
-@test vecnorm(A) ≈ vecnorm(parent(A))
-@test vecdot(v, v) ≈ vecdot(v0, v0)
+@test norm(v) ≈ norm(parent(v))
+@test norm(A) ≈ norm(parent(A))
+@test dot(v, v) ≈ dot(v0, v0)
 
 # Prior to its removal from Base, cumsum_kbn was used here. To achieve the same level of
 # accuracy in the tests, we need to use BigFloats with enlarged precision.
@@ -412,8 +416,8 @@ v = OffsetArray(rand(8), (-2,))
 @test sort(A, dims=1) == OffsetArray(sort(parent(A), dims=1), A.offsets)
 @test sort(A, dims=2) == OffsetArray(sort(parent(A), dims=2), A.offsets)
 
-@test mapslices(sort, A, 1) == OffsetArray(mapslices(sort, parent(A), 1), A.offsets)
-@test mapslices(sort, A, 2) == OffsetArray(mapslices(sort, parent(A), 2), A.offsets)
+@test mapslices(sort, A, dims=1) == OffsetArray(mapslices(sort, parent(A), dims=1), A.offsets)
+@test mapslices(sort, A, dims=2) == OffsetArray(mapslices(sort, parent(A), dims=2), A.offsets)
 
 @test rotl90(A) == OffsetArray(rotl90(parent(A)), A.offsets[[2,1]])
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])

@@ -809,6 +809,7 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
             memcpy(newdata, data, nb1);
             if (isbitsunion) {
                 memmove(newdata + (oldmaxsize + inc) * elsz, data + oldmaxsize * elsz, idx);
+                memset(newdata + (oldmaxsize + inc) * elsz + idx, 0, inc);
             }
             if (has_gap) {
                 memcpy(newdata + nb1 + nbinc, data + nb1, n * elsz - nb1);

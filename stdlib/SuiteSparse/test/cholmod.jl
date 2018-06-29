@@ -290,8 +290,8 @@ end
     @test_throws BoundsError ADense[6, 1]
     @test_throws BoundsError ADense[1, 6]
     @test copy(ADense) == ADense
-    @test CHOLMOD.norm_dense(ADense, 1) ≈ norm(A, 1)
-    @test CHOLMOD.norm_dense(ADense, 0) ≈ norm(A, Inf)
+    @test CHOLMOD.norm_dense(ADense, 1) ≈ opnorm(A, 1)
+    @test CHOLMOD.norm_dense(ADense, 0) ≈ opnorm(A, Inf)
     @test_throws ArgumentError CHOLMOD.norm_dense(ADense, 2)
     @test_throws ArgumentError CHOLMOD.norm_dense(ADense, 3)
 

@@ -1,17 +1,17 @@
 #!/bin/sh
-# Usage: fixup-rpath.sh <patchelf path> <install libdir> <build libdir>
+# Usage: fixup-rpath.sh <patchelf path> <dir to process> <build libdir>
 
 if [ $# -ne 3 ]; then
     echo "Incorrect number of arguments: Expected 3, got $#"
-    echo "Usage: fixup-rpath.sh <patchelf path> <install libdir> <build libdir>"
+    echo "Usage: fixup-rpath.sh <patchelf path> <directory to process> <build libdir>"
     exit 1
 fi
 
 patchelf="$1"
-install_libdir="$2"
+executable_dir="$2"
 build_libdir="$3"
 
-for lib in ${install_libdir}/*.so*; do
+for lib in $(find ${executable_dir} -type f -perm -111); do
     # First get the current RPATH
     rpath="$(${patchelf} --print-rpath ${lib})"
 
@@ -24,6 +24,8 @@ for lib in ${install_libdir}/*.so*; do
     new_rpath="$(echo ${rpath} | tr : \\n | grep -vF ${build_libdir} | tr \\n :)"
     # Drop the trailing :
     new_rpath="${new_rpath%?}"
+
+    echo "  Setting RPATH for ${lib} to '${new_rpath}'"
 
     # Now set the new RPATH
     ${patchelf} --set-rpath "${new_rpath}" ${lib}

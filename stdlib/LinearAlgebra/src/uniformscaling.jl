@@ -128,7 +128,7 @@ function (-)(J::UniformScaling, A::AbstractMatrix)
 end
 
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
-norm(J::UniformScaling, p::Real=2) = abs(J.λ)
+opnorm(J::UniformScaling, p::Real=2) = opnorm(J.λ, p)
 
 function det(J::UniformScaling{T}) where T
     if isone(J.λ)
@@ -194,11 +194,11 @@ end
 function isapprox(J::UniformScaling, A::AbstractMatrix;
                   atol::Real = 0,
                   rtol::Real = Base.rtoldefault(promote_leaf_eltypes(A), eltype(J), atol),
-                  nans::Bool = false, norm::Function = vecnorm)
+                  nans::Bool = false, norm::Function = norm)
     n = checksquare(A)
-    normJ = norm === LinearAlgebra.norm ? abs(J.λ) :
-            norm === vecnorm   ? abs(J.λ) * sqrt(n) :
-                                 norm(Diagonal(fill(J.λ, n)))
+    normJ = norm === opnorm             ? abs(J.λ) :
+            norm === LinearAlgebra.norm ? abs(J.λ) * sqrt(n) :
+                                          norm(Diagonal(fill(J.λ, n)))
     return norm(A - J) <= max(atol, rtol * max(norm(A), normJ))
 end
 isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)

@@ -132,13 +132,13 @@
            ,loc
            (call (core eval) ,name ,x)))
        (if (&& (call (top isdefined) (core Main) (quote Base))
-               (call (top isdefined) (top Base) (quote @deprecate)))
+               (call (top isdefined) (|.| (core Main) (quote Base)) (quote @deprecate)))
            (call eval
                  (quote
-                  (macrocall (top @deprecate)
+                  (macrocall (|.| (|.| (core Main) (quote Base)) (quote @deprecate))
                              (line 0 none)
                              (call eval m x)
-                             (call (|.| Core (quote eval)) m x)
+                             (call (|.| Core (quote eval)) m x) ; should be (core eval), but format as Core.eval(m, x) for deprecation warning
                              false))))
        (= (call include ,x)
           (block

@@ -139,6 +139,7 @@ function find_system_compiler()
         if success(`cc -v`)
             cc = "cc"
         end
+    catch
     end
 
     if cc === nothing

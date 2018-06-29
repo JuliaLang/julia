@@ -49,9 +49,6 @@ may trip up Julia users accustomed to MATLAB:
   * In Julia, reductions such as [`sum`](@ref), [`prod`](@ref), and [`max`](@ref) are performed
     over every element of an array when called with a single argument, as in `sum(A)`, even if `A`
     has more than one dimension.
-  * In Julia, functions such as [`sort`](@ref) that operate column-wise by default (`sort(A)` is
-    equivalent to `sort(A,1)`) do not have special behavior for `1xN` arrays; the argument is returned
-    unmodified since it still performs `sort(A,1)`. To sort a `1xN` matrix like a vector, use `sort(A,2)`.
   * In Julia, parentheses must be used to call a function with zero arguments, like in [`rand()`](@ref).
   * Julia discourages the used of semicolons to end statements. The results of statements are not
     automatically printed (except at the interactive prompt), and lines of code do not need to end

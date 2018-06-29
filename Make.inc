@@ -38,7 +38,6 @@ USE_SYSTEM_BLAS:=0
 USE_SYSTEM_LAPACK:=0
 USE_SYSTEM_GMP:=0
 USE_SYSTEM_MPFR:=0
-USE_SYSTEM_ARPACK:=0
 USE_SYSTEM_SUITESPARSE:=0
 USE_SYSTEM_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
@@ -168,6 +167,11 @@ else
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
+# Override `JULIA_COMMIT` to `JULIA_VERSION` if we're on a tagged commit
+ifeq ($(shell git describe --tags --exact-match > /dev/null 2>&1 && echo true),true)
+JULIA_COMMIT := $(JULIA_VERSION)
+endif
+
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
 
@@ -223,6 +227,8 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 # BinaryBuilder options
 # TODO: Autodiscover triplet
 USE_BINARYBUILDER_LLVM := 0
+# Use the Assertions build
+BINARYBUILDER_LLVM_ASSERTS := 0
 BINARYBUILDER_TRIPLET :=
 
 # LLVM Options
@@ -248,7 +254,11 @@ USE_POLLY_ACC := 0     # Enable GPU code-generation
 CMAKE ?= cmake
 CMAKE_GENERATOR ?= make
 
-# Point pkg-config to only look at our libraries
+# Point pkg-config to only look at our libraries, overriding whatever
+# the user may have unwittingly set.  To pass PKG_CONFIG_* variables
+# through to the buildsystem, these must be set either on the command
+# line, or through `override` directives within Make.user
+export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
@@ -955,6 +965,9 @@ else ifeq ($(OS), Darwin)
   RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
+ifeq ($(OS), FreeBSD)
+  RPATH += -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)'
+endif
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
   RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
@@ -1071,16 +1084,9 @@ MKLLIB := $(MKLROOT)/lib/ia32
 endif
 USE_SYSTEM_BLAS:=1
 USE_SYSTEM_LAPACK:=1
-ifeq ($(OS), WINNT)
-LIBBLASNAME := mkl_rt
-LIBLAPACKNAME := mkl_rt
-# work around libtool issue with arpack
-MKL_LDFLAGS := -L$(MKLLIB) -Wl,-lmkl_rt
-else
 LIBBLASNAME := libmkl_rt
 LIBLAPACKNAME := libmkl_rt
 MKL_LDFLAGS := -L$(MKLLIB) -lmkl_rt
-endif
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
     RPATH_MKL := -Wl,-rpath,$(MKLLIB)

@@ -15,7 +15,6 @@ const _REF_NAME = Ref.body.name
 #########
 
 function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
-    atype = limit_tuple_type(atype, sv.params)
     atype_params = unwrap_unionall(atype).parameters
     ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_first_argument_datatype here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
@@ -114,7 +113,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     method = match[3]::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
-    length(argtypes) >= nargs || return Any # probably limit_tuple_type made this non-matching method apparently match
+    length(argtypes) >= nargs || return Any
     haveconst = false
     for a in argtypes
         if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
@@ -370,28 +369,46 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
     elseif tti0 <: Array
         return Any[Vararg{eltype(tti0)}]
     else
-        return Any[abstract_iteration(typ, vtypes, sv)]
+        return abstract_iteration(typ, vtypes, sv)
     end
 end
 
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
-    tm = _topmod(sv)
-    if !isdefined(tm, :iterate) || !isconst(tm, :iterate)
-        return Vararg{Any}
+    if !isdefined(Main, :Base) || !isdefined(Main.Base, :iterate) || !isconst(Main.Base, :iterate)
+        return Any[Vararg{Any}]
     end
-    iteratef = getfield(tm, :iterate)
+    iteratef = getfield(Main.Base, :iterate)
     stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype], vtypes, sv)
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
-    stateordonet === Bottom && return Bottom
+    stateordonet === Bottom && return Any[Bottom]
     valtype = statetype = Bottom
-    while valtype !== Any
+    ret = Any[]
+    stateordonet = widenconst(stateordonet)
+    while !(Nothing <: stateordonet) && length(ret) < sv.params.MAX_TUPLE_SPLAT
+        if !isa(stateordonet, DataType) || !(stateordonet <: Tuple) || isvatuple(stateordonet) || length(stateordonet.parameters) != 2
+            break
+        end
+        if stateordonet.parameters[2] <: statetype
+            # infinite (or failing) iterator
+            return Any[Bottom]
+        end
+        valtype = stateordonet.parameters[1]
+        statetype = stateordonet.parameters[2]
+        push!(ret, valtype)
+        stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype, statetype], vtypes, sv)
         stateordonet = widenconst(stateordonet)
-        nounion = Nothing <: stateordonet ? typesubtract(stateordonet, Nothing) : stateordonet
+    end
+    if stateordonet === Nothing
+        return ret
+    end
+    while valtype !== Any
+        nounion = typesubtract(stateordonet, Nothing)
         if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
-            return Vararg{Any}
+            valtype = Any
+            break
         end
         if nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype
             break
@@ -399,8 +416,10 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
         stateordonet = abstract_call(iteratef, (), Any[Const(iteratef), itertype, statetype], vtypes, sv)
+        stateordonet = widenconst(stateordonet)
     end
-    return Vararg{valtype}
+    push!(ret, Vararg{valtype})
+    return ret
 end
 
 # do apply(af, fargs...), where af is a function value
@@ -422,6 +441,9 @@ function abstract_apply(@nospecialize(aft), fargs::Vector{Any}, aargtypes::Vecto
         ctypes´ = []
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
             cti = precise_container_type(fargs[i], ti, vtypes, sv)
+            if _any(t -> t === Bottom, cti)
+                continue
+            end
             for ct in ctypes
                 if isvarargtype(ct[end])
                     tail = tuple_tail_elem(unwrapva(ct[end]), cti)
@@ -434,11 +456,6 @@ function abstract_apply(@nospecialize(aft), fargs::Vector{Any}, aargtypes::Vecto
         ctypes = ctypes´
     end
     for ct in ctypes
-        if length(ct) > sv.params.MAX_TUPLETYPE_LEN
-            tail = tuple_tail_elem(Bottom, ct[sv.params.MAX_TUPLETYPE_LEN:end])
-            resize!(ct, sv.params.MAX_TUPLETYPE_LEN)
-            ct[end] = tail
-        end
         if isa(aft, Const)
             rt = abstract_call(aft.val, (), ct, vtypes, sv)
         elseif isconstType(aft)

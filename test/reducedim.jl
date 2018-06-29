@@ -6,7 +6,7 @@ using Random
 
 function safe_mapslices(op, A, region)
     newregion = intersect(region, 1:ndims(A))
-    return isempty(newregion) ? A : mapslices(op, A, newregion)
+    return isempty(newregion) ? A : mapslices(op, A, dims = newregion)
 end
 safe_sum(A::Array{T}, region) where {T} = safe_mapslices(sum, A, region)
 safe_prod(A::Array{T}, region) where {T} = safe_mapslices(prod, A, region)
@@ -111,15 +111,15 @@ end
 @test sum(Union{Float32, Float64}[1.0], dims=1) == [1.0]
 @test prod(Union{Float32, Float64}[1.0], dims=1) == [1.0]
 
-@test reduce((a,b) -> a|b, false, [true false; false false], dims=1) == [true false]
-let R = reduce((a,b) -> a+b, 0.0, [1 2; 3 4], dims=2)
+@test reduce((a,b) -> a|b, [true false; false false], dims=1, init=false) == [true false]
+let R = reduce((a,b) -> a+b, [1 2; 3 4], dims=2, init=0.0)
     @test eltype(R) == Float64
     @test R ≈ [3,7]
 end
-@test reduce((a,b) -> a+b, 0, [1 2; 3 4], dims=1) == [4 6]
+@test reduce((a,b) -> a+b, [1 2; 3 4], dims=1, init=0) == [4 6]
 
 # inferred return types
-@test typeof(@inferred(reduce(+, 0.0, ones(3,3,3), dims=1))) == Array{Float64, 3}
+@test typeof(@inferred(reduce(+, ones(3,3,3), dims=1, init=0.0))) == Array{Float64, 3}
 
 @testset "empty cases" begin
     A = Matrix{Int}(undef, 0,1)

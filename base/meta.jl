@@ -172,90 +172,130 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
     return ex
 end
 
-# replace slots 1:na with argexprs, static params with spvals, and increment
-# other slots by offset.
-function substitute!(
-        @nospecialize(e), na::Int, argexprs::Vector{Any},
-        @nospecialize(spsig), spvals::Vector{Any},
-        offset::Int, boundscheck::Symbol)
-    if isa(e, Core.Slot)
-        id = e.id::Int
-        if 1 <= id <= na
-            ae = argexprs[id]
-            if isa(e, Core.TypedSlot) && isa(ae, Core.Slot)
-                return Core.TypedSlot(ae.id, e.typ)
-            end
-            return ae
+"""
+    partially_inline!(code::Vector{Any}, slot_replacements::Vector{Any},
+                      type_signature::Type{<:Tuple}, static_param_values::Vector{Any},
+                      slot_offset::Int, statement_offset::Int,
+                      boundscheck::Symbol)
+
+Return `code` after performing an in-place partial inlining pass on the Julia IR stored
+within it.
+
+The kind of inlining transformations performed by this function are those that are generally
+possible given only a runtime type signature for a method invocation and the corresponding
+method's lowered IR. Thus, this function is mainly useful when preparing Julia IR to be
+emitted from a `@generated` function.
+
+The performed transformations are:
+
+- replace slot numbers in the range `1:length(slot_replacements)` with the corresponding items in `slot_replacements`
+- increment other slot numbers by `slot_offset`
+- substitute static parameter placeholders (e.g. `Expr(:static_parameter, 1)`) with the corresponding
+values in `static_param_values`
+- increment any statement indices present in the IR (`GotoNode`s, `SSAValue`s, etc.) by `statement_offset`
+(useful when the caller plans to prepend new statements to the IR)
+- turn off boundschecking (if `boundscheck === :off`) or propagate boundschecking (if `boundscheck === :propagate`)
+
+This function is similar to `Core.Compiler.ssa_substitute!`, but works on pre-type-inference
+IR instead of the optimizer's IR.
+"""
+function partially_inline!(code::Vector{Any}, slot_replacements::Vector{Any},
+                           @nospecialize(type_signature)#=::Type{<:Tuple}=#,
+                           static_param_values::Vector{Any},
+                           slot_offset::Int, statement_offset::Int,
+                           boundscheck::Symbol)
+    for i = 1:length(code)
+        isassigned(code, i) || continue
+        code[i] = _partially_inline!(code[i], slot_replacements, type_signature,
+                                     static_param_values, slot_offset,
+                                     statement_offset, boundscheck)
+    end
+    return code
+end
+
+function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
+                            @nospecialize(type_signature), static_param_values::Vector{Any},
+                            slot_offset::Int, statement_offset::Int,
+                            boundscheck::Symbol)
+    if isa(x, Core.SSAValue)
+        return Core.SSAValue(x.id + statement_offset)
+    end
+    if isa(x, Core.GotoNode)
+        return Core.GotoNode(x.label + statement_offset)
+    end
+    if isa(x, Core.SlotNumber)
+        id = x.id
+        if 1 <= id <= length(slot_replacements)
+            return slot_replacements[id]
         end
-        if isa(e, Core.SlotNumber)
-            return Core.SlotNumber(id + offset)
-        else
-            return Core.TypedSlot(id + offset, e.typ)
-        end
+        return Core.SlotNumber(id + slot_offset)
     end
-    if isa(e, Core.NewvarNode)
-        return Core.NewvarNode(substitute!(e.slot, na, argexprs, spsig, spvals, offset, boundscheck))
+    if isa(x, Core.NewvarNode)
+        return Core.NewvarNode(_partially_inline!(x.slot, slot_replacements, type_signature,
+                                                  static_param_values, slot_offset,
+                                                  statement_offset, boundscheck))
     end
-    if isa(e, Core.PhiNode)
-        values = Vector{Any}(undef, length(e.values))
-        for i = 1:length(values)
-            isassigned(e.values, i) || continue
-            values[i] = substitute!(e.values[i], na, argexprs, spsig,
-                spvals, offset, boundscheck)
-        end
-        return Core.PhiNode(e.edges, values)
+    if isa(x, Core.PhiNode)
+        partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                          slot_offset, statement_offset, boundscheck)
+        x.edges .+= slot_offset
+        return x
     end
-    if isa(e, Core.PiNode)
-        return Core.PiNode(substitute!(e.val, na, argexprs, spsig, spvals, offset, boundscheck), e.typ)
-    end
-    if isa(e, Expr)
-        head = e.head
+    if isa(x, Expr)
+        head = x.head
         if head === :static_parameter
-            return QuoteNode(spvals[e.args[1]])
+            return QuoteNode(static_param_values[x.args[1]])
         elseif head === :cfunction
-            @assert !isa(spsig, UnionAll) || !isempty(spvals)
-            if !(e.args[2] isa QuoteNode) # very common no-op
-                e.args[2] = substitute!(e.args[2], na, argexprs, spsig, spvals, offset, boundscheck)
+            @assert !isa(type_signature, UnionAll) || !isempty(spvals)
+            if !isa(x.args[2], QuoteNode) # very common no-op
+                x.args[2] = _partially_inline!(x.args[2], slot_replacements, type_signature,
+                                               static_param_values, slot_offset,
+                                               statement_offset, boundscheck)
             end
-            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
-            e.args[4] = svec(Any[
-                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
-                for argt
-                in e.args[4] ]...)
+            x.args[3] = _instantiate_type_in_env(x.args[3], type_signature, static_param_values)
+            x.args[4] = Core.svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[4]]...)
         elseif head === :foreigncall
-            @assert !isa(spsig, UnionAll) || !isempty(spvals)
-            for i = 1:length(e.args)
+            @assert !isa(type_signature, UnionAll) || !isempty(static_param_values)
+            for i = 1:length(x.args)
                 if i == 2
-                    e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
+                    x.args[2] = _instantiate_type_in_env(x.args[2], type_signature, static_param_values)
                 elseif i == 3
-                    e.args[3] = svec(Any[
-                        ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
-                        for argt
-                        in e.args[3] ]...)
+                    x.args[3] = Core.svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[3]]...)
                 elseif i == 4
-                    @assert isa((e.args[4]::QuoteNode).value, Symbol)
+                    @assert isa((x.args[4]::QuoteNode).value, Symbol)
                 elseif i == 5
-                    @assert isa(e.args[5], Int)
+                    @assert isa(x.args[5], Int)
                 else
-                    e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset, boundscheck)
+                    x.args[i] = _partially_inline!(x.args[i], slot_replacements,
+                                                   type_signature, static_param_values,
+                                                   slot_offset, statement_offset,
+                                                   boundscheck)
                 end
             end
         elseif head === :boundscheck
             if boundscheck === :propagate
-                return e
+                return x
             elseif boundscheck === :off
                 return false
             else
                 return true
             end
+        elseif head === :gotoifnot
+            x.args[1] = _partially_inline!(x.args[1], slot_replacements, type_signature,
+                                           static_param_values, slot_offset,
+                                           statement_offset, boundscheck)
+            x.args[2] += statement_offset
+        elseif head === :enter
+            x.args[1] += statement_offset
         elseif !is_meta_expr_head(head)
-            for i = 1:length(e.args)
-                e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset, boundscheck)
-            end
+            partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
+                              slot_offset, statement_offset, boundscheck)
         end
     end
-    return e
+    return x
 end
+
+_instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
 
 is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
 

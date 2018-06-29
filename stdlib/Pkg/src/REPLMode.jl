@@ -8,7 +8,7 @@ using UUIDs
 import REPL
 import REPL: LineEdit, REPLCompletions
 
-import ..devdir, ..Types.isdir_windows_workaround
+import ..devdir, ..Types.casesensitive_isdir
 using ..Types, ..Display, ..Operations, ..API
 
 ############
@@ -17,7 +17,7 @@ using ..Types, ..Display, ..Operations, ..API
 @enum(CommandKind, CMD_HELP, CMD_STATUS, CMD_SEARCH, CMD_ADD, CMD_RM, CMD_UP,
                    CMD_TEST, CMD_GC, CMD_PREVIEW, CMD_INIT, CMD_BUILD, CMD_FREE,
                    CMD_PIN, CMD_CHECKOUT, CMD_DEVELOP, CMD_GENERATE, CMD_PRECOMPILE,
-                   CMD_INSTANTIATE)
+                   CMD_INSTANTIATE, CMD_RESOLVE, CMD_ACTIVATE, CMD_DEACTIVATE)
 
 struct Command
     kind::CommandKind
@@ -26,37 +26,30 @@ end
 Base.show(io::IO, cmd::Command) = print(io, cmd.val)
 
 const cmds = Dict(
-    "help"      => CMD_HELP,
-    "?"         => CMD_HELP,
-    "status"    => CMD_STATUS,
-    "st"        => CMD_STATUS,
-    "."         => CMD_STATUS,
-    "search"    => CMD_SEARCH,
-    "find"      => CMD_SEARCH,
-    "/"         => CMD_SEARCH,
-    "add"       => CMD_ADD,
-    "install"   => CMD_ADD,
-    "+"         => CMD_ADD,
-    "rm"        => CMD_RM,
-    "remove"    => CMD_RM,
-    "uninstall" => CMD_RM,
-    "-"         => CMD_RM,
-    "up"        => CMD_UP,
-    "update"    => CMD_UP,
-    "upgrade"   => CMD_UP,
-    "test"      => CMD_TEST,
-    "gc"        => CMD_GC,
-    "preview"   => CMD_PREVIEW,
-    "init"      => CMD_INIT,
-    "build"     => CMD_BUILD,
-    "pin"       => CMD_PIN,
-    "free"      => CMD_FREE,
-    "checkout"  => CMD_CHECKOUT, # deprecated
-    "develop"   => CMD_DEVELOP,
-    "dev"       => CMD_DEVELOP,
-    "generate"  => CMD_GENERATE,
-    "precompile" => CMD_PRECOMPILE,
+    "help"        => CMD_HELP,
+    "?"           => CMD_HELP,
+    "status"      => CMD_STATUS,
+    "st"          => CMD_STATUS,
+    "add"         => CMD_ADD,
+    "rm"          => CMD_RM,
+    "remove"      => CMD_RM,
+    "up"          => CMD_UP,
+    "update"      => CMD_UP,
+    "test"        => CMD_TEST,
+    "gc"          => CMD_GC,
+    "preview"     => CMD_PREVIEW,
+    "init"        => CMD_INIT,
+    "build"       => CMD_BUILD,
+    "pin"         => CMD_PIN,
+    "free"        => CMD_FREE,
+    "develop"     => CMD_DEVELOP,
+    "dev"         => CMD_DEVELOP,
+    "generate"    => CMD_GENERATE,
+    "precompile"  => CMD_PRECOMPILE,
     "instantiate" => CMD_INSTANTIATE,
+    "resolve"     => CMD_RESOLVE,
+    "activate"    => CMD_ACTIVATE,
+    "deactivate"  => CMD_DEACTIVATE,
 )
 
 #################
@@ -70,7 +63,7 @@ end
 # Options #
 ###########
 @enum(OptionKind, OPT_ENV, OPT_PROJECT, OPT_MANIFEST, OPT_MAJOR, OPT_MINOR,
-                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME, OPT_PATH)
+                  OPT_PATCH, OPT_FIXED, OPT_COVERAGE, OPT_NAME)
 
 function Types.PackageMode(opt::OptionKind)
     opt == OPT_MANIFEST && return PKGMODE_MANIFEST
@@ -96,11 +89,8 @@ struct Option
                     OPT_MINOR, OPT_PATCH, OPT_FIXED) &&
                 argument !== nothing
             cmderror("the `$val` option does not take an argument")
-        elseif kind in (OPT_ENV, OPT_PATH) && argument == nothing
+        elseif kind in (OPT_ENV,) && argument == nothing
             cmderror("the `$val` option requires an argument")
-        end
-        if kind == OPT_PATH
-            argument =  replace(argument, "~" => homedir())
         end
         new(kind, val, argument)
     end
@@ -119,7 +109,6 @@ const opts = Dict(
     "fixed"    => OPT_FIXED,
     "coverage" => OPT_COVERAGE,
     "name"     => OPT_NAME,
-    "path"     => OPT_PATH,
 )
 
 function parse_option(word::AbstractString)::Option
@@ -142,7 +131,7 @@ end
 
 function parse_package(word::AbstractString; context=nothing)::PackageSpec
     word = replace(word, "~" => homedir())
-    if context in (CMD_ADD, CMD_DEVELOP) && isdir_windows_workaround(word)
+    if context in (CMD_ADD, CMD_DEVELOP) && casesensitive_isdir(word)
         pkg = PackageSpec()
         pkg.repo = Types.GitRepo(abspath(word))
         return pkg
@@ -168,7 +157,7 @@ end
 ################
 # REPL parsing #
 ################
-const lex_re = r"^[\?\./\+\-](?!\-) | [^@\#\s;]+\s*=\s*[^@\#\s;]+ | \#\s*[^@\#\s;]* | @\s*[^@\#\s;]* | [^@\#\s;]+|;"x
+const lex_re = r"^[\?\./\+\-](?!\-) | ((git|ssh|http(s)?)|(git@[\w\.]+))(:(//)?)([\w\.@\:/\-~]+)(\.git)(/)? | [^@\#\s;]+\s*=\s*[^@\#\s;]+ | \#\s*[^@\#\s;]* | @\s*[^@\#\s;]* | [^@\#\s;]+|;"x
 
 const Token = Union{Command, Option, VersionRange, String, Rev}
 
@@ -272,22 +261,25 @@ function do_cmd!(tokens::Vector{Token}, repl)
     end
     # Using invokelatest to hide the functions from inference.
     # Otherwise it would try to infer everything here.
-    cmd.kind == CMD_INIT     ? Base.invokelatest(          do_init!, ctx, tokens) :
-    cmd.kind == CMD_HELP     ? Base.invokelatest(          do_help!, ctx, tokens, repl) :
-    cmd.kind == CMD_RM       ? Base.invokelatest(            do_rm!, ctx, tokens) :
-    cmd.kind == CMD_ADD      ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_ADD) :
-    cmd.kind == CMD_CHECKOUT ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
-    cmd.kind == CMD_DEVELOP  ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
-    cmd.kind == CMD_UP       ? Base.invokelatest(            do_up!, ctx, tokens) :
-    cmd.kind == CMD_STATUS   ? Base.invokelatest(        do_status!, ctx, tokens) :
-    cmd.kind == CMD_TEST     ? Base.invokelatest(          do_test!, ctx, tokens) :
-    cmd.kind == CMD_GC       ? Base.invokelatest(            do_gc!, ctx, tokens) :
-    cmd.kind == CMD_BUILD    ? Base.invokelatest(         do_build!, ctx, tokens) :
-    cmd.kind == CMD_PIN      ? Base.invokelatest(           do_pin!, ctx, tokens) :
-    cmd.kind == CMD_FREE     ? Base.invokelatest(          do_free!, ctx, tokens) :
-    cmd.kind == CMD_GENERATE ? Base.invokelatest(      do_generate!, ctx, tokens) :
-    cmd.kind == CMD_PRECOMPILE ? Base.invokelatest(  do_precompile!, ctx, tokens) :
-    cmd.kind == CMD_INSTANTIATE ? Base.invokelatest(do_instantiate!, ctx, tokens) :
+    cmd.kind == CMD_INIT        ? Base.invokelatest(          do_init!, ctx, tokens) :
+    cmd.kind == CMD_HELP        ? Base.invokelatest(          do_help!, ctx, tokens, repl) :
+    cmd.kind == CMD_RM          ? Base.invokelatest(            do_rm!, ctx, tokens) :
+    cmd.kind == CMD_ADD         ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_ADD) :
+    cmd.kind == CMD_CHECKOUT    ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
+    cmd.kind == CMD_DEVELOP     ? Base.invokelatest(do_add_or_develop!, ctx, tokens, CMD_DEVELOP) :
+    cmd.kind == CMD_UP          ? Base.invokelatest(            do_up!, ctx, tokens) :
+    cmd.kind == CMD_STATUS      ? Base.invokelatest(        do_status!, ctx, tokens) :
+    cmd.kind == CMD_TEST        ? Base.invokelatest(          do_test!, ctx, tokens) :
+    cmd.kind == CMD_GC          ? Base.invokelatest(            do_gc!, ctx, tokens) :
+    cmd.kind == CMD_BUILD       ? Base.invokelatest(         do_build!, ctx, tokens) :
+    cmd.kind == CMD_PIN         ? Base.invokelatest(           do_pin!, ctx, tokens) :
+    cmd.kind == CMD_FREE        ? Base.invokelatest(          do_free!, ctx, tokens) :
+    cmd.kind == CMD_GENERATE    ? Base.invokelatest(      do_generate!, ctx, tokens) :
+    cmd.kind == CMD_RESOLVE     ? Base.invokelatest(       do_resolve!, ctx, tokens) :
+    cmd.kind == CMD_PRECOMPILE  ? Base.invokelatest(    do_precompile!, ctx, tokens) :
+    cmd.kind == CMD_INSTANTIATE ? Base.invokelatest(   do_instantiate!, ctx, tokens) :
+    cmd.kind == CMD_ACTIVATE    ? Base.invokelatest(      do_activate!, ctx, tokens) :
+    cmd.kind == CMD_DEACTIVATE  ? Base.invokelatest(    do_deactivate!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -321,33 +313,40 @@ What action you want the package manager to take:
 
 `status`: summarize contents of and changes to environment
 
-`generate`: generate files for a new project
-
 `add`: add packages to project
+
+`develop`: clone the full package repo locally for development
 
 `rm`: remove packages from project or manifest
 
 `up`: update packages in manifest
 
-`preview`: previews a subsequent command without affecting the current state
-
 `test`: run tests for packages
-
-`gc`: garbage collect packages not used for a significant time
-
-`init`: initializes an environment in the current, or git base, directory
 
 `build`: run the build script for packages
 
 `pin`: pins the version of packages
 
-`develop`: clone the full package repo locally for development
-
 `free`: undoes a `pin`, `develop`, or stops tracking a repo.
+
+`instantiate`: downloads all the dependencies for the project
+
+`resolve`: resolves to update the manifest from changes in dependencis of
+developed packages
+
+`init`: initializes an environment in the current, or git base, directory
+
+`generate`: generate files for a new project
+
+`preview`: previews a subsequent command without affecting the current state
 
 `precompile`: precompile all the project dependencies
 
-`instantiate`: downloads all the dependencies for the project
+`gc`: garbage collect packages not used for a significant time
+
+`activate`: set the primary environment the package manager manipulates
+
+`deactivate`: unset the primary environment the package manager manipulates
 """
 
 const helps = Dict(
@@ -401,6 +400,7 @@ const helps = Dict(
     pkg> add Example#master
     pkg> add Example#c37b675
     pkg> add https://github.com/JuliaLang/Example.jl#master
+    pkg> add git@github.com:JuliaLang/Example.jl.git
     pkg> add Example=7876af07-990d-54b4-ab0e-23690620f79a
     ```
     """, CMD_RM => md"""
@@ -505,6 +505,11 @@ const helps = Dict(
 
     Download all the dependencies for the current project at the version given by the project's manifest.
     If no manifest exists or the `--project` option is given, resolve and download the dependencies compatible with the project.
+    """, CMD_RESOLVE => md"""
+        resolve
+
+    Resolve the project i.e. run package resolution and update the Manifest. This is useful in case the dependencies of developed
+    packages have changed causing the current Manifest to_indices be out of sync.
     """
 )
 
@@ -666,11 +671,6 @@ function do_free!(ctx::Context, tokens::Vector{Token})
     API.free(ctx, pkgs)
 end
 
-function do_checkout!(ctx::Context, tokens::Vector{Token})
-    Base.depwarn("`checkout`` is deprecated, use `develop`", :checkout)
-    do_develop!(ctx, tokens)
-end
-
 function do_status!(ctx::Context, tokens::Vector{Token})
     mode = PKGMODE_COMBINED
     while !isempty(tokens)
@@ -777,6 +777,27 @@ function do_instantiate!(ctx::Context, tokens::Vector{Token})
     API.instantiate(ctx; manifest=manifest)
 end
 
+function do_resolve!(ctx::Context, tokens::Vector{Token})
+    !isempty(tokens) && cmderror("`resolve` does not take any arguments")
+    API.resolve(ctx)
+end
+
+function do_activate!(ctx::Context, tokens::Vector{Token})
+    if isempty(tokens)
+        return API.activate()
+    else
+        token = popfirst!(tokens)
+        if !isempty(tokens) || !(token isa String)
+            cmderror("`activate` takes an optional path to the env to activate")
+        end
+        return API.activate(abspath(token))
+    end
+end
+
+function do_deactivate!(ctx::Context, tokens::Vector{Token})
+    !isempty(tokens) && cmderror("`deactivate` does not take any arguments")
+    API.deactivate()
+end
 
 ######################
 # REPL mode creation #
@@ -915,14 +936,21 @@ function completions(full, index)
 end
 
 function promptf()
-    env = EnvCache()
-    proj_dir = dirname(env.project_file)
-    if startswith(pwd(), proj_dir) && env.pkg != nothing && !isempty(env.pkg.name)
-        name = env.pkg.name
-    else
-        name = basename(proj_dir)
+    env = try
+        EnvCache()
+    catch
+        nothing
     end
-    prefix = string("(", name, ") ")
+    prefix = ""
+    if env !== nothing
+        proj_dir = dirname(env.project_file)
+        if startswith(pwd(), proj_dir) && env.pkg != nothing && !isempty(env.pkg.name)
+            name = env.pkg.name
+        else
+            name = basename(proj_dir)
+        end
+        prefix = string("(", name, ") ")
+    end
     return prefix * "pkg> "
 end
 

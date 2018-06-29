@@ -115,6 +115,8 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
+_fieldnames(@nospecialize t) = isdefined(t, :names) ? t.names : t.name.names
+
 """
     fieldname(x::DataType, i::Integer)
 
@@ -130,7 +132,7 @@ julia> fieldname(Rational, 2)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    names = isdefined(t, :names) ? t.names : t.name.names
+    names = _fieldnames(t)
     n_fields = length(names)
     field_label = n_fields == 1 ? "field" : "fields"
     i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
@@ -153,8 +155,11 @@ julia> fieldnames(Rational)
 (:num, :den)
 ```
 """
-fieldnames(t::DataType) = ntuple(i -> fieldname(t, i), fieldcount(t))
+fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
+                           (_fieldnames(t)...,))
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
+fieldnames(::Core.TypeofBottom) =
+    error("The empty type does not have field names since it does not have instances.")
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 """
@@ -581,7 +586,7 @@ function fieldcount(@nospecialize t)
         end
         t = t::DataType
     elseif t == Union{}
-        return 0
+        error("The empty type does not have a well-defined number of fields since it does not have instances.")
     end
     if !(t isa DataType)
         throw(TypeError(:fieldcount, "", Type, t))
@@ -816,15 +821,19 @@ struct CodegenParams
     module_setup::Any
     module_activation::Any
     raise_exception::Any
+    emit_function::Any
+    emitted_function::Any
 
     CodegenParams(;cached::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, prefer_specsig::Bool=false,
-                   module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
+                   module_setup=nothing, module_activation=nothing, raise_exception=nothing,
+                   emit_function=nothing, emitted_function=nothing) =
         new(Cint(cached),
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(prefer_specsig),
-            module_setup, module_activation, raise_exception)
+            module_setup, module_activation, raise_exception,
+            emit_function, emitted_function)
 end
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types

@@ -333,6 +333,7 @@ using .Filesystem
 include("process.jl")
 include("grisu/grisu.jl")
 include("methodshow.jl")
+include("secretbuffer.jl")
 
 # core math functions
 include("floatfuncs.jl")
@@ -402,7 +403,6 @@ include("channels.jl")
 
 # utilities
 include("deepcopy.jl")
-include("clipboard.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
@@ -412,9 +412,6 @@ include("stacktraces.jl")
 using .StackTraces
 
 include("initdefs.jl")
-
-# statistics
-include("statistics.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -428,10 +425,8 @@ include("util.jl")
 
 creating_sysimg = true
 # set up depot & load paths to be able to find stdlib packages
-let BINDIR = Sys.BINDIR
-    init_depot_path(BINDIR)
-    init_load_path(BINDIR)
-end
+init_depot_path()
+init_load_path()
 
 include("asyncmap.jl")
 
@@ -520,7 +515,6 @@ let
             :Future,
             :OldPkg,
             :LinearAlgebra,
-            :IterativeEigensolvers,
             :SparseArrays,
             :SuiteSparse,
             :SharedArrays,
@@ -528,6 +522,7 @@ let
             :Pkg,
             :Test,
             :REPL,
+            :Statistics,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
@@ -535,10 +530,17 @@ let
     print_time = (mod, t) -> (print(rpad(string(mod) * "  ", maxlen + 3, "─")); Base.time_print(t * 10^9); println())
     print_time(Base, (Base.end_base_include - Base.start_base_include) * 10^(-9))
 
+    Base._track_dependencies[] = true
     Base.tot_time_stdlib[] = @elapsed for stdlib in stdlibs
         tt = @elapsed Base.require(Base, stdlib)
         print_time(stdlib, tt)
     end
+    for dep in Base._require_dependencies
+        dep[3] == 0.0 && continue
+        push!(Base._included_files, dep[1:2])
+    end
+    empty!(Base._require_dependencies)
+    Base._track_dependencies[] = false
 
     print_time("Stdlibs total", Base.tot_time_stdlib[])
 end
@@ -646,9 +648,6 @@ end
     @deprecate_stdlib DateFormat Dates true
     @eval @deprecate_stdlib $(Symbol("@dateformat_str")) Dates true
     @deprecate_stdlib now Dates true
-
-    @deprecate_stdlib eigs IterativeEigensolvers true
-    @deprecate_stdlib svds IterativeEigensolvers true
 
     @eval @deprecate_stdlib $(Symbol("@printf")) Printf true
     @eval @deprecate_stdlib $(Symbol("@sprintf")) Printf true
@@ -864,6 +863,7 @@ end
     @deprecate_stdlib varinfo       InteractiveUtils true
     @deprecate_stdlib versioninfo   InteractiveUtils true
     @deprecate_stdlib peakflops     InteractiveUtils true
+    @deprecate_stdlib clipboard     InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@which"))         InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@edit"))          InteractiveUtils true
     @eval @deprecate_stdlib $(Symbol("@less"))          InteractiveUtils true
@@ -894,6 +894,19 @@ end
     @deprecate_stdlib TCPSocket      Sockets true
     @deprecate_stdlib UDPSocket      Sockets true
 
+    @deprecate_stdlib cor       Statistics true
+    @deprecate_stdlib cov       Statistics true
+    @deprecate_stdlib std       Statistics true
+    @deprecate_stdlib stdm      Statistics true
+    @deprecate_stdlib var       Statistics true
+    @deprecate_stdlib varm      Statistics true
+    @deprecate_stdlib mean!     Statistics true
+    @deprecate_stdlib mean      Statistics true
+    @deprecate_stdlib median!   Statistics true
+    @deprecate_stdlib median    Statistics true
+    @deprecate_stdlib middle    Statistics true
+    @deprecate_stdlib quantile! Statistics true
+    @deprecate_stdlib quantile  Statistics true
 end
 end
 

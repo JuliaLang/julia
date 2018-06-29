@@ -237,7 +237,7 @@ end
 Get the *dynamically* current `Module`, which is the `Module` code is currently being read
 from. In general, this is not the same as the module containing the call to this function.
 
-DEPRECATED: use @__MODULE__ instead
+DEPRECATED: use `@__MODULE__` instead
 """
 @noinline function current_module()
     depwarn("`current_module()` is deprecated, use `@__MODULE__` instead.", :current_module)
@@ -1366,13 +1366,11 @@ export readandwrite
 @deprecate findmax(A::AbstractArray, dims)    findmax(A, dims=dims)
 @deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
 
-@deprecate mean(A::AbstractArray, dims)                              mean(A, dims=dims)
-@deprecate median(A::AbstractArray, dims; kwargs...)                 median(A; kwargs..., dims=dims)
-
 @deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
 @deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, v0, A, dims=dims)
 @deprecate reducedim(op, A::AbstractArray, dims)           reduce(op, A, dims=dims)
 @deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, v0, A, dims=dims)
+@deprecate mapslices(op, A::AbstractArray, dims)           mapslices(op, A, dims=dims)
 
 @deprecate sort(A::AbstractArray, dim::Integer; kwargs...) sort(A; kwargs..., dims=dim)
 
@@ -1691,12 +1689,6 @@ end
 @deprecate ipermute!(a, p::AbstractVector) invpermute!(a, p)
 
 # #27140, #27152
-@deprecate_moved cor "StatsBase"
-@deprecate_moved cov "StatsBase"
-@deprecate_moved std "StatsBase"
-@deprecate_moved stdm "StatsBase"
-@deprecate_moved var "StatsBase"
-@deprecate_moved varm "StatsBase"
 @deprecate_moved linreg "StatsBase"
 
 # ?? more special functions to SpecialFunctions.jl
@@ -1720,6 +1712,16 @@ end
 
 @deprecate atan2(y, x) atan(y, x)
 
+@deprecate_moved eigs "Arpack"
+@deprecate_moved svds "Arpack"
+
+# PR #27711
+@deprecate reduce(op, v0, itr) reduce(op, itr; init=v0)
+@deprecate foldl(op, v0, itr) foldl(op, itr; init=v0)
+@deprecate foldr(op, v0, itr) foldr(op, itr; init=v0)
+@deprecate mapreduce(f, op, v0, itr) mapreduce(f, op, itr; init=v0)
+@deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
+@deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
 
 # END 0.7 deprecations
 

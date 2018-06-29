@@ -82,11 +82,8 @@ Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
-Base.reduce(::Any, ::Any, ::Any)
 Base.reduce(::Any, ::Any)
-Base.foldl(::Any, ::Any, ::Any)
 Base.foldl(::Any, ::Any)
-Base.foldr(::Any, ::Any, ::Any)
 Base.foldr(::Any, ::Any)
 Base.maximum
 Base.maximum!
@@ -116,11 +113,8 @@ Base.all(::Any, ::Any)
 Base.foreach
 Base.map
 Base.map!
-Base.mapreduce(::Any, ::Any, ::Any, ::Any)
 Base.mapreduce(::Any, ::Any, ::Any)
-Base.mapfoldl(::Any, ::Any, ::Any, ::Any)
 Base.mapfoldl(::Any, ::Any, ::Any)
-Base.mapfoldr(::Any, ::Any, ::Any, ::Any)
 Base.mapfoldr(::Any, ::Any, ::Any)
 Base.first
 Base.last

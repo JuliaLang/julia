@@ -413,19 +413,30 @@ end
     @test (Transpose(complexvec) / Transpose(complexmat))::Transpose ≈ rowcomplexvec / copy(Transpose(complexmat))
 end
 
-@testset "norm of Adjoint/Transpose-wrapped vectors" begin
+@testset "norm and opnorm of Adjoint/Transpose-wrapped vectors" begin
     # definitions are in base/linalg/generic.jl
     realvec, complexvec = [3, -4], [3im, -4im]
-    # one norm result should be maximum(abs.(realvec)) == 4
+    # one norm result should be sum(abs.(realvec)) == 7
     # two norm result should be sqrt(sum(abs.(realvec))) == 5
-    # inf norm result should be sum(abs.(realvec)) == 7
+    # inf norm result should be maximum(abs.(realvec)) == 4
     for v in (realvec, complexvec)
         @test norm(Adjoint(v)) ≈ 5
-        @test norm(Adjoint(v), 1) ≈ 4
-        @test norm(Adjoint(v), Inf) ≈ 7
+        @test norm(Adjoint(v), 1) ≈ 7
+        @test norm(Adjoint(v), Inf) ≈ 4
         @test norm(Transpose(v)) ≈ 5
-        @test norm(Transpose(v), 1) ≈ 4
-        @test norm(Transpose(v), Inf) ≈ 7
+        @test norm(Transpose(v), 1) ≈ 7
+        @test norm(Transpose(v), Inf) ≈ 4
+    end
+    # one opnorm result should be maximum(abs.(realvec)) == 4
+    # two opnorm result should be sqrt(sum(abs.(realvec))) == 5
+    # inf opnorm result should be sum(abs.(realvec)) == 7
+    for v in (realvec, complexvec)
+        @test opnorm(Adjoint(v)) ≈ 5
+        @test opnorm(Adjoint(v), 1) ≈ 4
+        @test opnorm(Adjoint(v), Inf) ≈ 7
+        @test opnorm(Transpose(v)) ≈ 5
+        @test opnorm(Transpose(v), 1) ≈ 4
+        @test opnorm(Transpose(v), Inf) ≈ 7
     end
 end
 

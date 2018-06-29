@@ -17,7 +17,7 @@ lazy_iterpolate(s::AbstractString) = Expr(:call, Core.svec, s)
 lazy_iterpolate(@nospecialize x) = isexpr(x, :string) ? Expr(:call, Core.svec, x.args...) : x
 
 function docm(source::LineNumberNode, mod::Module, str, x)
-    out = Expr(:call, doc!, QuoteNode(source), mod, lazy_iterpolate(str), Expr(:quote, x))
+    out = Expr(:call, doc!, QuoteNode(source), mod, lazy_iterpolate(str), QuoteNode(x))
     if isexpr(x, :module)
         out = Expr(:toplevel, out, x)
     elseif isexpr(x, :call)

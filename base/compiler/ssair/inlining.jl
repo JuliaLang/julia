@@ -273,7 +273,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     stmt = compact.result[idx]
     linetable_offset = length(linetable)
     # Append the linetable of the inlined function to our line table
-    inlined_at = compact.result_lines[idx]
+    inlined_at = Int(compact.result_lines[idx])
     for entry in item.linetable
         push!(linetable, LineInfoNode(entry.mod, entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
@@ -553,16 +553,18 @@ function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(
     linfo
 end
 
-function rewrite_apply_exprargs!(inserter, typefunc, argexprs::Vector{Any})
+function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, sv::OptimizationState)
     new_argexprs = Any[argexprs[2]]
     # Flatten all tuples
     for arg in argexprs[3:end]
-        tupT = typefunc(arg)
+        tupT = argextype(arg, ir, sv.sp)
         t = widenconst(tupT)
         for i = 1:length(t.parameters)
             # Insert a getfield call here
             new_call = Expr(:call, Core.getfield, arg, i)
-            push!(new_argexprs, inserter(new_call, getfield_tfunc(tupT, Const(i))))
+            typ = getfield_tfunc(tupT, Const(i))
+            new_arg = insert_node!(ir, idx, typ, new_call)
+            push!(new_argexprs, new_arg)
         end
     end
     argexprs = new_argexprs
@@ -650,7 +652,7 @@ function analyze_method!(idx::Int, @nospecialize(f), @nospecialize(ft), @nospeci
     end
 
     @timeit "inline IR inflation" begin
-        ir2, inline_linetable = inflate_ir(src, spvals_from_meth_instance(linfo)), src.linetable
+        ir2, inline_linetable = inflate_ir(src, linfo), src.linetable
     end
     #verify_ir(ir2)
 
@@ -819,7 +821,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         # Independent of whether we can inline, the above analysis allows us to rewrite
         # this apply call to a regular call
         if isapply
-            stmt.args = rewrite_apply_exprargs!((node, typ)->insert_node!(ir, idx, typ, node), arg->argextype(arg, ir, sv.sp), stmt.args)
+            stmt.args = rewrite_apply_exprargs!(ir, idx, stmt.args, sv)
         end
 
         if f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
@@ -836,11 +838,11 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         end
         isinvoke = (invoke_data !== nothing)
 
-        atype_unlimited = argtypes_to_type(atypes)
+        atype = argtypes_to_type(atypes)
 
         # In :invoke, make sure that the arguments we're passing are a subtype of the
         # signature we're invoking.
-        (invoke_data === nothing || atype_unlimited <: invoke_data.types0) || continue
+        (invoke_data === nothing || atype <: invoke_data.types0) || continue
 
         # Bail out here if inlining is disabled
         sv.params.inlining || continue
@@ -850,20 +852,13 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             continue
         end
 
-        # Compute the limited type if necessary
-        if length(atype_unlimited.parameters) - 1 > sv.params.MAX_TUPLETYPE_LEN
-            atype = limit_tuple_type(atype_unlimited, sv.params)
-        else
-            atype = atype_unlimited
-        end
-
         # Ok, now figure out what method to call
         if invoke_data !== nothing
             method = invoke_data.entry.func
             (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
-                                    atype_unlimited, method.sig)::SimpleVector
+                                    atype, method.sig)::SimpleVector
             methsp = methsp::SimpleVector
-            result = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data,
+            result = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype, isinvoke, isapply, invoke_data,
                                      calltype)
             handle_single_case!(ir, stmt, idx, result, isinvoke, todo, sv)
             continue
@@ -940,7 +935,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             methsp = meth[1][2]::SimpleVector
             method = meth[1][3]::Method
             fully_covered = true
-            case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data, calltype)
+            case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype, isinvoke, isapply, invoke_data, calltype)
             case === nothing && continue
             push!(cases, Pair{Any,Any}(metharg, case))
         end
@@ -953,12 +948,12 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             continue
         end
         length(cases) == 0 && continue
-        push!(todo, UnionSplit(idx, fully_covered, atype_unlimited, isinvoke, cases))
+        push!(todo, UnionSplit(idx, fully_covered, atype, isinvoke, cases))
     end
     todo
 end
 
-function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int)
+function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int32)
     e = Expr(:call, TOP_TUPLE, args...)
     etyp = tuple_tfunc(Tuple{Any[widenconst(compact_exprtype(compact, args[i])) for i in 1:length(args)]...})
     return insert_node_here!(compact, e, etyp, line_idx)

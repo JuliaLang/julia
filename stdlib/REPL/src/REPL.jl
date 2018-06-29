@@ -85,7 +85,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 value = Core.eval(Main, ast)
                 backend.in_eval = false
                 # note: value wrapped carefully here to ensure it doesn't get passed through expand
-                Core.eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
                 put!(backend.response_channel, (value, nothing))
             end
             break
@@ -217,6 +217,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                 if isa(e,InterruptException)
                     try # raise the debugger if present
                         ccall(:jl_raise_debugger, Int, ())
+                    catch
                     end
                     line = ""
                     interrupted = true

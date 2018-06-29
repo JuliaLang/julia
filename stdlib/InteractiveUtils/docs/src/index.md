@@ -26,6 +26,7 @@ InteractiveUtils.code_llvm
 InteractiveUtils.@code_llvm
 InteractiveUtils.code_native
 InteractiveUtils.@code_native
+InteractiveUtils.clipboard
 ```
 
 ```@meta

@@ -20,7 +20,7 @@ cglobal
     CFunction struct
 
 Garbage-collection handle for the return value from `@cfunction`
-when the first argument is annotated with '\$'.
+when the first argument is annotated with '\\\$'.
 Like all `cfunction` handles, it should be passed to `ccall` as a `Ptr{Cvoid}`,
 and will be converted automatically at the call site to the appropriate type.
 
@@ -46,7 +46,7 @@ To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression
 (although it can include a splat expression). And that these arguments will be evaluated in global scope
 during compile-time (not deferred until runtime).
-Adding a '\$' in front of the function argument changes this to instead create a runtime closure
+Adding a '\\\$' in front of the function argument changes this to instead create a runtime closure
 over the local variable `callable`.
 
 See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
@@ -250,18 +250,23 @@ function transcode end
 
 transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
 transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
-transcode(::Type{T}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}}) where {T<:Union{Int32,UInt32}} =
+transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(Vector(src)))
+transcode(::Type{T}, src::CodeUnits{UInt8,String}) where {T<:Union{Int32,UInt32}} =
     transcode(T, String(src))
+
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
-    for c in src; print(buf, Char(c)); end
+    for c in src
+        print(buf, Char(c))
+    end
     take!(buf)
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
-function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}})
+function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -311,7 +316,7 @@ function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,Stri
     return dst
 end
 
-function transcode(::Type{UInt8}, src::Vector{UInt16})
+function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
     n = length(src)
     n == 0 && return UInt8[]
 

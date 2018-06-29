@@ -498,8 +498,8 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
 end
 
-# test MersenneTwister polynomial generation and jump
-let seed = rand(UInt)
+@testset "MersenneTwister polynomial generation and jump" begin
+    seed = rand(UInt)
     mta = MersenneTwister(seed)
     mtb = MersenneTwister(seed)
     step = 25000*2
@@ -519,6 +519,11 @@ let seed = rand(UInt)
 
     for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
         @test rand(mtb, Float64) == x
+    end
+
+    @testset "generated RNGs are in a deterministic state (relatively to ==)" begin
+        m = MersenneTwister()
+        @test randjump(m, 25000, 2) == randjump(m, 25000, 2)
     end
 end
 
@@ -653,7 +658,7 @@ struct RandomStruct23964 end
     @test_throws ArgumentError rand(RandomStruct23964())
 end
 
-@testset "rand(::$RNG, ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
+@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
                                                  T ∈ (Int32, UInt32, Int64, Int128, UInt128)
     RNG isa MersenneTwister && srand(RNG, rand(UInt128)) # for reproducibility
     r = T(1):T(108)

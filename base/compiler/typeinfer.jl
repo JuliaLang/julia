@@ -208,71 +208,19 @@ function store_backedges(frame::InferenceState)
 end
 
 # widen all Const elements in type annotations
-function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vector{Any})
-    for i = 1:length(e.args)
-        x = e.args[i]
-        if isa(x, Expr)
-            _widen_all_consts!(x, untypedload, slottypes)
-        elseif isa(x, TypedSlot)
-            vt = widenconst(x.typ)
-            if !(vt === x.typ)
-                if slottypes[x.id] ⊑ vt
-                    x = SlotNumber(x.id)
-                    untypedload[x.id] = true
-                else
-                    x = TypedSlot(x.id, vt)
-                end
-                e.args[i] = x
-            end
-        elseif isa(x, PiNode)
-            e.args[i] = PiNode(x.val, widenconst(x.typ))
-        elseif isa(x, SlotNumber) && (i != 1 || e.head !== :(=))
-            untypedload[x.id] = true
-        end
-    end
-    nothing
-end
-
 function widen_all_consts!(src::CodeInfo)
     for i = 1:length(src.ssavaluetypes)
         src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
     end
-    for i = 1:length(src.slottypes)
-        src.slottypes[i] = widenconst(src.slottypes[i])
+
+    for i = 1:length(src.code)
+        x = src.code[i]
+        if isa(x, PiNode)
+            src.code[i] = PiNode(x.val, widenconst(x.typ))
+        end
     end
 
-    nslots = length(src.slottypes)
-    untypedload = fill(false, nslots)
-    e = Expr(:body)
-    e.args = src.code
-    _widen_all_consts!(e, untypedload, src.slottypes)
-    for i = 1:nslots
-        src.slottypes[i] = widen_slot_type(src.slottypes[i], untypedload[i])
-    end
     return src
-end
-
-# widen all slots to their optimal storage layout
-# we also need to preserve the type for any untyped load of a DataType
-# since codegen optimizations of functions like `is` will depend on knowing it
-function widen_slot_type(@nospecialize(ty), untypedload::Bool)
-    if isa(ty, DataType)
-        if untypedload || isbitstype(ty) || isdefined(ty, :instance)
-            return ty
-        end
-    elseif isa(ty, Union)
-        ty_a = widen_slot_type(ty.a, false)
-        ty_b = widen_slot_type(ty.b, false)
-        if ty_a !== Any || ty_b !== Any
-            # TODO: better optimized codegen for unions?
-            return ty
-        end
-    elseif isa(ty, UnionAll)
-        if untypedload
-            return ty
-        end
-    end
-    return Any
 end
 
 maybe_widen_conditional(@nospecialize vt) = vt
@@ -314,7 +262,7 @@ function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs
         undefs[id] = true
     end
     # add type annotations where needed
-    if !(sv.src.slottypes[id] ⊑ vt)
+    if !(sv.slottypes[id] ⊑ vt)
         return TypedSlot(id, vt)
     end
     return sl
@@ -326,7 +274,7 @@ function record_slot_assign!(sv::InferenceState)
     # to compute a lower bound on the storage required
     states = sv.stmt_types
     body = sv.src.code::Vector{Any}
-    slottypes = sv.src.slottypes::Vector{Any}
+    slottypes = sv.slottypes::Vector{Any}
     for i = 1:length(body)
         expr = body[i]
         st_i = states[i]
@@ -429,12 +377,7 @@ function type_annotate!(sv::InferenceState)
     end
 
     if run_optimizer
-        for i = 2:length(changemap)
-            changemap[i] += changemap[i - 1]
-        end
-        if changemap[end] != 0
-            renumber_stuff!(body, changemap)
-        end
+        renumber_ir_elements!(body, changemap)
     end
 
     # finish marking used-undef variables
@@ -594,9 +537,8 @@ function typeinf_ext(linfo::MethodInstance, params::Params)
                     tree.method_for_inference_limit_heuristics = nothing
                     tree.slotnames = Any[ COMPILER_TEMP_SYM for i = 1:method.nargs ]
                     tree.slotflags = fill(0x00, Int(method.nargs))
-                    tree.slottypes = nothing
                     tree.ssavaluetypes = 0
-                    tree.codelocs = Int[1]
+                    tree.codelocs = Int32[1]
                     tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
                     tree.inferred = true
                     tree.ssaflags = UInt8[]

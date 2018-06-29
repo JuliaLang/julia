@@ -165,6 +165,7 @@ let r, t
     t = @async begin
         try
             wait(r)
+        catch
         end
         p = run(`$sleepcmd 1`, wait=false); wait(p)
         @test p.exitcode == 0
@@ -500,20 +501,20 @@ let c = `ls -l "foo bar"`
 end
 
 ## Deadlock in spawning a cmd (#22832)
-# FIXME?
-#let out = Pipe(), inpt = Pipe()
-#    Base.link_pipe!(out, reader_supports_async=true)
-#    Base.link_pipe!(inpt, writer_supports_async=true)
-#    p = run(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull), wait=false)
-#    @async begin # feed cat with 2 MB of data (zeros)
-#        write(inpt, zeros(UInt8, 1048576 * 2))
-#        close(inpt)
-#    end
-#    sleep(0.5) # give cat a chance to fill the write buffer for stdout
-#    close(out.in) # make sure we can still close the write end
-#    @test sizeof(readstring(out)) == 1048576 * 2 # make sure we get all the data
-#    @test success(p)
-#end
+let out = Pipe(), inpt = Pipe()
+    Base.link_pipe!(out, reader_supports_async=true)
+    Base.link_pipe!(inpt, writer_supports_async=true)
+    p = run(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull), wait=false)
+    @async begin # feed cat with 2 MB of data (zeros)
+        write(inpt, zeros(UInt8, 1048576 * 2))
+        close(inpt)
+    end
+    sleep(1) # give cat a chance to fill the write buffer for stdout
+    close(inpt.out)
+    close(out.in) # make sure we can still close the write end
+    @test sizeof(read(out)) == 1048576 * 2 # make sure we get all the data
+    @test success(p)
+end
 
 # `kill` error conditions
 let p = run(`$sleepcmd 100`, wait=false)

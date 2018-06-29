@@ -29,13 +29,12 @@ override USE_SYSTEM_LAPACK=1
 override USE_SYSTEM_LIBM=1
 override USE_SYSTEM_GMP=1
 override USE_SYSTEM_MPFR=1
-override USE_SYSTEM_ARPACK=1
 ````
 
 The following command will install all the necessary libraries on Ubuntu:
 
 ````
-sudo apt-get install libblas3gf liblapack3gf libarpack2 libgmp3-dev \
+sudo apt-get install libblas3gf liblapack3gf libgmp3-dev \
                      libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.8 \
                      g++-4.8 gfortran libgfortran3 m4 libedit-dev
 ````

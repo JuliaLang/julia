@@ -21,6 +21,8 @@ Base.codeunit
 Base.codeunits
 Base.ascii
 Base.@r_str
+Base.SubstitutionString
+Base.@s_str
 Base.@raw_str
 Base.Docs.@html_str
 Base.Docs.@text_str

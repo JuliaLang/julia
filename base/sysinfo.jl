@@ -6,6 +6,7 @@ Provide methods for retrieving information about hardware and the operating syst
 """ Sys
 
 export BINDIR,
+       STDLIB,
        CPU_CORES,
        CPU_NAME,
        WORD_SIZE,
@@ -36,6 +37,13 @@ global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
 A string containing the full path to the directory containing the `julia` executable.
 """
 :BINDIR
+
+"""
+    Sys.STDLIB
+
+A string containing the full path to the directory containing the `stdlib` packages.
+"""
+STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 
 # helper to avoid triggering precompile warnings
 
@@ -94,6 +102,8 @@ function __init__()
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
+    vers = "v$(VERSION.major).$(VERSION.minor)"
+    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
 

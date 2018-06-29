@@ -921,7 +921,7 @@ function Base.show(io::IO, ce::ConfigEntry)
 end
 
 """
-    split(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
+    LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
 
 Break the `ConfigEntry` up to the following pieces: section, subsection, name, and value.
 
@@ -938,14 +938,14 @@ The `ConfigEntry` would look like the following:
 julia> entry
 ConfigEntry("credential.https://example.com.username", "me")
 
-julia> split(entry)
+julia> LibGit2.split_cfg_entry(entry)
 ("credential", "https://example.com", "username", "me")
 ```
 
 Refer to the [git config syntax documenation](https://git-scm.com/docs/git-config#_syntax)
 for more details.
 """
-function Base.split(ce::ConfigEntry)
+function split_cfg_entry(ce::ConfigEntry)
     key = unsafe_string(ce.name)
 
     # Determine the positions of the delimiters
@@ -1180,8 +1180,6 @@ function objtype(obj_type::Consts.OBJECT)
     end
 end
 
-import Base.securezero!
-
 abstract type AbstractCredential end
 
 """
@@ -1194,11 +1192,9 @@ isfilled(::AbstractCredential)
 "Credential that support only `user` and `password` parameters"
 mutable struct UserPasswordCredential <: AbstractCredential
     user::String
-    pass::String
-    function UserPasswordCredential(user::AbstractString="", pass::AbstractString="")
-        c = new(user, pass)
-        finalizer(securezero!, c)
-        return c
+    pass::Base.SecretBuffer
+    function UserPasswordCredential(user::AbstractString="", pass::Union{AbstractString, Base.SecretBuffer}="")
+        new(user, pass)
     end
 
     # Deprecated constructors
@@ -1212,9 +1208,17 @@ mutable struct UserPasswordCredential <: AbstractCredential
     UserPasswordCredential(prompt_if_incorrect::Bool) = UserPasswordCredential("","",prompt_if_incorrect)
 end
 
-function securezero!(cred::UserPasswordCredential)
-    securezero!(cred.user)
-    securezero!(cred.pass)
+function Base.setproperty!(cred::UserPasswordCredential, name::Symbol, value)
+    if name == :pass
+        field = getfield(cred, name)
+        Base.shred!(field)
+    end
+    setfield!(cred, name, convert(fieldtype(typeof(cred), name), value))
+end
+
+function Base.shred!(cred::UserPasswordCredential)
+    cred.user = ""
+    Base.shred!(cred.pass)
     return cred
 end
 
@@ -1229,14 +1233,13 @@ end
 "SSH credential type"
 mutable struct SSHCredential <: AbstractCredential
     user::String
-    pass::String
+    pass::Base.SecretBuffer
+    # Paths to private keys
     prvkey::String
     pubkey::String
-    function SSHCredential(user::AbstractString="", pass::AbstractString="",
-                            prvkey::AbstractString="", pubkey::AbstractString="")
-        c = new(user, pass, prvkey, pubkey)
-        finalizer(securezero!, c)
-        return c
+    function SSHCredential(user="", pass="",
+                           prvkey="", pubkey="")
+        new(user, pass, prvkey, pubkey)
     end
 
     # Deprecated constructors
@@ -1251,11 +1254,20 @@ mutable struct SSHCredential <: AbstractCredential
     SSHCredential(prompt_if_incorrect::Bool) = SSHCredential("","","","",prompt_if_incorrect)
 end
 
-function securezero!(cred::SSHCredential)
-    securezero!(cred.user)
-    securezero!(cred.pass)
-    securezero!(cred.prvkey)
-    securezero!(cred.pubkey)
+function Base.setproperty!(cred::SSHCredential, name::Symbol, value)
+    if name == :pass
+        field = getfield(cred, name)
+        Base.shred!(field)
+    end
+    setfield!(cred, name, convert(fieldtype(typeof(cred), name), value))
+end
+
+
+function Base.shred!(cred::SSHCredential)
+    cred.user = ""
+    Base.shred!(cred.pass)
+    cred.prvkey = ""
+    cred.pubkey = ""
     return cred
 end
 
@@ -1278,8 +1290,8 @@ Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id
 Base.getindex(cache::CachedCredentials, cred_id) = Base.getindex(cache.cred, cred_id)
 Base.get!(cache::CachedCredentials, cred_id, default) = Base.get!(cache.cred, cred_id, default)
 
-function securezero!(p::CachedCredentials)
-    foreach(securezero!, values(p.cred))
+function Base.shred!(p::CachedCredentials)
+    foreach(Base.shred!, values(p.cred))
     return p
 end
 
@@ -1349,6 +1361,12 @@ end
 
 CredentialPayload(p::CredentialPayload) = p
 
+function Base.shred!(p::CredentialPayload)
+    # Note: Avoid shredding the `explicit` or `cache` fields as these are just references
+    # and it is not our responsibility to shred them.
+    p.credential !== nothing && Base.shred!(p.credential)
+    p.credential = nothing
+end
 
 """
     reset!(payload, [config]) -> CredentialPayload
@@ -1383,7 +1401,7 @@ should be destroyed. Should only be set to `false` during testing.
 """
 function approve(p::CredentialPayload; shred::Bool=true)
     cred = p.credential
-    cred === nothing && return  # No credentials were used
+    cred === nothing && return  # No credential was used
 
     if p.cache !== nothing
         approve(p.cache, cred, p.url)
@@ -1393,7 +1411,10 @@ function approve(p::CredentialPayload; shred::Bool=true)
         approve(p.config, cred, p.url)
     end
 
-    shred && securezero!(cred)
+    if shred
+        Base.shred!(cred)
+        p.credential = nothing
+    end
     nothing
 end
 
@@ -1408,17 +1429,19 @@ should be destroyed. Should only be set to `false` during testing.
 """
 function reject(p::CredentialPayload; shred::Bool=true)
     cred = p.credential
-    cred === nothing && return  # No credentials were used
+    cred === nothing && return  # No credential was used
 
     if p.cache !== nothing
         reject(p.cache, cred, p.url)
-        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
         reject(p.config, cred, p.url)
     end
 
-    shred && securezero!(cred)
+    if shred
+        Base.shred!(cred)
+        p.credential = nothing
+    end
     nothing
 end
 

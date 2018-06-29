@@ -233,7 +233,8 @@ julia> widemul(Float32(3.), 4.)
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
 
-iterate(x::Number, done = false) = done ? nothing : (x, true)
+iterate(x::Number) = (x, nothing)
+iterate(x::Number, ::Any) = nothing
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
 

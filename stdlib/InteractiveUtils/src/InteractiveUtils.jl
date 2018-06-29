@@ -6,11 +6,11 @@ module InteractiveUtils
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, peakflops, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native, Pkg
+    @code_typed, @code_lowered, @code_llvm, @code_native, Pkg, clipboard
 
 import Base.Docs.apropos
 
-using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_expr_type, show_unquoted, summarysize,
+using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
     to_tuple_type, signature_type, format_bytes
 
 using Markdown
@@ -20,6 +20,7 @@ import Pkg, OldPkg
 include("editless.jl")
 include("codeview.jl")
 include("macros.jl")
+include("clipboard.jl")
 
 """
     varinfo(m::Module=Main, pattern::Regex=r"")
@@ -68,10 +69,10 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
     if verbose
         lsb = ""
         if Sys.islinux()
-            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)) end
+            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=devnull)); catch; end
         end
         if Sys.iswindows()
-            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)) end
+            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)); catch; end
         end
         if !isempty(lsb)
             println(io, "      ", lsb)
@@ -95,7 +96,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
 
     if verbose
         println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io, "  Uptime: $(Sys.uptime()) sec") end
+        try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
         print(io, "  Load Avg: ")
         Base.print_matrix(io, Sys.loadavg()')
         println(io)

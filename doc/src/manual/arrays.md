@@ -29,9 +29,7 @@ they don't intend to change. Many non- mutating functions are implemented by
 calling a function of the same name with an added `!` at the end on an explicit
 copy of the input, and returning that copy.
 
-## Arrays
-
-### Basic Functions
+## Basic Functions
 
 | Function               | Description                                                                      |
 |:---------------------- |:-------------------------------------------------------------------------------- |
@@ -46,7 +44,7 @@ copy of the input, and returning that copy.
 | [`stride(A,k)`](@ref)  | the stride (linear index distance between adjacent elements) along dimension `k` |
 | [`strides(A)`](@ref)   | a tuple of the strides in each dimension                                         |
 
-### Construction and Initialization
+## Construction and Initialization
 
 Many functions for constructing and initializing arrays are provided. In the following list of
 such functions, calls with a `dims...` argument can either take a single tuple of dimension sizes
@@ -98,7 +96,7 @@ julia> zeros((2, 2))
 ```
 Here, `(2, 2)` is a [`Tuple`](@ref).
 
-### Concatenation
+## Concatenation
 
 Arrays can be constructed and also concatenated using the following functions:
 
@@ -149,7 +147,7 @@ julia> [[1 2]; [3 4]]
  3  4
 ```
 
-### Typed array initializers
+## Typed array initializers
 
 An array with a specific element type can be constructed using the syntax `T[A, B, C, ...]`. This
 will construct a 1-d array with element type `T`, initialized to contain elements `A`, `B`, `C`,
@@ -168,7 +166,7 @@ julia> Int8[[1 2] [3 4]]
  1  2  3  4
 ```
 
-### Comprehensions
+## Comprehensions
 
 Comprehensions provide a general and powerful way to construct arrays. Comprehension syntax is
 similar to set construction notation in mathematics:
@@ -216,7 +214,7 @@ the result in single precision by writing:
 Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 ```
 
-### Generator Expressions
+## Generator Expressions
 
 Comprehensions can also be written without the enclosing square brackets, producing an object
 known as a generator. This object can be iterated to produce values on demand, instead of allocating
@@ -246,6 +244,14 @@ julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
  (0.333333, 2)  (0.25, 4)
 ```
 
+Generators are implemented via inner functions. As in other cases of
+inner functions in the language, variables from the enclosing scope can be
+"captured" in the inner function.  For example, `sum(p[i] - q[i] for i=1:n)`
+captures the three variables `p`, `q` and `n` from the enclosing scope.
+Captured variables can present performance challenges described in
+[performance tips](@ref man-performance-tips).
+
+
 Ranges in generators and comprehensions can depend on previous ranges by writing multiple `for`
 keywords:
 
@@ -271,7 +277,7 @@ julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
  (3, 1)
 ```
 
-### [Indexing](@id man-array-indexing)
+## [Indexing](@id man-array-indexing)
 
 The general syntax for indexing into an n-dimensional array A is:
 
@@ -402,7 +408,7 @@ julia> searchsorted(a, 3)
 3:2
 ```
 
-### Assignment
+## Assignment
 
 The general syntax for assigning values in an n-dimensional array A is:
 
@@ -451,7 +457,7 @@ julia> x
   3   6  -9
 ```
 
-### [Supported index types](@id man-supported-index-types)
+## [Supported index types](@id man-supported-index-types)
 
 In the expression `A[I_1, I_2, ..., I_n]`, each `I_k` may be a scalar index, an
 array of scalar indices, or an object that represents an array of scalar
@@ -514,7 +520,7 @@ julia> A[:, 3]
  17
 ```
 
-#### Cartesian indices
+### Cartesian indices
 
 The special `CartesianIndex{N}` object represents a scalar index that behaves
 like an `N`-tuple of integers spanning multiple dimensions.  For example:
@@ -588,7 +594,7 @@ julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), :]
     `end` keyword to represent the last index of a dimension. Do not use `end`
     in indexing expressions that may contain either `CartesianIndex` or arrays thereof.
 
-#### Logical indexing
+### Logical indexing
 
 Often referred to as logical indexing or indexing with a logical mask, indexing
 by a boolean array selects elements at the indices where its values are `true`.
@@ -630,7 +636,7 @@ julia> x[mask]
  16
 ```
 
-### Iteration
+## Iteration
 
 The recommended ways to iterate over a whole array are
 
@@ -667,7 +673,7 @@ i = CartesianIndex(3, 2)
 In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
 iterate over any array type.
 
-### Array traits
+## Array traits
 
 If you write a custom [`AbstractArray`](@ref) type, you can specify that it has fast linear indexing using
 
@@ -678,7 +684,7 @@ Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
 specify this trait, the default value `IndexCartesian()` is used.
 
-### Array and Vectorized Operators and Functions
+## Array and Vectorized Operators and Functions
 
 The following operators are supported for arrays:
 
@@ -709,7 +715,7 @@ Also notice the difference between `max.(a,b)`, which [`broadcast`](@ref)s [`max
 elementwise over `a` and `b`, and [`maximum(a)`](@ref), which finds the largest value within
 `a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
 
-### Broadcasting
+## Broadcasting
 
 It is sometimes useful to perform element-by-element binary operations on arrays of different
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
@@ -774,7 +780,7 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
  "3. Third"
 ```
 
-### Implementation
+## Implementation
 
 The base array type in Julia is the abstract type [`AbstractArray{T,N}`](@ref). It is parametrized by
 the number of dimensions `N` and the element type `T`. [`AbstractVector`](@ref) and [`AbstractMatrix`](@ref) are

@@ -557,6 +557,7 @@ function show(io::IO, tn::Core.TypeName)
 end
 
 show(io::IO, ::Nothing) = print(io, "nothing")
+print(io::IO, ::Nothing) = throw(MethodError(print, (io, nothing)))
 show(io::IO, b::Bool) = print(io, b ? "true" : "false")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
@@ -577,12 +578,16 @@ function show(io::IO, p::Pair)
     iocompact = IOContext(io, :compact => get(io, :compact, true))
     has_tight_type(p) || return show_default(iocompact, p)
 
+    typeinfo = get(io, :typeinfo, Any)
+    typeinfos = typeinfo <: Pair && p isa typeinfo ?
+        (fieldtype(typeinfo, 1), fieldtype(typeinfo, 2)) : (Any, Any)
+
     isdelimited(iocompact, p.first) || print(io, "(")
-    show(iocompact, p.first)
+    show(IOContext(iocompact, :typeinfo => typeinfos[1]), p.first)
     isdelimited(iocompact, p.first) || print(io, ")")
     print(io, compact ? "=>" : " => ")
     isdelimited(iocompact, p.second) || print(io, "(")
-    show(iocompact, p.second)
+    show(IOContext(iocompact, :typeinfo => typeinfos[2]), p.second)
     isdelimited(iocompact, p.second) || print(io, ")")
     nothing
 end
@@ -644,7 +649,7 @@ end
 function show(io::IO, src::CodeInfo)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
-    lambda_io = IOContext(io, :SOURCEINFO => src)
+    lambda_io = io
     if src.slotnames !== nothing
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
     end
@@ -652,7 +657,7 @@ function show(io::IO, src::CodeInfo)
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?
-        ir = Core.Compiler.inflate_ir(src, Core.svec())
+        ir = Core.Compiler.inflate_ir(src)
         IRShow.show_ir(lambda_io, ir, argnames=sourceinfo_slotnames(src))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
@@ -711,8 +716,9 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
             while true
                 x = y[1]
                 y = iterate(itr, y[2])
-                show(IOContext(recur_io, :typeinfo =>
-                               typeinfo <: Tuple ? fieldtype(typeinfo, i1+i0) : typeinfo),
+                show(IOContext(recur_io, :typeinfo => itr isa typeinfo <: Tuple ?
+                                             fieldtype(typeinfo, i1+i0) :
+                                             typeinfo),
                      x)
                 i1 += 1
                 if y === nothing || i1 > n
@@ -902,27 +908,7 @@ unquoted(ex::Expr)       = ex.args[1]
 
 ## AST printing helpers ##
 
-typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
-
 const indent_width = 4
-
-function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
-    if ty === Function
-        print(io, "::F")
-    elseif ty === Core.IntrinsicFunction
-        print(io, "::I")
-    else
-        if emph && ty isa Type && (!isdispatchelem(ty) || ty == Core.Box)
-            if ty isa Union && is_expected_union(ty)
-                emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
-            else
-                emphasize(io, "::$ty")
-            end
-        else
-            print(io, "::$ty")
-        end
-    end
-end
 
 is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 
@@ -1033,17 +1019,6 @@ end
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     typ = isa(ex,TypedSlot) ? ex.typ : Any
     slotid = ex.id
-    src = get(io, :SOURCEINFO, false)
-    if isa(src, CodeInfo)
-        slottypes = (src::CodeInfo).slottypes
-        if isa(slottypes, Array) && slotid <= length(slottypes::Array)
-            slottype = slottypes[slotid]
-            # The Slot in assignment can somehow have an Any type
-            if isa(slottype, Type) && isa(typ, Type) && slottype <: typ
-                typ = slottype
-            end
-        end
-    end
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
     if (isa(slotnames, Vector{String}) &&
         slotid <= length(slotnames::Vector{String}))
@@ -1051,9 +1026,8 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     else
         print(io, "_", slotid)
     end
-    emphstate = typeemphasize(io)
-    if emphstate || (typ !== Any && isa(ex,TypedSlot))
-        show_expr_type(io, typ, emphstate)
+    if typ !== Any && isa(ex,TypedSlot)
+        print(io, "::", typ)
     end
 end
 
@@ -1484,10 +1458,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         unhandled = true
     end
     if unhandled
-        emphstate = typeemphasize(io)
-        if emphstate && ex.head !== :lambda && ex.head !== :method
-            io = IOContext(io, :TYPEEMPHASIZE => false)
-        end
         print(io, "\$(Expr(")
         show(io, ex.head)
         for arg in args
@@ -1845,7 +1815,7 @@ used by [`summary`](@ref) to display type information in terms of sequences of
 function calls on objects. `toplevel` is `true` if this is
 the direct call from `summary` and `false` for nested (recursive) calls.
 
-The fallback definition is to print `x` as "::\$(typeof(x))",
+The fallback definition is to print `x` as "::\\\$(typeof(x))",
 representing argument `x` in terms of its type. (The double-colon is
 omitted if `toplevel=true`.) However, you can
 specialize this function for specific types to customize printing.

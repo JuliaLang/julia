@@ -238,7 +238,7 @@ temp_pkg_dir() do project_path
             cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
             cd(joinpath(dir, "UnregisteredWithProject")) do
                 try
-                    pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                    pushfirst!(LOAD_PATH, Base.current_env())
                     Pkg.up()
                     @test haskey(Pkg.installed(), "Example")
                 finally
@@ -278,7 +278,8 @@ temp_pkg_dir() do project_path
             cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
             cd(joinpath(dir, "UnregisteredWithProject")) do
                 try
-                    pushfirst!(LOAD_PATH, Base.parse_load_path("@"))
+                    pushfirst!(LOAD_PATH, Base.current_env())
+                    Pkg.add("Test") # test https://github.com/JuliaLang/Pkg.jl/issues/324
                     Pkg.test()
                 finally
                     popfirst!(LOAD_PATH)

@@ -88,11 +88,11 @@ function print_node(io::IO, idx::Int, @nospecialize(stmt), used, argnames, maxsi
         Base.print(io, join(String[sprint(io->print_ssa(io, arg, argnames)) for arg in stmt.args], ", "))
         Base.print(io, ")")
     else
-        Base.print(io, stmt)
+        Base.show(io, stmt)
     end
 end
 
-function compute_inlining_depth(linetable, iline::Int)
+function compute_inlining_depth(linetable, iline::Int32)
     depth = 0
     while iline != 0
         linetable[iline].inlined_at == 0 && break
@@ -120,9 +120,9 @@ function default_expr_type_printer(io::IO, @nospecialize typ)
     nothing
 end
 
-function compute_loc_stack(code::IRCode, line::Int)
+function compute_loc_stack(code::IRCode, line::Int32)
     stack = []
-    line === 0 && return stack
+    line == 0 && return stack
     inlined_at = code.linetable[line].inlined_at
     if inlined_at != 0
         push!(stack, inlined_at)
@@ -214,7 +214,7 @@ function compute_ir_line_annotations(code::IRCode)
         lineno = 0
         loc_method = ""
         print(buf, "│")
-        if line !== 0
+        if line != 0
             stack = compute_loc_stack(code, line)
             lineno = code.linetable[stack[1]].line
             x = min(length(last_stack), length(stack))

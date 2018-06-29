@@ -12,7 +12,7 @@ recursively).
 By convention, a vector can be multiplied by a matrix on its left (`A * v`) whereas a row
 vector can be multiplied by a matrix on its right (such that `RowVector(v) * A = RowVector(transpose(A) * v)`). It
 differs from a `1×n`-sized matrix by the facts that its transpose returns a vector and the
-inner product `RowVector(v1) * v2` returns a scalar, but will otherwise behave similarly.
+dot product `RowVector(v1) * v2` returns a scalar, but will otherwise behave similarly.
 
 # Examples
 ```jldoctest

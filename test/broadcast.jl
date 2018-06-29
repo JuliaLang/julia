@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test, Random
+
 module TestBroadcastInternals
 
 using Base.Broadcast: check_broadcast_axes, check_broadcast_shape, newindex, _bcs
@@ -725,6 +727,26 @@ let f(args...) = *(args...)
     x, y, z = (1,2), 3, (4, 5)
     @test f.(x..., y, z...) == broadcast(f, x..., y, z...) == 120
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
+end
+
+@testset "Issue #27775: Broadcast!ing over nested scalar operations" begin
+    a = zeros(2)
+    a .= 1 ./ (1 + 2)
+    @test a == [1/3, 1/3]
+    a .= 1 ./ (1 .+ 3)
+    @test a == [1/4, 1/4]
+    a .= sqrt.(1 ./ 2)
+    @test a == [sqrt(1/2), sqrt(1/2)]
+    rng = MersenneTwister(1234)
+    a .= rand.((rng,))
+    rng = MersenneTwister(1234)
+    @test a == [rand(rng), rand(rng)]
+    @test a[1] != a[2]
+    rng = MersenneTwister(1234)
+    broadcast!(rand, a, (rng,))
+    rng = MersenneTwister(1234)
+    @test a == [rand(rng), rand(rng)]
+    @test a[1] != a[2]
 end
 
 # Issue #27446: Broadcasting pair operator

@@ -85,6 +85,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    SubstitutionString,
     Timer,
     UnitRange,
     Val,
@@ -625,15 +626,6 @@ export
     get_zero_subnormals,
     set_zero_subnormals,
 
-# statistics
-    mean!,
-    mean,
-    median!,
-    median,
-    middle,
-    quantile!,
-    quantile,
-
 # iteration
     done,
     next,
@@ -769,7 +761,6 @@ export
 # misc
     atexit,
     atreplinit,
-    clipboard,
     exit,
     ntuple,
 

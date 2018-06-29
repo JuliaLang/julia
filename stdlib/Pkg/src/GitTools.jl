@@ -14,8 +14,10 @@ Base.@kwdef mutable struct MiniProgressBar
     current::Float64 = 0.0
     prev::Float64 = 0.0
     has_shown::Bool = false
+    time_shown::Float64 = 0.0
 end
 
+const NONINTERACTIVE_TIME_GRANULARITY = Ref(2.0)
 const PROGRESS_BAR_PERCENTAGE_GRANULARITY = Ref(0.1)
 
 function showprogress(io::IO, p::MiniProgressBar)
@@ -25,6 +27,13 @@ function showprogress(io::IO, p::MiniProgressBar)
     # Saves printing to the terminal
     if p.has_shown && !((perc - prev_perc) > PROGRESS_BAR_PERCENTAGE_GRANULARITY[])
         return
+    end
+    if !isinteractive()
+        t = time()
+        if p.has_shown && (t - p.time_shown) < NONINTERACTIVE_TIME_GRANULARITY[]
+            return
+        end
+        p.time_shown = t
     end
     p.prev = p.current
     p.has_shown = true

@@ -29,11 +29,14 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
     if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
         return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
     end
+
     ex = Meta.lower(__module__, ex0)
-    exret = Expr(:none)
     if !isa(ex, Expr)
-        exret = Expr(:call, :error, "expression is not a function call or symbol")
-    elseif ex.head == :call
+        return Expr(:call, :error, "expression is not a function call or symbol")
+    end
+
+    exret = Expr(:none)
+    if ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
             (ex.args[1] === GlobalRef(Core,:_apply) ||
              ex.args[1] === GlobalRef(Base,:_apply))

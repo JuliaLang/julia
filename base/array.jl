@@ -677,10 +677,8 @@ function grow_to!(dest, itr, st)
 end
 
 ## Iteration ##
-function iterate(A::Array, i=1)
-    @_propagate_inbounds_meta
-    i >= length(A) + 1 ? nothing : (A[i], i+1)
-end
+
+iterate(A::Array, i=1) = (@_inline_meta; (i % UInt) - 1 < length(A) ? (@inbounds A[i], i + 1) : nothing)
 
 ## Indexing: getindex ##
 
@@ -2366,7 +2364,7 @@ _shrink_filter!(keep) = _unique_filter!(∈, pop!, keep)
 
 function _grow!(pred!, v::AbstractVector, itrs)
     filter!(pred!, v) # uniquify v
-    foldl(v, itrs) do v, itr
+    foldl(itrs; init=v) do v, itr
         mapfilter(pred!, push!, itr, v)
     end
 end

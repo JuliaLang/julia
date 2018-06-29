@@ -249,7 +249,7 @@ values(v::Pairs) = v.data
 getindex(v::Pairs, key) = v.data[key]
 setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
 get(v::Pairs, key, default) = get(v.data, key, default)
-get(f::Base.Callable, collection::Pairs, key) = get(f, v.data, key)
+get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
 
 # zip
 
@@ -946,10 +946,9 @@ function length(itr::PartitionIterator)
 end
 
 function iterate(itr::PartitionIterator{<:Vector}, state=1)
-    iterate(itr.c, state) === nothing && return nothing
-    l = state
-    r = min(state + itr.n-1, length(itr.c))
-    return view(itr.c, l:r), r + 1
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
@@ -1075,7 +1074,7 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(EOFError())
     else
         val, state = vs
-        s.nextvalstate = iterate(s.itr, state)
+        Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
         s.taken += 1
         return val
     end

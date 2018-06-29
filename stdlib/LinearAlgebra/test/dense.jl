@@ -236,18 +236,18 @@ end
             end
         end
 
-        @testset "Matrix (Operator)" begin
+        @testset "Matrix (Operator) opnorm" begin
             A = fill(elty(1),10,10)
             As = view(A,1:5,1:5)
-            @test norm(A, 1) ≈ 10
-            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A, 2) ≈ 10
-            @test norm(A, Inf) ≈ 10
-            @test norm(As, 1) ≈ 5
-            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(As, 2) ≈ 5
-            @test norm(As, Inf) ≈ 5
+            @test opnorm(A, 1) ≈ 10
+            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test opnorm(A, 2) ≈ 10
+            @test opnorm(A, Inf) ≈ 10
+            @test opnorm(As, 1) ≈ 5
+            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test opnorm(As, 2) ≈ 5
+            @test opnorm(As, Inf) ≈ 5
         end
 
-        @testset "Absolute homogeneity, triangle inequality, & vecnorm" begin
+        @testset "Absolute homogeneity, triangle inequality, & norm" begin
             for i = 1:10
                 Ainit = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
                         elty <: Complex ? convert(Matrix{elty}, complex.(randn(mmat, nmat), randn(mmat, nmat))) :
@@ -269,9 +269,9 @@ end
                     elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A + B) <= norm(A) + norm(B) # two is default
                     @test norm(A + B,Inf) <= norm(A,Inf) + norm(B,Inf)
 
-                    # vecnorm:
-                    for p = -2:3
-                        @test norm(reshape(A, length(A)), p) == vecnorm(A, p)
+                    # norm
+                    for p in (-Inf, Inf, (-2:3)...)
+                        @test norm(A, p) == norm(vec(A), p)
                     end
                 end
             end
@@ -577,7 +577,7 @@ end
             @test coth(acoth(coth(A))) ≈ coth(A)
 
             # Definition of principal values (Aprahamian & Higham, 2016, pp. 4-5)
-            abstol = sqrt(eps(real(elty))) * vecnorm(acosh(A))
+            abstol = sqrt(eps(real(elty))) * norm(acosh(A))
             @test all(z -> (0 < real(z) < π ||
                             abs(real(z)) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π) < abstol && imag(z) <= 0),
@@ -796,7 +796,7 @@ end
         r = (elty <: Complex ? adjoint : transpose)(rand(elty, 5))
         cm = rand(elty, 5, 1)
         rm = rand(elty, 1, 5)
-        @testset "inner products" begin
+        @testset "dot products" begin
             test_div_pinv_consistency(r, c)
             test_div_pinv_consistency(rm, c)
             test_div_pinv_consistency(r, cm)

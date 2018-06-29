@@ -618,8 +618,12 @@ julia> 2^2x
 64
 ```
 
-The precedence of numeric literal coefficients is the same as that of unary operators such as
-negation. So `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
+The precedence of numeric literal coefficients is slightly lower than that of
+unary operators such as negation.
+So `-2x` is parsed as `(-2) * x` and `√2x` is parsed as `(√2) * x`.
+However, numeric literal coefficients parse similarly to unary operators when
+combined with exponentiation.
+For example `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
 
 Numeric literals also work as coefficients to parenthesized expressions:
 

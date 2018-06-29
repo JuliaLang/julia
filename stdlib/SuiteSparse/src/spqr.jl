@@ -336,19 +336,19 @@ _ret_size(F::QRSparse, B::AbstractMatrix) = (size(F, 2), size(B, 2))
 
 LinearAlgebra.rank(F::QRSparse) = maximum(F.R.rowval)
 
-function (\)(F::QRSparse{Float64}, B::VecOrMat{Complex{Float64}})
+function (\)(F::QRSparse{T}, B::VecOrMat{Complex{T}}) where T<:LinearAlgebra.BlasReal
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    c2r = reshape(copy(transpose(reinterpret(Float64, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
+    c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = F\c2r
 
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      <-       |y1|y2|y3|y4|     <-      |x2|y2|     <-    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    return collect(reshape(reinterpret(Complex{Float64}, copy(transpose(reshape(x, (length(x) >> 1), 2)))), _ret_size(F, B)))
+    return collect(reshape(reinterpret(Complex{T}, copy(transpose(reshape(x, (length(x) >> 1), 2)))), _ret_size(F, B)))
 end
 
 function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
