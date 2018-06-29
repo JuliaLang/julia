@@ -72,7 +72,7 @@ julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/ui julia-$*
 
 julia-sysimg : julia-base julia-ui-$(JULIA_BUILD_MODE)
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.ji
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.ji JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
 julia-sysimg-release : julia-sysimg julia-ui-release
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.$(SHLIB_EXT)
