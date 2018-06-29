@@ -230,6 +230,11 @@ Language changes
     `size`, `length`, and `@inbounds`. To optionally enforce conventional indices,
     you can `@assert !has_offset_axes(A)`.
 
+  * `Sys.CPU_CORES` is deprecated in favor of `Sys.CPU_LOGICAL_CORES` which still gives
+    the number of "virtual" cores in the presence of hyperthreading rather than the
+    number of physical cores present on the CPU. Similarly, the environment variable
+    `JULIA_CPU_CORES` is deprecated in favor of `JULIA_CPU_LOGICAL_CORES` ([#27856]).
+
 Breaking changes
 ----------------
 

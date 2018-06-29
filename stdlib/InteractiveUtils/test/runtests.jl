@@ -192,7 +192,7 @@ end
         @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
                                                     String[]), String))
         @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String["JULIA_CPU_CORES=1"]), String))
+                                                    String["JULIA_CPU_LOGICAL_CORES=1"]), String))
     end
 end
 

@@ -59,7 +59,7 @@ import LinearAlgebra
 cd(dirname(@__FILE__)) do
     n = 1
     if net_on
-        n = min(Sys.CPU_CORES, length(tests))
+        n = min(Sys.CPU_LOGICAL_CORES, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
     end
