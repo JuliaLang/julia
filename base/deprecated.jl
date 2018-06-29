@@ -1716,15 +1716,28 @@ end
 @deprecate_moved svds "Arpack"
 
 # PR #27711
-@deprecate reduce(op, v0, itr) reduce(op, itr; init=v0)
+function reduce(op, v0, itr::AbstractArray; dims=nothing)
+    if dims === nothing
+        depwarn("`reduce(op, v0, itr)` is deprecated, use `reduce(op, itr; init=v0)` instead", :reduce)
+        return reduce(op, itr, init=v0)
+    else # deprecate the old deprecation
+        depwarn("`reduce(op, v0, itr; dims=dims)` is deprecated, use `reduce(op, itr; init=v0, dims=dims)` instead", :reduce)
+        return reduce(op, itr; init=v0, dims=dims)
+    end
+end
 @deprecate foldl(op, v0, itr) foldl(op, itr; init=v0)
 @deprecate foldr(op, v0, itr) foldr(op, itr; init=v0)
-@deprecate mapreduce(f, op, v0, itr) mapreduce(f, op, itr; init=v0)
+function mapreduce(f, op, v0, itr::AbstractArray; dims=nothing)
+    if dims === nothing
+        depwarn("`mapreduce(f, op, v0, itr)` is deprecated, use `mapreduce(f, op, itr; init=v0)` instead", :mapreduce)
+        return mapreduce(f, op, itr; init=v0)
+    else # deprecate the old deprecation
+        depwarn("`mapreduce(f, op, v0, itr; dims=dims)` is deprecated, use `mapreduce(f, op, itr; init=v0, dims=dims)` intead", :mapreduce)
+        return mapreduce(f, op, itr; init=v0, dims=dims)
+    end
+end
 @deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
 @deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
-# also deprecate the old deprecations
-@deprecate mapreduce(f, op, v0, A; dims=dims) mapreduce(f, op, A; init = v0, dims=dims)
-@deprecate reduce(op, v0, A; dims=dims) reduce(op, A; init=v0, dims=dims)
 
 # END 0.7 deprecations
 
