@@ -279,7 +279,7 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) 
     end
     (names...,)
 end
-
+#=
 """
     delete(nt::NamedTuple, omitnames::Tuple{Vararg{Symbol}})
 
@@ -296,7 +296,7 @@ end
 Construct a new named tuple from `nt` by removing the field named `omitname`.
 """
 delete(a::NamedTuple, omitname::Symbol) = delete(a, (omitname,))
-
+=#
 
 """
     structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn},Type{NamedTuple{bn}}}) where {an,bn}
