@@ -371,10 +371,10 @@ SparseMatrixCSC(M::Matrix) = sparse(M)
 SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
-    (I, J, V) = findnz(M)
-    eltypeTiI = convert(Vector{Ti}, I)
-    eltypeTiJ = convert(Vector{Ti}, J)
-    eltypeTvV = convert(Vector{Tv}, V)
+    I = findall(x -> x != 0, M)
+    eltypeTiI = Ti[i[1] for i in I]
+    eltypeTiJ = Ti[i[2] for i in I]
+    eltypeTvV = Tv[M[i] for i in I]
     return sparse_IJ_sorted!(eltypeTiI, eltypeTiJ, eltypeTvV, size(M)...)
 end
 function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
