@@ -279,16 +279,6 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) 
     end
     (names...,)
 end
-#=
-"""
-    delete(nt::NamedTuple, omitnames::Tuple{Vararg{Symbol}})
-
-Construct a new named tuple by omitting the fields in `omitnames` from `nt`.
-"""
-function delete(a::NamedTuple{an}, omitnames::Tuple{Vararg{Symbol}}) where {an}
-    names = diff_names(an, omitnames)
-    NamedTuple{names}(a)
-end
 
 """
     delete(nt::NamedTuple, omitname::Symbol)
@@ -296,7 +286,17 @@ end
 Construct a new named tuple from `nt` by removing the field named `omitname`.
 """
 delete(a::NamedTuple, omitname::Symbol) = delete(a, (omitname,))
-=#
+
+"""
+    deleteindicies(nt::NamedTuple, fieldnames::Tuple{Vararg{Symbol}})
+
+Construct a new named tuple by omitting the fields in `fieldnames` from `nt`.
+"""
+function deleteindicies(a::NamedTuple{an}, omitnames::Tuple{Vararg{Symbol}}) where {an}
+    names = diff_names(an, omitnames)
+    NamedTuple{names}(a)
+end
+
 
 """
     structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn},Type{NamedTuple{bn}}}) where {an,bn}
