@@ -300,6 +300,42 @@ temp_pkg_dir() do project_path
     end
 end
 
+temp_pkg_dir() do project_path
+    @testset "valid project file names" begin
+        extract_uuid(toml_path) = begin
+            uuid = ""
+            for line in eachline(toml_path)
+                m = match(r"uuid = \"(.+)\"", line)
+                if m !== nothing
+                    uuid = m.captures[1]
+                    break
+                end
+            end
+            return uuid
+        end
+
+        cd(project_path) do
+            pkg_name = "FooBar"
+            # create a project and grab its uuid
+            Pkg.generate(pkg_name)
+            uuid = extract_uuid(joinpath(pkg_name, "Project.toml"))
+            # activate project env
+            Pkg.activate(abspath(pkg_name))
+            # add an example project to populate manifest file
+            Pkg.add("Example")
+            Pkg.activate()
+            # change away from default names
+            mv(joinpath(pkg_name, "Project.toml"), joinpath(pkg_name, "JuliaProject.toml"))
+            mv(joinpath(pkg_name, "Manifest.toml"), joinpath(pkg_name, "JuliaManifest.toml"))
+            # make sure things still work
+            Pkg.develop(abspath(pkg_name))
+            @test isinstalled((name=pkg_name, uuid=UUID(uuid)))
+            Pkg.rm(pkg_name)
+            @test !isinstalled((name=pkg_name, uuid=UUID(uuid)))
+        end # cd project_path
+    end # @testset
+end
+
 include("repl.jl")
 
 end # module

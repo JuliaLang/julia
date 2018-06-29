@@ -130,9 +130,9 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
 end
 
 function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
-    project_file = joinpath(path, "Project.toml")
+    project_file = projectfile_path(path)
     fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
-    !isfile(project_file) && return false
+    (project_file === nothing) && return false
     project = read_project(project_file)
     compat = get(project, "compat", Dict())
     for (deppkg_name, uuid) in project["deps"]
@@ -652,8 +652,8 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
         deps = Dict{String,String}()
 
         # Check for deps in project file
-        project_file = joinpath(path, "Project.toml")
-        if isfile(project_file)
+        project_file = projectfile_path(path)
+        if nothing !== project_file
             project = read_project(project_file)
             deps = project["deps"]
         else

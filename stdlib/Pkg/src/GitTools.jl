@@ -95,7 +95,7 @@ function clone(url, source_path; header=nothing, kwargs...)
     catch err
         rm(source_path; force=true, recursive=true)
         err isa LibGit2.GitError || rethrow(err)
-        Pkg.Typs.cmderror("failed to clone from $(url), error: $err")
+        Pkg.Types.cmderror("failed to clone from $(url), error: $err")
     finally
         print(stdout, "\033[2K") # clear line
         print(stdout, "\e[?25h") # put back cursor

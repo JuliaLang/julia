@@ -26,7 +26,8 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
     PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED,
-    printpkgstyle
+    printpkgstyle,
+    projectfile_path
 
 
 include("versions.jl")
@@ -205,6 +206,20 @@ const default_envs = [
     "default",
 ]
 
+let trynames(names) = begin
+    return root_path::AbstractString -> begin
+        for x in names
+            maybe_file = joinpath(root_path, x)
+            if isfile(maybe_file)
+                return maybe_file
+            end
+        end
+    end
+end # trynames
+    global projectfile_path = trynames(project_names)
+    global manifestfile_path = trynames(manifest_names)
+end # let
+
 mutable struct EnvCache
     # environment info:
     env::Union{Nothing,String}
@@ -257,15 +272,13 @@ mutable struct EnvCache
         else
             project_package = nothing
         end
-        if haskey(project, "manifest")
-            manifest_file = abspath(project["manifest"])
-        else
-            dir = abspath(dirname(project_file))
-            for name in manifest_names
-                manifest_file = joinpath(dir, name)
-                isfile(manifest_file) && break
-            end
-        end
+        # determine manifest_file name
+        dir = abspath(dirname(project_file))
+        manifest_file = haskey(project, "manifest") ?
+            abspath(project["manifest"]) :
+            manifestfile_path(dir)
+        # use default name if still not determined
+        (manifest_file === nothing) && (manifest_file = joinpath(dir, "Manifest.toml"))
         write_env_usage(manifest_file)
         manifest = read_manifest(manifest_file)
         uuids = Dict{String,Vector{UUID}}()
@@ -300,8 +313,8 @@ stdlib_path(stdlib::String) = joinpath(stdlib_dir(), stdlib)
 function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
     for stdlib in readdir(stdlib_dir())
-        projfile = joinpath(stdlib_path(stdlib), "Project.toml")
-        if isfile(projfile)
+        projfile = projectfile_path(stdlib_path(stdlib))
+        if nothing !== projfile
             proj = TOML.parsefile(projfile)
             if haskey(proj, "uuid")
                 stdlibs[UUID(proj["uuid"])] = stdlib
@@ -560,23 +573,18 @@ end
 
 function parse_package!(ctx, pkg, project_path)
     env = ctx.env
-    found_project_file = false
-    for projname in project_names
-        if isfile(joinpath(project_path, projname))
-            found_project_file = true
-            project_data = parse_toml(project_path, "Project.toml")
-            pkg.uuid = UUID(project_data["uuid"])
-            pkg.name = project_data["name"]
-            if haskey(project_data, "version")
-                pkg.version = VersionNumber(project_data["version"])
-            else
-                @warn "project file for $(pkg.name) is missing a `version` entry"
-                Pkg.Operations.set_maximum_version_registry!(env, pkg)
-            end
-            break
+    project_file = projectfile_path(project_path)
+    if project_file !== nothing
+        project_data = parse_toml(project_file)
+        pkg.uuid = UUID(project_data["uuid"])
+        pkg.name = project_data["name"]
+        if haskey(project_data, "version")
+            pkg.version = VersionNumber(project_data["version"])
+        else
+            @warn "project file for $(pkg.name) is missing a `version` entry"
+            Pkg.Operations.set_maximum_version_registry!(env, pkg)
         end
-    end
-    if !found_project_file
+    else
         @warn "packages will need to have a [Julia]Project.toml file in the future"
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
