@@ -281,19 +281,19 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) 
 end
 
 """
-    delete(nt::NamedTuple, omitname::Symbol)
+    delete(nt::NamedTuple, fieldname::Symbol)
 
-Construct a new named tuple from `nt` by removing the field named `omitname`.
+Construct a new named tuple from `nt` by removing the field named `fieldname`.
 """
-delete(a::NamedTuple, omitname::Symbol) = deleteindicies(a, (omitname,))
+delete(nt::NamedTuple, fieldname::Symbol) = deleteindicies(nt, (fieldname,))
 
 """
     deleteindicies(nt::NamedTuple, fieldnames::Tuple{Vararg{Symbol}})
 
-Construct a new named tuple by omitting the fields in `fieldnames` from `nt`.
+Construct a new named tuple from `nt` by omitting the fields in `fieldnames`.
 """
-function deleteindicies(a::NamedTuple{an}, omitnames::Tuple{Vararg{Symbol}}) where {an}
-    names = diff_names(an, omitnames)
+function deleteindicies(a::NamedTuple{an}, fieldnames::Tuple{Vararg{Symbol}}) where {an}
+    names = diff_names(an, fieldnames)
     NamedTuple{names}(a)
 end
 
