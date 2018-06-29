@@ -1269,10 +1269,12 @@ function compute_annotations(f, types)
     join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
 end
 
-g_line() = leaf() # Deliberately not implemented to end up as a leaf after inlining
+@noinline leaffunc() = print()
+
+@inline g_line() = leaffunc()
 
 # Test that separate instances of the same function do not get merged
-function f_line()
+@inline function f_line()
    g_line()
    g_line()
    g_line()
