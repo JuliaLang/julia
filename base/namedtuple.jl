@@ -285,7 +285,7 @@ end
 
 Construct a new named tuple from `nt` by removing the field named `omitname`.
 """
-delete(a::NamedTuple, omitname::Symbol) = delete(a, (omitname,))
+delete(a::NamedTuple, omitname::Symbol) = deleteindicies(a, (omitname,))
 
 """
     deleteindicies(nt::NamedTuple, fieldnames::Tuple{Vararg{Symbol}})
