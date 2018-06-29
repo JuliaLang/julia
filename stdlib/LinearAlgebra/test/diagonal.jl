@@ -187,6 +187,11 @@ srand(1)
         DD = copy(D)
         r  = VV * Array(D)'
         @test Array(rmul!(VV, adjoint(DD))) ≈ r
+
+        # kron
+        D3 = Diagonal(convert(Vector{elty}, rand(n÷2)))
+        DM3= Matrix(D3)
+        Matrix(kron(D, D3)) ≈ kron(DM, DM3)
     end
     @testset "triu/tril" begin
         @test istriu(D)
