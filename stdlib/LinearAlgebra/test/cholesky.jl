@@ -273,7 +273,7 @@ end
 
 @testset "cholesky Diagonal" begin
     # real
-    d = abs.(randn(3)) + 0.1
+    d = abs.(randn(3)) .+ 0.1
     D = Diagonal(d)
     CD = cholesky(D)
     @test CD isa Cholesky{Float64}
