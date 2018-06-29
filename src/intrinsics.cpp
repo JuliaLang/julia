@@ -890,7 +890,6 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 tindex = ret;
             }
             jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, tbaa_data);
-            ret.isimmutable = x.isimmutable && y.isimmutable;
             if (x_vboxed || y_vboxed) {
                 if (!x_vboxed)
                     x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));

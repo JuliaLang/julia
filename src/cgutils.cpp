@@ -1460,7 +1460,6 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
                 Type *fty = julia_type_to_llvm(jt);
                 Value *addr = ctx.builder.CreateInBoundsGEP(fty, emit_bitcast(ctx, ptr, PointerType::get(fty, 0)), idx);
                 *ret = mark_julia_slot(addr, jt, NULL, strct.tbaa);
-                ret->isimmutable = strct.isimmutable;
                 return true;
             }
             *ret = typed_load(ctx, ptr, idx, jt, strct.tbaa, false);
@@ -1574,7 +1573,6 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             //    ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
             //    ConstantAsMetadata::get(ConstantInt::get(T_int8, union_max)) }));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), tindex0);
-            bool isimmutable = strct.isimmutable;
             if (jt->mutabl) {
                 // move value to an immutable stack slot (excluding tindex)
                 Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * align), (fsz + align - 2) / align);
@@ -1583,17 +1581,12 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                     lv->setAlignment(align);
                 emit_memcpy(ctx, lv, strct.tbaa, addr, strct.tbaa, fsz - 1, align);
                 addr = lv;
-                isimmutable = true;
             }
-            jl_cgval_t fieldval = mark_julia_slot(addr, jfty, tindex, strct.tbaa);
-            fieldval.isimmutable = isimmutable;
-            return fieldval;
+            return mark_julia_slot(addr, jfty, tindex, strct.tbaa);
         }
         else if (!jt->mutabl) {
             // just compute the pointer and let user load it when necessary
-            jl_cgval_t fieldval = mark_julia_slot(addr, jfty, NULL, strct.tbaa);
-            fieldval.isimmutable = strct.isimmutable;
-            return fieldval;
+            return mark_julia_slot(addr, jfty, NULL, strct.tbaa);
         }
         return typed_load(ctx, addr, NULL, jfty, strct.tbaa, true, align);
     }
