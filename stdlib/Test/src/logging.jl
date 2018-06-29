@@ -66,7 +66,7 @@ end
 function Base.show(io::IO, t::LogTestFailure)
     printstyled(io, "Log Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
-    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
+    printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     println(io, "  Expression: ", t.orig_expr)
     println(io, "  Log Pattern: ", join(t.patterns, " "))
     println(io, "  Captured Logs: ")
