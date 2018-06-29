@@ -860,7 +860,7 @@ function break_21369()
         local fr
         while true
             fr = Base.StackTraces.lookup(bt[i])[end]
-            if !fr.from_c
+            if !fr.from_c && fr.func !== :error
                 break
             end
             i += 1

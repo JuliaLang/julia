@@ -212,13 +212,20 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         else
             force_noinline = true
         end
+        if !opt.src.inlineable && result === Union{}
+            force_noinline = true
+        end
     end
     if force_noinline
         opt.src.inlineable = false
-    elseif !opt.src.inlineable && isa(def, Method)
+    elseif isa(def, Method)
         bonus = 0
         if result ⊑ Tuple && !isbitstype(widenconst(result))
             bonus = opt.params.inline_tupleret_bonus
+        end
+        if opt.src.inlineable
+            # For functions declared @inline, increase the cost threshold 20x
+            bonus += opt.params.inline_cost_threshold*19
         end
         opt.src.inlineable = isinlineable(def, opt, bonus)
     end
@@ -270,86 +277,87 @@ isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
 
 function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any}, params::Params)
     head = ex.head
-    if is_meta_expr_head(head) || head == :copyast # not sure if copyast is right
+    if is_meta_expr_head(head)
         return 0
-    end
-    argcost = 0
-    for a in ex.args
-        if a isa Expr
-            argcost = plus_saturate(argcost, statement_cost(a, -1, src, spvals, slottypes, params))
-        end
-    end
-    if head == :return || head == :(=)
-        return argcost
-    end
-    extyp = line == -1 ? Any : src.ssavaluetypes[line]
-    if head == :call
+    elseif head === :call
         ftyp = argextype(ex.args[1], src, spvals, slottypes)
-        if isa(ftyp, Type)
-            return argcost
-        end
-        if isa(ftyp, Const)
-            f = (ftyp::Const).val
-            if isa(f, IntrinsicFunction)
-                iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
-                if !isassigned(T_IFUNC_COST, iidx)
-                    # unknown/unhandled intrinsic
-                    return plus_saturate(argcost, params.inline_nonleaf_penalty)
-                end
-                return plus_saturate(argcost, T_IFUNC_COST[iidx])
+        f = singleton_type(ftyp)
+        if isa(f, IntrinsicFunction)
+            iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
+            if !isassigned(T_IFUNC_COST, iidx)
+                # unknown/unhandled intrinsic
+                return params.inline_nonleaf_penalty
             end
-            if isa(f, Builtin)
-                # The efficiency of operations like a[i] and s.b
-                # depend strongly on whether the result can be
-                # inferred, so check the type of ex
-                if f == Main.Core.getfield || f == Main.Core.tuple
-                    # we might like to penalize non-inferrability, but
-                    # tuple iteration/destructuring makes that
-                    # impossible
-                    # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
-                    return argcost
-                elseif f == Main.Core.arrayref && length(ex.args) >= 3
-                    atyp = argextype(ex.args[3], src, spvals, slottypes)
-                    return plus_saturate(argcost, isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty)
-                end
-                fidx = findfirst(x->x===f, T_FFUNC_KEY)
-                if fidx === nothing
-                    # unknown/unhandled builtin or anonymous function
-                    # Use the generic cost of a direct function call
-                    return plus_saturate(argcost, 20)
-                end
-                return plus_saturate(argcost, T_FFUNC_COST[fidx])
-            end
+            return T_IFUNC_COST[iidx]
         end
-        return plus_saturate(argcost, params.inline_nonleaf_penalty)
-    elseif head == :foreigncall || head == :invoke
+        if isa(f, Builtin)
+            # The efficiency of operations like a[i] and s.b
+            # depend strongly on whether the result can be
+            # inferred, so check the type of ex
+            if f === Main.Core.getfield || f === Main.Core.tuple
+                # we might like to penalize non-inferrability, but
+                # tuple iteration/destructuring makes that impossible
+                # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
+                return 0
+            elseif f === Main.Core.arrayref && length(ex.args) >= 3
+                atyp = argextype(ex.args[3], src, spvals, slottypes)
+                return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
+            end
+            fidx = findfirst(x->x===f, T_FFUNC_KEY)
+            if fidx === nothing
+                # unknown/unhandled builtin or anonymous function
+                # Use the generic cost of a direct function call
+                return 20
+            end
+            return T_FFUNC_COST[fidx]
+        end
+        return params.inline_nonleaf_penalty
+    elseif head === :foreigncall || head === :invoke
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
-        return extyp == Union{} ? 0 : plus_saturate(20, argcost)
-    elseif head == :llvmcall
-        return plus_saturate(10, argcost) # a wild guess at typical cost
-    elseif head == :enter
+        extyp = line == -1 ? Any : src.ssavaluetypes[line]
+        return extyp === Union{} ? 0 : 20
+    elseif head === :return
+        a = ex.args[1]
+        if a isa Expr
+            return statement_cost(a, -1, src, spvals, slottypes, params)
+        end
+        return 0
+    elseif head === :(=)
+        if ex.args[1] isa GlobalRef
+            cost = 20
+        else
+            cost = 0
+        end
+        a = ex.args[2]
+        if a isa Expr
+            cost = plus_saturate(cost, statement_cost(a, -1, src, spvals, slottypes, params))
+        end
+        return cost
+    elseif head === :copyast
+        return 100
+    elseif head === :enter
         # try/catch is a couple function calls,
         # but don't inline functions with try/catch
         # since these aren't usually performance-sensitive functions,
         # and llvm is more likely to miscompile them when these functions get large
         return typemax(Int)
-    elseif head == :gotoifnot
+    elseif head === :gotoifnot
         target = ex.args[2]::Int
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
         # summing the cost of the not-taken branch
-        return target < line ? plus_saturate(40, argcost) : argcost
+        return target < line ? 40 : 0
     end
-    return argcost
+    return 0
 end
 
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any},
                        params::Params, cost_threshold::Integer=params.inline_cost_threshold)
-    bodycost = 0
+    bodycost::Int = 0
     for line = 1:length(body)
         stmt = body[line]
         if stmt isa Expr
@@ -363,9 +371,9 @@ function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, 
             continue
         end
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost == typemax(Int) && return false
+        bodycost > cost_threshold && return false
     end
-    return bodycost <= cost_threshold
+    return true
 end
 
 function is_known_call(e::Expr, @nospecialize(func), src, spvals::SimpleVector, slottypes::Vector{Any} = empty_slottypes)

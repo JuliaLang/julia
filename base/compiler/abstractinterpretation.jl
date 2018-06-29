@@ -129,8 +129,9 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     code === nothing && return Any
     code = code::MethodInstance
     # decide if it's likely to be worthwhile
-    cache_inlineable = false
-    if isdefined(code, :inferred)
+    declared_inline = isdefined(method, :source) && ccall(:jl_ast_flag_inlineable, Bool, (Any,), method.source)
+    cache_inlineable = declared_inline
+    if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
             cache_src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), cache_inf)

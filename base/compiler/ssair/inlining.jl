@@ -585,6 +585,8 @@ end
 function singleton_type(@nospecialize(ft))
     if isa(ft, Const)
         return ft.val
+    elseif ft isa DataType && isdefined(ft, :instance)
+        return ft.instance
     end
     return nothing
 end

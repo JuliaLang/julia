@@ -1666,7 +1666,9 @@ julia> findnext(isodd, A, CartesianIndex(1, 1))
 CartesianIndex(1, 1)
 ```
 """
-function findnext(testf::Function, A, start)
+@inline findnext(testf::Function, A, start) = findnext_internal(testf, A, start)
+
+function findnext_internal(testf::Function, A, start)
     l = last(keys(A))
     i = start
     while i <= l
@@ -1854,7 +1856,9 @@ julia> findprev(isodd, A, CartesianIndex(1, 2))
 CartesianIndex(2, 1)
 ```
 """
-function findprev(testf::Function, A, start)
+@inline findprev(testf::Function, A, start) = findprev_internal(testf, A, start)
+
+function findprev_internal(testf::Function, A, start)
     i = start
     while i >= first(keys(A))
         testf(A[i]) && return i
