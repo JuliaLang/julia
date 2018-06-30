@@ -852,7 +852,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         sv.params.inlining || continue
 
         # Special case inliners for regular functions
-        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft)
+        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft) || f === return_type
             continue
         end
 
