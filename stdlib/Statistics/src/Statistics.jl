@@ -15,9 +15,34 @@ export cor, cov, std, stdm, var, varm, mean!, mean,
 ##### mean #####
 
 """
-    mean(f::Function, v)
+    mean(itr)
 
-Apply the function `f` to each element of `v` and take the mean.
+Compute the mean of all elements in a collection.
+
+!!! note
+    If array contains `NaN` or [`missing`](@ref) values, the result is also
+    `NaN` or `missing` (`missing` takes precedence if array contains both).
+    Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
+    mean of non-missing values.
+
+# Examples
+```jldoctest
+julia> mean(1:20)
+10.5
+
+julia> mean([1, missing, 3])
+missing
+
+julia> mean(skipmissing([1, missing, 3]))
+2.0
+```
+"""
+mean(itr) = mean(identity, itr)
+
+"""
+    mean(f::Function, itr)
+
+Apply the function `f` to each element of collection `itr` and take the mean.
 
 ```jldoctest
 julia> mean(√, [1, 2, 3])
@@ -27,25 +52,24 @@ julia> mean([√1, √2, √3])
 1.3820881233139908
 ```
 """
-function mean(f::Base.Callable, iterable)
-    y = iterate(iterable)
+function mean(f::Base.Callable, itr)
+    y = iterate(itr)
     if y === nothing
-        throw(ArgumentError("mean of empty collection undefined: $(repr(iterable))"))
+        throw(ArgumentError("mean of empty collection undefined: $(repr(itr))"))
     end
     count = 1
     value, state = y
     f_value = f(value)
     total = Base.reduce_first(Base.add_sum, f_value)
-    y = iterate(iterable, state)
+    y = iterate(itr, state)
     while y !== nothing
         value, state = y
         total += f(value)
         count += 1
-        y = iterate(iterable, state)
+        y = iterate(itr, state)
     end
     return total/count
 end
-mean(iterable) = mean(identity, iterable)
 mean(f::Base.Callable, A::AbstractArray) = sum(f, A) / Base._length(A)
 
 """
@@ -78,13 +102,26 @@ function mean!(R::AbstractArray, A::AbstractArray)
 end
 
 """
-    mean(v; dims)
+    mean(A::AbstractArray; dims)
 
-Compute the mean of whole array `v`, or optionally along the given dimensions.
+Compute the mean of an array over the given dimensions.
 
-!!! note
-    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
-    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> mean(A, dims=1)
+1×2 Array{Float64,2}:
+ 2.0  3.0
+
+julia> mean(A, dims=2)
+2×1 Array{Float64,2}:
+ 1.5
+ 3.5
+```
 """
 mean(A::AbstractArray; dims=:) = _mean(A, dims)
 
@@ -639,11 +676,8 @@ Like [`median`](@ref), but may overwrite the input vector.
 """
 function median!(v::AbstractVector)
     isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
-    if eltype(v)<:AbstractFloat
-        @inbounds for x in v
-            isnan(x) && return x
-        end
-    end
+    eltype(v)>:Missing && any(ismissing, v) && return missing
+    (eltype(v)<:AbstractFloat || eltype(v)>:AbstractFloat) && any(isnan, v) && return NaN
     inds = axes(v, 1)
     n = Base._length(inds)
     mid = div(first(inds)+last(inds),2)
@@ -657,16 +691,46 @@ end
 median!(v::AbstractArray) = median!(vec(v))
 
 """
-    median(v; dims)
+    median(itr)
 
-Compute the median of an entire array `v`, or, optionally,
-along the given dimensions. For an even number of
-elements no exact median element exists, so the result is
+Compute the median of all elements in a collection.
+For an even number of elements no exact median element exists, so the result is
 equivalent to calculating mean of two median elements.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
-    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
+    If `itr` contains `NaN` or [`missing`](@ref) values, the result is also
+    `NaN` or `missing` (`missing` takes precedence if `itr` contains both).
+    Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
+    median of non-missing values.
+
+# Examples
+```jldoctest
+julia> median([1, 2, 3])
+2.0
+
+julia> median([1, 2, 3, 4])
+2.5
+
+julia> median([1, 2, missing, 4])
+missing
+
+julia> median(skipmissing([1, 2, missing, 4]))
+2.0
+```
+"""
+median(itr) = median!(collect(itr))
+
+"""
+    median(A::AbstractArray; dims)
+
+Compute the median of an array along the given dimensions.
+
+# Examples
+```jldoctest
+julia> median([1 2; 3 4], dims=1)
+1×2 Array{Float64,2}:
+ 2.0  3.0
+```
 """
 median(v::AbstractArray; dims=:) = _median(v, dims)
 
@@ -677,29 +741,48 @@ _median(v::AbstractArray{T}, ::Colon) where {T} = median!(copyto!(Array{T,1}(und
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
 """
-    quantile!([q, ] v, p; sorted=false)
+    quantile!([q::AbstractArray, ] v::AbstractVector, p; sorted=false)
 
-Compute the quantile(s) of a vector `v` at the probability or probabilities `p`, which
-can be given as a single value, a vector, or a tuple. If `p` is a vector, an optional
+Compute the quantile(s) of a vector `v` at a specified probability or vector or tuple of
+probabilities `p` on the interval [0,1]. If `p` is a vector, an optional
 output array `q` may also be specified. (If not provided, a new output array is created.)
 The keyword argument `sorted` indicates whether `v` can be assumed to be sorted; if
-`false` (the default), then the elements of `v` may be partially sorted.
-
-The elements of `p` should be on the interval [0,1], and `v` should not have any `NaN`
-values.
+`false` (the default), then the elements of `v` will be partially sorted in-place.
 
 Quantiles are computed via linear interpolation between the points `((k-1)/(n-1), v[k])`,
 for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman and Fan
 (1996), and is the same as the R default.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation: `quantile!` will
-    throw an `ArgumentError` in the presence of `NaN` values in the data array.
-    Use the [`missing`](@ref) type to represent missing values, and the
-    [`skipmissing`](@ref) function to omit them.
+    An `ArgumentError` is thrown if `v` contains `NaN` or [`missing`](@ref) values.
 
 * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
+
+# Examples
+```jldoctest
+julia> x = [3, 2, 1];
+
+julia> quantile!(x, 0.5)
+2.0
+
+julia> x
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> y = zeros(3);
+
+julia> quantile!(y, x, [0.1, 0.5, 0.9]) === y
+true
+
+julia> y
+3-element Array{Float64,1}:
+ 1.2
+ 2.0
+ 2.8
+```
 """
 function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
                    sorted::Bool=false)
@@ -742,6 +825,7 @@ function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
         # only need to perform partial sort
         sort!(v, 1, lv, Base.Sort.PartialQuickSort(lo:hi), Base.Sort.Forward)
     end
+    ismissing(v[end]) && throw(ArgumentError("quantiles are undefined in presence of missing values"))
     isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
     return v
 end
@@ -773,27 +857,41 @@ end
 
 
 """
-    quantile(v, p; sorted=false)
+    quantile(itr, p; sorted=false)
 
-Compute the quantile(s) of a vector `v` at a specified probability or vector or tuple of
-probabilities `p`. The keyword argument `sorted` indicates whether `v` can be assumed to
-be sorted.
-
-The `p` should be on the interval [0,1], and `v` should not have any `NaN` values.
+Compute the quantile(s) of a collection `itr` at a specified probability or vector or tuple of
+probabilities `p` on the interval [0,1]. The keyword argument `sorted` indicates whether
+`itr` can be assumed to be sorted.
 
 Quantiles are computed via linear interpolation between the points `((k-1)/(n-1), v[k])`,
 for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman and Fan
 (1996), and is the same as the R default.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation: `quantile` will
-    throw an `ArgumentError` in the presence of `NaN` values in the data array.
-    Use the [`missing`](@ref) type to represent missing values, and the
-    [`skipmissing`](@ref) function to omit them.
+    An `ArgumentError` is thrown if collection contains `NaN` or [`missing`](@ref) values.
+    Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
+    quantiles of non-missing values.
 
 - Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
+
+# Examples
+```jldoctest
+julia> quantile(0:20, 0.5)
+10.0
+
+julia> quantile(0:20, [0.1, 0.5, 0.9])
+3-element Array{Float64,1}:
+  2.0
+ 10.0
+ 18.0
+
+julia> quantile(skipmissing([1, 10, missing]), 0.5)
+5.5
+ ```
 """
+quantile(itr, p; sorted::Bool=false) = quantile!(collect(itr), p, sorted=sorted)
+
 quantile(v::AbstractVector, p; sorted::Bool=false) =
     quantile!(sorted ? v : Base.copymutable(v), p; sorted=sorted)
 
