@@ -281,22 +281,22 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) 
 end
 
 """
-    delete(nt::NamedTuple, fieldname::Symbol)
+    delete(a::NamedTuple, symbol[s])
 
-Construct a new named tuple from `nt` by removing the field named `fieldname`.
-"""
-delete(nt::NamedTuple, fieldname::Symbol) = deleteindicies(nt, (fieldname,))
+Construct a new named tuple from `a` by removing the named field[s].
 
-"""
-    deleteindicies(nt::NamedTuple, fieldnames::Tuple{Vararg{Symbol}})
+```jldoctest
+julia> delete((a=1, b=2, c=3), :b)
+(a = 1, c = 3)
 
-Construct a new named tuple from `nt` by omitting the fields in `fieldnames`.
+julia> delete((a=1, b=2, c=3), :a, :b)
+(c = 3)
+```
 """
-function deleteindicies(a::NamedTuple{an}, fieldnames::Tuple{Vararg{Symbol}}) where {an}
+function delete(a::NamedTuple{an), fieldnames...) where {an}
     names = diff_names(an, fieldnames)
     NamedTuple{names}(a)
 end
-
 
 """
     structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn},Type{NamedTuple{bn}}}) where {an,bn}
