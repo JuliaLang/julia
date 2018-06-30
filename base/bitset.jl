@@ -29,7 +29,12 @@ very large integers), use [`Set`](@ref) instead.
 BitSet(itr) = union!(BitSet(), itr)
 
 # Special implementation for BitSet, which lacks a fast `length` method.
-union!(s::BitSet, itr) = foldl(push!, itr; init=s)
+function union!(s::BitSet, itr)
+    for x in itr
+        push!(s, x)
+    end
+    return s
+end
 
 @inline intoffset(s::BitSet) = s.offset << 6
 
@@ -274,7 +279,12 @@ intersect!(s1::BitSet, s2::BitSet) = _matched_map!(&, s1, s2)
 
 setdiff!(s1::BitSet, s2::BitSet) = _matched_map!((p, q) -> p & ~q, s1, s2)
 
-symdiff!(s::BitSet, ns) = foldl(int_symdiff!, ns; init=s)
+function symdiff!(s::BitSet, ns)
+    for x in ns
+        int_symdiff!(s, x)
+    end
+    return s
+end
 
 function int_symdiff!(s::BitSet, n::Integer)
     n0 = _check_bitset_bounds(n)
