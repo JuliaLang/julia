@@ -2057,124 +2057,51 @@ push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
-## hashing collections ##
+## hashing AbstractArray ##
 
-const hashaa_seed = UInt === UInt64 ? 0x7f53e68ceb575e76 : 0xeb575e76
-const hashrle_seed = UInt === UInt64 ? 0x2aab8909bfea414c : 0xbfea414c
-const hashr_seed   = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087
+function hash(A::AbstractArray, h::UInt)
+    h = hash(AbstractArray, h)
+    # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
+    # Instead hash the tuple of firsts and lasts along each dimension
+    h = hash(map(first, axes(A)), h)
+    h = hash(map(last, axes(A)), h)
+    isempty(A) && return h
 
-# Efficient O(1) method equivalent to the O(N) AbstractArray fallback,
-# which works only for ranges with regular step (RangeStepRegular)
-function hash_range(r::AbstractRange, h::UInt)
-    h += hashaa_seed
-    h += hash(size(r))
+    # Now work backwards and hash (up to) three distinct key-value pairs
+    # Working backwards introduces an asymmetry with isequal; in many cases
+    # arrays that hash equally will be compared via isequal, which iteratively
+    # works forwards and _short-circuits_. Therefore the elements at the
+    # beginning of the array are not as valuable to include in the hash computation
+    # as they are "cheaper" to compare within `isequal`.
+    # A small number of distinct elements are included in the hashing algorithm
+    # in order to emphasize distinctions between arrays that are nearly all the
+    # same constant value but have a handful of differences the O(log(n)) skipping
+    # algorithm might miss (in particular, this includes sparse matrices).
+    I = keys(A)
+    i = last(I)
+    v1 = A[i]
+    h = hash(i=>v1, h)
+    i = findprev(x->!isequal(x, v1), A, i)
+    i === nothing && return h
+    v2 = A[i]
+    h = hash(i=>v2, h)
+    i = findprev(x->!isequal(x, v1) && !isequal(x, v2), A, i)
+    i === nothing && return h
+    h = hash(i=>A[i], h)
 
-    length(r) == 0 && return h
-    h = hash(first(r), h)
-    length(r) == 1 && return h
-    length(r) == 2 && return hash(last(r), h)
-
-    h += hashr_seed
-    h = hash(length(r), h)
-    h = hash(last(r), h)
-end
-
-function hash(a::AbstractArray{T}, h::UInt) where T
-    # O(1) hashing for types with regular step
-    if isa(a, AbstractRange) && isa(RangeStepStyle(a), RangeStepRegular)
-        return hash_range(a, h)
+    # Now launch into an ~O(log(n)) hashing of values, continuing from the
+    # last-found distinct index. The Fibonacci series is used here to avoid
+    # repeating common divisors and potentially only including a single slice
+    # of an array (as might be the case with powers of two and a matrix with
+    # an evenly divisible size).
+    J = vec(I) # Reshape the (potentially cartesian) keys to more efficiently compute the linear skips
+    j = LinearIndices(I)[i]
+    fibskip = prevfibskip = 1
+    while j > fibskip
+        j -= fibskip
+        h = hash(A[J[j]], h)
+        fibskip, prevfibskip = fibskip + prevfibskip, fibskip
     end
 
-    h += hashaa_seed
-    h += hash(size(a))
-
-    y1 = iterate(a)
-    y1 === nothing && return h
-    y2 = iterate(a, y1[2])
-    y2 === nothing && return hash(y1[1], h)
-    y = iterate(a, y2[2])
-    y === nothing && return hash(y2[1], hash(y1[1], h))
-    x1, x2 = y1[1], y2[1]
-
-    # For the rest of the function, we keep three elements worth of state,
-    # x1, x2, y[1], with `y` potentially being `nothing` if there's only
-    # two elements remaining
-
-    # Check whether the array is equal to a range, and hash the elements
-    # at the beginning of the array as such as long as they match this assumption
-    # This needs to be done even for non-RangeStepRegular types since they may still be equal
-    # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
-    if isa(a, AbstractVector) && applicable(-, x2, x1)
-        n = 1
-        local step, laststep, laststate
-
-        h = hash(x1, h)
-        h += hashr_seed
-
-        while true
-            # If overflow happens with entries of the same type, a cannot be equal
-            # to a range with more than two elements because more extreme values
-            # cannot be represented. We must still hash the two first values as a
-            # range since they can always be considered as such (in a wider type)
-            if isconcretetype(T)
-                try
-                    step = x2 - x1
-                catch err
-                    isa(err, OverflowError) || rethrow(err)
-                    break
-                end
-                # If true, wraparound overflow happened
-                sign(step) == cmp(x2, x1) || break
-            else
-                applicable(-, x2, x1) || break
-                # widen() is here to ensure no overflow can happen
-                step = widen(x2) - widen(x1)
-            end
-            n > 1 && !isequal(step, laststep) && break
-            n += 1
-            laststep = step
-            if y === nothing
-                # The array matches a range exactly
-                return hash(x2, hash(n, h))
-            end
-            x1, x2 = x2, y[1]
-            y = iterate(a, y[2])
-        end
-
-        # Always hash at least the two first elements as a range (even in case of overflow)
-        if n < 2
-            h = hash(2, h)
-            h = hash(y2[1], h)
-            @assert y !== nothing
-            x1, x2 = x2, y[1]
-            y = iterate(a, y[2])
-        else
-            h = hash(n, h)
-            h = hash(x1, h)
-        end
-    end
-
-    # Hash elements which do not correspond to a range
-    while true
-        if isequal(x2, x1)
-            # For repeated elements, use run length encoding
-            # This allows efficient hashing of sparse arrays
-            runlength = 2
-            while y !== nothing
-                # No need to update x1 (it's isequal x2)
-                x2 = y[1]
-                y = iterate(a, y[2])
-                isequal(x1, x2) || break
-                runlength += 1
-            end
-            h += hashrle_seed
-            h = hash(runlength, h)
-        end
-        h = hash(x1, h)
-        y === nothing && break
-        x1, x2 = x2, y[1]
-        y = iterate(a, y[2])
-    end
-    !isequal(x2, x1) && (h = hash(x2, h))
     return h
 end
