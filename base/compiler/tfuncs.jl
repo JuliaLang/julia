@@ -616,7 +616,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             return rewrap_unionall(unwrapva(s.types[1]), s00)
         end
         # union together types of all fields
-        return reduce(tmerge, map(t -> rewrap_unionall(unwrapva(t), s00), s.types); init=Bottom)
+        return tmerge_all(map(@nospecialize(t) -> rewrap_unionall(unwrapva(t), s00), s.types))
     end
     fld = name.val
     if isa(fld,Symbol)
@@ -688,8 +688,7 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
         if !(Int <: name || Symbol <: name)
             return Bottom
         end
-        return reduce(tmerge, Any[ fieldtype_tfunc(s0, Const(i)) for i = 1:length(ftypes) ];
-                      init=Bottom)
+        return tmerge_all(Any[ fieldtype_tfunc(s0, Const(i)) for i = 1:length(ftypes) ])
     end
 
     fld = name.val
@@ -990,7 +989,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
         return Any
     end
     if isa(f, IntrinsicFunction)
-        if is_pure_intrinsic_infer(f) && all(a -> isa(a, Const), argtypes)
+        if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(a -> a.val, argtypes)
             try
                 return Const(f(argvals...))
