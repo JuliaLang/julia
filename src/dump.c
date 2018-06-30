@@ -1043,20 +1043,18 @@ static void jl_collect_lambdas_from_mod(jl_array_t *s, jl_module_t *m)
 }
 
 // flatten the backedge map reachable from caller into callees
-static void jl_collect_backedges_to(jl_method_instance_t *caller, jl_array_t *direct_callees, arraylist_t *to_restore)
+static void jl_collect_backedges_to(jl_method_instance_t *caller, htable_t *all_callees)
 {
     jl_array_t **pcallees = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
                 *callees = *pcallees;
     if (callees != HT_NOTFOUND) {
-        arraylist_push(to_restore, (void*)callees);
-        arraylist_push(to_restore, (void*)pcallees);
         *pcallees = (jl_array_t*) HT_NOTFOUND;
-        jl_array_ptr_1d_append(direct_callees, callees);
         size_t i, l = jl_array_len(callees);
         for (i = 0; i < l; i++) {
             jl_value_t *c = jl_array_ptr_ref(callees, i);
+            ptrhash_put(all_callees, c, c);
             if (jl_is_method_instance(c)) {
-                jl_collect_backedges_to((jl_method_instance_t*)c, direct_callees, to_restore);
+                jl_collect_backedges_to((jl_method_instance_t*)c, all_callees);
             }
         }
     }
@@ -1064,29 +1062,35 @@ static void jl_collect_backedges_to(jl_method_instance_t *caller, jl_array_t *di
 
 static void jl_collect_backedges(jl_array_t *s)
 {
-    arraylist_t to_restore;
-    arraylist_new(&to_restore, 0);
+    htable_t all_callees;
+    htable_new(&all_callees, 0);
     size_t i;
     void **table = edges_map.table;
     for (i = 0; i < edges_map.size; i += 2) {
         jl_method_instance_t *caller = (jl_method_instance_t*)table[i];
         jl_array_t *callees = (jl_array_t*)table[i + 1];
         if (callees != HT_NOTFOUND && module_in_worklist(caller->def.method->module)) {
-            size_t i, l = jl_array_len(callees); // length may change during iteration
-            for (i = 0; i < l; i++) {           // only consider the initial list
+            size_t i, l = jl_array_len(callees);
+            for (i = 0; i < l; i++) {
                 jl_value_t *c = jl_array_ptr_ref(callees, i);
+                ptrhash_put(&all_callees, c, c);
                 if (jl_is_method_instance(c)) {
-                    jl_collect_backedges_to((jl_method_instance_t*)c, callees, &to_restore);
+                    jl_collect_backedges_to((jl_method_instance_t*)c, &all_callees);
                 }
             }
+            jl_array_del_end(callees, l);
+            void **pc = all_callees.table;
+            size_t j;
+            for(j = 0; j < all_callees.size; j += 2) {
+                if (pc[j+1] != HT_NOTFOUND)
+                    jl_array_ptr_1d_push(callees, (jl_value_t*)pc[j]);
+            }
+            htable_reset(&all_callees, 100);
             jl_array_ptr_1d_push(s, (jl_value_t*)caller);
             jl_array_ptr_1d_push(s, (jl_value_t*)callees);
-            while (to_restore.len) {
-                void **pp = (void**)arraylist_pop(&to_restore);
-                *pp = arraylist_pop(&to_restore);
-            }
         }
     }
+    htable_free(&all_callees);
 }
 
 // serialize information about all loaded modules
