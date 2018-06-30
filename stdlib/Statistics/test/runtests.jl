@@ -40,7 +40,17 @@ end
     @test isnan(median([NaN]))
     @test isnan(median([0.0,NaN]))
     @test isnan(median([NaN,0.0]))
+    @test isnan(median([NaN,0.0,1.0]))
+    @test isnan(median(Any[NaN,0.0,1.0]))
     @test isequal(median([NaN 0.0; 1.2 4.5], dims=2), reshape([NaN; 2.85], 2, 1))
+
+    @test ismissing(median([1, missing]))
+    @test ismissing(median([1, 2, missing]))
+    @test ismissing(median([NaN, 2.0, missing]))
+    @test ismissing(median([NaN, missing]))
+    @test ismissing(median([missing, NaN]))
+    @test ismissing(median(Any[missing, 2.0, 3.0, 4.0, NaN]))
+    @test median(skipmissing([1, missing, 2])) === 1.5
 
     @test median!([1 2 3 4]) == 2.5
     @test median!([1 2; 3 4]) == 2.5
@@ -69,6 +79,12 @@ end
     @test isnan(mean([1.,-1.,Inf,-Inf]))
     @test isnan(mean([-Inf,Inf]))
     @test isequal(mean([NaN 0.0; 1.2 4.5], dims=2), reshape([NaN; 2.85], 2, 1))
+
+    @test ismissing(mean([1, missing]))
+    @test ismissing(mean([NaN, missing]))
+    @test ismissing(mean([missing, NaN]))
+    @test isequal(mean([missing 1.0; 2.0 3.0], dims=1), [missing 2.0])
+    @test mean(skipmissing([1, missing, 2])) === 1.5
 
     # Check that small types are accumulated using wider type
     for T in (Int8, UInt8)
@@ -207,6 +223,24 @@ end
 
     # issue #6672
     @test std(AbstractFloat[1,2,3], dims=1) == [1.0]
+
+    for f in (var, std)
+        @test ismissing(f([1, missing]))
+        @test ismissing(f([NaN, missing]))
+        @test ismissing(f([missing, NaN]))
+        @test isequal(f([missing 1.0; 2.0 3.0], dims=1), [missing f([1.0, 3.0])])
+        @test f(skipmissing([1, missing, 2])) === f([1, 2])
+    end
+    for f in (varm, stdm)
+        @test ismissing(f([1, missing], 0))
+        @test ismissing(f([1, 2], missing))
+        @test ismissing(f([1, NaN], missing))
+        @test ismissing(f([NaN, missing], 0))
+        @test ismissing(f([missing, NaN], 0))
+        @test ismissing(f([NaN, missing], missing))
+        @test ismissing(f([missing, NaN], missing))
+        @test f(skipmissing([1, missing, 2]), 0) === f([1, 2], 0)
+    end
 end
 
 function safe_cov(x, y, zm::Bool, cr::Bool)
@@ -398,6 +432,10 @@ end
     @test quantile([1, 2, 3, 4], (0.5,)) == (2.5,)
     @test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11], (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
     @test quantile([1, 2, 3, 4], ()) == ()
+
+    @test_throws ArgumentError quantile([1, missing], 0.5)
+    @test_throws ArgumentError quantile([1, NaN], 0.5)
+    @test quantile(skipmissing([1, missing, 2]), 0.5) === 1.5
 end
 
 # StatsBase issue 164

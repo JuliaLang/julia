@@ -20,7 +20,7 @@ export cor, cov, std, stdm, var, varm, mean!, mean,
 Compute the mean of all elements in a collection.
 
 !!! note
-    If array contains `NaN` or [`missing`](@ref) values, the result is also
+    If `itr` contains `NaN` or [`missing`](@ref) values, the result is also
     `NaN` or `missing` (`missing` takes precedence if array contains both).
     Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
     mean of non-missing values.
@@ -249,8 +249,10 @@ optionally over the given dimensions. `m` may contain means for each dimension o
 whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
-    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
+    If array contains `NaN` or [`missing`](@ref) values, the result is also
+    `NaN` or `missing` (`missing` takes precedence if array contains both).
+    Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
+    variance of non-missing values.
 """
 varm(A::AbstractArray, m::AbstractArray; corrected::Bool=true, dims=:) = _varm(A, m, corrected, dims)
 
@@ -278,8 +280,10 @@ whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x
 The mean `mean` over the region may be provided.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
-    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
+    If array contains `NaN` or [`missing`](@ref) values, the result is also
+    `NaN` or `missing` (`missing` takes precedence if array contains both).
+    Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
+    variance of non-missing values.
 """
 var(A::AbstractArray; corrected::Bool=true, mean=nothing, dims=:) = _var(A, corrected, mean, dims)
 
@@ -342,8 +346,10 @@ then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `correc
 `false` where `n = length(x)`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
-    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
+    If array contains `NaN` or [`missing`](@ref) values, the result is also
+    `NaN` or `missing` (`missing` takes precedence if array contains both).
+    Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
+    standard deviation of non-missing values.
 """
 std(A::AbstractArray; corrected::Bool=true, mean=nothing, dims=:) = _std(A, corrected, mean, dims)
 
@@ -371,8 +377,10 @@ then the sum is scaled with `n-1`, whereas the sum is
 scaled with `n` if `corrected` is `false` where `n = length(x)`.
 
 !!! note
-    Julia does not ignore `NaN` values in the computation. Use the [`missing`](@ref) type
-    to represent missing values, and the [`skipmissing`](@ref) function to omit them.
+    If array contains `NaN` or [`missing`](@ref) values, the result is also
+    `NaN` or `missing` (`missing` takes precedence if array contains both).
+    Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
+    standard deviation of non-missing values.
 """
 stdm(iterable, m; corrected::Bool=true) =
     std(iterable, corrected=corrected, mean=m)
@@ -868,7 +876,7 @@ for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman
 (1996), and is the same as the R default.
 
 !!! note
-    An `ArgumentError` is thrown if collection contains `NaN` or [`missing`](@ref) values.
+    An `ArgumentError` is thrown if `itr` contains `NaN` or [`missing`](@ref) values.
     Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
     quantiles of non-missing values.
 
