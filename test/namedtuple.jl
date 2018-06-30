@@ -206,6 +206,7 @@ abstr_nt_22194_3()
 @test delete((a=1, b=2), :z) == (a=1, b=2)
 @test delete((a=1, b=2, z=20), :b, :z) == (a=1,)
 @test delete((a=1, b=2, z=20), :b, :q, :z) == NamedTuple()
+@test delete((a=1, b=2)) == (a=1, b=2)
 
 @test Base.structdiff((a=1, b=2), (b=3,)) == (a=1,)
 @test Base.structdiff((a=1, b=2, z=20), (b=3,)) == (a=1, z=20)
