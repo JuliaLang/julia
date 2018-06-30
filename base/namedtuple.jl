@@ -281,7 +281,7 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) 
 end
 
 """
-    delete(a::NamedTuple, symbol[s])
+    delete(a::NamedTuple, symbol(s))
 
 Construct a new named tuple from `a` by removing the named field[s].
 
@@ -293,8 +293,8 @@ julia> delete((a=1, b=2, c=3), :a, :b)
 (c = 3)
 ```
 """
-function delete(a::NamedTuple{an), fieldnames...) where {an}
-    names = diff_names(an, fieldnames)
+function delete(a::NamedTuple{an), fields::Symbol...) where {an}
+    names = diff_names(an, fields)
     NamedTuple{names}(a)
 end
 
