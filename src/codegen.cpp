@@ -3928,8 +3928,14 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         return emit_isdefined(ctx, args[0]);
     }
     else if (head == throw_undef_if_not_sym) {
-        Value *cond = emit_unbox(ctx, T_int8, emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type);
-        undef_var_error_ifnot(ctx, ctx.builder.CreateTrunc(cond, T_int1), (jl_sym_t*)args[0]);
+        jl_sym_t *var = (jl_sym_t*)args[0];
+        Value *cond = ctx.builder.CreateTrunc(emit_unbox(ctx, T_int8, emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type), T_int1);
+        if (var == getfield_undefref_sym) {
+            raise_exception_unless(ctx, cond,
+                literal_pointer_val(ctx, jl_undefref_exception));
+        } else {
+            undef_var_error_ifnot(ctx, cond, var);
+        }
         return ghostValue(jl_void_type);
     }
     else if (head == invoke_sym) {

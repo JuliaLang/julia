@@ -5,8 +5,8 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
-showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
+replstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), MIME("text/plain"), x), x)
+showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), x), x)
 
 @testset "IOContext" begin
     io = IOBuffer()
@@ -1018,6 +1018,25 @@ end
         "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
 end
 
+@testset "arrays printing follows the :compact property when specified" begin
+    x = 3.141592653589793
+    @test showstr(x) == "3.141592653589793"
+    @test showstr([x, x]) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
+    @test showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
+    @test showstr([x x; x x]) == showstr([x x; x x], :compact => true) ==
+        "[3.14159 3.14159; 3.14159 3.14159]"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
+    @test replstr([x, x]) == replstr([x, x], :compact => false) ==
+        "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
+    @test replstr([x, x], :compact => true) ==
+        "2-element Array{Float64,1}:\n 3.14159\n 3.14159"
+    @test replstr([x x; x x]) == replstr([x x; x x], :compact => true) ==
+        "2×2 Array{Float64,2}:\n 3.14159  3.14159\n 3.14159  3.14159"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
+end
+
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
@@ -1250,11 +1269,11 @@ h_line() = f_line()
     ││╻  g_line""")
 
 # issue #27352
-@test_throws MethodError print(nothing)
-@test_throws MethodError print(stdout, nothing)
-@test_throws MethodError string(nothing)
-@test_throws MethodError string(1, "", nothing)
-@test_throws MethodError let x = nothing; "x = $x" end
+@test_throws ArgumentError print(nothing)
+@test_throws ArgumentError print(stdout, nothing)
+@test_throws ArgumentError string(nothing)
+@test_throws ArgumentError string(1, "", nothing)
+@test_throws ArgumentError let x = nothing; "x = $x" end
 @test let x = nothing; "x = $(repr(x))" end == "x = nothing"
-@test_throws MethodError `/bin/foo $nothing`
-@test_throws MethodError `$nothing`
+@test_throws ArgumentError `/bin/foo $nothing`
+@test_throws ArgumentError `$nothing`

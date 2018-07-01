@@ -20,6 +20,13 @@ function _any(@nospecialize(f), a)
     return false
 end
 
+function _all(@nospecialize(f), a)
+    for x in a
+        f(x) || return false
+    end
+    return true
+end
+
 function contains_is(itr, @nospecialize(x))
     for y in itr
         if y === x

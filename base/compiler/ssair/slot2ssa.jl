@@ -423,7 +423,12 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     end
     bb_rename = IdDict{Int,Int}(i=>x for (x, i) in pairs(result_order) if i !== 0)
     new_bbs = Vector{BasicBlock}(undef, length(result_order))
-    nstmts = sum(length(ir.cfg.blocks[i].stmts) for i in result_order if i !== 0)
+    nstmts = 0
+    for i in result_order
+        if i !== 0
+            nstmts += length(ir.cfg.blocks[i].stmts)
+        end
+    end
     result_stmts = Vector{Any}(undef, nstmts + ncritbreaks + nnewfallthroughs)
     result_types = Any[Any for i = 1:length(result_stmts)]
     result_ltable = fill(Int32(0), length(result_stmts))

@@ -11,6 +11,7 @@ struct JLOptions
     cpu_target::Ptr{UInt8}
     nprocs::Int32
     machine_file::Ptr{UInt8}
+    project::Ptr{UInt8}
     isinteractive::Int8
     color::Int8
     historyfile::Int8

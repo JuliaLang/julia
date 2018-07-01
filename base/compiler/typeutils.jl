@@ -26,7 +26,7 @@ function issingletontype(@nospecialize t)
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return all(@nospecialize(p) -> issingletontype(p), t.parameters)
+        return _all(issingletontype, t.parameters)
     end
     return false
 end
@@ -85,7 +85,11 @@ _typename(a::DataType) = Const(a.name)
 function tuple_tail_elem(@nospecialize(init), ct)
     # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
     tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
-    return Vararg{widenconst(foldl(tmerge_maybe_vararg, ct; init=init))}
+    t = init
+    for x in ct
+        t = tmerge_maybe_vararg(t, x)
+    end
+    return Vararg{widenconst(t)}
 end
 
 function countunionsplit(atypes)

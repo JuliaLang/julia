@@ -145,47 +145,6 @@ function version_slug(uuid::UUID, sha1::SHA1, p::Int=4)
     return slug(crc, p)
 end
 
-## load path expansion: turn LOAD_PATH entries into concrete paths ##
-
-function load_path_expand(env::AbstractString)::Union{String, Nothing}
-    # named environment?
-    if startswith(env, '@')
-        # `@` in JULIA_LOAD_PATH is expanded early (at startup time)
-        # if you put a `@` in LOAD_PATH manually, it's expanded late
-        (env == "@" || env == "@@") && return current_env()
-        env == "@stdlib" && return Sys.STDLIB
-        env = replace(env, '#' => VERSION.major, count=1)
-        env = replace(env, '#' => VERSION.minor, count=1)
-        env = replace(env, '#' => VERSION.patch, count=1)
-        name = env[2:end]
-        # look for named env in each depot
-        for depot in DEPOT_PATH
-            path = joinpath(depot, "environments", name)
-            isdir(path) || continue
-            for proj in project_names
-                file = abspath(path, proj)
-                isfile_casesensitive(file) && return file
-            end
-            return path
-        end
-        isempty(DEPOT_PATH) && return nothing
-        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
-    end
-    # otherwise, it's a path
-    path = abspath(env)
-    if isdir(path)
-        # directory with a project file?
-        for proj in project_names
-            file = joinpath(path, proj)
-            isfile_casesensitive(file) && return file
-        end
-    end
-    # package dir or path to project file
-    return path
-end
-
-load_path() = String[env for env in map(load_path_expand, LOAD_PATH) if env ≠ nothing]
-
 ## package identification: determine unique identity of package to be loaded ##
 
 find_package(args...) = locate_package(identify_package(args...))

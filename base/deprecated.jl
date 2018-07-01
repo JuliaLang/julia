@@ -1367,9 +1367,9 @@ export readandwrite
 @deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
 
 @deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
-@deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, v0, A, dims=dims)
+@deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, A, init=v0, dims=dims)
 @deprecate reducedim(op, A::AbstractArray, dims)           reduce(op, A, dims=dims)
-@deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, v0, A, dims=dims)
+@deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, A, init=v0, dims=dims)
 @deprecate mapslices(op, A::AbstractArray, dims)           mapslices(op, A, dims=dims)
 
 @deprecate sort(A::AbstractArray, dim::Integer; kwargs...) sort(A; kwargs..., dims=dim)
@@ -1716,10 +1716,26 @@ end
 @deprecate_moved svds "Arpack"
 
 # PR #27711
-@deprecate reduce(op, v0, itr) reduce(op, itr; init=v0)
+function reduce(op, v0, itr; dims=nothing)
+    if dims === nothing
+        depwarn("`reduce(op, v0, itr)` is deprecated, use `reduce(op, itr; init=v0)` instead", :reduce)
+        return reduce(op, itr, init=v0)
+    else # deprecate the old deprecation
+        depwarn("`reduce(op, v0, itr; dims=dims)` is deprecated, use `reduce(op, itr; init=v0, dims=dims)` instead", :reduce)
+        return reduce(op, itr; init=v0, dims=dims)
+    end
+end
 @deprecate foldl(op, v0, itr) foldl(op, itr; init=v0)
 @deprecate foldr(op, v0, itr) foldr(op, itr; init=v0)
-@deprecate mapreduce(f, op, v0, itr) mapreduce(f, op, itr; init=v0)
+function mapreduce(f, op, v0, itr; dims=nothing)
+    if dims === nothing
+        depwarn("`mapreduce(f, op, v0, itr)` is deprecated, use `mapreduce(f, op, itr; init=v0)` instead", :mapreduce)
+        return mapreduce(f, op, itr; init=v0)
+    else # deprecate the old deprecation
+        depwarn("`mapreduce(f, op, v0, itr; dims=dims)` is deprecated, use `mapreduce(f, op, itr; init=v0, dims=dims)` intead", :mapreduce)
+        return mapreduce(f, op, itr; init=v0, dims=dims)
+    end
+end
 @deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
 @deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
 

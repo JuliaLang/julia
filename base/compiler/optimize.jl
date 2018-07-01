@@ -143,7 +143,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
-    force_noinline = any(x -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
+    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
     replace_code_newstyle!(opt.src, ir, nargs)
 
     # compute inlining and other related optimizations
