@@ -990,8 +990,8 @@ end
     @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
         "2-element Array{Any,1}:\n Dict(1=>2) => (3=>4)\n          1 => 2     "
     # left-alignment when not using the "=>" symbol
-    @test replstr(Pair{Integer,Int64}[1=>2, 33=>4]) ==
-        "2-element Array{Pair{Integer,Int64},1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
+    @test replstr(Any[Pair{Integer,Int64}(1, 2), Pair{Integer,Int64}(33, 4)]) ==
+        "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
 end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
@@ -1197,6 +1197,9 @@ end
     @test showstr([keys(Dict('a' => 'b'))]) == "Base.KeySet{Char,Dict{Char,Char}}[['a']]"
     @test showstr([values(Dict('a' => 'b'))]) == "Base.ValueIterator{Dict{Char,Char}}[['b']]"
     @test replstr([keys(Dict('a' => 'b'))]) == "1-element Array{Base.KeySet{Char,Dict{Char,Char}},1}:\n ['a']"
+
+    @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
+    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1=>2]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
