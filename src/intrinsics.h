@@ -91,6 +91,8 @@
     /*  pointer access */ \
     ADD_I(pointerref, 3) \
     ADD_I(pointerset, 4) \
+    ADD_I(tbaa_pointerref, 4) \
+    ADD_I(tbaa_pointerset, 5) \
     /* c interface */ \
     ADD_I(cglobal, 2) \
     ALIAS(llvmcall, llvmcall) \

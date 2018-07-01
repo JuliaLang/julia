@@ -317,22 +317,26 @@ add_tfunc(Core._expr, 1, INT_INF, (args...)->Expr, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, x->Int, 4)
 add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
-add_tfunc(pointerref, 3, 3,
-          function (@nospecialize(a), @nospecialize(i), @nospecialize(align))
-              a = widenconst(a)
-              if a <: Ptr
-                  if isa(a,DataType) && isa(a.parameters[1],Type)
-                      return a.parameters[1]
-                  elseif isa(a,UnionAll) && !has_free_typevars(a)
-                      unw = unwrap_unionall(a)
-                      if isa(unw,DataType)
-                          return rewrap_unionall(unw.parameters[1], a)
-                      end
-                  end
-              end
-              return Any
-          end, 4)
+function pointerref_tfunc(@nospecialize(a), @nospecialize(i), @nospecialize(align))
+    a = widenconst(a)
+    if a <: Ptr
+        if isa(a,DataType) && isa(a.parameters[1],Type)
+            return a.parameters[1]
+        elseif isa(a,UnionAll) && !has_free_typevars(a)
+            unw = unwrap_unionall(a)
+            if isa(unw,DataType)
+                return rewrap_unionall(unw.parameters[1], a)
+            end
+        end
+    end
+    return Any
+end
+add_tfunc(pointerref, 3, 3, pointerref_tfunc, 4)
+add_tfunc(tbaa_pointerref, 4, 4, function (@nospecialize(t), @nospecialize(a), @nospecialize(i), @nospecialize(align))
+    pointerref_tfunc(a, i, align)
+end, 4)
 add_tfunc(pointerset, 4, 4, (@nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
+add_tfunc(tbaa_pointerset, 5, 5, (@nospecialize(t), @nospecialize(a), @nospecialize(v), @nospecialize(i), @nospecialize(align)) -> a, 5)
 
 function typeof_tfunc(@nospecialize(t))
     if isa(t, Const)
