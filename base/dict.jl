@@ -22,35 +22,26 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
 end
 
 function show(io::IO, t::AbstractDict{K,V}) where V where K
-    recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = get(io, :limit, false)
-    if !haskey(io, :compact)
-        recur_io = IOContext(recur_io, :compact => true)
-    end
+    recur_io = IOContext(io, :SHOWN_SET => t,
+                             :typeinfo => eltype(t),
+                             :compact => get(io, :compact, true))
 
+    limit::Bool = get(io, :limit, false)
     # show in a Julia-syntax-like form: Dict(k=>v, ...)
-    if isempty(t)
-        print(io, typeof(t), "()")
-    else
-        if isconcretetype(K) && isconcretetype(V)
-            print(io, typeof(t).name)
-        else
-            print(io, typeof(t))
+    print(io, typeinfo_prefix(io, t))
+    print(io, '(')
+    if !isempty(t) && !show_circular(io, t)
+        first = true
+        n = 0
+        for pair in t
+            first || print(io, ',')
+            first = false
+            show(recur_io, pair)
+            n+=1
+            limit && n >= 10 && (print(io, "…"); break)
         end
-        print(io, '(')
-        if !show_circular(io, t)
-            first = true
-            n = 0
-            for pair in t
-                first || print(io, ',')
-                first = false
-                show(recur_io, pair)
-                n+=1
-                limit && n >= 10 && (print(io, "…"); break)
-            end
-        end
-        print(io, ')')
     end
+    print(io, ')')
 end
 
 # Dict
