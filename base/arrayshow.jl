@@ -416,7 +416,7 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 function show(io::IO, X::AbstractArray)
     ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
-    io = IOContext(io, :typeinfo => eltype(X), :compact => true)
+    io = IOContext(io, :typeinfo => eltype(X), :compact => get(io, :compact, true))
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
@@ -430,7 +430,7 @@ end
 function show_vector(io::IO, v, opn='[', cls=']')
     print(io, typeinfo_prefix(io, v))
     # directly or indirectly, the context now knows about eltype(v)
-    io = IOContext(io, :typeinfo => eltype(v), :compact => true)
+    io = IOContext(io, :typeinfo => eltype(v), :compact => get(io, :compact, true))
     limited = get(io, :limit, false)
     if limited && _length(v) > 20
         inds = indices1(v)
