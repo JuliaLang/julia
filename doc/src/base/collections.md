@@ -89,8 +89,7 @@ Base.maximum
 Base.maximum!
 Base.minimum
 Base.minimum!
-Base.extrema(::Any)
-Base.extrema(::AbstractArray, ::Any)
+Base.extrema
 Base.argmax
 Base.argmin
 Base.findmax

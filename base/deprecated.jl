@@ -1365,6 +1365,7 @@ export readandwrite
 @deprecate any(f, a::AbstractArray, dims)     any(f, a, dims=dims)
 @deprecate findmax(A::AbstractArray, dims)    findmax(A, dims=dims)
 @deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
+@deprecate extrema(A::AbstractArray, dims)    extrema(A, dims=dims)
 
 @deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
 @deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, A, init=v0, dims=dims)

@@ -519,7 +519,9 @@ julia> extrema([9,pi,4.5])
 (3.141592653589793, 9.0)
 ```
 """
-function extrema(itr)
+extrema(itr) = _extrema_itr(itr)
+
+function _extrema_itr(itr)
     y = iterate(itr)
     y === nothing && throw(ArgumentError("collection must be non-empty"))
     (v, s) = y
