@@ -314,7 +314,7 @@ end
 
 function Base.propertynames(F::QRSparse, private::Bool=false)
     public = (:R, :Q, :prow, :pcol)
-    (public..., (private ? setdiff(fieldnames(typeof(F)), public) : ())...)
+    private ? ((public ∪ fieldnames(typeof(F)))...,) : public
 end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::QRSparse)
