@@ -1716,7 +1716,7 @@ end
 @deprecate_moved svds "Arpack"
 
 # PR #27711
-function reduce(op, v0, itr::AbstractArray; dims=nothing)
+function reduce(op, v0, itr; dims=nothing)
     if dims === nothing
         depwarn("`reduce(op, v0, itr)` is deprecated, use `reduce(op, itr; init=v0)` instead", :reduce)
         return reduce(op, itr, init=v0)
@@ -1727,7 +1727,7 @@ function reduce(op, v0, itr::AbstractArray; dims=nothing)
 end
 @deprecate foldl(op, v0, itr) foldl(op, itr; init=v0)
 @deprecate foldr(op, v0, itr) foldr(op, itr; init=v0)
-function mapreduce(f, op, v0, itr::AbstractArray; dims=nothing)
+function mapreduce(f, op, v0, itr; dims=nothing)
     if dims === nothing
         depwarn("`mapreduce(f, op, v0, itr)` is deprecated, use `mapreduce(f, op, itr; init=v0)` instead", :mapreduce)
         return mapreduce(f, op, itr; init=v0)
