@@ -1062,16 +1062,23 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
 {
     jl_value_t *intersected_type = type;
 
-    // TODO: The commented-out part of this optimization suffers from incorrectness issues
-    // due to broken subtyping for kind types (see
+    Optional<bool> known_isa;
+    if (x.constant) {
+        known_isa = jl_isa(x.constant, type);
+    } else {
+        intersected_type = jl_type_intersection(x.typ, type);
+        if (intersected_type == (jl_value_t*)jl_bottom_type)
+            known_isa = false;
+    }
+
+    // TODO: This commented-out version of the above check suffers from incorrectness
+    // issues due to broken subtyping for kind types (see
     // https://github.com/JuliaLang/julia/issues/27078). For actual `isa` calls, this
     // optimization should already have been performed upstream anyway, but having this
     // optimization in codegen might still be beneficial for `typeassert`s if we can make it
     // correct.
-    Optional<bool> known_isa;
-    if (x.constant) {
-        known_isa = jl_isa(x.constant, type);
-    }
+    // if (x.constant) {
+    //     known_isa = jl_isa(x.constant, type);
     // else if (jl_subtype(x.typ, type))
     //     known_isa = true;
     // else {
@@ -1079,6 +1086,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
     //     if (intersected_type == (jl_value_t*)jl_bottom_type)
     //         known_isa = false;
     // }
+
     if (known_isa) {
         if (!*known_isa && msg) {
             emit_type_error(ctx, x, literal_pointer_val(ctx, type), *msg);
