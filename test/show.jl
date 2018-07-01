@@ -1180,6 +1180,13 @@ end
               "Set(Tuple{Float64,Float64}[(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
               "Set(Tuple{Float64,Float64}[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
+    # issue #27747
+    let t = (x = Integer[1, 2],)
+        v = [t, t]
+        @test showstr(v) == "NamedTuple{(:x,),Tuple{Array{Integer,1}}}[(x = [1, 2],), (x = [1, 2],)]"
+        @test replstr(v) == "2-element Array{NamedTuple{(:x,),Tuple{Array{Integer,1}}},1}:\n (x = [1, 2],)\n (x = [1, 2],)"
+    end
+
     # issue #25857
     @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
 
