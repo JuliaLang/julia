@@ -1185,6 +1185,11 @@ end
 
     # issues #25466 & #26256
     @test replstr([:A => [1]]) == "1-element Array{Pair{Symbol,Array{$Int,1}},1}:\n :A => [1]"
+
+    # issue #26881
+    @test showstr([keys(Dict('a' => 'b'))]) == "Base.KeySet{Char,Dict{Char,Char}}[['a']]"
+    @test showstr([values(Dict('a' => 'b'))]) == "Base.ValueIterator{Dict{Char,Char}}[['b']]"
+    @test replstr([keys(Dict('a' => 'b'))]) == "1-element Array{Base.KeySet{Char,Dict{Char,Char}},1}:\n ['a']"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
