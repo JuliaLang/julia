@@ -329,7 +329,7 @@ What action you want the package manager to take:
 
 `instantiate`: downloads all the dependencies for the project
 
-`resolve`: resolves to update the manifest from changes in dependencis of
+`resolve`: resolves to update the manifest from changes in dependencies of
 developed packages
 
 `init`: initializes an environment in the current, or git base, directory
