@@ -529,6 +529,16 @@ end
 # normalization of paths by include (#26424)
 @test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
 
+old_act_proj = Base.ACTIVE_PROJECT[]
+pushfirst!(LOAD_PATH, "@")
+try
+    Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+    @eval using TestPkg
+finally
+    Base.ACTIVE_PROJECT[] = old_act_proj
+    popfirst!(LOAD_PATH)
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)
