@@ -190,7 +190,7 @@ targets2 = ["(1.0, 1.0)",
             "([1.0], [1.0])",
             "([1.0], [1.0])",
             "([1.0], [1.0])"]
-for n = 0:4
+@testset "printing of OffsetArray with n=$n" for n = 0:4
     a = OffsetArray(fill(1.,ntuple(d->1,n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
