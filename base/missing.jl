@@ -192,9 +192,6 @@ end
 # Optimized mapreduce implementation
 mapreduce(f, op, itr::SkipMissing{<:AbstractArray}) = _mapreduce(f, op, IndexStyle(itr.x), itr)
 
-"Sentinel indicating that no non-missing value was encountered."
-struct AllMissing end
-
 function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     A = itr.x
     local ai
@@ -215,11 +212,8 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
         i += 1
     end
     i > ilast && return mapreduce_first(f, op, a1)
-    # We know A contains at least two non-missing entries, therefore AllMissing() is not
-    # a possible return value: the check provides that information to inference
-    s = mapreduce_impl(f, op, itr, first(inds), last(inds))
-    s isa AllMissing && error("got AllMissing for an array with non-missing values")
-    return s
+    # We know A contains at least two non-missing entries: the result cannot be nothing
+    something(mapreduce_impl(f, op, itr, first(inds), last(inds)))
 end
 
 _mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapfoldl(f, op, itr)
@@ -227,15 +221,16 @@ _mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapfoldl(f, op, itr)
 mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
+# Returns nothing when the input contains only missing values, and Some(x) otherwise
 @noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
                                   ifirst::Integer, ilast::Integer, blksize::Int)
     A = itr.x
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         if a1 === missing
-            return AllMissing()
+            return nothing
         else
-            return mapreduce_first(f, op, a1)
+            return Some(mapreduce_first(f, op, a1))
         end
     elseif ifirst + blksize > ilast
         # sequential portion
@@ -246,7 +241,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
             ai === missing || break
             i += 1
         end
-        i > ilast && return AllMissing()
+        i > ilast && return nothing
         a1 = ai::eltype(itr)
         i += 1
         while i <= ilast
@@ -254,7 +249,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
             ai === missing || break
             i += 1
         end
-        i > ilast && return mapreduce_first(f, op, a1)
+        i > ilast && return Some(mapreduce_first(f, op, a1))
         a2 = ai::eltype(itr)
         # Unexpectedly, the following assertion allows SIMD instructions to be emitted
         A[i]::eltype(itr)
@@ -266,18 +261,20 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
                 v = op(v, f(ai))
             end
         end
-        return v
+        return Some(v)
     else
         # pairwise portion
         imid = (ifirst + ilast) >> 1
         v1 = mapreduce_impl(f, op, itr, ifirst, imid, blksize)
         v2 = mapreduce_impl(f, op, itr, imid+1, ilast, blksize)
-        if v1 isa AllMissing
+        if v1 === nothing && v2 === nothing
+            return nothing
+        elseif v1 === nothing
             return v2
-        elseif v2 isa AllMissing
+        elseif v2 === nothing
             return v1
         else
-            return op(v1, v2)
+            return Some(op(something(v1), something(v2)))
         end
     end
 end
