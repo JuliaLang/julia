@@ -187,6 +187,9 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     if method.file === DEPRECATED_SYM && method.sig == (Tuple{Type{T},Any} where T)
         return Any, false
     end
+    if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
+        return Any, false
+    end
     topmost = nothing
     # Limit argument type tuple growth of functions:
     # look through the parents list to see if there's a call to the same method
