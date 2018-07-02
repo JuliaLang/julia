@@ -268,7 +268,7 @@ run(pipeline(`update`, stdout="log.txt", append=true))
 """
 function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
     if append && stdout === nothing && stderr === nothing
-        error("append set to true, but no output redirections specified")
+        throw(ArgumentError("append set to true, but no output redirections specified"))
     end
     if stdin !== nothing
         cmd = redir_out(stdin, cmd)
@@ -381,7 +381,7 @@ const SpawnIOs = Vector{Any} # convenience name for readability
             h === C_NULL     ? (0x00, UInt(0)) :
             h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
             h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
-            error("invalid spawn handle $h from $io")
+            error("invalid spawn handle $h from $io") #TODO use a real error type here
         end
         for io in stdio]
     handle = Libc.malloc(_sizeof_uv_process)
@@ -783,9 +783,26 @@ An exception is raised if the process cannot be started.
 """
 success(cmd::AbstractCmd) = success(_spawn(cmd))
 
+struct ProcessExitedError
+    procs::Vector{Process}
+end
+ProcessExitedError(proc::Process) = ProcessExitedError([proc])
+
+function show(io::IO, err::ProcessExitedError)
+    if length(err.procs) == 1
+        proc = err.procs[1]
+        println(io, "failed process: ", proc, " [", proc.exitcode, "]")
+    else
+        println(io, "failed processes:")
+        for proc in err.procs
+            println(io, "  ", proc, " [", proc.exitcode, "]")
+        end
+    end
+end
+
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
-        error("failed process: ", proc, " [", proc.exitcode, "]")
+        throw(ProcessExitedError(proc))
     end
     nothing
 end
@@ -798,12 +815,7 @@ function pipeline_error(procs::ProcessChain)
         end
     end
     isempty(failed) && return nothing
-    length(failed) == 1 && pipeline_error(failed[1])
-    msg = "failed processes:"
-    for proc in failed
-        msg = string(msg, "\n  ", proc, " [", proc.exitcode, "]")
-    end
-    error(msg)
+    throw(ProcessExitedError(failed))
 end
 
 """

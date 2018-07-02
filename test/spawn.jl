@@ -421,9 +421,10 @@ end
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
 # issue #13616
+
 pcatcmd = `$catcmd _doesnt_exist__111_`
 let p = eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=devnull))
-    @test_throws(ErrorException("failed process: Process($pcatcmd, ProcessExited(1)) [1]"),
+    @test_throws(ProcessExitedError("failed process: Process($pcatcmd, ProcessExited(1)) [1]"),
                  collect(p))
 end
 
