@@ -900,7 +900,7 @@ end
 end
 
 @testset "Dict reduce merge" begin
-    f = (i::Vector{<:Dict}, o) -> begin
+    function f(i::Vector{<:Dict}, o)
         r1 = reduce(merge, i)
         r2 = merge(i...)
         t = typeof(o)
@@ -909,11 +909,11 @@ end
         @test typeof(r1) == t
         @test typeof(r2) == t
     end
-    f([Dict(1=>2), Dict(1.0=>2.0)], Dict(1.0=>2.0))
-    f([Dict(1=>2), Dict(2=>Complex(1.0, 1.0))],
+    check_merge([Dict(1=>2), Dict(1.0=>2.0)], Dict(1.0=>2.0))
+    check_merge([Dict(1=>2), Dict(2=>Complex(1.0, 1.0))],
       Dict(2=>Complex(1.0, 1.0), 1=>Complex(2.0, 0.0)))
-    f([Dict(1=>2), Dict(3=>4)], Dict(3=>4, 1=>2))
-    f([Dict(3=>4), Dict(:a=>5)], Dict(:a => 5, 3 => 4))
+    check_merge([Dict(1=>2), Dict(3=>4)], Dict(3=>4, 1=>2))
+    check_merge([Dict(3=>4), Dict(:a=>5)], Dict(:a => 5, 3 => 4))
 end
 
 @testset "misc error/io" begin
