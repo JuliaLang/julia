@@ -312,6 +312,11 @@ julia> F.pcol
     end
 end
 
+function Base.propertynames(F::QRSparse, private::Bool=false)
+    public = (:R, :Q, :prow, :pcol)
+    private ? ((public ∪ fieldnames(typeof(F)))...,) : public
+end
+
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::QRSparse)
     println(io, summary(F))
     println(io, "Q factor:")
