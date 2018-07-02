@@ -17,7 +17,7 @@ function temp_pkg_dir(fn::Function)
         Base.ACTIVE_PROJECT[] = nothing
         mktempdir() do env_dir
             mktempdir() do depot_dir
-                push!(LOAD_PATH, env_dir, "@v#.#", "@stdlib")
+                push!(LOAD_PATH, "@", "@v#.#", "@stdlib")
                 push!(DEPOT_PATH, depot_dir)
                 fn(env_dir)
             end

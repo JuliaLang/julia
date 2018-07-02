@@ -197,15 +197,6 @@ function parse_toml(path::String...; fakeit::Bool=false)
     !fakeit || isfile(p) ? TOML.parsefile(p) : Dict{String,Any}()
 end
 
-const project_names = ["JuliaProject.toml", "Project.toml"]
-const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
-const default_envs = [
-    "v$(VERSION.major).$(VERSION.minor).$(VERSION.patch)",
-    "v$(VERSION.major).$(VERSION.minor)",
-    "v$(VERSION.major)",
-    "default",
-]
-
 let trynames(names) = begin
     return root_path::AbstractString -> begin
         for x in names
@@ -216,8 +207,8 @@ let trynames(names) = begin
         end
     end
 end # trynames
-    global projectfile_path = trynames(project_names)
-    global manifestfile_path = trynames(manifest_names)
+    global projectfile_path = trynames(Base.project_names)
+    global manifestfile_path = trynames(Base.manifest_names)
 end # let
 
 mutable struct EnvCache

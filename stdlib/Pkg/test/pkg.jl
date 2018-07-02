@@ -315,23 +315,25 @@ temp_pkg_dir() do project_path
         end
 
         cd(project_path) do
-            pkg_name = "FooBar"
-            # create a project and grab its uuid
-            Pkg.generate(pkg_name)
-            uuid = extract_uuid(joinpath(pkg_name, "Project.toml"))
-            # activate project env
-            Pkg.activate(abspath(pkg_name))
-            # add an example project to populate manifest file
-            Pkg.add("Example")
-            Pkg.activate()
-            # change away from default names
-            mv(joinpath(pkg_name, "Project.toml"), joinpath(pkg_name, "JuliaProject.toml"))
-            mv(joinpath(pkg_name, "Manifest.toml"), joinpath(pkg_name, "JuliaManifest.toml"))
-            # make sure things still work
-            Pkg.develop(abspath(pkg_name))
-            @test isinstalled((name=pkg_name, uuid=UUID(uuid)))
-            Pkg.rm(pkg_name)
-            @test !isinstalled((name=pkg_name, uuid=UUID(uuid)))
+            mktempdir() do tmp; cd(tmp) do
+                pkg_name = "FooBar"
+                # create a project and grab its uuid
+                Pkg.generate(pkg_name)
+                uuid = extract_uuid(joinpath(pkg_name, "Project.toml"))
+                # activate project env
+                Pkg.activate(abspath(pkg_name))
+                # add an example project to populate manifest file
+                Pkg.add("Example")
+                Pkg.activate()
+                # change away from default names
+                mv(joinpath(pkg_name, "Project.toml"), joinpath(pkg_name, "JuliaProject.toml"))
+                mv(joinpath(pkg_name, "Manifest.toml"), joinpath(pkg_name, "JuliaManifest.toml"))
+                # make sure things still work
+                Pkg.develop(abspath(pkg_name))
+                @test isinstalled((name=pkg_name, uuid=UUID(uuid)))
+                Pkg.rm(pkg_name)
+                @test !isinstalled((name=pkg_name, uuid=UUID(uuid)))
+            end end
         end # cd project_path
     end # @testset
 end
