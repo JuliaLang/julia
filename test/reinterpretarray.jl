@@ -49,3 +49,22 @@ let A = collect(reshape(1:20, 5, 4))
     @test view(R, :, :) isa StridedArray
     @test reshape(R, :) isa StridedArray
 end
+
+# IndexStyle
+let a = fill(1.0, 5, 3)
+    r = reinterpret(Int64, a)
+    @test @inferred(IndexStyle(r)) == IndexLinear()
+    fill!(r, 2)
+    @test all(a .=== reinterpret(Float64, [Int64(2)])[1])
+    @test all(r .=== Int64(2))
+    r = reinterpret(Int32, a)
+    @test @inferred(IndexStyle(r)) == IndexLinear()
+    fill!(r, 3)
+    @test all(a .=== reinterpret(Float64, [(Int32(3), Int32(3))])[1])
+    @test all(r .=== Int32(3))
+    r = reinterpret(Int64, view(a, 1:2:5, :))
+    @test @inferred(IndexStyle(r)) == IndexCartesian()
+    fill!(r, 4)
+    @test all(a[1:2:5,:] .=== reinterpret(Float64, [Int64(4)])[1])
+    @test all(r .=== Int64(4))
+end
