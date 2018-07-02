@@ -707,8 +707,8 @@
             (function (call ,name
                             ,@(map make-decl field-names field-types))
                       (block
-                        ,@locs
-                        (call new ,@field-names))))
+                       ,@locs
+                       (new ,name ,@field-names))))
          any-ctor)
         (list any-ctor))))
 
