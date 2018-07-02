@@ -953,23 +953,10 @@ float(x::FloatWrapper) = x
     @test isa(cos(z), Complex)
 end
 
-module HypotTest
-    import Base: abs, isless, isinf, oneunit, /, *
-    using Test
-
-    struct MeterUnits{T} <: Number
-        val::T
-    end
-    abs(a::MeterUnits) = MeterUnits(abs(a.val))
-    isless(a::MeterUnits{T}, b::MeterUnits{T}) where T  = isless(a.val, b.val)
-    isinf(a::MeterUnits) = isinf(a.val)
-    oneunit(a::MeterUnits) = MeterUnits(one(a.val))
-    /(a::MeterUnits, b::MeterUnits) = a.val / b.val
-    *(a::MeterUnits, b::Real) = MeterUnits(a.val*b)
-
-    @test hypot(MeterUnits(0), MeterUnits(0)) == MeterUnits(0.0)
-    @test hypot(MeterUnits(3), MeterUnits(4)) == MeterUnits(5.0)
-    @test hypot(MeterUnits(NaN), MeterUnits(Inf)) == MeterUnits(Inf)
-    @test hypot(MeterUnits(Inf), MeterUnits(NaN)) == MeterUnits(Inf)
-    @test hypot(MeterUnits(Inf), MeterUnits(Inf)) == MeterUnits(Inf)
-end
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using .Main.TestHelpers: Furlong
+@test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
+@test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
+@test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
+@test hypot(Furlong(Inf), Furlong(NaN)) == Furlong(Inf)
+@test hypot(Furlong(Inf), Furlong(Inf)) == Furlong(Inf)

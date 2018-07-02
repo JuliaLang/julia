@@ -20,6 +20,8 @@ Base.promote_type(::Type{Furlong{p,T}}, ::Type{Furlong{p,S}}) where {p,T,S} =
 
 Base.one(x::Furlong{p,T}) where {p,T} = one(T)
 Base.one(::Type{Furlong{p,T}}) where {p,T} = one(T)
+Base.oneunit(x::Furlong{p,T}) where {p,T} = Furlong{p,T}(one(T))
+Base.oneunit(x::Type{Furlong{p,T}}) where {p,T} = Furlong{p,T}(one(T))
 Base.zero(x::Furlong{p,T}) where {p,T} = Furlong{p,T}(zero(T))
 Base.zero(::Type{Furlong{p,T}}) where {p,T} = Furlong{p,T}(zero(T))
 Base.iszero(x::Furlong) = iszero(x.val)
@@ -35,7 +37,7 @@ Base.abs(x::Furlong{p}) where {p} = Furlong{p}(abs(x.val))
 import LinearAlgebra: sylvester
 sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
 
-for f in (:isfinite, :isnan, :isreal)
+for f in (:isfinite, :isnan, :isreal, :isinf)
     @eval Base.$f(x::Furlong) = $f(x.val)
 end
 for f in (:real,:imag,:complex,:+,:-)
