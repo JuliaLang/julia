@@ -1093,6 +1093,8 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         import OldPkg
         empty!(Base.LOAD_PATH)
         append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
+        Base.ACTIVE_PROJECT[] = $(repr(Base.ACTIVE_PROJECT[]))
+        Base.HOME_PROJECT[] = $(repr(Base.HOME_PROJECT[]))
         empty!(Base.DEPOT_PATH)
         append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
         empty!(Base.DL_LOAD_PATH)
