@@ -900,7 +900,7 @@ end
 end
 
 @testset "Dict reduce merge" begin
-    function f(i::Vector{<:Dict}, o)
+    function check_merge(i::Vector{<:Dict}, o)
         r1 = reduce(merge, i)
         r2 = merge(i...)
         t = typeof(o)
