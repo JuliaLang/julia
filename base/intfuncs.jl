@@ -454,10 +454,6 @@ ndigits0z(x::BitSigned) = ndigits0z(unsigned(abs(x)))
 
 ndigits0z(x::Integer) = ndigits0zpb(x, 10)
 
-# TODO (when keywords args are fast): rename to ndigits and make pad a keyword
-ndigits10(x::Integer, pad::Int=1) = max(pad, ndigits0z(x))
-ndigits(x::Integer) = iszero(x) ? 1 : ndigits0z(x)
-
 ## ndigits with specified base ##
 
 # The suffix "nb" stands for "negative base"
@@ -510,7 +506,7 @@ ndigits0zpb(x::Bool, b::Integer) = x % Int
     ndigits0z(n::Integer, b::Integer=10)
 
 Return 0 if `n == 0`, otherwise compute the number of digits in
-integer `n` written in base `b` (i.e. equal to `ndigits(n, b)`
+integer `n` written in base `b` (i.e. equal to `ndigits(n, base=b)`
 in this case).
 The base `b` must not be in `[-1, 0, 1]`.
 
@@ -519,7 +515,7 @@ The base `b` must not be in `[-1, 0, 1]`.
 julia> Base.ndigits0z(0, 16)
 0
 
-julia> Base.ndigits(0, 16)
+julia> Base.ndigits(0, base=16)
 1
 
 julia> Base.ndigits0z(0)
@@ -540,29 +536,33 @@ function ndigits0z(x::Integer, b::Integer)
     elseif b > 1
         ndigits0zpb(x, b)
     else
-        throw(DomainError(b, "The base `b` must not be in `[-1, 0, 1]`."))
+        throw(DomainError(b, "The base must not be in `[-1, 0, 1]`."))
     end
 end
 
 """
-    ndigits(n::Integer, b::Integer=10)
+    ndigits(n::Integer; base::Integer=10, pad::Integer=1)
 
-Compute the number of digits in integer `n` written in base `b`.
-The base `b` must not be in `[-1, 0, 1]`.
+Compute the number of digits in integer `n` written in base `base`
+(`base` must not be in `[-1, 0, 1]`), optionally padded with zeros
+to a specified size (the result will never be less than `pad`).
 
 # Examples
 ```jldoctest
 julia> ndigits(12345)
 5
 
-julia> ndigits(1022, 16)
+julia> ndigits(1022, base=16)
 3
 
-julia> string(1022, base = 16)
+julia> string(1022, base=16)
 "3fe"
+
+julia> ndigits(123, pad=5)
+5
 ```
 """
-ndigits(x::Integer, b::Integer, pad::Int=1) = max(pad, ndigits0z(x, b))
+ndigits(x::Integer; base::Integer=10, pad::Int=1) = max(pad, ndigits0z(x, base))
 
 ## integer to string functions ##
 
@@ -591,7 +591,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + ndigits10(x, pad)
+    i = neg + ndigits(x, base=10, pad=pad)
     a = StringVector(i)
     while i > neg
         a[i] = '0'+rem(x,10)
@@ -622,7 +622,7 @@ function _base(b::Int, x::Integer, pad::Int, neg::Bool)
     (x >= 0) | (b < 0) || throw(DomainError(x, "For negative `x`, `b` must be negative."))
     2 <= abs(b) <= 62 || throw(ArgumentError("base must satisfy 2 ≤ abs(base) ≤ 62, got $b"))
     digits = abs(b) <= 36 ? base36digits : base62digits
-    i = neg + ndigits(x, b, pad)
+    i = neg + ndigits(x, base=b, pad=pad)
     a = StringVector(i)
     @inbounds while i > neg
         if b > 0
@@ -732,7 +732,7 @@ digits(n::Integer; base::Integer = 10, pad::Integer = 1) =
     digits(typeof(base), n, base = base, pad = pad)
 
 function digits(T::Type{<:Integer}, n::Integer; base::Integer = 10, pad::Integer = 1)
-    digits!(zeros(T, ndigits(n, base, pad)), n, base = base)
+    digits!(zeros(T, ndigits(n, base=base, pad=pad)), n, base=base)
 end
 
 """

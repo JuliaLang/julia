@@ -309,7 +309,7 @@ end
 function Sampler(::AbstractRNG, r::AbstractUnitRange{BigInt}, ::Repetition)
     m = last(r) - first(r)
     m < 0 && throw(ArgumentError("range must be non-empty"))
-    nd = ndigits(m, 2)
+    nd = ndigits(m, base=2)
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
     mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)

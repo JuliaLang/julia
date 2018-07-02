@@ -1300,6 +1300,8 @@ Deprecated or removed
     (along with other utilities mostly used at the interactive prompt, such as `edit`
     and `less`) ([#27635]).
 
+  * `ndigits(n, b, [pad])` is deprecated in favor of `ndigits(n, base=b, pad=pad)` ([#27908]).
+
 Command-line option changes
 ---------------------------
 
