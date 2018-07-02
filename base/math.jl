@@ -547,8 +547,8 @@ function hypot(x::T, y::T) where T<:Number
     if ax < ay
         ax, ay = ay, ax
     end
-    if ax == 0
-        r = ay / one(ax)
+    if iszero(ax)
+        r = ay / oneunit(ax)
     else
         r = ay / ax
     end

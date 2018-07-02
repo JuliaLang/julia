@@ -952,3 +952,11 @@ float(x::FloatWrapper) = x
     @test isa(sin(z), Complex)
     @test isa(cos(z), Complex)
 end
+
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using .Main.TestHelpers: Furlong
+@test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
+@test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
+@test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
+@test hypot(Furlong(Inf), Furlong(NaN)) == Furlong(Inf)
+@test hypot(Furlong(Inf), Furlong(Inf)) == Furlong(Inf)
