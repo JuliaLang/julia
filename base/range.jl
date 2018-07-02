@@ -455,6 +455,8 @@ maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be 
 minimum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
+extrema(r::AbstractRange) = (minimum(r), maximum(r))
+
 # Ranges are immutable
 copy(r::AbstractRange) = r
 

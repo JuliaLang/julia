@@ -173,7 +173,6 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/pointer.jl \
 		base/promotion.jl \
 		base/range.jl \
-		base/reduce.jl \
 		base/reflection.jl \
 		base/traits.jl \
 		base/refvalue.jl \
