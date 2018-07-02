@@ -3,6 +3,15 @@
 ## Functions to compute the reduced shape
 
 # for reductions that expand 0 dims to 1
+reduced_index(i::OneTo) = OneTo(1)
+reduced_index(i::Slice) = Slice(first(i):first(i))
+reduced_index(i::AbstractUnitRange) =
+    throw(ArgumentError(
+"""
+No method is implemented for reducing index range of type $typeof(i). Please implement
+reduced_index for this index type or report this as an issue.
+"""
+    ))
 reduced_indices(a::AbstractArray, region) = reduced_indices(axes(a), region)
 
 # for reductions that keep 0 dims as 0
@@ -18,13 +27,13 @@ function reduced_indices(inds::Indices{N}, d::Int, rd::AbstractUnitRange) where 
         return inds
     end
 end
-reduced_indices(inds::Indices, d::Int) = reduced_indices(inds, d, OneTo(1))
+reduced_indices(inds::Indices, d::Int) = reduced_indices(inds, d, reduced_index(inds[d]))
 
 function reduced_indices0(inds::Indices{N}, d::Int) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d <= N
         ind = inds[d]
-        return reduced_indices(inds, d, (isempty(ind) ? ind : OneTo(1)))
+        return reduced_indices(inds, d, (isempty(ind) ? ind : reduced_index(inds[d])))
     else
         return inds
     end
@@ -38,7 +47,7 @@ function reduced_indices(inds::Indices{N}, region) where N
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
-            rinds[d] = oftype(rinds[d], OneTo(1))
+            rinds[d] = reduced_index(rinds[d])
         end
     end
     tuple(rinds...)::typeof(inds)
@@ -53,7 +62,7 @@ function reduced_indices0(inds::Indices{N}, region) where N
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
             rind = rinds[d]
-            rinds[d] = oftype(rind, (isempty(rind) ? rind : OneTo(1)))
+            rinds[d] = isempty(rind) ? rind : reduced_index(rind)
         end
     end
     tuple(rinds...)::typeof(inds)
