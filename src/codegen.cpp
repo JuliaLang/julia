@@ -4209,8 +4209,7 @@ static void emit_cfunc_invalidate(
         break;
     }
     case jl_returninfo_t::SRet: {
-        unsigned sret_nbytes = jl_datatype_size(astrt);
-        emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, sret_nbytes, jl_alignment(sret_nbytes));
+        emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(astrt), julia_alignment(astrt, 0));
         ctx.builder.CreateRetVoid();
         break;
     }
