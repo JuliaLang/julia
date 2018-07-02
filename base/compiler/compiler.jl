@@ -65,12 +65,6 @@ include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 
-# map-reduce operators
-macro simd(forloop)
-    esc(forloop)
-end
-include("reduce.jl")
-
 # core structures
 include("bitarray.jl")
 include("bitset.jl")

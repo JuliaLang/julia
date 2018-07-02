@@ -633,8 +633,10 @@ function to_tuple_type(@nospecialize(t))
         t = Tuple{t...}
     end
     if isa(t,Type) && t<:Tuple
-        if !all(p->(isa(p,Type)||isa(p,TypeVar)), t.parameters)
-            error("argument tuple type must contain only types")
+        for p in t.parameters
+            if !(isa(p,Type) || isa(p,TypeVar))
+                error("argument tuple type must contain only types")
+            end
         end
     else
         error("expected tuple type")

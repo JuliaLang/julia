@@ -84,15 +84,21 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks, du, phin
     # Find the first dominating def
     curblock = stmtblock = block_for_inst(ir.cfg, use_idx)
     curblock = find_curblock(domtree, allblocks, curblock)
-    defblockdefs = [stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
+    defblockdefs = Int[stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
     def = 0
     if !isempty(defblockdefs)
         if curblock != stmtblock
             # Find the last def in this block
-            def = maximum(defblockdefs)
+            def = 0
+            for x in defblockdefs
+                def = max(def, x)
+            end
         else
             # Find the last def before our use
-            def = mapreduce(x->x >= use_idx ? 0 : x, max, defblockdefs)
+            def = 0
+            for x in defblockdefs
+                def = max(def, x >= use_idx ? 0 : x)
+            end
         end
     end
     if def == 0
