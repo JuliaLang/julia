@@ -5988,6 +5988,15 @@ let A=Vector{Union{Int, Missing}}(undef, 1)
     @test A[2] === missing
 end
 
+# issue #27809
+let A=Vector{Union{Int, Missing}}(undef, 0)
+    while length(A) < 2^17
+        push!(A, 0.0)
+    end
+    push!(A, 0.0)
+    @test !any(ismissing, A)
+end
+
 end # module UnionOptimizations
 
 # issue #6614, argument destructuring
