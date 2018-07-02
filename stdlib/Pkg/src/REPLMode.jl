@@ -252,6 +252,8 @@ function do_cmd!(tokens::Vector{Token}, repl)
             cmderror("misplaced token: ", token)
         end
     end
+    cmd.kind == CMD_ACTIVATE && return Base.invokelatest(do_activate!, tokens)
+
     ctx = Context(env = EnvCache(env_opt))
     if cmd.kind == CMD_PREVIEW
         ctx.preview = true
@@ -277,7 +279,6 @@ function do_cmd!(tokens::Vector{Token}, repl)
     cmd.kind == CMD_RESOLVE     ? Base.invokelatest(       do_resolve!, ctx, tokens) :
     cmd.kind == CMD_PRECOMPILE  ? Base.invokelatest(    do_precompile!, ctx, tokens) :
     cmd.kind == CMD_INSTANTIATE ? Base.invokelatest(   do_instantiate!, ctx, tokens) :
-    cmd.kind == CMD_ACTIVATE    ? Base.invokelatest(      do_activate!, ctx, tokens) :
         cmderror("`$cmd` command not yet implemented")
     return
 end
@@ -779,7 +780,7 @@ function do_resolve!(ctx::Context, tokens::Vector{Token})
     API.resolve(ctx)
 end
 
-function do_activate!(ctx::Context, tokens::Vector{Token})
+function do_activate!(tokens::Vector{Token})
     if isempty(tokens)
         return API.activate()
     else
