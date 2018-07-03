@@ -1027,7 +1027,7 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
                 (f === Core.kwfunc && length(atypes) == 2) ||
                 (is_inlineable_constant(val) &&
                  (contains_is(_PURE_BUILTINS, f) ||
-                  (f === getfield && effect_free(e, ir, ir.spvals, false, etype)) ||
+                  (f === getfield && stmt_effect_free(e, ir, ir.spvals)) ||
                   (isa(f, IntrinsicFunction) && is_pure_intrinsic_optim(f)))))
                 return quoted(val)
             end
