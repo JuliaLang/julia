@@ -151,8 +151,6 @@ temp_pkg_dir() do project_path; cd(project_path) do
                 empty!(DEPOT_PATH)
                 pushfirst!(DEPOT_PATH, depot_dir)
                 withenv("JULIA_PKG_DEVDIR" => tmp) do
-                    pkg"init"
-
                     # Test an unregistered package
                     p1_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithProject")
                     p2_path = joinpath(@__DIR__, "test_packages", "UnregisteredWithoutProject")
@@ -182,7 +180,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
     end # mktempdir
     # nested
     try
-        pushfirst!(LOAD_PATH, "@")
+        pushfirst!(LOAD_PATH, "@.")
         mktempdir() do other_dir
             mktempdir() do tmp; cd(tmp) do
                 withenv("USER" => "Test User") do
@@ -290,7 +288,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
         cp(joinpath(@__DIR__, "test_packages", "BigProject"), joinpath(tmp, "BigProject"))
         cd(joinpath(tmp, "BigProject")) do
             try
-                pushfirst!(LOAD_PATH, ".")
+                pushfirst!(LOAD_PATH, pwd())
                 pkg"dev SubModule"
                 pkg"dev SubModule2"
                 pkg"add Random"

@@ -1778,6 +1778,7 @@ typedef struct {
     const char *cpu_target;
     int32_t nprocs;
     const char *machine_file;
+    const char *project;
     int8_t isinteractive;
     int8_t color;
     int8_t historyfile;

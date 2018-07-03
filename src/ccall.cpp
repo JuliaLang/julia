@@ -577,7 +577,7 @@ static Value *julia_to_address(
                 }
                 ai->setAlignment(16);
                 // minimum gc-alignment in julia is pointer size
-                emit_memcpy(ctx, ai, jvinfo, nbytes, sizeof(void*));
+                emit_memcpy(ctx, ai, jvinfo.tbaa, jvinfo, nbytes, sizeof(void*));
                 return ctx.builder.CreatePtrToInt(ai, to);
             }
         }
@@ -596,7 +596,7 @@ static Value *julia_to_address(
         Value *nbytes = emit_datatype_size(ctx, jvt);
         AllocaInst *ai = ctx.builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        emit_memcpy(ctx, ai, jvinfo, nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
+        emit_memcpy(ctx, ai, jvinfo.tbaa, jvinfo, nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
         Value *p2 = ctx.builder.CreatePtrToInt(ai, to);
         ctx.builder.CreateBr(afterBB);
         ctx.builder.SetInsertPoint(afterBB);
@@ -611,10 +611,10 @@ static Value *julia_to_address(
     // since those are immutable.
     Value *slot = emit_static_alloca(ctx, slottype);
     if (!jvinfo.ispointer()) {
-        ctx.builder.CreateStore(emit_unbox(ctx, slottype, jvinfo, ety), slot);
+        tbaa_decorate(jvinfo.tbaa, ctx.builder.CreateStore(emit_unbox(ctx, slottype, jvinfo, ety), slot));
     }
     else {
-        emit_memcpy(ctx, slot, jvinfo, jl_datatype_size(ety), jl_datatype_align(ety));
+        emit_memcpy(ctx, slot, jvinfo.tbaa, jvinfo, jl_datatype_size(ety), jl_datatype_align(ety));
     }
     return ctx.builder.CreatePtrToInt(slot, to);
 }
@@ -646,10 +646,10 @@ static Value *julia_to_native(
     // since those are immutable.
     Value *slot = emit_static_alloca(ctx, to);
     if (!jvinfo.ispointer()) {
-        ctx.builder.CreateStore(emit_unbox(ctx, to, jvinfo, jlto), slot);
+        tbaa_decorate(jvinfo.tbaa, ctx.builder.CreateStore(emit_unbox(ctx, to, jvinfo, jlto), slot));
     }
     else {
-        emit_memcpy(ctx, slot, jvinfo, jl_datatype_size(jlto), jl_datatype_align(jlto));
+        emit_memcpy(ctx, slot, jvinfo.tbaa, jvinfo, jl_datatype_size(jlto), jl_datatype_align(jlto));
     }
     return slot;
 }
@@ -2096,7 +2096,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     auto slot = emit_static_alloca(ctx, resultTy);
                     slot->setAlignment(boxalign);
                     ctx.builder.CreateAlignedStore(result, slot, boxalign);
-                    emit_memcpy(ctx, strct, slot, rtsz, boxalign, tbaa);
+                    emit_memcpy(ctx, strct, tbaa, slot, tbaa, rtsz, boxalign, tbaa);
                 }
                 else {
                     init_bits_value(ctx, strct, result, tbaa, boxalign);

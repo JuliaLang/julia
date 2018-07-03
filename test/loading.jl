@@ -161,8 +161,13 @@ end
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
+saved_home_project = Base.HOME_PROJECT[]
+saved_active_project = Base.ACTIVE_PROJECT[]
+
 push!(empty!(LOAD_PATH), "project")
 push!(empty!(DEPOT_PATH), "depot")
+Base.HOME_PROJECT[] = nothing
+Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]
 
@@ -524,6 +529,16 @@ end
 # normalization of paths by include (#26424)
 @test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
 
+old_act_proj = Base.ACTIVE_PROJECT[]
+pushfirst!(LOAD_PATH, "@")
+try
+    Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+    @eval using TestPkg
+finally
+    Base.ACTIVE_PROJECT[] = old_act_proj
+    popfirst!(LOAD_PATH)
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)
@@ -533,5 +548,7 @@ for depot in depots
     rm(depot, force=true, recursive=true)
 end
 
-append!(empty!(DEPOT_PATH), saved_depot_path)
 append!(empty!(LOAD_PATH), saved_load_path)
+append!(empty!(DEPOT_PATH), saved_depot_path)
+Base.HOME_PROJECT[] = saved_home_project
+Base.ACTIVE_PROJECT[] = saved_active_project

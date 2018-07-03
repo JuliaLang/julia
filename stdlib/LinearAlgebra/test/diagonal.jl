@@ -187,6 +187,11 @@ srand(1)
         DD = copy(D)
         r  = VV * Array(D)'
         @test Array(rmul!(VV, adjoint(DD))) ≈ r
+
+        # kron
+        D3 = Diagonal(convert(Vector{elty}, rand(n÷2)))
+        DM3= Matrix(D3)
+        Matrix(kron(D, D3)) ≈ kron(DM, DM3)
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -267,12 +272,22 @@ srand(1)
         @test svdvals(D) == s
         @test svd(D).V == V
     end
+
 end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
     @test [eigvals(D)...;] ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+
+end
+
+@testset "eigmin (#27847)" begin
+    for _ in 1:100
+        d = randn(rand(1:10))
+        D = Diagonal(d)
+        @test eigmin(D) == minimum(d)
+    end
 end
 
 @testset "isposdef" begin

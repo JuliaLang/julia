@@ -84,10 +84,6 @@ include("namedtuple.jl")
 # core docsystem
 include("docs/core.jl")
 
-# SubArray
-include("subarray.jl")
-macro views(x); esc(x); end
-
 # sorting
 function sort end
 function sort! end

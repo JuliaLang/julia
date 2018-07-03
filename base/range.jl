@@ -49,7 +49,7 @@ end
     range(start; length, stop, step=1)
 
 Given a starting value, construct a range either by length or from `start` to `stop`,
-optionally with a given step (defaults to 1). One of `length` or `step` is required.
+optionally with a given step (defaults to 1). One of `length` or `stop` is required.
 If `length`, `stop`, and `step` are all specified, they must agree.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
@@ -846,13 +846,6 @@ function sum(r::AbstractRange{<:Real})
     return l * first(r) + (iseven(l) ? (step(r) * (l-1)) * (l>>1)
                                      : (step(r) * l) * ((l-1)>>1))
 end
-
-function mean(r::AbstractRange{<:Real})
-    isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
-    (first(r) + last(r)) / 2
-end
-
-median(r::AbstractRange{<:Real}) = mean(r)
 
 function _in_range(x, r::AbstractRange)
     if step(r) == 0

@@ -475,12 +475,7 @@ function precompile(ctx::Context)
     for (i, pkg) in enumerate(needs_to_be_precompiled)
         code = """
             import OldPkg
-            empty!(Base.DEPOT_PATH)
-            append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
-            empty!(Base.DL_LOAD_PATH)
-            append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
-            empty!(Base.LOAD_PATH)
-            append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
+            $(Base.load_path_setup_code())
             import $pkg
         """
         printpkgstyle(ctx, :Precompiling, pkg * " [$i of $(length(needs_to_be_precompiled))]")
@@ -548,31 +543,8 @@ function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwarg
     Operations.build_versions(ctx, union(new_apply, new_git))
 end
 
-const ACTIVE_ENV = Ref{Union{String,Nothing}}(nothing)
-
-function _activate(env::Union{String,Nothing})
-    if env === nothing
-        @warn "Current directory is not in a project, nothing activated."
-    else
-        if !isempty(LOAD_PATH) && ACTIVE_ENV[] === LOAD_PATH[1]
-            LOAD_PATH[1] = env
-        else
-            # TODO: warn if ACTIVE_ENV !== nothing ?
-            pushfirst!(LOAD_PATH, env)
-        end
-        ACTIVE_ENV[] = env
-    end
-end
-activate() = _activate(Base.current_env())
-activate(path::String) = _activate(Base.current_env(path))
-
-function deactivate()
-    if !isempty(LOAD_PATH) && ACTIVE_ENV[] === LOAD_PATH[1]
-        popfirst!(LOAD_PATH)
-    else
-        # warn if ACTIVE_ENV !== nothing ?
-    end
-    ACTIVE_ENV[] = nothing
+function activate(path::Union{String,Nothing}=nothing)
+    Base.ACTIVE_PROJECT[] = Base.load_path_expand(path)
 end
 
 end # module

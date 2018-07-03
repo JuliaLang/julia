@@ -136,7 +136,7 @@ function sqrmod!(f::GF2X, m::GF2X)::GF2X
         x2i = GF2X(1)
         GF2X[copy(mulxmod!(mulxmod!(x2i, m, d+1), m, d+1)) for i=1:d]
     end
-    foldl(GF2X(0), filter(i->coeff(f, i), 0:degree(f))) do g, i
+    foldl(filter(i->coeff(f, i), 0:degree(f)); init=GF2X(0)) do g, i
         i <= d÷2 ? # optimization for "simple" squares
             setcoeff!(g, 2i) :
             xor!(g, sqrs[i])
@@ -146,7 +146,7 @@ end
 # compute X^e mod m
 function powxmod(e::BigInt, m::GF2X)::GF2X
     e < 0 && throw(DomainError("e must be >= 0"))
-    foldl(GF2X(1), Base.ndigits0z(e, 2)-1:-1:0) do f, i
+    foldl(Base.ndigits0z(e, 2)-1:-1:0; init=GF2X(1)) do f, i
         MPZ.tstbit(e, i) ?
             mulxmod!(sqrmod!(f, m), m) :
             sqrmod!(f, m)

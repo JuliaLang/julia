@@ -413,9 +413,6 @@ using .StackTraces
 
 include("initdefs.jl")
 
-# statistics
-include("statistics.jl")
-
 # worker threads
 include("threadcall.jl")
 
@@ -525,6 +522,7 @@ let
             :Pkg,
             :Test,
             :REPL,
+            :Statistics,
         ]
 
     maxlen = maximum(textwidth.(string.(stdlibs)))
@@ -895,6 +893,20 @@ end
     @deprecate_stdlib send           Sockets true
     @deprecate_stdlib TCPSocket      Sockets true
     @deprecate_stdlib UDPSocket      Sockets true
+
+    @deprecate_stdlib cor       Statistics true
+    @deprecate_stdlib cov       Statistics true
+    @deprecate_stdlib std       Statistics true
+    @deprecate_stdlib stdm      Statistics true
+    @deprecate_stdlib var       Statistics true
+    @deprecate_stdlib varm      Statistics true
+    @deprecate_stdlib mean!     Statistics true
+    @deprecate_stdlib mean      Statistics true
+    @deprecate_stdlib median!   Statistics true
+    @deprecate_stdlib median    Statistics true
+    @deprecate_stdlib middle    Statistics true
+    @deprecate_stdlib quantile! Statistics true
+    @deprecate_stdlib quantile  Statistics true
 end
 end
 

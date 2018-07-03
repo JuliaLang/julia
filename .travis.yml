@@ -49,15 +49,6 @@ branches:
     - /^v\d+\.\d+\.\d+$/
 notifications:
     email: false
-    irc:
-        channels:
-            - "chat.freenode.net#julia-notifications"
-        on_success: change
-        on_failure: always
-    webhooks:
-        urls:
-          - http://status.julialang.org/put/travis
-          - http://julia.mit.edu:8000/travis-hook
 before_install:
     - make check-whitespace
     - if [ `uname` = "Linux" ]; then
@@ -136,8 +127,8 @@ script:
     - FILES_CHANGED=$(git diff --name-only $TRAVIS_COMMIT_RANGE -- || git ls-files)
     - cd .. && mv julia julia2
     # run tests
-    - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
-        /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true'
+    - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true'
+    # - /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true'
     - /tmp/julia/bin/julia -e 'Base.require(Main, :InteractiveUtils).versioninfo()'
     - pushd /tmp/julia/share/julia/test
     # skip tests if only files within the "doc" dir have changed

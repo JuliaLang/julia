@@ -1006,57 +1006,57 @@ end
 @testset "mapslices" begin
     local a, b, c, m, h, s
     a = rand(5,5)
-    s = mapslices(sort, a, [1])
-    S = mapslices(sort, a, [2])
+    s = mapslices(sort, a, dims=[1])
+    S = mapslices(sort, a, dims=[2])
     for i = 1:5
         @test s[:,i] == sort(a[:,i])
         @test vec(S[i,:]) == sort(vec(a[i,:]))
     end
 
     # issue #3613
-    b = mapslices(sum, fill(1.,2,3,4), [1,2])
+    b = mapslices(sum, fill(1.,2,3,4), dims=[1,2])
     @test size(b) === (1,1,4)
     @test all(b.==6)
 
     # issue #5141
     ## Update Removed the version that removes the dimensions when dims==1:ndims(A)
-    c1 = mapslices(x-> maximum(-x), a, [])
+    c1 = mapslices(x-> maximum(-x), a, dims=[])
     @test c1 == -a
 
     # other types than Number
-    @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
-    @test mapslices(prod,["1"],1) == ["1"]
+    @test mapslices(prod,["1" "2"; "3" "4"],dims=1) == ["13" "24"]
+    @test mapslices(prod,["1"],dims=1) == ["1"]
 
     # issue #5177
 
     c = fill(1,2,3,4)
-    m1 = mapslices(x-> fill(1,2,3), c, [1,2])
-    m2 = mapslices(x-> fill(1,2,4), c, [1,3])
-    m3 = mapslices(x-> fill(1,3,4), c, [2,3])
+    m1 = mapslices(x-> fill(1,2,3), c, dims=[1,2])
+    m2 = mapslices(x-> fill(1,2,4), c, dims=[1,3])
+    m3 = mapslices(x-> fill(1,3,4), c, dims=[2,3])
     @test size(m1) == size(m2) == size(m3) == size(c)
 
-    n1 = mapslices(x-> fill(1,6), c, [1,2])
-    n2 = mapslices(x-> fill(1,6), c, [1,3])
-    n3 = mapslices(x-> fill(1,6), c, [2,3])
-    n1a = mapslices(x-> fill(1,1,6), c, [1,2])
-    n2a = mapslices(x-> fill(1,1,6), c, [1,3])
-    n3a = mapslices(x-> fill(1,1,6), c, [2,3])
+    n1 = mapslices(x-> fill(1,6), c, dims=[1,2])
+    n2 = mapslices(x-> fill(1,6), c, dims=[1,3])
+    n3 = mapslices(x-> fill(1,6), c, dims=[2,3])
+    n1a = mapslices(x-> fill(1,1,6), c, dims=[1,2])
+    n2a = mapslices(x-> fill(1,1,6), c, dims=[1,3])
+    n3a = mapslices(x-> fill(1,1,6), c, dims=[2,3])
     @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)
     @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
 
     # mutating functions
     o = fill(1, 3, 4)
-    m = mapslices(x->fill!(x, 0), o, 2)
+    m = mapslices(x->fill!(x, 0), o, dims=2)
     @test m == zeros(3, 4)
     @test o == fill(1, 3, 4)
 
     # issue #18524
-    m = mapslices(x->tuple(x), [1 2; 3 4], 1)
+    m = mapslices(x->tuple(x), [1 2; 3 4], dims=1)
     @test m[1,1] == ([1,3],)
     @test m[1,2] == ([2,4],)
 
     # issue #21123
-    @test mapslices(nnz, sparse(1.0I, 3, 3), 1) == [1 1 1]
+    @test mapslices(nnz, sparse(1.0I, 3, 3), dims=1) == [1 1 1]
 end
 
 @testset "single multidimensional index" begin
@@ -1183,7 +1183,7 @@ end
 
     # mutating functions
     o = fill(1, 3, 4)
-    m = mapslices(x->fill!(x, 0), o, 2)
+    m = mapslices(x->fill!(x, 0), o, dims=2)
     @test m == zeros(3, 4)
     @test o == fill(1, 3, 4)
 
@@ -1987,8 +1987,8 @@ copyto!(S, A)
 @test cumsum(A, dims=1) == cumsum(B, dims=1) == cumsum(S, dims=1)
 @test cumsum(A, dims=2) == cumsum(B, dims=2) == cumsum(S, dims=2)
 
-@test mapslices(sort, A, 1) == mapslices(sort, B, 1) == mapslices(sort, S, 1)
-@test mapslices(sort, A, 2) == mapslices(sort, B, 2) == mapslices(sort, S, 2)
+@test mapslices(sort, A, dims=1) == mapslices(sort, B, dims=1) == mapslices(sort, S, dims=1)
+@test mapslices(sort, A, dims=2) == mapslices(sort, B, dims=2) == mapslices(sort, S, dims=2)
 
 @test reverse(A, dims=1) == reverse(B, dims=1) == reverse(S, dims=2)
 @test reverse(A, dims=2) == reverse(B, dims=2) == reverse(S, dims=2)

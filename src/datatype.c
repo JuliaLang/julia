@@ -259,7 +259,7 @@ static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al)
 {
     unsigned countbits = union_isbits(eltype, fsz, al);
-    return countbits > 0 && countbits < 127;
+    return (countbits > 0 && countbits < 127) ? countbits : 0;
 }
 
 static int references_name(jl_value_t *p, jl_typename_t *name)

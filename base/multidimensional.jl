@@ -1416,7 +1416,7 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
 end
 
 """
-    extrema(A, dims) -> Array{Tuple}
+    extrema(A::AbstractArray; dims) -> Array{Tuple}
 
 Compute the minimum and maximum elements of an array over the given dimensions.
 
@@ -1432,7 +1432,7 @@ julia> A = reshape(Vector(1:2:16), (2,2,2))
   9  13
  11  15
 
-julia> extrema(A, (1,2))
+julia> extrema(A, dims = (1,2))
 1×1×2 Array{Tuple{Int64,Int64},3}:
 [:, :, 1] =
  (1, 7)
@@ -1441,7 +1441,11 @@ julia> extrema(A, (1,2))
  (9, 15)
 ```
 """
-function extrema(A::AbstractArray, dims)
+extrema(A::AbstractArray; dims = :) = _extrema_dims(A, dims)
+
+_extrema_dims(A::AbstractArray, ::Colon) = _extrema_itr(A)
+
+function _extrema_dims(A::AbstractArray, dims)
     sz = [size(A)...]
     for d in dims
         sz[d] = 1

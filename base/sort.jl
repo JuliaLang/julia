@@ -5,12 +5,12 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, LinearIndices, IndexStyle, viewindexing, IndexLinear, _length, (:),
-    eachindex, axes, first, last, similar, start, next, done, zip, @views, OrdinalRange,
+using .Base: copymutable, LinearIndices, _length, (:),
+    eachindex, axes, first, last, similar, start, next, done, zip, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill
+    length, resize!, fill, Missing
 
 using .Base: >>>, !==
 
@@ -568,7 +568,7 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Number}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)

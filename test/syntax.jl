@@ -1333,15 +1333,25 @@ end
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
 
-@test Meta.parse("-(2)(x)") == Expr(:call, :-, Expr(:call, :*, 2, :x))
-@test Meta.parse("-(x)y")   == Expr(:call, :-, Expr(:call, :*, :x, :y))
+@test Meta.parse("-(2)(x)") == Expr(:call, :*, Expr(:call, :-,  2), :x)
+@test Meta.parse("-(x)y")   == Expr(:call, :*, Expr(:call, :-, :x), :y)
 @test Meta.parse("-(x,)y")  == Expr(:call, :*, Expr(:call, :-, :x), :y)
 @test Meta.parse("-(f)(x)") == Expr(:call, :-, Expr(:call, :f, :x))
-@test Meta.parse("-(2)(x)^2") == Expr(:call, :-, Expr(:call, :*, 2, Expr(:call, :^, :x, 2)))
+@test Meta.parse("-(2)(x)^2") == Expr(:call, :*, Expr(:call, :-, 2), Expr(:call, :^, :x, 2))
 @test Meta.parse("Y <- (x->true)(X)") ==
     Expr(:call, :<, :Y,
          Expr(:call, :-, Expr(:call, Expr(:->, :x, Expr(:block, LineNumberNode(1,:none), true)),
                               :X)))
+
+# issue #27641
+@test Meta.parse("√3x")   == Expr(:call, :*, Expr(:call, :√, 3), :x)
+@test Meta.parse("2^√3x") == Expr(:call, :^, 2, Expr(:call, :*, Expr(:call, :√, 3), :x))
+@test Meta.parse("√2^3")  == Expr(:call, :√, Expr(:call, :^, 2, 3))
+@test Meta.parse("-√2")   == Expr(:call, :-, Expr(:call, :√, 2))
+@test Meta.parse("√3x^2") == Expr(:call, :*, Expr(:call, :√, 3), Expr(:call, :^, :x, 2))
+@test Meta.parse("-3x^2") == Expr(:call, :*, -3, Expr(:call, :^, :x, 2))
+@test_throws ParseError Meta.parse("2!3")
+@test_throws ParseError Meta.parse("2√3")
 
 @test_throws ParseError Meta.parse("a.: b")
 @test Meta.parse("a.:end") == Expr(:., :a, QuoteNode(:end))

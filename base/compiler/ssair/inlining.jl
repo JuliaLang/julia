@@ -482,9 +482,13 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
     let compact = IncrementalCompact(ir)
         compact.result_bbs = state.new_cfg_blocks
         # This needs to be a minimum and is more of a size hint
-        nnewnodes = length(compact.result) + (sum(todo) do @nospecialize(item)
-            return isa(item, InliningTodo) ? (length(item.ir.stmts) + length(item.ir.new_nodes)) : 0
-        end)
+        nn = 0
+        for item in todo
+            if isa(item, InliningTodo)
+                nn += (length(item.ir.stmts) + length(item.ir.new_nodes))
+            end
+        end
+        nnewnodes = length(compact.result) + nn
         resize!(compact, nnewnodes)
         item = popfirst!(todo)
         inline_idx = item.idx
@@ -848,7 +852,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         sv.params.inlining || continue
 
         # Special case inliners for regular functions
-        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft)
+        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft) || f === return_type
             continue
         end
 
@@ -905,7 +909,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                 if !isdispatchtuple(metharg′)
                     fully_covered = false
                     continue
-                elseif any(x->x === metharg′, split_out_sigs)
+                elseif _any(x->x === metharg′, split_out_sigs)
                     continue
                 end
                 # `meth` is in specificity order, so find the first applicable method

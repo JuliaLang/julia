@@ -559,6 +559,8 @@ similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 reduce(f, S::SharedArray) =
     mapreduce(fetch, f, Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
+reduce(::typeof(vcat), S::SharedVector) = invoke(reduce, Tuple{Any,SharedArray}, vcat, S)
+reduce(::typeof(hcat), S::SharedVector) = invoke(reduce, Tuple{Any,SharedArray}, hcat, S)
 
 function map!(f, S::SharedArray, Q::SharedArray)
     if (S !== Q) && (procs(S) != procs(Q) || localindices(S) != localindices(Q))

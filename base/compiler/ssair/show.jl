@@ -16,6 +16,13 @@ end
 print_ssa(io::IO, val::SSAValue, argnames) = Base.print(io, "%$(val.id)")
 print_ssa(io::IO, val::Argument, argnames) = Base.print(io, isempty(argnames) ? "%%$(val.n)" : "%%$(argnames[val.n])")
 print_ssa(io::IO, val::GlobalRef, argnames) = Base.print(io, val)
+function print_ssa(io::IO, val::QuoteNode, argnames)
+    if val.value isa Symbol && Base.isidentifier(val.value)
+        Base.print(io, ":", val.value)
+    else
+        Base.show(io, val)
+    end
+end
 print_ssa(io::IO, @nospecialize(val), argnames) = Base.show(io, val)
 
 
@@ -87,8 +94,10 @@ function print_node(io::IO, idx::Int, @nospecialize(stmt), used, argnames, maxsi
         Base.print(io, "new(")
         Base.print(io, join(String[sprint(io->print_ssa(io, arg, argnames)) for arg in stmt.args], ", "))
         Base.print(io, ")")
-    else
+    elseif isa(stmt, GotoNode)
         Base.print(io, stmt)
+    else
+        Base.show(io, stmt)
     end
 end
 

@@ -356,6 +356,16 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
 (\)(A::Union{QR,QRCompactWY,QRPivoted}, B::Diagonal) =
     invoke(\, Tuple{Union{QR,QRCompactWY,QRPivoted}, AbstractVecOrMat}, A, B)
 
+function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
+    valA = A.diag; nA = length(valA)
+    valB = B.diag; nB = length(valB)
+    valC = Vector{typeof(zero(T1)*zero(T2))}(undef,nA*nB)
+    @inbounds for i = 1:nA, j = 1:nB
+        valC[(i-1)*nB+j] = valA[i] * valB[j]
+    end
+    return Diagonal(valC)
+end
+
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
@@ -445,8 +455,9 @@ function pinv(D::Diagonal{T}, tol::Real) where T
 end
 
 #Eigensystem
-eigvals(D::Diagonal{<:Number}) = D.diag
-eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
+eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
+eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
+    [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
 function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true)
     if any(!isfinite, D.diag)

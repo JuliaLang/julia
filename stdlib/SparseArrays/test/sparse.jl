@@ -601,7 +601,7 @@ end
         @test length(sprb45) == 20
         sprb45nnzs[i] = sum(sprb45)[1]
     end
-    @test 4 <= mean(sprb45nnzs) <= 16
+    @test 4 <= sum(sprb45nnzs)/length(sprb45nnzs) <= 16
 end
 
 @testset "issue #5853, sparse diff" begin

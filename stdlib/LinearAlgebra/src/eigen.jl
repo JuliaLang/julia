@@ -296,7 +296,8 @@ Stacktrace:
 [...]
 ```
 """
-function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+function eigmin(A::Union{Number, AbstractMatrix};
+                permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
     if eltype(v)<:Complex
         throw(DomainError(A, "`A` cannot have complex eigenvalues."))

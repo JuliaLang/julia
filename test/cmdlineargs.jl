@@ -418,9 +418,9 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
-            @test Base.current_env() === nothing
+            @test Base.current_project() === nothing
             @test success(`$exename -e "exit(0)"`)
-            for load_path in ["", "@", "@@"]
+            for load_path in ["", "@", "@."]
                 withenv("JULIA_LOAD_PATH" => load_path) do
                     @test success(`$exename -e "exit(!(Base.load_path() == []))"`)
                 end
@@ -499,9 +499,8 @@ end
 
 # backtrace contains type and line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    success, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp
-        -E 'include("____nonexistent_file")'`)
-    @test !success
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'include("____nonexistent_file")'`)
+    @test !succ
     @test out == ""
     @test occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)

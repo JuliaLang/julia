@@ -72,6 +72,9 @@ Language changes
   * Juxtaposing binary, octal, and hexadecimal literals is deprecated, since it can lead to
     confusing code such as `0xapi == 0xa * pi` ([#16356]).
 
+  * Numeric literal juxtaposition now has slighty lower precedence than unary operators,
+    so for example `√2x` parses as `(√2) * x` ([#27641]).
+
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
@@ -712,6 +715,13 @@ Library improvements
 
   * Added an optimized method of `vecdot` for taking the Frobenius inner product
     of sparse matrices. ([#27470])
+
+  * Added an optimized method of `kron` for taking the tensor product of two
+    `Diagonal` matrices. ([27581])
+
+  * The initial element `v0` in `reduce(op, v0, itr)` has been replaced with an `init`
+    optional keyword argument, as in `reduce(op, itr; init=v0)`. Similarly for `foldl`,
+    `foldr`, `mapreduce`, `mapfoldl` and `mapfoldr`. ([#27711])
 
 Compiler/Runtime improvements
 -----------------------------

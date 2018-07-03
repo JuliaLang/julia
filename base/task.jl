@@ -260,14 +260,11 @@ macro async(expr)
         local task = Task($thunk)
         if $(Expr(:isdefined, var))
             push!($var, task)
-            get_task_tls(task)[:SUPPRESS_EXCEPTION_PRINTING] = true
         end
         schedule(task)
     end
 end
 
-
-suppress_excp_printing(t::Task) = isa(t.storage, IdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
 
 function register_taskdone_hook(t::Task, hook)
     tls = get_task_tls(t)
@@ -302,16 +299,6 @@ function task_done_hook(t::Task)
             active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, result) # this terminates the task
-        end
-        if !suppress_excp_printing(t)
-            let bt = t.backtrace
-                # run a new task to print the error for us
-                @async with_output_color(Base.error_color(), stderr) do io
-                    print(io, "ERROR (unhandled task failure): ")
-                    showerror(io, result, bt)
-                    println(io)
-                end
-            end
         end
     end
     # Clear sigatomic before waiting
