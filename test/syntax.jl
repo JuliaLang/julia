@@ -1353,6 +1353,14 @@ end
 @test_throws ParseError Meta.parse("2!3")
 @test_throws ParseError Meta.parse("2√3")
 
+# issue #27914
+@test Meta.parse("2f(x)")        == Expr(:call, :*, 2, Expr(:call, :f, :x))
+@test Meta.parse("f(x)g(x)")     == Expr(:call, :*, Expr(:call, :f, :x), Expr(:call, :g, :x))
+@test Meta.parse("2f(x)g(x)")    == Expr(:call, :*, 2, Expr(:call, :f, :x), Expr(:call, :g, :x))
+@test Meta.parse("f(x)g(x)h(x)") == Expr(:call, :*, Expr(:call, :f, :x), Expr(:call, :g, :x), Expr(:call, :h, :x))
+@test Meta.parse("2(x)")         == Expr(:call, :*, 2, :x)
+@test Meta.parse("2(x)y")        == Expr(:call, :*, 2, :x, :y)
+
 @test_throws ParseError Meta.parse("a.: b")
 @test Meta.parse("a.:end") == Expr(:., :a, QuoteNode(:end))
 @test Meta.parse("a.:catch") == Expr(:., :a, QuoteNode(:catch))
