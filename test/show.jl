@@ -1201,6 +1201,9 @@ end
     @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
     @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1=>2]"
     @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1=>2)"
+
+    # issue #27979 (dislaying arrays of pairs containing arrays as first member)
+    @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
