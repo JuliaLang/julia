@@ -1016,14 +1016,20 @@
            (error (string "invalid numeric constant \"" expr t "\"")))))
 
 (define (parse-juxtapose s)
-  (let ((ex (parse-unary s)))
-    (let ((next (peek-token s)))
-      (if (juxtapose? s ex next)
-          (begin
-             #;(if (and (number? ex) (= ex 0))
-                   (error "juxtaposition with literal \"0\""))
-            `(call * ,ex ,(parse-factor s)))
-          ex))))
+  (let ((first (parse-unary s)))
+    (let loop ((ex   first)
+               (args (list first)))
+      (let ((next (peek-token s)))
+        (if (juxtapose? s ex next)
+            (begin
+              #;(if (and (number? ex) (= ex 0))
+                    (error "juxtaposition with literal \"0\""))
+              (let ((next (parse-factor s)))
+                (loop `(call * ,ex ,next)
+                      (cons next args))))
+            (if (length= args 1)
+                (car args)
+                (list* 'call '* (reverse args))))))))
 
 (define (maybe-negate op num)
   (if (eq? op '-)
