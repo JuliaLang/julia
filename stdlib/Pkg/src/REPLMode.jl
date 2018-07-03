@@ -128,12 +128,12 @@ let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(
     global const name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
-function parse_package(word::AbstractString; context=nothing)::PackageSpec
+# packages can be identified through: uuid, name, or name+uuid
+# additionally valid for add/develop are: local path, url
+function parse_package(word::AbstractString; add_or_develop=false)::PackageSpec
     word = replace(word, "~" => homedir())
-    if context in (CMD_ADD, CMD_DEVELOP) && casesensitive_isdir(word)
-        pkg = PackageSpec()
-        pkg.repo = Types.GitRepo(abspath(word))
-        return pkg
+    if add_or_develop && casesensitive_isdir(word)
+        return PackageSpec(Types.GitRepo(abspath(word)))
     elseif occursin(uuid_re, word)
         return PackageSpec(UUID(word))
     elseif occursin(name_re, word)
@@ -141,15 +141,11 @@ function parse_package(word::AbstractString; context=nothing)::PackageSpec
     elseif occursin(name_uuid_re, word)
         m = match(name_uuid_re, word)
         return PackageSpec(String(m.captures[1]), UUID(m.captures[2]))
+    elseif add_or_develop
+        # Guess it is a url then
+        return PackageSpec(Types.GitRepo(word))
     else
-        if context in (CMD_ADD, CMD_DEVELOP)
-            # Guess it is a url then
-            pkg = PackageSpec()
-            pkg.repo = Types.GitRepo(word)
-            return pkg
-        else
-            cmderror("`$word` cannot be parsed as a package")
-        end
+        cmderror("`$word` cannot be parsed as a package")
     end
 end
 
@@ -633,7 +629,7 @@ function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKin
         parsed_package = false
         token = popfirst!(tokens)
         if token isa String
-            push!(pkgs, parse_package(token; context=CMD_ADD))
+            push!(pkgs, parse_package(token; add_or_develop=true))
             cmd == CMD_DEVELOP && pkgs[end].repo == nothing && (pkgs[end].repo = Types.GitRepo("", ""))
             parsed_package = true
         elseif token isa VersionRange

@@ -17,7 +17,7 @@ preview_info() = printstyled("───── Preview mode ─────\n"; c
 
 include("generate.jl")
 
-parse_package(pkg) = Pkg.REPLMode.parse_package(pkg; context=Pkg.REPLMode.CMD_ADD)
+parse_package(pkg) = Pkg.REPLMode.parse_package(pkg; add_or_develop=true)
 
 add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
 add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([parse_package(pkg) for pkg in pkgs]; kwargs...)

@@ -170,6 +170,11 @@ PackageSpec(name::AbstractString, version::VersionTypes=VersionSpec()) =
     PackageSpec(name, UUID(zero(UInt128)), version)
 PackageSpec(uuid::UUID, version::VersionTypes=VersionSpec()) =
     PackageSpec("", uuid, version)
+function PackageSpec(repo::GitRepo)
+    pkg = PackageSpec()
+    pkg.repo = repo
+    return pkg
+end
 
 has_name(pkg::PackageSpec) = !isempty(pkg.name)
 has_uuid(pkg::PackageSpec) = pkg.uuid != UUID(zero(UInt128))
