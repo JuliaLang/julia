@@ -320,4 +320,104 @@ temp_pkg_dir() do project_path; cd(project_path) do
     end
 end; end
 
+temp_pkg_dir() do project_path
+    cd(project_path) do
+        @testset "add/remove using quoted local path" begin
+            # utils
+            setup_package(parent_dir, pkg_name) = begin
+                mkdir(parent_dir)
+                cd(parent_dir) do
+                    Pkg.generate(pkg_name)
+                    cd(pkg_name) do
+                        repo = LibGit2.init(joinpath(project_path, parent_dir, pkg_name))
+                        LibGit2.add!(repo, "*")
+                        LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)
+                    end #cd pkg_name
+                end # cd parent_dir
+            end
+
+            # extract uuid from a Project.toml file
+            extract_uuid(toml_path) = begin
+                uuid = ""
+                for line in eachline(toml_path)
+                    m = match(r"uuid = \"(.+)\"", line)
+                    if m !== nothing
+                        uuid = m.captures[1]
+                        break
+                    end
+                end
+                return uuid
+            end
+
+            # testing local dir with space in name
+            dir_name = "space dir"
+            pkg_name = "WeirdName77"
+            setup_package(dir_name, pkg_name)
+            uuid = extract_uuid("$dir_name/$pkg_name/Project.toml")
+            Pkg.REPLMode.pkgstr("add \"$dir_name/$pkg_name\"")
+            @test isinstalled((name=pkg_name, uuid = UUID(uuid)))
+            Pkg.REPLMode.pkgstr("remove \"$pkg_name\"")
+            @test !isinstalled((name=pkg_name, uuid = UUID(uuid)))
+
+            # testing dir name with significant characters
+            dir_name = "some@d;ir#"
+            pkg_name = "WeirdName77"
+            setup_package(dir_name, pkg_name)
+            uuid = extract_uuid("$dir_name/$pkg_name/Project.toml")
+            Pkg.REPLMode.pkgstr("add \"$dir_name/$pkg_name\"")
+            @test isinstalled((name=pkg_name, uuid = UUID(uuid)))
+            Pkg.REPLMode.pkgstr("remove '$pkg_name'")
+            @test !isinstalled((name=pkg_name, uuid = UUID(uuid)))
+
+            # more complicated input
+            ## pkg1
+            dir1 = "two space dir"
+            pkg_name1 = "name1"
+            setup_package(dir1, pkg_name1)
+            uuid1 = extract_uuid("$dir1/$pkg_name1/Project.toml")
+
+            ## pkg2
+            dir2 = "two'quote'dir"
+            pkg_name2 = "name2"
+            setup_package(dir2, pkg_name2)
+            uuid2 = extract_uuid("$dir2/$pkg_name2/Project.toml")
+
+            Pkg.REPLMode.pkgstr("add '$dir1/$pkg_name1' \"$dir2/$pkg_name2\"")
+            @test isinstalled((name=pkg_name1, uuid = UUID(uuid1)))
+            @test isinstalled((name=pkg_name2, uuid = UUID(uuid2)))
+            Pkg.REPLMode.pkgstr("remove '$pkg_name1' $pkg_name2")
+            @test !isinstalled((name=pkg_name1, uuid = UUID(uuid1)))
+            @test !isinstalled((name=pkg_name2, uuid = UUID(uuid2)))
+
+            Pkg.REPLMode.pkgstr("add '$dir1/$pkg_name1' \"$dir2/$pkg_name2\"")
+            @test isinstalled((name=pkg_name1, uuid = UUID(uuid1)))
+            @test isinstalled((name=pkg_name2, uuid = UUID(uuid2)))
+            Pkg.REPLMode.pkgstr("remove '$pkg_name1' \"$pkg_name2\"")
+            @test !isinstalled((name=pkg_name1, uuid = UUID(uuid1)))
+            @test !isinstalled((name=pkg_name2, uuid = UUID(uuid2)))
+        end
+    end
+end
+
+@testset "uint test `parse_package`" begin
+    name = "FooBar"
+    uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
+    url = "https://github.com/JuliaLang/Example.jl"
+    path = "./Foobar"
+    # valid input
+    pkg = Pkg.REPLMode.parse_package(name)
+    @test pkg.name == name
+    pkg = Pkg.REPLMode.parse_package(uuid)
+    @test pkg.uuid == UUID(uuid)
+    pkg = Pkg.REPLMode.parse_package("$name=$uuid")
+    @test (pkg.name == name) && (pkg.uuid == UUID(uuid))
+    pkg = Pkg.REPLMode.parse_package(url; add_or_develop=true)
+    @test (pkg.repo.url == url)
+    pkg = Pkg.REPLMode.parse_package(path; add_or_develop=true)
+    @test (pkg.repo.url == path)
+    # errors
+    @test_throws CommandError Pkg.REPLMode.parse_package(url)
+    @test_throws CommandError Pkg.REPLMode.parse_package(path)
+end
+
 end # module

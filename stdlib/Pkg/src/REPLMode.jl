@@ -161,12 +161,72 @@ const lex_re = r"^[\?\./\+\-](?!\-) | ((git|ssh|http(s)?)|(git@[\w\-\.]+))(:(//)
 const Token = Union{Command, Option, VersionRange, String, Rev}
 
 function tokenize(cmd::String)::Vector{Vector{Token}}
-    words = map(m->m.match, eachmatch(lex_re, cmd))
+    # phase 1: tokenize accoring to whitespace / quotes
+    chunks = parse_quotes(cmd)
+    # phase 2: tokenzie unquoted tokens according to pkg REPL syntax
+    words::Vector{String} = []
+    for chunk in chunks
+        is_quoted = chunk[1]
+        word = chunk[2]
+        if is_quoted
+            push!(words, word)
+        else # break unquoted chunks further according to lexer
+            # note: space before `$word` is necessary to keep using current `lex_re`
+            #                                                 v
+            append!(words, map(m->m.match, eachmatch(lex_re, " $word")))
+        end
+    end
+
     commands = Vector{Token}[]
     while !isempty(words)
         push!(commands, tokenize!(words))
     end
     return commands
+end
+
+function parse_quotes(cmd::String)
+    in_doublequote = false
+    in_singlequote = false
+    all_tokens::Array = []
+    token_in_progress::Array{Char} = []
+
+    push_token!(is_quoted) = begin
+        complete_token = String(token_in_progress)
+        empty!(token_in_progress)
+        push!(all_tokens, (is_quoted, complete_token))
+    end
+
+    for c in cmd
+        if c == '"'
+            if in_singlequote # raw char
+                push!(token_in_progress, c)
+            else # delimiter
+                in_doublequote = !in_doublequote
+                push_token!(true)
+            end
+        elseif c == '\''
+            if in_doublequote # raw char
+                push!(token_in_progress, c)
+            else # delimiter
+                in_singlequote = !in_singlequote
+                push_token!(true)
+            end
+        elseif c == ' ' && !(in_doublequote || in_singlequote)
+            push_token!(false)
+        else
+            push!(token_in_progress, c)
+        end
+    end
+    if (in_doublequote || in_singlequote)
+        ArgumentError("unterminated quote")
+    else
+        push_token!(false)
+    end
+    # to avoid complexity in the main loop, empty tokens are allowed above and
+    # filtered out before returning
+    isnotempty(x) = !isempty(x[2])
+    filter!(isnotempty, all_tokens)
+    return all_tokens
 end
 
 function tokenize!(words::Vector{<:AbstractString})::Vector{Token}
