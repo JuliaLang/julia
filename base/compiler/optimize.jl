@@ -144,7 +144,6 @@ function optimize(opt::OptimizationState, @nospecialize(result))
     nargs = Int(opt.nargs) - 1
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
-    replace_code_newstyle!(opt.src, ir, nargs)
 
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
@@ -153,10 +152,17 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         # (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
-        if length(opt.src.code) < 10
+        if length(ir.stmts) < 10
             proven_pure = true
-            for i in 1:length(opt.src.code)
-                if !statement_effect_free(opt.src.code[i], opt, opt.src.ssavaluetypes[i])
+            for i in 1:length(ir.stmts)
+                stmt = ir.stmts[i]
+                # These affect control flow within the function (so may not be removed
+                # if there is no usage within the function), but don't affect the purity
+                # of the function as a whole.
+                if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
+                    continue
+                end
+                if !stmt_effect_free(stmt, ir, ir.spvals)
                     proven_pure = false
                     break
                 end
@@ -187,6 +193,8 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             force_noinline || (opt.src.inlineable = true)
         end
     end
+
+    replace_code_newstyle!(opt.src, ir, nargs)
 
     # determine and cache inlineability
     if !force_noinline
@@ -250,118 +258,6 @@ function is_pure_builtin(@nospecialize(f))
     else
         return f === return_type
     end
-end
-
-function statement_effect_free(@nospecialize(e), me::OptimizationState, @nospecialize(etype))
-    if isa(e, Expr)
-        if e.head === :(=)
-            return !isa(e.args[1], GlobalRef) && effect_free(e.args[2], me, false, etype)
-        elseif e.head === :gotoifnot
-            return effect_free(e.args[1], me, false, etype)
-        end
-    elseif isa(e, GotoNode)
-        return true
-    end
-    return effect_free(e, me, false, etype)
-end
-
-effect_free(@nospecialize(e), s::OptimizationState, allow_volatile::Bool, @nospecialize(etype)) =
-    effect_free(e, s.src, s.sp, allow_volatile, etype, s.slottypes)
-
-# detect some important side-effect-free calls (allow_volatile=true)
-# and some affect-free calls (allow_volatile=false) -- affect_free means the call
-# cannot be affected by previous calls, except assignment nodes
-function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile::Bool, @nospecialize(etype),
-                     slottypes::Vector{Any} = empty_slottypes)
-    if isa(e, GlobalRef)
-        return (isdefined(e.mod, e.name) && (allow_volatile || isconst(e.mod, e.name)))
-    elseif isa(e, Slot)
-        return src.slotflags[slot_id(e)] & SLOT_USEDUNDEF == 0
-    elseif isa(e, Expr)
-        e = e::Expr
-        head = e.head
-        if is_meta_expr_head(head)
-            return true
-        end
-        if head === :static_parameter
-            # if we aren't certain enough about the type, it might be an UndefVarError at runtime
-            return isa(etype, Const) || issingletontype(widenconst(etype))
-        end
-        if etype === Bottom
-            return false
-        end
-        ea = e.args
-        if head === :call
-            if is_known_call_p(e, is_pure_builtin, src, spvals, slottypes)
-                if !allow_volatile
-                    if is_known_call(e, arrayref, src, spvals, slottypes) || is_known_call(e, arraylen, src, spvals, slottypes)
-                        return false
-                    elseif is_known_call(e, getfield, src, spvals, slottypes)
-                        nargs = length(ea)
-                        (3 <= nargs <= 4) || return false
-                        # TODO: check ninitialized
-                        if !isa(etype, Const) && !isconstType(etype)
-                            # first argument must be immutable to ensure e is affect_free
-                            a = ea[2]
-                            typ = unwrap_unionall(widenconst(argextype(a, src, spvals, slottypes)))
-                            if isType(typ)
-                                # all fields of subtypes of Type are effect-free
-                                # (including the non-inferrable uid field)
-                            elseif !isa(typ, DataType) || typ.abstract || (typ.mutable && length(typ.types) > 0)
-                                return false
-                            end
-                        end
-                    end
-                end
-                # fall-through
-            elseif is_known_call(e, _apply, src, spvals, slottypes) && length(ea) > 1
-                ft = argextype(ea[2], src, spvals, slottypes)
-                if !isa(ft, Const) || (!contains_is(_PURE_BUILTINS, ft.val) &&
-                                       ft.val !== Core.sizeof)
-                    return false
-                end
-                # fall-through
-            else
-                return false
-            end
-        elseif head === :new
-            a = ea[1]
-            typ = argextype(a, src, spvals, slottypes)
-            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(typ)
-            isexact || return false
-            isconcretedispatch(typ) || return false
-            typ = typ::DataType
-            if !allow_volatile && typ.mutable
-                return false
-            end
-            fieldcount(typ) >= length(ea) - 1 || return false
-            for fld_idx in 1:(length(ea) - 1)
-                eT = argextype(ea[fld_idx + 1], src, spvals, slottypes)
-                fT = fieldtype(typ, fld_idx)
-                eT ⊑ fT || return false
-            end
-            # fall-through
-        elseif head === :return
-            # fall-through
-        elseif head === :isdefined
-            return allow_volatile
-        elseif head === :the_exception
-            return allow_volatile
-        elseif head === :copyast
-            return true
-        else
-            return false
-        end
-        for a in ea
-            if !effect_free(a, src, spvals, allow_volatile, argextype(a, src, spvals, slottypes))
-                return false
-            end
-        end
-    elseif isa(e, GotoNode)
-        return false
-    end
-    return true
 end
 
 ## Computing the cost of a function body
