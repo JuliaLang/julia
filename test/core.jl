@@ -6274,3 +6274,8 @@ bar27770() = Nullable27770().value
 # Issue 27910
 f27910() = ((),)[2]
 @test_throws BoundsError f27910()
+
+# Issue 9765
+f9765(::Bool) = 1
+g9765() = f9765(isa(1, 1))
+@test_throws TypeError g9765()
