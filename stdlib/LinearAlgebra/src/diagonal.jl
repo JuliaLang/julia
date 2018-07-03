@@ -494,5 +494,5 @@ function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     Cholesky(A, 'U', convert(BlasInt, info))
 end
 
-cholesky(A::Diagonal, ::Val{false}; check::Bool = true) =
+cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
     cholesky!(cholcopy(A), Val(false); check = check)
