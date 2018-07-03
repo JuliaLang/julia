@@ -135,6 +135,11 @@ function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
     (project_file === nothing) && return false
     project = read_project(project_file)
     compat = get(project, "compat", Dict())
+    if haskey(compat, "julia")
+        if !(VERSION in Types.semver_spec(compat["julia"]))
+            @warn("julia version requirement for package $(pkg.name) not satisfied")
+        end
+    end
     for (deppkg_name, uuid) in project["deps"]
         vspec = haskey(compat, deppkg_name) ? Types.semver_spec(compat[deppkg_name]) : VersionSpec()
         deppkg = PackageSpec(deppkg_name, UUID(uuid), vspec)
@@ -162,7 +167,7 @@ function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
             if pkg_name == "julia"
                 if !(VERSION in vspec)
-                    @warn("julia version requirement for package $pkg not satisfied")
+                    @warn("julia version requirement for package $(pkg.name) not satisfied")
                 end
             else
                 deppkg = PackageSpec(pkg_name, vspec)
@@ -293,6 +298,12 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
         end
         pkg.version = v
     end
+    proj_compat = Types.project_compatibility(ctx, "julia")
+    v = intersect(VERSION, proj_compat)
+    if isempty(v)
+        @warn("julia version requirement for project not satisfied")
+    end
+
     # construct data structures for resolver and call it
     reqs = Requires(pkg.uuid => VersionSpec(pkg.version) for pkg in pkgs if pkg.uuid ≠ uuid_julia)
     fixed = collect_fixed!(ctx, pkgs, uuid_to_name)
