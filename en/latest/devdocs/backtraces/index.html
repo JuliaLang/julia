@@ -12,13 +12,13 @@ WARNING: Base.versioninfo is deprecated: it has been moved to the standard libra
 Add `using InteractiveUtils` to your imports.
   likely near /home/travis/build/JuliaLang/julia/doc/make.jl:147
 Julia Version 0.7.0-beta.unknown
-Commit 7a71ec4* (2018-07-02 16:23 UTC)
+Commit ac65654* (2018-07-03 14:34 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: Intel(R) Xeon(R) CPU @ 2.60GHz
+  CPU: Intel(R) Xeon(R) CPU @ 2.30GHz
   WORD_SIZE: 64
   LIBM: libopenlibm
-  LLVM: libLLVM-6.0.0 (ORCJIT, sandybridge)
+  LLVM: libLLVM-6.0.0 (ORCJIT, haswell)
 Environment:
   JULIA_TEST_MAXRSS_MB = 1200
   JULIA_CPU_CORES = 4</code></pre><h2><a class="nav-anchor" id="Segfaults-during-bootstrap-(sysimg.jl)-1" href="#Segfaults-during-bootstrap-(sysimg.jl)-1">Segfaults during bootstrap (<code>sysimg.jl</code>)</a></h2><p>Segfaults toward the end of the <code>make</code> process of building Julia are a common symptom of something going wrong while Julia is preparsing the corpus of code in the <code>base/</code> folder.  Many factors can contribute toward this process dying unexpectedly, however it is as often as not due to an error in the C-code portion of Julia, and as such must typically be debugged with a debug build inside of <code>gdb</code>.  Explicitly:</p><p>Create a debug build of Julia:</p><pre><code class="language-none">$ cd &lt;julia_root&gt;
