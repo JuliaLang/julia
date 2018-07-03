@@ -710,8 +710,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             jl_serialize_value(s, jl_nothing);
         else
             jl_serialize_value(s, (jl_value_t*)m->ambig);
-        write_int8(s->s, m->called);
+        write_int32(s->s, m->called);
         write_int32(s->s, m->nargs);
+        write_int32(s->s, m->nospecialize);
         write_int8(s->s, m->isva);
         write_int8(s->s, m->pure);
         jl_serialize_value(s, (jl_value_t*)m->module);
@@ -1563,7 +1564,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     jl_method_t *m =
         (jl_method_t*)jl_gc_alloc(s->ptls, sizeof(jl_method_t),
                                   jl_method_type);
-    memset(m, 0, sizeof(jl_method_type));
+    memset(m, 0, sizeof(jl_method_t));
     uintptr_t pos = backref_list.len;
     if (usetable)
         arraylist_push(&backref_list, m);
@@ -1585,8 +1586,9 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->min_world = jl_world_counter;
     m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
     jl_gc_wb(m, m->ambig);
-    m->called = read_int8(s->s);
+    m->called = read_int32(s->s);
     m->nargs = read_int32(s->s);
+    m->nospecialize = read_int32(s->s);
     m->isva = read_int8(s->s);
     m->pure = read_int8(s->s);
     m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);
