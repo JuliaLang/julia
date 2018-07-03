@@ -1020,7 +1020,7 @@ function promptf()
             end
         end
     end
-    return "pkg> "
+    return prefix * "pkg> "
 end
 
 # Set up the repl Pkg REPLMode
