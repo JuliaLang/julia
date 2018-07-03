@@ -83,9 +83,13 @@ end
 stat(fd::Integer)           = stat(RawFD(fd))
 
 """
-    stat(file)
+    stat(file; link = false)
 
 Returns a structure whose fields contain information about the file.
+If `link` is `true, gets the info for the link itself rather than the file it
+refers to. Also, if `link` is true, must be called on a file path rather than a
+file object or a file descriptor.
+
 The fields of the structure are:
 
 | Name    | Description                                                        |
@@ -104,182 +108,97 @@ The fields of the structure are:
 | ctime   | Unix timestamp of when the file was created                        |
 
 """
-stat(path...) = stat(joinpath(path...))
+function stat(path..., link = false)
+    full_path = joinpath(path...)
+    if link
+        stat(full_path)
+    else
+         lstat(full_path)
+    end
+end
 
 """
-    lstat(file)
+    filetype(path; link = false) -> Symbol
 
-Like [`stat`](@ref), but for symbolic links gets the info for the link
-itself rather than the file it refers to.
-This function must be called on a file path rather than a file object or a file
-descriptor.
+Returns the file type of `path`, with the following possibilities:
+
+- `:invalid`: not a valid filesystem path.-
+- `:FIFO`: a FIFO
+- `:chardev`: a character device
+- `:dir`: a directory
+- `:blockdev`: a block device
+- `:file`: a regular file
+- `:link`: a symbolic link
+- `:socket`: a socket
+
+If `link` is true, get the type of a link itself, with the same restrictions as
+[`stat`](@ref).
 """
-lstat(path...) = lstat(joinpath(path...))
-
-# some convenience functions
-
-"""
-    filemode(file)
-
-Equivalent to `stat(file).mode`
-"""
-filemode(st::StatStruct) = st.mode
-
-"""
-    filesize(path...)
-
-Equivalent to `stat(file).size`.
-"""
-filesize(st::StatStruct) = st.size
-
-"""
-    mtime(file)
-
-Equivalent to `stat(file).mtime`.
-"""
-mtime(st::StatStruct) = st.mtime
-
-"""
-    ctime(file)
-
-Equivalent to `stat(file).ctime`
-"""
-ctime(st::StatStruct) = st.ctime
-
-# mode type predicates
+function filetype(st::StatStruct; link = false)
+    mode = st.mode & 0xf000
+    if mode == 0x0000
+        :invalid
+    elseif mode == 0x1000
+        :FIFO
+    elseif mode == 0x2000
+        :chardev
+    elseif mode == 0x4000
+        :dir
+    elseif mode == 0x6000
+        :blockdev
+    elseif mode == 0x8000
+        :file
+    elseif mode == 0xa000
+        :link
+    elseif mode == 0xc000
+        :socket
+    else
+        error("Unknown path type")
+    end
+end
 
 """
-    ispath(path) -> Bool
+    fileflags(path)
 
-Returns `true` if `path` is a valid filesystem path, `false` otherwise.
+Returns a named tuple of the flags of a `path`, if the `path`:
+
+- `setuid`: has the setuid flag set
+- `setgid`: has the setgid flag set
+- `sticky`: has the sticky bit set
 """
-ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
+fileflags(path) = (
+    setuid = (filemode(st) & 0o4000) > 0,
+    setgid = (filemode(st) & 0o2000) > 0,
+    sticky = (filemode(st) & 0o1000) > 0
+)
 
-"""
-    isfifo(path) -> Bool
+translate_permission(bit) =
+    if bit == 1
+        :execute
+    elseif bit == 2
+        :write
+    elseif bit == 4
+        :read
+    else
+        error("Unknown permissions type")
+    end
 
-Returns `true` if `path` is a FIFO, `false` otherwise.
-"""
-isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
-
-"""
-    ischardev(path) -> Bool
-
-Returns `true` if `path` is a character device, `false` otherwise.
-"""
-ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
-
-"""
-    isdir(path) -> Bool
-
-Returns `true` if `path` is a directory, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> isdir(homedir())
-true
-
-julia> isdir("not/a/directory")
-false
-```
-"""
-isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
+permission_for_shift(shift) =
+    translate_permission(UInt8((st.mode >> shift) & 0x7))
 
 """
-    isblockdev(path) -> Bool
+    permissions(path)
 
-Returns `true` if `path` is a block device, `false` otherwise.
+Returns a named tuple of the permissions of a `path` for the `user`, the
+`group`, and `neither`.
+
+Permissions can be `:execute`, `:write`, `:read`, or `:other`.
 """
-isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
-
-"""
-    isfile(path) -> Bool
-
-Returns `true` if `path` is a regular file, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> isfile(homedir())
-false
-
-julia> f = open("test_file.txt", "w");
-
-julia> isfile(f)
-true
-
-julia> close(f); rm("test_file.txt")
-```
-"""
-isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
-
-"""
-    islink(path) -> Bool
-
-Returns `true` if `path` is a symbolic link, `false` otherwise.
-"""
-islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
-
-"""
-    issocket(path) -> Bool
-
-Returns `true` if `path` is a socket, `false` otherwise.
-"""
-issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
-
-# mode permission predicates
-
-"""
-    issetuid(path) -> Bool
-
-Returns `true` if `path` has the setuid flag set, `false` otherwise.
-"""
-issetuid(st::StatStruct) = (filemode(st) & 0o4000) > 0
-
-"""
-    issetgid(path) -> Bool
-
-Returns `true` if `path` has the setgid flag set, `false` otherwise.
-"""
-issetgid(st::StatStruct) = (filemode(st) & 0o2000) > 0
-
-"""
-    issticky(path) -> Bool
-
-Returns `true` if `path` has the sticky bit set, `false` otherwise.
-"""
-issticky(st::StatStruct) = (filemode(st) & 0o1000) > 0
-
-"""
-    uperm(file)
-
-Gets the permissions of the owner of the file as a bitfield of
-
-| Value | Description        |
-|:------|:-------------------|
-| 01    | Execute Permission |
-| 02    | Write Permission   |
-| 04    | Read Permission    |
-
-For allowed arguments, see [`stat`](@ref).
-"""
-uperm(st::StatStruct) = UInt8((filemode(st) >> 6) & 0x7)
-
-"""
-    gperm(file)
-
-Like [`uperm`](@ref) but gets the permissions of the group owning the file.
-"""
-gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
-
-"""
-    operm(file)
-
-Like [`uperm`](@ref) but gets the permissions for people who neither own the file nor are a member of
-the group owning the file
-"""
-operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
-
-# mode predicate methods for file names
+permissions(st::StatStruct) = (
+    user = permission_for_shift(st, 6),
+    group = permission_for_shift(st, 3),
+    neither = permission_for_shift(st, 0)
+)
 
 for f in Symbol[
     :ispath,
