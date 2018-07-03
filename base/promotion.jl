@@ -2,13 +2,10 @@
 
 ## type join (closest common ancestor, or least upper bound) ##
 
-"""
-    typejoin(T, S)
+if nameof(@__MODULE__) === :Base
+const typejoin = Core.Compiler.typejoin
+else
 
-
-Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
-they both inherit.
-"""
 typejoin() = (@_pure_meta; Bottom)
 typejoin(@nospecialize(t)) = (@_pure_meta; t)
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
@@ -117,6 +114,15 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     end
     return Any
 end
+end
+
+"""
+    typejoin(T, S)
+
+Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
+they both inherit.
+"""
+typejoin
 
 """
     promote_typejoin(T, S)
