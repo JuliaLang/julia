@@ -280,18 +280,6 @@ temp_pkg_dir() do project_path
     @testset "add julia" begin
         @test_throws CommandError Pkg.add("julia")
     end
-
-    @testset "up in Project without manifest" begin
-        mktempdir() do dir
-            cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
-            cd(joinpath(dir, "UnregisteredWithProject")) do
-               with_current_env() do
-                    Pkg.up()
-                    @test haskey(Pkg.installed(), "Example")
-                end
-            end
-        end
-    end
 end
 
 temp_pkg_dir() do project_path
@@ -300,10 +288,22 @@ temp_pkg_dir() do project_path
         @test haskey(Pkg.installed(), TEST_PKG.name)
         Pkg.rm(TEST_PKG.name)
     end
+
+    @testset "up in Project without manifest" begin
+        mktempdir() do dir
+            cp(joinpath(@__DIR__, "test_packages", "UnregisteredWithProject"), joinpath(dir, "UnregisteredWithProject"))
+            cd(joinpath(dir, "UnregisteredWithProject")) do
+                with_current_env() do
+                    Pkg.up()
+                    @test haskey(Pkg.installed(), "Example")
+                end
+            end
+        end
+    end
 end
 
 @testset "parse package url win" begin
-    @test typeof(Pkg.REPLMode.parse_package("https://github.com/abc/ABC.jl"; context=Pkg.REPLMode.CMD_ADD)) == PackageSpec
+    @test typeof(Pkg.REPLMode.parse_package("https://github.com/abc/ABC.jl"; add_or_develop=true)) == PackageSpec
 end
 
 @testset "preview generate" begin
@@ -349,7 +349,9 @@ temp_pkg_dir() do project_path
             mktempdir() do tmp; cd(tmp) do
                 pkg_name = "FooBar"
                 # create a project and grab its uuid
-                Pkg.generate(pkg_name)
+                withenv("USER" => "Test User") do
+                    Pkg.generate(pkg_name)
+                end
                 uuid = extract_uuid(joinpath(pkg_name, "Project.toml"))
                 # activate project env
                 Pkg.activate(abspath(pkg_name))
@@ -373,7 +375,9 @@ temp_pkg_dir() do project_path
     @testset "invalid repo url" begin
         cd(project_path) do
             @test_throws CommandError Pkg.add("https://github.com")
-            Pkg.generate("FooBar")
+            withenv("USER" => "Test User") do
+                Pkg.generate("FooBar")
+            end
             @test_throws CommandError Pkg.add("./Foobar")
         end
     end
@@ -383,10 +387,14 @@ temp_pkg_dir() do project_path
     function with_dummy_env(f)
         TEST_SIG = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time()), 0)
         env_path = joinpath(mktempdir(), "Dummy")
-        Pkg.generate(env_path)
+        withenv("USER" => "Test User") do
+            Pkg.generate(env_path)
+        end
         repo = LibGit2.init(env_path)
-        LibGit2.add!(repo, "*")
-        LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)
+        LibGit2.with(LibGit2.init(env_path)) do repo
+            LibGit2.add!(repo, "*")
+            LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)
+        end
         Pkg.activate(env_path)
         try
             f()
@@ -399,8 +407,9 @@ temp_pkg_dir() do project_path
     with_dummy_env() do
         @testset "inconsistent repo state" begin
             package_path = joinpath(project_path, "Example")
-            LibGit2.clone("https://github.com/JuliaLang/Example.jl", package_path)
-            Pkg.add(package_path)
+            LibGit2.with(LibGit2.clone("https://github.com/JuliaLang/Example.jl", package_path)) do repo
+                Pkg.add(package_path)
+            end
             rm(joinpath(package_path, ".git"); force=true, recursive=true)
             @test_throws CommandError Pkg.up()
         end

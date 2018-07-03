@@ -9,7 +9,7 @@ using REPL.TerminalMenus
 
 depots() = Base.DEPOT_PATH
 logdir() = joinpath(depots()[1], "logs")
-devdir() = get(ENV, "JULIA_PKG_DEVDIR", joinpath(homedir(), ".julia", "dev"))
+devdir() = get(ENV, "JULIA_PKG_DEVDIR", joinpath(depots()[1], "dev"))
 const UPDATED_REGISTRY_THIS_SESSION = Ref(false)
 
 # load snapshotted dependencies
