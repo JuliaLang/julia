@@ -297,10 +297,13 @@ end
     @test CD.info == 0
 
     # complex, failing
-    D[2, 2] = 0
+    D[2, 2] = 0.0 + 0im
     @test_throws PosDefException cholesky(D)
     Dnpd = cholesky(D; check = false)
     @test Dnpd.info == 2
+
+    # InexactError for Int
+    @test_throws InexactError cholesky!(Diagonal([2, 1]))
 end
 
 end # module TestCholesky
