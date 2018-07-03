@@ -821,14 +821,6 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             return 0;
         }
 
-        if (jl_is_kind(elt)) {
-            // kind slots always get guard entries (checking for subtypes of Type)
-            if (decl_i == elt || jl_subtype((jl_value_t*)jl_type_type, decl_i))
-                continue;
-            // TODO: other code paths that could reach here
-            return 0;
-        }
-
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
                 (definition->nospecialize & (1 << (i_arg - 1)))) {
             if (decl_i == (jl_value_t*)jl_any_type) {
@@ -842,6 +834,14 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 return 0;
             }
             // TODO: handle @nospecialize with other declared types
+        }
+
+        if (jl_is_kind(elt)) {
+            // kind slots always get guard entries (checking for subtypes of Type)
+            if (decl_i == elt || jl_subtype((jl_value_t*)jl_type_type, decl_i))
+                continue;
+            // TODO: other code paths that could reach here
+            return 0;
         }
 
         if (jl_is_type_type(elt)) {
