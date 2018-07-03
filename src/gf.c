@@ -1393,13 +1393,17 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
         jl_typemap_visitor(gf->name->mt->cache, set_max_world2, (void*)&def);
 
         // invalidate backedges
+        if (JL_DEBUG_METHOD_INVALIDATION) {
+            jl_static_show(JL_STDOUT, (jl_value_t*)def.replaced);
+            jl_uv_puts(JL_STDOUT, "\n", 1);
+        }
         JL_LOCK_NOGC(&def.replaced->def.method->writelock);
         jl_array_t *backedges = def.replaced->backedges;
         if (backedges) {
             size_t i, l = jl_array_len(backedges);
             jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_data(backedges);
             for (i = 0; i < l; i++) {
-                invalidate_method_instance(replaced[i], closure->max_world, 0);
+                invalidate_method_instance(replaced[i], closure->max_world, 1);
             }
         }
         closure->invalidated = 1;
