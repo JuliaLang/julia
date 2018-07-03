@@ -443,6 +443,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint64(s->s, m->uuid.lo);
     write_uint64(s->s, m->build_id);
     write_int32(s->s, m->counter);
+    write_int32(s->s, m->nospecialize);
 }
 
 static int is_ast_node(jl_value_t *v)
@@ -1781,8 +1782,9 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s)
     m->uuid.hi = read_uint64(s->s);
     m->uuid.lo = read_uint64(s->s);
     m->build_id = read_uint64(s->s);
-    m->primary_world = jl_world_counter;
     m->counter = read_int32(s->s);
+    m->nospecialize = read_int32(s->s);
+    m->primary_world = jl_world_counter;
     return (jl_value_t*)m;
 }
 

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+@nospecialize
+
 if Pair != Base.Pair
 import Base: Base, IOContext, string, join, sprint
 IOContext(io::IO, KV::Pair) = IOContext(io, Base.Pair(KV[1], KV[2]))
@@ -26,7 +28,7 @@ end
 print_ssa(io::IO, @nospecialize(val), argnames) = Base.show(io, val)
 
 
-function print_node(io::IO, idx::Int, @nospecialize(stmt), used, argnames, maxsize; color = true, print_typ=true)
+function print_node(io::IO, idx::Int, @nospecialize(stmt), used, argnames, maxsize; color::Bool=true, print_typ::Bool=true)
     if idx in used
         pad = " "^(maxsize-length(string(idx)))
         Base.print(io, "%$idx $pad= ")
@@ -428,3 +430,5 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
         println(io)
     end
 end
+
+@specialize
