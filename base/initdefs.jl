@@ -188,7 +188,7 @@ function active_project(search_load_path::Bool=true)
         project == "@" && continue
         project = load_path_expand(project)
         project === nothing && continue
-        if !isfile_casesensitive(project)
+        if !isfile_casesensitive(project) && basename(project) ∉ project_names
             project = abspath(project, "Project.toml")
         end
         return project

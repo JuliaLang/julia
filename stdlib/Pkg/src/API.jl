@@ -475,12 +475,7 @@ function precompile(ctx::Context)
     for (i, pkg) in enumerate(needs_to_be_precompiled)
         code = """
             import OldPkg
-            empty!(Base.DEPOT_PATH)
-            append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
-            empty!(Base.DL_LOAD_PATH)
-            append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
-            empty!(Base.LOAD_PATH)
-            append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
+            $(Base.load_path_setup_code())
             import $pkg
         """
         printpkgstyle(ctx, :Precompiling, pkg * " [$i of $(length(needs_to_be_precompiled))]")

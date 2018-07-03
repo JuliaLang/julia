@@ -1072,6 +1072,20 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
+function load_path_setup_code(load_path::Bool=true)
+    code = """
+    append!(empty!(Base.DEPOT_PATH), $(repr(map(abspath, DEPOT_PATH))))
+    append!(empty!(Base.DL_LOAD_PATH), $(repr(map(abspath, DL_LOAD_PATH))))
+    """
+    if load_path
+        code *= """
+        append!(empty!(Base.LOAD_PATH), $(repr(map(abspath, Base.load_path()))))
+        Base.HOME_PROJECT[] = Base.ACTIVE_PROJECT[] = nothing
+        """
+    end
+    return code
+end
+
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
@@ -1091,12 +1105,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         write(in, """
         begin
         import OldPkg
-        empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
-        empty!(Base.DEPOT_PATH)
-        append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
-        empty!(Base.DL_LOAD_PATH)
-        append!(Base.DL_LOAD_PATH, $(repr(DL_LOAD_PATH)))
+        $(Base.load_path_setup_code())
         Base._track_dependencies[] = true
         empty!(Base._concrete_dependencies)
         """)

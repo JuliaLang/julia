@@ -582,12 +582,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
     # a separate process. Errors are written to errfile for later reporting.
     code = """
         import OldPkg
-        empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
-        empty!(Base.DEPOT_PATH)
-        append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
-        empty!(Base.DL_LOAD_PATH)
-        append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
+        $(Base.load_path_setup_code())
         open("$(escape_string(errfile))", "a") do f
             pkg, build_file = "$pkg", "$(escape_string(build_file))"
             try
