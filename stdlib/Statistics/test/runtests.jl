@@ -174,6 +174,9 @@ end
     @test var([1 2 3 4 5; 6 7 8 9 10], dims=2) ≈ [2.5 2.5]'
     @test var([1 2 3 4 5; 6 7 8 9 10], dims=2; corrected=false) ≈ [2.0 2.0]'
 
+    @test var(collect(1:99), dims=1) ≈ [825]
+    @test var(Matrix(transpose(collect(1:99))), dims=2) ≈ [825]
+
     @test stdm([1,2,3], 2) ≈ 1.
     @test std([1,2,3]) ≈ 1.
     @test std([1,2,3]; corrected=false) ≈ sqrt(2.0/3)

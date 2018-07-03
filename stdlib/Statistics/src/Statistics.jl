@@ -188,7 +188,7 @@ centralizedabs2fun(m) = x -> abs2.(x - m)
 centralize_sumabs2(A::AbstractArray, m) =
     mapreduce(centralizedabs2fun(m), +, A)
 centralize_sumabs2(A::AbstractArray, m, ifirst::Int, ilast::Int) =
-    mapreduce_impl(centralizedabs2fun(m), +, A, ifirst, ilast)
+    Base.mapreduce_impl(centralizedabs2fun(m), +, A, ifirst, ilast)
 
 function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::AbstractArray) where S
     # following the implementation of _mapreducedim! at base/reducedim.jl
