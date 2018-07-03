@@ -737,7 +737,9 @@
           (else
            (if (equal? type-params params)
                `(new ,Texpr ,@(map (lambda (fty val)
-                                     `(call (top convert) ,fty ,val))
+                                     (if (equal? fty '(core Any))
+                                         val
+                                         `(call (top convert) ,fty ,val)))
                                    (list-head field-types (length args)) args))
                (let ((tn (make-ssavalue)))
                  `(block
