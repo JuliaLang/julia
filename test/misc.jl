@@ -607,3 +607,37 @@ end
 @test_warn "could not import" Core.eval(Main,        :(import ........notdefined_26310__))
 @test_nowarn Core.eval(Main, :(import .Main))
 @test_nowarn Core.eval(Main, :(import ....Main))
+
+# issue #27239
+@testset "strftime tests issue #27239" begin
+
+    # save current locales
+    locales = Dict()
+    for cat in 0:9999
+        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, C_NULL)
+        if cstr != C_NULL
+            locales[cat] = unsafe_string(cstr)
+        end
+    end
+
+    # change to non-Unicode Korean
+    for (cat, _) in locales
+        korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
+        for lc in korloc
+            cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
+        end
+    end
+
+    # system dependent formats
+    timestr_c = Libc.strftime(0.0)
+    timestr_aAbBpZ = Libc.strftime("%a %A %b %B %p %Z", 0)
+
+    # recover locales
+    for (cat, lc) in locales
+        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
+    end
+
+    # tests
+    @test isvalid(timestr_c)
+    @test isvalid(timestr_aAbBpZ)
+end

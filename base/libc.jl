@@ -170,12 +170,13 @@ library.
 """
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
+# Use wcsftime instead of strftime to support different locales
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Base.StringVector(128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ref{TmStruct}),
-              timestr, length(timestr), fmt, tm)
+    wctimestr = Vector{Cwchar_t}(undef, 128)
+    n = ccall(:wcsftime, Csize_t, (Ptr{Cwchar_t}, Csize_t, Cwstring, Ref{TmStruct}),
+              wctimestr, length(wctimestr), fmt, tm)
     n == 0 && return ""
-    return String(resize!(timestr,n))
+    return transcode(String, resize!(wctimestr, n))
 end
 
 """
