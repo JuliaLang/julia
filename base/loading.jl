@@ -787,6 +787,9 @@ end
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
+const full_warning_showed = Ref(false)
+const modules_warned_for = Set{PkgId}()
+
 """
     require(module::Symbol)
 
@@ -815,16 +818,32 @@ function require(into::Module, mod::Symbol)
         if where.uuid === nothing
             throw(ArgumentError("""
                 Package $mod not found in current path:
-                 - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
+                - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
                 """))
         else
-            throw(ArgumentError("""
-                Package $(where.name) does not have $mod in its dependencies:
-                 - If you have $(where.name) checked out for development and have
-                   added $mod as a dependency but haven't updated your primary
-                   environment's manifest file, try `Pkg.resolve()`.
-                 - Otherwise you may need to report an issue with $(where.name).
-                """))
+            s = """
+            Package $(where.name) does not have $mod in its dependencies:
+            - If you have $(where.name) checked out for development and have
+              added $mod as a dependency but haven't updated your primary
+              environment's manifest file, try `Pkg.resolve()`.
+            - Otherwise you may need to report an issue with $(where.name)"""
+
+            uuidkey = identify_package(PkgId(string(into)), String(mod))
+            # Attempt fall back to toplevel loading
+            if uuidkey === nothing
+                @error s
+            else
+                if !(where in modules_warned_for)
+                    @warn string(
+                        full_warning_showed[] ? "" : s, "\n",
+                        string("Loading $(mod) into $(where.name) from project dependency, ",
+                               "future warnings for $(where.name) are suppressed.")
+                    ) _module = nothing _file = nothing
+                end
+
+                push!(modules_warned_for, where)
+                full_warning_showed[] = true
+            end
         end
     end
     if _track_dependencies[]
