@@ -29,7 +29,7 @@ export rand!, randn!,
        shuffle, shuffle!,
        randperm, randperm!,
        randcycle, randcycle!,
-       AbstractRNG, MersenneTwister, RandomDevice
+       AbstractRNG, MersenneTwister, RandomDevice, RANDOM_DEVICE
 
 ## general definitions
 

@@ -778,3 +778,7 @@ end
 @testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
     @test length.(rand.(T(), 1:3)) == 1:3
 end
+
+@testset "RANDOM_DEVICE" begin
+    @test rand(Random.RANDOM_DEVICE) isa Float64
+end

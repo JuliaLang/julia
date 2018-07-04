@@ -67,6 +67,7 @@ RandomDevice
 RandomDevice(::Nothing) = RandomDevice()
 seed!(rng::RandomDevice) = rng
 
+const RANDOM_DEVICE = RandomDevice()
 
 ## MersenneTwister
 
@@ -306,6 +307,15 @@ const THREAD_RNGs = MersenneTwister[]
 end
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
+
+    if !Sys.iswindows()
+        # open /dev/urandom "in-place" (in RANDOM_DEVICE.file)
+        RANDOM_DEVICE.file.handle = pointer(RANDOM_DEVICE.file.ios)
+        systemerror("opening file /dev/urandom",
+                    ccall(:ios_file, Ptr{Cvoid},
+                          (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+                          RANDOM_DEVICE.file.ios, "/dev/urandom", 1, 0, 0, 0) == C_NULL)
+    end
 end
 
 
