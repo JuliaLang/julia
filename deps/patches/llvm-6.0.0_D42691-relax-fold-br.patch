@@ -1,0 +1,134 @@
+commit 4c64dfea37812732f39e68ca444b2eb809d78dcc
+Author: Serguei Katkov <serguei.katkov@azul.com>
+Date:   Thu Feb 8 07:16:29 2018 +0000
+
+    [SimplifyCFG] Re-apply Relax restriction for folding unconditional branches
+    
+    The commit rL308422 introduces a restriction for folding unconditional
+    branches. Specifically if empty block with unconditional branch leads to
+    header of the loop then elimination of this basic block is prohibited.
+    However it seems this condition is redundantly strict.
+    If elimination of this basic block does not introduce more back edges
+    then we can eliminate this block.
+    
+    The patch implements this relax of restriction.
+    
+    The test profile/Linux/counter_promo_nest.c in compiler-rt project
+    is updated to meet this change.
+    
+    Reviewers: efriedma, mcrosier, pacxx, hsung, davidxl
+    Reviewed By: pacxx
+    Subscribers: llvm-commits
+    Differential Revision: https://reviews.llvm.org/D42691
+    
+    
+    git-svn-id: https://llvm.org/svn/llvm-project/llvm/trunk@324572 91177308-0d34-0410-b5e6-96231b3b80d8
+
+diff --git a/lib/Transforms/Utils/SimplifyCFG.cpp b/lib/Transforms/Utils/SimplifyCFG.cpp
+index c3343ed8ecc..82ef1b91e74 100644
+--- a/lib/Transforms/Utils/SimplifyCFG.cpp
++++ b/lib/Transforms/Utils/SimplifyCFG.cpp
+@@ -5733,9 +5733,12 @@ bool SimplifyCFGOpt::SimplifyUncondBranch(BranchInst *BI,
+   // header. (This is for early invocations before loop simplify and
+   // vectorization to keep canonical loop forms for nested loops. These blocks
+   // can be eliminated when the pass is invoked later in the back-end.)
++  // Note that if BB has only one predecessor then we do not introduce new
++  // backedge, so we can eliminate BB.
+   bool NeedCanonicalLoop =
+       Options.NeedCanonicalLoop &&
+-      (LoopHeaders && (LoopHeaders->count(BB) || LoopHeaders->count(Succ)));
++      (LoopHeaders && std::distance(pred_begin(BB), pred_end(BB)) > 1 &&
++       (LoopHeaders->count(BB) || LoopHeaders->count(Succ)));
+   BasicBlock::iterator I = BB->getFirstNonPHIOrDbg()->getIterator();
+   if (I->isTerminator() && BB != &BB->getParent()->getEntryBlock() &&
+       !NeedCanonicalLoop && TryToSimplifyUncondBranchFromEmptyBlock(BB))
+diff --git a/test/Transforms/LoopUnroll/peel-loop.ll b/test/Transforms/LoopUnroll/peel-loop.ll
+index 3f7c64d8154..55e818244a7 100644
+--- a/test/Transforms/LoopUnroll/peel-loop.ll
++++ b/test/Transforms/LoopUnroll/peel-loop.ll
+@@ -19,10 +19,8 @@
+ ; CHECK: store i32 2, i32* %[[INC2]], align 4
+ ; CHECK: %[[CMP3:.*]] = icmp eq i32 %k, 3
+ ; CHECK: br i1 %[[CMP3]], label %for.end, label %[[LOOP_PH:.*]]
+-; CHECK: [[LOOP_PH]]:
+-; CHECK: br label %[[LOOP:.*]]
+-; CHECK: [[LOOP]]:
+-; CHECK: %[[IV:.*]] = phi i32 [ 3, %[[LOOP_PH]] ], [ {{.*}}, %[[LOOP]] ]
++; CHECK: for.end:
++; CHECK: ret void
+ 
+ define void @basic(i32* %p, i32 %k) #0 {
+ entry:
+@@ -68,11 +66,8 @@ for.end:                                          ; preds = %for.cond.for.end_cr
+ ; CHECK: store i32 2, i32* %[[INC2]], align 4
+ ; CHECK: %[[CMP3:.*]] = icmp eq i32 %k, 3
+ ; CHECK: br i1 %[[CMP3]], label %for.end, label %[[LOOP_PH:.*]]
+-; CHECK: [[LOOP_PH]]:
+-; CHECK: br label %[[LOOP:.*]]
+-; CHECK: [[LOOP]]:
+-; CHECK: %[[IV:.*]] = phi i32 [ 3, %[[LOOP_PH]] ], [ %[[IV:.*]], %[[LOOP]] ]
+-; CHECK: %ret = phi i32 [ 0, %entry ], [ 1, %[[NEXT0]] ], [ 2, %[[NEXT1]] ], [ 3, %[[NEXT2]] ], [ %[[IV]], %[[LOOP]] ]
++; CHECK: for.end:
++; CHECK: %ret = phi i32 [ 0, %entry ], [ 1, %[[NEXT0]] ], [ 2, %[[NEXT1]] ], [ 3, %[[NEXT2]] ], [ %inc, %for.body ]
+ ; CHECK: ret i32 %ret
+ define i32 @output(i32* %p, i32 %k) #0 {
+ entry:
+diff --git a/test/Transforms/LoopUnswitch/2015-06-17-Metadata.ll b/test/Transforms/LoopUnswitch/2015-06-17-Metadata.ll
+index 8652829bc51..a215be9d487 100644
+--- a/test/Transforms/LoopUnswitch/2015-06-17-Metadata.ll
++++ b/test/Transforms/LoopUnswitch/2015-06-17-Metadata.ll
+@@ -16,7 +16,7 @@ for.body:                                         ; preds = %for.inc, %for.body.
+   %cmp1 = icmp eq i32 %a, 12345
+   br i1 %cmp1, label %if.then, label %if.else, !prof !0
+ ; CHECK: %cmp1 = icmp eq i32 %a, 12345
+-; CHECK-NEXT: br i1 %cmp1, label %for.body.preheader.split.us, label %for.body.preheader.split, !prof !0
++; CHECK-NEXT: br i1 %cmp1, label %for.body.us, label %for.body, !prof !0
+ if.then:                                          ; preds = %for.body
+ ; CHECK: for.body.us:
+ ; CHECK: add nsw i32 %{{.*}}, 123
+@@ -53,7 +53,7 @@ entry:
+   br label %for.body
+ ;CHECK: entry:
+ ;CHECK-NEXT: %cmp1 = icmp eq i32 1, 2
+-;CHECK-NEXT: br i1 %cmp1, label %entry.split, label %for.cond.cleanup.split, !prof !1
++;CHECK-NEXT: br i1 %cmp1, label %for.body, label %for.cond.cleanup.split, !prof !1
+ ;CHECK: for.body:
+ for.body:                                         ; preds = %for.inc, %entry
+   %inc.i = phi i32 [ 0, %entry ], [ %inc, %if.then ]
+diff --git a/test/Transforms/LoopUnswitch/infinite-loop.ll b/test/Transforms/LoopUnswitch/infinite-loop.ll
+index af8725b02a1..013355faf35 100644
+--- a/test/Transforms/LoopUnswitch/infinite-loop.ll
++++ b/test/Transforms/LoopUnswitch/infinite-loop.ll
+@@ -16,7 +16,7 @@
+ ; CHECK-NEXT: br i1 %a, label %entry.split, label %abort0.split
+ 
+ ; CHECK: entry.split:
+-; CHECK-NEXT: br i1 %b, label %entry.split.split, label %abort1.split
++; CHECK-NEXT: br i1 %b, label %for.body, label %abort1.split
+ 
+ ; CHECK: for.body:
+ ; CHECK-NEXT: br label %for.body
+diff --git a/test/Transforms/SimplifyCFG/UncondBranchToHeader.ll b/test/Transforms/SimplifyCFG/UncondBranchToHeader.ll
+new file mode 100644
+index 00000000000..6a265539e75
+--- /dev/null
++++ b/test/Transforms/SimplifyCFG/UncondBranchToHeader.ll
+@@ -0,0 +1,18 @@
++; RUN: opt < %s -simplifycfg -S | FileCheck %s
++
++; Check that we can get rid of empty block leading to header
++; if it does not introduce new edge.
++define i32 @test(i32 %c) {
++entry:
++  br label %header
++header:
++  %i = phi i32 [0, %entry], [%i.1, %backedge]
++  %i.1 = add i32 %i, 1
++  %cmp = icmp slt i32 %i.1, %c
++  br i1 %cmp, label %backedge, label %exit
++; CHECK-NOT: backedge:
++backedge:
++  br label %header
++exit:
++  ret i32 %i
++}

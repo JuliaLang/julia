@@ -493,6 +493,7 @@ $(eval $(call LLVM_PATCH,llvm-rL332682)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL332302)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL332694)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-rL327898)) # remove for 7.0
+$(eval $(call LLVM_PATCH,llvm-6.0.0_D42691-relax-fold-br)) # remove for 7.0
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 endif # LLVM_VER
 
