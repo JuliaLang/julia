@@ -281,9 +281,9 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) 
 end
 
 """
-    delete(a::NamedTuple, symbol(s))
+    delete(a::NamedTuple, symbol...)
 
-Construct a new named tuple from `a` by removing the named field[s].
+Construct a new named tuple from `a` by removing the named field(s).
 
 ```jldoctest
 julia> delete((a=1, b=2, c=3), :b)
