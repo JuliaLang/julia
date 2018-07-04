@@ -132,6 +132,14 @@ function svd(x::Integer; full::Bool = false, thin::Union{Bool,Nothing} = nothing
     end
     return svd(float(x), full = full)
 end
+function svd(A::Adjoint; full::Bool = false)
+    s = svd(A.parent, full = full)
+    return SVD(s.Vt', s.S, s.U')
+end
+function svd(A::Transpose; full::Bool = false)
+    s = svd(A.parent, full = full)
+    return SVD(transpose(s.Vt), s.S, transpose(s.U))
+end
 
 function getproperty(F::SVD, d::Symbol)
     if d == :V
