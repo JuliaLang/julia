@@ -1512,8 +1512,7 @@ struct GenericDict{K,V} <: AbstractDict{K,V}
     s::AbstractDict{K,V}
 end
 
-for (G, A) in ((GenericSet, AbstractSet),
-               (GenericDict, AbstractDict))
+for G in (GenericSet, GenericDict)
     @eval begin
         Base.iterate(s::$G, state...) = iterate(s.s, state...)
     end
