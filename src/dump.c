@@ -2003,7 +2003,8 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v, size_t 
             }
             else {
                 // garbage entry - delete it :(
-                ((jl_typemap_entry_t*)v)->min_world = ((jl_typemap_entry_t*)v)->max_world - 1;
+                ((jl_typemap_entry_t*)v)->min_world = 1;
+                ((jl_typemap_entry_t*)v)->max_world = 0;
             }
         }
     }

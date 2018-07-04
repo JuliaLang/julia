@@ -262,14 +262,29 @@ cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
 """
     exp2(x)
 
-Compute ``2^x``.
+Compute the base 2 exponential of `x`, in other words ``2^x``.
 
+# Examples
 ```jldoctest
 julia> exp2(5)
 32.0
 ```
 """
 exp2(x::AbstractFloat) = 2^x
+
+"""
+    exp10(x)
+
+Compute the base 10 exponential of `x`, in other words ``10^x``.
+
+# Examples
+```jldoctest
+julia> exp10(2)
+100.0
+```
+"""
+exp10(x::AbstractFloat) = 10^x
+
 for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :expm1)
     @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
 end
@@ -945,7 +960,7 @@ muladd(x,y,z) = x*y+z
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
+             :atanh,:exp,:exp2,:exp10,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::Complex32) = Complex32($func(Complex64(a)))

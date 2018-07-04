@@ -539,10 +539,10 @@ endif
 # Allow the user to specify this in Make.user
 GCCPATH ?= $(LOCALBASE)/lib/gcc$(_GCCVER)
 
-LDFLAGS += -L$(build_libdir) -L$(GCCPATH) -Wl,-rpath,$(build_libdir) -Wl,-rpath,$(GCCPATH)
-
-# This ensures we get the right RPATH even if we're missing FFLAGS somewhere
-FC += -Wl,-rpath=$(GCCPATH)
+# We're going to copy over the libraries we need from GCCPATH into build_libdir, then
+# tell everyone to look for them there. At install time, the build_libdir added into
+# the RPATH here is removed by patchelf.
+LDFLAGS += -L$(build_libdir) -Wl,-rpath,$(build_libdir)
 
 endif # gfortran
 endif # FreeBSD
@@ -934,6 +934,9 @@ else ifeq ($(OS), Darwin)
   RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
+ifeq ($(OS), FreeBSD)
+  RPATH += -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)'
+endif
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
   RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin

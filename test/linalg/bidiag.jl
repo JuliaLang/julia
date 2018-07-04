@@ -328,3 +328,15 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
         end
     end
 end
+
+@testset "solve with matrix elements" begin
+    A = triu(tril(randn(9, 9), 3), -3)
+    b = randn(9)
+    Alb = Bidiagonal(Any[tril(A[1:3,1:3]), tril(A[4:6,4:6]), tril(A[7:9,7:9])],
+                     Any[triu(A[4:6,1:3]), triu(A[7:9,4:6])], 'L')
+    Aub = Bidiagonal(Any[triu(A[1:3,1:3]), triu(A[4:6,4:6]), triu(A[7:9,7:9])],
+                     Any[tril(A[1:3,4:6]), tril(A[4:6,7:9])], 'U')
+    bb = Any[b[1:3], b[4:6], b[7:9]]
+    @test vcat((Alb\bb)...) ≈ LowerTriangular(A)\b
+    @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
+end

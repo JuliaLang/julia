@@ -474,8 +474,6 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
 int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr);
 
-jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
-                                               int cache, int inexact, int allow_exec, size_t world);
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache, size_t world);
 jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs);
 jl_method_instance_t *jl_lookup_generic(jl_value_t **args, uint32_t nargs, uint32_t callsite, size_t world);
