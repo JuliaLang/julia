@@ -3,7 +3,6 @@
 using REPL.REPLCompletions
 using Test
 using Random
-import OldPkg
 
 let ex = quote
     module CompletionFoo
@@ -84,23 +83,6 @@ let ex = quote
     end
     ex.head = :toplevel
     Core.eval(Main, ex)
-end
-
-function temp_pkg_dir_noinit(fn::Function)
-    # Used in tests below to set up and tear down a sandboxed package directory
-    # Unlike the version in test/pkg.jl, this does not run OldPkg.init so does not
-    # clone METADATA (only Pkg and LibGit2 tests should need internet access)
-    tmpdir = joinpath(tempdir(),randstring())
-    withenv("JULIA_PKGDIR" => tmpdir) do
-        @test !isdir(OldPkg.dir())
-        try
-            mkpath(OldPkg.dir())
-            @test isdir(OldPkg.dir())
-            fn()
-        finally
-            rm(tmpdir, recursive=true)
-        end
-    end
 end
 
 function map_completion_text(completions)
@@ -501,39 +483,6 @@ let s = "#=\nmax"
 end
 
 # Test completion of packages
-mkp(p) = ((@assert !isdir(p)); mkpath(p))
-temp_pkg_dir_noinit() do
-    push!(LOAD_PATH, OldPkg.dir())
-    try
-        # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
-        # but not <Mod>/ if no corresponding .jl file is found
-        pkg_dir = OldPkg.dir("CompletionFooPackage", "src")
-        mkp(pkg_dir)
-        touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
-
-        pkg_dir = OldPkg.dir("CompletionFooPackage2.jl", "src")
-        mkp(pkg_dir)
-        touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
-
-        touch(OldPkg.dir("CompletionFooPackage3.jl"))
-
-        mkp(OldPkg.dir("CompletionFooPackageNone"))
-        mkp(OldPkg.dir("CompletionFooPackageNone2.jl"))
-
-        s = "using Completion"
-        c,r = test_complete(s)
-        @test "CompletionFoo" in c #The module
-        @test "CompletionFooPackage" in c #The package
-        @test "CompletionFooPackage2" in c #The package
-        @test "CompletionFooPackage3" in c #The package
-        @test !("CompletionFooPackageNone" in c) #The package
-        @test !("CompletionFooPackageNone2" in c) #The package
-        @test s[r] == "Completion"
-    finally
-        @test pop!(LOAD_PATH) == OldPkg.dir()
-    end
-end
-
 path = joinpath(tempdir(),randstring())
 pushfirst!(LOAD_PATH, path)
 try

@@ -134,7 +134,7 @@ script:
     # skip tests if only files within the "doc" dir have changed
     - if [ $(echo "$FILES_CHANGED" | grep -cv '^doc/') -gt 0 ]; then
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online OldPkg/pkg Pkg/pkg download; fi
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl LibGit2/online Pkg/pkg download; fi
     - popd
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&

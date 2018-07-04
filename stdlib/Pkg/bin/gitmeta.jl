@@ -20,7 +20,6 @@ const STDLIBS = sort!(by = lowercase, [
     "Logging"
     "Markdown"
     "Mmap"
-    "OldPkg"
     "Pkg"
     "Printf"
     "Profile"
