@@ -128,11 +128,11 @@ end
 # test for unique Enum values
 @test_throws ArgumentError("values for Enum Test14 are not unique") @macrocall(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0))
 
-@test repr(apple) == "apple::$(string(Fruit)) = 0"
+@test repr(apple) == "apple::Fruit = 0"
 @test string(apple) == "apple"
 
 @test repr("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
-@test repr("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
+@test repr("text/plain", orange) == "orange::Fruit = 1"
 let io = IOBuffer()
     ioc = IOContext(io, :compact=>false)
     show(io, Fruit)

@@ -369,7 +369,7 @@ function show(io::IO, f::Function)
     mt = ft.name.mt
     if isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
-        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
+        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main || get(io, :compact, false)
             print(io, mt.name)
         else
             print(io, mt.module, ".", mt.name)
@@ -464,6 +464,13 @@ function show_type_name(io::IO, tn::Core.TypeName)
         end
     end
     sym = globfunc ? globname : tn.name
+    if get(io, :compact, false)
+        if globfunc
+            return print(io, "typeof(", sym, ")")
+        else
+            return print(io, sym)
+        end
+    end
     sym_str = string(sym)
     hidden = !globfunc && '#' ∈ sym_str
     quo = false
