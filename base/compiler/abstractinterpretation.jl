@@ -56,6 +56,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     napplicable = length(applicable)
     rettype = Bottom
     edgecycle = false
+    edges = Any[]
     for i in 1:napplicable
         match = applicable[i]::SimpleVector
         method = match[3]::Method
@@ -67,14 +68,20 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                rt, edgecycle1 = abstract_call_method(method, sig_n, svec(), sv)
+                rt, edgecycle1, edge = abstract_call_method(method, sig_n, svec(), sv)
+                if edge !== nothing
+                    push!(edges, edge)
+                end
                 edgecycle |= edgecycle1::Bool
                 rettype = tmerge(rettype, rt)
                 rettype === Any && break
             end
             rettype === Any && break
         else
-            rt, edgecycle = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            rt, edgecycle, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            if edge !== nothing
+                push!(edges, edge)
+            end
             rettype = tmerge(rettype, rt)
             rettype === Any && break
         end
@@ -90,6 +97,9 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         end
     end
     if !(rettype === Any) # adding a new method couldn't refine (widen) this type
+        for edge in edges
+            add_backedge!(edge::MethodInstance, sv)
+        end
         fullmatch = false
         for i in napplicable:-1:1
             match = applicable[i]::SimpleVector
@@ -185,10 +195,10 @@ end
 function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
     # TODO: remove with 0.7 deprecations
     if method.file === DEPRECATED_SYM && method.sig == (Tuple{Type{T},Any} where T)
-        return Any, false
+        return Any, false, nothing
     end
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
-        return Any, false
+        return Any, false, nothing
     end
     topmost = nothing
     # Limit argument type tuple growth of functions:
@@ -297,7 +307,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
         recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, method.sig)::SimpleVector
         sig = recomputed[1]
         if !isa(unwrap_unionall(sig), DataType) # probably Union{}
-            return Any, false
+            return Any, false, nothing
         end
         sparams = recomputed[2]::SimpleVector
     end
@@ -305,10 +315,8 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     rt, edge = typeinf_edge(method, sig, sparams, sv)
     if edge === nothing
         edgecycle = true
-    else
-        add_backedge!(edge::MethodInstance, sv)
     end
-    return rt, edgecycle
+    return rt, edgecycle, edge
 end
 
 # This is only for use with `Conditional`.
