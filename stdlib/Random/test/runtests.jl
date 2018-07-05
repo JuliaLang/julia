@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, SparseArrays
+using Test: guardsrand
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))

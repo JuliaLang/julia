@@ -7,6 +7,7 @@ using SparseArrays
 using LinearAlgebra
 using Base.Printf: @printf
 using Random
+using Test: guardsrand
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
