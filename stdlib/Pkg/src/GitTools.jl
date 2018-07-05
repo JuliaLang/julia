@@ -95,7 +95,12 @@ function clone(url, source_path; header=nothing, kwargs...)
     catch err
         rm(source_path; force=true, recursive=true)
         err isa LibGit2.GitError || rethrow(err)
-        Pkg.Types.cmderror("failed to clone from $(url), error: $err")
+        if (err.class == LibGit2.Error.Net && err.code == LibGit2.Error.EINVALIDSPEC) ||
+           (err.class == LibGit2.Error.Repository && err.code == LibGit2.Error.ENOTFOUND)
+            Pkg.Types.cmderror("Git repository not found at '$(url)'")
+        else
+            Pkg.Types.cmderror("failed to clone from $(url), error: $err")
+        end
     finally
         print(stdout, "\033[2K") # clear line
         print(stdout, "\e[?25h") # put back cursor
@@ -122,7 +127,11 @@ function fetch(repo::LibGit2.GitRepo, remoteurl=nothing; header=nothing, kwargs.
         return LibGit2.fetch(repo; remoteurl=remoteurl, callbacks=callbacks, kwargs...)
     catch err
         err isa LibGit2.GitError || rethrow(err)
-        Pkg.Types.cmderror("failed to fetch from $(remoteurl), error: $err")
+        if (err.class == LibGit2.Error.Repository && err.code == LibGit2.Error.ERROR)
+            Pkg.Types.cmderror("Git repository not found at '$(remoteurl)'")
+        else
+            Pkg.Types.cmderror("failed to fetch from $(remoteurl), error: $err")
+        end
     finally
         print(stdout, "\033[2K") # clear line
         print(stdout, "\e[?25h") # put back cursor

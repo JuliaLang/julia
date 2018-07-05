@@ -369,6 +369,44 @@ temp_pkg_dir() do project_path
     end # @testset
 end
 
+temp_pkg_dir() do project_path
+    @testset "invalid repo url" begin
+        cd(project_path) do
+            @test_throws CommandError Pkg.add("https://github.com")
+            Pkg.generate("FooBar")
+            @test_throws CommandError Pkg.add("./Foobar")
+        end
+    end
+end
+
+temp_pkg_dir() do project_path
+    function with_dummy_env(f)
+        TEST_SIG = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time()), 0)
+        env_path = joinpath(mktempdir(), "Dummy")
+        Pkg.generate(env_path)
+        repo = LibGit2.init(env_path)
+        LibGit2.add!(repo, "*")
+        LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)
+        Pkg.activate(env_path)
+        try
+            f()
+        finally
+            Pkg.activate()
+        end
+    end
+    # pkg assumes `Example.jl` is still a git repo, it will try to fetch on `update`
+    # `fetch` should warn that it is no longer a git repo
+    with_dummy_env() do
+        @testset "inconsistent repo state" begin
+            package_path = joinpath(project_path, "Example")
+            LibGit2.clone("https://github.com/JuliaLang/Example.jl", package_path)
+            Pkg.add(package_path)
+            rm(joinpath(package_path, ".git"); force=true, recursive=true)
+            @test_throws CommandError Pkg.up()
+        end
+    end
+end
+
 include("repl.jl")
 
 end # module
