@@ -303,7 +303,7 @@ try
           """)
 
     Base.compilecache(Base.PkgId("FooBar"))
-    @test isfile(joinpath(cachedir, "FooBar.ji"))
+    @test filetype(joinpath(cachedir, "FooBar.ji") == :file)
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
@@ -319,9 +319,9 @@ try
     insert!(DEPOT_PATH, 1, dir2)
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
     @eval using FooBar1
-    @test !isfile(joinpath(cachedir2, "FooBar.ji"))
-    @test !isfile(joinpath(cachedir, "FooBar1.ji"))
-    @test isfile(joinpath(cachedir2, "FooBar1.ji"))
+    @test filetype(joinpath(cachedir2, "FooBar.ji") != :file)
+    @test filetype(joinpath(cachedir, "FooBar1.ji") != :file)
+    @test filetype(joinpath(cachedir2, "FooBar1.ji") == :file)
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
     @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Vector
     @test fb_uuid == Base.module_build_id(FooBar)

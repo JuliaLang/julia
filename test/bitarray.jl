@@ -1540,7 +1540,7 @@ end
         @test_throws EOFError read!(fname, b2)
         @test bitcheck(b2)
     finally
-         isfile(fname) && rm(fname)
+         filetype(fname) == :file && rm(fname)
     end
 end
 

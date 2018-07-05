@@ -6,11 +6,11 @@
 
 if Sys.isunix() && !Sys.isapple()
     # assume case-sensitive filesystems, don't have to do anything
-    isfile_casesensitive(path) = isfile(path)
+    isfile_casesensitive(path) = filetype(path) == :file
 elseif Sys.iswindows()
     # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
     function isfile_casesensitive(path)
-        isfile(path) || return false  # Fail fast
+        filetype(path) == :file || return false  # Fail fast
         basename(Filesystem.longpath(path)) == basename(path)
     end
 elseif Sys.isapple()
@@ -43,7 +43,7 @@ elseif Sys.isapple()
     # Buffer buf;
     # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
-        isfile(path) || return false
+        filetype(path) == :file || return false
         path_basename = String(basename(path))
         local casepreserved_basename
         header_size = 12
@@ -74,7 +74,7 @@ elseif Sys.isapple()
 else
     # Generic fallback that performs a slow directory listing.
     function isfile_casesensitive(path)
-        isfile(path) || return false
+        filetype(path) == :file || return false
         dir, filename = splitdir(path)
         any(readdir(dir) .== filename)
     end
@@ -572,9 +572,9 @@ end
 ## other code loading functionality ##
 
 function find_source_file(path::AbstractString)
-    (isabspath(path) || isfile(path)) && return path
+    (isabspath(path) || filetype(path) == :file) && return path
     base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
-    return isfile(base_path) ? base_path : nothing
+    return filetype(base_path) == :file ? base_path : nothing
 end
 
 cache_file_entry(pkg::PkgId) = joinpath(
@@ -1165,7 +1165,7 @@ function compilecache(pkg::PkgId)
     end
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-    if isfile(cachefile)
+    if filetype(cachefile) == :file
         @logmsg verbosity "Recompiling stale cache file $cachefile for module $name"
     else
         @logmsg verbosity "Precompiling module $name"

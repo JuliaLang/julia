@@ -40,7 +40,7 @@ function read(readable::Union{IO,Base.AbstractCmd})
     end
     return lines
 end
-read(file::AbstractString) = isfile(file) ? open(read,file) : Line[]
+read(file::AbstractString) = filetype(file) == :file ? open(read,file) : Line[]
 
 
 end # module

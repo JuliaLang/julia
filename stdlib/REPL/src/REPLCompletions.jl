@@ -193,7 +193,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
             for file in filesinpath
                 # In a perfect world, we would filter on whether the file is executable
                 # here, or even on whether the current user can execute the file in question.
-                if startswith(file, prefix) && isfile(joinpath(pathdir, file))
+                if startswith(file, prefix) && filetype(joinpath(pathdir, file) == :file)
                     push!(matches, file)
                 end
             end
@@ -583,7 +583,7 @@ function completions(string, pos)
         s = string[startpos:pos]
         if dotpos <= startpos
             for dir in Base.load_path()
-                if basename(dir) in Base.project_names && isfile(dir)
+                if basename(dir) in Base.project_names && filetype(dir) == :file
                     append!(suggestions, project_deps_get_completion_candidates(s, dir))
                 end
                 filetype(dir) == :dir || continue
@@ -594,7 +594,7 @@ function completions(string, pos)
                         #   <Mod>.jl
                         #   <Mod>/src/<Mod>.jl
                         #   <Mod>.jl/src/<Mod>.jl
-                        if isfile(joinpath(dir, pname))
+                        if filetype(joinpath(dir, pname) == :file)
                             endswith(pname, ".jl") && push!(suggestions,
                                                             pname[1:prevind(pname, end-2)])
                         else
@@ -603,8 +603,8 @@ function completions(string, pos)
                             else
                                 pname
                             end
-                            if isfile(joinpath(dir, pname, "src",
-                                               "$mod_name.jl"))
+                            if filetype(joinpath(dir, pname, "src",
+                                               "$mod_name.jl") == :file)
                                 push!(suggestions, mod_name)
                             end
                         end

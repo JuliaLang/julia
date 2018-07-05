@@ -1752,6 +1752,8 @@ end
 @deprecate ispath(args...) filetype(args...) != :invalid
 @deprecate isfifo(args...) filetype(args...) == :FIFO
 @deprecate isdir(args...) filetype(args...) == :dir
+@deprecate isblockdev(args...) filetype(args...) == :block
+@deprecate isfile(args...) filetype(args...) == :file
 
 # END 0.7 deprecations
 

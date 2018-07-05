@@ -16,12 +16,12 @@ sha1(pkg::AbstractString, ver::VersionNumber) =
 function available(names=readdir("METADATA"))
     pkgs = Dict{String,Dict{VersionNumber,Available}}()
     for pkg in names
-        isfile("METADATA", pkg, "url") || continue
+        filetype("METADATA", pkg, "url") == :file || continue
         versdir = joinpath("METADATA", pkg, "versions")
         filetype(versdir) == :dir || continue
         for ver in readdir(versdir)
             occursin(Base.VERSION_REGEX, ver) || continue
-            isfile(versdir, ver, "sha1") || continue
+            filetype(versdir, ver, "sha1") == :file || continue
             haskey(pkgs,pkg) || (pkgs[pkg] = Dict{VersionNumber,Available}())
             pkgs[pkg][VersionNumber(ver)] = Available(
                 readchomp(joinpath(versdir,ver,"sha1")),
@@ -36,13 +36,13 @@ available(pkg::AbstractString) = get(available([pkg]),pkg,Dict{VersionNumber,Ava
 function latest(names=readdir("METADATA"))
     pkgs = Dict{String,Available}()
     for pkg in names
-        isfile("METADATA", pkg, "url") || continue
+        filetype("METADATA", pkg, "url") == :file || continue
         versdir = joinpath("METADATA", pkg, "versions")
         filetype(versdir) == :dir || continue
         pkgversions = VersionNumber[]
         for ver in readdir(versdir)
             occursin(Base.VERSION_REGEX, ver) || continue
-            isfile(versdir, ver, "sha1") || continue
+            filetype(versdir, ver, "sha1") == :file || continue
             push!(pkgversions, VersionNumber(ver))
         end
         isempty(pkgversions) && continue
@@ -60,14 +60,14 @@ isinstalled(pkg::AbstractString) =
 
 function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
     isinstalled(pkg) || throw(PkgError("$pkg is not an installed package."))
-    isfile("METADATA", pkg, "url") || return true
+    filetype("METADATA", pkg, "url") == :file || return true
     filetype(pkg, ".git") != :invalid || return true
 
     LibGit2.isdirty(prepo) && return true
     LibGit2.isattached(prepo) && return true
     LibGit2.need_update(prepo)
     if findall("REQUIRE", LibGit2.GitIndex(prepo)) === nothing
-        isfile(pkg,"REQUIRE") && return true
+        filetype(pkg,"REQUIRE") == :file && return true
     end
     head = string(LibGit2.head_oid(prepo))
     for (ver,info) in avail
@@ -188,7 +188,7 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
         LibGit2.need_update(repo)
         if findall("REQUIRE", LibGit2.GitIndex(repo)) === nothing
-            isfile(pkgreq) && return pkgreq
+            filetype(pkgreq) == :file && return pkgreq
         end
         string(LibGit2.head_oid(repo))
     end

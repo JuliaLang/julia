@@ -4,7 +4,7 @@ using SHA
 
 if isempty(ARGS)
     error("need file to test sha perf")
-elseif !isfile(ARGS[1])
+elseif filetype(ARGS[1]) != :file
     error("file $(ARGS[1]) does not exist")
 end
 

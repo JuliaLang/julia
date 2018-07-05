@@ -215,7 +215,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false, kwargs...
     project_deps_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
-    if !ctx.preview && (Operations.any_package_not_installed(ctx) || !isfile(ctx.env.manifest_file))
+    if !ctx.preview && (Operations.any_package_not_installed(ctx) || filetype(ctx.env.manifest_file) != :file)
         Pkg.instantiate(ctx)
     end
     Operations.test(ctx, pkgs; coverage=coverage)
@@ -265,7 +265,7 @@ function gc(ctx::Context=Context(); kwargs...)
     paths_to_keep = String[]
     printpkgstyle(ctx, :Active, "manifests at:")
     for (manifestfile, date) in manifest_date
-        !isfile(manifestfile) && continue
+        filetype(manifestfile) != :file && continue
         println("        `$manifestfile`")
         infos = try
             read_manifest(manifestfile)
@@ -393,7 +393,7 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     project_resolve!(ctx.env, pkgs)
     manifest_resolve!(ctx.env, pkgs)
     ensure_resolved(ctx.env, pkgs)
-    if !ctx.preview && (Operations.any_package_not_installed(ctx) || !isfile(ctx.env.manifest_file))
+    if !ctx.preview && (Operations.any_package_not_installed(ctx) || filetype(ctx.env.manifest_file) != :file)
         Pkg.instantiate(ctx)
     end
     uuids = UUID[]
@@ -442,7 +442,7 @@ function precompile(ctx::Context)
     printpkgstyle(ctx, :Precompiling, "project...")
 
     pkgids = [Base.PkgId(UUID(uuid), name) for (name, uuid) in ctx.env.project["deps"] if !(UUID(uuid) in  keys(ctx.stdlibs))]
-    if ctx.env.pkg !== nothing && isfile( joinpath( dirname(ctx.env.project_file), "src", ctx.env.pkg.name * ".jl"))
+    if ctx.env.pkg !== nothing && filetype( joinpath( dirname(ctx.env.project_file) == :file, "src", ctx.env.pkg.name * ".jl"))
         push!(pkgids, Base.PkgId(ctx.env.pkg.uuid, ctx.env.pkg.name))
     end
 
@@ -503,11 +503,11 @@ end
 instantiate(; kwargs...) = instantiate(Context(); kwargs...)
 function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwargs...)
     Context!(ctx; kwargs...)
-    if (!isfile(ctx.env.manifest_file) && manifest == nothing) || manifest == false
+    if (filetype(ctx.env.manifest_file) != :file && manifest == nothing) || manifest == false
         up(ctx)
         return
     end
-    if !isfile(ctx.env.manifest_file) && manifest == true
+    if filetype(ctx.env.manifest_file) != :file && manifest == true
         cmderror("manifest at $(ctx.env.manifest) does not exist")
     end
     update_registry(ctx)

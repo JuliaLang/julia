@@ -63,7 +63,7 @@ mktempdir() do dir
             @test !Base.isfile_casesensitive(lowered_filename)
 
             # check that case-sensitivity only applies to basename of a path:
-            if isfile(lowered_filename) # case-insensitive filesystem
+            if filetype(lowered_filename) == :file # case-insensitive filesystem
                 mkdir("cAsEtEsT")
                 touch(joinpath("cAsEtEsT", true_filename))
                 @test Base.isfile_casesensitive(joinpath("casetest", true_filename))

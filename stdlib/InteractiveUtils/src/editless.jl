@@ -15,7 +15,7 @@ for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `
 function editor()
     if Sys.iswindows() || Sys.isapple()
         default_editor = "open"
-    elseif isfile("/etc/alternatives/editor")
+    elseif filetype("/etc/alternatives/editor") == :file
         default_editor = realpath("/etc/alternatives/editor")
     else
         default_editor = "emacs"

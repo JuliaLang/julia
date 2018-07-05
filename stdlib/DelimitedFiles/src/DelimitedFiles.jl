@@ -236,7 +236,7 @@ readdlm_auto(input::Vector{UInt8}, dlm::AbstractChar, T::Type, eol::AbstractChar
 readdlm_auto(input::IO, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...) =
     readdlm_string(read(input, String), dlm, T, eol, auto, val_opts(opts))
 function readdlm_auto(input::AbstractString, dlm::AbstractChar, T::Type, eol::AbstractChar, auto::Bool; opts...)
-    isfile(input) || throw(ArgumentError("Cannot open \'$input\': not a file"))
+    filetype(input) == :file || throw(ArgumentError("Cannot open \'$input\': not a file"))
     optsd = val_opts(opts)
     use_mmap = get(optsd, :use_mmap, Sys.iswindows() ? false : true)
     fsz = stat(input).size

@@ -30,7 +30,7 @@ end
 Return `true` if the `private_key` file requires a passphrase, `false` otherwise.
 """
 function is_passphrase_required(private_key::AbstractString)
-    !isfile(private_key) && return false
+    filetype(private_key) != :file && return false
 
     # In encrypted private keys, the second line is "Proc-Type: 4,ENCRYPTED"
     return open(private_key) do f
@@ -88,7 +88,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
 
         cred.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
             default = joinpath(homedir(), ".ssh", "id_rsa")
-            if isempty(cred.prvkey) && isfile(default)
+            if isempty(cred.prvkey) && filetype(default) == :file
                 default
             else
                 cred.prvkey
@@ -97,7 +97,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
 
         cred.pubkey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
             default = cred.prvkey * ".pub"
-            if isempty(cred.pubkey) && isfile(default)
+            if isempty(cred.pubkey) && filetype(default) == :file
                 default
             else
                 cred.pubkey
@@ -122,7 +122,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
 
         # For SSH we need a private key location
         last_private_key = cred.prvkey
-        if !isfile(cred.prvkey) || !revised || !haskey(ENV, "SSH_KEY_PATH")
+        if filetype(cred.prvkey) != :file || !revised || !haskey(ENV, "SSH_KEY_PATH")
             response = Base.prompt("Private key location for '$url'", default=cred.prvkey)
             response === nothing && return user_abort()
             cred.prvkey = expanduser(response)
@@ -136,7 +136,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
         # For SSH we need a public key location. Avoid asking about the public key as
         # typically this will just annoy users.
         stale = !p.first_pass && cred.prvkey == last_private_key && cred.pubkey != cred.prvkey * ".pub"
-        if isfile(cred.prvkey) && (stale || !isfile(cred.pubkey))
+        if filetype(cred.prvkey) == :file && (stale || filetype(cred.pubkey) != :file)
             response = Base.prompt("Public key location for '$url'", default=cred.pubkey)
             response === nothing && return user_abort()
             cred.pubkey = expanduser(response)

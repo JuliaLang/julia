@@ -342,7 +342,7 @@ Return `true` if the given `path` has executable permissions.
 """
 function isexecutable(path::String)
     if iswindows()
-        return isfile(path)
+        return filetype(path) == :file
     else
         # We use `access()` and `X_OK` to determine if a given path is
         # executable by the current user.  `X_OK` comes from `unistd.h`.

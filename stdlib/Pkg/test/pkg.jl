@@ -155,14 +155,14 @@ temp_pkg_dir() do project_path
                 @test isinstalled(TEST_PKG)
                 @test Pkg.installed()[TEST_PKG.name] > old_v
                 test_pkg_main_file = joinpath(devdir, TEST_PKG.name, "src", TEST_PKG.name * ".jl")
-                @test isfile(test_pkg_main_file)
+                @test filetype(test_pkg_main_file) == :file
                 # Pkg #152
                 write(test_pkg_main_file,
                     """
                     module Example
                         export hello, domath
                         const example2path = joinpath(@__DIR__, "..", "deps", "deps.jl")
-                        if !isfile(example2path)
+                        if filetype(example2path) != :file
                             error("Example is not installed correctly")
                         end
                         hello(who::String) = "Hello, \$who"
@@ -176,7 +176,7 @@ temp_pkg_dir() do project_path
                     """
                 )
                 Pkg.build(TEST_PKG.name)
-                @test isfile(joinpath(devdir, TEST_PKG.name, "deps", "deps.jl"))
+                @test filetype(joinpath(devdir, TEST_PKG.name, "deps", "deps.jl") == :file)
                 Pkg.test(TEST_PKG.name)
                 Pkg.free(TEST_PKG.name)
                 @test Pkg.installed()[TEST_PKG.name] == old_v
@@ -222,7 +222,7 @@ temp_pkg_dir() do project_path
                         Pkg.clone(pwd())
                         Pkg.build("Example")
                         Pkg.test("Example"; coverage=true)
-                        @test isfile(Pkg.dir("Example", "src", "Example.jl"))
+                        @test filetype(Pkg.dir("Example", "src", "Example.jl") == :file)
                     end
                 end
             end

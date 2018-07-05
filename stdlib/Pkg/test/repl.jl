@@ -41,7 +41,7 @@ mktempdir() do project_path
                 pkg"st"
                 @eval using HelloWorld
                 Base.invokelatest(HelloWorld.greet)
-                @test isfile("Project.toml")
+                @test filetype("Project.toml") == :file
                 Pkg.REPLMode.pkgstr("develop $(joinpath(@__DIR__, "test_packages", "PackageWithBuildSpecificTestDeps"))")
                 Pkg.test("PackageWithBuildSpecificTestDeps")
             end

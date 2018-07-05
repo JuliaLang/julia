@@ -1276,7 +1276,7 @@ function Base.:(==)(a::SSHCredential, b::SSHCredential)
 end
 
 function isfilled(cred::SSHCredential)
-    !isempty(cred.user) && isfile(cred.prvkey) && isfile(cred.pubkey) &&
+    !isempty(cred.user) && filetype(cred.prvkey) == :file && filetype(cred.pubkey) == :file &&
     (!isempty(cred.pass) || !is_passphrase_required(cred.prvkey))
 end
 

@@ -54,8 +54,8 @@ end
 # Test basic operations: adding or removing a package, status, free
 # Also test for the existence of REQUIRE and META_BRANCH
 temp_pkg_dir() do
-    @test isfile(joinpath(OldPkg.dir(),"REQUIRE"))
-    @test isfile(joinpath(OldPkg.dir(),"META_BRANCH"))
+    @test filetype(joinpath(OldPkg.dir() == :file,"REQUIRE"))
+    @test filetype(joinpath(OldPkg.dir() == :file,"META_BRANCH"))
     @test isempty(OldPkg.installed())
     @test sprint(OldPkg.status) == "No packages installed\n"
     @test !isempty(OldPkg.available())

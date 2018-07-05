@@ -918,7 +918,7 @@ empty!(LOAD_PATH)
 Base.init_load_path() # want to be able to find external packages in userimg.jl
 
 let
-tot_time_userimg = @elapsed (Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
+tot_time_userimg = @elapsed (Base.filetype("userimg.jl") == :file && Base.include(Main, "userimg.jl"))
 tot_time_precompile = Base.is_primary_base_module ? (@elapsed Base.include(Base, "precompile.jl")) : 0.0
 
 
@@ -929,7 +929,7 @@ println("Sysimage built. Summary:")
 print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
 print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base          / tot_time) * 100); println("%")
 print("Stdlibs: ──── "); Base.time_print(Base.tot_time_stdlib[] * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (Base.tot_time_stdlib[] / tot_time) * 100); println("%")
-if isfile("userimg.jl")
+if filetype("userimg.jl") == :file
 print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
 end
 print("Precompile: ─ "); Base.time_print(tot_time_precompile    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_precompile    / tot_time) * 100); println("%")

@@ -132,7 +132,7 @@ end
 function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
     project_file = joinpath(path, "Project.toml")
     fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
-    !isfile(project_file) && return false
+    filetype(project_file) != :file && return false
     project = read_project(project_file)
     compat = get(project, "compat", Dict())
     for (deppkg_name, uuid) in project["deps"]
@@ -156,7 +156,7 @@ function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
     # Checked out "old-school" packages have by definition a version higher than all registered.
     set_maximum_version_registry!(ctx.env, pkg)
     !haskey(fix_deps_map, pkg.uuid) && (fix_deps_map[pkg.uuid] = valtype(fix_deps_map)())
-    if isfile(reqfile)
+    if filetype(reqfile) == :file
         for r in Pkg2.Reqs.read(reqfile)
             r isa Pkg2.Reqs.Requirement || continue
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
@@ -653,7 +653,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
 
         # Check for deps in project file
         project_file = joinpath(path, "Project.toml")
-        if isfile(project_file)
+        if filetype(project_file) == :file
             project = read_project(project_file)
             deps = project["deps"]
         else
@@ -665,7 +665,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
                 push!(dep_pkgs, PackageSpec(stdlib, stdlib_uuid))
             end
             reqfile = joinpath(path, "REQUIRE")
-            if isfile(reqfile)
+            if filetype(reqfile) == :file
                 for r in Pkg2.Reqs.read(reqfile)
                     r isa Pkg2.Reqs.Requirement || continue
                     push!(dep_pkgs, PackageSpec(r.package))
@@ -810,7 +810,7 @@ function collect_target_deps!(ctx::Context, pkgs::Vector{PackageSpec}, pkg::Pack
     project_path = nothing
     for project_name in Base.project_names
         project_path_cand = joinpath(path, project_name)
-        if isfile(project_path_cand)
+        if filetype(project_path_cand) == :file
             project_path = project_path_cand
             break
         end
@@ -851,7 +851,7 @@ end
 # Pkg2 test/REQUIRE compatibility
 function pkg2_test_target_compatibility!(ctx, path, pkgs)
     test_reqfile = joinpath(path, "test", "REQUIRE")
-    if isfile(test_reqfile)
+    if filetype(test_reqfile) == :file
         for r in Pkg2.Reqs.read(test_reqfile)
             r isa Pkg2.Reqs.Requirement || continue
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
@@ -1168,7 +1168,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             end
         end
         testfile = joinpath(version_path, "test", "runtests.jl")
-        if !isfile(testfile)
+        if filetype(testfile) != :file
             push!(missing_runtests, pkg.name)
         end
         push!(version_paths, version_path)
@@ -1223,7 +1223,7 @@ end
 
 function init(ctx::Context)
     project_file = ctx.env.project_file
-    isfile(project_file) &&
+    filetype(project_file) == :file &&
         cmderror("Project already initialized at $project_file")
     if !ctx.preview
         mkpath(dirname(project_file))

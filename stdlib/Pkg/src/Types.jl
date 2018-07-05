@@ -193,7 +193,7 @@ end
 
 function parse_toml(path::String...; fakeit::Bool=false)
     p = joinpath(path...)
-    !fakeit || isfile(p) ? TOML.parsefile(p) : Dict{String,Any}()
+    !fakeit || filetype(p) == :file ? TOML.parsefile(p) : Dict{String,Any}()
 end
 
 const project_names = ["JuliaProject.toml", "Project.toml"]
@@ -242,7 +242,7 @@ mutable struct EnvCache
             end
         end
         @assert project_file isa String &&
-            (isfile(project_file) || filetype(project_file) == :invalid ||
+            (filetype(project_file) == :file || filetype(project_file) == :invalid ||
              filetype(project_file) == :dir && isempty(readdir(project_file)))
         project_dir = dirname(project_file)
         git = filetype(joinpath(project_dir, ".git") != :invalid) ? LibGit2.GitRepo(project_dir) : nothing
@@ -263,7 +263,7 @@ mutable struct EnvCache
             dir = abspath(dirname(project_file))
             for name in manifest_names
                 manifest_file = joinpath(dir, name)
-                isfile(manifest_file) && break
+                filetype(manifest_file) == :file && break
             end
         end
         write_env_usage(manifest_file)
@@ -301,7 +301,7 @@ function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
     for stdlib in readdir(stdlib_dir())
         projfile = joinpath(stdlib_path(stdlib), "Project.toml")
-        if isfile(projfile)
+        if filetype(projfile) == :file
             proj = TOML.parsefile(projfile)
             if haskey(proj, "uuid")
                 stdlibs[UUID(proj["uuid"])] = stdlib
@@ -343,7 +343,7 @@ function write_env_usage(manifest_file::AbstractString)
     filetype(logdir() == :invalid) && mkpath(logdir())
     usage_file = joinpath(logdir(), "manifest_usage.toml")
     touch(usage_file)
-    !isfile(manifest_file) && return
+    filetype(manifest_file) != :file && return
     # Do not rewrite as do syntax (no longer precompilable)
     io = open(usage_file, "a")
     println(io, "[[\"", escape_string(manifest_file), "\"]]")
@@ -359,7 +359,7 @@ function read_project(io::IO)
     return project
 end
 function read_project(file::String)
-    isfile(file) ? open(read_project, file) : read_project(devnull)
+    filetype(file) == :file ? open(read_project, file) : read_project(devnull)
 end
 
 function read_manifest(io::IO)
@@ -380,7 +380,7 @@ function read_manifest(io::IO)
     return manifest
 end
 function read_manifest(file::String)
-    try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
+    try filetype(file) == :file ? open(read_manifest, file) : read_manifest(devnull)
     catch err
         err isa ErrorException && startswith(err.msg, "ambiguious dependency") || rethrow(err)
         err.msg *= "In manifest file: $file"
@@ -453,7 +453,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                 parse_package!(ctx, pkg, project_path)
                 dev_pkg_path = joinpath(Pkg.devdir(), pkg.name)
                 if filetype(dev_pkg_path) == :dir
-                    if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
+                    if filetype(joinpath(dev_pkg_path, "src", pkg.name * ".jl") != :file)
                         cmderror("Path `$(dev_pkg_path)` exists but it does not contain `src/$(pkg.name).jl")
                     else
                         @info "Path `$(dev_pkg_path)` exists and looks like the correct package, using existing path instead of cloning"
@@ -560,7 +560,7 @@ function parse_package!(ctx, pkg, project_path)
     env = ctx.env
     found_project_file = false
     for projname in project_names
-        if isfile(joinpath(project_path, projname))
+        if filetype(joinpath(project_path, projname) == :file)
             found_project_file = true
             project_data = parse_toml(project_path, "Project.toml")
             pkg.uuid = UUID(project_data["uuid"])
@@ -766,7 +766,7 @@ function registries(depot::String)::Vector{String}
     d = joinpath(depot, "registries")
     filetype(d) == :invalid && return String[]
     regs = filter!(readdir(d)) do r
-        isfile(joinpath(d, r, "Registry.toml"))
+        filetype(joinpath(d, r, "Registry.toml") == :file)
     end
     String[joinpath(depot, "registries", r) for r in regs]
 end

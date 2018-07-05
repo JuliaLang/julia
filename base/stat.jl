@@ -108,9 +108,9 @@ Returns the file type of `path`, with the following possibilities:
 
 - `:invalid`: not a valid filesystem path.-
 - `:FIFO`: a FIFO
-- `:chardev`: a character device
+- `:character`: a character device
 - `:dir`: a directory
-- `:blockdev`: a block device
+- `:block`: a block device
 - `:file`: a regular file
 - `:link`: a symbolic link
 - `:socket`: a socket
@@ -125,11 +125,11 @@ function filetype(st::StatStruct; link = false)
     elseif mode == 0x1000
         :FIFO
     elseif mode == 0x2000
-        :chardev
+        :character
     elseif mode == 0x4000
         :dir
     elseif mode == 0x6000
-        :blockdev
+        :block
     elseif mode == 0x8000
         :file
     elseif mode == 0xa000

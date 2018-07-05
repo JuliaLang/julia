@@ -52,12 +52,12 @@ end
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
-@test !isfile(Base.Filesystem.StatStruct())
+@test filetype(Base.Filesystem.StatStruct() != :file)
 @test filetype(dir) == :dir
-@test !isfile(dir)
+@test filetype(dir) != :file
 @test !islink(dir)
 @test filetype(file) != :dir
-@test isfile(file)
+@test filetype(file) == :file
 @test !islink(file)
 
 @test stat(file).mode & 0o444 > 0 # readable
@@ -159,7 +159,7 @@ c_file = joinpath(c_tmpdir, "cfile.txt")
 cp(newfile, c_file)
 
 @test filetype(c_subdir) == :dir
-@test isfile(c_file)
+@test filetype(c_file) == :file
 @test_throws SystemError rm(c_tmpdir)
 @test_throws SystemError rm(c_tmpdir, force=true)
 
@@ -171,7 +171,7 @@ d_tmpdir = mktempdir(c_tmpdir)
 # create temp file in specific directory
 d_tmpfile,f = mktemp(c_tmpdir)
 close(f)
-@test isfile(d_tmpfile)
+@test filetype(d_tmpfile) == :file
 @test Base.samefile(dirname(d_tmpfile), c_tmpdir)
 
 rm(c_tmpdir, recursive=true)
@@ -244,18 +244,18 @@ end
 (p, f) = mktemp()
 print(f, "Here is some text")
 close(f)
-@test isfile(p) == true
+@test filetype(p) == :file == true
 @test read(p, String) == "Here is some text"
 rm(p)
 
 let
     tmp_path = mktemp() do p, io
-        @test isfile(p)
+        @test filetype(p) == :file
         print(io, "鴨かも？")
         p
     end
     @test tmp_path != ""
-    @test !isfile(tmp_path)
+    @test filetype(tmp_path) != :file
 end
 
 let
@@ -311,7 +311,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
                 check_dir(orig_path, copied_path, follow_symlinks)
             else
                 # copied_path must also be a file.
-                @test isfile(copied_path)
+                @test filetype(copied_path) == :file
                 # copied_path must have same content
                 @test read(orig_path, String) == read(copied_path, String)
             end
@@ -320,7 +320,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
         check_cp_main(orig_path, copied_path, follow_symlinks)
     else
         # copied_path must also be a file.
-        @test isfile(copied_path)
+        @test filetype(copied_path) == :file
         # copied_path must have same content
         @test read(orig_path, String) == read(copied_path, String)
     end
@@ -381,7 +381,7 @@ mktempdir() do tmpdir
     newfile_stat = stat(file)
 
     @test filetype(file) == :invalid
-    @test isfile(newfile)
+    @test filetype(newfile) == :file
     @test Base.samefile(files_stat, newfile_stat)
 
     file = newfile
@@ -644,7 +644,7 @@ if !Sys.iswindows()
 
     function cp_follow_symlinks_false_check(s, d, file_txt; force=false)
         cp(s, d; force=force, follow_symlinks=false)
-        @test isfile(s) == isfile(d)
+        @test filetype(s) == :file == filetype(d) == :file
         @test islink(s) == islink(d)
         islink(s) && @test readlink(s) == readlink(d)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
@@ -662,7 +662,7 @@ if !Sys.iswindows()
         # make sure d does not exist anymore
         @test filetype(d) == :invalid
         # comare s, with d_mv
-        @test isfile(s) == isfile(d_mv)
+        @test filetype(s) == :file == filetype(d_mv) == :file
         @test islink(s) == islink(d_mv)
         islink(s) && @test readlink(s) == readlink(d_mv)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
@@ -709,7 +709,7 @@ if !Sys.iswindows()
         for d in test_new_paths1
             cp(otherfile, d; force=true, follow_symlinks=false)
             # Expect no link because a file is copied (follow_symlinks=false does not effect this)
-            @test isfile(d) && !islink(d)
+            @test filetype(d) == :file && !islink(d)
             # all should contain otherfile_content
             @test read(d, String) == otherfile_content
         end

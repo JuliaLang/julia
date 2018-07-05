@@ -18,7 +18,7 @@ stdlib_deps = Dict{String,Vector{String}}()
 
 for pkg in readdir(stdlibdir)
     project_file = joinpath(stdlibdir, pkg, "Project.toml")
-    isfile(project_file) || continue
+    filetype(project_file) == :file || continue
     project = TOML.parsefile(project_file)
     stdlib_uuids[pkg] = project["uuid"]
     stdlib_trees[pkg] = split(readchomp(`git -C $juliadir ls-tree HEAD -- stdlib/$pkg`))[3]
