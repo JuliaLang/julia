@@ -242,7 +242,7 @@ Stacktrace:
 ```
 """
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
-    if islink(path) || filetype(path) != :dir
+    if filetype(path) == :link || filetype(path) != :dir
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
@@ -281,8 +281,8 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
             # Check for issue when: (src == dst) or when one is a link to the other
             # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
             if Base.samefile(src, dst)
-                abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
-                abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
+                abs_src = filetype(src) == :link ? abspath(readlink(src)) : abspath(src)
+                abs_dst = filetype(dst) == :link ? abspath(readlink(dst)) : abspath(dst)
                 throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
                                            "This is not supported.\n  ",
                                            "`src` refers to: $(abs_src)\n  ",
@@ -310,7 +310,7 @@ function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
     mkdir(dst)
     for name in readdir(src)
         srcname = joinpath(src, name)
-        if !follow_symlinks && islink(srcname)
+        if !follow_symlinks && filetype(srcname) == :link
             symlink(readlink(srcname), joinpath(dst, name))
         elseif filetype(srcname) == :dir
             cptree(srcname, joinpath(dst, name); force=force,
@@ -342,7 +342,7 @@ function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
         force = remove_destination
     end
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
-    if !follow_symlinks && islink(src)
+    if !follow_symlinks && filetype(src) == :link
         symlink(readlink(src), dst)
     elseif filetype(src) == :dir
         cptree(src, dst; force=force, follow_symlinks=follow_symlinks)
@@ -696,7 +696,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         end
         for dir in dirs
             path = joinpath(root,dir)
-            if follow_symlinks || !islink(path)
+            if follow_symlinks || filetype(path) != :link
                 for (root_l, dirs_l, files_l) in walkdir(path, topdown=topdown, follow_symlinks=follow_symlinks, onerror=onerror)
                     put!(chnl, (root_l, dirs_l, files_l))
                 end
@@ -822,7 +822,7 @@ function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     uv_error("chmod", err)
     if recursive && filetype(path) == :dir
         for p in readdir(path)
-            if !islink(joinpath(path, p))
+            if filetype(joinpath(path, p) != :link)
                 chmod(joinpath(path, p), mode, recursive=true)
             end
         end
