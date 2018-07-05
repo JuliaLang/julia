@@ -51,7 +51,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     outdated = :maybe
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
-            ispath(pkg) || throw(PkgError("unknown package $pkg"))
+            filetype(pkg) != :invalid || throw(PkgError("unknown package $pkg"))
             @info "Package $pkg is already installed"
         end
         branch = Dir.getmetabranch()
@@ -83,7 +83,7 @@ add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return @info "Package $pkg is not installed"
+    filetype(pkg) != :invalid || return @info "Package $pkg is not installed"
     @info "Removing $pkg (unregistered)"
     Write.remove(pkg)
 end
@@ -117,7 +117,7 @@ function installed(pkg::AbstractString)
     avail = Read.available(pkg)
     if Read.isinstalled(pkg)
         res = typemin(VersionNumber)
-        if ispath(joinpath(pkg,".git"))
+        if filetype(joinpath(pkg,".git") != :invalid)
             LibGit2.with(GitRepo, pkg) do repo
                 res = Read.installed_version(pkg, repo, avail)
             end
@@ -129,7 +129,7 @@ function installed(pkg::AbstractString)
 end
 
 function status(io::IO; pkgname::AbstractString = "")
-    if !isempty(pkgname) && !ispath(pkgname)
+    if !isempty(pkgname) && filetype(pkgname) == :invalid
         throw(PkgError("Package $pkgname does not exist"))
     end
     showpkg(pkg) = isempty(pkgname) ? true : (pkg == pkgname)
@@ -163,13 +163,13 @@ end
 status(io::IO, pkg::AbstractString) = status(io, pkgname = pkg)
 
 function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
-    if !isempty(pkg) && !ispath(pkg)
+    if !isempty(pkg) && filetype(pkg) == :invalid
         throw(PkgError("Package $pkg does not exist"))
     end
     @printf io " - %-29s " pkg
     fix || return println(io,ver)
     @printf io "%-19s" ver
-    if ispath(pkg,".git")
+    if filetype(pkg,".git") != :invalid
         prepo = GitRepo(pkg)
         try
             with(LibGit2.head(prepo)) do phead
@@ -200,7 +200,7 @@ end
 
 function clone(url::AbstractString, pkg::AbstractString)
     @info "Cloning $pkg from $url"
-    ispath(pkg) && throw(PkgError("$pkg already exists"))
+    filetype(pkg) != :invalid && throw(PkgError("$pkg already exists"))
     try
         LibGit2.with(LibGit2.clone(url, pkg)) do repo
             LibGit2.set_remote_url(repo, "origin", url)
@@ -231,7 +231,7 @@ end
 clone(url_or_pkg::AbstractString) = clone(url_and_pkg(url_or_pkg)...)
 
 function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
     @info "Checking out $pkg $branch..."
     with(GitRepo, pkg) do r
         LibGit2.transact(r) do repo
@@ -249,7 +249,7 @@ function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, d
 end
 
 function free(pkg::AbstractString)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
@@ -276,7 +276,7 @@ end
 function free(pkgs)
     try
         for pkg in pkgs
-            ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+            filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
             Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
             avail = Read.available(pkg)
             isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
@@ -300,7 +300,7 @@ function free(pkgs)
 end
 
 function pin(pkg::AbstractString, head::AbstractString)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
     should_resolve = true
     with(GitRepo, pkg) do repo
         id = if isempty(head) # get HEAD commit
@@ -351,7 +351,7 @@ end
 pin(pkg::AbstractString) = pin(pkg, "")
 
 function pin(pkg::AbstractString, ver::VersionNumber)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be pinned – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be pinned – not a registered package"))
@@ -423,7 +423,7 @@ function update(branch::AbstractString, upkgs::Set{String})
     Base.shred!(LibGit2.CachedCredentials()) do creds
         stopupdate = false
         for (pkg,ver) in fixed
-            ispath(pkg,".git") || continue
+            filetype(pkg,".git") != :invalid || continue
             pkg in dont_update && continue
             with(GitRepo, pkg) do repo
                 if LibGit2.isattached(repo)

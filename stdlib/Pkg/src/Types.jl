@@ -242,10 +242,10 @@ mutable struct EnvCache
             end
         end
         @assert project_file isa String &&
-            (isfile(project_file) || !ispath(project_file) ||
+            (isfile(project_file) || filetype(project_file) == :invalid ||
              isdir(project_file) && isempty(readdir(project_file)))
         project_dir = dirname(project_file)
-        git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
+        git = filetype(joinpath(project_dir, ".git") != :invalid) ? LibGit2.GitRepo(project_dir) : nothing
 
         project = read_project(project_file)
         if any(haskey.((project,), ["name", "uuid", "version"]))
@@ -340,7 +340,7 @@ function project_compatibility(ctx::Context, name::String)
 end
 
 function write_env_usage(manifest_file::AbstractString)
-    !ispath(logdir()) && mkpath(logdir())
+    filetype(logdir() == :invalid) && mkpath(logdir())
     usage_file = joinpath(logdir(), "manifest_usage.toml")
     touch(usage_file)
     !isfile(manifest_file) && return
@@ -425,7 +425,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                 clone_path = joinpath(depots()[1], "clones")
                 mkpath(clone_path)
                 repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
-                repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+                repo, just_cloned = filetype(repo_path) != :invalid ? (LibGit2.GitRepo(repo_path), false) : begin
                     r = GitTools.clone(pkg.repo.url, repo_path)
                     GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
                     r, true
@@ -482,7 +482,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             clones_dir = joinpath(depots()[1], "clones")
             mkpath(clones_dir)
             repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
-            repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+            repo, just_cloned = filetype(repo_path) != :invalid ? (LibGit2.GitRepo(repo_path), false) : begin
                 r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
                 GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
                 r, true
@@ -764,7 +764,7 @@ const DEFAULT_REGISTRIES = Dict("Uncurated" => "https://github.com/JuliaRegistri
 # Return paths of all registries in a depot
 function registries(depot::String)::Vector{String}
     d = joinpath(depot, "registries")
-    ispath(d) || return String[]
+    filetype(d) == :invalid && return String[]
     regs = filter!(readdir(d)) do r
         isfile(joinpath(d, r, "Registry.toml"))
     end
@@ -776,7 +776,7 @@ function registries(; clone_default=true)::Vector{String}
     isempty(depots()) && return String[]
     user_regs = abspath(depots()[1], "registries")
     if clone_default
-        if !ispath(user_regs)
+        if filetype(user_regs) == :invalid
             mkpath(user_regs)
             Base.shred!(LibGit2.CachedCredentials()) do creds
                 printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
@@ -1031,7 +1031,7 @@ function write_env(ctx::Context; display_diff=true)
     # update the project file
     project = deepcopy(env.project)
     isempty(project["deps"]) && delete!(project, "deps")
-    if !isempty(project) || ispath(env.project_file)
+    if !isempty(project) || filetype(env.project_file) != :invalid
         if display_diff
             printpkgstyle(ctx, :Updating, pathrepr(ctx, env.project_file))
             Pkg.Display.print_project_diff(ctx, old_env, env)
@@ -1044,7 +1044,7 @@ function write_env(ctx::Context; display_diff=true)
         end
     end
     # update the manifest file
-    if !isempty(env.manifest) || ispath(env.manifest_file)
+    if !isempty(env.manifest) || filetype(env.manifest_file) != :invalid
         if display_diff
             printpkgstyle(ctx, :Updating, pathrepr(ctx, env.manifest_file))
             Pkg.Display.print_manifest_diff(ctx, old_env, env)

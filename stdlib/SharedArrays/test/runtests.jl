@@ -16,11 +16,11 @@ dims = (20,20,20)
 if Sys.islinux()
     S = SharedArray{Int64,3}(dims)
     @test startswith(S.segname, "/jl")
-    @test !ispath("/dev/shm" * S.segname)
+    @test filetype("/dev/shm" * S.segname) == :invalid
 
     S = SharedArray{Int64,3}(dims; pids=[id_other])
     @test startswith(S.segname, "/jl")
-    @test !ispath("/dev/shm" * S.segname)
+    @test filetype("/dev/shm" * S.segname) == :invalid
 end
 
 # TODO : Need a similar test of shmem cleanup for OSX

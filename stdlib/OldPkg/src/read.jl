@@ -61,7 +61,7 @@ isinstalled(pkg::AbstractString) =
 function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
     isinstalled(pkg) || throw(PkgError("$pkg is not an installed package."))
     isfile("METADATA", pkg, "url") || return true
-    ispath(pkg, ".git") || return true
+    filetype(pkg, ".git") != :invalid || return true
 
     LibGit2.isdirty(prepo) && return true
     LibGit2.isattached(prepo) && return true
@@ -106,7 +106,7 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
 end
 
 function ispinned(pkg::AbstractString)
-    ispath(pkg,".git") || return false
+    filetype(pkg,".git") != :invalid || return false
     LibGit2.with(LibGit2.GitRepo, pkg) do repo
         return ispinned(repo)
     end
@@ -120,7 +120,7 @@ function ispinned(prepo::LibGit2.GitRepo)
 end
 
 function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
-    ispath(pkg,".git") || return typemin(VersionNumber)
+    filetype(pkg,".git") != :invalid || return typemin(VersionNumber)
 
     # get package repo head hash
     local head
@@ -182,7 +182,7 @@ end
 
 function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     pkgreq = joinpath(pkg,"REQUIRE")
-    ispath(pkg,".git") || return pkgreq
+    filetype(pkg,".git") != :invalid || return pkgreq
     repo = LibGit2.GitRepo(pkg)
     head = LibGit2.with(LibGit2.GitRepo, pkg) do repo
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
@@ -211,7 +211,7 @@ function installed(avail::Dict=available())
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
-        if ispath(pkg,".git")
+        if filetype(pkg,".git") != :invalid
             LibGit2.with(LibGit2.GitRepo, pkg) do repo
                 ver = installed_version(pkg, repo, ap)
                 fixed = isfixed(pkg, repo, ap)
@@ -246,7 +246,7 @@ function free(inst::Dict=installed(), dont_update::Set{String}=Set{String}())
 end
 
 function issue_url(pkg::AbstractString)
-    ispath(pkg,".git") || return ""
+    filetype(pkg,".git") != :invalid || return ""
     m = match(LibGit2.GITHUB_REGEX, url(pkg))
     m === nothing && return ""
     return "https://github.com/" * m.captures[1] * "/issues"

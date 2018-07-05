@@ -65,8 +65,8 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         Base.mv(joinpath(temp_dir,"META_BRANCH"), joinpath(dir,"META_BRANCH"))
         rm(temp_dir, recursive=true)
     catch err
-        ispath(metadata_dir) && rm(metadata_dir, recursive=true)
-        ispath(temp_dir) && rm(temp_dir, recursive=true)
+        filetype(metadata_dir) != :invalid && rm(metadata_dir, recursive=true)
+        filetype(temp_dir) != :invalid && rm(temp_dir, recursive=true)
         rethrow(err)
     end
 end

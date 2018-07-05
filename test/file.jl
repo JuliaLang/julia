@@ -238,7 +238,7 @@ my_tempdir = tempdir()
 
 let path = tempname()
     # issue #9053
-    @test !ispath(path)
+    @test filetype(path) == :invalid
 end
 
 (p, f) = mktemp()
@@ -380,7 +380,7 @@ mktempdir() do tmpdir
     mv(file, newfile)
     newfile_stat = stat(file)
 
-    @test !ispath(file)
+    @test filetype(file) == :invalid
     @test isfile(newfile)
     @test Base.samefile(files_stat, newfile_stat)
 
@@ -396,7 +396,7 @@ mktempdir() do tmpdir
     # rename, then make sure b_tmpdir does exist and a_tmpdir doesn't
     mv(a_tmpdir, b_tmpdir)
     @test isdir(b_tmpdir)
-    @test !ispath(a_tmpdir)
+    @test filetype(a_tmpdir) == :invalid
 
     # get b_tmpdir's file info and compare with a_tmpdir
     b_stat = stat(b_tmpdir)
@@ -458,7 +458,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         mv(d, d_mv; force=force)
         stat_d_mv = stat(d_mv)
         # make sure d does not exist anymore
-        @test !ispath(d)
+        @test filetype(d) == :invalid
         # compare s, with d_mv
         @test isdir(s) == isdir(d_mv)
         @test islink(s) == islink(d_mv)
@@ -603,7 +603,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mktempdir() do tmpdir
         none_existing_src = joinpath(tmpdir, "none_existing_src")
         dst = joinpath(tmpdir, "dst")
-        @test !ispath(none_existing_src)
+        @test filetype(none_existing_src) == :invalid
         # cptree
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=false)
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=true)
@@ -660,7 +660,7 @@ if !Sys.iswindows()
         mv(d, d_mv; force=force)
         stat_d_mv = stat(d_mv)
         # make sure d does not exist anymore
-        @test !ispath(d)
+        @test filetype(d) == :invalid
         # comare s, with d_mv
         @test isfile(s) == isfile(d_mv)
         @test islink(s) == islink(d_mv)
@@ -993,8 +993,8 @@ rm(subdir)
 rm(subdir2)
 rm(dir)
 
-@test !ispath(file)
-@test !ispath(dir)
+@test filetype(file) == :invalid
+@test filetype(dir) == :invalid
 
 
 

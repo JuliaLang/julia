@@ -276,7 +276,7 @@ end
 # The following use Unix command line facilites
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
                                                           force::Bool=false)
-    if ispath(dst)
+    if filetype(dst) != :invalid
         if force
             # Check for issue when: (src == dst) or when one is a link to the other
             # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
@@ -458,7 +458,7 @@ function tempname()
             seed += 1
         end
         filename = _win_tempname(parent, seed)
-        if !ispath(filename)
+        if filetype($1) == :invalid
             return filename
         end
         seed += 1

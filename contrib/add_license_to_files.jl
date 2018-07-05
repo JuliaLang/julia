@@ -164,7 +164,7 @@ function abspaths(A::Vector)
     abs_A = []
     for p in A
         abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(dirname(@__FILE__), p))
-        ispath(abs_p) || error(string("`abs_p` seems not to be an existing path. ",
+        filetype(abs_p) != :invalid || error(string("`abs_p` seems not to be an existing path. ",
                                       "Adjust your configuration: <", p, "> : ", abs_p, "\n"))
         push!(abs_A, abs_p)
     end

@@ -51,7 +51,7 @@ macro stat_call(sym, arg1type, arg)
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
         r == 0 || r == Base.UV_ENOENT || r == Base.UV_ENOTDIR || throw(UVError("stat", r))
         st = StatStruct(stat_buf)
-        if ispath(st) != (r == 0)
+        if (filetype($1) != :invalid) & (r == 0)
             error("stat returned zero type for a valid path")
         end
         return st
@@ -203,7 +203,7 @@ samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
 function samefile(a::AbstractString, b::AbstractString)
     infoa = stat(a)
     infob = stat(b)
-    if ispath(infoa) && ispath(infob)
+    if filetype(infoa) != :invalid && filetype(infob) != :invalid
         samefile(infoa, infob)
     else
         return false

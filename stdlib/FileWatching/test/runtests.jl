@@ -235,7 +235,7 @@ function test_touch(slval)
     write(f, "Hello World\n")
     close(f)
     tr = take!(channel)
-    @test ispath(tr[1]) && ispath(tr[2])
+    @test filetype(tr[1]) != :invalid && filetype(tr[2]) != :invalid
     fetch(t)
 end
 

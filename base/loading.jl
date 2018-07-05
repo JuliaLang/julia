@@ -527,7 +527,7 @@ function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{N
         slug = joinpath(name, version_slug(uuid, hash))
         for depot in DEPOT_PATH
             path = abspath(depot, "packages", slug)
-            ispath(path) && return entry_path(path, name)
+            filetype(path) != :invalid && return entry_path(path, name)
         end
     end
 end
