@@ -242,7 +242,7 @@ Stacktrace:
 ```
 """
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
-    if filetype(path) == :link || filetype(path) != :dir
+    if filetype(path; link = true) == :link || filetype(path) != :dir
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
@@ -281,8 +281,8 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
             # Check for issue when: (src == dst) or when one is a link to the other
             # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
             if Base.samefile(src, dst)
-                abs_src = filetype(src) == :link ? abspath(readlink(src)) : abspath(src)
-                abs_dst = filetype(dst) == :link ? abspath(readlink(dst)) : abspath(dst)
+                abs_src = filetype(src; link = true) == :link ? abspath(readlink(src)) : abspath(src)
+                abs_dst = filetype(dst; link = true) == :link ? abspath(readlink(dst)) : abspath(dst)
                 throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
                                            "This is not supported.\n  ",
                                            "`src` refers to: $(abs_src)\n  ",
@@ -310,7 +310,7 @@ function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
     mkdir(dst)
     for name in readdir(src)
         srcname = joinpath(src, name)
-        if !follow_symlinks && filetype(srcname) == :link
+        if !follow_symlinks && filetype(srcname; link = true) == :link
             symlink(readlink(srcname), joinpath(dst, name))
         elseif filetype(srcname) == :dir
             cptree(srcname, joinpath(dst, name); force=force,
@@ -342,7 +342,7 @@ function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
         force = remove_destination
     end
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
-    if !follow_symlinks && filetype(src) == :link
+    if !follow_symlinks && filetype(src; link = true) == :link
         symlink(readlink(src), dst)
     elseif filetype(src) == :dir
         cptree(src, dst; force=force, follow_symlinks=follow_symlinks)

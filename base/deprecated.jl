@@ -1754,7 +1754,7 @@ end
 @deprecate isdir(args...) filetype(args...) == :dir
 @deprecate isblockdev(args...) filetype(args...) == :block
 @deprecate isfile(args...) filetype(args...) == :file
-@deprecate islink(args...) filetype(args...) == :link
+@deprecate islink(args...) filetype(args...; link = true) == :link
 @deprecate issocket(args...) filetype(args...) == :socket
 @deprecate issetuid(args...) fileflags(args...).set_user
 @deprecate issetgid(args...) fileflags(args...).set_group

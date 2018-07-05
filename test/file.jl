@@ -138,12 +138,12 @@ end
 
 # test links
 if Sys.isunix()
-    @test filetype(link) == :link == true
+    @test filetype(link; link = true) == :link == true
     @test readlink(link) == file
 end
 
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    @test filetype(dirlink) == :link == true
+    @test filetype(dirlink; link = true) == :link == true
     @test filetype(dirlink) == :dir == true
     @test readlink(dirlink) == subdir * (Sys.iswindows() ? "\\" : "")
 end
@@ -293,10 +293,10 @@ function check_dir(orig_path::AbstractString, copied_path::AbstractString, follo
 end
 
 function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow_symlinks::Bool)
-    if filetype(orig_path) == :link
+    if filetype(orig_path; link = true) == :link
         if !follow_symlinks
             # copied_path must be a link
-            @test filetype(copied_path) == :link
+            @test filetype(copied_path; link = true) == :link
             readlink_orig = readlink(orig_path)
             # copied_path must have the same link value:
             #    this is true for absolute and relative links
@@ -306,7 +306,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
             end
         else
             # copied_path may not be a link if follow_symlinks=true
-            @test filetype(orig_path) == :link == filetype(copied_path) != :link
+            @test filetype(orig_path; link = true) == :link == filetype(copied_path) != :link
             if filetype(orig_path) == :dir
                 check_dir(orig_path, copied_path, follow_symlinks)
             else
@@ -442,9 +442,9 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     function cp_follow_symlinks_false_check(s, d; force=false)
         cp(s, d; force=force, follow_symlinks=false)
         @test filetype(s) == :dir == filetype(d) == :dir
-        @test filetype(s) == :link == filetype(d) == :link
-        filetype(s) == :link && @test readlink(s) == readlink(d)
-        filetype(s) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d))
+        @test filetype(s; link = true) == :link == filetype(d; link = true) == :link
+        filetype(s; link = true) == :link && @test readlink(s) == readlink(d)
+        filetype(s; link = true) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d))
         # all should contain 1 file named  "c.txt"
         @test "c.txt" in readdir(d)
         @test length(readdir(d)) == 1
@@ -461,9 +461,9 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test filetype(d) == :invalid
         # compare s, with d_mv
         @test filetype(s) == :dir == filetype(d_mv) == :dir
-        @test filetype(s) == :link == filetype(d_mv) == :link
-        filetype(s) == :link && @test readlink(s) == readlink(d_mv)
-        filetype(s) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
+        @test filetype(s; link = true) == :link == filetype(d_mv; link = true) == :link
+        filetype(s; link = true) == :link && @test readlink(s) == readlink(d_mv)
+        filetype(s; link = true) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
         # all should contain 1 file named  "c.txt"
         @test "c.txt" in readdir(d_mv)
         @test length(readdir(d_mv)) == 1
@@ -645,9 +645,9 @@ if !Sys.iswindows()
     function cp_follow_symlinks_false_check(s, d, file_txt; force=false)
         cp(s, d; force=force, follow_symlinks=false)
         @test filetype(s) == :file == filetype(d) == :file
-        @test filetype(s) == :link == filetype(d) == :link
-        filetype(s) == :link && @test readlink(s) == readlink(d)
-        filetype(s) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d))
+        @test filetype(s; link = true) == :link == filetype(d; link = true) == :link
+        filetype(s; link = true) == :link && @test readlink(s) == readlink(d)
+        filetype(s; link = true) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d))
         # all should contain the same
         @test read(s, String) == read(d, String) == file_txt
     end
@@ -663,9 +663,9 @@ if !Sys.iswindows()
         @test filetype(d) == :invalid
         # comare s, with d_mv
         @test filetype(s) == :file == filetype(d_mv) == :file
-        @test filetype(s) == :link == filetype(d_mv) == :link
-        filetype(s) == :link && @test readlink(s) == readlink(d_mv)
-        filetype(s) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
+        @test filetype(s; link = true) == :link == filetype(d_mv; link = true) == :link
+        filetype(s; link = true) == :link && @test readlink(s) == readlink(d_mv)
+        filetype(s; link = true) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
         # all should contain the same
         @test read(s, String) == read(d_mv, String) == file_txt
         # d => d_mv same file/dir

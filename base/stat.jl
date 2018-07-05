@@ -243,7 +243,7 @@ function ismount(path...)
     filetype(path) == :dir || return false
     s1 = lstat(path; link = true)
     # Symbolic links cannot be mount points
-    filetype(s1) == :link && return false
+    filetype(s1; link = true) == :link && return false
     parent_path = joinpath(path, "..")
     s2 = lstat(parent_path; link = true)
     # If a directory and its parent are on different devices,  then the
