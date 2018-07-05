@@ -3,27 +3,11 @@
 # filesystem operations
 
 export
-    ctime,
-    filemode,
-    filesize,
-    gperm,
-    isblockdev,
-    ischardev,
-    isdir,
-    isfifo,
-    isfile,
-    islink,
+    fileflags,
+    filetype,
     ismount,
-    ispath,
-    issetgid,
-    issetuid,
-    issocket,
-    issticky,
-    lstat,
-    mtime,
     operm,
-    stat,
-    uperm
+    permissions
 
 struct StatStruct
     device  :: UInt
@@ -166,11 +150,14 @@ Returns a named tuple of the flags of a `path`, if the `path`:
 - `setgid`: has the setgid flag set
 - `sticky`: has the sticky bit set
 """
-fileflags(path) = (
-    setuid = (filemode(st) & 0o4000) > 0,
-    setgid = (filemode(st) & 0o2000) > 0,
-    sticky = (filemode(st) & 0o1000) > 0
-)
+function fileflags(st::StatStruct)
+    mode = st.mode
+    (
+        setuid = (mode & 0o4000) > 0,
+        setgid = (mode & 0o2000) > 0,
+        sticky = (mode & 0o1000) > 0
+    )
+end
 
 function translate_permissions(read_write_execute)
     read, write_execute = divrem(read_write_execute, 4)
@@ -182,8 +169,8 @@ function translate_permissions(read_write_execute)
     )
 end
 
-permission_for_shift(shift) =
-    translate_permission(UInt8((st.mode >> shift) & 0x7))
+permission_for_shift(mode, shift) =
+    translate_permission(UInt8((mode >> shift) & 0x7))
 
 """
     permissions(path)
@@ -192,35 +179,24 @@ Returns a nested named tuple of bools. The outer tuple will classify permissions
 as `user`, `group`, or `other`. The inner tuple will classify permisissions as
 `read`, `write`, or `execute`.
 """
-permissions(st::StatStruct) = (
-    user = permission_for_shift(st, 6),
-    group = permission_for_shift(st, 3),
-    other = permission_for_shift(st, 0)
-)
-
-for f in Symbol[
-    :ispath,
-    :isfifo,
-    :ischardev,
-    :isdir,
-    :isblockdev,
-    :isfile,
-    :issocket,
-    :issetuid,
-    :issetgid,
-    :issticky,
-    :uperm,
-    :gperm,
-    :operm,
-    :filemode,
-    :filesize,
-    :mtime,
-    :ctime,
-]
-    @eval ($f)(path...)  = ($f)(stat(path...))
+function permissions(st::StatStruct)
+    mode = st.mode
+    (
+        user = permission_for_shift(mode, 6),
+        group = permission_for_shift(mode, 3),
+        other = permission_for_shift(mode, 0)
+    )
 end
 
-islink(path...) = islink(lstat(path...))
+permissions(path...) = permissions(stat(path...))
+
+for f in Symbol[
+    :fileflags,
+    :filetype,
+    :permissions
+]
+    @eval ($f)(path...; link = false)  = ($f)(stat(path...; link = link))
+end
 
 # samefile can be used for files and directories: #11145#issuecomment-99511194
 samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
