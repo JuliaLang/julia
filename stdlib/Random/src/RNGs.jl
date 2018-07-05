@@ -559,3 +559,23 @@ end
 
 _randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X) =
     fillcache_zeros!(MersenneTwister(copy(r.seed), DSFMT.dsfmt_jump(r.state, jumppoly)))
+
+function _randjump(mt::MersenneTwister, jumppoly::DSFMT.GF2X, len::Integer)
+    mts = MersenneTwister[]
+    push!(mts, mt)
+    for i in 1:len-1
+        cmt = mts[end]
+        push!(mts, _randjump(cmt, jumppoly))
+    end
+    return mts
+end
+
+const TRNG = Array{MersenneTwister}
+const ThreadRNG = Ref{TRNG}()
+
+TRNG(r::MersenneTwister=GLOBAL_RNG) = TRNG(randjump(r, big(10)^20, Threads.nthreads()))
+
+function trand(r::Array{MersenneTwister}=ThreadRNG[])
+    rt = r[Threads.threadid()]
+    return rand(rt)
+end

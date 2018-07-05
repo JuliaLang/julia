@@ -27,7 +27,8 @@ export srand,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
-       randjump
+       randjump,
+       trand
 
 
 ## general definitions
@@ -270,6 +271,7 @@ function __init__()
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module Random")
     end
+    ThreadRNG[] = TRNG()
 end
 
 include("RNGs.jl")
