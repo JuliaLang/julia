@@ -850,7 +850,6 @@ export
     chown,
     cp,
     download,
-    gperm,
     ismount,
     isreadable,
     iswritable,
@@ -860,7 +859,6 @@ export
     mktemp,
     mktempdir,
     mv,
-    operm,
     pwd,
     readlink,
     rm,
@@ -869,7 +867,6 @@ export
     tempdir,
     tempname,
     touch,
-    uperm,
     walkdir,
 
 # external processes ## TODO: whittle down these exports.

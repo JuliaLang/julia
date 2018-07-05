@@ -6,7 +6,6 @@ export
     fileflags,
     filetype,
     ismount,
-    operm,
     permissions
 
 struct StatStruct
@@ -169,8 +168,32 @@ function translate_permissions(read_write_execute)
     )
 end
 
+
+permission_bitfield(mode, shift) = UInt8((mode >> shift) & 0x7)
+
+# unexported but necessary for compatibility?
+"""
+    permission_bitfields(path)
+
+Returns a named tuple of permission bitfields for `user`, `group`, and `other`.
+
+| Value | Description        |
+|:------|:-------------------|
+| 01    | Execute Permission |
+| 02    | Write Permission   |
+| 04    | Read Permission    |
+"""
+function permission_bitfields(st::StatStruct)
+    mode = st.mode
+    (
+        user = permission_bitfield(mode, 6),
+        group = permission_bitfield(mode, 3),
+        other = permission_bitfield(mode, 0)
+    )
+end
+
 permission_for_shift(mode, shift) =
-    translate_permission(UInt8((mode >> shift) & 0x7))
+    translate_permission(permission_bitfield(mode, shift))
 
 """
     permissions(path)

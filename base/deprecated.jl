@@ -1759,6 +1759,9 @@ end
 @deprecate issetuid(args...) fileflags(args...).set_user
 @deprecate issetgid(args...) fileflags(args...).set_group
 @deprecate issticky(args...) fileflags(args...).sticky
+@deprecate uperm(args...) Base.permissions_bitfield(args...).user
+@deprecate gperm(args...) Base.permissions_bitfield(args...).group
+@deprecate operm(args...) Base.permissions_bitfield(args...).owner
 
 # END 0.7 deprecations
 

@@ -859,7 +859,7 @@ end
 
 # issue #10994: pathnames cannot contain embedded NUL chars
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
-        stat, lstat, uperm, gperm, operm, touch,
+        stat, lstat, touch,
         realpath)
     local f
     @test_throws ArgumentError f("adir\0bad")

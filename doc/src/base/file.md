@@ -14,9 +14,6 @@ Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.stat
 Base.Filesystem.lstat
-Base.Filesystem.uperm
-Base.Filesystem.gperm
-Base.Filesystem.operm
 Base.Filesystem.cp
 Base.download
 Base.Filesystem.mv
