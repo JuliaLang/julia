@@ -113,7 +113,7 @@ function stat(path..., link = false)
     if link
         stat(full_path)
     else
-         lstat(full_path)
+        lstat(full_path)
     end
 end
 
@@ -172,16 +172,15 @@ fileflags(path) = (
     sticky = (filemode(st) & 0o1000) > 0
 )
 
-translate_permission(bit) =
-    if bit == 1
-        :execute
-    elseif bit == 2
-        :write
-    elseif bit == 4
-        :read
-    else
-        error("Unknown permissions type")
-    end
+function translate_permissions(read_write_execute)
+    read, write_execute = divrem(read_write_execute, 4)
+    write, execute = divrem(write_execute, 2)
+    (
+        read = Bool(read),
+        write = Bool(write),
+        execute = Bool(execute)
+    )
+end
 
 permission_for_shift(shift) =
     translate_permission(UInt8((st.mode >> shift) & 0x7))
@@ -189,15 +188,14 @@ permission_for_shift(shift) =
 """
     permissions(path)
 
-Returns a named tuple of the permissions of a `path` for the `user`, the
-`group`, and `neither`.
-
-Permissions can be `:execute`, `:write`, `:read`, or `:other`.
+Returns a nested named tuple of bools. The outer tuple will classify permissions
+as `user`, `group`, or `other`. The inner tuple will classify permisissions as
+`read`, `write`, or `execute`.
 """
 permissions(st::StatStruct) = (
     user = permission_for_shift(st, 6),
     group = permission_for_shift(st, 3),
-    neither = permission_for_shift(st, 0)
+    other = permission_for_shift(st, 0)
 )
 
 for f in Symbol[
