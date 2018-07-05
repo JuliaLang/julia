@@ -738,7 +738,7 @@ function sendfile(src::AbstractString, dst::AbstractString)
         dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, stat(src_file).mode)
         dst_open = true
 
-        bytes = filesize(stat(src_file))
+        bytes = stat(src_file).size
         sendfile(dst_file, src_file, Int64(0), Int(bytes))
     finally
         if src_open && isopen(src_file)

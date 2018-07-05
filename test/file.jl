@@ -66,7 +66,7 @@ end
 @test stat(file).mode & 0o222 == 0
 chmod(file, stat(file).mode | 0o222)
 @test stat(file).mode & 0o111 == 0
-@test filesize(file) == 0
+@test stat(file).size == 0
 
 if Sys.iswindows()
     permissions = 0o444
@@ -123,9 +123,9 @@ end
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
-    @test filesize(dir) == 0
+    @test stat(dir).size == 0
 else
-    @test filesize(dir) > 0
+    @test stat(dir).size > 0
 end
 nowtime = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
@@ -859,7 +859,7 @@ end
 
 # issue #10994: pathnames cannot contain embedded NUL chars
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
-        stat, lstat, filemode, filesize, uperm, gperm, operm, touch,
+        stat, lstat, filemode, uperm, gperm, operm, touch,
         isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid,
         issetuid, issocket, issticky, realpath)
     local f

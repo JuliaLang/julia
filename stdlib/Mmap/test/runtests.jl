@@ -73,19 +73,19 @@ for i = 0x01:0x0c
 end
 GC.gc(); GC.gc()
 
-sz = filesize(file)
+sz = stat(file).size
 s = open(file, "r+")
 m = Mmap.mmap(s, Vector{UInt8}, sz+1)
 @test length(m) == sz+1 # test growing
 @test m[end] == 0x00
 close(s); finalize(m); m=nothing; GC.gc()
-sz = filesize(file)
+sz = stat(file).size
 s = open(file, "r+")
 m = Mmap.mmap(s, Vector{UInt8}, 1, sz)
 @test length(m) == 1
 @test m[1] == 0x00
 close(s); finalize(m); m=nothing; GC.gc()
-sz = filesize(file)
+sz = stat(file).size
 # test where offset is actually > than size of file; file is grown with zeroed bytes
 s = open(file, "r+")
 m = Mmap.mmap(s, Vector{UInt8}, 1, sz+1)
@@ -220,7 +220,7 @@ open(file,"w") do f
     write(f,UInt64(1))
     write(f,UInt8(1))
 end
-@test filesize(file) == 9
+@test stat(file).size == 9
 s = open(file, "r+")
 m = Mmap.mmap(s, BitArray, (72,))
 @test Test._check_bitarray_consistency(m)

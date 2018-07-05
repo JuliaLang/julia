@@ -1184,7 +1184,7 @@ end
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
 
 isvalid_cache_header(f::IOStream) = (0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios))
-isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
+isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), stat(f).size - 4) == read(f, UInt32))
 
 function parse_cache_header(f::IO)
     modules = Vector{Pair{PkgId, UInt64}}()

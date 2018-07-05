@@ -239,7 +239,7 @@ function readdlm_auto(input::AbstractString, dlm::AbstractChar, T::Type, eol::Ab
     isfile(input) || throw(ArgumentError("Cannot open \'$input\': not a file"))
     optsd = val_opts(opts)
     use_mmap = get(optsd, :use_mmap, Sys.iswindows() ? false : true)
-    fsz = filesize(input)
+    fsz = stat(input).size
     if use_mmap && fsz > 0 && fsz < typemax(Int)
         a = open(input, "r") do f
             Mmap.mmap(f, Vector{UInt8}, (Int(fsz),))

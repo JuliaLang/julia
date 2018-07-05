@@ -851,7 +851,6 @@ export
     cp,
     download,
     filemode,
-    filesize,
     gperm,
     isblockdev,
     ischardev,

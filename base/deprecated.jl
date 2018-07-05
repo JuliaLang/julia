@@ -1747,6 +1747,8 @@ end
 @deprecate mtime(args...) stat(args...).ctime
 @deprecate filemode(st::StatStruct) st.mtime
 @deprecate filemode(args...) stat(args...).ctime
+@deprecate filesize(st::StatStruct) st.size
+@deprecate filesize(args...) stat(args...).size
 
 # END 0.7 deprecations
 

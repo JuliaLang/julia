@@ -15,7 +15,6 @@ Base.Filesystem.chown
 Base.stat
 Base.Filesystem.lstat
 Base.Filesystem.filemode
-Base.Filesystem.filesize
 Base.Filesystem.uperm
 Base.Filesystem.gperm
 Base.Filesystem.operm
