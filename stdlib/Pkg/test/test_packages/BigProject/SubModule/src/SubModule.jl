@@ -2,6 +2,8 @@
 
 module SubModule
 
+using RecursiveDep
+
 buildfile = joinpath(@__DIR__, "..", "deps", "buildartifact")
 if !isfile(buildfile)
     error("Package built incorrectly")

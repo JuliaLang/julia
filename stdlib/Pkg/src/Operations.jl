@@ -756,16 +756,25 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
             "version" => string(pkg.version)
         )]
     else
-        # Only put `pkg` and its deps in the temp project
+        # Only put `pkg` and its deps (recursively) in the temp project
+        collect_deps!(seen, pkg) = begin
+            pkg.uuid in keys(localctx.stdlibs) && return
+            pkg.uuid in seen && return
+            push!(seen, pkg.uuid)
+            info = manifest_info(localctx.env, pkg.uuid)
+            need_to_resolve |= haskey(info, "path")
+            localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
+            for (dpkg, duuid) in get(info, "deps", [])
+                collect_deps!(seen, PackageSpec(dpkg, UUID(duuid)))
+            end
+        end
+        # Only put `pkg` and its deps (revursively) in the temp project
         empty!(localctx.env.project["deps"])
         localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
-        info = manifest_info(localctx.env, pkg.uuid)
-        need_to_resolve |= haskey(info, "path")
-        for (dpkg, duuid) in get(info, "deps", [])
-            dinfo = manifest_info(localctx.env, UUID(duuid))
-            dinfo === nothing || (need_to_resolve |= haskey(info, "path"))
-            localctx.env.project["deps"][dpkg] = string(duuid)
-        end
+
+        seen_uuids = Set{UUID}()
+        collect_deps!(seen_uuids, pkg)# Only put `pkg` and its deps (recursively) in the temp project
+
     end
 
     pkgs = PackageSpec[]

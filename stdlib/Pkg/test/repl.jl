@@ -289,6 +289,8 @@ temp_pkg_dir() do project_path; cd(project_path) do
         cp(joinpath(@__DIR__, "test_packages", "BigProject"), joinpath(tmp, "BigProject"))
         cd(joinpath(tmp, "BigProject"))
         with_current_env() do
+            pkg"dev RecursiveDep2"
+            pkg"dev RecursiveDep"
             pkg"dev SubModule"
             pkg"dev SubModule2"
             pkg"add Random"
