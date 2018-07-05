@@ -89,9 +89,8 @@ The fields of the structure are:
 | blocks  | The number of such blocks allocated                                |
 | mtime   | Unix timestamp of when the file was last modified                  |
 | ctime   | Unix timestamp of when the file was created                        |
-
 """
-function stat(path..., link = false)
+function stat(path...; link = false)
     full_path = joinpath(path...)
     if link
         stat(full_path)
