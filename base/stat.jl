@@ -241,11 +241,11 @@ Returns `true` if `path` is a mount point, `false` otherwise.
 function ismount(path...)
     path = joinpath(path...)
     filetype(path) == :dir || return false
-    s1 = lstat(path)
+    s1 = lstat(path; link = true)
     # Symbolic links cannot be mount points
     filetype(s1) == :link && return false
     parent_path = joinpath(path, "..")
-    s2 = lstat(parent_path)
+    s2 = lstat(parent_path; link = true)
     # If a directory and its parent are on different devices,  then the
     # directory must be a mount point
     (s1.device != s2.device) && return true

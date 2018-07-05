@@ -853,7 +853,6 @@ export
     ismount,
     isreadable,
     iswritable,
-    lstat,
     mkdir,
     mkpath,
     mktemp,

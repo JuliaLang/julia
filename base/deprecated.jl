@@ -1762,6 +1762,7 @@ end
 @deprecate uperm(args...) Base.permissions_bitfield(args...).user
 @deprecate gperm(args...) Base.permissions_bitfield(args...).group
 @deprecate operm(args...) Base.permissions_bitfield(args...).owner
+@deprecate lstat(args...) stat(args...; link = true)
 
 # END 0.7 deprecations
 

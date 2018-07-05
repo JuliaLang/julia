@@ -113,7 +113,7 @@ else
         @test stat(dir).mode & 0o777 == permissions
         @test stat(subdir).mode & 0o777 == permissions
         @test stat(file).mode & 0o777 == permissions
-        @test lstat(link).mode & 0o777 != permissions  # Symbolic links are not modified.
+        @test lstat(link; link = true).mode & 0o777 != permissions  # Symbolic links are not modified.
         @test stat(linkfile).mode & 0o777 != permissions  # Symbolic links are not followed.
         @test stat(tmpfile).mode & 0o777 != permissions
         rm(linkfile)
