@@ -458,7 +458,7 @@ function tempname()
             seed += 1
         end
         filename = _win_tempname(parent, seed)
-        if filetype($1) == :invalid
+        if filetype(filename) == :invalid
             return filename
         end
         seed += 1

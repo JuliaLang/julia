@@ -25,6 +25,9 @@ Base.Filesystem.mktemp(::Any)
 Base.Filesystem.mktemp(::Function, ::Any)
 Base.Filesystem.mktempdir(::Any)
 Base.Filesystem.mktempdir(::Function, ::Any)
+Base.Filesystem.filetype
+Base.Filesystem.fileflags
+Base.Filesystem.permissions
 Base.Filesystem.ismount
 Base.Filesystem.homedir
 Base.Filesystem.dirname
