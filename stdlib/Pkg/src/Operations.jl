@@ -12,12 +12,15 @@ using ..Types, ..GraphType, ..Resolve, ..Pkg2, ..BinaryProvider, ..GitTools
 import ..depots, ..devdir, ..Types.uuid_julia
 
 function find_installed(name::String, uuid::UUID, sha1::SHA1)
-    slug = Base.version_slug(uuid, sha1)
-    for depot in depots()
-        path = abspath(depot, "packages", name, slug)
-        ispath(path) && return path
+    slug_default = Base.version_slug(uuid, sha1)
+    # 4 used to be the default so look there first
+    for slug in (Base.version_slug(uuid, sha1, 4), slug_default)
+        for depot in depots()
+            path = abspath(depot, "packages", name, slug)
+            ispath(path) && return path
+        end
     end
-    return abspath(depots()[1], "packages", name, slug)
+    return abspath(depots()[1], "packages", name, slug_default)
 end
 
 function load_versions(path::String)
