@@ -1440,8 +1440,10 @@ end
 @deprecate countlines(x, eol) countlines(x, eol = eol)
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
-@deprecate digits(n, base, pad) digits(n, base = base, pad = pad)
-@deprecate digits(T, n, base, pad) digits(T, n, base = base, pad = pad)
+@deprecate digits(n, base)         digits(n, base = base)
+@deprecate digits(n, base, pad)    digits(n, base = base, pad = pad)
+@deprecate digits(T::Type{<:Integer}, n, base)      digits(T, n, base = base)
+@deprecate digits(T::Type{<:Integer}, n, base, pad) digits(T, n, base = base, pad = pad)
 
 #27908
 @deprecate ndigits(n, base)      ndigits(n, base=base)
