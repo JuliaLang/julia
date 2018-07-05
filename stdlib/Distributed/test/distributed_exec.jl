@@ -1501,6 +1501,10 @@ else
     @info "SO_REUSEPORT is unsupported, skipping reuseport tests"
 end
 
+# issue #27933
+a27933 = :_not_defined_27933
+@test remotecall_fetch(()->a27933, first(workers())) === a27933
+
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
 rmprocs(workers())

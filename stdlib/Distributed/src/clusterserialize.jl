@@ -173,10 +173,11 @@ function deserialize_global_from_main(s::ClusterSerializer, sym)
     sym_isconst = deserialize(s)
     v = deserialize(s)
     if sym_isconst
-        @eval Main const $sym = $v
+        ccall(:jl_set_const, Cvoid, (Any, Any, Any), Main, sym, v)
     else
-        @eval Main $sym = $v
+        ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, sym, v)
     end
+    return nothing
 end
 
 function delete_global_tracker(s::ClusterSerializer, v)
