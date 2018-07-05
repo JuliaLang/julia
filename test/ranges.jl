@@ -1143,6 +1143,15 @@ end
         @test findall(in(2:(length(r) - 1)), r) === 2:(length(r) - 1)
         @test findall(in(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
     end
+    @test convert(Base.OneTo, 1:2) === Base.OneTo{Int}(2)
+    @test_throws ArgumentError("first element must be 1, got 2") convert(Base.OneTo, 2:3)
+    @test_throws ArgumentError("step must be 1, got 2") convert(Base.OneTo, 1:2:5)
+    @test Base.OneTo(1:2) === Base.OneTo{Int}(2)
+    @test Base.OneTo(1:1:2) === Base.OneTo{Int}(2)
+    @test Base.OneTo{Int32}(1:2) === Base.OneTo{Int32}(2)
+    @test Base.OneTo(Int32(1):Int32(2)) === Base.OneTo{Int32}(2)
+    @test Base.OneTo{Int16}(3.0) === Base.OneTo{Int16}(3)
+    @test_throws InexactError(:Int16, Int16, 3.2) Base.OneTo{Int16}(3.2)
 end
 
 @testset "range of other types" begin
