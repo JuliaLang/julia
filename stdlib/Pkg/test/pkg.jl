@@ -266,7 +266,7 @@ end
         cd(tmp) do
             withenv("USER" => "Test User") do
                 Pkg.generate("Foo"; preview=true)
-                @test !isdir(joinpath(tmp, "Foo"))
+                @test filetype(joinpath(tmp, "Foo") != :dir)
             end
         end
     end

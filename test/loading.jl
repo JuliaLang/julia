@@ -43,7 +43,7 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
-@test isdir(@__DIR__)
+@test filetype(@__DIR__) == :dir
 @test @__DIR__() == dirname(@__FILE__)
 let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
     wd = sprint(show, abspath(pwd(), "")),

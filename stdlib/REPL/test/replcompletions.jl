@@ -91,10 +91,10 @@ function temp_pkg_dir_noinit(fn::Function)
     # clone METADATA (only Pkg and LibGit2 tests should need internet access)
     tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
-        @test !isdir(OldPkg.dir())
+        @test filetype(OldPkg.dir() != :dir)
         try
             mkpath(OldPkg.dir())
-            @test isdir(OldPkg.dir())
+            @test filetype(OldPkg.dir() == :dir)
             fn()
         finally
             rm(tmpdir, recursive=true)
@@ -494,7 +494,7 @@ let s = "#=\nmax"
 end
 
 # Test completion of packages
-mkp(p) = ((@assert !isdir(p)); mkpath(p))
+mkp(p) = ((@assert filetype(p) != :dir); mkpath(p))
 temp_pkg_dir_noinit() do
     push!(LOAD_PATH, OldPkg.dir())
     try
@@ -622,7 +622,7 @@ let s, c, r
     @test s[r] == "tmp"
 
     # This should match things that are inside the tmp directory
-    if !isdir("/tmp/tmp")
+    if filetype("/tmp/tmp") != :dir
         s = "/tmp/"
         c,r = test_scomplete(s)
         @test !("tmp/" in c)

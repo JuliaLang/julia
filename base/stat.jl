@@ -217,7 +217,7 @@ Returns `true` if `path` is a mount point, `false` otherwise.
 """
 function ismount(path...)
     path = joinpath(path...)
-    isdir(path) || return false
+    filetype(path) == :dir || return false
     s1 = lstat(path)
     # Symbolic links cannot be mount points
     islink(s1) && return false

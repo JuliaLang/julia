@@ -18,7 +18,7 @@ function available(names=readdir("METADATA"))
     for pkg in names
         isfile("METADATA", pkg, "url") || continue
         versdir = joinpath("METADATA", pkg, "versions")
-        isdir(versdir) || continue
+        filetype(versdir) == :dir || continue
         for ver in readdir(versdir)
             occursin(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
@@ -38,7 +38,7 @@ function latest(names=readdir("METADATA"))
     for pkg in names
         isfile("METADATA", pkg, "url") || continue
         versdir = joinpath("METADATA", pkg, "versions")
-        isdir(versdir) || continue
+        filetype(versdir) == :dir || continue
         pkgversions = VersionNumber[]
         for ver in readdir(versdir)
             occursin(Base.VERSION_REGEX, ver) || continue
@@ -56,7 +56,7 @@ function latest(names=readdir("METADATA"))
 end
 
 isinstalled(pkg::AbstractString) =
-    pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && isdir(pkg)
+    pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && filetype(pkg) == :dir
 
 function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
     isinstalled(pkg) || throw(PkgError("$pkg is not an installed package."))
@@ -75,7 +75,7 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     end
 
     cache = Cache.path(pkg)
-    cache_has_head = if isdir(cache)
+    cache_has_head = if filetype(cache) == :dir
         crepo = LibGit2.GitRepo(cache)
         LibGit2.iscommit(head, crepo)
     else
@@ -141,7 +141,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
     !isempty(vers) && return maximum(vers)
 
     cache = Cache.path(pkg)
-    cache_has_head = if isdir(cache)
+    cache_has_head = if filetype(cache) == :dir
         crepo = LibGit2.GitRepo(cache)
         LibGit2.iscommit(head, crepo)
     else

@@ -8,7 +8,7 @@ prefix = joinpath(homedir(), ".julia", "registries", "Stdlib")
 # TODO: use Sys.STDLIBDIR instead once implemented
 let vers = "v$(VERSION.major).$(VERSION.minor)"
 global stdlibdir = realpath(abspath(Sys.BINDIR, "..", "share", "julia", "stdlib", vers))
-isdir(stdlibdir) || error("stdlib directory does not exist: $stdlibdir")
+filetype(stdlibdir) == :dir || error("stdlib directory does not exist: $stdlibdir")
 end
 juliadir = dirname(stdlibdir)
 

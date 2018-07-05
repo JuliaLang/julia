@@ -233,7 +233,7 @@ mutable struct EnvCache
             project_file = Base.load_path_expand(env)
             project_file === nothing && error("package environment does not exist: $env")
         elseif env isa String
-            if isdir(env)
+            if filetype(env) == :dir
                 isempty(readdir(env)) || error("environment is a package directory: $env")
                 project_file = joinpath(env, Base.project_names[end])
             else
@@ -243,7 +243,7 @@ mutable struct EnvCache
         end
         @assert project_file isa String &&
             (isfile(project_file) || filetype(project_file) == :invalid ||
-             isdir(project_file) && isempty(readdir(project_file)))
+             filetype(project_file) == :dir && isempty(readdir(project_file)))
         project_dir = dirname(project_file)
         git = filetype(joinpath(project_dir, ".git") != :invalid) ? LibGit2.GitRepo(project_dir) : nothing
 
@@ -394,13 +394,13 @@ const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?(?:\/)?$"
 
 # Windows sometimes throw on `isdir`...
 function isdir_windows_workaround(path::String)
-    try isdir(path)
+    try filetype(path) == :dir
     catch e
         false
     end
 end
 
-casesensitive_isdir(dir::String) = isdir_windows_workaround(dir) && dir in readdir(joinpath(dir, ".."))
+casesensitive_filetype(dir::String) == :dir = isdir_windows_workaround(dir) && dir in readdir(joinpath(dir, ".."))
 
 function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
     Base.shred!(LibGit2.CachedCredentials()) do creds
@@ -452,7 +452,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
 
                 parse_package!(ctx, pkg, project_path)
                 dev_pkg_path = joinpath(Pkg.devdir(), pkg.name)
-                if isdir(dev_pkg_path)
+                if filetype(dev_pkg_path) == :dir
                     if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
                         cmderror("Path `$(dev_pkg_path)` exists but it does not contain `src/$(pkg.name).jl")
                     else
@@ -526,7 +526,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             folder_already_downloaded = false
             if has_uuid(pkg) && has_name(pkg)
                 version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
-                isdir(version_path) && (folder_already_downloaded = true)
+                filetype(version_path) == :dir && (folder_already_downloaded = true)
                 info = manifest_info(env, pkg.uuid)
                 if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
                     # Same tree sha and this version already downloaded, nothing left to do

@@ -206,7 +206,7 @@ function clone(url::AbstractString, pkg::AbstractString)
             LibGit2.set_remote_url(repo, "origin", url)
         end
     catch err
-        isdir(pkg) && Base.rm(pkg, recursive=true)
+        filetype(pkg) == :dir && Base.rm(pkg, recursive=true)
         rethrow(err)
     end
     @info "Computing changes..."
@@ -701,7 +701,7 @@ function test!(pkg::AbstractString,
         end
     end
     test_path = abspath(pkg,"test","runtests.jl")
-    if !isdir(pkg)
+    if filetype(pkg) != :dir
         push!(nopkgs, pkg)
     elseif !isfile(test_path)
         push!(notests, pkg)

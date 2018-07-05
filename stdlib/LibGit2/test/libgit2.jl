@@ -623,9 +623,9 @@ mktempdir() do dir
     @testset "Initializing repository" begin
         @testset "with remote branch" begin
             LibGit2.with(LibGit2.init(cache_repo)) do repo
-                @test isdir(cache_repo)
+                @test filetype(cache_repo) == :dir
                 @test LibGit2.path(repo) == LibGit2.posixpath(realpath(cache_repo))
-                @test isdir(joinpath(cache_repo, ".git"))
+                @test filetype(joinpath(cache_repo, ".git") == :dir)
                 # set a remote branch
                 branch = "upstream"
                 LibGit2.GitRemote(repo, branch, repo_url) |> close
@@ -685,7 +685,7 @@ mktempdir() do dir
         @testset "bare" begin
             path = joinpath(dir, "Example.Bare")
             LibGit2.with(LibGit2.init(path, true)) do repo
-                @test isdir(path)
+                @test filetype(path) == :dir
                 @test LibGit2.path(repo) == LibGit2.posixpath(realpath(path))
                 @test isfile(joinpath(path, LibGit2.Consts.HEAD_FILE))
                 @test LibGit2.isattached(repo)
@@ -711,7 +711,7 @@ mktempdir() do dir
 
     @testset "Cloning repository" begin
         function bare_repo_tests(repo, repo_path)
-            @test isdir(repo_path)
+            @test filetype(repo_path) == :dir
             @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
             @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
             @test LibGit2.isattached(repo)
@@ -734,9 +734,9 @@ mktempdir() do dir
         end
         @testset "normal" begin
             LibGit2.with(LibGit2.clone(cache_repo, test_repo)) do repo
-                @test isdir(test_repo)
+                @test filetype(test_repo) == :dir
                 @test LibGit2.path(repo) == LibGit2.posixpath(realpath(test_repo))
-                @test isdir(joinpath(test_repo, ".git"))
+                @test filetype(joinpath(test_repo, ".git") == :dir)
                 @test LibGit2.workdir(repo) == LibGit2.path(repo)*"/"
                 @test LibGit2.isattached(repo)
                 @test LibGit2.isorphan(repo)
@@ -2923,7 +2923,7 @@ mktempdir() do dir
                         catch err
                             serialize(f, err)
                         finally
-                            isdir(dest_dir) && rm(dest_dir, recursive=true)
+                            filetype(dest_dir) == :dir && rm(dest_dir, recursive=true)
                         end
                     end
                 """

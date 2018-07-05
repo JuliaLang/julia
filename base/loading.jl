@@ -259,7 +259,7 @@ const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 #  - `true`: `env` is an implicit environment
 #  - `path`: the path of an explicit project file
 function env_project_file(env::String)::Union{Bool,String}
-    if isdir(env)
+    if filetype(env) == :dir
         for proj in project_names
             project_file = joinpath(env, proj)
             isfile_casesensitive(project_file) && return project_file
@@ -411,7 +411,7 @@ entry_path(::Nothing, name::String) = nothing
 # given a project path (project directory or entry point)
 # return the project file
 function package_path_to_project_file(path::String)::Union{Nothing,String}
-    if !isdir(path)
+    if filetype(path) != :dir
         dir = dirname(path)
         basename(dir) == "src" || return nothing
         path = dirname(dir)
@@ -1155,7 +1155,7 @@ function compilecache(pkg::PkgId)
     # decide where to put the resulting cache file
     cachefile = abspath(DEPOT_PATH[1], cache_file_entry(pkg))
     cachepath = dirname(cachefile)
-    isdir(cachepath) || mkpath(cachepath)
+    filetype(cachepath) == :dir || mkpath(cachepath)
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
     for (key, mod) in loaded_modules

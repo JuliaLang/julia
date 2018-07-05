@@ -50,7 +50,7 @@ end
 
 function load_versions(dir::String)
     versions = Dict{VersionNumber,Version}()
-    isdir(dir) || return versions
+    filetype(dir) == :dir || return versions
     for ver in readdir(dir)
         path = joinpath(dir, ver)
         sha1 = joinpath(path, "sha1")

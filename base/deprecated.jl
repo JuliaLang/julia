@@ -1751,7 +1751,7 @@ end
 @deprecate filesize(args...) stat(args...).size
 @deprecate ispath(args...) filetype(args...) != :invalid
 @deprecate isfifo(args...) filetype(args...) == :FIFO
-@deprecate isfifo(args...) filetype(args...) == :chardev
+@deprecate isdir(args...) filetype(args...) == :dir
 
 # END 0.7 deprecations
 

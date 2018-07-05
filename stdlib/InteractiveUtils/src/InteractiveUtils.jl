@@ -119,7 +119,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)
         println(io, "Packages:")
         println(io, "  Package Directory: ", OldPkg.dir())
         print(io, "  Package Status:")
-        if isdir(OldPkg.dir())
+        if filetype(OldPkg.dir() == :dir)
             println(io, "")
             OldPkg.status(io)
         else

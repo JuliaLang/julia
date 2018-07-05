@@ -28,8 +28,8 @@ mktempdir() do dir
             c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
             repo = LibGit2.clone(repo_url, repo_path, credentials=c)
             try
-                @test isdir(repo_path)
-                @test isdir(joinpath(repo_path, ".git"))
+                @test filetype(repo_path) == :dir
+                @test filetype(joinpath(repo_path, ".git") == :dir)
             finally
                 close(repo)
             end
@@ -48,8 +48,8 @@ mktempdir() do dir
             c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
             repo = LibGit2.clone(repo_url, repo_path, credentials=c, callbacks=callbacks)
             try
-                @test isdir(repo_path)
-                @test isdir(joinpath(repo_path, ".git"))
+                @test filetype(repo_path) == :dir
+                @test filetype(joinpath(repo_path, ".git") == :dir)
 
                 @test status[].total >= 0
                 @test status[].current == status[].total

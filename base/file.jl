@@ -206,14 +206,14 @@ julia> readdir("test")
 function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
-    (path == dir || isdir(path)) && return
+    (path == dir || filetype(path) == :dir) && return
     mkpath(dir, mode = checkmode(mode))
     try
         mkdir(path, mode = mode)
     # If there is a problem with making the directory, but the directory
     # does in fact exist, then ignore the error. Else re-throw it.
     catch err
-        if !isa(err, SystemError) || !isdir(path)
+        if !isa(err, SystemError) || filetype(path) != :dir
             rethrow()
         end
     end
@@ -242,7 +242,7 @@ Stacktrace:
 ```
 """
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
-    if islink(path) || !isdir(path)
+    if islink(path) || filetype(path) != :dir
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
@@ -305,14 +305,14 @@ function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
                      "`force` instead", :cptree)
         force = remove_destination
     end
-    isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
+    filetype(src) == :dir || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
     for name in readdir(src)
         srcname = joinpath(src, name)
         if !follow_symlinks && islink(srcname)
             symlink(readlink(srcname), joinpath(dst, name))
-        elseif isdir(srcname)
+        elseif filetype(srcname) == :dir
             cptree(srcname, joinpath(dst, name); force=force,
                                                  follow_symlinks=follow_symlinks)
         else
@@ -344,7 +344,7 @@ function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     if !follow_symlinks && islink(src)
         symlink(readlink(src), dst)
-    elseif isdir(src)
+    elseif filetype(src) == :dir
         cptree(src, dst; force=force, follow_symlinks=follow_symlinks)
     else
         sendfile(src, dst)
@@ -683,7 +683,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     dirs = Vector{eltype(content)}()
     files = Vector{eltype(content)}()
     for name in content
-        if isdir(joinpath(root, name))
+        if filetype(joinpath(root, name) == :dir)
             push!(dirs, name)
         else
             push!(files, name)
@@ -771,14 +771,14 @@ function symlink(p::AbstractString, np::AbstractString)
     end
     flags = 0
     @static if Sys.iswindows()
-        if isdir(p)
+        if filetype(p) == :dir
             flags |= UV_FS_SYMLINK_JUNCTION
             p = abspath(p)
         end
     end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
     @static if Sys.iswindows()
-        if err < 0 && !isdir(p)
+        if err < 0 && filetype(p) != :dir
             @warn "On Windows, creating file symlinks requires Administrator privileges" maxlog=1 _group=:file
         end
     end
@@ -820,7 +820,7 @@ Return `path`.
 function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
     uv_error("chmod", err)
-    if recursive && isdir(path)
+    if recursive && filetype(path) == :dir
         for p in readdir(path)
             if !islink(joinpath(path, p))
                 chmod(joinpath(path, p), mode, recursive=true)

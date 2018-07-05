@@ -53,10 +53,10 @@ end
 # This section tests some of the features of the stat-based file info #
 #######################################################################
 @test !isfile(Base.Filesystem.StatStruct())
-@test isdir(dir)
+@test filetype(dir) == :dir
 @test !isfile(dir)
 @test !islink(dir)
-@test !isdir(file)
+@test filetype(file) != :dir
 @test isfile(file)
 @test !islink(file)
 
@@ -144,7 +144,7 @@ end
 
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     @test islink(dirlink) == true
-    @test isdir(dirlink) == true
+    @test filetype(dirlink) == :dir == true
     @test readlink(dirlink) == subdir * (Sys.iswindows() ? "\\" : "")
 end
 
@@ -158,14 +158,14 @@ mkdir(c_subdir)
 c_file = joinpath(c_tmpdir, "cfile.txt")
 cp(newfile, c_file)
 
-@test isdir(c_subdir)
+@test filetype(c_subdir) == :dir
 @test isfile(c_file)
 @test_throws SystemError rm(c_tmpdir)
 @test_throws SystemError rm(c_tmpdir, force=true)
 
 # create temp dir in specific directory
 d_tmpdir = mktempdir(c_tmpdir)
-@test isdir(d_tmpdir)
+@test filetype(d_tmpdir) == :dir
 @test Base.samefile(dirname(d_tmpdir), c_tmpdir)
 
 # create temp file in specific directory
@@ -175,7 +175,7 @@ close(f)
 @test Base.samefile(dirname(d_tmpfile), c_tmpdir)
 
 rm(c_tmpdir, recursive=true)
-@test !isdir(c_tmpdir)
+@test filetype(c_tmpdir) != :dir
 @test_throws Base.UVError rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
 @test_throws Base.UVError rm(c_tmpdir, recursive=true)
@@ -234,7 +234,7 @@ close(s)
 #######################################################################
 
 my_tempdir = tempdir()
-@test isdir(my_tempdir) == true
+@test filetype(my_tempdir) == :dir == true
 
 let path = tempname()
     # issue #9053
@@ -260,11 +260,11 @@ end
 
 let
     tmpdir = mktempdir() do d
-        @test isdir(d)
+        @test filetype(d) == :dir
         d
     end
     @test tmpdir != ""
-    @test !isdir(tmpdir)
+    @test filetype(tmpdir) != :dir
 end
 
 emptyfile = joinpath(dir, "empty")
@@ -279,9 +279,9 @@ rm(emptyfile)
 ## This section tests cp & mv(rename) files, directories, absolute and relative links. #
 ########################################################################################
 function check_dir(orig_path::AbstractString, copied_path::AbstractString, follow_symlinks::Bool)
-    isdir(orig_path) || throw(ArgumentError("'$orig_path' is not a directory."))
+    filetype(orig_path) == :dir || throw(ArgumentError("'$orig_path' is not a directory."))
     # copied_path must also be a dir.
-    @test isdir(copied_path)
+    @test filetype(copied_path) == :dir
     readir_orig = readdir(orig_path)
     readir_copied = readdir(copied_path)
     @test readir_orig == readir_copied
@@ -307,7 +307,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
         else
             # copied_path may not be a link if follow_symlinks=true
             @test islink(orig_path) == !islink(copied_path)
-            if isdir(orig_path)
+            if filetype(orig_path) == :dir
                 check_dir(orig_path, copied_path, follow_symlinks)
             else
                 # copied_path must also be a file.
@@ -316,7 +316,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
                 @test read(orig_path, String) == read(copied_path, String)
             end
         end
-    elseif isdir(orig_path)
+    elseif filetype(orig_path) == :dir
         check_cp_main(orig_path, copied_path, follow_symlinks)
     else
         # copied_path must also be a file.
@@ -327,7 +327,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
 end
 
 function check_cp_main(orig::AbstractString, copied::AbstractString, follow_symlinks::Bool)
-    if isdir(orig)
+    if filetype(orig) == :dir
         check_dir(orig, copied, follow_symlinks)
     else
         check_cp(orig, copied, follow_symlinks)
@@ -395,7 +395,7 @@ mktempdir() do tmpdir
 
     # rename, then make sure b_tmpdir does exist and a_tmpdir doesn't
     mv(a_tmpdir, b_tmpdir)
-    @test isdir(b_tmpdir)
+    @test filetype(b_tmpdir) == :dir
     @test filetype(a_tmpdir) == :invalid
 
     # get b_tmpdir's file info and compare with a_tmpdir
@@ -441,7 +441,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 
     function cp_follow_symlinks_false_check(s, d; force=false)
         cp(s, d; force=force, follow_symlinks=false)
-        @test isdir(s) == isdir(d)
+        @test filetype(s) == :dir == filetype(d) == :dir
         @test islink(s) == islink(d)
         islink(s) && @test readlink(s) == readlink(d)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
@@ -460,7 +460,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         # make sure d does not exist anymore
         @test filetype(d) == :invalid
         # compare s, with d_mv
-        @test isdir(s) == isdir(d_mv)
+        @test filetype(s) == :dir == filetype(d_mv) == :dir
         @test islink(s) == islink(d_mv)
         islink(s) && @test readlink(s) == readlink(d_mv)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
@@ -507,7 +507,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         for d in test_new_paths1
             cp(emptydir, d; force=true, follow_symlinks=false)
             # Expect no link because a dir is copied (follow_symlinks=false does not effect this)
-            @test isdir(d) && !islink(d)
+            @test filetype(d) == :dir && !islink(d)
             # none should contain any file
             @test isempty(readdir(d))
         end

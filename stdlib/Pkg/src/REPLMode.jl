@@ -130,7 +130,7 @@ end
 
 function parse_package(word::AbstractString; context=nothing)::PackageSpec
     word = replace(word, "~" => homedir())
-    if context in (CMD_ADD, CMD_DEVELOP) && casesensitive_isdir(word)
+    if context in (CMD_ADD, CMD_DEVELOP) && casesensitive_filetype(word) == :dir
         pkg = PackageSpec()
         pkg.repo = Types.GitRepo(abspath(word))
         return pkg

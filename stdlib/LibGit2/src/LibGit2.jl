@@ -965,7 +965,7 @@ end
 
 function set_ssl_cert_locations(cert_loc)
     cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_dir  = filetype(cert_loc) == :dir ? cert_loc : Cstring(C_NULL)
     cert_file == C_NULL && cert_dir == C_NULL && return
     @check ccall((:git_libgit2_opts, :libgit2), Cint,
           (Cint, Cstring, Cstring),

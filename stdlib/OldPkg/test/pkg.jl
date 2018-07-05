@@ -29,11 +29,11 @@ function temp_pkg_dir(fn::Function, tmp_dir=joinpath(tempdir(), randstring()),
 
     # Used in tests below to set up and tear down a sandboxed package directory
     withenv("JULIA_PKGDIR" => tmp_dir) do
-        @test !isdir(OldPkg.dir())
+        @test filetype(OldPkg.dir() != :dir)
         try
             if initialize
                 OldPkg.init()
-                @test isdir(OldPkg.dir())
+                @test filetype(OldPkg.dir() == :dir)
                 OldPkg.resolve()
             else
                 mkpath(OldPkg.dir())

@@ -68,7 +68,7 @@ function update_registry(ctx)
         @info("Skipping updating registry in preview mode")
     else
         for reg in registries()
-            if isdir(joinpath(reg, ".git"))
+            if filetype(joinpath(reg, ".git") == :dir)
                 regpath = pathrepr(ctx, reg)
                 printpkgstyle(ctx, :Updating, "registry at " * regpath)
                 LibGit2.with(LibGit2.GitRepo, reg) do repo
@@ -291,7 +291,7 @@ function gc(ctx::Context=Context(); kwargs...)
     paths_to_delete = String[]
     for depot in depots()
         packagedir = abspath(depot, "packages")
-        if isdir(packagedir)
+        if filetype(packagedir) == :dir
             for name in readdir(packagedir)
                 for slug in readdir(joinpath(packagedir, name))
                     versiondir = joinpath(packagedir, name, slug)
@@ -326,7 +326,7 @@ function gc(ctx::Context=Context(); kwargs...)
     # Delete package paths that are now empty
     for depot in depots()
         packagedir = abspath(depot, "packages")
-        if isdir(packagedir)
+        if filetype(packagedir) == :dir
             for name in readdir(packagedir)
                 name_path = joinpath(packagedir, name)
                 if isempty(readdir(name_path))
