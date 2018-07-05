@@ -10,7 +10,6 @@ doc string.
 # Functions
 
 The following functions can be called on all <:AbstractMenu types.
-Details can be found in
 
 ## Exported
 
@@ -262,8 +261,10 @@ function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
 
         writeLine(buf, m, i, i == cursor, term_width)
 
-        # dont print an \r\n on the last line
-        i != (m.pagesize+m.pageoffset) && print(buf, "\r\n")
+        # don't print an \r\n on the last line unless there is only one line
+        if m.pagesize == 1 || i != (m.pagesize+m.pageoffset)
+            print(buf, "\r\n")
+        end
     end
 
     print(out, String(take!(buf)))

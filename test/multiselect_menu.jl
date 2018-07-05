@@ -1,10 +1,6 @@
 # Check to make sure types are imported properly
 @test MultiSelectMenu <: TerminalMenus.AbstractMenu
 
-# Invalid Menu Params
-@test_throws ErrorException MultiSelectMenu(["one"])
-@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1)
-
 # Constructor
 @test MultiSelectMenu(["one", "two", "three"]).pagesize == 3
 @test MultiSelectMenu(string.(1:30), pagesize=-1).pagesize == 30
@@ -34,3 +30,5 @@ TerminalMenus.writeLine(buf, multi_menu, 1, true, term_width)
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10))
 @test simulateInput(Set([1,2]), multi_menu, :enter, :enter, 'd')
+multi_menu = MultiSelectMenu(["single option"])
+@test simulateInput(Set([1]), multi_menu, :up, :up, :down, :enter, 'd')
