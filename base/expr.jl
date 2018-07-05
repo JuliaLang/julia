@@ -361,9 +361,9 @@ end
 In the body of the generated function, only types of arguments can be read
 (not the values). The function returns a quoted expression evaluated when the
 function is called. The `@generated` macro should not be used on functions mutating
-the global scope or depending on mutable elements.  
-  
-See [Metaprogramming](@ref) for further details.  
+the global scope or depending on mutable elements.
+
+See [Metaprogramming](@ref) for further details.
 
 ## Example:
 ```julia
