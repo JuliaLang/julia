@@ -553,14 +553,36 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 
 ## integer construction ##
 
+"""
+    @int128_str str
+    @int128_str(str)
+
+`@int128_str` parses a string into a Int128
+Throws an `ArgumentError` if the string is not a valid integer
+"""
 macro int128_str(s)
     return parse(Int128, s)
 end
 
+"""
+    @uint128_str str
+    @uint128_str(str)
+
+`@uint128_str` parses a string into a UInt128
+Throws an `ArgumentError` if the string is not a valid integer
+"""
 macro uint128_str(s)
     return parse(UInt128, s)
 end
 
+"""
+    @big_str str
+    @big_str(str)
+
+`@big_str` parses a string into a BigInt
+Throws an `ArgumentError` if the string is not a valid integer
+Removes all underscores `_` from the string
+"""
 macro big_str(s)
     if '_' in s
         # remove _ in s[2:end-1]
