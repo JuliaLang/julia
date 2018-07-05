@@ -31,12 +31,12 @@ jl_options_t jl_options = { 0,    // quiet
                             -1,   // banner
                             NULL, // julia_bindir
                             NULL, // julia_bin
-                            NULL, // project
                             NULL, // cmds
                             NULL, // image_file (will be filled in below)
                             NULL, // cpu_target ("native", "core2", etc...)
                             0,    // nprocs
                             NULL, // machine_file
+                            NULL, // project
                             0,    // isinteractive
                             0,    // color
                             JL_OPTIONS_HISTORYFILE_ON, // history file

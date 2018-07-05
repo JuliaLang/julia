@@ -1834,10 +1834,10 @@ static jl_value_t *jl_deserialize_typemap_entry(jl_serializer_state *s)
         jl_deserialize_struct(s, v, 1);
 #ifndef NDEBUG
         if (te->func.value && jl_typeis(te->func.value, jl_method_instance_type)) {
-            assert((te->func.linfo->max_world == 0 &&
+            assert(((te->func.linfo->max_world == 0 &&
                     te->func.linfo->min_world == 1) ||
-                   (te->func.linfo->max_world >= te->max_world &&
-                    te->func.linfo->min_world <= te->min_world) &&
+                    (te->func.linfo->max_world >= te->max_world &&
+                     te->func.linfo->min_world <= te->min_world)) &&
                    "corrupt typemap entry structure");
         }
 #endif
