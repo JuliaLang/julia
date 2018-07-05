@@ -433,7 +433,7 @@ function show_vector(io::IO, v, opn='[', cls=']')
     io = IOContext(io, :typeinfo => eltype(v), :compact => get(io, :compact, true))
     limited = get(io, :limit, false)
     if limited && _length(v) > 20
-        inds = indices1(v)
+        inds = axes1(v)
         show_delim_array(io, v, opn, ",", "", false, inds[1], inds[1]+9)
         print(io, "  …  ")
         show_delim_array(io, v, "", ",", cls, false, inds[end-9], inds[end])

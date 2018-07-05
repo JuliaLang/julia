@@ -282,10 +282,10 @@ end
 Slice(S::Slice) = S
 axes(S::Slice) = (S,)
 unsafe_indices(S::Slice) = (S,)
-indices1(S::Slice) = S
+axes1(S::Slice) = S
 axes(S::Slice{<:OneTo}) = (S.indices,)
 unsafe_indices(S::Slice{<:OneTo}) = (S.indices,)
-indices1(S::Slice{<:OneTo}) = S.indices
+axes1(S::Slice{<:OneTo}) = S.indices
 
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
@@ -361,7 +361,7 @@ LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
 # AbstractArray implementation
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
-axes(iter::LinearIndices) = map(indices1, iter.indices)
+axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(unsafe_length, iter.indices)
 function getindex(iter::LinearIndices, i::Int)
     @_inline_meta

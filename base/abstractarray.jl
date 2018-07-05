@@ -86,9 +86,9 @@ end
 # Performance optimization: get rid of a branch on `d` in `axes(A, d)`
 # for d=1. 1d arrays are heavily used, and the first dimension comes up
 # in other applications.
-indices1(A::AbstractArray{<:Any,0}) = OneTo(1)
-indices1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
-indices1(iter) = OneTo(length(iter))
+axes1(A::AbstractArray{<:Any,0}) = OneTo(1)
+axes1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
+axes1(iter) = OneTo(length(iter))
 
 unsafe_indices(A) = axes(A)
 unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
@@ -161,7 +161,7 @@ _length(A) = (@_inline_meta; length(A))
 eachindex(itrs...) = keys(itrs...)
 
 # eachindex iterates over all indices. IndexCartesian definitions are later.
-eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
+eachindex(A::AbstractVector) = (@_inline_meta(); axes1(A))
 
 """
     eachindex(A...)
@@ -210,7 +210,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     eachindex(IndexStyle(A,B...), A, B...)
 end
 eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(_length(A)))
-eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; indices1(A))
+eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     indsA = eachindex(IndexLinear(), A)
@@ -509,7 +509,7 @@ function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
     @_propagate_inbounds_meta
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
 end
-checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractVector{Bool}) = indx == indices1(I)
+checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractVector{Bool}) = indx == axes1(I)
 checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractArray{Bool}) = false
 function checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray)
     @_inline_meta
@@ -1148,9 +1148,9 @@ get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] :
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
-    ind = findall(in(indices1(A)), I)
+    ind = findall(in(axes1(A)), I)
     X[ind] = A[I[ind]]
-    Xind = indices1(X)
+    Xind = axes1(X)
     X[first(Xind):first(ind)-1] = default
     X[last(ind)+1:last(Xind)] = default
     X
@@ -1776,9 +1776,9 @@ _sub2ind(inds::Union{DimsInteger,Indices}, I1::AbstractVector{T}, I::AbstractVec
     _sub2ind_vecs(inds, I1, I...)
 function _sub2ind_vecs(inds, I::AbstractVector...)
     I1 = I[1]
-    Iinds = indices1(I1)
+    Iinds = axes1(I1)
     for j = 2:length(I)
-        indices1(I[j]) == Iinds || throw(DimensionMismatch("indices of I[1] ($(Iinds)) does not match indices of I[$j] ($(indices1(I[j])))"))
+        axes1(I[j]) == Iinds || throw(DimensionMismatch("indices of I[1] ($(Iinds)) does not match indices of I[$j] ($(axes1(I[j])))"))
     end
     Iout = similar(I1)
     _sub2ind!(Iout, inds, Iinds, I)

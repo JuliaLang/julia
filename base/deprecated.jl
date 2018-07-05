@@ -1747,6 +1747,7 @@ end
 @deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
 @deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
 
+
 @deprecate startswith(a::Vector{UInt8}, b::Vector{UInt8}) length(a) >= length(b) && view(a, 1:length(b)) == b
 
 # PR #27859
@@ -1758,6 +1759,8 @@ function print(io::IO, ::Nothing)
     depwarn("Calling `print` on `nothing` is deprecated; use `show`, `repr`, or custom output instead.", :print)
     show(io, nothing)
 end
+
+@deprecate indices1 axes1
 
 # END 0.7 deprecations
 
