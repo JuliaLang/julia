@@ -68,7 +68,7 @@ parentindices(V::SubArray) = V.indices
 
 From an array view `A`, returns the corresponding indices in the parent.
 """
-parentindices(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
+parentindices(a::AbstractArray) = map(OneTo, size(a))
 
 ## Aliasing detection
 dataids(A::SubArray) = (dataids(A.parent)..., _splatmap(dataids, A.indices)...)
