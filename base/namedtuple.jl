@@ -281,7 +281,7 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) 
 end
 
 """
-    delete(a::NamedTuple, symbol...)
+    delete(a::NamedTuple, fields::Symbol...)
 
 Construct a new named tuple from `a` by removing the named field(s).
 
