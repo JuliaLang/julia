@@ -184,8 +184,10 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
 
     pids, onlocalhost = shared_pids(pids)
 
+    isfile(x) = filetype(x) == :file
+
     # If not supplied, determine the appropriate mode
-    have_file = onlocalhost ? filetype(filename) == :file : remotecall_fetch(isfile, pids[1], filename)
+    have_file = onlocalhost ? isfile(filename) : remotecall_fetch(isfile, pids[1], filename)
     if mode === nothing
         mode = have_file ? "r+" : "w+"
     end

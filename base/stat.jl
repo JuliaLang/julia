@@ -146,15 +146,15 @@ end
 
 Returns a named tuple of the flags of a `path`, if the `path`:
 
-- `setuid`: has the setuid flag set
-- `setgid`: has the setgid flag set
+- `set_user`: has the setuid flag set
+- `set_group`: has the setgid flag set
 - `sticky`: has the sticky bit set
 """
 function fileflags(st::StatStruct)
     mode = st.mode
     (
-        setuid = (mode & 0o4000) > 0,
-        setgid = (mode & 0o2000) > 0,
+        set_user = (mode & 0o4000) > 0,
+        set_group = (mode & 0o2000) > 0,
         sticky = (mode & 0o1000) > 0
     )
 end
