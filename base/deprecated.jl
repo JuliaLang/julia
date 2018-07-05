@@ -1740,6 +1740,10 @@ end
 @deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
 @deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
 
+#PR #27917
+@deprecate ctime(st::StatStruct) st.ctime
+@deprecate ctime(args...) ctime(stat(args...))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

@@ -849,7 +849,6 @@ export
     chmod,
     chown,
     cp,
-    ctime,
     download,
     filemode,
     filesize,

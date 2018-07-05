@@ -859,7 +859,7 @@ end
 
 # issue #10994: pathnames cannot contain embedded NUL chars
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
-        stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch,
+        stat, lstat, mtime, filemode, filesize, uperm, gperm, operm, touch,
         isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid,
         issetuid, issocket, issticky, realpath)
     local f
