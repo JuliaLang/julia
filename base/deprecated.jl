@@ -1742,7 +1742,11 @@ end
 
 #PR #27917
 @deprecate ctime(st::StatStruct) st.ctime
-@deprecate ctime(args...) ctime(stat(args...))
+@deprecate ctime(args...) stat(args...).ctime
+@deprecate mtime(st::StatStruct) st.mtime
+@deprecate mtime(args...) stat(args...).ctime
+@deprecate filemode(st::StatStruct) st.mtime
+@deprecate filemode(args...) stat(args...).ctime
 
 # END 0.7 deprecations
 

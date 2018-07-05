@@ -41,7 +41,7 @@ StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
     ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
 )
 
-show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(string(filemode(st), base = 8, pad = 6)), size=$(filesize(st)))")
+show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(string(st.mode, base = 8, pad = 6)), size=$(filesize(st)))")
 
 # stat & lstat functions
 

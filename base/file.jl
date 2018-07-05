@@ -246,7 +246,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
-                if (filemode(path) & 0o222) == 0
+                if (stat(path).mode & 0o222) == 0
                     chmod(path, 0o777)
                 end
             end
@@ -735,7 +735,7 @@ function sendfile(src::AbstractString, dst::AbstractString)
     try
         src_file = open(src, JL_O_RDONLY)
         src_open = true
-        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, filemode(src_file))
+        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, stat(src_file).mode)
         dst_open = true
 
         bytes = filesize(stat(src_file))
