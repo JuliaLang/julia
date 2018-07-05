@@ -872,7 +872,6 @@ export
     mkpath,
     mktemp,
     mktempdir,
-    mtime,
     mv,
     operm,
     pwd,

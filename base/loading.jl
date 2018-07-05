@@ -722,7 +722,7 @@ function _include_dependency(mod::Module, _path::AbstractString)
         path = normpath(joinpath(dirname(prev), _path))
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (mod, path, mtime(path)))
+        push!(_require_dependencies, (mod, path, stat(path).mtime))
     end
     return path, prev
 end
@@ -1365,7 +1365,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             for (_, f, ftime_req) in includes
                 # Issue #13606: compensate for Docker images rounding mtimes
                 # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
-                ftime = mtime(f)
+                ftime = stat(f).mtime
                 if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, digits=6)
                     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                     return true

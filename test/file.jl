@@ -130,11 +130,11 @@ end
 nowtime = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
 let skew = 10 + (nowtime - starttime)
-    mfile = mtime(file)
-    mdir  = mtime(dir)
+    mfile = stat(file).mtime
+    mdir  = stat(dir).mtime
     @test abs(nowtime - mfile) <= skew && abs(nowtime - mdir) <= skew && abs(mfile - mdir) <= skew
 end
-#@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
+#@test Int(time()) >= Int(stat(file).mtime) >= Int(stat(dir).mtime) >= 0 # 1 second accuracy should be sufficient
 
 # test links
 if Sys.isunix()
@@ -859,7 +859,7 @@ end
 
 # issue #10994: pathnames cannot contain embedded NUL chars
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
-        stat, lstat, mtime, filemode, filesize, uperm, gperm, operm, touch,
+        stat, lstat, filemode, filesize, uperm, gperm, operm, touch,
         isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid,
         issetuid, issocket, issticky, realpath)
     local f

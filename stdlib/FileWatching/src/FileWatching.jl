@@ -674,7 +674,7 @@ The `previous` status is always a `StatStruct`, but it may have all of the field
 The `current` status object may be a `StatStruct`, an `EOFError` (indicating the timeout elapsed),
 or some other `Exception` subtype (if the `stat` operation failed - for example, if the path does not exist).
 
-To determine when a file was modified, compare `current isa StatStruct && mtime(prev) != mtime(current)` to detect
+To determine when a file was modified, compare `current isa StatStruct && prev.mtime != current.mtime` to detect
 notification of changes. However, using [`watch_file`](@ref) for this operation is preferred, since
 it is more reliable and efficient, although in some situations it may not be available.
 """

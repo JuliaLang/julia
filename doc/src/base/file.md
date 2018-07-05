@@ -14,7 +14,6 @@ Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.stat
 Base.Filesystem.lstat
-Base.Filesystem.mtime
 Base.Filesystem.filemode
 Base.Filesystem.filesize
 Base.Filesystem.uperm
