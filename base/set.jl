@@ -363,27 +363,6 @@ function replace_pairs!(res, A, count::Int, old_new::Tuple{Vararg{Pair}})
 end
 
 """
-    replace!(pred::Function, A, new; [count::Integer])
-
-Replace all occurrences `x` in collection `A` for which `pred(x)` is true
-by `new`.
-
-# Examples
-```jldoctest
-julia> A = [1, 2, 3, 1];
-
-julia> replace!(isodd, A, 0, count=2)
-4-element Array{Int64,1}:
- 0
- 2
- 0
- 1
-```
-"""
-replace!(pred::Callable, A, new; count::Integer=typemax(Int)) =
-    replace!(x -> ifelse(pred(x), new, x), A, count=check_count(count))
-
-"""
     replace!(new::Function, A; [count::Integer])
 
 Replace each element `x` in collection `A` by `new(x)`.
@@ -472,28 +451,6 @@ function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
 end
 subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
     subtract_singletontype(subtract_singletontype(T, y...), x)
-
-"""
-    replace(pred::Function, A, new; [count::Integer])
-
-Return a copy of collection `A` where all occurrences `x` for which
-`pred(x)` is true are replaced by `new`.
-If `count` is specified, then replace at most `count` occurrences in total.
-
-# Examples
-```jldoctest
-julia> replace(isodd, [1, 2, 3, 1], 0, count=2)
-4-element Array{Int64,1}:
- 0
- 2
- 0
- 1
-```
-"""
-function replace(pred::Callable, A, new; count::Integer=typemax(Int))
-    T = promote_type(eltype(A), typeof(new))
-    _replace!(x -> ifelse(pred(x), new, x), _similar_or_copy(A, T), A, check_count(count))
-end
 
 """
     replace(new::Function, A; [count::Integer])

@@ -518,16 +518,12 @@ end
     @test replace!(x->2x, a, count=0x2) == [4, 8, 3, 2]
 
     d = Dict(1=>2, 3=>4)
-    @test replace(x->x.first > 2, d, 0=>0) == Dict(1=>2, 0=>0)
     @test replace!(x -> x.first > 2 ? x.first=>2*x.second : x, d) === d
     @test d == Dict(1=>2, 3=>8)
     @test replace(d, (3=>8)=>(0=>0)) == Dict(1=>2, 0=>0)
     @test replace!(d, (3=>8)=>(2=>2)) === d
     @test d == Dict(1=>2, 2=>2)
-    for count = (1, 0x1, big(1))
-        @test replace(x->x.second == 2, d, 0=>0, count=count) in [Dict(1=>2, 0=>0),
-                                                                  Dict(2=>2, 0=>0)]
-    end
+
     s = Set([1, 2, 3])
     @test replace(x -> x > 1 ? 2x : x, s) == Set([1, 4, 6])
     for count = (1, 0x1, big(1))
@@ -553,12 +549,8 @@ end
     # test eltype promotion
     x = @inferred replace([1, 2], 2=>2.5)
     @test x == [1, 2.5] && x isa Vector{Float64}
-    x = @inferred replace(x -> x > 1, [1, 2], 2.5)
-    @test x == [1, 2.5] && x isa Vector{Float64}
 
     x = @inferred replace([1, 2], 2=>missing)
-    @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
-    x = @inferred replace(x -> x > 1, [1, 2], missing)
     @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
 
     @test_broken @inferred replace([1, missing], missing=>2)
