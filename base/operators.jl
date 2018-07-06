@@ -945,7 +945,7 @@ function in(x, itr)
     anymissing = false
     for y in itr
         v = (y == x)
-        if v === missing
+        if ismissing(v)
             anymissing = true
         elseif v
             return true
