@@ -450,8 +450,7 @@ function mktempdir(parent=tempdir())
     end
 end
 
-function tempname()
-    parent = tempdir()
+function tempname(parent = tempdir())
     seed::UInt32 = rand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
@@ -467,8 +466,7 @@ end
 
 else # !windows
 # Obtain a temporary filename.
-function tempname()
-    d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
+function tempname(d = get(ENV, "TMPDIR", C_NULL)) # tempnam ignores TMPDIR on darwin
     p = ccall(:tempnam, Cstring, (Cstring,Cstring), d, :julia)
     systemerror(:tempnam, p == C_NULL)
     s = unsafe_string(p)
@@ -506,10 +504,12 @@ Obtain the path of a temporary directory (possibly shared with other processes).
 tempdir()
 
 """
-    tempname()
+    tempname([dir])
 
-Generate a temporary file path. This function only returns a path; no file is
-created. The path is likely to be unique, but this cannot be guaranteed.
+Generate a temporary file path within the directory `dir`.
+If `dir` is not specified, then it is within the system tempory files location.
+This function only returns a path; no file is created.
+The path is likely to be unique, but this cannot be guaranteed.
 
 !!! warning
 
