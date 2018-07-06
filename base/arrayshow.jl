@@ -78,7 +78,7 @@ function alignment(io::IO, X::AbstractVecOrMat,
             break
         end
     end
-    if 1 < length(a) < _length(axes(X,2))
+    if 1 < length(a) < length(axes(X,2))
         while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
             pop!(a)
         end
@@ -168,7 +168,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)
     rowsA, colsA = axes(X,1), axes(X,2)
-    m, n = _length(rowsA), _length(colsA)
+    m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
     # If not, then we only need to look at the first and last chunks of A,
@@ -266,10 +266,10 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
             for i = 1:nd
                 ii = idxs[i]
                 ind = tailinds[i]
-                if _length(ind) > 10
+                if length(ind) > 10
                     if ii == ind[firstindex(ind)+3] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
                         for j=i+1:nd
-                            szj = _length(axes(a, j+2))
+                            szj = length(axes(a, j+2))
                             indj = tailinds[j]
                             if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
                                 @goto skip
@@ -313,7 +313,7 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     # 0) compute new IOContext
-    if !haskey(io, :compact) && _length(axes(X, 2)) > 1
+    if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
     if get(io, :limit, false) && eltype(X) === Method
@@ -359,7 +359,7 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
     indr, indc = axes(X,1), axes(X,2)
-    nr, nc = _length(indr), _length(indc)
+    nr, nc = length(indr), length(indc)
     rdots, cdots = false, false
     rr1, rr2 = UnitRange{Int}(indr), 1:0
     cr1, cr2 = UnitRange{Int}(indc), 1:0
@@ -432,7 +432,7 @@ function show_vector(io::IO, v, opn='[', cls=']')
     # directly or indirectly, the context now knows about eltype(v)
     io = IOContext(io, :typeinfo => eltype(v), :compact => get(io, :compact, true))
     limited = get(io, :limit, false)
-    if limited && _length(v) > 20
+    if limited && length(v) > 20
         inds = axes1(v)
         show_delim_array(io, v, opn, ",", "", false, inds[1], inds[1]+9)
         print(io, "  …  ")

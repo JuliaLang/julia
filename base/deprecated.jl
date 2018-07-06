@@ -1761,6 +1761,7 @@ function print(io::IO, ::Nothing)
 end
 
 @deprecate indices1 axes1
+@deprecate _length length
 
 # END 0.7 deprecations
 

@@ -169,7 +169,7 @@ function check_reducedims(R, A)
     had_nonreduc = false
     for i = 1:ndims(A)
         Ri, Ai = axes(R, i), axes(A, i)
-        sRi, sAi = _length(Ri), _length(Ai)
+        sRi, sAi = length(Ri), length(Ai)
         if sRi == 1
             if sAi > 1
                 if had_nonreduc
@@ -209,7 +209,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
 
     if has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
-        nslices = div(_length(A), lsiz)
+        nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i = 1:nslices
             @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
@@ -795,7 +795,7 @@ function _findmax(A, region)
     end
 end
 
-reducedim1(R, A) = _length(axes1(R)) == 1
+reducedim1(R, A) = length(axes1(R)) == 1
 
 """
     argmin(A; dims) -> indices

@@ -165,8 +165,6 @@ julia> length([1 2; 3 4])
 ```
 """
 length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
-_length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, axes(A)))) # circumvent missing size
-_length(A) = (@_inline_meta; length(A))
 
 # `eachindex` is mostly an optimization of `keys`
 eachindex(itrs...) = keys(itrs...)
@@ -220,7 +218,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     eachindex(IndexStyle(A,B...), A, B...)
 end
-eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(_length(A)))
+eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
@@ -755,7 +753,7 @@ function copyto!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::Abstr
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
-    copyto!(dest, dstart, src, first(LinearIndices(src)), _length(src))
+    copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
@@ -848,7 +846,7 @@ function iterate(A::AbstractArray, state=(eachindex(A),))
     A[y[1]], (state[1], tail(y)...)
 end
 
-isempty(a::AbstractArray) = (_length(a) == 0)
+isempty(a::AbstractArray) = (length(a) == 0)
 
 
 ## range conversions ##

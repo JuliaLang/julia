@@ -782,7 +782,6 @@ _prod_axes1(a, A) =
 
 ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = prod(size(P))
-_length(p::ProductIterator) = prod(map(unsafe_length, axes(p)))
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)

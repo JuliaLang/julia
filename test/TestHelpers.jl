@@ -169,7 +169,7 @@ _offset(out, ::Tuple{}, ::Tuple{}) = out
 
 indsoffset(r::AbstractRange) = first(r) - 1
 indsoffset(i::Integer) = 0
-indslength(r::AbstractRange) = Base._length(r)
+indslength(r::AbstractRange) = length(r)
 indslength(i::Integer) = i
 
 

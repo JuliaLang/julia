@@ -5,7 +5,7 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, LinearIndices, _length, (:),
+using .Base: copymutable, LinearIndices, length, (:),
     eachindex, axes, first, last, similar, start, next, done, zip, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
@@ -628,7 +628,7 @@ function sort!(v::AbstractVector;
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = _length(v)
+        n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -786,7 +786,7 @@ function sortperm(v::AbstractVector;
                   order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = _length(v)
+        n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -911,7 +911,7 @@ function sort(A::AbstractArray;
         Base.depwarn("`initialized` keyword argument is deprecated", :sort)
     end
     order = ord(lt,by,rev,order)
-    n = _length(axes(A, dim))
+    n = length(axes(A, dim))
     if dim != 1
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
