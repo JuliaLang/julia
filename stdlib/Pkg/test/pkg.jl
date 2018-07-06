@@ -118,7 +118,7 @@ end
 
 temp_pkg_dir() do project_path
     @testset "simple add and remove with preview" begin
-        Pkg.init(project_path)
+        Pkg.activate(project_path)
         Pkg.add(TEST_PKG.name; preview = true)
         @test !isinstalled(TEST_PKG)
         Pkg.add(TEST_PKG.name)

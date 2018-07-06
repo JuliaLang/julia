@@ -38,7 +38,6 @@ const cmds = Dict(
     "test"        => CMD_TEST,
     "gc"          => CMD_GC,
     "preview"     => CMD_PREVIEW,
-    "init"        => CMD_INIT,
     "build"       => CMD_BUILD,
     "pin"         => CMD_PIN,
     "free"        => CMD_FREE,
@@ -389,8 +388,6 @@ What action you want the package manager to take:
 `resolve`: resolves to update the manifest from changes in dependencies of
 developed packages
 
-`init`: initializes an environment in the current, or git base, directory
-
 `generate`: generate files for a new project
 
 `preview`: previews a subsequent command without affecting the current state
@@ -413,7 +410,7 @@ const helps = Dict(
 
     Display usage information for commands listed.
 
-    Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `init`, `build`, `free`, `pin`, `develop`.
+    Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `build`, `free`, `pin`, `develop`.
     """, CMD_STATUS => md"""
 
         status
@@ -509,12 +506,6 @@ const helps = Dict(
     """, CMD_GC => md"""
 
     Deletes packages that cannot be reached from any existing environment.
-    """, CMD_INIT => md"""
-
-        init
-
-    Creates an environment in the current directory, or the git base directory if the current directory
-    is in a git repository.
     """, CMD_BUILD =>md"""
 
         build pkg[=uuid] ...
@@ -782,13 +773,6 @@ function do_build!(ctx::Context, tokens::Vector{Token})
         end
     end
     API.build(ctx, pkgs)
-end
-
-function do_init!(ctx::Context, tokens::Vector{Token})
-    if !isempty(tokens)
-        cmderror("`init` does currently not take any arguments")
-    end
-    API.init(ctx)
 end
 
 function do_generate!(ctx::Context, tokens::Vector{Token})

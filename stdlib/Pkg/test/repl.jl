@@ -24,10 +24,8 @@ function git_init_package(tmp, path)
     return pkgpath
 end
 
-
-@testset "generate init args" begin
+@testset "generate args" begin
     @test_throws CommandError pkg"generate"
-    @test_throws CommandError pkg"init Beep"
 end
 
 temp_pkg_dir() do project_path
@@ -77,7 +75,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     tokens = Pkg.REPLMode.tokenize("add git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git@0.5.0")
     @test tokens[1][2] ==              "git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git"
     @test repr(tokens[1][3]) == "VersionRange(\"0.5.0\")"
-    pkg"init"
+    pkg"activate ."
     pkg"add Example"
     @test isinstalled(TEST_PKG)
     v = Pkg.installed()[TEST_PKG.name]
@@ -230,7 +228,7 @@ end
 # Autocompletions
 temp_pkg_dir() do project_path; cd(project_path) do
     Pkg.Types.registries()
-    pkg"init"
+    pkg"activate ."
     c, r = test_complete("add Exam")
     @test "Example" in c
     c, r = test_complete("rm Exam")
