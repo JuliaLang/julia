@@ -23,6 +23,8 @@ let z = zip(1:2, 3:4, 5:6)
     @test eltype(z) == Tuple{Int,Int,Int}
 end
 
+@inferred collect(zip((1, 2.0, 3), ("a", 2, "c")))
+
 @test eltype(Iterators.filter(isodd, 1:5)) == Int
 
 # typed `collect`

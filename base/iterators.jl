@@ -392,6 +392,15 @@ reverse(z::Zip1) = Zip1(reverse(z.a))
 reverse(z::Zip2) = Zip2(reverse(z.a), reverse(z.b))
 reverse(z::Zip) = Zip(reverse(z.a), reverse(z.z))
 
+zip_recursive(t1::Tuple{}, t2::Tuple{}) = ()
+zip_recursive(t1::Tuple{}, t2::Tuple) = ()
+zip_recursive(t1::Tuple, t2::Tuple{}) = ()
+zip_recursive(t1::Tuple, t2::Tuple) =
+    (first(t1), first(t2)), zip_recursive(tail(t1), tail(t2))...
+
+Base.collect(z::Base.Iterators.Zip2{T1, T2} where {T1 <: Tuple, T2 <: Tuple}) =
+    zip_recursive(z.a, z.b)
+
 # filter
 
 struct Filter{F,I}
