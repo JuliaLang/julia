@@ -4078,7 +4078,8 @@ f(x) = yt(x)
             (cond ((and (pair? e) (eq? (car e) 'line))
                    (if (and (= current-line 0) (length= e 2) (pair? linetable))
                        ;; (line n) after push_loc just updates the line for the new file
-                       (set-car! (cdr (car linetable)) (cadr e))
+                       (begin (set-car! (cdr (car linetable)) (cadr e))
+                              (set! current-line (cadr e)))
                        (begin
                          (set! current-line (cadr e))
                          (if (pair? (cddr e))

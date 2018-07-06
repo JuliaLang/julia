@@ -164,3 +164,16 @@ let st = stacktrace(bt23971)
     @test string(st[1].file) == @__FILE__
     @test !occursin("missing", string(st[2].file))
 end
+
+# issue #27959
+let bt, found = false
+    @testset begin
+        bt = backtrace()
+    end
+    for frame in map(StackTraces.lookup, bt)
+        if frame[1].line == @__LINE__() - 3 && frame[1].file == Symbol(@__FILE__)
+            found = true; break
+        end
+    end
+    @test found
+end
