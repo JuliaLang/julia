@@ -7349,7 +7349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
 },
 
 {
@@ -20269,7 +20269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sparse Arrays",
     "title": "SparseArrays.findnz",
     "category": "function",
-    "text": "findnz(A)\n\nReturn a tuple (I, J, V) where I and J are the row and column indices of the non-zero values in matrix A, and V is a vector of the non-zero values.\n\nExamples\n\njulia> A = [1 2 0; 0 0 3; 0 4 0]\n3×3 Array{Int64,2}:\n 1  2  0\n 0  0  3\n 0  4  0\n\njulia> findnz(A)\n([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])\n\n\n\n\n\n"
+    "text": "findnz(A)\n\nReturn a tuple (I, J, V) where I and J are the row and column indices of the stored (\"structurally non-zero\") values in sparse matrix A, and V is a vector of the values.\n\nExamples\n\njulia> A = sparse([1 2 0; 0 0 3; 0 4 0])\n3×3 SparseMatrixCSC{Int64,Int64} with 4 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  2\n  [3, 2]  =  4\n  [2, 3]  =  3\n\njulia> findnz(A)\n([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])\n\n\n\n\n\n"
 },
 
 {
