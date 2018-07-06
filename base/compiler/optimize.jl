@@ -138,6 +138,19 @@ function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
     return inlineable
 end
 
+# These affect control flow within the function (so may not be removed
+# if there is no usage within the function), but don't affect the purity
+# of the function as a whole.
+function stmt_affects_purity(stmt)
+    if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
+        return false
+    end
+    if isa(stmt, Expr)
+        return stmt.head != :simdloop && stmt.head != :enter
+    end
+    return true
+end
+
 # run the optimization work
 function optimize(opt::OptimizationState, @nospecialize(result))
     def = opt.linfo.def
@@ -156,13 +169,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             proven_pure = true
             for i in 1:length(ir.stmts)
                 stmt = ir.stmts[i]
-                # These affect control flow within the function (so may not be removed
-                # if there is no usage within the function), but don't affect the purity
-                # of the function as a whole.
-                if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
-                    continue
-                end
-                if !stmt_effect_free(stmt, ir, ir.spvals)
+                if stmt_affects_purity(stmt) && !stmt_effect_free(stmt, ir, ir.spvals)
                     proven_pure = false
                     break
                 end
