@@ -1179,7 +1179,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(Array{Real}, Type{AbstractArray{Int}}) === Const(false)
     @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Real, 2})) === Const(true)
     @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Int, 2})) === Const(false)
-    @test isa_tfunc(DataType, Int) === Const(false)
+    @test isa_tfunc(DataType, Int) === Union{}
     @test isa_tfunc(DataType, Const(Type{Int})) === Bool
     @test isa_tfunc(DataType, Const(Type{Array})) === Bool
     @test isa_tfunc(UnionAll, Const(Type{Int})) === Bool # could be improved
@@ -1189,7 +1189,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false) # any result is ok
     @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Const(false)
-    @test isa_tfunc(typeof(Union{}), Union{}) === Const(false) # any result is ok
+    @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
     let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
@@ -1204,7 +1204,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(Val{1}, Type{Val{T}} where T) === Bool
     @test isa_tfunc(Val{1}, DataType) === Bool
     @test isa_tfunc(Any, Const(Any)) === Const(true)
-    @test isa_tfunc(Any, Union{}) === Const(false) # any result is ok
+    @test isa_tfunc(Any, Union{}) === Union{} # any result is ok
     @test isa_tfunc(Any, Type{Union{}}) === Const(false)
     @test isa_tfunc(Union{Int64, Float64}, Type{Real}) === Const(true)
     @test isa_tfunc(Union{Int64, Float64}, Type{Integer}) === Bool
