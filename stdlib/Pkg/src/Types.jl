@@ -26,7 +26,8 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
     PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED,
-    printpkgstyle
+    printpkgstyle,
+    projectfile_path
 
 
 include("versions.jl")
@@ -169,6 +170,11 @@ PackageSpec(name::AbstractString, version::VersionTypes=VersionSpec()) =
     PackageSpec(name, UUID(zero(UInt128)), version)
 PackageSpec(uuid::UUID, version::VersionTypes=VersionSpec()) =
     PackageSpec("", uuid, version)
+function PackageSpec(repo::GitRepo)
+    pkg = PackageSpec()
+    pkg.repo = repo
+    return pkg
+end
 
 has_name(pkg::PackageSpec) = !isempty(pkg.name)
 has_uuid(pkg::PackageSpec) = pkg.uuid != UUID(zero(UInt128))
@@ -196,14 +202,19 @@ function parse_toml(path::String...; fakeit::Bool=false)
     !fakeit || isfile(p) ? TOML.parsefile(p) : Dict{String,Any}()
 end
 
-const project_names = ["JuliaProject.toml", "Project.toml"]
-const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
-const default_envs = [
-    "v$(VERSION.major).$(VERSION.minor).$(VERSION.patch)",
-    "v$(VERSION.major).$(VERSION.minor)",
-    "v$(VERSION.major)",
-    "default",
-]
+let trynames(names) = begin
+    return root_path::AbstractString -> begin
+        for x in names
+            maybe_file = joinpath(root_path, x)
+            if isfile(maybe_file)
+                return maybe_file
+            end
+        end
+    end
+end # trynames
+    global projectfile_path = trynames(Base.project_names)
+    global manifestfile_path = trynames(Base.manifest_names)
+end # let
 
 mutable struct EnvCache
     # environment info:
@@ -257,15 +268,13 @@ mutable struct EnvCache
         else
             project_package = nothing
         end
-        if haskey(project, "manifest")
-            manifest_file = abspath(project["manifest"])
-        else
-            dir = abspath(dirname(project_file))
-            for name in manifest_names
-                manifest_file = joinpath(dir, name)
-                isfile(manifest_file) && break
-            end
-        end
+        # determine manifest_file name
+        dir = abspath(dirname(project_file))
+        manifest_file = haskey(project, "manifest") ?
+            abspath(project["manifest"]) :
+            manifestfile_path(dir)
+        # use default name if still not determined
+        (manifest_file === nothing) && (manifest_file = joinpath(dir, "Manifest.toml"))
         write_env_usage(manifest_file)
         manifest = read_manifest(manifest_file)
         uuids = Dict{String,Vector{UUID}}()
@@ -300,8 +309,8 @@ stdlib_path(stdlib::String) = joinpath(stdlib_dir(), stdlib)
 function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
     for stdlib in readdir(stdlib_dir())
-        projfile = joinpath(stdlib_path(stdlib), "Project.toml")
-        if isfile(projfile)
+        projfile = projectfile_path(stdlib_path(stdlib))
+        if nothing !== projfile
             proj = TOML.parsefile(projfile)
             if haskey(proj, "uuid")
                 stdlibs[UUID(proj["uuid"])] = stdlib
@@ -447,7 +456,14 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                         rev = string(LibGit2.GitHash(LibGit2.head(repo)))
                     end
                 end
-                gitobject, isbranch = checkout_rev!(repo, rev)
+                gitobject, isbranch = get_object_branch(repo, rev)
+                LibGit2.transact(repo) do r
+                    if isbranch
+                        LibGit2.branch!(r, rev, track=LibGit2.Consts.REMOTE_ORIGIN)
+                    else
+                        LibGit2.checkout!(r, string(LibGit2.GitHash(gitobject)))
+                    end
+                end
                 close(repo); close(gitobject)
 
                 parse_package!(ctx, pkg, project_path)
@@ -491,12 +507,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             pinned = (info != nothing && get(info, "pinned", false))
             if upgrade_or_add && !pinned && !just_cloned
                 rev = pkg.repo.rev
-                try
-                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                catch e
-                    e isa LibGit2.GitError || rethrow(e)
-                    cmderror("failed to fetch from $(pkg.repo.url), error: $e")
-                end
+                GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
             end
             if upgrade_or_add && !pinned
                 rev = pkg.repo.rev
@@ -514,11 +525,9 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
                     rev = string(LibGit2.GitHash(LibGit2.head(repo)))
                 end
             end
-            gitobject, isbranch = checkout_rev!(repo, rev)
-            if !isbranch
-                # If the user gave a shortened commit SHA, might as well update it to the full one
-                pkg.repo.rev = string(LibGit2.GitHash(gitobject))
-            end
+            gitobject, isbranch = get_object_branch(repo, rev)
+            # If the user gave a shortened commit SHA, might as well update it to the full one
+            pkg.repo.rev = isbranch ? rev : string(LibGit2.GitHash(gitobject))
             git_tree = LibGit2.peel(LibGit2.GitTree, gitobject)
             @assert git_tree isa LibGit2.GitTree
             pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
@@ -558,23 +567,18 @@ end
 
 function parse_package!(ctx, pkg, project_path)
     env = ctx.env
-    found_project_file = false
-    for projname in project_names
-        if isfile(joinpath(project_path, projname))
-            found_project_file = true
-            project_data = parse_toml(project_path, "Project.toml")
-            pkg.uuid = UUID(project_data["uuid"])
-            pkg.name = project_data["name"]
-            if haskey(project_data, "version")
-                pkg.version = VersionNumber(project_data["version"])
-            else
-                @warn "project file for $(pkg.name) is missing a `version` entry"
-                Pkg.Operations.set_maximum_version_registry!(env, pkg)
-            end
-            break
+    project_file = projectfile_path(project_path)
+    if project_file !== nothing
+        project_data = parse_toml(project_file)
+        pkg.uuid = UUID(project_data["uuid"])
+        pkg.name = project_data["name"]
+        if haskey(project_data, "version")
+            pkg.version = VersionNumber(project_data["version"])
+        else
+            @warn "project file for $(pkg.name) is missing a `version` entry"
+            Pkg.Operations.set_maximum_version_registry!(env, pkg)
         end
-    end
-    if !found_project_file
+    else
         @warn "packages will need to have a [Julia]Project.toml file in the future"
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
@@ -587,9 +591,10 @@ function parse_package!(ctx, pkg, project_path)
         reg_uuids = registered_uuids(env, pkg.name)
         is_registered = !isempty(reg_uuids)
         if !is_registered
-            # This is an unregistered old style package, give it a random UUID and a version
+            # This is an unregistered old style package, give it a UUID and a version
             if !has_uuid(pkg)
-                pkg.uuid = UUIDs.uuid1()
+                uuid_unreg_pkg = UUID(0xa9a2672e746f11e833ef119c5b888869)
+                pkg.uuid = uuid5(uuid_unreg_pkg, pkg.name)
                 @info "Assigning UUID $(pkg.uuid) to $(pkg.name)"
             end
             pkg.version = v"0.0"
@@ -613,7 +618,7 @@ function set_repo_for_pkg!(env, pkg)
     _, pkg.repo.url = Types.registered_info(env, pkg.uuid, "repo")[1]
 end
 
-function checkout_rev!(repo, rev)
+function get_object_branch(repo, rev)
     gitobject = nothing
     isbranch = false
     try

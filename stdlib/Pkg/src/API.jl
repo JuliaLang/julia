@@ -9,7 +9,7 @@ import Dates
 import LibGit2
 
 import ..depots, ..logdir, ..devdir
-import ..Operations, ..Display, ..GitTools, ..Pkg
+import ..Operations, ..Display, ..GitTools, ..Pkg, ..UPDATED_REGISTRY_THIS_SESSION
 using ..Types, ..TOML
 
 
@@ -17,7 +17,7 @@ preview_info() = printstyled("───── Preview mode ─────\n"; c
 
 include("generate.jl")
 
-parse_package(pkg) = Pkg.REPLMode.parse_package(pkg; context=Pkg.REPLMode.CMD_ADD)
+parse_package(pkg) = Pkg.REPLMode.parse_package(pkg; add_or_develop=true)
 
 add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
 add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([parse_package(pkg) for pkg in pkgs]; kwargs...)
@@ -25,17 +25,29 @@ add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Cont
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, kwargs...)
     Context!(ctx; kwargs...)
+
+    # if julia is passed as a package the solver gets tricked;
+    # this catches the error early on
+    any(pkg->(pkg.name == "julia"), pkgs) &&
+        cmderror("Trying to $mode julia as a package")
+
     ctx.preview && preview_info()
+    if !UPDATED_REGISTRY_THIS_SESSION[]
+        update_registry(ctx)
+    end
     if mode == :develop
         new_git = handle_repos_develop!(ctx, pkgs)
     else
         new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
-        update_registry(ctx)
     end
     project_deps_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
     stdlib_resolve!(ctx, pkgs)
     ensure_resolved(ctx.env, pkgs, registry=true)
+
+    any(pkg -> Types.collides_with_project(ctx.env, pkg), pkgs) &&
+        cmderror("Cannot $mode package with the same name or uuid as the project")
+
     Operations.add_or_develop(ctx, pkgs; new_git=new_git)
     ctx.preview && preview_info()
     return
@@ -115,6 +127,7 @@ function update_registry(ctx)
         end
         @warn warn_str
     end
+    UPDATED_REGISTRY_THIS_SESSION[] = true
     return
 end
 
@@ -546,5 +559,13 @@ end
 function activate(path::Union{String,Nothing}=nothing)
     Base.ACTIVE_PROJECT[] = Base.load_path_expand(path)
 end
+
+"""
+    setprotocol!(proto::Union{Nothing, AbstractString}=nothing)
+
+Set the protocol used to access GitHub-hosted packages when `add`ing a url or `develop`ing a package.
+Defaults to 'https', with `proto == nothing` delegating the choice to the package developer.
+"""
+setprotocol!(proto::Union{Nothing, AbstractString}=nothing) = GitTools.setprotocol!(proto)
 
 end # module

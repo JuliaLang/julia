@@ -7,11 +7,14 @@ import Base: show, isempty, in, intersect, union!, union, ==, hash, copy
 
 import ...Types: VersionBound, VersionRange
 
+const _inf_versionnumber = typemax(VersionNumber)
+const _inf_versionbound = VersionBound("*")
+
 struct VersionInterval
     lower::VersionNumber
     upper::VersionNumber
 end
-VersionInterval(lower::VersionNumber) = VersionInterval(lower,typemax(VersionNumber))
+VersionInterval(lower::VersionNumber) = VersionInterval(lower,_inf_versionnumber)
 VersionInterval() = VersionInterval(typemin(VersionNumber))
 
 show(io::IO, i::VersionInterval) = print(io, "[$(i.lower),$(i.upper))")
@@ -26,24 +29,26 @@ function Base.convert(::Type{VersionRange}, a::VersionInterval)
     lower, upper = a.lower, a.upper
 
     lb = VersionBound(lower.major, lower.minor, lower.patch)
-
-    vb = UInt32[upper.major, upper.minor, upper.patch]
-    # Consider e.g. "0.1.0 0.1.0+" to be the same as VerionRange("0.1.0")
-    # by making the "+" bump the patch version
-    if typeof(upper.build) == Tuple{String} && vb[3] != typemax(UInt32)
-        vb[3] += 1
+    if upper == _inf_versionnumber
+        ub = _inf_versionbound
+    else
+        vb = UInt32[upper.major, upper.minor, upper.patch]
+        # Consider e.g. "0.1.0 0.1.0+" to be the same as VersionRange("0.1.0")
+        # by making the "+" bump the patch version
+        if typeof(upper.build) == Tuple{String} && vb[3] != typemax(UInt32)
+            vb[3] += 1
+        end
+        i = 3
+        while i > 0 && vb[i] == 0
+            pop!(vb)
+            i -= 1
+        end
+        # NOTE: an upper bound of 0 could happen in principle, e.g. [v"0.0.0-", v"0.0.0")
+        #       but we just ignore this here...
+        i > 0 || error("invalid interval upper bound v$upper")
+        vb[i] -= 1
+        ub = VersionBound(vb...)
     end
-    i = 3
-    while i > 0 && vb[i] == 0
-        pop!(vb)
-        i -= 1
-    end
-    # NOTE: an upper bound of 0 could happen in principle, e.g. [v"0.0.0-", v"0.0.0")
-    #       but we just ignore this here...
-    i > 0 || error("invalid interval upper bound v$upper")
-    vb[i] -= 1
-    ub = VersionBound(vb...)
-
     return VersionRange(lb, ub)
 end
 
