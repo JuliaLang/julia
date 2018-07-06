@@ -140,7 +140,9 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry}, status=false)
     same = all(x.old == x.new for x in diff)
     some_packages_not_downloaded = false
     for x in diff
-        package_downloaded = Base.locate_package(Base.PkgId(x.uuid, x.name)) !== nothing
+        pkgid = Base.PkgId(x.uuid, x.name)
+        package_downloaded = pkgid in keys(Base.loaded_modules) ||
+                             Base.locate_package(pkgid) !== nothing
         if x.old != nothing && x.new != nothing
             if x.old ≈ x.new
                 verb = ' '
