@@ -232,26 +232,31 @@ julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 `strings` can be any iterable over elements `x` which are convertible to strings
 via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 """
-function join(io::IO, strings, delim, last)
-    a = Iterators.Stateful(strings)
-    isempty(a) && return
-    print(io, popfirst!(a))
-    for str in a
-        print(io, isempty(a) ? last : delim)
-        print(io, str)
+function join(io::IO, strings, delim="", last=delim)
+    first = true
+    local prev
+    for str in strings
+        if @isdefined prev
+            first ? (first = false) : print(io, delim)
+            print(io, prev)
+        end
+        prev = str
     end
+    if @isdefined prev
+        first || print(io, last)
+        print(io, prev)
+    end
+    nothing
 end
 function join(io::IO, strings, delim)
-    a = Iterators.Stateful(strings)
-    for str in a
+    # Specialization of the above code when delim==last,
+    # which lets us emit (compile) less code
+    first = true
+    for str in strings
+        first ? (first = false) : print(io, delim)
         print(io, str)
-        !isempty(a) && print(io, delim)
     end
 end
-join(io::IO, strings) = join(io, strings, "")
-# Hack around https://github.com/JuliaLang/julia/issues/26871
-join(io::IO, strings::Tuple{}, delim) = nothing
-join(io::IO, strings::Tuple{}, delim, last) = nothing
 
 join(strings) = sprint(join, strings)
 join(strings, delim) = sprint(join, strings, delim)
