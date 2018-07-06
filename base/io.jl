@@ -542,7 +542,7 @@ function write(s::IO, a::Array)
 end
 
 function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
-    if !isbitstype(T)
+    if !isbitstype(T) || !isa(a, StridedArray)
         return invoke(write, Tuple{IO, AbstractArray}, s, a)
     end
     elsz = sizeof(T)
