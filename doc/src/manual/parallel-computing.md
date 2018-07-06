@@ -1576,11 +1576,11 @@ creates separate instances of `Regex` object for each entry of `rx` vector.
 
 The case of `rand` is a bit more complex as we have to ensure that each thread
 uses non-overlapping pseudorandom number sequences. This can be simply ensured
-by using [`randjump`](@ref) function:
+by using the `Future.randjump` function:
 
 
 ```julia-repl
-julia> using Random
+julia> using Random; import Future
 
 julia> function g_fix(r)
            a = zeros(1000)
@@ -1591,7 +1591,10 @@ julia> function g_fix(r)
        end
 g_fix (generic function with 1 method)
 
-julia> r = randjump(MersenneTwister(1), big(10)^20, nthreads());
+julia>  r = let m = MersenneTwister(1)
+                [m; accumulate(Future.randjump, m, fill(big(10)^20, nthreads()-1))]
+            end;
+
 julia> g_fix(r)
 1000
 ```

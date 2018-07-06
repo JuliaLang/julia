@@ -555,30 +555,7 @@ end
 
 ### randjump
 
-"""
-    randjump(r::MersenneTwister, steps::Integer, len::Integer) -> Vector{MersenneTwister}
-
-Create an array of size `len` of initialized `MersenneTwister` RNG objects. The
-first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
-initialized such that a state of the RNG object in the array would be moved forward (without
-generating numbers) from a previous RNG object array element by `steps` steps.
-One such step corresponds to the generation of two `Float64` numbers.
-For each different value of `steps`, a large polynomial has to be generated internally.
-One is already pre-computed for `steps=big(10)^20`.
-"""
-randjump(r::MersenneTwister, steps::Integer, len::Integer) =
-    _randjump(r, DSFMT.calc_jump(steps), len)
-
+# Old randjump methods are deprecated, the scalar version is in the Future module.
 
 _randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X) =
     fillcache_zeros!(MersenneTwister(copy(r.seed), DSFMT.dsfmt_jump(r.state, jumppoly)))
-
-function _randjump(mt::MersenneTwister, jumppoly::DSFMT.GF2X, len::Integer)
-    mts = MersenneTwister[]
-    push!(mts, mt)
-    for i in 1:len-1
-        cmt = mts[end]
-        push!(mts, _randjump(cmt, jumppoly))
-    end
-    return mts
-end

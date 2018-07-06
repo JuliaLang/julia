@@ -1228,6 +1228,9 @@ Deprecated or removed
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
 
+  * `randjump`, which produced an array, is deprecated in favor of the
+    scalar version `Future.randjump` used with `accumulate` ([#27746]).
+
   * The `assert` function (and `@assert` macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.
 
   * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).

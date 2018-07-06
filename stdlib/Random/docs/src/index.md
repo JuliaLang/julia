@@ -34,7 +34,6 @@ Random.randn
 Random.randn!
 Random.randexp
 Random.randexp!
-Random.randjump
 Random.randstring
 Random.randsubseq
 Random.randsubseq!
