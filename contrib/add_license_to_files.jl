@@ -100,11 +100,11 @@ license_linenum(line) = startswith(strip(line), "#!") ? 2 : 1
 
 # Collects all absolute file paths in rootdir inclusive subdirs
 function getfilespaths!(filepaths::Vector, rootdir::AbstractString)
-    isdir(rootdir) || error(string("`rootdir` must be an directory. "))
+    filetype(rootdir) == :dir || error(string("`rootdir` must be an directory. "))
     abs_rootdir = abspath(rootdir)
     for name in readdir(abs_rootdir)
         path = joinpath(abs_rootdir, name)
-        if isdir(path)
+        if filetype(path) == :dir
             getfilespaths!(filepaths, path)
         else
             push!(filepaths, joinpath(abs_rootdir, name))
@@ -118,7 +118,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
 
     for name in readdir(src)
         path = normpath(joinpath(src, name))
-        if isdir(path)
+        if filetype(path) == :dir
             if path in abs_excludedirs
                 getfilespaths!(unprocessed, path)
                 continue
@@ -164,7 +164,7 @@ function abspaths(A::Vector)
     abs_A = []
     for p in A
         abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(dirname(@__FILE__), p))
-        ispath(abs_p) || error(string("`abs_p` seems not to be an existing path. ",
+        filetype(abs_p) != :invalid || error(string("`abs_p` seems not to be an existing path. ",
                                       "Adjust your configuration: <", p, "> : ", abs_p, "\n"))
         push!(abs_A, abs_p)
     end

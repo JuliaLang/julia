@@ -91,7 +91,7 @@ function current_project(dir::AbstractString)
             isfile_casesensitive(file) && return file
         end
         # bail at home directory or top of git repo
-        (dir == home || ispath(joinpath(dir, ".git"))) && break
+        (dir == home || filetype(joinpath(dir, ".git") != :invalid)) && break
         old, dir = dir, dirname(dir)
         dir == old && break
     end
@@ -159,7 +159,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # look for named env in each depot
         for depot in DEPOT_PATH
             path = joinpath(depot, "environments", name)
-            isdir(path) || continue
+            filetype(path) == :dir || continue
             for proj in project_names
                 file = abspath(path, proj)
                 isfile_casesensitive(file) && return file
@@ -171,7 +171,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
     end
     # otherwise, it's a path
     path = abspath(env)
-    if isdir(path)
+    if filetype(path) == :dir
         # directory with a project file?
         for proj in project_names
             file = joinpath(path, proj)
@@ -199,7 +199,7 @@ function active_project(search_load_path::Bool=true)
         project = load_path_expand(project)
         project === nothing && continue
         isfile_casesensitive(project) && return project
-        ispath(project) && continue
+        filetype(project) != :invalid && continue
         basename(project) in project_names && return project
     end
 end

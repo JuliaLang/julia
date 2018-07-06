@@ -13,7 +13,7 @@ function dir()
     b = _pkgroot()
     x, y = VERSION.major, VERSION.minor
     d = joinpath(b,"v$x.$y")
-    if isdir(d) || !isdir(b) || !isdir(joinpath(b, "METADATA"))
+    if filetype(d) == :dir || filetype(b) != :dir || filetype(joinpath(b, "METADATA") != :dir)
         return d
     end
     return b

@@ -8,7 +8,7 @@ prefix = joinpath(homedir(), ".julia", "registries", "Stdlib")
 # TODO: use Sys.STDLIBDIR instead once implemented
 let vers = "v$(VERSION.major).$(VERSION.minor)"
 global stdlibdir = realpath(abspath(Sys.BINDIR, "..", "share", "julia", "stdlib", vers))
-isdir(stdlibdir) || error("stdlib directory does not exist: $stdlibdir")
+filetype(stdlibdir) == :dir || error("stdlib directory does not exist: $stdlibdir")
 end
 juliadir = dirname(stdlibdir)
 
@@ -18,7 +18,7 @@ stdlib_deps = Dict{String,Vector{String}}()
 
 for pkg in readdir(stdlibdir)
     project_file = joinpath(stdlibdir, pkg, "Project.toml")
-    isfile(project_file) || continue
+    filetype(project_file) == :file || continue
     project = TOML.parsefile(project_file)
     stdlib_uuids[pkg] = project["uuid"]
     stdlib_trees[pkg] = split(readchomp(`git -C $juliadir ls-tree HEAD -- stdlib/$pkg`))[3]

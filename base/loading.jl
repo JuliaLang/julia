@@ -6,11 +6,11 @@
 
 if Sys.isunix() && !Sys.isapple()
     # assume case-sensitive filesystems, don't have to do anything
-    isfile_casesensitive(path) = isfile(path)
+    isfile_casesensitive(path) = filetype(path) == :file
 elseif Sys.iswindows()
     # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
     function isfile_casesensitive(path)
-        isfile(path) || return false  # Fail fast
+        filetype(path) == :file || return false  # Fail fast
         basename(Filesystem.longpath(path)) == basename(path)
     end
 elseif Sys.isapple()
@@ -43,7 +43,7 @@ elseif Sys.isapple()
     # Buffer buf;
     # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
-        isfile(path) || return false
+        filetype(path) == :file || return false
         path_basename = String(basename(path))
         local casepreserved_basename
         header_size = 12
@@ -74,7 +74,7 @@ elseif Sys.isapple()
 else
     # Generic fallback that performs a slow directory listing.
     function isfile_casesensitive(path)
-        isfile(path) || return false
+        filetype(path) == :file || return false
         dir, filename = splitdir(path)
         any(readdir(dir) .== filename)
     end
@@ -259,7 +259,7 @@ const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 #  - `true`: `env` is an implicit environment
 #  - `path`: the path of an explicit project file
 function env_project_file(env::String)::Union{Bool,String}
-    if isdir(env)
+    if filetype(env) == :dir
         for proj in project_names
             project_file = joinpath(env, proj)
             isfile_casesensitive(project_file) && return project_file
@@ -411,7 +411,7 @@ entry_path(::Nothing, name::String) = nothing
 # given a project path (project directory or entry point)
 # return the project file
 function package_path_to_project_file(path::String)::Union{Nothing,String}
-    if !isdir(path)
+    if filetype(path) != :dir
         dir = dirname(path)
         basename(dir) == "src" || return nothing
         path = dirname(dir)
@@ -527,7 +527,7 @@ function explicit_manifest_uuid_path(manifest_file::String, pkg::PkgId)::Union{N
         slug = joinpath(name, version_slug(uuid, hash))
         for depot in DEPOT_PATH
             path = abspath(depot, "packages", slug)
-            ispath(path) && return entry_path(path, name)
+            filetype(path) != :invalid && return entry_path(path, name)
         end
     end
 end
@@ -572,9 +572,9 @@ end
 ## other code loading functionality ##
 
 function find_source_file(path::AbstractString)
-    (isabspath(path) || isfile(path)) && return path
+    (isabspath(path) || filetype(path) == :file) && return path
     base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
-    return isfile(base_path) ? base_path : nothing
+    return filetype(base_path) == :file ? base_path : nothing
 end
 
 cache_file_entry(pkg::PkgId) = joinpath(
@@ -722,7 +722,7 @@ function _include_dependency(mod::Module, _path::AbstractString)
         path = normpath(joinpath(dirname(prev), _path))
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (mod, path, mtime(path)))
+        push!(_require_dependencies, (mod, path, stat(path).mtime))
     end
     return path, prev
 end
@@ -1155,7 +1155,7 @@ function compilecache(pkg::PkgId)
     # decide where to put the resulting cache file
     cachefile = abspath(DEPOT_PATH[1], cache_file_entry(pkg))
     cachepath = dirname(cachefile)
-    isdir(cachepath) || mkpath(cachepath)
+    filetype(cachepath) == :dir || mkpath(cachepath)
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
     for (key, mod) in loaded_modules
@@ -1165,7 +1165,7 @@ function compilecache(pkg::PkgId)
     end
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-    if isfile(cachefile)
+    if filetype(cachefile) == :file
         @logmsg verbosity "Recompiling stale cache file $cachefile for module $name"
     else
         @logmsg verbosity "Precompiling module $name"
@@ -1184,7 +1184,7 @@ end
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
 
 isvalid_cache_header(f::IOStream) = (0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios))
-isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
+isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), stat(f).size - 4) == read(f, UInt32))
 
 function parse_cache_header(f::IO)
     modules = Vector{Pair{PkgId, UInt64}}()
@@ -1365,7 +1365,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             for (_, f, ftime_req) in includes
                 # Issue #13606: compensate for Docker images rounding mtimes
                 # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
-                ftime = mtime(f)
+                ftime = stat(f).mtime
                 if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, digits=6)
                     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                     return true

@@ -193,7 +193,7 @@ function incomplete_tag(ex::Expr)
 end
 
 # call include() on a file, ignoring if not found
-include_ifexists(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
+include_ifexists(mod::Module, path::AbstractString) = filetype(path) == :file && include(mod, path)
 
 function exec_options(opts)
     if !isempty(ARGS)
@@ -285,7 +285,7 @@ function load_julia_startup()
     #   If it is not found, then continue on to the relative path based on Sys.BINDIR
     BINDIR = Sys.BINDIR::String
     SYSCONFDIR = Base.SYSCONFDIR::String
-    if !isempty(SYSCONFDIR) && isfile(joinpath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
+    if !isempty(SYSCONFDIR) && filetype(joinpath(BINDIR, SYSCONFDIR, "julia", "startup.jl") == :file)
         include(Main, abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
     else
         include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))

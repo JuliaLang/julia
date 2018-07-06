@@ -15,7 +15,7 @@ function find_installed(name::String, uuid::UUID, sha1::SHA1)
     slug = Base.version_slug(uuid, sha1)
     for depot in depots()
         path = abspath(depot, "packages", name, slug)
-        ispath(path) && return path
+        filetype(path) != :invalid && return path
     end
     return abspath(depots()[1], "packages", name, slug)
 end
@@ -102,7 +102,7 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
         end
 
         path = project_rel_path(ctx, path)
-        if !isdir(path)
+        if filetype(path) != :dir
             cmderror("path $(path) for package $(pkg.name) no longer exists. Remove the package or `develop` it at a new path")
         end
 
@@ -132,7 +132,7 @@ end
 function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
     project_file = joinpath(path, "Project.toml")
     fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
-    !isfile(project_file) && return false
+    filetype(project_file) != :file && return false
     project = read_project(project_file)
     compat = get(project, "compat", Dict())
     for (deppkg_name, uuid) in project["deps"]
@@ -156,7 +156,7 @@ function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
     # Checked out "old-school" packages have by definition a version higher than all registered.
     set_maximum_version_registry!(ctx.env, pkg)
     !haskey(fix_deps_map, pkg.uuid) && (fix_deps_map[pkg.uuid] = valtype(fix_deps_map)())
-    if isfile(reqfile)
+    if filetype(reqfile) == :file
         for r in Pkg2.Reqs.read(reqfile)
             r isa Pkg2.Reqs.Requirement || continue
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
@@ -411,7 +411,7 @@ function install_archive(
             # 7z on Win might create this spurious file
             filter!(x -> x != "pax_global_header", dirs)
             @assert length(dirs) == 1
-            !isdir(version_path) && mkpath(version_path)
+            filetype(version_path) != :dir && mkpath(version_path)
             mv(joinpath(dir, dirs[1]), version_path; force=true)
             Base.rm(path; force = true)
             return true
@@ -432,9 +432,9 @@ function install_git(
 )::Nothing
     repo, git_hash = Base.shred!(LibGit2.CachedCredentials()) do creds
         clones_dir = joinpath(depots()[1], "clones")
-        ispath(clones_dir) || mkpath(clones_dir)
+        filetype(clones_dir) != :invalid || mkpath(clones_dir)
         repo_path = joinpath(clones_dir, string(uuid))
-        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+        repo = filetype(repo_path) != :invalid ? LibGit2.GitRepo(repo_path) : begin
             GitTools.clone(urls[1], repo_path; isbare=true, header = "[$uuid] $name from $(urls[1])", credentials=creds)
         end
         git_hash = LibGit2.GitHash(hash.bytes)
@@ -483,7 +483,7 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UU
         pkg.path == nothing || continue
         pkg.repo == nothing || continue
         path = find_installed(pkg.name, pkg.uuid, hashes[pkg.uuid])
-        if !ispath(path)
+        if filetype(path) == :invalid
             push!(pkgs_to_install, (pkg, path))
             push!(new_versions, pkg.uuid)
         end
@@ -653,7 +653,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
 
         # Check for deps in project file
         project_file = joinpath(path, "Project.toml")
-        if isfile(project_file)
+        if filetype(project_file) == :file
             project = read_project(project_file)
             deps = project["deps"]
         else
@@ -665,7 +665,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
                 push!(dep_pkgs, PackageSpec(stdlib, stdlib_uuid))
             end
             reqfile = joinpath(path, "REQUIRE")
-            if isfile(reqfile)
+            if filetype(reqfile) == :file
                 for r in Pkg2.Reqs.read(reqfile)
                     r isa Pkg2.Reqs.Requirement || continue
                     push!(dep_pkgs, PackageSpec(r.package))
@@ -810,7 +810,7 @@ function collect_target_deps!(ctx::Context, pkgs::Vector{PackageSpec}, pkg::Pack
     project_path = nothing
     for project_name in Base.project_names
         project_path_cand = joinpath(path, project_name)
-        if isfile(project_path_cand)
+        if filetype(project_path_cand) == :file
             project_path = project_path_cand
             break
         end
@@ -851,7 +851,7 @@ end
 # Pkg2 test/REQUIRE compatibility
 function pkg2_test_target_compatibility!(ctx, path, pkgs)
     test_reqfile = joinpath(path, "test", "REQUIRE")
-    if isfile(test_reqfile)
+    if filetype(test_reqfile) == :file
         for r in Pkg2.Reqs.read(test_reqfile)
             r isa Pkg2.Reqs.Requirement || continue
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
@@ -927,9 +927,9 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
             end
             version = v"0.0"
         end
-        ispath(path) || error("Build path for $name does not exist: $path")
+        filetype(path) != :invalid || error("Build path for $name does not exist: $path")
         build_file = joinpath(path, "deps", "build.jl")
-        ispath(build_file) && push!(builds, (uuid, name, hash_or_path, build_file, version))
+        filetype(build_file) != :invalid && push!(builds, (uuid, name, hash_or_path, build_file, version))
     end
     # toposort builds by dependencies
     order = dependency_order_uuids(ctx, map(first, builds))
@@ -1168,7 +1168,7 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
             end
         end
         testfile = joinpath(version_path, "test", "runtests.jl")
-        if !isfile(testfile)
+        if filetype(testfile) != :file
             push!(missing_runtests, pkg.name)
         end
         push!(version_paths, version_path)
@@ -1223,7 +1223,7 @@ end
 
 function init(ctx::Context)
     project_file = ctx.env.project_file
-    isfile(project_file) &&
+    filetype(project_file) == :file &&
         cmderror("Project already initialized at $project_file")
     if !ctx.preview
         mkpath(dirname(project_file))
@@ -1233,4 +1233,3 @@ function init(ctx::Context)
 end
 
 end # module
-

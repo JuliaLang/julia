@@ -34,7 +34,7 @@ end
 
 function install(pkg::AbstractString, sha1::AbstractString)
     prefetch(pkg, sha1)
-    repo = if isdir(".trash/$pkg")
+    repo = if filetype(".trash/$pkg") == :dir
         mv(".trash/$pkg", "./$pkg") #TODO check for newer version in cache before moving
         GitRepo(pkg)
     else
@@ -57,8 +57,8 @@ function update(pkg::AbstractString, sha1::AbstractString)
 end
 
 function remove(pkg::AbstractString)
-    isdir(".trash") || mkdir(".trash")
-    ispath(".trash/$pkg") && rm(".trash/$pkg", recursive=true)
+    filetype(".trash") == :dir || mkdir(".trash")
+    filetype(".trash/$pkg") != :invalid && rm(".trash/$pkg", recursive=true)
     mv(pkg, ".trash/$pkg")
 end
 

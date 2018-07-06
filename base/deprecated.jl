@@ -1740,6 +1740,30 @@ end
 @deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
 @deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
 
+#PR #27917
+@deprecate ctime(st::StatStruct) st.ctime
+@deprecate ctime(args...) stat(args...).ctime
+@deprecate mtime(st::StatStruct) st.mtime
+@deprecate mtime(args...) stat(args...).ctime
+@deprecate filemode(st::StatStruct) st.mtime
+@deprecate filemode(args...) stat(args...).ctime
+@deprecate filesize(st::StatStruct) st.size
+@deprecate filesize(args...) stat(args...).size
+@deprecate ispath(args...) filetype(args...) != :invalid
+@deprecate isfifo(args...) filetype(args...) == :FIFO
+@deprecate isdir(args...) filetype(args...) == :dir
+@deprecate isblockdev(args...) filetype(args...) == :block
+@deprecate isfile(args...) filetype(args...) == :file
+@deprecate islink(args...) filetype(args...; link = true) == :link
+@deprecate issocket(args...) filetype(args...) == :socket
+@deprecate issetuid(args...) fileflags(args...).set_user
+@deprecate issetgid(args...) fileflags(args...).set_group
+@deprecate issticky(args...) fileflags(args...).sticky
+@deprecate uperm(args...) Base.permissions_bitfield(args...).user
+@deprecate gperm(args...) Base.permissions_bitfield(args...).group
+@deprecate operm(args...) Base.permissions_bitfield(args...).owner
+@deprecate lstat(args...) stat(args...; link = true)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

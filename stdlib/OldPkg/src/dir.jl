@@ -14,7 +14,7 @@ function path()
     b = _pkgroot()
     x, y = VERSION.major, VERSION.minor
     d = joinpath(b,"v$x.$y")
-    if isdir(d) || !isdir(b) || !isdir(joinpath(b, "METADATA"))
+    if filetype(d) == :dir || filetype(b) != :dir || filetype(joinpath(b, "METADATA") != :dir)
         return d
     end
     return b
@@ -24,7 +24,7 @@ path(pkg::AbstractString...) = normpath(path(),pkg...)
 function cd(f::Function, args...; kws...)
     dir = path()
     metadata_dir = joinpath(dir, "METADATA")
-    if !isdir(metadata_dir)
+    if filetype(metadata_dir) != :dir
         !haskey(ENV,"JULIA_PKGDIR") ? init() :
             throw(PkgError("Package metadata directory $metadata_dir doesn't exist; run OldPkg.init() to initialize it."))
     end
@@ -41,7 +41,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
     dir = path()
     @info "Initializing package repository $dir"
     metadata_dir = joinpath(dir, "METADATA")
-    if isdir(metadata_dir)
+    if filetype(metadata_dir) == :dir
         @info "Package directory $dir is already initialized"
         LibGit2.set_remote_url(metadata_dir, "origin", meta)
         return
@@ -65,8 +65,8 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         Base.mv(joinpath(temp_dir,"META_BRANCH"), joinpath(dir,"META_BRANCH"))
         rm(temp_dir, recursive=true)
     catch err
-        ispath(metadata_dir) && rm(metadata_dir, recursive=true)
-        ispath(temp_dir) && rm(temp_dir, recursive=true)
+        filetype(metadata_dir) != :invalid && rm(metadata_dir, recursive=true)
+        filetype(temp_dir) != :invalid && rm(temp_dir, recursive=true)
         rethrow(err)
     end
 end

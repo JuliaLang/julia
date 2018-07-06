@@ -14,13 +14,6 @@ Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.stat
 Base.Filesystem.lstat
-Base.Filesystem.ctime
-Base.Filesystem.mtime
-Base.Filesystem.filemode
-Base.Filesystem.filesize
-Base.Filesystem.uperm
-Base.Filesystem.gperm
-Base.Filesystem.operm
 Base.Filesystem.cp
 Base.download
 Base.Filesystem.mv
@@ -32,18 +25,10 @@ Base.Filesystem.mktemp(::Any)
 Base.Filesystem.mktemp(::Function, ::Any)
 Base.Filesystem.mktempdir(::Any)
 Base.Filesystem.mktempdir(::Function, ::Any)
-Base.Filesystem.isblockdev
-Base.Filesystem.ischardev
-Base.Filesystem.isdir
-Base.Filesystem.isfifo
-Base.Filesystem.isfile
-Base.Filesystem.islink
+Base.Filesystem.filetype
+Base.Filesystem.fileflags
+Base.Filesystem.permissions
 Base.Filesystem.ismount
-Base.Filesystem.ispath
-Base.Filesystem.issetgid
-Base.Filesystem.issetuid
-Base.Filesystem.issocket
-Base.Filesystem.issticky
 Base.Filesystem.homedir
 Base.Filesystem.dirname
 Base.Filesystem.basename

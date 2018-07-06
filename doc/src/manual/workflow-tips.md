@@ -58,7 +58,7 @@ julia -L _init.jl
 If you further add the following to your `~/.julia/config/startup.jl` file
 
 ```julia
-isfile("_init.jl") && include(joinpath(pwd(), "_init.jl"))
+filetype("_init.jl") == :file && include(joinpath(pwd(), "_init.jl"))
 ```
 
 then calling `julia` from that directory will run the initialization code without the additional

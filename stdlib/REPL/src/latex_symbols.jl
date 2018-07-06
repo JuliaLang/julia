@@ -49,7 +49,7 @@ end
 # symbol listing, using the following script:
 #=
 fname = "unicode-math-table.tex"
-isfile(fname) || download("http://mirror.math.ku.edu/tex-archive/macros/latex/contrib/unicode-math/$fname", fname)
+filetype(fname) == :file || download("http://mirror.math.ku.edu/tex-archive/macros/latex/contrib/unicode-math/$fname", fname)
 const latex_strings = Set(values(REPL.REPLCompletions.latex_symbols))
 open(fname) do f
     for L in eachline(f)

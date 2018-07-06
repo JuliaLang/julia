@@ -10,7 +10,7 @@ dlls = Libdl.dllist()
 @test length(dlls) > 3 # at a bare minimum, probably have some version of libstdc, libgcc, libjulia, ...
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     for dl in dlls
-        if isfile(dl) && (Libdl.dlopen_e(dl) != C_NULL)
+        if filetype(dl) == :file && (Libdl.dlopen_e(dl) != C_NULL)
             @test Base.samefile(Libdl.dlpath(dl), dl)
         end
     end
@@ -34,7 +34,7 @@ else
     dirname(abspath(Libdl.dlpath("libjulia")))
 end
 
-if isfile(joinpath(private_libdir,"julia","libccalltest."*Libdl.dlext))
+if filetype(joinpath(private_libdir,"julia","libccalltest."*Libdl.dlext) == :file)
     private_libdir = joinpath(private_libdir, "julia")
 end
 

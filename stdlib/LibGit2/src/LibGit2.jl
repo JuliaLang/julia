@@ -618,7 +618,7 @@ set by `mode`:
 ```julia
 # fetch changes
 LibGit2.fetch(repo)
-isfile(joinpath(repo_path, our_file)) # will be false
+filetype(joinpath(repo_path, our_file) == :file) # will be false
 
 # fastforward merge the changes
 LibGit2.merge!(repo, fastforward=true)
@@ -964,8 +964,8 @@ function transact(f::Function, repo::GitRepo)
 end
 
 function set_ssl_cert_locations(cert_loc)
-    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_file = filetype(cert_loc) == :file ? cert_loc : Cstring(C_NULL)
+    cert_dir  = filetype(cert_loc) == :dir ? cert_loc : Cstring(C_NULL)
     cert_file == C_NULL && cert_dir == C_NULL && return
     @check ccall((:git_libgit2_opts, :libgit2), Cint,
           (Cint, Cstring, Cstring),

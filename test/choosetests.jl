@@ -3,7 +3,7 @@
 using Random, Sockets
 
 const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
-const STDLIBS = filter!(x -> isdir(joinpath(STDLIB_DIR, x)), readdir(STDLIB_DIR))
+const STDLIBS = filter!(x -> filetype(joinpath(STDLIB_DIR, x) == :dir), readdir(STDLIB_DIR))
 
 """
 
@@ -166,7 +166,7 @@ function choosetests(choices = [])
     for test in tests
         if test in STDLIBS
             testfile = joinpath(STDLIB_DIR, test, "test", "testgroups")
-            if isfile(testfile)
+            if filetype(testfile) == :file
                 testgroups = readlines(testfile)
                 length(testgroups) == 0 && error("no testgroups defined for $test")
                 prepend!(new_tests, (test * "/") .* testgroups)

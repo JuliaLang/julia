@@ -15,14 +15,14 @@ path(pkg::AbstractString) = abspath(".cache", pkg)
 
 function mkcachedir()
     cache = joinpath(realpath("."), ".cache")
-    if isdir(cache)
+    if filetype(cache) == :dir
         return
     end
 
     @static if Sys.isunix()
         if Dir.isversioned(pwd())
             rootcache = joinpath(realpath(".."), ".cache")
-            if !isdir(rootcache)
+            if filetype(rootcache) != :dir
                 mkdir(rootcache)
             end
             symlink(rootcache, cache)
@@ -33,12 +33,12 @@ function mkcachedir()
 end
 
 function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
-    isdir(".cache") || mkcachedir()
+    filetype(".cache") == :dir || mkcachedir()
 
     cache = path(pkg)
     normalized_url = normalize_url(url)
 
-    repo = if isdir(cache)
+    repo = if filetype(cache) == :dir
         LibGit2.GitRepo(cache) # open repo, free it at the end
     else
         @info "Cloning cache of $pkg from $normalized_url"
@@ -53,7 +53,7 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
             else
                 "Unknown error: $err"
             end
-            isdir(cache) && rm(cache, recursive=true)
+            filetype(cache) == :dir && rm(cache, recursive=true)
             throw(PkgError(errmsg))
         end
     end

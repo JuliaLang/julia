@@ -1300,6 +1300,20 @@ Deprecated or removed
     (along with other utilities mostly used at the interactive prompt, such as `edit`
     and `less`) ([#27635]).
 
+  * `lstat` has been refactored into `stat` ([#27917]).
+
+  * `filemode`, `filesize`, `mtime`, and `ctime` have been deprecated in favor
+     of field accesses of `stat` ([#27917]).
+
+  * `ispath`, `isfifo`, `ischardev`, `isdir`, `isblockdev`, `isfile`, `islink`,
+    `issocket`, and `issetuid` have been refactored to `filetype` ([#27917]).
+
+  * `issetuid`, `issetgid`, and `issticky` have been refactored to `fileflags`
+    ([#27917]).
+
+  * `uperm`, `operm`, and `gperm` have been refactored to `permissions`
+    ([#27917]).
+
 Command-line option changes
 ---------------------------
 

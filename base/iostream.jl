@@ -480,7 +480,7 @@ end
 function read(s::IOStream)
     sz = 0
     try # filesize is just a hint, so ignore if it fails
-        sz = filesize(s)
+        sz = stat(s).size
         pos = ccall(:ios_pos, Int64, (Ptr{Cvoid},), s.ios)
         if pos > 0
             sz -= pos

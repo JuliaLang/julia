@@ -33,8 +33,8 @@ function challenge_prompt(code::Expr, challenges; timeout::Integer=60, debug::Bo
             deserialize(fp)
         end
     finally
-        isfile(output_file) && rm(output_file)
-        isfile(input_code) && rm(input_code)
+        filetype(output_file) == :file && rm(output_file)
+        filetype(input_code) == :file && rm(input_code)
     end
     return nothing
 end
@@ -406,7 +406,7 @@ end
         @test !LibGit2.is_passphrase_required("")
 
         file = joinpath(KEY_DIR, "foobar")
-        @test !isfile(file)
+        @test filetype(file) != :file
         @test !LibGit2.is_passphrase_required(file)
     end
 
@@ -623,9 +623,9 @@ mktempdir() do dir
     @testset "Initializing repository" begin
         @testset "with remote branch" begin
             LibGit2.with(LibGit2.init(cache_repo)) do repo
-                @test isdir(cache_repo)
+                @test filetype(cache_repo) == :dir
                 @test LibGit2.path(repo) == LibGit2.posixpath(realpath(cache_repo))
-                @test isdir(joinpath(cache_repo, ".git"))
+                @test filetype(joinpath(cache_repo, ".git") == :dir)
                 # set a remote branch
                 branch = "upstream"
                 LibGit2.GitRemote(repo, branch, repo_url) |> close
@@ -685,9 +685,9 @@ mktempdir() do dir
         @testset "bare" begin
             path = joinpath(dir, "Example.Bare")
             LibGit2.with(LibGit2.init(path, true)) do repo
-                @test isdir(path)
+                @test filetype(path) == :dir
                 @test LibGit2.path(repo) == LibGit2.posixpath(realpath(path))
-                @test isfile(joinpath(path, LibGit2.Consts.HEAD_FILE))
+                @test filetype(joinpath(path, LibGit2.Consts.HEAD_FILE) == :file)
                 @test LibGit2.isattached(repo)
             end
 
@@ -711,9 +711,9 @@ mktempdir() do dir
 
     @testset "Cloning repository" begin
         function bare_repo_tests(repo, repo_path)
-            @test isdir(repo_path)
+            @test filetype(repo_path) == :dir
             @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
-            @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
+            @test filetype(joinpath(repo_path, LibGit2.Consts.HEAD_FILE) == :file)
             @test LibGit2.isattached(repo)
             @test LibGit2.remotes(repo) == ["origin"]
         end
@@ -734,9 +734,9 @@ mktempdir() do dir
         end
         @testset "normal" begin
             LibGit2.with(LibGit2.clone(cache_repo, test_repo)) do repo
-                @test isdir(test_repo)
+                @test filetype(test_repo) == :dir
                 @test LibGit2.path(repo) == LibGit2.posixpath(realpath(test_repo))
-                @test isdir(joinpath(test_repo, ".git"))
+                @test filetype(joinpath(test_repo, ".git") == :dir)
                 @test LibGit2.workdir(repo) == LibGit2.path(repo)*"/"
                 @test LibGit2.isattached(repo)
                 @test LibGit2.isorphan(repo)
@@ -1318,7 +1318,7 @@ mktempdir() do dir
         LibGit2.with(LibGit2.GitRepo(test_repo)) do repo
             # fetch changes
             @test LibGit2.fetch(repo) == 0
-            @test !isfile(joinpath(test_repo, test_file))
+            @test filetype(joinpath(test_repo, test_file) != :file)
 
             # ff merge them
             @test LibGit2.merge!(repo, fastforward=true)
@@ -1326,7 +1326,7 @@ mktempdir() do dir
             # because there was not any file we need to reset branch
             head_oid = LibGit2.head_oid(repo)
             new_head = LibGit2.reset!(repo, head_oid, LibGit2.Consts.RESET_HARD)
-            @test isfile(joinpath(test_repo, test_file))
+            @test filetype(joinpath(test_repo, test_file) == :file)
             @test new_head == head_oid
 
             # GitAnnotated for a fetchhead
@@ -1649,10 +1649,10 @@ mktempdir() do dir
                 oid = LibGit2.commit(trepo, "test commit"; author=test_sig, committer=test_sig)
                 error("Force recovery")
             end
-            @test isfile(joinpath(test_repo, "AAA"))
-            @test isfile(joinpath(test_repo, "CCC"))
-            @test !isfile(joinpath(test_repo, "BBB"))
-            @test isfile(joinpath(test_repo, test_file))
+            @test filetype(joinpath(test_repo, "AAA") == :file)
+            @test filetype(joinpath(test_repo, "CCC") == :file)
+            @test filetype(joinpath(test_repo, "BBB") != :file)
+            @test filetype(joinpath(test_repo, test_file) == :file)
         end
     end
 
@@ -1748,7 +1748,7 @@ mktempdir() do dir
     @testset "Git credential username" begin
         @testset "fill username" begin
             config_path = joinpath(dir, config_file)
-            isfile(config_path) && rm(config_path)
+            filetype(config_path) == :file && rm(config_path)
 
             LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
                 # No credential settings should be set for these tests
@@ -1787,7 +1787,7 @@ mktempdir() do dir
 
         @testset "empty username" begin
             config_path = joinpath(dir, config_file)
-            isfile(config_path) && rm(config_path)
+            filetype(config_path) == :file && rm(config_path)
 
             LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
                 # No credential settings should be set for these tests
@@ -1815,7 +1815,7 @@ mktempdir() do dir
     @testset "Git helpers useHttpPath" begin
         @testset "use_http_path" begin
             config_path = joinpath(dir, config_file)
-            isfile(config_path) && rm(config_path)
+            filetype(config_path) == :file && rm(config_path)
 
             LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
                 # No credential settings should be set for these tests
@@ -1898,7 +1898,7 @@ mktempdir() do dir
             # on the path.
             if GIT_INSTALLED
                 credential_path = joinpath(dir, ".git-credentials")
-                isfile(credential_path) && rm(credential_path)
+                filetype(credential_path) == :file && rm(credential_path)
 
                 # Requires `git` to be installed and available on the path.
                 helper = parse(LibGit2.GitCredentialHelper, "store")
@@ -1910,14 +1910,14 @@ mktempdir() do dir
                     query = LibGit2.GitCredential("https", "mygithost")
                     filled = LibGit2.GitCredential("https", "mygithost", nothing, "bob", "s3cre7")
 
-                    @test !isfile(credential_path)
+                    @test filetype(credential_path) != :file
 
                     Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == query
                     end
 
                     LibGit2.approve(helper, filled)
-                    @test isfile(credential_path)
+                    @test filetype(credential_path) == :file
                     Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == filled
                     end
@@ -1938,7 +1938,7 @@ mktempdir() do dir
             # on the path.
             if GIT_INSTALLED
                 credential_path = joinpath(dir, ".git-credentials")
-                isfile(credential_path) && rm(credential_path)
+                filetype(credential_path) == :file && rm(credential_path)
 
                 # Requires `git` to be installed and available on the path.
                 helper = parse(LibGit2.GitCredentialHelper, "store")
@@ -1963,7 +1963,7 @@ mktempdir() do dir
                     filled_without_path_a = without_path(filled_a)
                     filled_without_path_b = without_path(filled_b)
 
-                    @test !isfile(credential_path)
+                    @test filetype(credential_path) != :file
 
                     Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == query
@@ -1976,7 +1976,7 @@ mktempdir() do dir
                     end
 
                     LibGit2.approve(helper, filled_a)
-                    @test isfile(credential_path)
+                    @test filetype(credential_path) == :file
                     Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
                         @test result == filled_without_path_a
                     end
@@ -2188,7 +2188,7 @@ mktempdir() do dir
                 # Set the USERPROFILE / HOME above to be a directory that does not contain
                 # the "~/.ssh/id_rsa" file. If this file exists the credential callback
                 # will default to use this private key instead of triggering a prompt.
-                @test !isfile(joinpath(homedir(), ".ssh", "id_rsa"))
+                @test filetype(joinpath(homedir() != :file, ".ssh", "id_rsa"))
 
                 # User provides valid credentials
                 challenges = [
@@ -2261,7 +2261,7 @@ mktempdir() do dir
             # Explicitly set the public key ENV variable to a non-existent file.
             withenv("SSH_KEY_PATH" => valid_key,
                     "SSH_PUB_KEY_PATH" => valid_key * ".public") do
-                @test !isfile(ENV["SSH_PUB_KEY_PATH"])
+                @test filetype(ENV["SSH_PUB_KEY_PATH"]) != :file
 
                 challenges = [
                     # "Private key location for 'git@github.com' [$valid_key]: " => "\n"
@@ -2276,7 +2276,7 @@ mktempdir() do dir
             # the private key.
             withenv("SSH_KEY_PATH" => valid_key,
                     "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
-                @test isfile(ENV["SSH_PUB_KEY_PATH"])
+                @test filetype(ENV["SSH_PUB_KEY_PATH"]) == :file
 
                 challenges = [
                     "Private key location for 'git@github.com' [$valid_key]: " => "\n"
@@ -2923,7 +2923,7 @@ mktempdir() do dir
                         catch err
                             serialize(f, err)
                         finally
-                            isdir(dest_dir) && rm(dest_dir, recursive=true)
+                            filetype(dest_dir) == :dir && rm(dest_dir, recursive=true)
                         end
                     end
                 """

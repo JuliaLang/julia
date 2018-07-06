@@ -31,6 +31,7 @@ function test_path(test)
     end
 end
 
+isfile(x) = filetype(x) == :file
 # Check all test files exist
 isfiles = isfile.(test_path.(tests) .* ".jl")
 if !all(isfiles)

@@ -3,27 +3,10 @@
 # filesystem operations
 
 export
-    ctime,
-    filemode,
-    filesize,
-    gperm,
-    isblockdev,
-    ischardev,
-    isdir,
-    isfifo,
-    isfile,
-    islink,
+    fileflags,
+    filetype,
     ismount,
-    ispath,
-    issetgid,
-    issetuid,
-    issocket,
-    issticky,
-    lstat,
-    mtime,
-    operm,
-    stat,
-    uperm
+    permissions
 
 struct StatStruct
     device  :: UInt
@@ -57,7 +40,7 @@ StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
     ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
 )
 
-show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(string(filemode(st), base = 8, pad = 6)), size=$(filesize(st)))")
+show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(string(st.mode, base = 8, pad = 6)), size=$(st.size))")
 
 # stat & lstat functions
 
@@ -67,7 +50,7 @@ macro stat_call(sym, arg1type, arg)
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
         r == 0 || r == Base.UV_ENOENT || r == Base.UV_ENOTDIR || throw(UVError("stat", r))
         st = StatStruct(stat_buf)
-        if ispath(st) != (r == 0)
+        if (filetype($1) != :invalid) & (r == 0)
             error("stat returned zero type for a valid path")
         end
         return st
@@ -83,9 +66,13 @@ end
 stat(fd::Integer)           = stat(RawFD(fd))
 
 """
-    stat(file)
+    stat(file; link = false)
 
 Returns a structure whose fields contain information about the file.
+If `link` is `true, gets the info for the link itself rather than the file it
+refers to. Also, if `link` is true, must be called on a file path rather than a
+file object or a file descriptor.
+
 The fields of the structure are:
 
 | Name    | Description                                                        |
@@ -102,215 +89,143 @@ The fields of the structure are:
 | blocks  | The number of such blocks allocated                                |
 | mtime   | Unix timestamp of when the file was last modified                  |
 | ctime   | Unix timestamp of when the file was created                        |
+"""
+function stat(path...; link = false)
+    full_path = joinpath(path...)
+    if link
+        stat(full_path)
+    else
+        lstat(full_path)
+    end
+end
 
 """
-stat(path...) = stat(joinpath(path...))
+    filetype(path; link = false) -> Symbol
+
+Returns the file type of `path`, with the following possibilities:
+
+- `:invalid`: not a valid filesystem path.-
+- `:FIFO`: a FIFO
+- `:character`: a character device
+- `:dir`: a directory
+- `:block`: a block device
+- `:file`: a regular file
+- `:link`: a symbolic link
+- `:socket`: a socket
+
+If `link` is true, get the type of a link itself, with the same restrictions as
+[`stat`](@ref).
+"""
+function filetype(st::StatStruct; link = false)
+    mode = st.mode & 0xf000
+    if mode == 0x0000
+        :invalid
+    elseif mode == 0x1000
+        :FIFO
+    elseif mode == 0x2000
+        :character
+    elseif mode == 0x4000
+        :dir
+    elseif mode == 0x6000
+        :block
+    elseif mode == 0x8000
+        :file
+    elseif mode == 0xa000
+        :link
+    elseif mode == 0xc000
+        :socket
+    else
+        error("Unknown path type")
+    end
+end
 
 """
-    lstat(file)
+    fileflags(path)
 
-Like [`stat`](@ref), but for symbolic links gets the info for the link
-itself rather than the file it refers to.
-This function must be called on a file path rather than a file object or a file
-descriptor.
+Returns a named tuple of the flags of a `path`, if the `path`:
+
+- `set_user`: has the setuid flag set
+- `set_group`: has the setgid flag set
+- `sticky`: has the sticky bit set
 """
-lstat(path...) = lstat(joinpath(path...))
+function fileflags(st::StatStruct)
+    mode = st.mode
+    (
+        set_user = (mode & 0o4000) > 0,
+        set_group = (mode & 0o2000) > 0,
+        sticky = (mode & 0o1000) > 0
+    )
+end
 
-# some convenience functions
+function translate_permissions(read_write_execute)
+    read, write_execute = divrem(read_write_execute, 4)
+    write, execute = divrem(write_execute, 2)
+    (
+        read = Bool(read),
+        write = Bool(write),
+        execute = Bool(execute)
+    )
+end
 
+
+permission_bitfield(mode, shift) = UInt8((mode >> shift) & 0x7)
+
+# unexported but necessary for compatibility?
 """
-    filemode(file)
+    permission_bitfields(path)
 
-Equivalent to `stat(file).mode`
-"""
-filemode(st::StatStruct) = st.mode
-
-"""
-    filesize(path...)
-
-Equivalent to `stat(file).size`.
-"""
-filesize(st::StatStruct) = st.size
-
-"""
-    mtime(file)
-
-Equivalent to `stat(file).mtime`.
-"""
-mtime(st::StatStruct) = st.mtime
-
-"""
-    ctime(file)
-
-Equivalent to `stat(file).ctime`
-"""
-ctime(st::StatStruct) = st.ctime
-
-# mode type predicates
-
-"""
-    ispath(path) -> Bool
-
-Returns `true` if `path` is a valid filesystem path, `false` otherwise.
-"""
-ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
-
-"""
-    isfifo(path) -> Bool
-
-Returns `true` if `path` is a FIFO, `false` otherwise.
-"""
-isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
-
-"""
-    ischardev(path) -> Bool
-
-Returns `true` if `path` is a character device, `false` otherwise.
-"""
-ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
-
-"""
-    isdir(path) -> Bool
-
-Returns `true` if `path` is a directory, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> isdir(homedir())
-true
-
-julia> isdir("not/a/directory")
-false
-```
-"""
-isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
-
-"""
-    isblockdev(path) -> Bool
-
-Returns `true` if `path` is a block device, `false` otherwise.
-"""
-isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
-
-"""
-    isfile(path) -> Bool
-
-Returns `true` if `path` is a regular file, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> isfile(homedir())
-false
-
-julia> f = open("test_file.txt", "w");
-
-julia> isfile(f)
-true
-
-julia> close(f); rm("test_file.txt")
-```
-"""
-isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
-
-"""
-    islink(path) -> Bool
-
-Returns `true` if `path` is a symbolic link, `false` otherwise.
-"""
-islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
-
-"""
-    issocket(path) -> Bool
-
-Returns `true` if `path` is a socket, `false` otherwise.
-"""
-issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
-
-# mode permission predicates
-
-"""
-    issetuid(path) -> Bool
-
-Returns `true` if `path` has the setuid flag set, `false` otherwise.
-"""
-issetuid(st::StatStruct) = (filemode(st) & 0o4000) > 0
-
-"""
-    issetgid(path) -> Bool
-
-Returns `true` if `path` has the setgid flag set, `false` otherwise.
-"""
-issetgid(st::StatStruct) = (filemode(st) & 0o2000) > 0
-
-"""
-    issticky(path) -> Bool
-
-Returns `true` if `path` has the sticky bit set, `false` otherwise.
-"""
-issticky(st::StatStruct) = (filemode(st) & 0o1000) > 0
-
-"""
-    uperm(file)
-
-Gets the permissions of the owner of the file as a bitfield of
+Returns a named tuple of permission bitfields for `user`, `group`, and `other`.
 
 | Value | Description        |
 |:------|:-------------------|
 | 01    | Execute Permission |
 | 02    | Write Permission   |
 | 04    | Read Permission    |
-
-For allowed arguments, see [`stat`](@ref).
 """
-uperm(st::StatStruct) = UInt8((filemode(st) >> 6) & 0x7)
-
-"""
-    gperm(file)
-
-Like [`uperm`](@ref) but gets the permissions of the group owning the file.
-"""
-gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
-
-"""
-    operm(file)
-
-Like [`uperm`](@ref) but gets the permissions for people who neither own the file nor are a member of
-the group owning the file
-"""
-operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
-
-# mode predicate methods for file names
-
-for f in Symbol[
-    :ispath,
-    :isfifo,
-    :ischardev,
-    :isdir,
-    :isblockdev,
-    :isfile,
-    :issocket,
-    :issetuid,
-    :issetgid,
-    :issticky,
-    :uperm,
-    :gperm,
-    :operm,
-    :filemode,
-    :filesize,
-    :mtime,
-    :ctime,
-]
-    @eval ($f)(path...)  = ($f)(stat(path...))
+function permission_bitfields(st::StatStruct)
+    mode = st.mode
+    (
+        user = permission_bitfield(mode, 6),
+        group = permission_bitfield(mode, 3),
+        other = permission_bitfield(mode, 0)
+    )
 end
 
-islink(path...) = islink(lstat(path...))
+permission_for_shift(mode, shift) =
+    translate_permission(permission_bitfield(mode, shift))
+
+"""
+    permissions(path)
+
+Returns a nested named tuple of bools. The outer tuple will classify permissions
+as `user`, `group`, or `other`. The inner tuple will classify permisissions as
+`read`, `write`, or `execute`.
+"""
+function permissions(st::StatStruct)
+    mode = st.mode
+    (
+        user = permission_for_shift(mode, 6),
+        group = permission_for_shift(mode, 3),
+        other = permission_for_shift(mode, 0)
+    )
+end
+
+permissions(path...) = permissions(stat(path...))
+
+for f in Symbol[
+    :fileflags,
+    :filetype,
+    :permissions
+]
+    @eval ($f)(path...; link = false)  = ($f)(stat(path...; link = link))
+end
 
 # samefile can be used for files and directories: #11145#issuecomment-99511194
 samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
 function samefile(a::AbstractString, b::AbstractString)
     infoa = stat(a)
     infob = stat(b)
-    if ispath(infoa) && ispath(infob)
+    if filetype(infoa) != :invalid && filetype(infob) != :invalid
         samefile(infoa, infob)
     else
         return false
@@ -324,12 +239,12 @@ Returns `true` if `path` is a mount point, `false` otherwise.
 """
 function ismount(path...)
     path = joinpath(path...)
-    isdir(path) || return false
-    s1 = lstat(path)
+    filetype(path) == :dir || return false
+    s1 = lstat(path; link = true)
     # Symbolic links cannot be mount points
-    islink(s1) && return false
+    filetype(s1; link = true) == :link && return false
     parent_path = joinpath(path, "..")
-    s2 = lstat(parent_path)
+    s2 = lstat(parent_path; link = true)
     # If a directory and its parent are on different devices,  then the
     # directory must be a mount point
     (s1.device != s2.device) && return true

@@ -83,7 +83,7 @@ end
 grow!(::Anonymous,o::Integer,l::Integer) = return
 function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
-    filelen = filesize(io)
+    filelen = stat(io).size
     if filelen < offset + len
         failure = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd(io), offset+len)
         Base.systemerror(:ftruncate, failure != 0)
@@ -182,7 +182,7 @@ like HDF5 (which can be used with memory-mapping).
 """
 function mmap(io::IO,
               ::Type{Array{T,N}}=Vector{UInt8},
-              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+              dims::NTuple{N,Integer}=(div(stat(io).size-position(io),sizeof(T)),),
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
@@ -212,7 +212,7 @@ function mmap(io::IO,
     else
         name, readonly, create = settings(io)
         szfile = convert(Csize_t, len + offset)
-        readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+        readonly && szfile > stat(io).size && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
@@ -238,15 +238,15 @@ end
 
 mmap(file::AbstractString,
      ::Type{T}=Vector{UInt8},
-     dims::NTuple{N,Integer}=(div(filesize(file),sizeof(eltype(T))),),
+     dims::NTuple{N,Integer}=(div(stat(file).size,sizeof(eltype(T))),),
      offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array,N} =
-    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::Array{eltype(T),N}
+    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, filetype(file) == :file ? "r" : "w+")::Array{eltype(T),N}
 
 # using a length argument instead of dims
 mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:Array} =
     mmap(io, T, (len,), offset; grow=grow, shared=shared)
 mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array} =
-    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)}
+    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, filetype(file) == :file ? "r" : "w+")::Vector{eltype(T)}
 
 # constructors for non-file-backed (anonymous) mmaps
 mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:Array,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
@@ -309,13 +309,13 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
 end
 
 mmap(file::AbstractString, ::Type{T}, dims::NTuple{N,Integer}, offset::Integer=Int64(0);grow::Bool=true, shared::Bool=true) where {T<:BitArray,N} =
-    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::BitArray{N}
+    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, filetype(file) == :file ? "r" : "w+")::BitArray{N}
 
 # using a length argument instead of dims
 mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
     mmap(io, T, (len,), offset; grow=grow, shared=shared)
 mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
-    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::BitVector
+    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, filetype(file) == :file ? "r" : "w+")::BitVector
 
 # constructors for non-file-backed (anonymous) mmaps
 mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:BitArray,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)

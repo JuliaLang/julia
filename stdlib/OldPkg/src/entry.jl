@@ -51,7 +51,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     outdated = :maybe
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
-            ispath(pkg) || throw(PkgError("unknown package $pkg"))
+            filetype(pkg) != :invalid || throw(PkgError("unknown package $pkg"))
             @info "Package $pkg is already installed"
         end
         branch = Dir.getmetabranch()
@@ -83,7 +83,7 @@ add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return @info "Package $pkg is not installed"
+    filetype(pkg) != :invalid || return @info "Package $pkg is not installed"
     @info "Removing $pkg (unregistered)"
     Write.remove(pkg)
 end
@@ -117,7 +117,7 @@ function installed(pkg::AbstractString)
     avail = Read.available(pkg)
     if Read.isinstalled(pkg)
         res = typemin(VersionNumber)
-        if ispath(joinpath(pkg,".git"))
+        if filetype(joinpath(pkg,".git") != :invalid)
             LibGit2.with(GitRepo, pkg) do repo
                 res = Read.installed_version(pkg, repo, avail)
             end
@@ -129,7 +129,7 @@ function installed(pkg::AbstractString)
 end
 
 function status(io::IO; pkgname::AbstractString = "")
-    if !isempty(pkgname) && !ispath(pkgname)
+    if !isempty(pkgname) && filetype(pkgname) == :invalid
         throw(PkgError("Package $pkgname does not exist"))
     end
     showpkg(pkg) = isempty(pkgname) ? true : (pkg == pkgname)
@@ -163,13 +163,13 @@ end
 status(io::IO, pkg::AbstractString) = status(io, pkgname = pkg)
 
 function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
-    if !isempty(pkg) && !ispath(pkg)
+    if !isempty(pkg) && filetype(pkg) == :invalid
         throw(PkgError("Package $pkg does not exist"))
     end
     @printf io " - %-29s " pkg
     fix || return println(io,ver)
     @printf io "%-19s" ver
-    if ispath(pkg,".git")
+    if filetype(pkg,".git") != :invalid
         prepo = GitRepo(pkg)
         try
             with(LibGit2.head(prepo)) do phead
@@ -180,7 +180,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
                 end
             end
             attrs = AbstractString[]
-            isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
+            filetype("METADATA",pkg,"url") == :file || push!(attrs,"unregistered")
             LibGit2.isdirty(prepo) && push!(attrs,"dirty")
             isempty(attrs) || print(io, " (",join(attrs,", "),")")
         catch err
@@ -200,13 +200,13 @@ end
 
 function clone(url::AbstractString, pkg::AbstractString)
     @info "Cloning $pkg from $url"
-    ispath(pkg) && throw(PkgError("$pkg already exists"))
+    filetype(pkg) != :invalid && throw(PkgError("$pkg already exists"))
     try
         LibGit2.with(LibGit2.clone(url, pkg)) do repo
             LibGit2.set_remote_url(repo, "origin", url)
         end
     catch err
-        isdir(pkg) && Base.rm(pkg, recursive=true)
+        filetype(pkg) == :dir && Base.rm(pkg, recursive=true)
         rethrow(err)
     end
     @info "Computing changes..."
@@ -220,7 +220,7 @@ function url_and_pkg(url_or_pkg::AbstractString)
     if !(':' in url_or_pkg)
         # no colon, could be a package name
         url_file = joinpath("METADATA", url_or_pkg, "url")
-        isfile(url_file) && return readchomp(url_file), url_or_pkg
+        filetype(url_file) == :file && return readchomp(url_file), url_or_pkg
     end
     # try to parse as URL or local path
     m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url_or_pkg)
@@ -231,7 +231,7 @@ end
 clone(url_or_pkg::AbstractString) = clone(url_and_pkg(url_or_pkg)...)
 
 function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
     @info "Checking out $pkg $branch..."
     with(GitRepo, pkg) do r
         LibGit2.transact(r) do repo
@@ -249,7 +249,7 @@ function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, d
 end
 
 function free(pkg::AbstractString)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
@@ -276,7 +276,7 @@ end
 function free(pkgs)
     try
         for pkg in pkgs
-            ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+            filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
             Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
             avail = Read.available(pkg)
             isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
@@ -300,7 +300,7 @@ function free(pkgs)
 end
 
 function pin(pkg::AbstractString, head::AbstractString)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
     should_resolve = true
     with(GitRepo, pkg) do repo
         id = if isempty(head) # get HEAD commit
@@ -351,7 +351,7 @@ end
 pin(pkg::AbstractString) = pin(pkg, "")
 
 function pin(pkg::AbstractString, ver::VersionNumber)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    filetype(pkg,".git") != :invalid || throw(PkgError("$pkg is not a git repo"))
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be pinned – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be pinned – not a registered package"))
@@ -423,7 +423,7 @@ function update(branch::AbstractString, upkgs::Set{String})
     Base.shred!(LibGit2.CachedCredentials()) do creds
         stopupdate = false
         for (pkg,ver) in fixed
-            ispath(pkg,".git") || continue
+            filetype(pkg,".git") != :invalid || continue
             pkg in dont_update && continue
             with(GitRepo, pkg) do repo
                 if LibGit2.isattached(repo)
@@ -619,7 +619,7 @@ function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
         Read.isinstalled(pkg) || throw(PkgError("$pkg is not an installed package"))
         build!(Read.requires_list(pkg), seen, errfile)
         path = abspath(pkg,"deps","build.jl")
-        isfile(path) || continue
+        filetype(path) == :file || continue
         build(pkg, path, errfile) || error("Build process failed.")
     end
 end
@@ -657,7 +657,7 @@ function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
         pkg in seen && continue
         updatehook!(Read.requires_list(pkg),errs,push!(seen,pkg))
         path = abspath(pkg,"deps","update.jl")
-        isfile(path) || continue
+        filetype(path) == :file || continue
         @info "Running update script for $pkg"
         cd(dirname(path)) do
             try evalfile(path)
@@ -693,7 +693,7 @@ function test!(pkg::AbstractString,
                nopkgs::Vector{AbstractString},
                notests::Vector{AbstractString}; coverage::Bool=false)
     reqs_path = abspath(pkg,"test","REQUIRE")
-    if isfile(reqs_path)
+    if filetype(reqs_path) == :file
         tests_require = Reqs.parse(reqs_path)
         if (!isempty(tests_require))
             @info "Computing test dependencies for $pkg..."
@@ -701,9 +701,9 @@ function test!(pkg::AbstractString,
         end
     end
     test_path = abspath(pkg,"test","runtests.jl")
-    if !isdir(pkg)
+    if filetype(pkg) != :dir
         push!(nopkgs, pkg)
-    elseif !isfile(test_path)
+    elseif filetype(test_path) != :file
         push!(notests, pkg)
     else
         @info "Testing $pkg"
@@ -730,7 +730,7 @@ function test!(pkg::AbstractString,
             end
         end
     end
-    isfile(reqs_path) && resolve()
+    filetype(reqs_path) == :file && resolve()
 end
 
 struct PkgTestError <: Exception

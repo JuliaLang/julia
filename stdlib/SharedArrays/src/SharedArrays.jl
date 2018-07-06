@@ -184,6 +184,8 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
 
     pids, onlocalhost = shared_pids(pids)
 
+    isfile(x) = filetype(x) == :file
+
     # If not supplied, determine the appropriate mode
     have_file = onlocalhost ? isfile(filename) : remotecall_fetch(isfile, pids[1], filename)
     if mode === nothing
@@ -201,7 +203,7 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
             throw(ArgumentError("cannot initialize unwritable array (mode = $mode)"))
         end
     end
-    if mode == "r" && !isfile(filename)
+    if mode == "r" && filetype(filename) != :file
         throw(ArgumentError("file $filename does not exist, but mode $mode cannot create it"))
     end
 

@@ -60,10 +60,10 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
 
         # Copy in userimg.jl if it exists
         if userimg_path !== nothing
-            if !isfile(userimg_path)
+            if filetype(userimg_path) != :file
                 error("$userimg_path is not found, ensure it is an absolute path.")
             end
-            if isfile("userimg.jl")
+            if filetype("userimg.jl") == :file
                 error("$(joinpath(base_dir, "userimg.jl")) already exists, delete manually to continue.")
             end
             cp(userimg_path, "userimg.jl")
@@ -89,7 +89,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             end
 
             if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
-                if isfile("$sysimg_path.$(Libdl.dlext)")
+                if filetype("$sysimg_path.$(Libdl.dlext) == :file")
                     info("To run Julia with this image loaded, run: `julia -J $sysimg_path.$(Libdl.dlext)`.")
                 else
                     info("To run Julia with this image loaded, run: `julia -J $sysimg_path.ji`.")
@@ -99,7 +99,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             end
         finally
             # Cleanup userimg.jl
-            if userimg_path !== nothing && isfile("userimg.jl")
+            if userimg_path !== nothing && filetype("userimg.jl") == :file
                 rm("userimg.jl")
             end
         end
@@ -168,7 +168,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     info("Linking sys.$(Libdl.dlext)")
     info("$cc $(join(FLAGS, ' ')) -o $sysimg_file $sysimg_path.o")
     # Windows has difficulties overwriting a file in use so we first link to a temp file
-    if Sys.iswindows() && isfile(sysimg_file)
+    if Sys.iswindows() && filetype(sysimg_file) == :file
         if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=stdout, stderr=stderr))
             mv(sysimg_file, "$sysimg_file.old"; force=true)
             mv("$sysimg_path.tmp", sysimg_file; force=true)

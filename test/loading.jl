@@ -43,7 +43,7 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
-@test isdir(@__DIR__)
+@test filetype(@__DIR__) == :dir
 @test @__DIR__() == dirname(@__FILE__)
 let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
     wd = sprint(show, abspath(pwd(), "")),
@@ -63,7 +63,7 @@ mktempdir() do dir
             @test !Base.isfile_casesensitive(lowered_filename)
 
             # check that case-sensitivity only applies to basename of a path:
-            if isfile(lowered_filename) # case-insensitive filesystem
+            if filetype(lowered_filename) == :file # case-insensitive filesystem
                 mkdir("cAsEtEsT")
                 touch(joinpath("cAsEtEsT", true_filename))
                 @test Base.isfile_casesensitive(joinpath("casetest", true_filename))

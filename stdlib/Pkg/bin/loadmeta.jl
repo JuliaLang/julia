@@ -34,7 +34,7 @@ Version(sha1::String) = Version(sha1, Dict{String,Require}())
 function load_requires(path::String)
     requires = Dict{String,Require}()
     requires["julia"] = Require(VersionInterval())
-    isfile(path) || return requires
+    filetype(path) == :file || return requires
     for r in filter!(r->r isa Requirement, Reqs.read(path))
         # @assert length(r.versions.intervals) == 1
         new = haskey(requires, r.package)
@@ -50,11 +50,11 @@ end
 
 function load_versions(dir::String)
     versions = Dict{VersionNumber,Version}()
-    isdir(dir) || return versions
+    filetype(dir) == :dir || return versions
     for ver in readdir(dir)
         path = joinpath(dir, ver)
         sha1 = joinpath(path, "sha1")
-        isfile(sha1) || continue
+        filetype(sha1) == :file || continue
         requires = load_requires(joinpath(path, "requires"))
         versions[VersionNumber(ver)] = Version(readchomp(sha1), requires)
     end
@@ -67,7 +67,7 @@ function load_packages(dir::String)
         path = joinpath(dir, pkg)
         url = joinpath(path, "url")
         versions = joinpath(path, "versions")
-        isfile(url) || continue
+        filetype(url) == :file || continue
         pkgs[pkg] = Package(
             uuid5(uuid_package, pkg),
             readchomp(url),

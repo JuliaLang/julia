@@ -181,7 +181,7 @@ function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     nothing
 end
 
-bytesavailable(f::File) = max(0, filesize(f) - position(f)) # position can be > filesize
+bytesavailable(f::File) = max(0, stat(f).size - position(f)) # position can be > filesize
 
 eof(f::File) = bytesavailable(f) == 0
 

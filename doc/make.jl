@@ -16,8 +16,8 @@ end
 
 # Documenter Setup.
 
-symlink_q(tgt, link) = isfile(link) || symlink(tgt, link)
-cp_q(src, dest) = isfile(dest) || cp(src, dest)
+symlink_q(tgt, link) = filetype(link) == :file || symlink(tgt, link)
+cp_q(src, dest) = filetype(dest) == :file || cp(src, dest)
 
 # make links for stdlib package docs, this is needed until #522 in Documenter.jl is finished
 const STDLIB_DOCS = []
@@ -27,7 +27,7 @@ cd(joinpath(@__DIR__, "src")) do
     mkdir("stdlib")
     for dir in readdir(STDLIB_DIR)
         sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src", "index.md")
-        if isfile(sourcefile)
+        if filetype(sourcefile) == :file
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
             if Sys.iswindows()

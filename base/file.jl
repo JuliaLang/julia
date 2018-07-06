@@ -206,14 +206,14 @@ julia> readdir("test")
 function mkpath(path::AbstractString; mode::Integer = 0o777)
     isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
-    (path == dir || isdir(path)) && return
+    (path == dir || filetype(path) == :dir) && return
     mkpath(dir, mode = checkmode(mode))
     try
         mkdir(path, mode = mode)
     # If there is a problem with making the directory, but the directory
     # does in fact exist, then ignore the error. Else re-throw it.
     catch err
-        if !isa(err, SystemError) || !isdir(path)
+        if !isa(err, SystemError) || filetype(path) != :dir
             rethrow()
         end
     end
@@ -242,11 +242,11 @@ Stacktrace:
 ```
 """
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
-    if islink(path) || !isdir(path)
+    if filetype(path; link = true) == :link || filetype(path) != :dir
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
-                if (filemode(path) & 0o222) == 0
+                if (stat(path).mode & 0o222) == 0
                     chmod(path, 0o777)
                 end
             end
@@ -276,13 +276,13 @@ end
 # The following use Unix command line facilites
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
                                                           force::Bool=false)
-    if ispath(dst)
+    if filetype(dst) != :invalid
         if force
             # Check for issue when: (src == dst) or when one is a link to the other
             # https://github.com/JuliaLang/julia/pull/11172#issuecomment-100391076
             if Base.samefile(src, dst)
-                abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
-                abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
+                abs_src = filetype(src; link = true) == :link ? abspath(readlink(src)) : abspath(src)
+                abs_dst = filetype(dst; link = true) == :link ? abspath(readlink(dst)) : abspath(dst)
                 throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
                                            "This is not supported.\n  ",
                                            "`src` refers to: $(abs_src)\n  ",
@@ -305,14 +305,14 @@ function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
                      "`force` instead", :cptree)
         force = remove_destination
     end
-    isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
+    filetype(src) == :dir || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
     for name in readdir(src)
         srcname = joinpath(src, name)
-        if !follow_symlinks && islink(srcname)
+        if !follow_symlinks && filetype(srcname; link = true) == :link
             symlink(readlink(srcname), joinpath(dst, name))
-        elseif isdir(srcname)
+        elseif filetype(srcname) == :dir
             cptree(srcname, joinpath(dst, name); force=force,
                                                  follow_symlinks=follow_symlinks)
         else
@@ -342,9 +342,9 @@ function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
         force = remove_destination
     end
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
-    if !follow_symlinks && islink(src)
+    if !follow_symlinks && filetype(src; link = true) == :link
         symlink(readlink(src), dst)
-    elseif isdir(src)
+    elseif filetype(src) == :dir
         cptree(src, dst; force=force, follow_symlinks=follow_symlinks)
     else
         sendfile(src, dst)
@@ -382,16 +382,16 @@ Return `path`.
 ```julia-repl
 julia> write("my_little_file", 2);
 
-julia> mtime("my_little_file")
+julia> stat("my_little_file").mtime
 1.5273815391135583e9
 
 julia> touch("my_little_file");
 
-julia> mtime("my_little_file")
+julia> stat("my_little_file").mtime
 1.527381559163435e9
 ```
 
-We can see the [`mtime`](@ref) has been modified by `touch`.
+We can see the [`stat`](@ref) has been modified by `touch`.
 """
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
@@ -458,7 +458,7 @@ function tempname()
             seed += 1
         end
         filename = _win_tempname(parent, seed)
-        if !ispath(filename)
+        if filetype(filename) == :invalid
             return filename
         end
         seed += 1
@@ -683,7 +683,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     dirs = Vector{eltype(content)}()
     files = Vector{eltype(content)}()
     for name in content
-        if isdir(joinpath(root, name))
+        if filetype(joinpath(root, name) == :dir)
             push!(dirs, name)
         else
             push!(files, name)
@@ -696,7 +696,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         end
         for dir in dirs
             path = joinpath(root,dir)
-            if follow_symlinks || !islink(path)
+            if follow_symlinks || filetype(path) != :link
                 for (root_l, dirs_l, files_l) in walkdir(path, topdown=topdown, follow_symlinks=follow_symlinks, onerror=onerror)
                     put!(chnl, (root_l, dirs_l, files_l))
                 end
@@ -735,10 +735,10 @@ function sendfile(src::AbstractString, dst::AbstractString)
     try
         src_file = open(src, JL_O_RDONLY)
         src_open = true
-        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, filemode(src_file))
+        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, stat(src_file).mode)
         dst_open = true
 
-        bytes = filesize(stat(src_file))
+        bytes = stat(src_file).size
         sendfile(dst_file, src_file, Int64(0), Int(bytes))
     finally
         if src_open && isopen(src_file)
@@ -771,14 +771,14 @@ function symlink(p::AbstractString, np::AbstractString)
     end
     flags = 0
     @static if Sys.iswindows()
-        if isdir(p)
+        if filetype(p) == :dir
             flags |= UV_FS_SYMLINK_JUNCTION
             p = abspath(p)
         end
     end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
     @static if Sys.iswindows()
-        if err < 0 && !isdir(p)
+        if err < 0 && filetype(p) != :dir
             @warn "On Windows, creating file symlinks requires Administrator privileges" maxlog=1 _group=:file
         end
     end
@@ -820,9 +820,9 @@ Return `path`.
 function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
     uv_error("chmod", err)
-    if recursive && isdir(path)
+    if recursive && filetype(path) == :dir
         for p in readdir(path)
-            if !islink(joinpath(path, p))
+            if filetype(joinpath(path, p) != :link)
                 chmod(joinpath(path, p), mode, recursive=true)
             end
         end

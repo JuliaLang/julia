@@ -193,7 +193,7 @@ end
 
 function parse_toml(path::String...; fakeit::Bool=false)
     p = joinpath(path...)
-    !fakeit || isfile(p) ? TOML.parsefile(p) : Dict{String,Any}()
+    !fakeit || filetype(p) == :file ? TOML.parsefile(p) : Dict{String,Any}()
 end
 
 const project_names = ["JuliaProject.toml", "Project.toml"]
@@ -233,7 +233,7 @@ mutable struct EnvCache
             project_file = Base.load_path_expand(env)
             project_file === nothing && error("package environment does not exist: $env")
         elseif env isa String
-            if isdir(env)
+            if filetype(env) == :dir
                 isempty(readdir(env)) || error("environment is a package directory: $env")
                 project_file = joinpath(env, Base.project_names[end])
             else
@@ -242,10 +242,10 @@ mutable struct EnvCache
             end
         end
         @assert project_file isa String &&
-            (isfile(project_file) || !ispath(project_file) ||
-             isdir(project_file) && isempty(readdir(project_file)))
+            (filetype(project_file) == :file || filetype(project_file) == :invalid ||
+             filetype(project_file) == :dir && isempty(readdir(project_file)))
         project_dir = dirname(project_file)
-        git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
+        git = filetype(joinpath(project_dir, ".git") != :invalid) ? LibGit2.GitRepo(project_dir) : nothing
 
         project = read_project(project_file)
         if any(haskey.((project,), ["name", "uuid", "version"]))
@@ -263,7 +263,7 @@ mutable struct EnvCache
             dir = abspath(dirname(project_file))
             for name in manifest_names
                 manifest_file = joinpath(dir, name)
-                isfile(manifest_file) && break
+                filetype(manifest_file) == :file && break
             end
         end
         write_env_usage(manifest_file)
@@ -301,7 +301,7 @@ function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
     for stdlib in readdir(stdlib_dir())
         projfile = joinpath(stdlib_path(stdlib), "Project.toml")
-        if isfile(projfile)
+        if filetype(projfile) == :file
             proj = TOML.parsefile(projfile)
             if haskey(proj, "uuid")
                 stdlibs[UUID(proj["uuid"])] = stdlib
@@ -340,10 +340,10 @@ function project_compatibility(ctx::Context, name::String)
 end
 
 function write_env_usage(manifest_file::AbstractString)
-    !ispath(logdir()) && mkpath(logdir())
+    filetype(logdir() == :invalid) && mkpath(logdir())
     usage_file = joinpath(logdir(), "manifest_usage.toml")
     touch(usage_file)
-    !isfile(manifest_file) && return
+    filetype(manifest_file) != :file && return
     # Do not rewrite as do syntax (no longer precompilable)
     io = open(usage_file, "a")
     println(io, "[[\"", escape_string(manifest_file), "\"]]")
@@ -359,7 +359,7 @@ function read_project(io::IO)
     return project
 end
 function read_project(file::String)
-    isfile(file) ? open(read_project, file) : read_project(devnull)
+    filetype(file) == :file ? open(read_project, file) : read_project(devnull)
 end
 
 function read_manifest(io::IO)
@@ -380,7 +380,7 @@ function read_manifest(io::IO)
     return manifest
 end
 function read_manifest(file::String)
-    try isfile(file) ? open(read_manifest, file) : read_manifest(devnull)
+    try filetype(file) == :file ? open(read_manifest, file) : read_manifest(devnull)
     catch err
         err isa ErrorException && startswith(err.msg, "ambiguious dependency") || rethrow(err)
         err.msg *= "In manifest file: $file"
@@ -394,13 +394,13 @@ const reg_pkg = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?(?:\/)?$"
 
 # Windows sometimes throw on `isdir`...
 function isdir_windows_workaround(path::String)
-    try isdir(path)
+    try filetype(path) == :dir
     catch e
         false
     end
 end
 
-casesensitive_isdir(dir::String) = isdir_windows_workaround(dir) && dir in readdir(joinpath(dir, ".."))
+casesensitive_filetype(dir::String) == :dir = isdir_windows_workaround(dir) && dir in readdir(joinpath(dir, ".."))
 
 function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
     Base.shred!(LibGit2.CachedCredentials()) do creds
@@ -425,7 +425,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                 clone_path = joinpath(depots()[1], "clones")
                 mkpath(clone_path)
                 repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
-                repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+                repo, just_cloned = filetype(repo_path) != :invalid ? (LibGit2.GitRepo(repo_path), false) : begin
                     r = GitTools.clone(pkg.repo.url, repo_path)
                     GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
                     r, true
@@ -452,8 +452,8 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
 
                 parse_package!(ctx, pkg, project_path)
                 dev_pkg_path = joinpath(Pkg.devdir(), pkg.name)
-                if isdir(dev_pkg_path)
-                    if !isfile(joinpath(dev_pkg_path, "src", pkg.name * ".jl"))
+                if filetype(dev_pkg_path) == :dir
+                    if filetype(joinpath(dev_pkg_path, "src", pkg.name * ".jl") != :file)
                         cmderror("Path `$(dev_pkg_path)` exists but it does not contain `src/$(pkg.name).jl")
                     else
                         @info "Path `$(dev_pkg_path)` exists and looks like the correct package, using existing path instead of cloning"
@@ -482,7 +482,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             clones_dir = joinpath(depots()[1], "clones")
             mkpath(clones_dir)
             repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
-            repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+            repo, just_cloned = filetype(repo_path) != :invalid ? (LibGit2.GitRepo(repo_path), false) : begin
                 r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
                 GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
                 r, true
@@ -526,7 +526,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             folder_already_downloaded = false
             if has_uuid(pkg) && has_name(pkg)
                 version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
-                isdir(version_path) && (folder_already_downloaded = true)
+                filetype(version_path) == :dir && (folder_already_downloaded = true)
                 info = manifest_info(env, pkg.uuid)
                 if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
                     # Same tree sha and this version already downloaded, nothing left to do
@@ -560,7 +560,7 @@ function parse_package!(ctx, pkg, project_path)
     env = ctx.env
     found_project_file = false
     for projname in project_names
-        if isfile(joinpath(project_path, projname))
+        if filetype(joinpath(project_path, projname) == :file)
             found_project_file = true
             project_data = parse_toml(project_path, "Project.toml")
             pkg.uuid = UUID(project_data["uuid"])
@@ -764,9 +764,9 @@ const DEFAULT_REGISTRIES = Dict("Uncurated" => "https://github.com/JuliaRegistri
 # Return paths of all registries in a depot
 function registries(depot::String)::Vector{String}
     d = joinpath(depot, "registries")
-    ispath(d) || return String[]
+    filetype(d) == :invalid && return String[]
     regs = filter!(readdir(d)) do r
-        isfile(joinpath(d, r, "Registry.toml"))
+        filetype(joinpath(d, r, "Registry.toml") == :file)
     end
     String[joinpath(depot, "registries", r) for r in regs]
 end
@@ -776,7 +776,7 @@ function registries(; clone_default=true)::Vector{String}
     isempty(depots()) && return String[]
     user_regs = abspath(depots()[1], "registries")
     if clone_default
-        if !ispath(user_regs)
+        if filetype(user_regs) == :invalid
             mkpath(user_regs)
             Base.shred!(LibGit2.CachedCredentials()) do creds
                 printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
@@ -1031,7 +1031,7 @@ function write_env(ctx::Context; display_diff=true)
     # update the project file
     project = deepcopy(env.project)
     isempty(project["deps"]) && delete!(project, "deps")
-    if !isempty(project) || ispath(env.project_file)
+    if !isempty(project) || filetype(env.project_file) != :invalid
         if display_diff
             printpkgstyle(ctx, :Updating, pathrepr(ctx, env.project_file))
             Pkg.Display.print_project_diff(ctx, old_env, env)
@@ -1044,7 +1044,7 @@ function write_env(ctx::Context; display_diff=true)
         end
     end
     # update the manifest file
-    if !isempty(env.manifest) || ispath(env.manifest_file)
+    if !isempty(env.manifest) || filetype(env.manifest_file) != :invalid
         if display_diff
             printpkgstyle(ctx, :Updating, pathrepr(ctx, env.manifest_file))
             Pkg.Display.print_manifest_diff(ctx, old_env, env)

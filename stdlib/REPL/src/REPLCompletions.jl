@@ -140,7 +140,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     try
         if isempty(dir)
             files = readdir()
-        elseif isdir(dir)
+        elseif filetype(dir) == :dir
             files = readdir(dir)
         else
             return String[], 0:-1, false
@@ -152,7 +152,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     matches = Set{String}()
     for file in files
         if startswith(file, prefix)
-            id = try isdir(joinpath(dir, file)) catch; false end
+            id = try filetype(joinpath(dir, file) == :dir) catch; false end
             # joinpath is not used because windows needs to complete with double-backslash
             push!(matches, id ? file * (@static Sys.iswindows() ? "\\\\" : "/") : file)
         end
@@ -193,7 +193,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
             for file in filesinpath
                 # In a perfect world, we would filter on whether the file is executable
                 # here, or even on whether the current user can execute the file in question.
-                if startswith(file, prefix) && isfile(joinpath(pathdir, file))
+                if startswith(file, prefix) && filetype(joinpath(pathdir, file) == :file)
                     push!(matches, file)
                 end
             end
@@ -541,7 +541,7 @@ function completions(string, pos)
 
         if inc_tag == :string &&
            length(paths) == 1 &&  # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:prevind(string, first(r))] * paths[1],
+           filetype(expanduser(replace(string[startpos:prevind(string, first(r) != :dir)] * paths[1],
                                      r"\\ " => " "))) &&  # except if it's a directory
            (length(string) <= pos ||
             string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
@@ -583,10 +583,10 @@ function completions(string, pos)
         s = string[startpos:pos]
         if dotpos <= startpos
             for dir in Base.load_path()
-                if basename(dir) in Base.project_names && isfile(dir)
+                if basename(dir) in Base.project_names && filetype(dir) == :file
                     append!(suggestions, project_deps_get_completion_candidates(s, dir))
                 end
-                isdir(dir) || continue
+                filetype(dir) == :dir || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&
                         pname != "REQUIRE" && startswith(pname, s)
@@ -594,7 +594,7 @@ function completions(string, pos)
                         #   <Mod>.jl
                         #   <Mod>/src/<Mod>.jl
                         #   <Mod>.jl/src/<Mod>.jl
-                        if isfile(joinpath(dir, pname))
+                        if filetype(joinpath(dir, pname) == :file)
                             endswith(pname, ".jl") && push!(suggestions,
                                                             pname[1:prevind(pname, end-2)])
                         else
@@ -603,8 +603,8 @@ function completions(string, pos)
                             else
                                 pname
                             end
-                            if isfile(joinpath(dir, pname, "src",
-                                               "$mod_name.jl"))
+                            if filetype(joinpath(dir, pname, "src",
+                                               "$mod_name.jl") == :file)
                                 push!(suggestions, mod_name)
                             end
                         end

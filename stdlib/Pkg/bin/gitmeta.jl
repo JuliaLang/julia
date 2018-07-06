@@ -46,9 +46,9 @@ function gitmeta(pkgs::Dict{String,Package})
     @assert length(STDLIBS) ≤ 64 # use 64 bits to encode usage
     fd = joinpath(@__DIR__, "sha1map.toml")
     fs = joinpath(@__DIR__, "stdlib.toml")
-    d = ispath(fd) ? TOML.parsefile(fd) : Dict()
+    d = filetype(fd) == :invalid ? Dict() : TOML.parsefile(fd)
     s = Dict()
-    if ispath(fs)
+    if filetype(fs) != :invalid
         s = TOML.parsefile(fs)
         get(s, "STDLIBS", nothing) == STDLIBS || empty!(s)
         mv(fs, "$fs.old", force=true)
@@ -75,7 +75,7 @@ function gitmeta(pkgs::Dict{String,Package})
             (v"0.7" ∉ v.requires["julia"].versions ||
             haskey(s[uuid], v.sha1)) && continue
             if repo == nothing
-                repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+                repo = filetype(repo_path) != :invalid ? LibGit2.GitRepo(repo_path) : begin
                     updated = true
                     @info "Cloning [$uuid] $pkg"
                     LibGit2.clone(p.url, repo_path, isbare=true)

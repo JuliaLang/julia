@@ -52,31 +52,31 @@ end
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
-@test !isfile(Base.Filesystem.StatStruct())
-@test isdir(dir)
-@test !isfile(dir)
-@test !islink(dir)
-@test !isdir(file)
-@test isfile(file)
-@test !islink(file)
+@test filetype(Base.Filesystem.StatStruct() != :file)
+@test filetype(dir) == :dir
+@test filetype(dir) != :file
+@test filetype(dir) != :link
+@test filetype(file) != :dir
+@test filetype(file) == :file
+@test filetype(file) != :link
 
-@test filemode(file) & 0o444 > 0 # readable
-@test filemode(file) & 0o222 > 0 # writable
-@test chmod(file, filemode(file) & 0o7555) == file
-@test filemode(file) & 0o222 == 0
-chmod(file, filemode(file) | 0o222)
-@test filemode(file) & 0o111 == 0
-@test filesize(file) == 0
+@test stat(file).mode & 0o444 > 0 # readable
+@test stat(file).mode & 0o222 > 0 # writable
+@test chmod(file, stat(file).mode & 0o7555) == file
+@test stat(file).mode & 0o222 == 0
+chmod(file, stat(file).mode | 0o222)
+@test stat(file).mode & 0o111 == 0
+@test stat(file).size == 0
 
 if Sys.iswindows()
     permissions = 0o444
-    @test filemode(dir) & 0o777 != permissions
-    @test filemode(subdir) & 0o777 != permissions
-    @test filemode(file) & 0o777 != permissions
+    @test stat(dir).mode & 0o777 != permissions
+    @test stat(subdir).mode & 0o777 != permissions
+    @test stat(file).mode & 0o777 != permissions
     chmod(dir, permissions, recursive=true)
-    @test filemode(dir) & 0o777 == permissions
-    @test filemode(subdir) & 0o777 == permissions
-    @test filemode(file) & 0o777 == permissions
+    @test stat(dir).mode & 0o777 == permissions
+    @test stat(subdir).mode & 0o777 == permissions
+    @test stat(file).mode & 0o777 == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
     function get_umask()
@@ -91,31 +91,31 @@ else
         tmpfile2=joinpath(tmpdir, "tempfile2.txt")
         touch(tmpfile)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test stat(tmpfile).mode & (~umask) == stat(tmpfile2).mode
         rm(tmpfile2)
         chmod(tmpfile, 0o777)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test stat(tmpfile).mode & (~umask) == stat(tmpfile2).mode
         rm(tmpfile2)
         chmod(tmpfile, 0o707)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test stat(tmpfile).mode & (~umask) == stat(tmpfile2).mode
         rm(tmpfile2)
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
         permissions=0o776
-        @test filemode(dir) & 0o777 != permissions
-        @test filemode(subdir) & 0o777 != permissions
-        @test filemode(file) & 0o777 != permissions
-        @test filemode(linkfile) & 0o777 != permissions
-        @test filemode(tmpfile) & 0o777 != permissions
+        @test stat(dir).mode & 0o777 != permissions
+        @test stat(subdir).mode & 0o777 != permissions
+        @test stat(file).mode & 0o777 != permissions
+        @test stat(linkfile).mode & 0o777 != permissions
+        @test stat(tmpfile).mode & 0o777 != permissions
         chmod(dir, permissions, recursive=true)
-        @test filemode(dir) & 0o777 == permissions
-        @test filemode(subdir) & 0o777 == permissions
-        @test filemode(file) & 0o777 == permissions
-        @test lstat(link).mode & 0o777 != permissions  # Symbolic links are not modified.
-        @test filemode(linkfile) & 0o777 != permissions  # Symbolic links are not followed.
-        @test filemode(tmpfile) & 0o777 != permissions
+        @test stat(dir).mode & 0o777 == permissions
+        @test stat(subdir).mode & 0o777 == permissions
+        @test stat(file).mode & 0o777 == permissions
+        @test lstat(link; link = true).mode & 0o777 != permissions  # Symbolic links are not modified.
+        @test stat(linkfile).mode & 0o777 != permissions  # Symbolic links are not followed.
+        @test stat(tmpfile).mode & 0o777 != permissions
         rm(linkfile)
     end
 end
@@ -123,28 +123,28 @@ end
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
-    @test filesize(dir) == 0
+    @test stat(dir).size == 0
 else
-    @test filesize(dir) > 0
+    @test stat(dir).size > 0
 end
 nowtime = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
 let skew = 10 + (nowtime - starttime)
-    mfile = mtime(file)
-    mdir  = mtime(dir)
+    mfile = stat(file).mtime
+    mdir  = stat(dir).mtime
     @test abs(nowtime - mfile) <= skew && abs(nowtime - mdir) <= skew && abs(mfile - mdir) <= skew
 end
-#@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
+#@test Int(time()) >= Int(stat(file).mtime) >= Int(stat(dir).mtime) >= 0 # 1 second accuracy should be sufficient
 
 # test links
 if Sys.isunix()
-    @test islink(link) == true
+    @test filetype(link; link = true) == :link == true
     @test readlink(link) == file
 end
 
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    @test islink(dirlink) == true
-    @test isdir(dirlink) == true
+    @test filetype(dirlink; link = true) == :link == true
+    @test filetype(dirlink) == :dir == true
     @test readlink(dirlink) == subdir * (Sys.iswindows() ? "\\" : "")
 end
 
@@ -158,24 +158,24 @@ mkdir(c_subdir)
 c_file = joinpath(c_tmpdir, "cfile.txt")
 cp(newfile, c_file)
 
-@test isdir(c_subdir)
-@test isfile(c_file)
+@test filetype(c_subdir) == :dir
+@test filetype(c_file) == :file
 @test_throws SystemError rm(c_tmpdir)
 @test_throws SystemError rm(c_tmpdir, force=true)
 
 # create temp dir in specific directory
 d_tmpdir = mktempdir(c_tmpdir)
-@test isdir(d_tmpdir)
+@test filetype(d_tmpdir) == :dir
 @test Base.samefile(dirname(d_tmpdir), c_tmpdir)
 
 # create temp file in specific directory
 d_tmpfile,f = mktemp(c_tmpdir)
 close(f)
-@test isfile(d_tmpfile)
+@test filetype(d_tmpfile) == :file
 @test Base.samefile(dirname(d_tmpfile), c_tmpdir)
 
 rm(c_tmpdir, recursive=true)
-@test !isdir(c_tmpdir)
+@test filetype(c_tmpdir) != :dir
 @test_throws Base.UVError rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
 @test_throws Base.UVError rm(c_tmpdir, recursive=true)
@@ -234,37 +234,37 @@ close(s)
 #######################################################################
 
 my_tempdir = tempdir()
-@test isdir(my_tempdir) == true
+@test filetype(my_tempdir) == :dir == true
 
 let path = tempname()
     # issue #9053
-    @test !ispath(path)
+    @test filetype(path) == :invalid
 end
 
 (p, f) = mktemp()
 print(f, "Here is some text")
 close(f)
-@test isfile(p) == true
+@test filetype(p) == :file == true
 @test read(p, String) == "Here is some text"
 rm(p)
 
 let
     tmp_path = mktemp() do p, io
-        @test isfile(p)
+        @test filetype(p) == :file
         print(io, "鴨かも？")
         p
     end
     @test tmp_path != ""
-    @test !isfile(tmp_path)
+    @test filetype(tmp_path) != :file
 end
 
 let
     tmpdir = mktempdir() do d
-        @test isdir(d)
+        @test filetype(d) == :dir
         d
     end
     @test tmpdir != ""
-    @test !isdir(tmpdir)
+    @test filetype(tmpdir) != :dir
 end
 
 emptyfile = joinpath(dir, "empty")
@@ -279,9 +279,9 @@ rm(emptyfile)
 ## This section tests cp & mv(rename) files, directories, absolute and relative links. #
 ########################################################################################
 function check_dir(orig_path::AbstractString, copied_path::AbstractString, follow_symlinks::Bool)
-    isdir(orig_path) || throw(ArgumentError("'$orig_path' is not a directory."))
+    filetype(orig_path) == :dir || throw(ArgumentError("'$orig_path' is not a directory."))
     # copied_path must also be a dir.
-    @test isdir(copied_path)
+    @test filetype(copied_path) == :dir
     readir_orig = readdir(orig_path)
     readir_copied = readdir(copied_path)
     @test readir_orig == readir_copied
@@ -293,10 +293,10 @@ function check_dir(orig_path::AbstractString, copied_path::AbstractString, follo
 end
 
 function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow_symlinks::Bool)
-    if islink(orig_path)
+    if filetype(orig_path; link = true) == :link
         if !follow_symlinks
             # copied_path must be a link
-            @test islink(copied_path)
+            @test filetype(copied_path; link = true) == :link
             readlink_orig = readlink(orig_path)
             # copied_path must have the same link value:
             #    this is true for absolute and relative links
@@ -306,28 +306,28 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
             end
         else
             # copied_path may not be a link if follow_symlinks=true
-            @test islink(orig_path) == !islink(copied_path)
-            if isdir(orig_path)
+            @test filetype(orig_path; link = true) == :link == filetype(copied_path) != :link
+            if filetype(orig_path) == :dir
                 check_dir(orig_path, copied_path, follow_symlinks)
             else
                 # copied_path must also be a file.
-                @test isfile(copied_path)
+                @test filetype(copied_path) == :file
                 # copied_path must have same content
                 @test read(orig_path, String) == read(copied_path, String)
             end
         end
-    elseif isdir(orig_path)
+    elseif filetype(orig_path) == :dir
         check_cp_main(orig_path, copied_path, follow_symlinks)
     else
         # copied_path must also be a file.
-        @test isfile(copied_path)
+        @test filetype(copied_path) == :file
         # copied_path must have same content
         @test read(orig_path, String) == read(copied_path, String)
     end
 end
 
 function check_cp_main(orig::AbstractString, copied::AbstractString, follow_symlinks::Bool)
-    if isdir(orig)
+    if filetype(orig) == :dir
         check_dir(orig, copied, follow_symlinks)
     else
         check_cp(orig, copied, follow_symlinks)
@@ -380,8 +380,8 @@ mktempdir() do tmpdir
     mv(file, newfile)
     newfile_stat = stat(file)
 
-    @test !ispath(file)
-    @test isfile(newfile)
+    @test filetype(file) == :invalid
+    @test filetype(newfile) == :file
     @test Base.samefile(files_stat, newfile_stat)
 
     file = newfile
@@ -395,8 +395,8 @@ mktempdir() do tmpdir
 
     # rename, then make sure b_tmpdir does exist and a_tmpdir doesn't
     mv(a_tmpdir, b_tmpdir)
-    @test isdir(b_tmpdir)
-    @test !ispath(a_tmpdir)
+    @test filetype(b_tmpdir) == :dir
+    @test filetype(a_tmpdir) == :invalid
 
     # get b_tmpdir's file info and compare with a_tmpdir
     b_stat = stat(b_tmpdir)
@@ -441,10 +441,10 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 
     function cp_follow_symlinks_false_check(s, d; force=false)
         cp(s, d; force=force, follow_symlinks=false)
-        @test isdir(s) == isdir(d)
-        @test islink(s) == islink(d)
-        islink(s) && @test readlink(s) == readlink(d)
-        islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
+        @test filetype(s) == :dir == filetype(d) == :dir
+        @test filetype(s; link = true) == :link == filetype(d; link = true) == :link
+        filetype(s; link = true) == :link && @test readlink(s) == readlink(d)
+        filetype(s; link = true) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d))
         # all should contain 1 file named  "c.txt"
         @test "c.txt" in readdir(d)
         @test length(readdir(d)) == 1
@@ -458,12 +458,12 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         mv(d, d_mv; force=force)
         stat_d_mv = stat(d_mv)
         # make sure d does not exist anymore
-        @test !ispath(d)
+        @test filetype(d) == :invalid
         # compare s, with d_mv
-        @test isdir(s) == isdir(d_mv)
-        @test islink(s) == islink(d_mv)
-        islink(s) && @test readlink(s) == readlink(d_mv)
-        islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
+        @test filetype(s) == :dir == filetype(d_mv) == :dir
+        @test filetype(s; link = true) == :link == filetype(d_mv; link = true) == :link
+        filetype(s; link = true) == :link && @test readlink(s) == readlink(d_mv)
+        filetype(s; link = true) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
         # all should contain 1 file named  "c.txt"
         @test "c.txt" in readdir(d_mv)
         @test length(readdir(d_mv)) == 1
@@ -507,7 +507,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         for d in test_new_paths1
             cp(emptydir, d; force=true, follow_symlinks=false)
             # Expect no link because a dir is copied (follow_symlinks=false does not effect this)
-            @test isdir(d) && !islink(d)
+            @test filetype(d) == :dir && filetype(d) != :link
             # none should contain any file
             @test isempty(readdir(d))
         end
@@ -603,7 +603,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mktempdir() do tmpdir
         none_existing_src = joinpath(tmpdir, "none_existing_src")
         dst = joinpath(tmpdir, "dst")
-        @test !ispath(none_existing_src)
+        @test filetype(none_existing_src) == :invalid
         # cptree
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=false)
         @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=true)
@@ -644,10 +644,10 @@ if !Sys.iswindows()
 
     function cp_follow_symlinks_false_check(s, d, file_txt; force=false)
         cp(s, d; force=force, follow_symlinks=false)
-        @test isfile(s) == isfile(d)
-        @test islink(s) == islink(d)
-        islink(s) && @test readlink(s) == readlink(d)
-        islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
+        @test filetype(s) == :file == filetype(d) == :file
+        @test filetype(s; link = true) == :link == filetype(d; link = true) == :link
+        filetype(s; link = true) == :link && @test readlink(s) == readlink(d)
+        filetype(s; link = true) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d))
         # all should contain the same
         @test read(s, String) == read(d, String) == file_txt
     end
@@ -660,12 +660,12 @@ if !Sys.iswindows()
         mv(d, d_mv; force=force)
         stat_d_mv = stat(d_mv)
         # make sure d does not exist anymore
-        @test !ispath(d)
+        @test filetype(d) == :invalid
         # comare s, with d_mv
-        @test isfile(s) == isfile(d_mv)
-        @test islink(s) == islink(d_mv)
-        islink(s) && @test readlink(s) == readlink(d_mv)
-        islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
+        @test filetype(s) == :file == filetype(d_mv) == :file
+        @test filetype(s; link = true) == :link == filetype(d_mv; link = true) == :link
+        filetype(s; link = true) == :link && @test readlink(s) == readlink(d_mv)
+        filetype(s; link = true) == :link && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
         # all should contain the same
         @test read(s, String) == read(d_mv, String) == file_txt
         # d => d_mv same file/dir
@@ -709,7 +709,7 @@ if !Sys.iswindows()
         for d in test_new_paths1
             cp(otherfile, d; force=true, follow_symlinks=false)
             # Expect no link because a file is copied (follow_symlinks=false does not effect this)
-            @test isfile(d) && !islink(d)
+            @test filetype(d) == :file && filetype(d) != :link
             # all should contain otherfile_content
             @test read(d, String) == otherfile_content
         end
@@ -859,9 +859,8 @@ end
 
 # issue #10994: pathnames cannot contain embedded NUL chars
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
-        stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch,
-        isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid,
-        issetuid, issocket, issticky, realpath)
+        stat, lstat, touch,
+        realpath)
     local f
     @test_throws ArgumentError f("adir\0bad")
 end
@@ -993,8 +992,8 @@ rm(subdir)
 rm(subdir2)
 rm(dir)
 
-@test !ispath(file)
-@test !ispath(dir)
+@test filetype(file) == :invalid
+@test filetype(dir) == :invalid
 
 
 

@@ -3,7 +3,7 @@
 module SubModule
 
 buildfile = joinpath(@__DIR__, "..", "deps", "buildartifact")
-if !isfile(buildfile)
+if filetype(buildfile) != :file
     error("Package built incorrectly")
 else
     include(buildfile)
