@@ -1221,16 +1221,4 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
     end
 end
 
-function init(ctx::Context)
-    project_file = ctx.env.project_file
-    isfile(project_file) &&
-        cmderror("Project already initialized at $project_file")
-    if !ctx.preview
-        mkpath(dirname(project_file))
-        touch(project_file)
-    end
-    printpkgstyle(ctx, :Initialized, "project at " * abspath(project_file))
-end
-
 end # module
-
