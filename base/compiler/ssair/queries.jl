@@ -19,13 +19,7 @@ function stmt_effect_free(@nospecialize(stmt), src, spvals::SimpleVector)
         ea = e.args
         if head === :call
             f = argextype(ea[1], src, spvals)
-            if isa(f, Const)
-                f = f.val
-            elseif isType(f)
-                f = f.parameters[1]
-            else
-                return false
-            end
+            f = isa(f, Const) ? f.val : isType(f) ? f.parameters[1] : return false
             f === return_type && return true
             # TODO: This needs significant refinement
             contains_is(_PURE_BUILTINS, f) || return false
