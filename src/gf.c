@@ -1703,13 +1703,13 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
 {
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
     if (jl_is_tuple_type(unw) && jl_tparam0(unw) == jl_bottom_type)
-        return (jl_value_t*)jl_alloc_vec_any(0);
+        return jl_an_empty_vec_any;
     jl_datatype_t *dt = jl_first_argument_datatype(unw);
     if (dt == NULL || !jl_is_datatype(dt))
         return jl_false; // indeterminate - ml_matches can't deal with this case
     jl_methtable_t *mt = dt->name->mt;
     if (mt == NULL)
-        return (jl_value_t*)jl_alloc_vec_any(0);
+        return jl_an_empty_vec_any;
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous, world, min_valid, max_valid);
 }
 
@@ -1959,6 +1959,7 @@ JL_DLLEXPORT jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types, size_t world)
 }
 
 // see if a call to m with computed from `types` is ambiguous
+// XXX: This needs to take a `world` argument
 JL_DLLEXPORT int jl_is_call_ambiguous(jl_value_t *types, jl_method_t *m)
 {
     if (m->ambig == jl_nothing)
@@ -2474,6 +2475,32 @@ static jl_value_t *ml_matches(union jl_typemap_t defs, int offs,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               size_t world, size_t *min_valid, size_t *max_valid)
 {
+    if (jl_is_datatype(type) && ((jl_datatype_t*)type)->isdispatchtuple) {
+        // extra fast path: if we know this might be just a subtyping lookup,
+        // try that first in the latest world, and fall back to a normal lookup only if we
+        // detect that we must look at the full table
+        jl_svec_t *env = jl_emptysvec;
+        jl_svec_t *matc = NULL;
+        JL_GC_PUSH2(&env, &matc);
+        jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(
+                defs, (jl_value_t*)type, /*env*/&env, /*subtype*/1, offs, jl_world_counter, /*max_world_mask*/(~(size_t)0) >> 1);
+        if (!entry) {
+            JL_GC_POP();
+            return jl_an_empty_vec_any; // never was a matching method
+        }
+        jl_method_t *meth = entry->func.method;
+        if (entry->min_world <= world && entry->max_world == ~(size_t)0 &&
+                !jl_is_call_ambiguous((jl_value_t*)type, meth)) { // use the slow path to compute valid ages (if any)
+            if (*min_valid < entry->min_world)
+                *min_valid = entry->min_world;
+            matc = jl_svec(3, type, env, meth);
+            jl_array_t *t = jl_alloc_vec_any(1);
+            jl_array_ptr_set(t, 0, (jl_value_t*)matc);
+            JL_GC_POP();
+            return (jl_value_t*)t;
+        }
+        JL_GC_POP();
+    }
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)type);
     size_t l = jl_svec_len(((jl_datatype_t*)unw)->parameters);
     jl_value_t *va = NULL;
