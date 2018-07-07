@@ -116,7 +116,7 @@ function _reducedim_init(f, op, fv, fop, A, region)
     if T !== Any && applicable(zero, T)
         x = f(zero(T))
         z = op(fv(x), fv(x))
-        Tr = typeof(z) == typeof(x) && !isbitstype(T) ? T : typeof(z)
+        Tr = z isa T ? T : typeof(z)
     else
         z = fv(fop(f, A))
         Tr = typeof(z)
