@@ -647,7 +647,7 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     end
     # This completes the unsorted-row, has-repeats CSR form's construction
 
-    # Sweep through the CSR form, simultaneously (1) caculating the CSC form's column
+    # Sweep through the CSR form, simultaneously (1) calculating the CSC form's column
     # counts and storing them shifted forward by one in csccolptr; (2) detecting repeated
     # entries; and (3) repacking the CSR form with the repeated entries combined.
     #

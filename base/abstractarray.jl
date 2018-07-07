@@ -1008,7 +1008,7 @@ error_if_canonical_setindex(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{In
     error("setindex! not defined for ", typeof(A))
 error_if_canonical_setindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
-## Internal defitions
+## Internal definitions
 _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
     error("setindex! for $(typeof(A)) with types $(typeof(I)) is not supported")
 

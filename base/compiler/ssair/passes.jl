@@ -10,7 +10,7 @@
     struct. Somewhat counterintuitively, we don't actually need to make sure that the
     struct itself is live (or even allocated) at a ccall site. If there are no other places
     where the struct escapes (and thus e.g. where its address is taken), it need not be
-    allocated. We do however, need to make sure to preserve any elments of this struct.
+    allocated. We do however, need to make sure to preserve any elements of this struct.
 """
 struct SSADefUse
     uses::Vector{Int}

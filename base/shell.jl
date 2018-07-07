@@ -60,7 +60,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             append_arg()
             while !isempty(st)
                 # We've made sure above that we don't end in whitespace,
-                # so updateing `i` here is ok
+                # so updating `i` here is ok
                 (i, c) = peek(st)
                 isspace(c) || break
                 popfirst!(st)

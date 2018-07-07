@@ -540,7 +540,7 @@ end
 # issue #14470
 # TODO: More deprecations must be removed in src/cgutils.cpp:emit_array_nd_index()
 # TODO: Re-enable the disabled tests marked PLI
-# On the Julia side, this definition will gracefully supercede the new behavior (already coded)
+# On the Julia side, this definition will gracefully supersede the new behavior (already coded)
 @inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any,Vararg{Any}}, ::Tuple{})
     any(x->unsafe_length(x)==0, IA) && return false
     any(x->unsafe_length(x)!=1, IA) && return _depwarn_for_trailing_indices(IA)
@@ -1739,7 +1739,7 @@ function mapreduce(f, op, v0, itr; dims=nothing)
         depwarn("`mapreduce(f, op, v0, itr)` is deprecated, use `mapreduce(f, op, itr; init=v0)` instead", :mapreduce)
         return mapreduce(f, op, itr; init=v0)
     else # deprecate the old deprecation
-        depwarn("`mapreduce(f, op, v0, itr; dims=dims)` is deprecated, use `mapreduce(f, op, itr; init=v0, dims=dims)` intead", :mapreduce)
+        depwarn("`mapreduce(f, op, v0, itr; dims=dims)` is deprecated, use `mapreduce(f, op, itr; init=v0, dims=dims)` instead", :mapreduce)
         return mapreduce(f, op, itr; init=v0, dims=dims)
     end
 end

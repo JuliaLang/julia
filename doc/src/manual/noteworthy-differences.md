@@ -293,7 +293,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia macros operate on parsed expressions, rather than the text of the program, which allows
     them to perform sophisticated transformations of Julia code. Macro names start with the `@` character,
     and have both a function-like syntax, `@mymacro(arg1, arg2, arg3)`, and a statement-like syntax,
-    `@mymacro arg1 arg2 arg3`. The forms are interchangable; the function-like form is particularly
+    `@mymacro arg1 arg2 arg3`. The forms are interchangeable; the function-like form is particularly
     useful if the macro appears within another expression, and is often clearest. The statement-like
     form is often used to annotate blocks, as in the distributed `for` construct: `@distributed for i in 1:n; #= body =#; end`.
     Where the end of the macro construct may be unclear, use the function-like form.

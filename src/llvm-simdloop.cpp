@@ -216,7 +216,7 @@ bool LowerSIMDLoop::markSIMDLoop(Module &M, Function *marker, bool ivdep)
 
         MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(n));
 
-        // If ivdep is true we assume that there is no memory dependecy between loop iterations
+        // If ivdep is true we assume that there is no memory dependency between loop iterations
         // This is a fairly strong assumption and does often not hold true for generic code.
         if (ivdep) {
             // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.

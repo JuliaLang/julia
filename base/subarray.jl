@@ -37,7 +37,7 @@ check_parent_index_match(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) where {T
 check_parent_index_match(parent, ::NTuple{N, Bool}) where {N} =
     throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
 
-# This computes the linear indexing compatability for a given tuple of indices
+# This computes the linear indexing compatibility for a given tuple of indices
 viewindexing() = IndexLinear()
 # Leading scalar indices simply increase the stride
 viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
@@ -350,7 +350,7 @@ function _indices_sub(S::SubArray, i1::AbstractArray, I...)
     (unsafe_indices(i1)..., _indices_sub(S, I...)...)
 end
 
-## Compatability
+## Compatibility
 # deprecate?
 function parentdims(s::SubArray)
     nd = ndims(s)

@@ -884,7 +884,7 @@ JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc)
 
 STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
 {
-    //if we dont manage this array return
+    //if we don't manage this array return
     if (a->flags.how == 0) return;
 
     int newbytes = (a->maxsize - dec) * a->elsize;
@@ -1049,7 +1049,7 @@ JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
 
     if (sz <= a->maxsize) {
         size_t dec = a->maxsize - sz;
-        //if we dont save at least an eighth of maxsize then its not worth it to shrink
+        //if we don't save at least an eighth of maxsize then its not worth it to shrink
         if (dec < a->maxsize / 8) return;
         jl_array_shrink(a, dec);
     }

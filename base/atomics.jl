@@ -14,7 +14,7 @@ export
     atomic_max!, atomic_min!,
     atomic_fence
 
-# Disable 128-bit types on 32-bit Intel sytems due to LLVM problems;
+# Disable 128-bit types on 32-bit Intel systems due to LLVM problems;
 # see <https://github.com/JuliaLang/julia/issues/14818> (fixed on LLVM 3.9)
 # 128-bit atomics do not exist on AArch32.
 if (Base.libllvm_version < v"3.9-" && ARCH === :i686) ||

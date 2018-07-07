@@ -143,7 +143,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     // Only used for SIGFPE.
     // This doesn't seems to be reliable when the SIGFPE is generated
     // from a divide-by-zero exception, which is now handled by
-    // `catch_exception_raise`. It works fine when a signal is recieved
+    // `catch_exception_raise`. It works fine when a signal is received
     // due to `kill`/`raise` though.
     ucontext64_t *ctx = (ucontext64_t*)_ctx;
     rsp -= sizeof(void*);

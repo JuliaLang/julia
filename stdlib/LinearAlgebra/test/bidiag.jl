@@ -334,7 +334,7 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         # not matching the general behavior of fill!, and so have been deprecated.
         # In a future dev cycle, these fill! methods should probably be reintroduced
         # with behavior matching that of fill! for other structured matrix types.
-        # In the interm, equivalently test fillstored! below
+        # In the interim, equivalently test fillstored! below
         @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
         @test iszero(fillstored!(LowerTriangular(fill(1, 3, 3)), 0))
         @test iszero(fillstored!(UpperTriangular(fill(1, 3, 3)), 0))

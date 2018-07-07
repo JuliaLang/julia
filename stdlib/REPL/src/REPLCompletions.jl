@@ -620,7 +620,7 @@ function completions(string, pos)
     s = string[startpos:pos]
     comp_keywords && append!(suggestions, complete_keyword(s))
     # The case where dot and start pos is equal could look like: "(""*"").d","". or  CompletionFoo.test_y_array[1].y
-    # This case can be handled by finding the begining of the expresion. This is done bellow.
+    # This case can be handled by finding the beginning of the expression. This is done below.
     if dotpos == startpos
         i = prevind(string, startpos)
         while 0 < i

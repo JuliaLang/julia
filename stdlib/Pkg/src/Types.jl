@@ -428,7 +428,7 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                 project_path = pkg.repo.url
                 parse_package!(ctx, pkg, project_path)
             else
-                # We save the repo in case another environement wants to
+                # We save the repo in case another environment wants to
                 # develop from the same repo, this avoids having to reclone it
                 # from scratch.
                 clone_path = joinpath(depots()[1], "clones")

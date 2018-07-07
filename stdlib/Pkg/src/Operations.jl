@@ -631,7 +631,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
         info = Dict{String,Any}("uuid" => string(uuid))
         push!(infos, info)
     end
-    # We do not print out the whole dependency chain for the standard libaries right now
+    # We do not print out the whole dependency chain for the standard libraries right now
     uuid in keys(ctx.stdlibs) && return info
     info["version"] = string(version)
     hash == nothing ? delete!(info, "git-tree-sha1") : (info["git-tree-sha1"] = string(hash))
@@ -958,7 +958,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
     order = dependency_order_uuids(ctx, map(first, builds))
     sort!(builds, by = build -> order[first(build)])
     max_name = isempty(builds) ? 0 : maximum(textwidth.([build[2] for build in builds]))
-    # build each package verions in a child process
+    # build each package versions in a child process
     for (uuid, name, hash_or_path, build_file, version) in builds
         log_file = splitext(build_file)[1] * ".log"
         printpkgstyle(ctx, :Building,

@@ -8,7 +8,7 @@ size(S::LDLt) = size(S.data)
 size(S::LDLt, i::Integer) = size(S.data, i)
 
 LDLt{T,S}(F::LDLt) where {T,S<:AbstractMatrix} = LDLt{T,S}(convert(S, F.data))
-# NOTE: the annotaion <:AbstractMatrix shouldn't be necessary, it is introduced
+# NOTE: the annotation <:AbstractMatrix shouldn't be necessary, it is introduced
 #       to avoid an ambiguity warning (see issue #6383)
 LDLt{T}(F::LDLt{S,U}) where {T,S,U<:AbstractMatrix} = LDLt{T,U}(F)
 

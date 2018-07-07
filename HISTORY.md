@@ -930,7 +930,7 @@ Library improvements
     * Updating only a subset of the packages is now supported,
       e.g. `Pkg.update("Example")` ([#17132]).
 
-  * Miscellanous:
+  * Miscellaneous:
 
     * Prime number related functions have been moved from `Base` to the
       [Primes.jl package](https://github.com/JuliaMath/Primes.jl) ([#16481]).
@@ -1313,7 +1313,7 @@ Compiler/Runtime improvements
 
   * Accessing fields that are always initialized no longer produces undefined checks ([#8827]).
 
-  * New generational garbage collector which greatly reduces GC overhead for many commmon workloads ([#5227]).
+  * New generational garbage collector which greatly reduces GC overhead for many common workloads ([#5227]).
 
 Library improvements
 --------------------
