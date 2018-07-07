@@ -1165,6 +1165,13 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
     return jl_subtype(a, b) && jl_subtype(b, a);
 }
 
+JL_DLLEXPORT int jl_is_not_broken_subtype(jl_value_t *a, jl_value_t *b)
+{
+    // TODO: the final commented out check here isn't correct; it should be closer to the
+    // `issingletype` check used by `isnotbrokensubtype` in `base/compiler/typeutils.jl`
+    return !jl_is_kind(b) || !jl_is_type_type(a); // || jl_is_datatype_singleton((jl_datatype_t*)jl_tparam0(a));
+}
+
 int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt)
 {
     if (jl_is_tuple_type(pdt) && !jl_is_va_tuple(pdt)) {

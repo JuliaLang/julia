@@ -53,12 +53,15 @@ add_tfunc(throw, 1, 1, (@nospecialize(x)) -> Bottom, 0)
 # returns (type, isexact)
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 function instanceof_tfunc(@nospecialize(t))
-    if t === Bottom || t === typeof(Bottom)
-        return Bottom, true
-    elseif isa(t, Const)
+    if isa(t, Const)
         if isa(t.val, Type)
             return t.val, true
         end
+        return Bottom, true
+    end
+    t = widenconst(t)
+    if t === Bottom || t === typeof(Bottom) || typeintersect(t, Type) === Bottom
+        return Bottom, true
     elseif isType(t)
         tp = t.parameters[1]
         return tp, !has_free_typevars(tp)
@@ -385,21 +388,29 @@ add_tfunc(typeassert, 2, 2,
               return typeintersect(v, t)
           end, 4)
 add_tfunc(isa, 2, 2,
-          function (@nospecialize(v), @nospecialize(t))
-              t, isexact = instanceof_tfunc(t)
+          function (@nospecialize(v), @nospecialize(tt))
+              t, isexact = instanceof_tfunc(tt)
+              if t === Bottom
+                  # check if t could be equivalent to typeof(Bottom), since that's valid in `isa`, but the set of `v` is empty
+                  # if `t` cannot have instances, it's also invalid on the RHS of isa
+                  if typeintersect(widenconst(tt), Type) === Union{}
+                      return Union{}
+                  end
+                  return Const(false)
+              end
               if !has_free_typevars(t)
-                  if t === Bottom
-                      return Const(false)
-                  elseif v ⊑ t
-                      if isexact
+                  if v ⊑ t
+                      if isexact && isnotbrokensubtype(v, t)
                           return Const(true)
                       end
                   elseif isa(v, Const) || isa(v, Conditional) || isdispatchelem(v)
                       # this tests for knowledge of a leaftype appearing on the LHS
                       # (ensuring the isa is precise)
                       return Const(false)
-                  elseif isexact && typeintersect(v, t) === Bottom
-                      if !iskindtype(v) #= subtyping currently intentionally answers this query incorrectly for kinds =#
+                  elseif typeintersect(v, t) === Bottom
+                      # similar to `isnotbrokensubtype` check above, `typeintersect(v, t)`
+                      # can't be trusted for kind types so we do an extra check here
+                      if !iskindtype(v)
                           return Const(false)
                       end
                   end
