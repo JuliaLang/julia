@@ -123,7 +123,7 @@ function cache_lookup(code::MethodInstance, argtypes::Vector{Any}, cache::Vector
         if cache_code.linfo === code && length(argtypes) === (length(cache_vargs) + nargs)
             cache_match = true
             for i in 1:length(argtypes)
-                a = argtypes[i]
+                a = maybe_widen_conditional(argtypes[i])
                 ca = i <= nargs ? cache_args[i] : cache_vargs[i - nargs]
                 # verify that all Const argument types match between the call and cache
                 if (isa(a, Const) || isa(ca, Const)) && !(a === ca)

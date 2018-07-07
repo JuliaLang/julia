@@ -126,6 +126,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     length(argtypes) >= nargs || return Any
     haveconst = false
     for a in argtypes
+        a = maybe_widen_conditional(a)
         if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
             # have new information from argtypes that wasn't available from the signature
             haveconst = true
@@ -154,6 +155,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
         if !istopfunction(f, :getproperty) && !istopfunction(f, :setproperty!)
             # in this case, see if all of the arguments are constants
             for a in argtypes
+                a = maybe_widen_conditional(a)
                 if !isa(a, Const) && !isconstType(a)
                     return Any
                 end
@@ -167,7 +169,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
         if method.isva
             vargs = argtypes[(nargs + 1):end]
             for i in 1:length(vargs)
-                a = vargs[i]
+                a = maybe_widen_conditional(vargs[i])
                 if i > length(inf_result.vargs)
                     push!(inf_result.vargs, a)
                 elseif a isa Const
@@ -176,7 +178,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
             end
         end
         for i in 1:nargs
-            a = argtypes[i]
+            a = maybe_widen_conditional(argtypes[i])
             if a isa Const
                 atypes[i] = a # inject Const argtypes into inference
             end
@@ -486,8 +488,8 @@ end
 
 function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
     for i = 2:length(argtypes)
-        a = argtypes[i]
-        if !(isa(a,Const) || isconstType(a))
+        a = maybe_widen_conditional(argtypes[i])
+        if !(isa(a, Const) || isconstType(a))
             return false
         end
     end
@@ -505,7 +507,7 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
         return false
     end
 
-    args = Any[ (a=argtypes[i]; isa(a,Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
+    args = Any[ (a = maybe_widen_conditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
     try
         value = Core._apply_pure(f, args)
         # TODO: add some sort of edge(s)
@@ -947,7 +949,7 @@ end
 # determine whether `ex` abstractly evals to constant `c`
 function abstract_evals_to_constant(@nospecialize(ex), @nospecialize(c), vtypes::VarTable, sv::InferenceState)
     av = abstract_eval(ex, vtypes, sv)
-    return isa(av,Const) && av.val === c
+    return isa(av, Const) && av.val === c
 end
 
 # make as much progress on `frame` as possible (without handling cycles)
@@ -1018,7 +1020,7 @@ function typeinf_local(frame::InferenceState)
                 end
             elseif hd === :return
                 pc´ = n + 1
-                rt = abstract_eval(stmt.args[1], s[pc], frame)
+                rt = maybe_widen_conditional(abstract_eval(stmt.args[1], s[pc], frame))
                 if !isa(rt, Const) && !isa(rt, Type)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
