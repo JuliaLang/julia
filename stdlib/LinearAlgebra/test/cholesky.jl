@@ -271,4 +271,39 @@ end
     @test_throws ArgumentError cholesky!(Hermitian(rand(Float16, 5,5)), Val(true))
 end
 
+@testset "cholesky Diagonal" begin
+    # real
+    d = abs.(randn(3)) .+ 0.1
+    D = Diagonal(d)
+    CD = cholesky(D)
+    @test CD isa Cholesky{Float64}
+    @test CD.U isa UpperTriangular{Float64}
+    @test CD.U == Diagonal(.√d)
+    @test CD.info == 0
+
+    # real, failing
+    @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
+    Dnpd = cholesky(Diagonal([1.0, -2.0]); check = false)
+    @test Dnpd.info == 2
+
+    # complex
+    d = cis.(rand(3) .* 2*π)
+    d .*= abs.(randn(3) .+ 0.1)
+    D = Diagonal(d)
+    CD = cholesky(D)
+    @test CD isa Cholesky{Complex{Float64}}
+    @test CD.U isa UpperTriangular{Complex{Float64}}
+    @test CD.U == Diagonal(.√d)
+    @test CD.info == 0
+
+    # complex, failing
+    D[2, 2] = 0.0 + 0im
+    @test_throws PosDefException cholesky(D)
+    Dnpd = cholesky(D; check = false)
+    @test Dnpd.info == 2
+
+    # InexactError for Int
+    @test_throws InexactError cholesky!(Diagonal([2, 1]))
+end
+
 end # module TestCholesky

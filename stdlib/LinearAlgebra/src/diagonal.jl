@@ -487,3 +487,23 @@ end
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) =
     mapreduce(t -> t[1]*t[2]*t[3], +, zip(x, D.diag, y))
 # TODO: these methods will yield row matrices, rather than adjoint/transpose vectors
+
+function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
+    info = 0
+    diagonal = A.diag
+    for i in axes(diagonal, 1)
+        d = diagonal[i]
+        if !(d == 0 || (isreal(d) && d < 0))
+            diagonal[i] = √d
+        elseif check
+            throw(PosDefException(i))
+        else
+            info = i
+            break
+        end
+    end
+    Cholesky(A, 'U', convert(BlasInt, info))
+end
+
+cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
+    cholesky!(cholcopy(A), Val(false); check = check)
