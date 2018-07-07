@@ -219,7 +219,7 @@ end # let
 mutable struct EnvCache
     # environment info:
     env::Union{Nothing,String}
-    git::Union{Nothing,LibGit2.GitRepo}
+    git::Union{Nothing,String}
 
     # paths for files:
     project_file::String
@@ -256,7 +256,7 @@ mutable struct EnvCache
             (isfile(project_file) || !ispath(project_file) ||
              isdir(project_file) && isempty(readdir(project_file)))
         project_dir = dirname(project_file)
-        git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
+        git = ispath(joinpath(project_dir, ".git")) ? project_dir : nothing
 
         project = read_project(project_file)
         if any(haskey.((project,), ["name", "uuid", "version"]))
