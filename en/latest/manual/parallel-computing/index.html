@@ -198,7 +198,7 @@ julia&gt; data = [i for i in c]
 3-element Array{Int64,1}:
  1
  2
- 3</code></pre><p>Consider a simple example using channels for inter-task communication. We start 4 tasks to process data from a single <code>jobs</code> channel. Jobs, identified by an id (<code>job_id</code>), are written to the channel. Each task in this simulation reads a <code>job_id</code>, waits for a random amout of time and writes back a tuple of <code>job_id</code> and the simulated time to the results channel. Finally all the <code>results</code> are printed out.</p><pre><code class="language-julia-repl">julia&gt; const jobs = Channel{Int}(32);
+ 3</code></pre><p>Consider a simple example using channels for inter-task communication. We start 4 tasks to process data from a single <code>jobs</code> channel. Jobs, identified by an id (<code>job_id</code>), are written to the channel. Each task in this simulation reads a <code>job_id</code>, waits for a random amount of time and writes back a tuple of <code>job_id</code> and the simulated time to the results channel. Finally all the <code>results</code> are printed out.</p><pre><code class="language-julia-repl">julia&gt; const jobs = Channel{Int}(32);
 
 julia&gt; const results = Channel{Tuple}(32);
 
