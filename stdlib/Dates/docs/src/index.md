@@ -427,7 +427,7 @@ julia> collect(dr)
 
 ## Adjuster Functions
 
-As convenient as date-period arithmetics are, often the kinds of calculations needed on dates
+As convenient as date-period arithmetic is, often the kinds of calculations needed on dates
 take on a *calendrical* or *temporal* nature rather than a fixed number of periods. Holidays are
 a perfect example; most follow rules such as "Memorial Day = Last Monday of May", or "Thanksgiving
 = 4th Thursday of November". These kinds of temporal expressions deal with rules relative to the
