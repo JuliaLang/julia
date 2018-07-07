@@ -1468,6 +1468,19 @@ result = f24852_kernel(x, y)
 # TODO: test that `expand_early = true` + inflated `method_for_inference_limit_heuristics`
 # can be used to tighten up some inference result.
 
+f26339(T) = T === Union{} ? 1 : ""
+g26339(T) = T === Int ? 1 : ""
+@test Base.return_types(f26339, (Int,)) == Any[String]
+@test Base.return_types(g26339, (Int,)) == Any[String]
+@test Base.return_types(f26339, (Type{Int},)) == Any[String]
+@test Base.return_types(g26339, (Type{Int},)) == Any[Int]
+@test Base.return_types(f26339, (Type{Union{}},)) == Any[Int]
+@test Base.return_types(g26339, (Type{Union{}},)) == Any[String]
+@test Base.return_types(f26339, (typeof(Union{}),)) == Any[Int]
+@test Base.return_types(g26339, (typeof(Union{}),)) == Any[String]
+@test Base.return_types(f26339, (Type,)) == Any[Union{Int, String}]
+@test Base.return_types(g26339, (Type,)) == Any[Union{Int, String}]
+
 # Test that Conditional doesn't get widened to Bool too quickly
 f25261() = (1, 1)
 f25261(s) = i == 1 ? (1, 2) : nothing

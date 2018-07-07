@@ -745,7 +745,6 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
 
         ft = argextype(arg1, ir, sv.sp)
         has_free_typevars(ft) && continue
-        isa(ft, Conditional) && (ft = Bool)
         f = singleton_type(ft)
         # TODO: llvmcall can contain other calls as arguments, so this code doesn't work on it
         f === Core.Intrinsics.llvmcall && continue
@@ -786,7 +785,6 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             new_atypes = Any[]
             ft = argextype(stmt.args[2], ir, sv.sp)
             has_free_typevars(ft) && continue
-            isa(ft, Conditional) && (ft = Bool)
             f = singleton_type(ft)
             # Push function type
             push!(new_atypes, ft)
