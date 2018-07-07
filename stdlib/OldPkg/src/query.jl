@@ -364,7 +364,7 @@ end
 # Reduce the number of versions by creating equivalence classes, and retaining
 # only the highest version for each equivalence class.
 # Two versions are equivalent if:
-#   1) They appear together as dependecies of another package (i.e. for each
+#   1) They appear together as dependencies of another package (i.e. for each
 #      dependency relation, they are both required or both not required)
 #   2) They have the same dependencies
 # Preliminarily calls filter_versions.
@@ -416,7 +416,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
     # Produce dependency patterns.
     for (p,vss) in alldeps, vs in vss
         # packages with just one version, or dependencies
-        # which do not distiguish between versions, are not
+        # which do not distinguish between versions, are not
         # interesting
         (length(deps[p]) == 1 || vs == VersionSet()) && continue
 
@@ -535,7 +535,7 @@ function subdeps(deps::Dict{String,Dict{VersionNumber,Available}}, pkgs::Set{Str
     return sub_deps
 end
 
-# Build a subgraph incuding only the (direct and indirect) dependencies
+# Build a subgraph including only the (direct and indirect) dependencies
 # of a given package set
 function dependencies_subset(deps::Dict{String,Dict{VersionNumber,Available}}, pkgs::Set{String})
     staged::Set{String} = filter(p->p in keys(deps), pkgs)
@@ -552,7 +552,7 @@ function dependencies_subset(deps::Dict{String,Dict{VersionNumber,Available}}, p
     return subdeps(deps, allpkgs)
 end
 
-# Build a subgraph incuding only the (direct and indirect) dependencies and dependants
+# Build a subgraph including only the (direct and indirect) dependencies and dependants
 # of a given package set
 function undirected_dependencies_subset(deps::Dict{String,Dict{VersionNumber,Available}}, pkgs::Set{String})
     graph = Dict{String, Set{String}}()

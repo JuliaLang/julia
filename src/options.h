@@ -52,7 +52,7 @@
 #ifdef GC_DEBUG_ENV
 #define GC_VERIFY
 #else
-// It is recommanded to use the WITH_GC_VERIFY make option to turn on this
+// It is recommended to use the WITH_GC_VERIFY make option to turn on this
 // option. Keep the document here before a better build system is ready.
 // #define GC_VERIFY
 #endif

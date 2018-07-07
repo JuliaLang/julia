@@ -652,7 +652,7 @@ Library improvements
     Therefore custom string types may want to define direct `ncodeunits` methods.
 
   * `reverseind(s::AbstractString, i::Integer)` now has an efficient generic fallback, so
-    custom string types do not need to provide their own efficient defintions. The generic
+    custom string types do not need to provide their own efficient definitions. The generic
     definition relies on `ncodeunits` however, so for optimal performance you may need to
     define a custom method for that function.
 
@@ -693,7 +693,7 @@ Library improvements
       Use `unique` to get the old behavior.
 
   * The `linearindices` function has been deprecated in favor of the new
-    `LinearIndices` type, which additionnally provides conversion from
+    `LinearIndices` type, which additionally provides conversion from
     cartesian indices to linear indices using the normal indexing operation.
     ([#24715], [#26775]).
 
@@ -733,7 +733,7 @@ Compiler/Runtime improvements
     call. ([#22210], [#22732])
 
   * Inference recursion-detection heuristics are now more precise,
-    allowing them to be triggered less often, but being more agressive when they
+    allowing them to be triggered less often, but being more aggressive when they
     are triggered to drive the inference computation to a solution ([#23912]).
 
   * Inference now propagates constants inter-procedurally, and can compute

@@ -208,7 +208,7 @@ temp_pkg_dir() do project_path; cd(project_path) do
                 cp("HelloWorld", joinpath(other_dir, "HelloWorld"))
                 cd(joinpath(other_dir, "HelloWorld"))
                 with_current_env() do
-                    # Check that these didnt generate absolute paths in the Manifest by copying
+                    # Check that these didn't generate absolute paths in the Manifest by copying
                     # to another directory
                     @test Base.find_package("SubModule1") == joinpath(pwd(), "SubModule1", "src", "SubModule1.jl")
                     @test Base.find_package("SubModule2") == joinpath(pwd(), "SubModule2", "src", "SubModule2.jl")

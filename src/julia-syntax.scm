@@ -1418,7 +1418,7 @@
 
 ;; make an expression safe for multiple evaluation
 ;; for example a[f(x)] => (temp=f(x); a[temp])
-;; retuns a pair (expr . assignments)
+;; returns a pair (expr . assignments)
 ;; where 'assignments' is a list of needed assignment statements
 (define (remove-argument-side-effects e)
   (if

@@ -297,7 +297,7 @@ static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f)
     if (__unlikely(oldlen + 2 > a->max)) {
         JL_LOCK_NOGC(&finalizers_lock);
         // `a->len` might have been modified.
-        // Another possiblility is to always grow the array to `oldlen + 2` but
+        // Another possibility is to always grow the array to `oldlen + 2` but
         // it's simpler this way and uses slightly less memory =)
         oldlen = a->len;
         arraylist_grow(a, 2);
@@ -1522,7 +1522,7 @@ STATIC_INLINE int gc_mark_scan_objarray(jl_ptls_t ptls, gc_mark_sp_t *sp,
             gc_repush_markdata(sp, gc_mark_objarray_t);
         }
         else {
-            // Finished scaning this one, finish up by checking the GC invariance
+            // Finished scanning this one, finish up by checking the GC invariance
             // and let the next item replacing the current one directly.
             gc_mark_push_remset(ptls, objary->parent, objary->nptr);
         }
@@ -1557,7 +1557,7 @@ STATIC_INLINE int gc_mark_scan_obj8(jl_ptls_t ptls, gc_mark_sp_t *sp, gc_mark_ob
             gc_repush_markdata(sp, gc_mark_obj8_t);
         }
         else {
-            // Finished scaning this one, finish up by checking the GC invariance
+            // Finished scanning this one, finish up by checking the GC invariance
             // and let the next item replacing the current one directly.
             gc_mark_push_remset(ptls, obj8->parent, obj8->nptr);
         }
@@ -1592,7 +1592,7 @@ STATIC_INLINE int gc_mark_scan_obj16(jl_ptls_t ptls, gc_mark_sp_t *sp, gc_mark_o
             gc_repush_markdata(sp, gc_mark_obj16_t);
         }
         else {
-            // Finished scaning this one, finish up by checking the GC invariance
+            // Finished scanning this one, finish up by checking the GC invariance
             // and let the next item replacing the current one directly.
             gc_mark_push_remset(ptls, obj16->parent, obj16->nptr);
         }
@@ -1627,7 +1627,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, gc_mark_sp_t *sp, gc_mark_o
             gc_repush_markdata(sp, gc_mark_obj32_t);
         }
         else {
-            // Finished scaning this one, finish up by checking the GC invariance
+            // Finished scanning this one, finish up by checking the GC invariance
             // and let the next item replacing the current one directly.
             gc_mark_push_remset(ptls, obj32->parent, obj32->nptr);
         }
@@ -1699,7 +1699,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, gc_mark_sp_t *sp, gc_mark_o
 // Using two stacks also double the number of operations on the stack pointer
 // though we still only need to use one of them (the pc stack pointer) for bounds check.
 // In general, it seems that the reduction of stack memory ops and instructions count
-// have a larger possitive effect on the performance. =)
+// have a larger positive effect on the performance. =)
 
 // As a general guide we do not want to make non-inlined function calls in this function
 // if possible since a large number of registers has to be spilled when that happens.
@@ -1715,9 +1715,9 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, gc_mark_sp_t *sp, gc_mark_o
 // the object whose information is stored in `new_obj`, `tag` and `bits`.
 // The branches in `mark` will dispatch the object to one of the scan "loop"s to be scanned
 // as either a normal julia object or one of the special objects with specific storage format.
-// Each of the scan "loop" will preform a DFS of the object in the following way
+// Each of the scan "loop" will perform a DFS of the object in the following way
 //
-// 1. When encountering an pointer (julia object reference) slots, load, preform NULL check
+// 1. When encountering an pointer (julia object reference) slots, load, perform NULL check
 //    and atomically set the mark bits to determine if the object needs to be scanned.
 // 2. If yes, it'll push itself back onto the mark stack (after updating fields that are changed)
 //    using `gc_repush_markdata` to increment the stack pointers.
@@ -2492,7 +2492,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     }
     gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, orig_marked_len);
     // "Flush" the mark stack before flipping the reset_age bit
-    // so that the objects are not incorrectly resetted.
+    // so that the objects are not incorrectly reset.
     gc_mark_loop(ptls, sp);
     gc_mark_sp_init(gc_cache, &sp);
     mark_reset_age = 1;

@@ -748,7 +748,7 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                     id = slot_id(stmt.args[1])
                     val = stmt.args[2]
                     typ = typ_for_val(val, ci, spvals, idx, slottypes)
-                    # Having undef_token appear on the RHS is possible if we're on a dead brach.
+                    # Having undef_token appear on the RHS is possible if we're on a dead branch.
                     # Do something reasonable here, by marking the LHS as undef as well.
                     if val !== undef_token
                         incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ))

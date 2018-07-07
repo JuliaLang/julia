@@ -297,7 +297,7 @@ function deserialize(s::ClusterSerializer, t::Type{<:Future})
 
     # 1) send_add_client() is not executed when the ref is being serialized
     #    to where it exists, hence do it here.
-    # 2) If we have recieved a 'fetch'ed Future or if the Future ctor found an
+    # 2) If we have received a 'fetch'ed Future or if the Future ctor found an
     #    already 'fetch'ed instance in client_refs (Issue #25847), we should not
     #    track it in the backing RemoteValue store.
     if f2.where == myid() && f2.v === nothing

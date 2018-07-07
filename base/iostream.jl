@@ -254,7 +254,7 @@ end
 
 Open a file in a mode specified by five boolean keyword arguments:
 
-| Keyword    | Desciption             | Default                                 |
+| Keyword    | Description             | Default                                 |
 |:-----------|:-----------------------|:----------------------------------------|
 | `read`     | open for reading       | `!write`                                |
 | `write`    | open for writing       | `truncate \\| append`                   |

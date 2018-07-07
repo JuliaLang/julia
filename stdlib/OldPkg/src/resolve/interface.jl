@@ -23,7 +23,7 @@ mutable struct Interface
     # states per package: one per version + uninstalled
     spp::Vector{Int}
 
-    # pakage dict: associates an index to each package name
+    # package dict: associates an index to each package name
     pdict::Dict{String,Int}
 
     # package versions: for each package, keep the list of the

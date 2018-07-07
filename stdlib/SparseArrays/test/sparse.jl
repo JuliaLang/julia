@@ -1098,7 +1098,7 @@ end
     @test iA === iS === nothing
 end
 
-@testset "findmin/findmax/minumum/maximum" begin
+@testset "findmin/findmax/minimum/maximum" begin
     A = sparse([1.0 5.0 6.0;
                 5.0 2.0 4.0])
     for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),

@@ -449,7 +449,7 @@ Many BLAS functions accept arguments that determine whether to transpose an argu
 which triangle of a matrix to reference (`uplo` or `ul`),
 whether the diagonal of a triangular matrix can be assumed to
 be all ones (`dA`) or which side of a matrix multiplication
-the input argument belongs on (`side`). The possiblities are:
+the input argument belongs on (`side`). The possibilities are:
 
 #### [Multplication Order](@id stdlib-blas-side)
 | `side` | Meaning                                                             |

@@ -11,7 +11,7 @@ streams of random numbers. Besides `MersenneTwister`, Julia also provides the `R
 type, which is a wrapper over the OS provided entropy.
 
 Most functions related to random generation accept an optional `AbstractRNG` as the first argument,
-`rng` , which defaults to the global one if not provided. Morever, some of them accept optionally
+`rng` , which defaults to the global one if not provided. Moreover, some of them accept optionally
 dimension specifications `dims...` (which can be given as a tuple) to generate arrays of random
 values.
 

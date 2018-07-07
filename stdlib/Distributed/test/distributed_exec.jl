@@ -1411,7 +1411,7 @@ let
         #rm(tmp_dir, force=true)
     end
 end
-# cookie and comand line option `--worker` tests. remove workers, set cookie and test
+# cookie and command line option `--worker` tests. remove workers, set cookie and test
 struct WorkerArgTester <: ClusterManager
     worker_opt
     write_cookie

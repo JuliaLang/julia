@@ -1585,7 +1585,7 @@ rdiv!(A::LowerTriangular, transB::Transpose{<:Any,<:Union{UpperTriangular,UnitUp
 ## the element type doesn't have to be stable under division whereas that is
 ## necessary in the general triangular solve problem.
 
-## Some Triangular-Triangular cases. We might want to write taylored methods
+## Some Triangular-Triangular cases. We might want to write tailored methods
 ## for these cases, but I'm not sure it is worth it.
 (*)(A::Union{Tridiagonal,SymTridiagonal}, B::AbstractTriangular) = rmul!(Matrix(A), B)
 

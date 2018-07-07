@@ -45,7 +45,7 @@ a file called `Make.user` in the top-level directory and adding a line to it suc
 LLVM_VER = 3.5.0
 ```
 
-Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to bulid against the latest
+Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to build against the latest
 development version of LLVM.
 
 You can also specify to build a debug version of LLVM, by setting either `LLVM_DEBUG = 1` or

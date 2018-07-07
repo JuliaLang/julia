@@ -83,7 +83,7 @@ std::string jl_get_cpu_features_llvm(void)
         }
     }
     // Explicitly disabled features need to be added at the end so that
-    // they are not reenabled by other features that implies them by default.
+    // they are not re-enabled by other features that implies them by default.
     for (auto &ele: HostFeatures) {
         if (!ele.getValue()) {
             if (!attr.empty()) {

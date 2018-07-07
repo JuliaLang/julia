@@ -32,7 +32,7 @@ using namespace llvm;
         in an untracked address space
       - Commuting GEPs and addrspace casts
 
-    This is most useful for removing superflous casts that can inhibit LLVM
+    This is most useful for removing superfluous casts that can inhibit LLVM
     optimizations.
 */
 

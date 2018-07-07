@@ -942,7 +942,7 @@ julia> LibGit2.split_cfg_entry(entry)
 ("credential", "https://example.com", "username", "me")
 ```
 
-Refer to the [git config syntax documenation](https://git-scm.com/docs/git-config#_syntax)
+Refer to the [git config syntax documentation](https://git-scm.com/docs/git-config#_syntax)
 for more details.
 """
 function split_cfg_entry(ce::ConfigEntry)

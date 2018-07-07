@@ -471,7 +471,7 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
 end
 
 # @doc isn't available when running in Core at this point.
-# Tuple syntax for documention two function signatures at the same time
+# Tuple syntax for documentation two function signatures at the same time
 # doesn't work either at this point.
 if nameof(@__MODULE__) === :Base
     for fname in (:mod, :rem)

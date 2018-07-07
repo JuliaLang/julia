@@ -647,7 +647,7 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
 end
 
 ##### findmin & findmax #####
-# The initial values of Rval are not used if the correponding indices in Rind are 0.
+# The initial values of Rval are not used if the corresponding indices in Rind are 0.
 #
 function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind

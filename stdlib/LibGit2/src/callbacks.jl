@@ -65,7 +65,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     cred = p.credential::SSHCredential
     revised = false
 
-    # Use a filled credential as-is on the first pass. Reset password on sucessive calls.
+    # Use a filled credential as-is on the first pass. Reset password on successive calls.
     if p.first_pass && isfilled(cred)
         revised = true
     elseif !p.first_pass
@@ -176,7 +176,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     cred = p.credential::UserPasswordCredential
     revised = false
 
-    # Use a filled credential as-is on the first pass. Reset password on sucessive calls.
+    # Use a filled credential as-is on the first pass. Reset password on successive calls.
     if p.first_pass && isfilled(cred)
         revised = true
     elseif !p.first_pass

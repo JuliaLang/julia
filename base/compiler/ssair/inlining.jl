@@ -55,7 +55,7 @@ struct UnionSplit
 end
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
-    # Go through the function, perfoming simple ininlingin (e.g. replacing call by constants
+    # Go through the function, performing simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
     @timeit "analysis" todo = assemble_inline_todo!(ir, linetable, sv)
     isempty(todo) && return ir
@@ -290,7 +290,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         end
     end
     # If the iterator already moved on to the next basic block,
-    # temorarily re-open in again.
+    # temporarily re-open in again.
     local return_value
     # Special case inlining that maintains the current basic block if there's only one BB in the target
     if item.linear_inline_eligible

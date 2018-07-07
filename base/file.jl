@@ -273,7 +273,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
 end
 
 
-# The following use Unix command line facilites
+# The following use Unix command line facilities
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
                                                           force::Bool=false)
     if ispath(dst)
