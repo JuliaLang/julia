@@ -146,7 +146,7 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
         if i == length(msglines) && !isempty(suffix)
             npad = max(0, justify_width - nonpadwidth) + minsuffixpad
             print(iob, " "^npad)
-            printstyled(iob, suffix, color=:light_black)
+            printstyled(iob, suffix, color=Base.stackframe_lineinfo_color())
         end
         println(iob)
     end
