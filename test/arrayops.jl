@@ -2283,6 +2283,9 @@ end
     @test accumulate(min, [1 0; 0 1], dims=1) == [1 0; 0 0]
     @test accumulate(min, [1 0; 0 1], dims=2) == [1 0; 0 0]
 
+    @test accumulate(min, [3 2 1; 3 2 1], dims=2) == [3 2 1; 3 2 1]
+    @test accumulate(min, [3 2 1; 3 2 1], dims=2, init=2) == [2 2 1; 2 2 1]
+
     @test isa(accumulate(+, Int[]), Vector{Int})
     @test isa(accumulate(+, Int[]; init=1.), Vector{Float64})
     @test accumulate(+, [1,2]; init=1) == [2, 4]
@@ -2311,6 +2314,7 @@ end
     arr = randn(4)
     oarr = OffsetArray(arr, (-3,))
     @test accumulate(+, oarr).parent == accumulate(+, arr)
+    @test accumulate(+, oarr, init = 10).parent == accumulate(+, arr; init = 10)
 
     @inferred accumulate(+, randn(3))
     @inferred accumulate(+, randn(3); init=1)

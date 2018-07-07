@@ -518,7 +518,7 @@ end
     # test PRNG jump
 
     function randjumpvec(m, steps, len) # old version of randjump
-        mts = accumulate(Future.randjump, m, fill(steps, len-1))
+        mts = accumulate(Future.randjump, fill(steps, len-1); init=m)
         pushfirst!(mts, m)
         mts
     end

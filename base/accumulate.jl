@@ -268,7 +268,9 @@ julia> x = [1, 0, 2, 0, 3];
 
 julia> y = [0, 0, 0, 0, 0];
 
-julia> accumulate!(+, y,julia> , Somey
+julia> accumulate!(+, y, x);
+
+julia> y
 5-element Array{Int64,1}:
  1
  1
@@ -283,8 +285,8 @@ julia> B = [0 0; 0 0];
 julia> accumulate!(-, B, A, dims=1);
 
 julia> B
-2×2 Array{Int64,Union{2}:
-  1, Some}   2
+2×2 Array{Int64,2}:
+  1,  2
  -2  -2
 
 julia> accumulate!(-, B, A, dims=2);
@@ -383,12 +385,15 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     inds = LinearIndices(A)
     inds == LinearIndices(B) || throw(DimensionMismatch("LinearIndices of A and B don't match"))
     dim > 1 && return copyto!(B, A)
-    i1 = inds[1]
+    (i1, state) = iterate(inds) # We checked earlier that A isn't empty
     cur_val = v1
     B[i1] = cur_val
-    @inbounds for i in inds[2:end]
+    next = iterate(inds, state)
+    @inbounds while next !== nothing
+        (i, state) = next
         cur_val = op(cur_val, A[i])
         B[i] = cur_val
+        next = iterate(inds, state)
     end
     return B
 end
