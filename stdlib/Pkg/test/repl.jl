@@ -54,6 +54,24 @@ temp_pkg_dir() do project_path
         LibGit2.with(LibGit2.GitRepo(devdir)) do repo
             @test LibGit2.branch(repo) == "DO_NOT_REMOVE"
         end
+
+        withenv("USER" => "Test User") do
+            pkg"generate Foo"
+        end
+        pkg"dev Foo"
+        mv(joinpath("Foo", "src", "Foo.jl"), joinpath("Foo", "src", "Foo2.jl"))
+        @test_throws CommandError pkg"dev Foo"
+        mv(joinpath("Foo", "src", "Foo2.jl"), joinpath("Foo", "src", "Foo.jl"))
+        write(joinpath("Foo", "Project.toml"), """
+            name = "Foo"
+        """
+        )
+        @test_throws CommandError pkg"dev Foo"
+        write(joinpath("Foo", "Project.toml"), """
+            uuid = "b7b78b08-812d-11e8-33cd-11188e330cbe"
+        """
+        )
+        @test_throws CommandError pkg"dev Foo"
     end
 end
 
