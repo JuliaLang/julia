@@ -85,9 +85,6 @@ const IR_FLAG_INBOUNDS = 0x01
 # known affect-free calls (also effect-free)
 const _PURE_BUILTINS = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 
-# known effect-free calls (might not be affect-free)
-const _PURE_BUILTINS_VOLATILE = Any[getfield, arrayref, isdefined, Core.sizeof]
-
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 #########
@@ -256,17 +253,6 @@ function is_pure_intrinsic_optim(f::IntrinsicFunction)
              f === Intrinsics.cglobal)  # cglobal throws an error for symbol-not-found
 end
 
-function is_pure_builtin(@nospecialize(f))
-    if isa(f, IntrinsicFunction)
-        return is_pure_intrinsic_optim(f)
-    elseif isa(f, Builtin)
-        return (contains_is(_PURE_BUILTINS, f) ||
-                contains_is(_PURE_BUILTINS_VOLATILE, f))
-    else
-        return f === return_type
-    end
-end
-
 ## Computing the cost of a function body
 
 # saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
@@ -382,14 +368,6 @@ function is_known_call(e::Expr, @nospecialize(func), src, spvals::SimpleVector, 
     end
     f = argextype(e.args[1], src, spvals, slottypes)
     return isa(f, Const) && f.val === func
-end
-
-function is_known_call_p(e::Expr, @nospecialize(pred), src, spvals::SimpleVector, slottypes::Vector{Any})
-    if e.head !== :call
-        return false
-    end
-    f = argextype(e.args[1], src, spvals, slottypes)
-    return (isa(f, Const) && pred(f.val)) || (isType(f) && pred(f.parameters[1]))
 end
 
 function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int}, preprocess::Bool = true)

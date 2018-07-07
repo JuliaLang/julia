@@ -840,9 +840,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
     elseif isa(e, Slot)
         return vtypes[slot_id(e)].typ
-    elseif isa(e, Symbol)
-        return abstract_eval_global(sv.mod, e)
-    elseif isa(e,GlobalRef)
+    elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name)
     end
 
