@@ -3,13 +3,24 @@
 ####################
 # LU Factorization #
 ####################
-struct LU{T,S<:AbstractMatrix} <: Factorization{T}
+struct LU{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     ipiv::Vector{BlasInt}
     info::BlasInt
-    LU{T,S}(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T,S} = new(factors, ipiv, info)
+
+    function LU{T,S}(factors, ipiv, info) where {T,S<:AbstractMatrix{T}}
+        @assert !has_offset_axes(factors)
+        new{T,S}(factors, ipiv, info)
+    end
 end
-LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T} = LU{T,typeof(factors)}(factors, ipiv, info)
+function LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T}
+    LU{T,typeof(factors)}(factors, ipiv, info)
+end
+function LU{T}(factors::AbstractMatrix, ipiv::AbstractVector{<:Integer}, info::Integer) where {T}
+    LU(convert(AbstractMatrix{T}, factors),
+       convert(Vector{BlasInt}, ipiv),
+       BlasInt(info))
+end
 
 # iteration for destructuring into components
 Base.iterate(S::LU) = (S.L, Val(:U))

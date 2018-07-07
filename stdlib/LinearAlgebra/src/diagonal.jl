@@ -4,7 +4,15 @@
 
 struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     diag::V
+
+    function Diagonal{T,V}(diag) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(diag)
+        new{T,V}(diag)
+    end
 end
+Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
+Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
+
 """
     Diagonal(A::AbstractMatrix)
 
@@ -47,11 +55,10 @@ julia> Diagonal(V)
 """
 Diagonal(V::AbstractVector)
 
-Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
-Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
-
+Diagonal(D::Diagonal) = D
 Diagonal{T}(D::Diagonal{T}) where {T} = D
-Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
+Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
+
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal) = diagm(0 => D.diag)
 Array(D::Diagonal) = Matrix(D)

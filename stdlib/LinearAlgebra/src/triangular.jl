@@ -9,14 +9,22 @@ abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
 for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
           :UnitUpperTriangular)
     @eval begin
-        struct $t{T,S<:AbstractMatrix} <: AbstractTriangular{T,S}
+        struct $t{T,S<:AbstractMatrix{T}} <: AbstractTriangular{T,S}
             data::S
+
+            function $t{T,S}(data) where {T,S<:AbstractMatrix{T}}
+                @assert !has_offset_axes(data)
+                checksquare(data)
+                new{T,S}(data)
+            end
         end
         $t(A::$t) = A
         $t{T}(A::$t{T}) where {T} = A
         function $t(A::AbstractMatrix)
-            checksquare(A)
             return $t{eltype(A), typeof(A)}(A)
+        end
+        function $t{T}(A::AbstractMatrix) where T
+            $t(convert(AbstractMatrix{T}, A))
         end
 
         function $t{T}(A::$t) where T
