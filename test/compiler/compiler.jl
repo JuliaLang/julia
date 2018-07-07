@@ -1147,6 +1147,7 @@ test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
 test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
+test_const_return(()->fieldtype(Dict{Int64,Nothing}, :age), Tuple{}, UInt)
 @eval test_const_return(()->Core.sizeof($(Array{Int,0}(undef))), Tuple{}, sizeof(Int))
 @eval test_const_return(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2))), Tuple{}, 4 * 2 * 2)
 

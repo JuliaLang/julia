@@ -82,8 +82,15 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 const IR_FLAG_INBOUNDS = 0x01
 
-# known affect-free calls (also effect-free)
-const _PURE_BUILTINS = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
+# known to be always effect-free (in particular nothrow)
+const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
+
+# known to be effect-free if the are nothrow
+const _PURE_OR_ERROR_BUILTINS = [
+    fieldtype, apply_type, isa, UnionAll,
+    getfield, arrayref, isdefined, Core.sizeof,
+    Core.kwfunc
+]
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -166,7 +173,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             proven_pure = true
             for i in 1:length(ir.stmts)
                 stmt = ir.stmts[i]
-                if stmt_affects_purity(stmt) && !stmt_effect_free(stmt, ir, ir.spvals)
+                if stmt_affects_purity(stmt) && !stmt_effect_free(stmt, ir.types[i], ir, ir.spvals)
                     proven_pure = false
                     break
                 end
