@@ -687,8 +687,8 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
     u = unwrap_unionall(s)
 
     if isa(u, Union)
-        return tmerge(rewrap(fieldtype_tfunc(u.a, name), s),
-                      rewrap(fieldtype_tfunc(u.b, name), s))
+        return tmerge(rewrap(fieldtype_tfunc(Type{u.a}, name), s),
+                      rewrap(fieldtype_tfunc(Type{u.b}, name), s))
     end
 
     if !isa(u, DataType) || u.abstract
