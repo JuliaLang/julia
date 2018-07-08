@@ -2589,7 +2589,7 @@
                                (error (string "variable \"" v "\" declared both local and global"))))
                          glob)
                (let ((argnames (if lam (lam:vars lam) '())))
-                 (if (pair? argnames)
+                 (if (and (pair? argnames) (eq? e (lam:body lam)))
                      (for-each (lambda (v)
                                  (if (memq v argnames)
                                      (error (string "local variable name \"" v "\" conflicts with an argument"))))
