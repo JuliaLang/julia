@@ -232,7 +232,7 @@ julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 `strings` can be any iterable over elements `x` which are convertible to strings
 via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 """
-function join(io::IO, strings, delim="", last=delim)
+function join(io::IO, strings, delim, last)
     first = true
     local prev
     for str in strings
@@ -248,7 +248,7 @@ function join(io::IO, strings, delim="", last=delim)
     end
     nothing
 end
-function join(io::IO, strings, delim)
+function join(io::IO, strings, delim="")
     # Specialization of the above code when delim==last,
     # which lets us emit (compile) less code
     first = true
