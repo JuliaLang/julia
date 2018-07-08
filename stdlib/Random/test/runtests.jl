@@ -686,3 +686,18 @@ end
     @test Random.gentype(Random.UInt52(UInt128)) == UInt128
     @test Random.gentype(Random.UInt104()) == UInt128
 end
+
+@testset "Check that trand() yields an independent stream of values among threads" begin
+	n = Threads.nthreads()
+	if n > 1
+		a = zeros(n)
+		Threads.@threads for i in 1:n
+			a[i] = trand()
+		end
+		for i in 1:(n-1)
+			@test all(x -> (a[i] != x) , a[(i+1):end])
+		end
+	else
+		@test 1 === 1
+	end
+end
