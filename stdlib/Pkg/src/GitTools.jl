@@ -7,7 +7,7 @@ import LibGit2
 using Printf
 
 Base.@kwdef mutable struct MiniProgressBar
-    max::Float64 = 1
+    max::Float64 = 1.0
     header::String = ""
     color::Symbol = :white
     width::Int = 40
