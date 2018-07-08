@@ -434,37 +434,45 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                 clone_path = joinpath(depots()[1], "clones")
                 mkpath(clone_path)
                 repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
-                repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-                    r = GitTools.clone(pkg.repo.url, repo_path)
-                    GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                    r, true
+                repo = nothing
+                try
+                    repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+                        r = GitTools.clone(pkg.repo.url, repo_path)
+                        GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                        r, true
+                    end
+                    if !just_cloned
+                        GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                    end
+                finally
+                    repo isa LibGit2.GitRepo && LibGit2.close(repo)
                 end
-                if !just_cloned
-                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                end
-                close(repo)
 
                 # Copy the repo to a temporary place and check out the rev
                 project_path = mktempdir()
                 cp(repo_path, project_path; force=true)
-                repo = LibGit2.GitRepo(project_path)
-                rev = pkg.repo.rev
-                if isempty(rev)
-                    if LibGit2.isattached(repo)
-                        rev = LibGit2.branch(repo)
-                    else
-                        rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                LibGit2.with(LibGit2.GitRepo(project_path)) do repo
+                    rev = pkg.repo.rev
+                    if isempty(rev)
+                        if LibGit2.isattached(repo)
+                            rev = LibGit2.branch(repo)
+                        else
+                            rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                        end
+                    end
+                    gitobject, isbranch = get_object_branch(repo, rev)
+                    try
+                        LibGit2.transact(repo) do r
+                            if isbranch
+                                LibGit2.branch!(r, rev, track=LibGit2.Consts.REMOTE_ORIGIN)
+                            else
+                                LibGit2.checkout!(r, string(LibGit2.GitHash(gitobject)))
+                            end
+                        end
+                    finally
+                        close(gitobject)
                     end
                 end
-                gitobject, isbranch = get_object_branch(repo, rev)
-                LibGit2.transact(repo) do r
-                    if isbranch
-                        LibGit2.branch!(r, rev, track=LibGit2.Consts.REMOTE_ORIGIN)
-                    else
-                        LibGit2.checkout!(r, string(LibGit2.GitHash(gitobject)))
-                    end
-                end
-                close(repo); close(gitobject)
 
                 parse_package!(ctx, pkg, project_path)
                 dev_pkg_path = joinpath(Pkg.devdir(), pkg.name)
@@ -498,60 +506,73 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             clones_dir = joinpath(depots()[1], "clones")
             mkpath(clones_dir)
             repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
-            repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-                r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
-                GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                r, true
-            end
-            info = manifest_info(env, pkg.uuid)
-            pinned = (info != nothing && get(info, "pinned", false))
-            if upgrade_or_add && !pinned && !just_cloned
-                rev = pkg.repo.rev
-                GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
-            end
-            if upgrade_or_add && !pinned
-                rev = pkg.repo.rev
-            else
-                # Not upgrading so the rev should be the current git-tree-sha
-                rev = info["git-tree-sha1"]
-                pkg.version = VersionNumber(info["version"])
-            end
-
-            # see if we can get rev as a branch
-            if isempty(rev)
-                if LibGit2.isattached(repo)
-                    rev = LibGit2.branch(repo)
-                else
-                    rev = string(LibGit2.GitHash(LibGit2.head(repo)))
-                end
-            end
-            gitobject, isbranch = get_object_branch(repo, rev)
-            # If the user gave a shortened commit SHA, might as well update it to the full one
-            pkg.repo.rev = isbranch ? rev : string(LibGit2.GitHash(gitobject))
-            git_tree = LibGit2.peel(LibGit2.GitTree, gitobject)
-            @assert git_tree isa LibGit2.GitTree
-            pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
-            version_path = nothing
+            repo = nothing
+            do_nothing_more = false
+            project_path = nothing
             folder_already_downloaded = false
-            if has_uuid(pkg) && has_name(pkg)
-                version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
-                isdir(version_path) && (folder_already_downloaded = true)
-                info = manifest_info(env, pkg.uuid)
-                if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
-                    # Same tree sha and this version already downloaded, nothing left to do
-                    pkg.version = VersionNumber(info["version"])
-                    continue
+            try
+                repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+                    r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
+                    GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                    r, true
                 end
+                info = manifest_info(env, pkg.uuid)
+                pinned = (info != nothing && get(info, "pinned", false))
+                if upgrade_or_add && !pinned && !just_cloned
+                    rev = pkg.repo.rev
+                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                end
+                if upgrade_or_add && !pinned
+                    rev = pkg.repo.rev
+                else
+                    # Not upgrading so the rev should be the current git-tree-sha
+                    rev = info["git-tree-sha1"]
+                    pkg.version = VersionNumber(info["version"])
+                end
+
+                # see if we can get rev as a branch
+                if isempty(rev)
+                    if LibGit2.isattached(repo)
+                        rev = LibGit2.branch(repo)
+                    else
+                        rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                    end
+                end
+                gitobject, isbranch = get_object_branch(repo, rev)
+                # If the user gave a shortened commit SHA, might as well update it to the full one
+                try
+                    pkg.repo.rev = isbranch ? rev : string(LibGit2.GitHash(gitobject))
+                    LibGit2.with(LibGit2.peel(LibGit2.GitTree, gitobject)) do git_tree
+                        @assert git_tree isa LibGit2.GitTree
+                        pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
+                            version_path = nothing
+                            folder_alreay_downloaded = false
+                        if has_uuid(pkg) && has_name(pkg)
+                            version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
+                            isdir(version_path) && (folder_already_downloaded = true)
+                            info = manifest_info(env, pkg.uuid)
+                            if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
+                                # Same tree sha and this version already downloaded, nothing left to do
+                                pkg.version = VersionNumber(info["version"])
+                                do_nothing_more = true
+                            end
+                        end
+                        if folder_already_downloaded
+                            project_path = version_path
+                        else
+                            project_path = mktempdir()
+                            opts = LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE,
+                                target_directory=Base.unsafe_convert(Cstring, project_path))
+                            LibGit2.checkout_tree(repo, git_tree, options=opts)
+                        end
+                    end
+                finally
+                    close(gitobject)
+                end
+            finally
+                repo isa LibGit2.GitRepo && close(repo)
             end
-            if folder_already_downloaded
-                project_path = version_path
-            else
-                project_path = mktempdir()
-                opts = LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE,
-                    target_directory=Base.unsafe_convert(Cstring, project_path))
-                LibGit2.checkout_tree(repo, git_tree, options=opts)
-            end
-            close(repo); close(git_tree); close(gitobject)
+            do_nothing_more && continue
             parse_package!(ctx, pkg, project_path)
             if !folder_already_downloaded
                 version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
@@ -787,8 +808,8 @@ function registries(; clone_default=true)::Vector{String}
                 printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
                 for (reg, url) in DEFAULT_REGISTRIES
                     path = joinpath(user_regs, reg)
-                    repo = GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)
-                    close(repo)
+                    LibGit2.with(GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)) do repo
+                    end
                 end
             end
         end
