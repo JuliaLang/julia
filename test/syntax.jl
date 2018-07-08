@@ -1414,6 +1414,30 @@ end
 # issue #15229
 @test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
     Expr(:error, "local variable name \"x\" conflicts with an argument")
+@test Meta.lower(@__MODULE__, :(function f(x); begin; local x; 0; end; end)) ==
+    Expr(:error, "local variable name \"x\" conflicts with an argument")
+
+# issue #27964
+a27964(x) = Any[x for x in []]
+@test a27964(0) == Any[]
+function b27964(x)
+    local y
+    let
+        local x
+        x = 2
+        y = x
+    end
+    return (x, y)
+end
+@test b27964(8) == (8, 2)
+function c27964(x)
+    local y
+    let x = 2
+        y = x
+    end
+    return (x, y)
+end
+@test c27964(8) == (8, 2)
 
 # issue #26739
 @test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") Core.eval(@__MODULE__, :(sin.[1]))
