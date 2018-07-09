@@ -820,6 +820,9 @@ end
 let repr = sprint(dump, Test)
     @test repr == "Module Test\n"
 end
+let repr = sprint(dump, nothing)
+    @test repr == "Nothing nothing\n"
+end
 let a = Vector{Any}(undef, 10000)
     a[2] = "elemA"
     a[4] = "elemB"

@@ -1611,8 +1611,9 @@ function dump(io::IOContext, @nospecialize(x), n::Int, indent)
                 end
             end
         end
-    else
-        !isa(x, Function) && print(io, " ", x)
+    elseif !isa(x, Function)
+        print(io, " ")
+        show(io, x)
     end
     nothing
 end
