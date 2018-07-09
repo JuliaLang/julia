@@ -1749,6 +1749,10 @@ end
 
 @deprecate startswith(a::Vector{UInt8}, b::Vector{UInt8}) length(a) >= length(b) && view(a, 1:length(b)) == b
 
+# PR #27859
+@deprecate accumulate(op, v0, x::AbstractVector) accumulate(op, x; init=v0)
+@deprecate accumulate!(op, y, v0, x::AbstractVector) accumulate!(op, y, x; init=v0)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

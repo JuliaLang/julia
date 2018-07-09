@@ -721,7 +721,8 @@ Library improvements
 
   * The initial element `v0` in `reduce(op, v0, itr)` has been replaced with an `init`
     optional keyword argument, as in `reduce(op, itr; init=v0)`. Similarly for `foldl`,
-    `foldr`, `mapreduce`, `mapfoldl` and `mapfoldr`. ([#27711])
+    `foldr`, `mapreduce`, `mapfoldl`, `mapfoldr`, `accumulate` and `accumulate!`.
+    ([#27711], [#27859])
 
 Compiler/Runtime improvements
 -----------------------------
