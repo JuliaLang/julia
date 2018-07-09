@@ -371,7 +371,7 @@ end
 function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(iter, i)
-    @inbounds (first(iter):last(iter))[i]
+    @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
 end
 # More efficient iteration — predominantly for non-vector LinearIndices
 # but one-dimensional LinearIndices must be special-cased to support OffsetArrays
