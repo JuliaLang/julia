@@ -1143,7 +1143,7 @@ Newly launched workers are connected to each other and the master process in an 
 Specifying the command line argument `--worker[=<cookie>]` results in the launched processes
 initializing themselves as workers and connections being set up via TCP/IP sockets.
 
-All workers in a cluster share the same [cookie](#cluster-cookie) as the master. When the cookie is
+All workers in a cluster share the same [cookie](@ref man-cluster-cookie) as the master. When the cookie is
 unspecified, i.e, with the `--worker` option, the worker tries to read it from its standard input.
  `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
  standard inputs.
@@ -1306,7 +1306,7 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom `ClusterManager`.
 
-## Cluster Cookie
+## [Cluster Cookie](@id man-cluster-cookie)
 
 All processes in a cluster share the same cookie which, by default, is a randomly generated string
 on the master process:
