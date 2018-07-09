@@ -289,8 +289,8 @@ function logmsg_code(_module, file, line, level, message, exs...)
         end
     end
     # Note that it may be necessary to set `id` and `group` manually during bootstrap
-    id !== nothing || (id = Expr(:quote, log_record_id(_module, level, exs)))
-    group !== nothing || (group = Expr(:quote, Symbol(splitext(basename(file))[1])))
+    id !== nothing || (id = :(log_record_id(_module, level, $exs)))
+    group !== nothing || (group = :(Symbol(splitext(basename($file))[1])))
     quote
         level = $level
         std_level = convert(LogLevel, level)
