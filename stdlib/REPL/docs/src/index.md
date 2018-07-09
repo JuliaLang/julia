@@ -461,7 +461,7 @@ You like the following fruits:
   - peach
 ```
 
-## Customization / Configuation
+## Customization / Configuration
 
 All interface customization is done through the keyword only
 `TerminalMenus.config()` function.

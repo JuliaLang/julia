@@ -540,7 +540,7 @@ end
 # issue #14470
 # TODO: More deprecations must be removed in src/cgutils.cpp:emit_array_nd_index()
 # TODO: Re-enable the disabled tests marked PLI
-# On the Julia side, this definition will gracefully supercede the new behavior (already coded)
+# On the Julia side, this definition will gracefully supersede the new behavior (already coded)
 @inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any,Vararg{Any}}, ::Tuple{})
     any(x->unsafe_length(x)==0, IA) && return false
     any(x->unsafe_length(x)!=1, IA) && return _depwarn_for_trailing_indices(IA)
@@ -735,8 +735,9 @@ end
 @deprecate findprev(A, v, i::Integer) something(findprev(isequal(v), A, i), 0)
 @deprecate findlast(A, v)             something(findlast(isequal(v), A), 0)
 # to fix ambiguities introduced by deprecations
-findnext(pred::Function, A, i::Integer) = invoke(findnext, Tuple{Function, Any, Any}, pred, A, i)
-findprev(pred::Function, A, i::Integer) = invoke(findprev, Tuple{Function, Any, Any}, pred, A, i)
+# TODO: also remove find*_internal in array.jl
+findnext(pred::Function, A, i::Integer) = findnext_internal(pred, A, i)
+findprev(pred::Function, A, i::Integer) = findprev_internal(pred, A, i)
 # also remove deprecation warnings in find* functions in array.jl, sparse/sparsematrix.jl,
 # and sparse/sparsevector.jl.
 
@@ -1440,8 +1441,14 @@ end
 @deprecate countlines(x, eol) countlines(x, eol = eol)
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
-@deprecate digits(n, base, pad) digits(n, base = base, pad = pad)
-@deprecate digits(T, n, base, pad) digits(T, n, base = base, pad = pad)
+@deprecate digits(n, base)         digits(n, base = base)
+@deprecate digits(n, base, pad)    digits(n, base = base, pad = pad)
+@deprecate digits(T::Type{<:Integer}, n, base)      digits(T, n, base = base)
+@deprecate digits(T::Type{<:Integer}, n, base, pad) digits(T, n, base = base, pad = pad)
+
+#27908
+@deprecate ndigits(n, base)      ndigits(n, base=base)
+@deprecate ndigits(n, base, pad) ndigits(n, base=base, pad=pad)
 
 @deprecate print_with_color(color, args...; kwargs...) printstyled(args...; kwargs..., color=color)
 
@@ -1733,12 +1740,14 @@ function mapreduce(f, op, v0, itr; dims=nothing)
         depwarn("`mapreduce(f, op, v0, itr)` is deprecated, use `mapreduce(f, op, itr; init=v0)` instead", :mapreduce)
         return mapreduce(f, op, itr; init=v0)
     else # deprecate the old deprecation
-        depwarn("`mapreduce(f, op, v0, itr; dims=dims)` is deprecated, use `mapreduce(f, op, itr; init=v0, dims=dims)` intead", :mapreduce)
+        depwarn("`mapreduce(f, op, v0, itr; dims=dims)` is deprecated, use `mapreduce(f, op, itr; init=v0, dims=dims)` instead", :mapreduce)
         return mapreduce(f, op, itr; init=v0, dims=dims)
     end
 end
 @deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
 @deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
+
+@deprecate startswith(a::Vector{UInt8}, b::Vector{UInt8}) length(a) >= length(b) && view(a, 1:length(b)) == b
 
 # END 0.7 deprecations
 

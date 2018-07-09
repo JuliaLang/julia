@@ -1163,7 +1163,7 @@ static void write_module_path(ios_t *s, jl_module_t *depmod)
 }
 
 // serialize the global _require_dependencies array of pathnames that
-// are include depenencies
+// are include dependencies
 static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *mod_array)
 {
     int64_t initial_pos = 0;

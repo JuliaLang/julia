@@ -159,7 +159,7 @@ example (taken from `@code_typed sin(1.0)`):
 ```
 
 The three annotations are indicated with `*`. The first one is the line number of the
-active function (printed once whenver the outer most line number changes). The second
+active function (printed once whenever the outer most line number changes). The second
 is the inlining indicator. The number of lines indicate the level of nesting, with a
 half-size line (╷) indicating the start of a scope and a full size line (│) indicating
 a continuing scope. The last annotation is the most complicated one. It is a heuristic

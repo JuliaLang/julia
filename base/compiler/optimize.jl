@@ -85,9 +85,6 @@ const IR_FLAG_INBOUNDS = 0x01
 # known affect-free calls (also effect-free)
 const _PURE_BUILTINS = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 
-# known effect-free calls (might not be affect-free)
-const _PURE_BUILTINS_VOLATILE = Any[getfield, arrayref, isdefined, Core.sizeof]
-
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 #########
@@ -144,7 +141,6 @@ function optimize(opt::OptimizationState, @nospecialize(result))
     nargs = Int(opt.nargs) - 1
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] == :noinline, ir.meta)
-    replace_code_newstyle!(opt.src, ir, nargs)
 
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
@@ -153,10 +149,17 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         # (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
-        if length(opt.src.code) < 10
+        if length(ir.stmts) < 10
             proven_pure = true
-            for i in 1:length(opt.src.code)
-                if !statement_effect_free(opt.src.code[i], opt, opt.src.ssavaluetypes[i])
+            for i in 1:length(ir.stmts)
+                stmt = ir.stmts[i]
+                # These affect control flow within the function (so may not be removed
+                # if there is no usage within the function), but don't affect the purity
+                # of the function as a whole.
+                if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
+                    continue
+                end
+                if !stmt_effect_free(stmt, ir, ir.spvals)
                     proven_pure = false
                     break
                 end
@@ -188,6 +191,8 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         end
     end
 
+    replace_code_newstyle!(opt.src, ir, nargs)
+
     # determine and cache inlineability
     if !force_noinline
         # don't keep ASTs for functions specialized on a Union argument
@@ -204,13 +209,20 @@ function optimize(opt::OptimizationState, @nospecialize(result))
         else
             force_noinline = true
         end
+        if !opt.src.inlineable && result === Union{}
+            force_noinline = true
+        end
     end
     if force_noinline
         opt.src.inlineable = false
-    elseif !opt.src.inlineable && isa(def, Method)
+    elseif isa(def, Method)
         bonus = 0
         if result ⊑ Tuple && !isbitstype(widenconst(result))
             bonus = opt.params.inline_tupleret_bonus
+        end
+        if opt.src.inlineable
+            # For functions declared @inline, increase the cost threshold 20x
+            bonus += opt.params.inline_cost_threshold*19
         end
         opt.src.inlineable = isinlineable(def, opt, bonus)
     end
@@ -241,129 +253,6 @@ function is_pure_intrinsic_optim(f::IntrinsicFunction)
              f === Intrinsics.cglobal)  # cglobal throws an error for symbol-not-found
 end
 
-function is_pure_builtin(@nospecialize(f))
-    if isa(f, IntrinsicFunction)
-        return is_pure_intrinsic_optim(f)
-    elseif isa(f, Builtin)
-        return (contains_is(_PURE_BUILTINS, f) ||
-                contains_is(_PURE_BUILTINS_VOLATILE, f))
-    else
-        return f === return_type
-    end
-end
-
-function statement_effect_free(@nospecialize(e), me::OptimizationState, @nospecialize(etype))
-    if isa(e, Expr)
-        if e.head === :(=)
-            return !isa(e.args[1], GlobalRef) && effect_free(e.args[2], me, false, etype)
-        elseif e.head === :gotoifnot
-            return effect_free(e.args[1], me, false, etype)
-        end
-    elseif isa(e, GotoNode)
-        return true
-    end
-    return effect_free(e, me, false, etype)
-end
-
-effect_free(@nospecialize(e), s::OptimizationState, allow_volatile::Bool, @nospecialize(etype)) =
-    effect_free(e, s.src, s.sp, allow_volatile, etype, s.slottypes)
-
-# detect some important side-effect-free calls (allow_volatile=true)
-# and some affect-free calls (allow_volatile=false) -- affect_free means the call
-# cannot be affected by previous calls, except assignment nodes
-function effect_free(@nospecialize(e), src, spvals::SimpleVector, allow_volatile::Bool, @nospecialize(etype),
-                     slottypes::Vector{Any} = empty_slottypes)
-    if isa(e, GlobalRef)
-        return (isdefined(e.mod, e.name) && (allow_volatile || isconst(e.mod, e.name)))
-    elseif isa(e, Slot)
-        return src.slotflags[slot_id(e)] & SLOT_USEDUNDEF == 0
-    elseif isa(e, Expr)
-        e = e::Expr
-        head = e.head
-        if is_meta_expr_head(head)
-            return true
-        end
-        if head === :static_parameter
-            # if we aren't certain enough about the type, it might be an UndefVarError at runtime
-            return isa(etype, Const) || issingletontype(widenconst(etype))
-        end
-        if etype === Bottom
-            return false
-        end
-        ea = e.args
-        if head === :call
-            if is_known_call_p(e, is_pure_builtin, src, spvals, slottypes)
-                if !allow_volatile
-                    if is_known_call(e, arrayref, src, spvals, slottypes) || is_known_call(e, arraylen, src, spvals, slottypes)
-                        return false
-                    elseif is_known_call(e, getfield, src, spvals, slottypes)
-                        nargs = length(ea)
-                        (3 <= nargs <= 4) || return false
-                        # TODO: check ninitialized
-                        if !isa(etype, Const) && !isconstType(etype)
-                            # first argument must be immutable to ensure e is affect_free
-                            a = ea[2]
-                            typ = unwrap_unionall(widenconst(argextype(a, src, spvals, slottypes)))
-                            if isType(typ)
-                                # all fields of subtypes of Type are effect-free
-                                # (including the non-inferrable uid field)
-                            elseif !isa(typ, DataType) || typ.abstract || (typ.mutable && length(typ.types) > 0)
-                                return false
-                            end
-                        end
-                    end
-                end
-                # fall-through
-            elseif is_known_call(e, _apply, src, spvals, slottypes) && length(ea) > 1
-                ft = argextype(ea[2], src, spvals, slottypes)
-                if !isa(ft, Const) || (!contains_is(_PURE_BUILTINS, ft.val) &&
-                                       ft.val !== Core.sizeof)
-                    return false
-                end
-                # fall-through
-            else
-                return false
-            end
-        elseif head === :new
-            a = ea[1]
-            typ = argextype(a, src, spvals, slottypes)
-            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(typ)
-            isexact || return false
-            isconcretedispatch(typ) || return false
-            typ = typ::DataType
-            if !allow_volatile && typ.mutable
-                return false
-            end
-            fieldcount(typ) >= length(ea) - 1 || return false
-            for fld_idx in 1:(length(ea) - 1)
-                eT = argextype(ea[fld_idx + 1], src, spvals, slottypes)
-                fT = fieldtype(typ, fld_idx)
-                eT ⊑ fT || return false
-            end
-            # fall-through
-        elseif head === :return
-            # fall-through
-        elseif head === :isdefined
-            return allow_volatile
-        elseif head === :the_exception
-            return allow_volatile
-        elseif head === :copyast
-            return true
-        else
-            return false
-        end
-        for a in ea
-            if !effect_free(a, src, spvals, allow_volatile, argextype(a, src, spvals, slottypes))
-                return false
-            end
-        end
-    elseif isa(e, GotoNode)
-        return false
-    end
-    return true
-end
-
 ## Computing the cost of a function body
 
 # saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
@@ -374,86 +263,87 @@ isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
 
 function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any}, params::Params)
     head = ex.head
-    if is_meta_expr_head(head) || head == :copyast # not sure if copyast is right
+    if is_meta_expr_head(head)
         return 0
-    end
-    argcost = 0
-    for a in ex.args
-        if a isa Expr
-            argcost = plus_saturate(argcost, statement_cost(a, -1, src, spvals, slottypes, params))
-        end
-    end
-    if head == :return || head == :(=)
-        return argcost
-    end
-    extyp = line == -1 ? Any : src.ssavaluetypes[line]
-    if head == :call
+    elseif head === :call
         ftyp = argextype(ex.args[1], src, spvals, slottypes)
-        if isa(ftyp, Type)
-            return argcost
-        end
-        if isa(ftyp, Const)
-            f = (ftyp::Const).val
-            if isa(f, IntrinsicFunction)
-                iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
-                if !isassigned(T_IFUNC_COST, iidx)
-                    # unknown/unhandled intrinsic
-                    return plus_saturate(argcost, params.inline_nonleaf_penalty)
-                end
-                return plus_saturate(argcost, T_IFUNC_COST[iidx])
+        f = singleton_type(ftyp)
+        if isa(f, IntrinsicFunction)
+            iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
+            if !isassigned(T_IFUNC_COST, iidx)
+                # unknown/unhandled intrinsic
+                return params.inline_nonleaf_penalty
             end
-            if isa(f, Builtin)
-                # The efficiency of operations like a[i] and s.b
-                # depend strongly on whether the result can be
-                # inferred, so check the type of ex
-                if f == Main.Core.getfield || f == Main.Core.tuple
-                    # we might like to penalize non-inferrability, but
-                    # tuple iteration/destructuring makes that
-                    # impossible
-                    # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
-                    return argcost
-                elseif f == Main.Core.arrayref && length(ex.args) >= 3
-                    atyp = argextype(ex.args[3], src, spvals, slottypes)
-                    return plus_saturate(argcost, isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty)
-                end
-                fidx = findfirst(x->x===f, T_FFUNC_KEY)
-                if fidx === nothing
-                    # unknown/unhandled builtin or anonymous function
-                    # Use the generic cost of a direct function call
-                    return plus_saturate(argcost, 20)
-                end
-                return plus_saturate(argcost, T_FFUNC_COST[fidx])
-            end
+            return T_IFUNC_COST[iidx]
         end
-        return plus_saturate(argcost, params.inline_nonleaf_penalty)
-    elseif head == :foreigncall || head == :invoke
+        if isa(f, Builtin)
+            # The efficiency of operations like a[i] and s.b
+            # depend strongly on whether the result can be
+            # inferred, so check the type of ex
+            if f === Main.Core.getfield || f === Main.Core.tuple
+                # we might like to penalize non-inferrability, but
+                # tuple iteration/destructuring makes that impossible
+                # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
+                return 0
+            elseif f === Main.Core.arrayref && length(ex.args) >= 3
+                atyp = argextype(ex.args[3], src, spvals, slottypes)
+                return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
+            end
+            fidx = findfirst(x->x===f, T_FFUNC_KEY)
+            if fidx === nothing
+                # unknown/unhandled builtin or anonymous function
+                # Use the generic cost of a direct function call
+                return 20
+            end
+            return T_FFUNC_COST[fidx]
+        end
+        return params.inline_nonleaf_penalty
+    elseif head === :foreigncall || head === :invoke
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from
         # consideration. This way, non-inlined error branches do not
         # prevent inlining.
-        return extyp == Union{} ? 0 : plus_saturate(20, argcost)
-    elseif head == :llvmcall
-        return plus_saturate(10, argcost) # a wild guess at typical cost
-    elseif head == :enter
+        extyp = line == -1 ? Any : src.ssavaluetypes[line]
+        return extyp === Union{} ? 0 : 20
+    elseif head === :return
+        a = ex.args[1]
+        if a isa Expr
+            return statement_cost(a, -1, src, spvals, slottypes, params)
+        end
+        return 0
+    elseif head === :(=)
+        if ex.args[1] isa GlobalRef
+            cost = 20
+        else
+            cost = 0
+        end
+        a = ex.args[2]
+        if a isa Expr
+            cost = plus_saturate(cost, statement_cost(a, -1, src, spvals, slottypes, params))
+        end
+        return cost
+    elseif head === :copyast
+        return 100
+    elseif head === :enter
         # try/catch is a couple function calls,
         # but don't inline functions with try/catch
         # since these aren't usually performance-sensitive functions,
         # and llvm is more likely to miscompile them when these functions get large
         return typemax(Int)
-    elseif head == :gotoifnot
+    elseif head === :gotoifnot
         target = ex.args[2]::Int
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
         # summing the cost of the not-taken branch
-        return target < line ? plus_saturate(40, argcost) : argcost
+        return target < line ? 40 : 0
     end
-    return argcost
+    return 0
 end
 
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, slottypes::Vector{Any},
                        params::Params, cost_threshold::Integer=params.inline_cost_threshold)
-    bodycost = 0
+    bodycost::Int = 0
     for line = 1:length(body)
         stmt = body[line]
         if stmt isa Expr
@@ -467,9 +357,9 @@ function inline_worthy(body::Array{Any,1}, src::CodeInfo, spvals::SimpleVector, 
             continue
         end
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost == typemax(Int) && return false
+        bodycost > cost_threshold && return false
     end
-    return bodycost <= cost_threshold
+    return true
 end
 
 function is_known_call(e::Expr, @nospecialize(func), src, spvals::SimpleVector, slottypes::Vector{Any} = empty_slottypes)
@@ -478,14 +368,6 @@ function is_known_call(e::Expr, @nospecialize(func), src, spvals::SimpleVector, 
     end
     f = argextype(e.args[1], src, spvals, slottypes)
     return isa(f, Const) && f.val === func
-end
-
-function is_known_call_p(e::Expr, @nospecialize(pred), src, spvals::SimpleVector, slottypes::Vector{Any})
-    if e.head !== :call
-        return false
-    end
-    f = argextype(e.args[1], src, spvals, slottypes)
-    return (isa(f, Const) && pred(f.val)) || (isType(f) && pred(f.parameters[1]))
 end
 
 function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int}, preprocess::Bool = true)

@@ -258,7 +258,7 @@ contains detailed information about it based on the keyword argument:
 
   * `options::DescribeOptions=DescribeOptions()`
 
-A git decription of a `commitish` object looks for the tag (by default, annotated,
+A git description of a `commitish` object looks for the tag (by default, annotated,
 although a search of all tags can be performed) which can be reached from `commitish`
 which is most recent. If the tag is pointing to `commitish`, then only the tag is
 included in the description. Otherwise, a suffix is included which contains the

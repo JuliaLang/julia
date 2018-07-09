@@ -1117,7 +1117,7 @@ end
     # test vector with sparsity approx 1/2
     let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
         @test Vector(sort(x)) == sort(Vector(x))
-        # apply three distinct tranformations where zeros sort into start/middle/end
+        # apply three distinct transformations where zeros sort into start/middle/end
         @test Vector(sort(x, by=abs)) == sort(Vector(x), by=abs)
         @test Vector(sort(x, by=sign)) == sort(Vector(x), by=sign)
         @test Vector(sort(x, by=inv)) == sort(Vector(x), by=inv)

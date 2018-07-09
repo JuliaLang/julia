@@ -1348,7 +1348,7 @@ end
 #   }
 # }
 #
-# i.e. copy over the appropraite default subdict
+# i.e. copy over the appropriate default subdict
 #
 
 # deep merge where target has higher precedence
@@ -1883,7 +1883,7 @@ function bracketed_paste(s; tabwidth=options(s).tabwidth)
 end
 
 function tab_should_complete(s)
-    # Yes, we are ignoring the possiblity
+    # Yes, we are ignoring the possibility
     # the we could be in the middle of a multi-byte
     # sequence, here but that's ok, since any
     # whitespace we're interested in is only one byte
@@ -2081,14 +2081,14 @@ const prefix_history_keymap = merge!(
         "\e[A" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
         # Down Arrow
         "\e[B" => (s,data,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
-        # by default, pass thru to the parent mode
+        # by default, pass through to the parent mode
         "*"    => (s,data,c)->begin
             accept_result(s, data.histprompt);
             ps = state(s, mode(s))
             map = keymap(ps, mode(s))
             match_input(map, s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
         end,
-        # match escape sequences for pass thru
+        # match escape sequences for pass through
         "\e*" => "*",
         "\e[*" => "*",
         "\eO*"  => "*",

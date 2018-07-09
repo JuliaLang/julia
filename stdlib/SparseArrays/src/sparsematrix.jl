@@ -371,10 +371,10 @@ SparseMatrixCSC(M::Matrix) = sparse(M)
 SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 function SparseMatrixCSC{Tv,Ti}(M::AbstractMatrix) where {Tv,Ti}
-    (I, J, V) = findnz(M)
-    eltypeTiI = convert(Vector{Ti}, I)
-    eltypeTiJ = convert(Vector{Ti}, J)
-    eltypeTvV = convert(Vector{Tv}, V)
+    I = findall(x -> x != 0, M)
+    eltypeTiI = Ti[i[1] for i in I]
+    eltypeTiJ = Ti[i[2] for i in I]
+    eltypeTvV = Tv[M[i] for i in I]
     return sparse_IJ_sorted!(eltypeTiI, eltypeTiJ, eltypeTvV, size(M)...)
 end
 function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
@@ -647,7 +647,7 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     end
     # This completes the unsorted-row, has-repeats CSR form's construction
 
-    # Sweep through the CSR form, simultaneously (1) caculating the CSC form's column
+    # Sweep through the CSR form, simultaneously (1) calculating the CSC form's column
     # counts and storing them shifted forward by one in csccolptr; (2) detecting repeated
     # entries; and (3) repacking the CSR form with the repeated entries combined.
     #

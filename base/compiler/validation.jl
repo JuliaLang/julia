@@ -211,7 +211,7 @@ is_valid_lvalue(@nospecialize(x)) = isa(x, Slot) || isa(x, GlobalRef)
 
 function is_valid_argument(@nospecialize(x))
     if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
-        (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck, :copyast))) ||
+        (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck))) ||
         isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
         isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true
@@ -223,7 +223,7 @@ end
 
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin)
+    if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin, :copyast)
         return true
     end
     return false

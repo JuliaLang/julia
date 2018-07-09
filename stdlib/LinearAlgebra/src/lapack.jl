@@ -3730,7 +3730,7 @@ for (stev, stebz, stegr, stein, elty) in
                 throw(DimensionMismatch("w_in has length $(length(w_in)), but needs to be between 1 and $n"))
             end
             m = length(w_in)
-            #If iblock and isplit are invalid input, assume worst-case block paritioning,
+            #If iblock and isplit are invalid input, assume worst-case block partitioning,
             # i.e. set the block scheme to be the entire matrix
             iblock = similar(dv, BlasInt,n)
             isplit = similar(dv, BlasInt,n)
@@ -6091,7 +6091,7 @@ trsen!(compq::AbstractChar, job::AbstractChar, select::AbstractVector{BlasInt}, 
 """
     tgsen!(select, S, T, Q, Z) -> (S, T, alpha, beta, Q, Z)
 
-Reorders the vectors of a generalized Schur decomposition. `select` specifices
+Reorders the vectors of a generalized Schur decomposition. `select` specifies
 the eigenvalues in each cluster.
 """
 tgsen!(select::AbstractVector{BlasInt}, S::AbstractMatrix, T::AbstractMatrix, Q::AbstractMatrix, Z::AbstractMatrix)

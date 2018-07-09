@@ -55,7 +55,7 @@ struct UnionSplit
 end
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
-    # Go through the function, perfoming simple ininlingin (e.g. replacing call by constants
+    # Go through the function, performing simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
     @timeit "analysis" todo = assemble_inline_todo!(ir, linetable, sv)
     isempty(todo) && return ir
@@ -290,7 +290,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         end
     end
     # If the iterator already moved on to the next basic block,
-    # temorarily re-open in again.
+    # temporarily re-open in again.
     local return_value
     # Special case inlining that maintains the current basic block if there's only one BB in the target
     if item.linear_inline_eligible
@@ -585,6 +585,8 @@ end
 function singleton_type(@nospecialize(ft))
     if isa(ft, Const)
         return ft.val
+    elseif ft isa DataType && isdefined(ft, :instance)
+        return ft.instance
     end
     return nothing
 end
@@ -1027,7 +1029,7 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
                 (f === Core.kwfunc && length(atypes) == 2) ||
                 (is_inlineable_constant(val) &&
                  (contains_is(_PURE_BUILTINS, f) ||
-                  (f === getfield && effect_free(e, ir, ir.spvals, false, etype)) ||
+                  (f === getfield && stmt_effect_free(e, ir, ir.spvals)) ||
                   (isa(f, IntrinsicFunction) && is_pure_intrinsic_optim(f)))))
                 return quoted(val)
             end

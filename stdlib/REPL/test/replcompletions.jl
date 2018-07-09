@@ -420,7 +420,7 @@ let s = """CompletionFoo.test4("\\"","""
 end
 
 ########## Test where the current inference logic fails ########
-# Fails due to inferrence fails to determine a concrete type for arg 1
+# Fails due to inference fails to determine a concrete type for arg 1
 # But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
 let s = "CompletionFoo.test5(AbstractArray[[]][1],"
     c, r, res = test_complete(s)

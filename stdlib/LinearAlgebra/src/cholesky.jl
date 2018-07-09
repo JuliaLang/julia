@@ -174,7 +174,6 @@ function cholesky!(A::StridedMatrix, ::Val{false}=Val(false); check::Bool = true
     end
 end
 
-
 ## With pivoting
 ### BLAS/LAPACK element types
 function cholesky!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},

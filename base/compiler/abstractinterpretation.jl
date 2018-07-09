@@ -56,6 +56,7 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
     napplicable = length(applicable)
     rettype = Bottom
     edgecycle = false
+    edges = Any[]
     for i in 1:napplicable
         match = applicable[i]::SimpleVector
         method = match[3]::Method
@@ -67,14 +68,20 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                rt, edgecycle1 = abstract_call_method(method, sig_n, svec(), sv)
+                rt, edgecycle1, edge = abstract_call_method(method, sig_n, svec(), sv)
+                if edge !== nothing
+                    push!(edges, edge)
+                end
                 edgecycle |= edgecycle1::Bool
                 rettype = tmerge(rettype, rt)
                 rettype === Any && break
             end
             rettype === Any && break
         else
-            rt, edgecycle = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            rt, edgecycle, edge = abstract_call_method(method, sig, match[2]::SimpleVector, sv)
+            if edge !== nothing
+                push!(edges, edge)
+            end
             rettype = tmerge(rettype, rt)
             rettype === Any && break
         end
@@ -90,6 +97,9 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
         end
     end
     if !(rettype === Any) # adding a new method couldn't refine (widen) this type
+        for edge in edges
+            add_backedge!(edge::MethodInstance, sv)
+        end
         fullmatch = false
         for i in napplicable:-1:1
             match = applicable[i]::SimpleVector
@@ -129,8 +139,9 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     code === nothing && return Any
     code = code::MethodInstance
     # decide if it's likely to be worthwhile
-    cache_inlineable = false
-    if isdefined(code, :inferred)
+    declared_inline = isdefined(method, :source) && ccall(:jl_ast_flag_inlineable, Bool, (Any,), method.source)
+    cache_inlineable = declared_inline
+    if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
             cache_src_inferred = ccall(:jl_ast_flag_inferred, Bool, (Any,), cache_inf)
@@ -185,10 +196,10 @@ end
 function abstract_call_method(method::Method, @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
     # TODO: remove with 0.7 deprecations
     if method.file === DEPRECATED_SYM && method.sig == (Tuple{Type{T},Any} where T)
-        return Any, false
+        return Any, false, nothing
     end
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
-        return Any, false
+        return Any, false, nothing
     end
     topmost = nothing
     # Limit argument type tuple growth of functions:
@@ -297,7 +308,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
         recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, method.sig)::SimpleVector
         sig = recomputed[1]
         if !isa(unwrap_unionall(sig), DataType) # probably Union{}
-            return Any, false
+            return Any, false, nothing
         end
         sparams = recomputed[2]::SimpleVector
     end
@@ -305,10 +316,8 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
     rt, edge = typeinf_edge(method, sig, sparams, sv)
     if edge === nothing
         edgecycle = true
-    else
-        add_backedge!(edge::MethodInstance, sv)
     end
-    return rt, edgecycle
+    return rt, edgecycle, edge
 end
 
 # This is only for use with `Conditional`.
@@ -638,19 +647,20 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
             if !isa(body, Type) && !isa(body, TypeVar)
                 return Any
             end
-            has_free_typevars(body) || return body
-            if isa(argtypes[2], Const)
-                tv = argtypes[2].val
-            elseif isa(argtypes[2], PartialTypeVar)
-                ptv = argtypes[2]
-                tv = ptv.tv
-                canconst = false
-            else
-                return Any
+            if has_free_typevars(body)
+                if isa(argtypes[2], Const)
+                    tv = argtypes[2].val
+                elseif isa(argtypes[2], PartialTypeVar)
+                    ptv = argtypes[2]
+                    tv = ptv.tv
+                    canconst = false
+                else
+                    return Any
+                end
+                !isa(tv, TypeVar) && return Any
+                body = UnionAll(tv, body)
             end
-            !isa(tv, TypeVar) && return Any
-            theunion = UnionAll(tv, body)
-            ret = canconst ? AbstractEvalConstant(theunion) : Type{theunion}
+            ret = canconst ? AbstractEvalConstant(body) : Type{body}
             return ret
         end
         return Any
@@ -830,9 +840,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
     elseif isa(e, Slot)
         return vtypes[slot_id(e)].typ
-    elseif isa(e, Symbol)
-        return abstract_eval_global(sv.mod, e)
-    elseif isa(e,GlobalRef)
+    elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name)
     end
 

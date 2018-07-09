@@ -459,7 +459,7 @@ checks and is only meant to improve readability of the call.
 !!! warning
     Fortran compilers *may* also add other hidden arguments for pointers, assumed-shape (`:`)
     and assumed-size (`*`) arrays. Such behaviour can be avoided by using `ISO_C_BINDING` and
-    including `bind(c)` in the defintion of the subroutine, which is strongly recommended for
+    including `bind(c)` in the definition of the subroutine, which is strongly recommended for
     interoperable code. In this case there will be no hidden arguments, at the cost of some
     language features (e.g. only `character(len=1)` will be permitted to pass strings).
 
@@ -778,7 +778,7 @@ The input `n` is passed by value, and so the function's input signature is
 simply declared as `(Csize_t,)` without any `Ref` or `Ptr` necessary. (If the
 wrapper was calling a Fortran function instead, the corresponding function input
 signature should instead be `(Ref{Csize_t},)`, since Fortran variables are
-passed by pointers.) Furthermore, `n` can be any type that is convertable to a
+passed by pointers.) Furthermore, `n` can be any type that is convertible to a
 `Csize_t` integer; the [`ccall`](@ref) implicitly calls [`Base.cconvert(Csize_t,
 n)`](@ref).
 
@@ -799,7 +799,7 @@ end
 
 Here, the input `p` is declared to be of type `Ref{gsl_permutation}`, meaning that the memory
 that `p` points to may be managed by Julia or by C. A pointer to memory allocated by C should
-be of type `Ptr{gsl_permutation}`, but it is convertable using [`Base.cconvert`](@ref) and therefore
+be of type `Ptr{gsl_permutation}`, but it is convertible using [`Base.cconvert`](@ref) and therefore
 can be used in the same (covariant) context of the input argument to a [`ccall`](@ref). A pointer
 to memory allocated by Julia must be of type `Ref{gsl_permutation}`, to ensure that the memory
 address pointed to is valid and that Julia's garbage collector manages the chunk of memory pointed

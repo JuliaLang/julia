@@ -77,26 +77,6 @@ function is_inlineable_constant(@nospecialize(x))
     return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
 end
 
-# count occurrences up to n+1
-function occurs_more(@nospecialize(e), pred, n)
-    if isa(e,Expr)
-        head = e.head
-        is_meta_expr_head(head) && return 0
-        c = 0
-        for a = e.args
-            c += occurs_more(a, pred, n)
-            if c>n
-                return c
-            end
-        end
-        return c
-    end
-    if pred(e)
-        return 1
-    end
-    return 0
-end
-
 ###########################
 # MethodInstance/CodeInfo #
 ###########################

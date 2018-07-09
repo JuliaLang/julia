@@ -860,7 +860,7 @@ function break_21369()
         local fr
         while true
             fr = Base.StackTraces.lookup(bt[i])[end]
-            if !fr.from_c
+            if !fr.from_c && fr.func !== :error
                 break
             end
             i += 1
@@ -1179,7 +1179,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(Array{Real}, Type{AbstractArray{Int}}) === Const(false)
     @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Real, 2})) === Const(true)
     @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Int, 2})) === Const(false)
-    @test isa_tfunc(DataType, Int) === Bool # could be improved
+    @test isa_tfunc(DataType, Int) === Union{}
     @test isa_tfunc(DataType, Const(Type{Int})) === Bool
     @test isa_tfunc(DataType, Const(Type{Array})) === Bool
     @test isa_tfunc(UnionAll, Const(Type{Int})) === Bool # could be improved
@@ -1189,7 +1189,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false) # any result is ok
     @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Const(false)
-    @test isa_tfunc(typeof(Union{}), Union{}) === Const(false) # any result is ok
+    @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
     let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
@@ -1204,7 +1204,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(Val{1}, Type{Val{T}} where T) === Bool
     @test isa_tfunc(Val{1}, DataType) === Bool
     @test isa_tfunc(Any, Const(Any)) === Const(true)
-    @test isa_tfunc(Any, Union{}) === Const(false) # any result is ok
+    @test isa_tfunc(Any, Union{}) === Union{} # any result is ok
     @test isa_tfunc(Any, Type{Union{}}) === Const(false)
     @test isa_tfunc(Union{Int64, Float64}, Type{Real}) === Const(true)
     @test isa_tfunc(Union{Int64, Float64}, Type{Integer}) === Bool
@@ -1245,7 +1245,7 @@ let subtype_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
     @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
     let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
-        @test subtype_tfunc(c, Const(Bool)) === Bool # any result is ok
+        @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
     end
     @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
     @test subtype_tfunc(Type{Val{1}}, DataType) === Bool
@@ -1717,3 +1717,8 @@ Base.iterate(i::Iterator27434, ::Val{2}) = i.z, Val(3)
 Base.iterate(::Iterator27434, ::Any) = nothing
 @test @inferred splat27434(Iterator27434(1, 2, 3)) == (1, 2, 3)
 @test Core.Compiler.return_type(splat27434, Tuple{typeof(Iterators.repeated(1))}) == Union{}
+
+# issue #27078
+f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
+T27078 = Vector{Vector{T}} where T
+@test f27078(T27078) === T27078.body

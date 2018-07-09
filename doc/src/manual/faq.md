@@ -97,7 +97,7 @@ julia> x
 Here we created a function `change_array!`, that assigns `5` to the first element of the passed
 array (bound to `x` at the call site, and bound to `A` within the function). Notice that, after
 the function call, `x` is still bound to the same array, but the content of that array changed:
-the variables `A` and `x` were distinct bindings refering to the same mutable `Array` object.
+the variables `A` and `x` were distinct bindings referring to the same mutable `Array` object.
 
 ### Can I use `using` or `import` inside a function?
 

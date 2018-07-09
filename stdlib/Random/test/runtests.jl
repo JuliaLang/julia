@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, SparseArrays
+using Test: guardsrand
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
@@ -10,6 +11,8 @@ using Random
 using Random.DSFMT
 
 using Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
+
+import Future # randjump
 
 @testset "Issue #6573" begin
     srand(0)
@@ -514,7 +517,13 @@ end
 
     # test PRNG jump
 
-    mts = randjump(mta, 25000, size)
+    function randjumpvec(m, steps, len) # old version of randjump
+        mts = accumulate(Future.randjump, m, fill(steps, len-1))
+        pushfirst!(mts, m)
+        mts
+    end
+
+    mts = randjumpvec(mta, 25000, size)
     @test length(mts) == 4
 
     for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
@@ -523,7 +532,7 @@ end
 
     @testset "generated RNGs are in a deterministic state (relatively to ==)" begin
         m = MersenneTwister()
-        @test randjump(m, 25000, 2) == randjump(m, 25000, 2)
+        @test Future.randjump(m, 25000) == Future.randjump(m, 25000)
     end
 end
 
@@ -573,10 +582,10 @@ let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
     # RNGs do not share their seed in randjump
-    let rs = randjump(r, big(10)^20, 2)
-        @test  rs[1].seed !== rs[2].seed
-        srand(rs[2])
-        @test seed == rs[1].seed != rs[2].seed
+    let r2 = Future.randjump(r, big(10)^20)
+        @test  r.seed !== r2.seed
+        srand(r2)
+        @test seed == r.seed != r2.seed
     end
     resize!(seed, 4)
     @test r.seed != seed

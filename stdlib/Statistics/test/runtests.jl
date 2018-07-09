@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Statistics, Test, Random, LinearAlgebra, SparseArrays
+using Test: guardsrand
 
 @testset "middle" begin
     @test middle(3) === 3.0

@@ -7,6 +7,7 @@ using SparseArrays
 using LinearAlgebra
 using Base.Printf: @printf
 using Random
+using Test: guardsrand
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -1097,7 +1098,7 @@ end
     @test iA === iS === nothing
 end
 
-@testset "findmin/findmax/minumum/maximum" begin
+@testset "findmin/findmax/minimum/maximum" begin
     A = sparse([1.0 5.0 6.0;
                 5.0 2.0 4.0])
     for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
@@ -2195,11 +2196,6 @@ end
     local v = vec(A)
     v[1] = 2
     @test A[1,1] == 2
-end
-
-@testset "findnz on non-sparse arrays" begin
-    @test findnz([0 1; 0 2]) == ([1, 2], [2, 2], [1, 2])
-    @test findnz(BitArray([false true; false true])) == ([1, 2], [2, 2], trues(2))
 end
 
 # #25943

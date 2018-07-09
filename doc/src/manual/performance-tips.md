@@ -1491,7 +1491,7 @@ outer scope (or another inner function) modifies `r`.
 The discussion in the preceding paragraph referred to the "parser", that is, the phase
 of compilation that takes place when the module containing `abmult` is first loaded,
 as opposed to the later phase when it is first invoked. The parser does not "know" that
-`Int` is a fixed type, or that the statement `r = -r` tranforms an `Int` to another `Int`.
+`Int` is a fixed type, or that the statement `r = -r` transforms an `Int` to another `Int`.
 The magic of type inference takes place in the later phase of compilation.
 
 Thus, the parser does not know that `r` has a fixed type (`Int`).
@@ -1537,7 +1537,7 @@ The `let` block creates a new variable `r` whose scope is only the
 inner function. The second technique recovers full language performance
 in the presence of captured variables. Note that this is a rapidly
 evolving aspect of the compiler, and it is likely that future releases
-will not require this degree of programmer annotation to attain peformance.
+will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.

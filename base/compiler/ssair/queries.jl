@@ -3,11 +3,10 @@
 """
 Determine whether a statement is side-effect-free, i.e. may be removed if it has no uses.
 """
-function stmt_effect_free(@nospecialize(stmt), src::IncrementalCompact, spvals::SimpleVector)
+function stmt_effect_free(@nospecialize(stmt), src, spvals::SimpleVector)
     isa(stmt, Union{PiNode, PhiNode}) && return true
     isa(stmt, Union{ReturnNode, GotoNode, GotoIfNot}) && return false
     isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
-    (isa(stmt, Symbol) || isa(stmt, SSAValue) || isa(stmt, Argument)) && return true
     isa(stmt, Slot) && return false # Slots shouldn't occur in the IR at this point, but let's be defensive here
     if isa(stmt, Expr)
         e = stmt::Expr

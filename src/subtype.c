@@ -39,7 +39,7 @@ extern "C" {
 // Union type decision points are discovered while the algorithm works.
 // If a new Union decision is encountered, the `more` flag is set to tell
 // the forall/exists loop to grow the stack.
-// TODO: the stack probably needs to be artifically large because of some
+// TODO: the stack probably needs to be artificially large because of some
 // deeper problem (see #21191) and could be shrunk once that is fixed
 typedef struct {
     int depth;
@@ -1163,6 +1163,13 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
     if (obviously_egal(a, b))    return 1;
     if (obviously_unequal(a, b)) return 0;
     return jl_subtype(a, b) && jl_subtype(b, a);
+}
+
+JL_DLLEXPORT int jl_is_not_broken_subtype(jl_value_t *a, jl_value_t *b)
+{
+    // TODO: the final commented out check here isn't correct; it should be closer to the
+    // `issingletype` check used by `isnotbrokensubtype` in `base/compiler/typeutils.jl`
+    return !jl_is_kind(b) || !jl_is_type_type(a); // || jl_is_datatype_singleton((jl_datatype_t*)jl_tparam0(a));
 }
 
 int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt)

@@ -301,12 +301,12 @@ end
     @test !any(ndigits_mismatch, 8192:9999)
 end
 # The following should not crash (#16579)
-ndigits(big(rand(Int)), rand(63:typemax(Int)))
-ndigits(big(rand(Int)), big(2)^rand(2:999))
+ndigits(big(rand(Int)), base=rand(63:typemax(Int)))
+ndigits(big(rand(Int)), base=big(2)^rand(2:999))
 
 for x in big.([-20:20; rand(Int)])
     for _base in -1:1
-        @test_throws DomainError ndigits(x, _base)
+        @test_throws DomainError ndigits(x, base=_base)
     end
 end
 

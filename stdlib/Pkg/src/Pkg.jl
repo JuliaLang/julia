@@ -9,7 +9,8 @@ using REPL.TerminalMenus
 
 depots() = Base.DEPOT_PATH
 logdir() = joinpath(depots()[1], "logs")
-devdir() = get(ENV, "JULIA_PKG_DEVDIR", joinpath(homedir(), ".julia", "dev"))
+devdir() = get(ENV, "JULIA_PKG_DEVDIR", joinpath(depots()[1], "dev"))
+const UPDATED_REGISTRY_THIS_SESSION = Ref(false)
 
 # load snapshotted dependencies
 include("../ext/TOML/src/TOML.jl")
@@ -26,24 +27,25 @@ include("API.jl")
 include("REPLMode.jl")
 
 # Define new variables so tab comleting Pkg. works.
-const add         = API.add
-const rm          = API.rm
-const up          = API.up
-const test        = API.test
-const gc          = API.gc
-const init        = API.init
-const build       = API.build
-const installed   = API.installed
-const pin         = API.pin
-const free        = API.free
-const checkout    = API.checkout
-const develop     = API.develop
-const generate    = API.generate
-const instantiate = API.instantiate
-const resolve     = API.resolve
-const status      = Display.status
-const update      = up
-const activate    = API.activate
+const add          = API.add
+const rm           = API.rm
+const up           = API.up
+const test         = API.test
+const gc           = API.gc
+const init         = API.init
+const build        = API.build
+const installed    = API.installed
+const pin          = API.pin
+const free         = API.free
+const checkout     = API.checkout
+const develop      = API.develop
+const generate     = API.generate
+const instantiate  = API.instantiate
+const resolve      = API.resolve
+const status       = Display.status
+const update       = up
+const activate     = API.activate
+const setprotocol! = API.setprotocol!
 
 # legacy CI script support
 import .API: clone, dir

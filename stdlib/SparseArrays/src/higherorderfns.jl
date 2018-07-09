@@ -1013,7 +1013,7 @@ end
 # capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
 # broadcast scalar arguments (mixedargs), and returns a function (parevalf, i.e. partially
 # evaluated f) and a reduced argument tuple (passedargstup) containing only the sparse
-# vectors/matrices in mixedargs in their orginal order, and such that the result of
+# vectors/matrices in mixedargs in their original order, and such that the result of
 # broadcast(parevalf, passedargstup...) is broadcast(f, mixedargs...)
 @inline function capturescalars(f, mixedargs)
     let (passedsrcargstup, makeargs) = _capturescalars(mixedargs...)

@@ -130,11 +130,16 @@ function collect_fixed!(ctx::Context, pkgs::Vector{PackageSpec}, uuid_to_name::D
 end
 
 function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps_map::Dict{UUID,Vector{PackageSpec}})
-    project_file = joinpath(path, "Project.toml")
+    project_file = projectfile_path(path)
     fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
-    !isfile(project_file) && return false
+    (project_file === nothing) && return false
     project = read_project(project_file)
     compat = get(project, "compat", Dict())
+    if haskey(compat, "julia")
+        if !(VERSION in Types.semver_spec(compat["julia"]))
+            @warn("julia version requirement for package $(pkg.name) not satisfied")
+        end
+    end
     for (deppkg_name, uuid) in project["deps"]
         vspec = haskey(compat, deppkg_name) ? Types.semver_spec(compat[deppkg_name]) : VersionSpec()
         deppkg = PackageSpec(deppkg_name, UUID(uuid), vspec)
@@ -162,7 +167,7 @@ function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
             pkg_name, vspec = r.package, VersionSpec(VersionRange[r.versions.intervals...])
             if pkg_name == "julia"
                 if !(VERSION in vspec)
-                    @warn("julia version requirement for package $pkg not satisfied")
+                    @warn("julia version requirement for package $(pkg.name) not satisfied")
                 end
             else
                 deppkg = PackageSpec(pkg_name, vspec)
@@ -172,6 +177,7 @@ function collect_require!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
         end
         # Packages from REQUIRE files need to get their UUID from the registry
         registry_resolve!(ctx.env, fix_deps)
+        project_deps_resolve!(ctx.env, fix_deps)
         ensure_resolved(ctx.env, fix_deps; registry=true)
     end
 end
@@ -293,6 +299,12 @@ function resolve_versions!(ctx::Context, pkgs::Vector{PackageSpec})::Dict{UUID,V
         end
         pkg.version = v
     end
+    proj_compat = Types.project_compatibility(ctx, "julia")
+    v = intersect(VERSION, proj_compat)
+    if isempty(v)
+        @warn("julia version requirement for project not satisfied")
+    end
+
     # construct data structures for resolver and call it
     reqs = Requires(pkg.uuid => VersionSpec(pkg.version) for pkg in pkgs if pkg.uuid ≠ uuid_julia)
     fixed = collect_fixed!(ctx, pkgs, uuid_to_name)
@@ -619,7 +631,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
         info = Dict{String,Any}("uuid" => string(uuid))
         push!(infos, info)
     end
-    # We do not print out the whole dependency chain for the standard libaries right now
+    # We do not print out the whole dependency chain for the standard libraries right now
     uuid in keys(ctx.stdlibs) && return info
     info["version"] = string(version)
     hash == nothing ? delete!(info, "git-tree-sha1") : (info["git-tree-sha1"] = string(hash))
@@ -652,8 +664,8 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
         deps = Dict{String,String}()
 
         # Check for deps in project file
-        project_file = joinpath(path, "Project.toml")
-        if isfile(project_file)
+        project_file = projectfile_path(path)
+        if nothing !== project_file
             project = read_project(project_file)
             deps = project["deps"]
         else
@@ -671,6 +683,7 @@ function update_manifest(ctx::Context, pkg::PackageSpec, hash::Union{SHA1, Nothi
                     push!(dep_pkgs, PackageSpec(r.package))
                 end
                 registry_resolve!(env, dep_pkgs)
+                project_deps_resolve!(ctx.env, dep_pkgs)
                 ensure_resolved(env, dep_pkgs; registry=true)
             end
             for dep_pkg in dep_pkgs
@@ -743,16 +756,25 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
             "version" => string(pkg.version)
         )]
     else
-        # Only put `pkg` and its deps in the temp project
+        # Only put `pkg` and its deps (recursively) in the temp project
+        collect_deps!(seen, pkg) = begin
+            pkg.uuid in keys(localctx.stdlibs) && return
+            pkg.uuid in seen && return
+            push!(seen, pkg.uuid)
+            info = manifest_info(localctx.env, pkg.uuid)
+            need_to_resolve |= haskey(info, "path")
+            localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
+            for (dpkg, duuid) in get(info, "deps", [])
+                collect_deps!(seen, PackageSpec(dpkg, UUID(duuid)))
+            end
+        end
+        # Only put `pkg` and its deps (revursively) in the temp project
         empty!(localctx.env.project["deps"])
         localctx.env.project["deps"][pkg.name] = string(pkg.uuid)
-        info = manifest_info(localctx.env, pkg.uuid)
-        need_to_resolve |= haskey(info, "path")
-        for (dpkg, duuid) in get(info, "deps", [])
-            dinfo = manifest_info(localctx.env, UUID(duuid))
-            dinfo === nothing || (need_to_resolve |= haskey(info, "path"))
-            localctx.env.project["deps"][dpkg] = string(duuid)
-        end
+
+        seen_uuids = Set{UUID}()
+        collect_deps!(seen_uuids, pkg)# Only put `pkg` and its deps (recursively) in the temp project
+
     end
 
     pkgs = PackageSpec[]
@@ -858,6 +880,7 @@ function pkg2_test_target_compatibility!(ctx, path, pkgs)
             push!(pkgs, PackageSpec(pkg_name, vspec))
         end
         registry_resolve!(ctx.env, pkgs)
+        project_deps_resolve!(ctx.env, pkgs)
         ensure_resolved(ctx.env, pkgs; registry=true)
     end
     return nothing
@@ -935,7 +958,7 @@ function build_versions(ctx::Context, uuids::Vector{UUID}; might_need_to_resolve
     order = dependency_order_uuids(ctx, map(first, builds))
     sort!(builds, by = build -> order[first(build)])
     max_name = isempty(builds) ? 0 : maximum(textwidth.([build[2] for build in builds]))
-    # build each package verions in a child process
+    # build each package versions in a child process
     for (uuid, name, hash_or_path, build_file, version) in builds
         log_file = splitext(build_file)[1] * ".log"
         printpkgstyle(ctx, :Building,
@@ -1043,12 +1066,6 @@ function rm(ctx::Context, pkgs::Vector{PackageSpec})
 end
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; new_git = UUID[])
-    # if julia is passed as a package the solver gets tricked;
-    # this catches the error early on
-    any(pkg->(pkg.uuid == uuid_julia), pkgs) &&
-        cmderror("Trying to add julia as a package")
-    any(pkg -> Types.collides_with_project(ctx.env, pkg), pkgs) &&
-        cmderror("Cannot add package with the same name or uuid as the project")
     # copy added name/UUIDs into project
     for pkg in pkgs
         ctx.env.project["deps"][pkg.name] = string(pkg.uuid)

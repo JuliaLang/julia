@@ -209,7 +209,7 @@ mutable struct Messages
                     fld0[v0] = FieldValue(-1)
                 else
                     # the state is one of those explicitly requested:
-                    # favor it at a higer level than normal (upgrade
+                    # favor it at a higher level than normal (upgrade
                     # FieldValue from l2 to l1)
                     fld0[v0] += FieldValue(0, vweight[p0][v0], -vweight[p0][v0])
                 end

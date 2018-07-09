@@ -2718,7 +2718,7 @@ mktempdir() do dir
                     """)
 
                 # Directly write to the cleartext credential store. Note: we are not using
-                # the LibGit2.approve message to avoid any posibility of the tests
+                # the LibGit2.approve message to avoid any possibility of the tests
                 # accidentally writing to a user's global store.
                 write(cred_file, "https://$valid_username:$valid_password@github.com")
 

@@ -557,7 +557,8 @@ end
     x = @inferred replace(x -> x > 1, [1, 2], missing)
     @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
 
-    x = @inferred replace([1, missing], missing=>2)
+    @test_broken @inferred replace([1, missing], missing=>2)
+    x = replace([1, missing], missing=>2)
     @test x == [1, 2] && x isa Vector{Int}
     x = @inferred replace([1, missing], missing=>2, count=1)
     @test x == [1, 2] && x isa Vector{Union{Int, Missing}}

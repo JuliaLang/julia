@@ -178,7 +178,7 @@ Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
 
 end
 
-# Mimic a quantity with a physical unit that is not convertable to a real number
+# Mimic a quantity with a physical unit that is not convertible to a real number
 struct PhysQuantity{n,T}   # n is like the exponent of the unit
     val::T
 end

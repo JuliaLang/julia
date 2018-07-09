@@ -563,7 +563,7 @@ end
 # Endian tests
 # For now, we only support little endian.
 # Add an `Sys.ARCH` test for big endian when/if we add support for that.
-# Do **NOT** use `ENDIAN_BOM` to figure out the endianess
+# Do **NOT** use `ENDIAN_BOM` to figure out the endianness
 # since that's exactly what we want to test.
 @test ENDIAN_BOM == 0x04030201
 @test ntoh(0x1) == 0x1

@@ -646,7 +646,7 @@ julia> data = [i for i in c]
 
 Consider a simple example using channels for inter-task communication. We start 4 tasks to process
 data from a single `jobs` channel. Jobs, identified by an id (`job_id`), are written to the channel.
-Each task in this simulation reads a `job_id`, waits for a random amout of time and writes back
+Each task in this simulation reads a `job_id`, waits for a random amount of time and writes back
 a tuple of `job_id` and the simulated time to the results channel. Finally all the `results` are
 printed out.
 
@@ -1576,11 +1576,11 @@ creates separate instances of `Regex` object for each entry of `rx` vector.
 
 The case of `rand` is a bit more complex as we have to ensure that each thread
 uses non-overlapping pseudorandom number sequences. This can be simply ensured
-by using [`randjump`](@ref) function:
+by using the `Future.randjump` function:
 
 
 ```julia-repl
-julia> using Random
+julia> using Random; import Future
 
 julia> function g_fix(r)
            a = zeros(1000)
@@ -1591,7 +1591,10 @@ julia> function g_fix(r)
        end
 g_fix (generic function with 1 method)
 
-julia> r = randjump(MersenneTwister(1), big(10)^20, nthreads());
+julia>  r = let m = MersenneTwister(1)
+                [m; accumulate(Future.randjump, m, fill(big(10)^20, nthreads()-1))]
+            end;
+
 julia> g_fix(r)
 1000
 ```

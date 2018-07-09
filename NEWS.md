@@ -652,7 +652,7 @@ Library improvements
     Therefore custom string types may want to define direct `ncodeunits` methods.
 
   * `reverseind(s::AbstractString, i::Integer)` now has an efficient generic fallback, so
-    custom string types do not need to provide their own efficient defintions. The generic
+    custom string types do not need to provide their own efficient definitions. The generic
     definition relies on `ncodeunits` however, so for optimal performance you may need to
     define a custom method for that function.
 
@@ -693,7 +693,7 @@ Library improvements
       Use `unique` to get the old behavior.
 
   * The `linearindices` function has been deprecated in favor of the new
-    `LinearIndices` type, which additionnally provides conversion from
+    `LinearIndices` type, which additionally provides conversion from
     cartesian indices to linear indices using the normal indexing operation.
     ([#24715], [#26775]).
 
@@ -733,7 +733,7 @@ Compiler/Runtime improvements
     call. ([#22210], [#22732])
 
   * Inference recursion-detection heuristics are now more precise,
-    allowing them to be triggered less often, but being more agressive when they
+    allowing them to be triggered less often, but being more aggressive when they
     are triggered to drive the inference computation to a solution ([#23912]).
 
   * Inference now propagates constants inter-procedurally, and can compute
@@ -1228,6 +1228,9 @@ Deprecated or removed
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
 
+  * `randjump`, which produced an array, is deprecated in favor of the
+    scalar version `Future.randjump` used with `accumulate` ([#27746]).
+
   * The `assert` function (and `@assert` macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.
 
   * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
@@ -1299,6 +1302,8 @@ Deprecated or removed
   * `clipboard` has been moved to the `InteractiveUtils` standard library package
     (along with other utilities mostly used at the interactive prompt, such as `edit`
     and `less`) ([#27635]).
+
+  * `ndigits(n, b, [pad])` is deprecated in favor of `ndigits(n, base=b, pad=pad)` ([#27908]).
 
 Command-line option changes
 ---------------------------
