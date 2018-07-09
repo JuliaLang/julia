@@ -53,7 +53,7 @@ Random.shuffle
 Random.shuffle!
 ```
 
-## Generators
+## Generators (creation and seeding)
 
 ```@docs
 Random.srand
@@ -63,25 +63,25 @@ Random.RandomDevice
 
 ## Hooking into the `Random` API
 
-There are two orthogonal ways to extend `Random` functionalities:
+There are two mostly orthogonal ways to extend `Random` functionalities:
 1) generating random values of custom types
 2) creating new generators
 
 The API for 1) is quite functional, but is relatively recent so it may still have to evolve in subsequent releases of the `Random` module.
 For example, it's typically sufficient to implement one `rand` method in order to have all other usual methods work automatically.
 
-The API for 2) is close to non-existent, and may require more work than strictly necessary from the implementor, in order to support standard types of generated values.
+The API for 2) is still rudimentary, and may require more work than strictly necessary from the implementor, in order to support usual types of generated values.
 
 ### Generating random values of custom types
 
 There are two categories: generating values from a type (e.g. `rand(Int)`), or from a collection (e.g. `rand(1:3)`).
 The simple cases are explained first, and more advanced usage is presented later.
 
-#### generating values from a type
+#### Generating values from a type
 
 Given a type `T`, it's currently assumed that if `rand(T)` is defined, an object of type `T` will be produced.
-In order to define `rand(T)`, the following method can be defined:
-`rand(rng::AbstractRNG, ::Random.SamplerType{T})`.
+In order to define random generation of values of type `T`, the following method can be defined:
+`rand(rng::AbstractRNG, ::Random.SamplerType{T})` (this should return what `rand(rng, T)` is expected to return).
 
 Let's take the following example: we implement a `Die` type, with a variable number `n` of sides, numbered from `1` to `n`.
 We want `rand(Die)` to produce a die with a random number of up to 20 sides (and at least 4):
@@ -116,21 +116,20 @@ julia> a = Vector{Die}(undef, 3); rand!(a)
  Die(17)
 ```
 
-#### generating values from a collection
+#### Generating values from a collection
 
 Given a collection type `T`, it's currently assumed that if `rand(::T)` is defined, an object of type `eltype(T)` will be produced.
-In order to define `rand(::T)`, the following method can be defined:
-`rand(rng::AbstractRNG, sp::Random.SamplerTrivial{T})`. There, `sp` simply wraps an object of type `T`, which can be accessed via `sp[]`.
+In order to define random generation out of objects of type `T`, the following method can be defined:
+`rand(rng::AbstractRNG, sp::Random.SamplerTrivial{T})`. Here, `sp` simply wraps an object of type `T`, which can be accessed via `sp[]`.
 Continuing the `Die` example, we want now to define `rand(d::Die)` to produce an `Int` corresponding to one of `d`'s sides:
 
 ```julia-repl
-julia> Random.rand(rng::AbstractRNG, d::SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
+julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
 
 julia> rand(Die(4))
 2
 
 julia> rand(Die(4), 3)
-
 3-element Array{Any,1}:
  3
  4
@@ -141,19 +140,19 @@ In the last example, a `Vector{Any}` is produced; the reason is that `eltype(Die
 `Base.eltype(::Type{Die}) = Int`.
 
 
-#### generating values for an `AbstractFloat` type
+#### Generating values for an `AbstractFloat` type
 
 `AbstractFloat` types are special-cased, because by default random values are not produced in the whole type domain, but rather
 in `[0,1)`. The following method should be implemented for `T <: AbstractFloat`:
-`Random.rand(::AbstractRNG, ::SamplerTrivial{CloseOpen01{T}})`
+`Random.rand(::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{T}})`
 
 
-#### optimizing generation with cached computation between calls
+#### Optimizing generation with cached computation between calls
 
 When repeatedly generating random values (with the same `rand` parameters), it happens for some types
 that the result of a computation is used for each call. In this case, the computation can be decoupled
 from actually generating the values. This is the case for example with the default implementation for
-`AbstractArray`. Assume that `rand(1:20)` has to be called repeatedly in a loop: the way to take advantage
+`AbstractArray`. Assume that `rand(rng, 1:20)` has to be called repeatedly in a loop: the way to take advantage
 of this decoupling is as follows:
 
 ```julia
@@ -165,10 +164,10 @@ for x in X
 end
 ```
 
-This is of course used by the default implementation of random array generation (like in `rand(1:20, 10)`).
+This mechanism is of course used by the default implementation of random array generation (like in `rand(1:20, 10)`).
 In order to implement this decoupling for a custom type, a helper type can be used.
 Going back to our `Die` example: `rand(::Die)` uses random generation from a range, so
-this could take advantage of this optimization opportunity.
+there is an opportunity for this optimization:
 
 ```julia
 import Random: Sampler, rand
@@ -178,40 +177,40 @@ struct SamplerDie <: Sampler{Int} # generates values of type Int
     sp::Sampler{Int} # this is an abstract type, so this could be improved
 end
 
-Sampler(rng::AbstractRNG, die::Die, v::Random.Repetition) =
-    SamplerDie(die, Sampler(rng, 1:die.nsides, v))
-# the `v` parameter will be explained later on
+Sampler(rng::AbstractRNG, die::Die, r::Random.Repetition) =
+    SamplerDie(die, Sampler(rng, 1:die.nsides, r))
+# the `r` parameter will be explained later on
 
 rand(rng::AbstractRNG, sp::SamplerDie) = rand(rng, sp.sp)
 ```
 
 It's now possible to get a sampler with `sp = Sampler(rng, die)`, and use `sp` instead of `die` in any `rand` call
 involving `rng`.
-In the simplistic example above, `die` doesn't need to be stored in `SamplerDie` but this is the case in practice.
+In the simplistic example above, `die` doesn't need to be stored in `SamplerDie` but this is often the case in practice.
 
 This pattern is so frequent that a helper type named `Random.SamplerSimple` is available: we could have implemented
 our decoupling with:
 
 ```julia
-Sampler(rng::AbstractRNG, die::Die, v::Random.Repetition) =
-    SamplerSimple(die, Sampler(rng, 1:die.nsides, v))
+Sampler(rng::AbstractRNG, die::Die, r::Random.Repetition) =
+    SamplerSimple(die, Sampler(rng, 1:die.nsides, r))
 
 rand(rng::AbstractRNG, sp::SamplerSimple{Die}) = rand(rng, sp.data)
 ```
 
 Here, `sp.data` refers to the second parameter in the call to the `SamplerSimple` constructor
-(here equal to `Sampler(rng, 1:die.nsides, v)`), while the `Die` object can be accessed
+(in this case equal to `Sampler(rng, 1:die.nsides, r)`), while the `Die` object can be accessed
 via `sp[]`.
 
-Another helper type is currently available for slighlty more complex cases, `Random.SamplerTag`, but is
+Another helper type is currently available for other cases, `Random.SamplerTag`, but is
 considered as internal API, and can break at any time without proper deprecations.
 
-#### using distinct algorithms for scalar or array generation
+#### Using distinct algorithms for scalar or array generation
 
-In some cases, whether one want to generate only a handful of values or a large number of values
+In some cases, whether one wants to generate only a handful of values or a large number of values
 will have an impact on the choice of algorithm. This is handled with the third parameter of the
 `Sampler` constructor. Let's assume we defined two helper types for `Die`, say `SamplerDie1`
-which should be used to generate only few random values, and `SamplerDieMany` for the many values.
+which should be used to generate only few random values, and `SamplerDieMany` for many values.
 We can use those types as follows:
 
 ```julia
@@ -226,10 +225,10 @@ Note: `Sampler(rng, x)` is simply a shorthand for `Sampler(rng, x, Val(Inf))`, a
 `Random.Repetition` is an alias for `Union{Val{1}, Val{Inf}}`.
 
 
-### creating new generators
+### Creating new generators
 
 The API is not clearly defined yet, but as a rule of thumb:
-1) any `rand` method producing basic type (`isbitstype` integer and floating types in `Base`)
+1) any `rand` method producing "basic" types (`isbitstype` integer and floating types in `Base`)
    may have to be defined;
 2) other documented `rand` methods accepting an `AbstractRNG` should work out of the box.
 
@@ -242,13 +241,14 @@ of `s`
 1) `Sampler(::MyRNG, ::S, ::Repetition)`, which returns an object of type say `SamplerS`
 2) `rand(rng::MyRNG, sp::SamplerS)`
 
-In many cases, `Sampler(rng::AbstractRNG, ::S, ::Repetition)` will already be
-defined in the `Random` module. It would then be possible to skip step 1)
-in practice, but the corresponding `SamplerS` type is considered as
-internal detail, and may change without warning.
+It can happen that `Sampler(rng::AbstractRNG, ::S, ::Repetition)` is
+already defined in the `Random` module. It would then be possible to
+skip step 1) in practice (if one wants to specialize generation for
+this particular RNG type), but the corresponding `SamplerS` type is
+considered as internal detail, and may be changed without warning.
 
 
-#### specializing array generation
+#### Specializing array generation
 
 In some cases, for a given RNG type, generating an array of random
 values can be more efficient with a specialized method than by merely
@@ -257,13 +257,13 @@ the case for `MersenneTwister`, which natively writes random values in
 an array.
 
 To implement this specialization for `MyRNG`
-and for a specification `s`, it is first required to know the return type of
-`Sampler(::MyRNG, s, Val(Inf))`, say `SamplerType{s}` (assuming `s` is
-a type); then define `rand!(rng::MyRNG, a::AbstractArray{s},
-::SamplerType{s})`. Instead of `AbstractArray`, it's possible to
-implement the functionality only for a subtype, e.g. `Array{s}`. In
-case `s` is a collection, the `eltype` of `a` should be equal to that
-of `s` (i.e. `a::AbstractArray{eltype(s)}`). The non-mutating array
+and for a specification `s`, producing elements of type `S`,
+the following method can be defined:
+`rand!(rng::MyRNG, a::AbstractArray{S}, ::SamplerS)`,
+where `SamplerS` is the type of the sampler returned by `Sampler(MyRNG(), s, Val(Inf))`.
+Instead of `AbstractArray`, it's possible to
+implement the functionality only for a subtype, e.g. `Array{s}`.
+The non-mutating array
 method of `rand` will automatically call this specialization
 internally.
 
