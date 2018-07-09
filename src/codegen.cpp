@@ -4186,12 +4186,12 @@ static void emit_cfunc_invalidate(
         }
         else {
             gf_ret = emit_bitcast(ctx, gf_ret, gfrt->getPointerTo());
-            ctx.builder.CreateRet(ctx.builder.CreateAlignedLoad(gf_ret, julia_alignment(astrt, 0)));
+            ctx.builder.CreateRet(ctx.builder.CreateAlignedLoad(gf_ret, julia_alignment(astrt)));
         }
         break;
     }
     case jl_returninfo_t::SRet: {
-        emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(astrt), julia_alignment(astrt, 0));
+        emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(astrt), julia_alignment(astrt));
         ctx.builder.CreateRetVoid();
         break;
     }
@@ -5038,7 +5038,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, const jl_returnin
         if (lty != NULL && !isboxed) {
             theArg = decay_derived(emit_bitcast(ctx, theArg, PointerType::get(lty, 0)));
             if (!lty->isAggregateType()) // keep "aggregate" type values in place as pointers
-                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(ty, 0));
+                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(ty));
         }
         assert(dyn_cast<UndefValue>(theArg) == NULL);
         args[idx] = theArg;
@@ -6134,7 +6134,7 @@ static std::unique_ptr<Module> emit_function(
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_concrete_type(jlrettype));
                         emit_memcpy(ctx, sret, nullptr, retvalinfo, jl_datatype_size(jlrettype),
-                                    julia_alignment(jlrettype, 0));
+                                    julia_alignment(jlrettype));
                     }
                     else { // must be jl_returninfo_t::Union
                         emit_unionmove(ctx, sret, nullptr, retvalinfo, /*skip*/isboxed_union);

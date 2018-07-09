@@ -367,7 +367,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         return NULL;
     }
 
-    unsigned alignment = julia_alignment(jt, 0);
+    unsigned alignment = julia_alignment(jt);
     Type *ptype = to->getPointerTo();
     if (dest) {
         emit_memcpy(ctx, dest, tbaa_dest, p, x.tbaa, jl_datatype_size(jt), alignment, false);
