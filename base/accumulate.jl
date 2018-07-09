@@ -286,7 +286,7 @@ julia> accumulate!(-, B, A, dims=1);
 
 julia> B
 2×2 Array{Int64,2}:
-  1,  2
+  1   2
  -2  -2
 
 julia> accumulate!(-, B, A, dims=2);
