@@ -1926,7 +1926,9 @@ function mapslices(f, A::AbstractArray; dims)
     Rsize = copy(dimsA)
     # TODO: maybe support removing dimensions
     if !isa(r1, AbstractArray) || ndims(r1) == 0
-        r1 = [r1]
+        tmp = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
+        tmp[first(CartesianIndices(tmp))] = r1
+        r1 = tmp
     end
     nextra = max(0, length(dims)-ndims(r1))
     if eltype(Rsize) == Int
