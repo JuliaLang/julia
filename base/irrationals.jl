@@ -136,6 +136,13 @@ end
 
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
+"""
+	@irrational sym val def
+	@irrational(sym, val, def)
+
+	Provides a pre-computed value `val` for an irrational constant
+	identified by `sum`, along with its definition `def`.
+"""
 macro irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
