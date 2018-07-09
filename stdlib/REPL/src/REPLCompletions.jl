@@ -422,6 +422,21 @@ function afterusing(string::String, startpos::Int)
     return occursin(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
+function complete_symbols(comps, symbol_dict)
+    newcomps = []
+    for c in comps
+        smb = get(symbol_dict, c, c)
+        scomps, positions = completions(smb, 1)
+        (smb in  scomps) || push!(newcomps, smb)
+        if !isempty(scomps)
+            for s in scomps
+                push!(newcomps, s)
+            end
+         end
+    end
+    return newcomps
+end
+
 function bslash_completions(string, pos)
     slashpos = something(findprev(isequal('\\'), string, pos), 0)
     if (something(findprev(in(bslash_separators), string, pos), 0) < slashpos &&
@@ -440,10 +455,12 @@ function bslash_completions(string, pos)
         # Julian completions as only latex / emoji symbols contain the leading \
         if startswith(s, "\\:") # emoji
             emoji_names = Iterators.filter(k -> startswith(k, s), keys(emoji_symbols))
-            return (true, (sort!(collect(emoji_names)), slashpos:pos, true))
+            comps = complete_symbols(sort(collect(emoji_names)), emoji_symbols)
+            return (true, (comps, slashpos:pos, true))
         else # latex
             latex_names = Iterators.filter(k -> startswith(k, s), keys(latex_symbols))
-            return (true, (sort!(collect(latex_names)), slashpos:pos, true))
+            comps = complete_symbols(sort(collect(latex_names)), latex_symbols)
+            return (true, (comps, slashpos:pos, true))
         end
     end
     return (false, (String[], 0:-1, false))
