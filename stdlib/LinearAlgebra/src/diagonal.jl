@@ -356,8 +356,8 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
 (\)(A::Union{QR,QRCompactWY,QRPivoted}, B::Diagonal) =
     invoke(\, Tuple{Union{QR,QRCompactWY,QRPivoted}, AbstractVecOrMat}, A, B)
 
-(/)(U::UpperTriangular, D::Diagonal) = UpperTriangular(parent(U) ./ D.diag')
-(/)(L::LowerTriangular, D::Diagonal) = LowerTriangular(parent(L) ./ D.diag')
+(/)(U::UpperTriangular, D::Diagonal) = UpperTriangular(parent(U) ./ transpose(D.diag))
+(/)(L::LowerTriangular, D::Diagonal) = LowerTriangular(parent(L) ./ transpose(D.diag))
 (\)(D::Diagonal, U::UpperTriangular) = UpperTriangular(parent(U) ./ D.diag)
 (\)(D::Diagonal, L::LowerTriangular) = LowerTriangular(parent(L) ./ D.diag)
 

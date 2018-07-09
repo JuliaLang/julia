@@ -456,15 +456,15 @@ end
 end
 
 @testset "Triangular division by Diagonal #27989" begin
-    for _ in 1:100
-        K = rand(1:10)
-        U = UpperTriangular(randn(K, K))
-        L = LowerTriangular(randn(K, K))
-        D = Diagonal(randn(K))
-        @test (U / D)::UpperTriangular == UpperTriangular(Matrix(U) / Matrix(D))
-        @test (L / D)::LowerTriangular == LowerTriangular(Matrix(L) / Matrix(D))
-        @test (D \ U)::UpperTriangular == UpperTriangular(Matrix(D) \ Matrix(U))
-        @test (D \ L)::LowerTriangular == LowerTriangular(Matrix(D) \ Matrix(L))
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        K = 5
+        U = UpperTriangular(randn(elty, K, K))
+        L = LowerTriangular(randn(elty, K, K))
+        D = Diagonal(randn(elty, K))
+        @test (U / D)::UpperTriangular{elty} == UpperTriangular(Matrix(U) / Matrix(D))
+        @test (L / D)::LowerTriangular{elty} == LowerTriangular(Matrix(L) / Matrix(D))
+        @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
+        @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
     end
 end
 
