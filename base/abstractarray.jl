@@ -1926,6 +1926,9 @@ function mapslices(f, A::AbstractArray; dims)
     Rsize = copy(dimsA)
     # TODO: maybe support removing dimensions
     if !isa(r1, AbstractArray) || ndims(r1) == 0
+        # If the result of f on a single slice is a scalar then we add singleton
+        # dimensions. When adding adding the dimensions, we have to respect the
+        # index type of the input array (e.g. in the case of OffsetArrays)
         tmp = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
         tmp[first(CartesianIndices(tmp))] = r1
         r1 = tmp
