@@ -17,11 +17,10 @@ safe_sumabs2(A::Array{T}, region) where {T} = safe_mapslices(sum, abs2.(A), regi
 safe_maxabs(A::Array{T}, region) where {T} = safe_mapslices(maximum, abs.(A), region)
 safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), region)
 
-Areduc = rand(3, 4, 5, 6)
 @testset "test reductions over region: $region" for region in Any[
     1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
-    # println("region = $region")
+    Areduc = rand(3, 4, 5, 6)
     r = fill(NaN, map(length, Base.reduced_indices(axes(Areduc), region)))
     @test sum!(r, Areduc) ≈ safe_sum(Areduc, region)
     @test prod!(r, Areduc) ≈ safe_prod(Areduc, region)
