@@ -112,19 +112,22 @@ const Repetition = Union{Val{1},Val{Inf}}
 # Sampler(::AbstractRNG, X, ::Val{Inf}) = Sampler(X)
 # Sampler(::AbstractRNG, ::Type{X}, ::Val{Inf}) where {X} = Sampler(X)
 
-Sampler(rng::AbstractRNG, sp::Sampler, ::Repetition) =
+Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof(rng), x, r)
+Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} = Sampler(typeof(rng), X, r)
+
+Sampler(::Type{<:AbstractRNG}, sp::Sampler, ::Repetition) =
     throw(ArgumentError("Sampler for this object is not defined"))
 
 # default shortcut for the general case
-Sampler(rng::AbstractRNG, X) = Sampler(rng, X, Val(Inf))
-Sampler(rng::AbstractRNG, ::Type{X}) where {X} = Sampler(rng, X, Val(Inf))
+Sampler(::Type{RNG}, X) where {RNG<:AbstractRNG} = Sampler(RNG, X, Val(Inf))
+Sampler(::Type{RNG}, ::Type{X}) where {RNG<:AbstractRNG,X} = Sampler(RNG, X, Val(Inf))
 
 #### pre-defined useful Sampler types
 
 # default fall-back for types
 struct SamplerType{T} <: Sampler{T} end
 
-Sampler(::AbstractRNG, ::Type{T}, ::Repetition) where {T} = SamplerType{T}()
+Sampler(::Type{<:AbstractRNG}, ::Type{T}, ::Repetition) where {T} = SamplerType{T}()
 
 Base.getindex(::SamplerType{T}) where {T} = T
 
@@ -135,7 +138,7 @@ end
 
 SamplerTrivial(x::T) where {T} = SamplerTrivial{T,eltype(T)}(x)
 
-Sampler(::AbstractRNG, x, ::Repetition) = SamplerTrivial(x)
+Sampler(::Type{<:AbstractRNG}, x, ::Repetition) = SamplerTrivial(x)
 
 Base.getindex(sp::SamplerTrivial) = sp.self
 
