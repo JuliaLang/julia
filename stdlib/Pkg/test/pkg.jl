@@ -390,7 +390,6 @@ temp_pkg_dir() do project_path
         withenv("USER" => "Test User") do
             Pkg.generate(env_path)
         end
-        repo = LibGit2.init(env_path)
         LibGit2.with(LibGit2.init(env_path)) do repo
             LibGit2.add!(repo, "*")
             LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)
