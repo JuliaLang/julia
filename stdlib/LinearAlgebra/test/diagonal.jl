@@ -461,14 +461,10 @@ end
         U = UpperTriangular(randn(K, K))
         L = LowerTriangular(randn(K, K))
         D = Diagonal(randn(K))
-        @test U / D isa UpperTriangular
-        @test U / D == UpperTriangular(Matrix(U) / Matrix(D))
-        @test L / D isa LowerTriangular
-        @test L / D == LowerTriangular(Matrix(L) / Matrix(D))
-        @test D \ U == UpperTriangular(Matrix(D) \ Matrix(U))
-        @test D \ U isa UpperTriangular
-        @test D \ L == LowerTriangular(Matrix(D) \ Matrix(L))
-        @test D \ L isa LowerTriangular
+        @test (U / D)::UpperTriangular == UpperTriangular(Matrix(U) / Matrix(D))
+        @test (L / D)::LowerTriangular == LowerTriangular(Matrix(L) / Matrix(D))
+        @test (D \ U)::UpperTriangular == UpperTriangular(Matrix(D) \ Matrix(U))
+        @test (D \ L)::LowerTriangular == LowerTriangular(Matrix(D) \ Matrix(L))
     end
 end
 
