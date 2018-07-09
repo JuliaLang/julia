@@ -474,7 +474,6 @@ end
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
     if !(X isa typeinfo)
-        @assert typeinfo.name.module ∉ (Base, Core) "$(typeof(X)) is not a subtype of $typeinfo"
         typeinfo = Any # no error for user-defined types
     end
     # what the context already knows about the eltype of X:
