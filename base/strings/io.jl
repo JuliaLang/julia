@@ -11,6 +11,8 @@ of values `xs` if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
+Printing `nothing` is deprecated and will throw an error in the future.
+
 # Examples
 ```jldoctest
 julia> print("Hello World!")

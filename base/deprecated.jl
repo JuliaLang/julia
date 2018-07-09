@@ -1749,6 +1749,12 @@ end
 
 @deprecate startswith(a::Vector{UInt8}, b::Vector{UInt8}) length(a) >= length(b) && view(a, 1:length(b)) == b
 
+# issue 27352
+function print(io::IO, ::Nothing)
+    depwarn("Calling `print` on `nothing` is deprecated; use `show`, `repr`, or custom output instead.", :print)
+    show(io, nothing)
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
