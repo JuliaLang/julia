@@ -455,4 +455,21 @@ end
     @test Transpose(x)*D*x == (Transpose(x)*D)*x == (Transpose(x)*Array(D))*x
 end
 
+@testset "Triangular division by Diagonal #27989" begin
+    for _ in 1:100
+        K = rand(1:10)
+        U = UpperTriangular(randn(K, K))
+        L = LowerTriangular(randn(K, K))
+        D = Diagonal(randn(K))
+        @test U / D isa UpperTriangular
+        @test U / D == UpperTriangular(Matrix(U) / Matrix(D))
+        @test L / D isa LowerTriangular
+        @test L / D == LowerTriangular(Matrix(L) / Matrix(D))
+        @test D \ U == UpperTriangular(Matrix(D) \ Matrix(U))
+        @test D \ U isa UpperTriangular
+        @test D \ L == LowerTriangular(Matrix(D) \ Matrix(L))
+        @test D \ L isa LowerTriangular
+    end
+end
+
 end # module TestDiagonal
