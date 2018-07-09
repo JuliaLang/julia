@@ -574,15 +574,19 @@ isdelimited(io::IO, x) = true
 # without its explicit type (like in "Pair{Integer,Integer}(1, 2)")
 isdelimited(io::IO, p::Pair) = !(has_tight_type(p) || get(io, :typeinfo, Any) == typeof(p))
 
+function gettypeinfos(io::IO, p::Pair)
+    typeinfo = get(io, :typeinfo, Any)
+    p isa typeinfo <: Pair ?
+        fieldtype(typeinfo, 1) => fieldtype(typeinfo, 2) :
+        Any => Any
+end
+
 function show(io::IO, p::Pair)
     compact = get(io, :compact, false)
     iocompact = IOContext(io, :compact => get(io, :compact, true))
     isdelimited(io, p) && return show_default(iocompact, p)
 
-    typeinfo = get(io, :typeinfo, Any)
-    typeinfos = p isa typeinfo <: Pair ?
-        (fieldtype(typeinfo, 1), fieldtype(typeinfo, 2)) : (Any, Any)
-
+    typeinfos = gettypeinfos(io, p)
     isdelimited(iocompact, p.first) || print(io, "(")
     show(IOContext(iocompact, :typeinfo => typeinfos[1]), p.first)
     isdelimited(iocompact, p.first) || print(io, ")")
@@ -1606,8 +1610,9 @@ function dump(io::IOContext, @nospecialize(x), n::Int, indent)
                 end
             end
         end
-    else
-        !isa(x, Function) && print(io, " ", x)
+    elseif !isa(x, Function)
+        print(io, " ")
+        show(io, x)
     end
     nothing
 end
@@ -1748,7 +1753,8 @@ end
 function alignment(io::IO, x::Pair)
     s = sprint(show, x, context=io, sizehint=0)
     if !isdelimited(io, x) # i.e. use "=>" for display
-        iocompact = IOContext(io, :compact => get(io, :compact, true))
+        iocompact = IOContext(io, :compact => get(io, :compact, true),
+                                  :typeinfo => gettypeinfos(io, x)[1])
         left = length(sprint(show, x.first, context=iocompact, sizehint=0))
         left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
         left += !get(io, :compact, false) # spaces are added around "=>"
