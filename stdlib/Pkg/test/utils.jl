@@ -15,11 +15,13 @@ function temp_pkg_dir(fn::Function)
         empty!(DEPOT_PATH)
         Base.HOME_PROJECT[] = nothing
         Base.ACTIVE_PROJECT[] = nothing
-        mktempdir() do env_dir
-            mktempdir() do depot_dir
-                push!(LOAD_PATH, "@", "@v#.#", "@stdlib")
-                push!(DEPOT_PATH, depot_dir)
-                fn(env_dir)
+        withenv("JULIA_PROJECT" => nothing, "JULIA_LOAD_PATH" => nothing) do
+            mktempdir() do env_dir
+                mktempdir() do depot_dir
+                    push!(LOAD_PATH, "@", "@v#.#", "@stdlib")
+                    push!(DEPOT_PATH, depot_dir)
+                    fn(env_dir)
+                end
             end
         end
     finally
