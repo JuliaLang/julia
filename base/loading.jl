@@ -1170,9 +1170,15 @@ function compilecache(pkg::PkgId)
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
     if isfile(cachefile)
-        @logmsg verbosity "Recompiling stale cache file $cachefile for module $name"
+        # work around #28042
+        printstyled("[ Info: "; color = Base.default_color_info, bold=true)
+        println("Recompiling stale cache file $cachefile for module $name")
+        # @logmsg verbosity "Recompiling stale cache file $cachefile for module $name"
     else
-        @logmsg verbosity "Precompiling module $name"
+        # work around #28042
+        printstyled("[ Info: "; color = Base.default_color_info, bold=true)
+        println("Precompiling module $name")
+        # @logmsg verbosity "Precompiling module $name"
     end
     if success(create_expr_cache(path, cachefile, concrete_deps, pkg.uuid))
         # append checksum to the end of the .ji file:
