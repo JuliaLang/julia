@@ -2,7 +2,7 @@
 
   * [Introduction](@ref man-introduction)
   * [Getting Started](@ref man-getting-started)
-  * [Variables](@ref)
+  * [Variables](@ref variables.md)
   * [Integers and Floating-Point Numbers](@ref)
   * [Mathematical Operations and Elementary Functions](@ref)
   * [Complex and Rational Numbers](@ref)
