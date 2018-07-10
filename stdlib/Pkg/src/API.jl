@@ -475,7 +475,6 @@ function precompile(ctx::Context)
     code = join(["import " * pkg for pkg in needs_to_be_precompiled], '\n') * "\nexit(0)"
     for (i, pkg) in enumerate(needs_to_be_precompiled)
         code = """
-            import OldPkg
             $(Base.load_path_setup_code())
             import $pkg
         """

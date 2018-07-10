@@ -1078,8 +1078,13 @@ function load_path_setup_code(load_path::Bool=true)
     append!(empty!(Base.DL_LOAD_PATH), $(repr(map(abspath, DL_LOAD_PATH))))
     """
     if load_path
+        load_path = map(abspath, Base.load_path())
+        path_sep = Sys.iswindows() ? ';' : ':'
+        any(path -> path_sep in path, load_path) &&
+            error("LOAD_PATH entries cannot contain $(repr(path_sep))")
         code *= """
-        append!(empty!(Base.LOAD_PATH), $(repr(map(abspath, Base.load_path()))))
+        append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
+        ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
         Base.HOME_PROJECT[] = Base.ACTIVE_PROJECT[] = nothing
         """
     end
@@ -1104,7 +1109,6 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     try
         write(in, """
         begin
-        import OldPkg
         $(Base.load_path_setup_code())
         Base._track_dependencies[] = true
         empty!(Base._concrete_dependencies)
