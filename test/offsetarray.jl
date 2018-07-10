@@ -83,6 +83,29 @@ for i = 1:9 @test A_3_3[i] == i end
 @test eachindex(A) == 1:4
 @test eachindex(S) == CartesianIndices(axes(S)) == CartesianIndices(map(Base.Slice, (0:1,3:4)))
 
+# LinearIndices
+# issue 27986
+let a1 = [11,12,13], a2 = [1 2; 3 4]
+    b1 = OffsetArray(a1, (-3,))
+    i1 = LinearIndices(b1)
+    @test i1[-2] == -2
+    @test_throws BoundsError i1[-3]
+    @test_throws BoundsError i1[1]
+    @test i1[-2:end] === -2:0
+    @test @inferred(i1[-2:0]) === -2:0
+    @test_throws BoundsError i1[-3:end]
+    @test_throws BoundsError i1[-2:1]
+    b2 = OffsetArray(a2, (-3,5))
+    i2 = LinearIndices(b2)
+    @test i2[3] == 3
+    @test_throws BoundsError i2[0]
+    @test_throws BoundsError i2[5]
+    @test @inferred(i2[2:3])   === 2:3
+    @test @inferred(i2[1:2:4]) === 1:2:3
+    @test_throws BoundsError i2[1:5]
+    @test_throws BoundsError i2[1:2:5]
+end
+
 # logical indexing
 @test A[A .> 2] == [3,4]
 @test_throws BoundsError h[trues(2)]
