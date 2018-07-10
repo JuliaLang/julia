@@ -103,7 +103,7 @@ end
 """
     cd(f::Function, dir::AbstractString=homedir())
 
-Temporarily change the current working directory, apply function `f` and
+Temporarily change the current working directory to `dir`, apply function `f` and
 finally return to the original directory.
 
 # Examples
@@ -358,6 +358,43 @@ end
 Move the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
 Return `dst`.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> write("hello.txt", "world");
+
+julia> "hello.txt" in readdir()
+true
+
+julia> mv("hello.txt", "goodbye.txt")
+"goodbye.txt"
+
+julia> "hello.txt" in readdir()
+false
+
+julia> "goodbye.txt" in readdir()
+true
+
+julia> readline("goodbye.txt")
+"world"
+
+julia> write("hello.txt", "world2");
+
+julia> mv("hello.txt", "goodbye.txt")
+ERROR: ArgumentError: 'goodbye.txt' exists. `force=true` is required to remove 'goodbye.txt' before moving.
+Stacktrace:
+ [1] #checkfor_mv_cp_cptree#10(::Bool, ::Function, ::String, ::String, ::String) at ./file.jl:293
+[...]
+
+julia> mv("hello.txt", "goodbye.txt", force=true)
+"goodbye.txt"
+
+julia> readline("goodbye.txt")
+"world2"
+
+julia> rm("goodbye.txt")
+
+```
 """
 function mv(src::AbstractString, dst::AbstractString; force::Bool=false,
                                                       remove_destination::Union{Bool,Nothing}=nothing)
