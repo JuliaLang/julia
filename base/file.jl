@@ -363,17 +363,11 @@ Return `dst`.
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> write("hello.txt", "world");
 
-julia> "hello.txt" in readdir()
-true
-
 julia> mv("hello.txt", "goodbye.txt")
 "goodbye.txt"
 
 julia> "hello.txt" in readdir()
 false
-
-julia> "goodbye.txt" in readdir()
-true
 
 julia> readline("goodbye.txt")
 "world"
@@ -388,11 +382,6 @@ Stacktrace:
 
 julia> mv("hello.txt", "goodbye.txt", force=true)
 "goodbye.txt"
-
-julia> readline("goodbye.txt")
-"world2"
-
-julia> rm("goodbye.txt")
 
 ```
 """
