@@ -1753,6 +1753,12 @@ end
 @deprecate accumulate(op, v0, x::AbstractVector) accumulate(op, x; init=v0)
 @deprecate accumulate!(op, y, v0, x::AbstractVector) accumulate!(op, y, x; init=v0)
 
+# issue 27352
+function print(io::IO, ::Nothing)
+    depwarn("Calling `print` on `nothing` is deprecated; use `show`, `repr`, or custom output instead.", :print)
+    show(io, nothing)
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
