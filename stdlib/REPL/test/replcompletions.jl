@@ -3,7 +3,6 @@
 using REPL.REPLCompletions
 using Test
 using Random
-import OldPkg
 
 let ex = quote
     module CompletionFoo
