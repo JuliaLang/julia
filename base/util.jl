@@ -458,10 +458,10 @@ graphical interface.
 function getpass end
 
 if Sys.iswindows()
-function getpass(input::TTY, prompt::AbstractString)
+function getpass(input::TTY, output::IO, prompt::AbstractString)
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
-    print(prompt, ": ")
-    flush(stdout)
+    print(output, prompt, ": ")
+    flush(output)
     s = SecretBuffer()
     plen = 0
     while true
@@ -479,8 +479,8 @@ function getpass(input::TTY, prompt::AbstractString)
     return s
 end
 else
-function getpass(input::TTY, prompt::AbstractString)
-    input === stdin || throw(ArgumentError("getpass only works for stdin"))
+function getpass(input::TTY, output::IO, prompt::AbstractString)
+    (input === stdin && output === stdout) || throw(ArgumentError("getpass only works for stdin"))
     msg = string(prompt, ": ")
     unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
 end
@@ -488,7 +488,7 @@ end
 
 # allow new getpass methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-getpass(prompt::AbstractString) = getpass(stdin, prompt)
+getpass(prompt::AbstractString) = getpass(stdin, stdout, prompt)
 
 """
     prompt(message; default="") -> Union{String, Nothing}
@@ -499,11 +499,10 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
-function prompt(input::TTY, message::AbstractString; default::AbstractString="")
-    input === stdin || throw(ArgumentError("prompt only works for stdin"))
+function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
-    print(msg)
-    uinput = readline(keep=true)
+    print(output, msg)
+    uinput = readline(input, keep=true)
     isempty(uinput) && return nothing  # Encountered an EOF
     uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
@@ -511,7 +510,7 @@ end
 
 # allow new prompt methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, message, default=default)
+prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, stdout, message, default=default)
 
 # Windows authentication prompt
 if Sys.iswindows()
