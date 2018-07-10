@@ -1035,13 +1035,13 @@ mutable struct Stateful{T, VS}
     end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
-        new{T, VS}(itr, iterate(itr)::VS, 0)
+        return new{T, VS}(itr, iterate(itr)::VS, 0)
     end
 end
 
 function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
     s.itr = itr
-    s.nextvalstate = iterate(itr)
+    setfield!(s, :nextvalstate, iterate(itr))
     s.taken = 0
     s
 end
@@ -1057,7 +1057,8 @@ else
     # having to typesubtract
     function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
         valstate === nothing && return nothing
-        iterate(itr, tail(valstate))
+        val, st = valstate
+        return iterate(itr, st)
     end
     function _approx_iter_type(itrT::Type, vstate::Type)
         vstate <: Union{Nothing, Tuple{Any, Any}} || return Any

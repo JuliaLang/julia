@@ -1189,7 +1189,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false) # any result is ok
     @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Const(false)
-    @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
+    @test isa_tfunc(typeof(Union{}), Union{}) === Union{}
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
     let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
@@ -1204,7 +1204,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(Val{1}, Type{Val{T}} where T) === Bool
     @test isa_tfunc(Val{1}, DataType) === Bool
     @test isa_tfunc(Any, Const(Any)) === Const(true)
-    @test isa_tfunc(Any, Union{}) === Union{} # any result is ok
+    @test isa_tfunc(Any, Union{}) === Union{}
     @test isa_tfunc(Any, Type{Union{}}) === Const(false)
     @test isa_tfunc(Union{Int64, Float64}, Type{Real}) === Const(true)
     @test isa_tfunc(Union{Int64, Float64}, Type{Integer}) === Bool
@@ -1467,6 +1467,19 @@ result = f24852_kernel(x, y)
 
 # TODO: test that `expand_early = true` + inflated `method_for_inference_limit_heuristics`
 # can be used to tighten up some inference result.
+
+f26339(T) = T === Union{} ? 1 : ""
+g26339(T) = T === Int ? 1 : ""
+@test Base.return_types(f26339, (Int,)) == Any[String]
+@test Base.return_types(g26339, (Int,)) == Any[String]
+@test Base.return_types(f26339, (Type{Int},)) == Any[String]
+@test Base.return_types(g26339, (Type{Int},)) == Any[Int]
+@test Base.return_types(f26339, (Type{Union{}},)) == Any[Int]
+@test Base.return_types(g26339, (Type{Union{}},)) == Any[String]
+@test Base.return_types(f26339, (typeof(Union{}),)) == Any[Int]
+@test Base.return_types(g26339, (typeof(Union{}),)) == Any[String]
+@test Base.return_types(f26339, (Type,)) == Any[Union{Int, String}]
+@test Base.return_types(g26339, (Type,)) == Any[Union{Int, String}]
 
 # Test that Conditional doesn't get widened to Bool too quickly
 f25261() = (1, 1)

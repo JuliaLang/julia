@@ -126,6 +126,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
     length(argtypes) >= nargs || return Any
     haveconst = false
     for a in argtypes
+        a = maybe_widen_conditional(a)
         if isa(a, Const) && !isdefined(typeof(a.val), :instance) && !(isa(a.val, Type) && issingletontype(a.val))
             # have new information from argtypes that wasn't available from the signature
             haveconst = true
@@ -154,6 +155,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
         if !istopfunction(f, :getproperty) && !istopfunction(f, :setproperty!)
             # in this case, see if all of the arguments are constants
             for a in argtypes
+                a = maybe_widen_conditional(a)
                 if !isa(a, Const) && !isconstType(a)
                     return Any
                 end
@@ -167,7 +169,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
         if method.isva
             vargs = argtypes[(nargs + 1):end]
             for i in 1:length(vargs)
-                a = vargs[i]
+                a = maybe_widen_conditional(vargs[i])
                 if i > length(inf_result.vargs)
                     push!(inf_result.vargs, a)
                 elseif a isa Const
@@ -176,7 +178,7 @@ function abstract_call_method_with_const_args(@nospecialize(f), argtypes::Vector
             end
         end
         for i in 1:nargs
-            a = argtypes[i]
+            a = maybe_widen_conditional(argtypes[i])
             if a isa Const
                 atypes[i] = a # inject Const argtypes into inference
             end
@@ -486,8 +488,8 @@ end
 
 function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
     for i = 2:length(argtypes)
-        a = argtypes[i]
-        if !(isa(a,Const) || isconstType(a))
+        a = maybe_widen_conditional(argtypes[i])
+        if !(isa(a, Const) || isconstType(a))
             return false
         end
     end
@@ -505,7 +507,7 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
         return false
     end
 
-    args = Any[ (a=argtypes[i]; isa(a,Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
+    args = Any[ (a = maybe_widen_conditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
     try
         value = Core._apply_pure(f, args)
         # TODO: add some sort of edge(s)
@@ -530,13 +532,16 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
 
     if isa(f, Builtin) || isa(f, IntrinsicFunction)
         if f === ifelse && fargs isa Vector{Any} && length(argtypes) == 4 && argtypes[2] isa Conditional
-            cnd = argtypes[2]
+            # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
+            cnd = argtypes[2]::Conditional
             tx = argtypes[3]
             ty = argtypes[4]
-            if isa(fargs[3], Slot) && slot_id(cnd.var) == slot_id(fargs[3])
+            a = ssa_def_expr(fargs[3], sv)
+            b = ssa_def_expr(fargs[4], sv)
+            if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
                 tx = typeintersect(tx, cnd.vtype)
             end
-            if isa(fargs[4], Slot) && slot_id(cnd.var) == slot_id(fargs[4])
+            if isa(b, Slot) && slot_id(cnd.var) == slot_id(b)
                 ty = typeintersect(ty, cnd.elsetype)
             end
             return tmerge(tx, ty)
@@ -554,18 +559,20 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                 a = ssa_def_expr(fargs[2], sv)
                 if isa(a, Slot)
                     aty = widenconst(argtypes[2])
+                    if rt === Const(false)
+                        return Conditional(a, Union{}, aty)
+                    elseif rt === Const(true)
+                        return Conditional(a, aty, Union{})
+                    end
                     tty_ub, isexact_tty = instanceof_tfunc(argtypes[3])
                     if isexact_tty && !isa(tty_ub, TypeVar)
                         tty_lb = tty_ub # TODO: this would be wrong if !isexact_tty, but instanceof_tfunc doesn't preserve this info
                         if !has_free_typevars(tty_lb) && !has_free_typevars(tty_ub)
                             ifty = typeintersect(aty, tty_ub)
-                            elsety = typesubtract(aty, tty_lb)
-                            if ifty != elsety
-                                return Conditional(a, ifty, elsety)
-                            end
+                            elty = typesubtract(aty, tty_lb)
+                            return Conditional(a, ifty, elty)
                         end
                     end
-                    return Bool
                 end
             elseif f === (===)
                 a = ssa_def_expr(fargs[2], sv)
@@ -574,21 +581,42 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                 bty = argtypes[3]
                 # if doing a comparison to a singleton, consider returning a `Conditional` instead
                 if isa(aty, Const) && isa(b, Slot)
-                    if isdefined(typeof(aty.val), :instance) # can only widen a if it is a singleton
-                        return Conditional(b, aty, typesubtract(widenconst(bty), typeof(aty.val)))
+                    if rt === Const(false)
+                        aty = Union{}
+                    elseif rt === Const(true)
+                        bty = Union{}
+                    elseif bty isa Type && isdefined(typeof(aty.val), :instance) # can only widen a if it is a singleton
+                        bty = typesubtract(bty, typeof(aty.val))
                     end
-                    return isa(rt, Const) ? rt : Conditional(b, aty, bty)
+                    return Conditional(b, aty, bty)
                 end
                 if isa(bty, Const) && isa(a, Slot)
-                    if isdefined(typeof(bty.val), :instance) # same for b
-                        return Conditional(a, bty, typesubtract(widenconst(aty), typeof(bty.val)))
+                    if rt === Const(false)
+                        bty = Union{}
+                    elseif rt === Const(true)
+                        aty = Union{}
+                    elseif aty isa Type && isdefined(typeof(bty.val), :instance) # same for b
+                        aty = typesubtract(aty, typeof(bty.val))
                     end
-                    return isa(rt, Const) ? rt : Conditional(a, bty, aty)
+                    return Conditional(a, bty, aty)
+                end
+                if isa(b, Slot)
+                    return Conditional(b, bty, bty)
+                end
+                if isa(a, Slot)
+                    return Conditional(a, aty, aty)
                 end
             elseif f === Core.Compiler.not_int
                 aty = argtypes[2]
                 if isa(aty, Conditional)
-                    return Conditional(aty.var, aty.elsetype, aty.vtype)
+                    ifty = aty.elsetype
+                    elty = aty.vtype
+                    if rt === Const(false)
+                        ifty = Union{}
+                    elseif rt === Const(true)
+                        elty = Union{}
+                    end
+                    return Conditional(aty.var, ifty, elty)
                 end
             end
         end
@@ -947,7 +975,7 @@ end
 # determine whether `ex` abstractly evals to constant `c`
 function abstract_evals_to_constant(@nospecialize(ex), @nospecialize(c), vtypes::VarTable, sv::InferenceState)
     av = abstract_eval(ex, vtypes, sv)
-    return isa(av,Const) && av.val === c
+    return isa(av, Const) && av.val === c
 end
 
 # make as much progress on `frame` as possible (without handling cycles)
@@ -1018,7 +1046,7 @@ function typeinf_local(frame::InferenceState)
                 end
             elseif hd === :return
                 pc´ = n + 1
-                rt = abstract_eval(stmt.args[1], s[pc], frame)
+                rt = maybe_widen_conditional(abstract_eval(stmt.args[1], s[pc], frame))
                 if !isa(rt, Const) && !isa(rt, Type)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally

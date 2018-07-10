@@ -321,6 +321,10 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                 return Conditional(typea.var, vtype, elsetype)
             end
         end
+        val = maybe_extract_const_bool(typea)
+        if val isa Bool && val === maybe_extract_const_bool(typeb)
+            return Const(val)
+        end
         return Bool
     end
     # no special type-inference lattice, join the types

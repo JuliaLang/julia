@@ -72,6 +72,9 @@ function instanceof_tfunc(@nospecialize(t))
     elseif isa(t, Union)
         ta, isexact_a = instanceof_tfunc(t.a)
         tb, isexact_b = instanceof_tfunc(t.b)
+        ta === Union{} && return tb, isexact_b
+        tb === Union{} && return ta, isexact_a
+        ta == tb && return ta, isexact_a && isexact_b
         return Union{ta, tb}, false # at runtime, will be exactly one of these
     end
     return Any, false
@@ -206,27 +209,29 @@ add_tfunc(ifelse, 3, 3,
                 return Bottom
             end
         elseif isa(cnd, Conditional)
-            # handled in abstract_call
+            # optimized (if applicable) in abstract_call
         elseif !(Bool ⊑ cnd)
             return Bottom
         end
         return tmerge(x, y)
     end, 1)
 function egal_tfunc(@nospecialize(x), @nospecialize(y))
-    if isa(x, Const) && isa(y, Const)
-        return Const(x.val === y.val)
-    elseif typeintersect(widenconst(x), widenconst(y)) === Bottom
-        return Const(false)
-    elseif (isa(x, Const) && y === typeof(x.val) && isdefined(y, :instance)) ||
-           (isa(y, Const) && x === typeof(y.val) && isdefined(x, :instance))
-        return Const(true)
-    elseif isa(x, Conditional) && isa(y, Const)
-        y.val === false && return Conditional(x.var, x.elsetype, x.vtype)
-        y.val === true && return x
+    xx = maybe_widen_conditional(x)
+    yy = maybe_widen_conditional(y)
+    if isa(x, Conditional) && isa(yy, Const)
+        yy.val === false && return Conditional(x.var, x.elsetype, x.vtype)
+        yy.val === true && return x
         return x
-    elseif isa(y, Conditional) && isa(x, Const)
-        x.val === false && return Conditional(y.var, y.elsetype, y.vtype)
-        x.val === true && return y
+    elseif isa(y, Conditional) && isa(xx, Const)
+        xx.val === false && return Conditional(y.var, y.elsetype, y.vtype)
+        xx.val === true && return y
+    elseif isa(xx, Const) && isa(yy, Const)
+        return Const(xx.val === yy.val)
+    elseif typeintersect(widenconst(xx), widenconst(yy)) === Bottom
+        return Const(false)
+    elseif (isa(xx, Const) && y === typeof(xx.val) && isdefined(y, :instance)) ||
+           (isa(yy, Const) && x === typeof(yy.val) && isdefined(x, :instance))
+        return Const(true)
     end
     return Bool
 end
@@ -374,7 +379,7 @@ end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
 add_tfunc(typeassert, 2, 2,
           function (@nospecialize(v), @nospecialize(t))
-              t, isexact = instanceof_tfunc(t)
+              t = instanceof_tfunc(t)[1]
               t === Any && return v
               if isa(v, Const)
                   if !has_free_typevars(t) && !isa(v.val, t)
@@ -787,7 +792,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     tparams = Any[]
     outervars = Any[]
     for i = 1:largs
-        ai = args[i]
+        ai = maybe_widen_conditional(args[i])
         if isType(ai)
             aip1 = ai.parameters[1]
             canconst &= !has_free_typevars(aip1)
@@ -939,7 +944,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
                            sv::Union{InferenceState,Nothing}, params::Params = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
-        for a in argtypes
+        for a in argtypes # TODO: permit Conditional here too
             if !isa(a, Const)
                 return tuple_tfunc(argtypes_to_type(argtypes))
             end
@@ -1080,7 +1085,8 @@ end
 
 # N.B.: typename maps type equivalence classes to a single value
 function typename_static(@nospecialize(t))
-    t = unwrap_unionall(t)
+    t isa Const && return _typename(t.val)
+    t isa Conditional && return Bool.name
+    t = unwrap_unionall(widenconst(t))
     return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
 end
-typename_static(t::Const) = _typename(t.val)
