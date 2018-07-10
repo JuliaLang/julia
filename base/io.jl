@@ -289,6 +289,8 @@ Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 
+read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
+
 """
     read!(stream::IO, array::Union{Array, BitArray})
     read!(filename::AbstractString, array::Union{Array, BitArray})
