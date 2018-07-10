@@ -591,12 +591,12 @@ uabs(x::BitSigned) = unsigned(abs(x))
 
 
 """
-    nextfloat(x::AbstractFloat, n::Integer)
+    nextfloat(x::IEEEFloat, n::Integer)
 
 The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
 applications of `prevfloat` if `n < 0`.
 """
-function nextfloat(f::AbstractFloat, d::Integer)
+function nextfloat(f::IEEEFloat, d::Integer)
     F = typeof(f)
     fumax = reinterpret(Unsigned, F(Inf))
     U = typeof(fumax)
