@@ -61,7 +61,7 @@ function default_metafmt(level, _module, group, id, file, line)
     color = default_logcolor(level)
     prefix = (level == Warn ? "Warning" : string(level))*':'
     mod = _module === nothing ? "" : "$(_module) "
-    suffix = (Info <= level < Warn) ? "" : "@ $mod$(basename(file)):$line"
+    suffix = (Info <= level < Warn) ? "" : "@ $mod$(Base.contractuser(file)):$line"
     color,prefix,suffix
 end
 
