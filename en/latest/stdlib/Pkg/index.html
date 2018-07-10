@@ -80,16 +80,45 @@ shell&gt; cat ~/.julia/packages/MbedTLS/h1Vu/deps/build.log
 │   caller = macro expansion at OutputCollector.jl:63 [inlined]
 └ @ Core OutputCollector.jl:63
 ...
-[ Info: using prebuilt binaries</code></pre><h2><a class="nav-anchor" id="Creating-your-own-projects-1" href="#Creating-your-own-projects-1">Creating your own projects</a></h2><p>So far we have added packages to the default project at <code>~/.julia/environments/v0.7</code>, it is, however, easy to create other, independent, projects. It should be pointed out if two projects uses the same package at the same version, the content of this package is not duplicated. This is done using the <code>init</code> command. Below we make a new directory and create a new project in it:</p><pre><code class="language-none">shell&gt; mkdir MyProject
+[ Info: using prebuilt binaries</code></pre><h2><a class="nav-anchor" id="Creating-your-own-projects-1" href="#Creating-your-own-projects-1">Creating your own projects</a></h2><p>So far we have added packages to the default project at <code>~/.julia/environments/v0.7</code>, it is, however, easy to create other, independent, projects. It should be pointed out if two projects uses the same package at the same version, the content of this package is not duplicated. In order to create a new project, create a directory for it and then activate that directory to make it the &quot;active project&quot; which package operations manipulate:</p><pre><code class="language-none">shell&gt; mkdir MyProject
 
 shell&gt; cd MyProject
 /Users/kristoffer/MyProject
 
-(v0.7) pkg&gt; init
-Initialized project at /Users/kristoffer/MyProject/Project.toml
+(v0.7) pkg&gt; activate .
 
 (MyProject) pkg&gt; st
-    Status `Project.toml`</code></pre><p>Note that the REPL prompt changed when the new project was initiated, in other words, Pkg automatically set the current environment to the one that just got initiated. Since this is a newly created project, the status command show it contains no packages. Packages added here again in a completely separate environment from the one earlier used.</p><h2><a class="nav-anchor" id="Garbage-collecting-old,-unused-packages-1" href="#Garbage-collecting-old,-unused-packages-1">Garbage collecting old, unused packages</a></h2><p>As packages are updated and projects are deleted, installed packages that were once used will inevitably become old and not used from any existing project. Pkg keeps a log of all projects used so it can go through the log and see exactly which projects still exist and what packages those projects used. The rest can be deleted. This is done with the <code>gc</code> command:</p><pre><code class="language-none">(v0.7) pkg&gt; gc
+    Status `Project.toml`</code></pre><p>Note that the REPL prompt changed when the new project is activated. Since this is a newly created project, the status command show it contains no packages, and in fact, it has no project or manifest file until we add a package to it:</p><pre><code class="language-none">shell&gt; ls -l
+total 0
+
+(MyProject) pkg&gt; add Example
+  Updating registry at `~/.julia/registries/Uncurated`
+  Updating git-repo `https://github.com/JuliaRegistries/Uncurated.git`
+ Resolving package versions...
+  Updating `Project.toml`
+  [7876af07] + Example v0.5.1
+  Updating `Manifest.toml`
+  [7876af07] + Example v0.5.1
+  [8dfed614] + Test
+
+shell&gt; ls -l
+total 8
+-rw-r--r-- 1 stefan staff 207 Jul  3 16:35 Manifest.toml
+-rw-r--r-- 1 stefan staff  56 Jul  3 16:35 Project.toml
+
+shell&gt; cat Project.toml
+[deps]
+Example = &quot;7876af07-990d-54b4-ab0e-23690620f79a&quot;
+
+shell&gt; cat Manifest.toml
+[[Example]]
+deps = [&quot;Test&quot;]
+git-tree-sha1 = &quot;8eb7b4d4ca487caade9ba3e85932e28ce6d6e1f8&quot;
+uuid = &quot;7876af07-990d-54b4-ab0e-23690620f79a&quot;
+version = &quot;0.5.1&quot;
+
+[[Test]]
+uuid = &quot;8dfed614-e22c-5e08-85e1-65c5234f0b40&quot;</code></pre><p>This new environment is completely separate from the one we used earlier.</p><h2><a class="nav-anchor" id="Garbage-collecting-old,-unused-packages-1" href="#Garbage-collecting-old,-unused-packages-1">Garbage collecting old, unused packages</a></h2><p>As packages are updated and projects are deleted, installed packages that were once used will inevitably become old and not used from any existing project. Pkg keeps a log of all projects used so it can go through the log and see exactly which projects still exist and what packages those projects used. The rest can be deleted. This is done with the <code>gc</code> command:</p><pre><code class="language-none">(v0.7) pkg&gt; gc
     Active manifests at:
         `/Users/kristoffer/BinaryProvider/Manifest.toml`
         ...
@@ -169,7 +198,7 @@ println(&quot;Testing...&quot;)
    Testing HelloWorld
  Resolving package versions...
 Testing...
-   Testing HelloWorld tests passed</code></pre><h4><a class="nav-anchor" id="Test-specific-dependencies-1" href="#Test-specific-dependencies-1">Test-specific dependencies</a></h4><p>Sometimes one might want to use some packages only at testing time but not enforce a dependency on them when the package is used. This is possible by adding dependencies to a &quot;test target&quot; to the Project file. Here we add the <code>Test</code> standard library as a test-only dependency by adding the following to the Project file:</p><pre><code class="language-none">[target.test.deps]
+   Testing HelloWorld tests passed</code></pre><h4><a class="nav-anchor" id="Test-specific-dependencies-1" href="#Test-specific-dependencies-1">Test-specific dependencies</a></h4><p>Sometimes one might want to use some packages only at testing time but not enforce a dependency on them when the package is used. This is possible by adding dependencies to a &quot;test target&quot; to the Project file. Here we add the <code>Test</code> standard library as a test-only dependency by adding the following to the Project file:</p><pre><code class="language-none">[targets.test.deps]
 Test = &quot;8dfed614-e22c-5e08-85e1-65c5234f0b40&quot;</code></pre><p>We can now use <code>Test</code> in the test script and we can see that it gets installed on testing:</p><pre><code class="language-none">shell&gt; cat test/runtests.jl
 using Test
 @test 1 == 1
