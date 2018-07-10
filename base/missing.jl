@@ -254,8 +254,6 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         end
         i > ilast && return Some(mapreduce_first(f, op, a1))
         a2 = ai::eltype(itr)
-        # Unexpectedly, the following assertion allows SIMD instructions to be emitted
-        A[i]::eltype(itr)
         i += 1
         v = op(f(a1), f(a2))
         @simd for i = i:ilast
