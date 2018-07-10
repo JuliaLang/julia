@@ -7,6 +7,9 @@
  <metadata_license>CC-BY-SA-3.0</metadata_license>
  <project_license>MIT and LGPL-2.1+ and GPL-2.0+</project_license>
  <summary>High-performance programming language for technical computing</summary>
+ <provides>
+  <binary>julia</binary>
+ </provides>
  <description>
   <p>
    Julia is a high-level, high-performance dynamic programming language for
