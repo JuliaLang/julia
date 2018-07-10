@@ -458,7 +458,8 @@ graphical interface.
 function getpass end
 
 if Sys.iswindows()
-function getpass(prompt::AbstractString)
+function getpass(input::TTY, prompt::AbstractString)
+    input === stdin || throw(ArgumentError("getpass only works for stdin"))
     print(prompt, ": ")
     flush(stdout)
     s = SecretBuffer()
@@ -478,11 +479,16 @@ function getpass(prompt::AbstractString)
     return s
 end
 else
-function getpass(prompt::AbstractString)
+function getpass(input::TTY, prompt::AbstractString)
+    input === stdin || throw(ArgumentError("getpass only works for stdin"))
     msg = string(prompt, ": ")
     unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
 end
 end
+
+# allow new getpass methods to be defined if stdin has been
+# redirected to some custom stream, e.g. in IJulia.
+getpass(prompt::AbstractString) = getpass(stdin, prompt)
 
 """
     prompt(message; default="") -> Union{String, Nothing}
@@ -493,7 +499,8 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
-function prompt(message::AbstractString; default::AbstractString="")
+function prompt(input::TTY, message::AbstractString; default::AbstractString="")
+    input === stdin || throw(ArgumentError("prompt only works for stdin"))
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
     print(msg)
     uinput = readline(keep=true)
@@ -502,6 +509,9 @@ function prompt(message::AbstractString; default::AbstractString="")
     isempty(uinput) ? default : uinput
 end
 
+# allow new prompt methods to be defined if stdin has been
+# redirected to some custom stream, e.g. in IJulia.
+prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, message, default=default)
 
 # Windows authentication prompt
 if Sys.iswindows()
