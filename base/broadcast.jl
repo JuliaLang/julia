@@ -482,7 +482,7 @@ an `Int`.
     tuples may be created by `newindexer(argument)`.
 """
 Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(broadcast_axes(arg), I.I))
-Base.@propagate_inbounds newindex(arg, I::Int) = CartesianIndex(_newindex(broadcast_axes(arg), (I,)))
+Base.@propagate_inbounds newindex(arg, I::Integer) = CartesianIndex(_newindex(broadcast_axes(arg), (I,)))
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(Base.unsafe_length(ax[1])==1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
@@ -490,8 +490,8 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = CartesianIndex(_newindex(I.I, keep, Idefault))
-@inline newindex(i::Int, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
-@inline newindex(i::Int, keep::Tuple{}, idefault) = CartesianIndex(())
+@inline newindex(i::Integer, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
+@inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
 @inline _newindex(I, keep, Idefault) =
     (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
 @inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I
@@ -507,14 +507,14 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
     (Base._length(ind1)!=1, keep...), (first(ind1), Idefault...)
 end
 
-@inline function Base.getindex(bc::Broadcasted, I::Union{Int,CartesianIndex})
+@inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
 end
-Base.@propagate_inbounds Base.getindex(bc::Broadcasted, i1::Int, i2::Int, I::Int...) = bc[CartesianIndex((i1, i2, I...))]
+Base.@propagate_inbounds Base.getindex(bc::Broadcasted, i1::Integer, i2::Integer, I::Integer...) = bc[CartesianIndex((i1, i2, I...))]
 Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
 
-@inline Base.checkbounds(bc::Broadcasted, I::Union{Int,CartesianIndex}) =
+@inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
 
 

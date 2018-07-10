@@ -729,6 +729,13 @@ let f(args...) = *(args...)
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
 end
 
+@testset "Issue #27911: Broadcasting over collections with big indices" begin
+    @test iszero.(Int128(0):Int128(2)) == [true, false, false]
+    @test iszero.((Int128(0):Int128(2)) .- 1) == [false, true, false]
+    @test iszero.(big(0):big(2)) == [true, false, false]
+    @test iszero.((big(0):big(2)) .- 1) == [false, true, false]
+end
+
 @testset "Issue #27775: Broadcast!ing over nested scalar operations" begin
     a = zeros(2)
     a .= 1 ./ (1 + 2)
