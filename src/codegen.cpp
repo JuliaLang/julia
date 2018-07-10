@@ -494,14 +494,6 @@ struct jl_varinfo_t {
     }
 };
 
-// aggregate of array metadata
-typedef struct {
-    Value *dataptr;
-    Value *len;
-    std::vector<Value*> sizes;
-    jl_value_t *ty;
-} jl_arrayvar_t;
-
 struct jl_returninfo_t {
     Function *decl;
     enum CallingConv {
@@ -530,7 +522,6 @@ public:
     std::vector<jl_cgval_t> SAvalues;
     std::vector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, jl_value_t *>> PhiNodes;
     std::vector<bool> ssavalue_assigned;
-    std::map<int, jl_arrayvar_t> *arrayvars = NULL;
     jl_module_t *module = NULL;
     jl_method_instance_t *linfo = NULL;
     jl_code_info_t *source = NULL;
@@ -3637,15 +3628,6 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t 
     if (rval_info.typ == jl_bottom_type)
         return;
 
-    // add info to arrayvar list
-    if (l && rval_info.isboxed) {
-        // check isboxed in case rval isn't the right type (for example, on a dead branch),
-        // so we don't try to assign it to the arrayvar info
-        jl_arrayvar_t *av = arrayvar_for(ctx, l);
-        if (av != NULL)
-            assign_arrayvar(ctx, *av, rval_info);
-    }
-
     // compute / store tindex info
     if (vi.pTIndex) {
         Value *tindex;
@@ -4204,12 +4186,12 @@ static void emit_cfunc_invalidate(
         }
         else {
             gf_ret = emit_bitcast(ctx, gf_ret, gfrt->getPointerTo());
-            ctx.builder.CreateRet(ctx.builder.CreateAlignedLoad(gf_ret, julia_alignment(astrt, 0)));
+            ctx.builder.CreateRet(ctx.builder.CreateAlignedLoad(gf_ret, julia_alignment(astrt)));
         }
         break;
     }
     case jl_returninfo_t::SRet: {
-        emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(astrt), julia_alignment(astrt, 0));
+        emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(astrt), julia_alignment(astrt));
         ctx.builder.CreateRetVoid();
         break;
     }
@@ -5056,7 +5038,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, const jl_returnin
         if (lty != NULL && !isboxed) {
             theArg = decay_derived(emit_bitcast(ctx, theArg, PointerType::get(lty, 0)));
             if (!lty->isAggregateType()) // keep "aggregate" type values in place as pointers
-                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(ty, 0));
+                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(ty));
         }
         assert(dyn_cast<UndefValue>(theArg) == NULL);
         args[idx] = theArg;
@@ -5269,9 +5251,7 @@ static std::unique_ptr<Module> emit_function(
 
     //jl_static_show(JL_STDOUT, (jl_value_t*)ast);
     //jl_printf(JL_STDOUT, "\n");
-    std::map<int, jl_arrayvar_t> arrayvars;
     std::map<int, BasicBlock*> labels;
-    ctx.arrayvars = &arrayvars;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
     ctx.source = src;
@@ -5703,7 +5683,6 @@ static std::unique_ptr<Module> emit_function(
             continue;
         }
         allocate_local(varinfo, s);
-        maybe_alloc_arrayvar(ctx, i);
     }
 
     std::map<int, int> upsilon_to_phic;
@@ -5825,11 +5804,6 @@ static std::unique_ptr<Module> emit_function(
             else {
                 Value *argp = boxed(ctx, theArg);
                 ctx.builder.CreateStore(argp, vi.boxroot);
-            }
-            // get arrayvar data if applicable
-            if (arrayvars.find(i) != arrayvars.end()) {
-                jl_arrayvar_t av = arrayvars[i];
-                assign_arrayvar(ctx, av, theArg);
             }
         }
     }
@@ -6160,7 +6134,7 @@ static std::unique_ptr<Module> emit_function(
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_concrete_type(jlrettype));
                         emit_memcpy(ctx, sret, nullptr, retvalinfo, jl_datatype_size(jlrettype),
-                                    julia_alignment(jlrettype, 0));
+                                    julia_alignment(jlrettype));
                     }
                     else { // must be jl_returninfo_t::Union
                         emit_unionmove(ctx, sret, nullptr, retvalinfo, /*skip*/isboxed_union);

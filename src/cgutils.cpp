@@ -4,7 +4,9 @@
 
 static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
 {
-    load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, md );
+    load_or_store->setMetadata(llvm::LLVMContext::MD_tbaa, md);
+    if (isa<LoadInst>(load_or_store) && md == tbaa_const)
+        load_or_store->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(md->getContext(), None));
     return load_or_store;
 }
 
@@ -358,20 +360,29 @@ static size_t dereferenceable_size(jl_value_t *jt)
     }
 }
 
+// If given alignment is 0 and LLVM's assumed alignment for a load/store via ptr
+// might be stricter than the Julia alignment for jltype, return the alignment of jltype.
+// Otherwise return the given alignment.
+static unsigned julia_alignment(jl_value_t *jltype)
+{
+    unsigned alignment = jl_datatype_align(jltype);
+    assert(alignment <= JL_HEAP_ALIGNMENT);
+    assert(JL_HEAP_ALIGNMENT % alignment == 0);
+    return alignment;
+}
+
 static inline void maybe_mark_argument_dereferenceable(Argument *A, jl_value_t *jt)
 {
-    auto F = A->getParent();
+    AttrBuilder B;
+    B.addAttribute(Attribute::NonNull);
     // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
-#if JL_LLVM_VERSION >= 50000
-    F->addParamAttr(A->getArgNo(), Attribute::NonNull);
-#else
-    F->setAttributes(F->getAttributes().addAttribute(jl_LLVMContext, A->getArgNo() + 1,
-                                                     Attribute::NonNull));
-#endif
     size_t size = dereferenceable_size(jt);
-    if (!size)
-        return;
-    F->addDereferenceableAttr(A->getArgNo() + 1, size);
+    if (size) {
+        B.addDereferenceableAttr(size);
+        if (!A->getType()->getPointerElementType()->isSized()) // mimic LLVM Loads.cpp isAligned
+            B.addAlignmentAttr(julia_alignment(jt));
+    }
+    A->addAttrs(B);
 }
 
 static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null,
@@ -1229,19 +1240,6 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
     return im1;
 }
 
-// If given alignment is 0 and LLVM's assumed alignment for a load/store via ptr
-// might be stricter than the Julia alignment for jltype, return the alignment of jltype.
-// Otherwise return the given alignment.
-static unsigned julia_alignment(jl_value_t *jltype, unsigned alignment)
-{
-    if (!alignment) {
-        alignment = jl_datatype_align(jltype);
-        assert(alignment <= JL_HEAP_ALIGNMENT);
-        assert(JL_HEAP_ALIGNMENT % alignment == 0);
-    }
-    return alignment;
-}
-
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, MDNode *tbaa_dest = nullptr, bool isVolatile = false);
 
 static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, jl_value_t *jltype,
@@ -1267,8 +1265,8 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     //    elt = data;
     //}
     //else {
-        Instruction *load = ctx.builder.CreateAlignedLoad(data, isboxed ?
-            alignment : julia_alignment(jltype, alignment), false);
+        Instruction *load = ctx.builder.CreateAlignedLoad(data, isboxed || alignment ?
+            alignment : julia_alignment(jltype), false);
         if (isboxed)
             load = maybe_mark_load_dereferenceable(load, true, jltype);
         if (tbaa) {
@@ -1316,7 +1314,7 @@ static void typed_store(jl_codectx_t &ctx,
     }
     if (idx_0based)
         data = ctx.builder.CreateInBoundsGEP(r->getType(), data, idx_0based);
-    Instruction *store = ctx.builder.CreateAlignedStore(r, data, isboxed ? alignment : julia_alignment(jltype, alignment));
+    Instruction *store = ctx.builder.CreateAlignedStore(r, data, isboxed || alignment ? alignment : julia_alignment(jltype));
     if (tbaa)
         tbaa_decorate(tbaa, store);
 }
@@ -1637,32 +1635,6 @@ static bool arraytype_constshape(jl_value_t *ty)
             jl_is_long(jl_tparam1(ty)) && jl_unbox_long(jl_tparam1(ty)) != 1);
 }
 
-static void maybe_alloc_arrayvar(jl_codectx_t &ctx, int s)
-{
-    jl_value_t *jt = ctx.slots[s].value.typ;
-    if (arraytype_constshape(jt)) {
-        // TODO: this optimization does not yet work with 1-d arrays, since the
-        // length and data pointer can change at any time via push!
-        // we could make it work by reloading the metadata when the array is
-        // passed to an external function (ideally only impure functions)
-        int ndims = jl_unbox_long(jl_tparam1(jt));
-        jl_value_t *jelt = jl_tparam0(jt);
-        bool isboxed = !jl_array_store_unboxed(jelt);
-        Type *elt = julia_type_to_llvm(jelt);
-        if (type_is_ghost(elt))
-            return;
-        if (isboxed)
-            elt = T_prjlvalue;
-        // CreateAlloca is OK here because maybe_alloc_arrayvar is only called in the prologue setup
-        jl_arrayvar_t &av = (*ctx.arrayvars)[s];
-        av.dataptr = ctx.builder.CreateAlloca(PointerType::get(elt, 0));
-        av.len = ctx.builder.CreateAlloca(T_size);
-        for (int i = 0; i < ndims - 1; i++)
-            av.sizes.push_back(ctx.builder.CreateAlloca(T_size));
-        av.ty = jt;
-    }
-}
-
 static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *dim)
 {
     Value *t = boxed(ctx, tinfo);
@@ -1672,20 +1644,6 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
             t,
             ctx.builder.CreateAdd(dim, ConstantInt::get(dim->getType(), o)),
             tbaa, T_psize);
-}
-
-static jl_arrayvar_t *arrayvar_for(jl_codectx_t &ctx, jl_value_t *ex)
-{
-    if (ex == NULL)
-        return NULL;
-    if (!jl_is_slot(ex))
-        return NULL;
-    int sl = jl_slot_number(ex) - 1;
-    auto av = ctx.arrayvars->find(sl);
-    if (av != ctx.arrayvars->end())
-        return &av->second;
-    //TODO: ssavalue case
-    return NULL;
 }
 
 static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int dim)
@@ -1726,9 +1684,6 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 
 static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo, jl_value_t *ex)
 {
-    jl_arrayvar_t *av = arrayvar_for(ctx, ex);
-    if (av != NULL)
-        return ctx.builder.CreateLoad(av->len);
     return emit_arraylen_prim(ctx, tinfo);
 }
 
@@ -1752,17 +1707,11 @@ static Value *emit_arrayptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, bool isb
 
 static Value *emit_arrayptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, jl_value_t *ex, bool isboxed = false)
 {
-    jl_arrayvar_t *av = arrayvar_for(ctx, ex);
-    if (av!=NULL)
-        return ctx.builder.CreateLoad(av->dataptr);
     return emit_arrayptr(ctx, tinfo, isboxed);
 }
 
 static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, jl_value_t *ex, int dim)
 {
-    jl_arrayvar_t *av = arrayvar_for(ctx, ex);
-    if (av != NULL && dim <= (int)av->sizes.size())
-        return ctx.builder.CreateLoad(av->sizes[dim - 1]);
     return emit_arraysize(ctx, tinfo, dim);
 }
 
@@ -1793,17 +1742,6 @@ static Value *emit_arrayelsize(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
                                           emit_bitcast(ctx, decay_derived(t), jl_parray_llvmt),
                                           elsize_field);
     return tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(addr));
-}
-
-static void assign_arrayvar(jl_codectx_t &ctx, jl_arrayvar_t &av, const jl_cgval_t &ainfo)
-{
-    Value *aptr = emit_bitcast(ctx,
-        emit_arrayptr(ctx, ainfo),
-        av.dataptr->getType()->getContainedType(0));
-    tbaa_decorate(tbaa_arrayptr, ctx.builder.CreateStore(aptr, av.dataptr));
-    ctx.builder.CreateStore(emit_arraylen_prim(ctx, ainfo), av.len);
-    for (size_t i = 0; i < av.sizes.size(); i++)
-        ctx.builder.CreateStore(emit_arraysize(ctx, ainfo, i + 1), av.sizes[i]);
 }
 
 // Returns the size of the array represented by `tinfo` for the given dimension `dim` if
@@ -2289,7 +2227,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
             else {
                 Value *src_ptr = data_pointer(ctx, src);
                 unsigned nb = jl_datatype_size(typ);
-                unsigned alignment = julia_alignment(typ, 0);
+                unsigned alignment = julia_alignment(typ);
                 Value *nbytes = ConstantInt::get(T_size, nb);
                 if (skip) {
                     // TODO: this Select is very bad for performance, but is necessary to work around LLVM bugs with the undef option that we want to use:
@@ -2316,7 +2254,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
         bool allunboxed = for_each_uniontype_small(
                 [&](unsigned idx, jl_datatype_t *jt) {
                     unsigned nb = jl_datatype_size(jt);
-                    unsigned alignment = julia_alignment((jl_value_t*)jt, 0);
+                    unsigned alignment = julia_alignment((jl_value_t*)jt);
                     BasicBlock *tempBB = BasicBlock::Create(jl_LLVMContext, "union_move", ctx.f);
                     ctx.builder.SetInsertPoint(tempBB);
                     switchInst->addCase(ConstantInt::get(T_int8, idx), tempBB);

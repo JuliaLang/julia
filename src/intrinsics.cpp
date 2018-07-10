@@ -367,7 +367,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         return NULL;
     }
 
-    unsigned alignment = julia_alignment(jt, 0);
+    unsigned alignment = julia_alignment(jt);
     Type *ptype = to->getPointerTo();
     if (dest) {
         emit_memcpy(ctx, dest, tbaa_dest, p, x.tbaa, jl_datatype_size(jt), alignment, false);
@@ -1325,15 +1325,5 @@ static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
 
 static FunctionType *ft1arg(Type *ret, Type *arg)
 {
-    std::vector<Type*> args1(0);
-    args1.push_back(arg);
-    return FunctionType::get(ret, args1, false);
-}
-
-static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
-{
-    std::vector<Type*> args2(0);
-    args2.push_back(arg1);
-    args2.push_back(arg2);
-    return FunctionType::get(ret, args2, false);
+    return FunctionType::get(ret, { arg }, false);
 }
