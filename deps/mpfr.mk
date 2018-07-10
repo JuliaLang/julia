@@ -20,6 +20,8 @@ ifeq ($(OS),Darwin)
 MPFR_CHECK_MFLAGS := LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
+MPFR_OPTS += --enable-float128
+
 ifeq ($(SANITIZE),1)
 # Force generic C build
 MPFR_OPTS += --host=none-unknown-linux
