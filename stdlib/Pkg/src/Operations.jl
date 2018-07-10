@@ -133,7 +133,7 @@ function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
     project_file = projectfile_path(path)
     fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
     (project_file === nothing) && return false
-    project = read_project(project_file)
+    project = read_package(project_file)
     compat = get(project, "compat", Dict())
     if haskey(compat, "julia")
         if !(VERSION in Types.semver_spec(compat["julia"]))
@@ -839,7 +839,7 @@ function collect_target_deps!(ctx::Context, pkgs::Vector{PackageSpec}, pkg::Pack
     end
     project = nothing
     if project_path !== nothing
-        project = read_project(project_path)
+        project = read_package(project_path)
     end
 
     # Pkg2 compatibiity with test/REQUIRE
@@ -1238,16 +1238,4 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
     end
 end
 
-function init(ctx::Context)
-    project_file = ctx.env.project_file
-    isfile(project_file) &&
-        cmderror("Project already initialized at $project_file")
-    if !ctx.preview
-        mkpath(dirname(project_file))
-        touch(project_file)
-    end
-    printpkgstyle(ctx, :Initialized, "project at " * abspath(project_file))
-end
-
 end # module
-

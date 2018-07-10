@@ -118,7 +118,7 @@ end
 
 temp_pkg_dir() do project_path
     @testset "simple add and remove with preview" begin
-        Pkg.init(project_path)
+        Pkg.activate(project_path)
         Pkg.add(TEST_PKG.name; preview = true)
         @test !isinstalled(TEST_PKG)
         Pkg.add(TEST_PKG.name)
@@ -390,7 +390,6 @@ temp_pkg_dir() do project_path
         withenv("USER" => "Test User") do
             Pkg.generate(env_path)
         end
-        repo = LibGit2.init(env_path)
         LibGit2.with(LibGit2.init(env_path)) do repo
             LibGit2.add!(repo, "*")
             LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)

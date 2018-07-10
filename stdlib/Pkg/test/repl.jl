@@ -24,17 +24,15 @@ function git_init_package(tmp, path)
     return pkgpath
 end
 
-
-@testset "generate init args" begin
+@testset "generate args" begin
     @test_throws CommandError pkg"generate"
-    @test_throws CommandError pkg"init Beep"
 end
 
 temp_pkg_dir() do project_path
     cd(project_path) do
         withenv("USER" => "Test User") do
             pkg"generate HelloWorld"
-            LibGit2.init(".")
+            LibGit2.close((LibGit2.init(".")))
             cd("HelloWorld")
             with_current_env() do
                 pkg"st"
@@ -56,6 +54,24 @@ temp_pkg_dir() do project_path
         LibGit2.with(LibGit2.GitRepo(devdir)) do repo
             @test LibGit2.branch(repo) == "DO_NOT_REMOVE"
         end
+
+        withenv("USER" => "Test User") do
+            pkg"generate Foo"
+        end
+        pkg"dev Foo"
+        mv(joinpath("Foo", "src", "Foo.jl"), joinpath("Foo", "src", "Foo2.jl"))
+        @test_throws CommandError pkg"dev Foo"
+        mv(joinpath("Foo", "src", "Foo2.jl"), joinpath("Foo", "src", "Foo.jl"))
+        write(joinpath("Foo", "Project.toml"), """
+            name = "Foo"
+        """
+        )
+        @test_throws CommandError pkg"dev Foo"
+        write(joinpath("Foo", "Project.toml"), """
+            uuid = "b7b78b08-812d-11e8-33cd-11188e330cbe"
+        """
+        )
+        @test_throws CommandError pkg"dev Foo"
     end
 end
 
@@ -77,7 +93,7 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     tokens = Pkg.REPLMode.tokenize("add git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git@0.5.0")
     @test tokens[1][2] ==              "git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git"
     @test repr(tokens[1][3]) == "VersionRange(\"0.5.0\")"
-    pkg"init"
+    pkg"activate ."
     pkg"add Example"
     @test isinstalled(TEST_PKG)
     v = Pkg.installed()[TEST_PKG.name]
@@ -230,7 +246,7 @@ end
 # Autocompletions
 temp_pkg_dir() do project_path; cd(project_path) do
     Pkg.Types.registries()
-    pkg"init"
+    pkg"activate ."
     c, r = test_complete("add Exam")
     @test "Example" in c
     c, r = test_complete("rm Exam")
@@ -334,9 +350,10 @@ temp_pkg_dir() do project_path
                         Pkg.generate(pkg_name)
                     end
                     cd(pkg_name) do
-                        repo = LibGit2.init(joinpath(project_path, parent_dir, pkg_name))
-                        LibGit2.add!(repo, "*")
-                        LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)
+                        LibGit2.with(LibGit2.init(joinpath(project_path, parent_dir, pkg_name))) do repo
+                            LibGit2.add!(repo, "*")
+                            LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)
+                        end
                     end #cd pkg_name
                 end # cd parent_dir
             end

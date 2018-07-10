@@ -22,7 +22,7 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, project_deps_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos_develop!, handle_repos_add!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
-    read_project, read_manifest, pathrepr, registries,
+    read_project, read_package, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
     PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED,
@@ -371,6 +371,19 @@ function read_project(file::String)
     isfile(file) ? open(read_project, file) : read_project(devnull)
 end
 
+_throw_package_err(x, f) = cmderror("expected a `$x` entry in project file at $(abspath(f))")
+function read_package(f::String)
+    project = read_project(f)
+    haskey(project, "name") || _throw_package_err("name", f)
+    haskey(project, "uuid") || _throw_package_err("uuid", f)
+    name = project["name"]
+    entry = joinpath(dirname(f), "src", "$name.jl")
+    if !isfile(entry)
+        cmderror("expected the file `src/$name.jl` to exist for package $name at $(dirname(f))")
+    end
+    return project
+end
+
 function read_manifest(io::IO)
     manifest = TOML.parse(io)
     for (name, infos) in manifest, info in infos
@@ -590,17 +603,17 @@ function parse_package!(ctx, pkg, project_path)
     env = ctx.env
     project_file = projectfile_path(project_path)
     if project_file !== nothing
-        project_data = parse_toml(project_file)
+        project_data = read_package(project_file)
         pkg.uuid = UUID(project_data["uuid"])
         pkg.name = project_data["name"]
         if haskey(project_data, "version")
             pkg.version = VersionNumber(project_data["version"])
         else
-            @warn "project file for $(pkg.name) is missing a `version` entry"
+            @warn "project file for $(pkg.name) at $(project_path) is missing a `version` entry"
             Pkg.Operations.set_maximum_version_registry!(env, pkg)
         end
     else
-        @warn "packages will need to have a [Julia]Project.toml file in the future"
+        @warn "package $(pkg.name) at $(project_path) will need to have a [Julia]Project.toml file in the future"
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
         else
