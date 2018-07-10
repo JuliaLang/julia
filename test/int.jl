@@ -188,18 +188,28 @@ end
     end
 end
 @testset "widen/widemul" begin
-    @test widen(UInt8(3)) === UInt(3)
-    @test widen(UInt16(3)) === UInt(3)
+    @test widen(UInt8(3)) === UInt16(3)
+    @test widen(UInt16(3)) === UInt32(3)
     @test widen(UInt32(3)) === UInt64(3)
     @test widen(UInt64(3)) === UInt128(3)
     @test widen(UInt128(3)) == 3
+
+    @test typeof(widen(UInt8(3))) == UInt16
+    @test typeof(widen(UInt16(3))) == UInt32
+    @test typeof(widen(UInt32(3))) == UInt64
+    @test typeof(widen(UInt64(3))) == UInt128
     @test typeof(widen(UInt128(3))) == BigInt
 
-    @test widen(Int8(-3)) === Int(-3)
-    @test widen(Int16(-3)) === Int(-3)
+    @test widen(Int8(-3)) === Int16(-3)
+    @test widen(Int16(-3)) === Int32(-3)
     @test widen(Int32(-3)) === Int64(-3)
     @test widen(Int64(-3)) === Int128(-3)
     @test widen(Int128(-3)) == -3
+
+    @test typeof(widen(Int8(-3))) == Int16
+    @test typeof(widen(Int16(-3))) == Int32
+    @test typeof(widen(Int32(-3))) == Int64
+    @test typeof(widen(Int64(-3))) == Int128
     @test typeof(widen(Int128(-3))) == BigInt
 
     @test widemul(false, false) == false

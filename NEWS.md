@@ -496,8 +496,7 @@ This section lists changes that do not have deprecation warnings.
   * `isequal` for `Ptr`s now compares element types; `==` still compares only addresses
     ([#26858]).
 
-  * `widen` on 8- and 16-bit integer types now widens to the platform word size (`Int`)
-    instead of to a 32-bit type ([#26859]).
+  * `widen` on 8- and 16-bit integer types now widens to 16- and 32-bit types, respectively. ([#28045]).
 
   * `mv`,`cp`, `touch`, `mkdir`, `mkpath`, `chmod` and `chown` now return the path that was created/modified
     rather than `nothing` ([#27071]).
