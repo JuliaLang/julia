@@ -1,10 +1,10 @@
 # The Julia Manual
 
   * [Introduction](@ref man-introduction)
-  * [Getting Started](@ref man-getting-started)
+  * [Getting Started](getting-started.md)
   * [Variables](variables.md)
-  * [Integers and Floating-Point Numbers](@ref)
-  * [Mathematical Operations and Elementary Functions](@ref)
+  * [Integers and Floating-Point Numbers](integers-and-floating-point-numbers.md)
+  * [Mathematical Operations and Elementary Functions](mathematical-operations.md)
   * [Complex and Rational Numbers](@ref)
   * [Strings](@ref)
   * [Functions](@ref)
