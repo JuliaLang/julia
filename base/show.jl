@@ -871,8 +871,8 @@ operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstri
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_assignment = operator_precedence(:(=))
 const prec_pair = operator_precedence(:(=>))
-const prec_arrow = operator_precedence(:(-->))
 const prec_control_flow = operator_precedence(:(&&))
+const prec_arrow = operator_precedence(:(-->))
 const prec_comparison = operator_precedence(:(>))
 const prec_power = operator_precedence(:(^))
 const prec_decl = operator_precedence(:(::))
