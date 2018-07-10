@@ -47,7 +47,6 @@ STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # fo
 
 # helper to avoid triggering precompile warnings
 
-global CPU_LOGICAL_CORES
 """
     Sys.CPU_LOGICAL_CORES
 
@@ -55,7 +54,7 @@ The number of logical CPU cores available in the system.
 
 See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-:CPU_LOGICAL_CORES
+CPU_LOGICAL_CORES = 1 # for bootstrap, changed on startup
 
 """
     Sys.ARCH
@@ -98,6 +97,7 @@ function __init__()
     else
         Int(ccall(:jl_cpu_cores, Int32, ()))
     end
+    global CPU_CORES = CPU_LOGICAL_CORES
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())

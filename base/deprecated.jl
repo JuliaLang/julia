@@ -1575,6 +1575,9 @@ end
     Base.@deprecate log Base.log
 end
 
+# PR 27856
+@eval Base.Sys Base.@deprecate_binding CPU_CORES CPU_LOGICAL_CORES true nothing false
+
 # PR 26071
 @deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
            collect(m.match for m in eachmatch(r, s, overlap = overlap)))
