@@ -2081,11 +2081,11 @@ function hash(A::AbstractArray, h::UInt)
     i = last(I)
     v1 = A[i]
     h = hash(i=>v1, h)
-    i = findprev(x->!isequal(x, v1), A, i)
+    i = let v1=v1; findprev(x->!isequal(x, v1), A, i); end
     i === nothing && return h
     v2 = A[i]
     h = hash(i=>v2, h)
-    i = findprev(x->!isequal(x, v1) && !isequal(x, v2), A, i)
+    i = let v1=v1, v2=v2; findprev(x->!isequal(x, v1) && !isequal(x, v2), A, i); end
     i === nothing && return h
     h = hash(i=>A[i], h)
 
@@ -2096,7 +2096,7 @@ function hash(A::AbstractArray, h::UInt)
     # an evenly divisible size).
     J = vec(I) # Reshape the (potentially cartesian) keys to more efficiently compute the linear skips
     j = LinearIndices(I)[i]
-    fibskip = prevfibskip = 1
+    fibskip = prevfibskip = oneunit(j)
     while j > fibskip
         j -= fibskip
         h = hash(A[J[j]], h)
