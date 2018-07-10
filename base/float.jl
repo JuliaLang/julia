@@ -648,7 +648,7 @@ nextfloat(x::AbstractFloat) = nextfloat(x,1)
 The result of `n` iterative applications of `prevfloat` to `x` if `n >= 0`, or `-n`
 applications of `nextfloat` if `n < 0`.
 """
-prevfloat(f::IEEEFloat, d::Integer) = nextfloat(x, -d)
+prevfloat(x::IEEEFloat, d::Integer) = nextfloat(x, -d)
 
 """
     prevfloat(x::AbstractFloat)
