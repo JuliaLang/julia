@@ -331,6 +331,7 @@ temp_pkg_dir() do project_path
     end
 end
 
+#=
 temp_pkg_dir() do project_path
     @testset "valid project file names" begin
         extract_uuid(toml_path) = begin
@@ -382,6 +383,7 @@ temp_pkg_dir() do project_path
         end
     end
 end
+=#
 
 temp_pkg_dir() do project_path
     function with_dummy_env(f)
