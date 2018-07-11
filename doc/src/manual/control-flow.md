@@ -563,7 +563,7 @@ below all interrupt the normal flow of control.
 |:----------------------------- |
 | [`ArgumentError`](@ref)       |
 | [`BoundsError`](@ref)         |
-| `CompositeException`          |
+| [`CompositeException`](@ref)  |
 | [`DivideError`](@ref)         |
 | [`DomainError`](@ref)         |
 | [`EOFError`](@ref)            |
