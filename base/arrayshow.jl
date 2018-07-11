@@ -449,18 +449,11 @@ end
 # given type `typeinfo` extracted from context, assuming a collection
 # is being displayed, deduce the elements type; in spirit this is
 # similar to `eltype`
-function typeinfo_eltype(typeinfo::Union{Nothing,Type})::Union{Type,Nothing}
-    if typeinfo == nothing || typeinfo == Any
-        # the current context knows nothing about what is being displayed, not even
-        # whether it's a collection or scalar
-        nothing
-    else
-        # we assume typeinfo refers to a collection-like type, whose
-        # eltype meaningfully represents what the context knows about
-        # the eltype of the object currently being displayed
-        eltype(typeinfo)
-    end
-end
+typeinfo_eltype(typeinfo) = nothing
+typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = T
+typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = Pair{K,V}
+typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = T
+
 
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)

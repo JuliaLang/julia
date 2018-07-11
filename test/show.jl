@@ -1217,6 +1217,10 @@ end
 
     # issue #28159
     @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Array{NamedTuple{names,Tuple{$Int,$Int}} where names,1}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
+
+    @test replstr(Vector[Any[1]]) == "1-element Array{Array{T,1} where T,1}:\n Any[1]"
+    @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
+        "1-element Array{AbstractDict{Integer,Integer},1}:\n Dict(1=>2)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
