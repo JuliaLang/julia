@@ -1559,3 +1559,14 @@ let oldstderr = stderr, newstderr, errtxt
     end
     @test occursin("WARNING: local variable B conflicts with a static parameter", fetch(errtxt))
 end
+
+# issue #28044
+code28044(x) = 10x
+begin
+    function f28044(::Val{code28044}) where code28044
+        code28044(2)
+    end
+    # make sure this assignment to `code28044` doesn't add an implicit-global
+    Val{code28044} where code28044
+end
+@test f28044(Val(identity)) == 2
