@@ -774,8 +774,8 @@ function peek end
 """
     @__LINE__ -> Int
 
-`@__LINE__` expands to the line number of the location of the macrocall.
-Returns `0` if the line number could not be determined.
+Expand to the line number of the location of the macrocall.
+Return `0` if the line number could not be determined.
 """
 macro __LINE__()
     return __source__.line

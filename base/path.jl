@@ -87,7 +87,7 @@ end
 """
     isabspath(path::AbstractString) -> Bool
 
-Determines whether a path is absolute (begins at the root directory).
+Determine whether a path is absolute (begins at the root directory).
 
 # Examples
 ```jldoctest
@@ -103,7 +103,7 @@ isabspath(path::AbstractString)
 """
     isdirpath(path::AbstractString) -> Bool
 
-Determines whether a path refers to a directory (for example, ends with a path separator).
+Determine whether a path refers to a directory (for example, ends with a path separator).
 
 # Examples
 ```jldoctest
