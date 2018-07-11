@@ -137,12 +137,12 @@ function show(io::IO, t::NamedTuple)
     if n == 0
         print(io, "NamedTuple()")
     else
-        typeinfo = get(io, :typeinfo, Any)
+        typeinfo = get(io, :typeinfo, nothing)
         print(io, "(")
         for i = 1:n
             print(io, fieldname(typeof(t),i), " = ")
             show(IOContext(io, :typeinfo =>
-                           t isa typeinfo <: NamedTuple ? fieldtype(typeinfo, i) : Any),
+                           typeinfo !== nothing && t isa typeinfo <: NamedTuple ? fieldtype(typeinfo, i) : nothing),
                  getfield(t, i))
             if n == 1
                 print(io, ",")

@@ -448,18 +448,9 @@ end
 
 # given type `typeinfo` extracted from context, assuming a collection
 # is being displayed, deduce the elements type; in spirit this is
-# similar to `eltype`, but in some cases this would lead to incomplete
-# information: assume we are at the top level, and no typeinfo is set,
-# and that it is deduced to be typeinfo=Any by default, and consider
-# printing X = Any[1]; to know if the eltype of X is already displayed,
-# we would compare eltype(X) to eltype(typeinfo) == Any, and deduce
-# that we don't need to print X's eltype because it's already known by
-# the context, which is wrong; even if default value of typeinfo is
-# not set to Any, then the problem would be similar one layer below
-# when printing an array like Any[Any[1]]; hence we must treat Any
-# specially
-function typeinfo_eltype(typeinfo::Type)::Union{Type,Nothing}
-    if typeinfo == Any
+# similar to `eltype`
+function typeinfo_eltype(typeinfo::Union{Nothing,Type})::Union{Type,Nothing}
+    if typeinfo == nothing || typeinfo == Any
         # the current context knows nothing about what is being displayed, not even
         # whether it's a collection or scalar
         nothing
@@ -473,13 +464,15 @@ end
 
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
-    typeinfo = get(io, :typeinfo, Any)::Type
-    if !(X isa typeinfo)
-        typeinfo = Any # no error for user-defined types
+    typeinfo = get(io, :typeinfo, nothing)::Union{Nothing,Type}
+    if typeinfo !== nothing && !(X isa typeinfo)
+        typeinfo = nothing
     end
+
     # what the context already knows about the eltype of X:
     eltype_ctx = typeinfo_eltype(typeinfo)
     eltype_X = eltype(X)
+
     if X isa AbstractDict
         if eltype_X == eltype_ctx || !isempty(X) && isconcretetype(keytype(X)) && isconcretetype(valtype(X))
             string(typeof(X).name)
