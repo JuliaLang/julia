@@ -302,4 +302,10 @@ let m = Module(:Bare26273i, false)
     end)
 end
 
+@testset "#26335: _module and _file kwargs" begin
+    ignored = Test.Ignored()
+    @test_logs (:warn, "a", ignored, ignored, ignored, "foo.jl") (@warn "a" _file="foo.jl")
+    @test_logs (:warn, "a", Base) (@warn "a" _module=Base)
+end
+
 end
