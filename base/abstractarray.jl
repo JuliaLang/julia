@@ -2067,40 +2067,46 @@ function hash(A::AbstractArray, h::UInt)
     h = hash(map(last, axes(A)), h)
     isempty(A) && return h
 
-    # Now work backwards and hash (up to) three distinct key-value pairs
-    # Working backwards introduces an asymmetry with isequal; in many cases
-    # arrays that hash equally will be compared via isequal, which iteratively
-    # works forwards and _short-circuits_. Therefore the elements at the
-    # beginning of the array are not as valuable to include in the hash computation
-    # as they are "cheaper" to compare within `isequal`.
-    # A small number of distinct elements are included in the hashing algorithm
-    # in order to emphasize distinctions between arrays that are nearly all the
-    # same constant value but have a handful of differences the O(log(n)) skipping
-    # algorithm might miss (in particular, this includes sparse matrices).
-    I = keys(A)
-    i = last(I)
-    v1 = A[i]
-    h = hash(i=>v1, h)
-    i = let v1=v1; findprev(x->!isequal(x, v1), A, i); end
-    i === nothing && return h
-    v2 = A[i]
-    h = hash(i=>v2, h)
-    i = let v1=v1, v2=v2; findprev(x->!isequal(x, v1) && !isequal(x, v2), A, i); end
-    i === nothing && return h
-    h = hash(i=>A[i], h)
+    # Goal: Hash approximately log(N) entries with a higher density of hashed elements
+    # weighted towards the end and special consideration for repeated values. Colliding
+    # hashes will often subsequently be compared by equality -- and equality between arrays
+    # works elementwise forwards and is short-circuiting. This means that a collision
+    # between arrays that differ by elements at the beginning is cheaper than one where the
+    # difference is towards the end. Furthermore, blindly choosing log(N) entries from a
+    # sparse array will likely only choose the same element repeatedly (zero in this case).
 
-    # Now launch into an ~O(log(n)) hashing of values, continuing from the
-    # last-found distinct index. The Fibonacci series is used here to avoid
-    # repeating common divisors and potentially only including a single slice
-    # of an array (as might be the case with powers of two and a matrix with
-    # an evenly divisible size).
-    J = vec(I) # Reshape the (potentially cartesian) keys to more efficiently compute the linear skips
-    j = LinearIndices(I)[i]
-    fibskip = prevfibskip = oneunit(j)
-    while j > fibskip
-        j -= fibskip
-        h = hash(A[J[j]], h)
+    # To achieve this, we work backwards, starting by hashing the last element of the
+    # array. After hashing each element, we skip the next `fibskip` elements, where
+    # `fibskip` is pulled from the Fibonacci sequence -- Fibonacci was chosen as a simple
+    # ~O(log(N)) algorithm that ensures we don't hit a common divisor of a dimension and
+    # only end up hashing one slice of the array (as might happen with powers of two).
+    # Finally, we find the next distinct value from the one we just hashed.
+
+    # This is a little tricky since skipping an integer number of values inherently works
+    # with linear indices, but `findprev` uses `keys`. Hoist out the conversion "maps":
+    ks = keys(A)
+    key_to_linear = LinearIndices(ks) # Index into this map to compute the linear index
+    linear_to_key = vec(ks)           # And vice-versa
+
+    # Start at the last index
+    keyidx = last(ks)
+    linidx = key_to_linear[keyidx]
+    fibskip = prevfibskip = oneunit(linidx)
+    while true
+        # Hash the current key-index and its element
+        elt = A[keyidx]
+        h = hash(keyidx=>elt, h)
+
+        # Skip backwards a Fibonacci number of indices -- this is a linear index operation
+        linidx = key_to_linear[keyidx]
+        linidx <= fibskip && break
+        linidx -= fibskip
+        keyidx = linear_to_key[linidx]
         fibskip, prevfibskip = fibskip + prevfibskip, fibskip
+
+        # Find a key index with a value distinct from `elt` -- might be `keyidx` itself
+        keyidx = findprev(!isequal(elt), A, keyidx)
+        keyidx === nothing && break
     end
 
     return h
