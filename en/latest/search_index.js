@@ -11693,7 +11693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.cd",
     "category": "method",
-    "text": "cd(f::Function, dir::AbstractString=homedir())\n\nTemporarily change the current working directory, apply function f and finally return to the original directory.\n\nExamples\n\njulia> pwd()\n\"/home/JuliaUser\"\n\njulia> cd(readdir, \"/home/JuliaUser/Projects/julia\")\n34-element Array{String,1}:\n \".circleci\"\n \".freebsdci.sh\"\n \".git\"\n \".gitattributes\"\n \".github\"\n ⋮\n \"test\"\n \"ui\"\n \"usr\"\n \"usr-staging\"\n\njulia> pwd()\n\"/home/JuliaUser\"\n\n\n\n\n\n"
+    "text": "cd(f::Function, dir::AbstractString=homedir())\n\nTemporarily change the current working directory to dir, apply function f and finally return to the original directory.\n\nExamples\n\njulia> pwd()\n\"/home/JuliaUser\"\n\njulia> cd(readdir, \"/home/JuliaUser/Projects/julia\")\n34-element Array{String,1}:\n \".circleci\"\n \".freebsdci.sh\"\n \".git\"\n \".gitattributes\"\n \".github\"\n ⋮\n \"test\"\n \"ui\"\n \"usr\"\n \"usr-staging\"\n\njulia> pwd()\n\"/home/JuliaUser\"\n\n\n\n\n\n"
 },
 
 {
@@ -11781,7 +11781,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.ctime",
     "category": "function",
-    "text": "ctime(file)\n\nEquivalent to stat(file).ctime\n\n\n\n\n\n"
+    "text": "ctime(file)\n\nEquivalent to stat(file).ctime.\n\n\n\n\n\n"
 },
 
 {
@@ -11797,7 +11797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.filemode",
     "category": "function",
-    "text": "filemode(file)\n\nEquivalent to stat(file).mode\n\n\n\n\n\n"
+    "text": "filemode(file)\n\nEquivalent to stat(file).mode.\n\n\n\n\n\n"
 },
 
 {
@@ -11813,7 +11813,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.uperm",
     "category": "function",
-    "text": "uperm(file)\n\nGets the permissions of the owner of the file as a bitfield of\n\nValue Description\n01 Execute Permission\n02 Write Permission\n04 Read Permission\n\nFor allowed arguments, see stat.\n\n\n\n\n\n"
+    "text": "uperm(file)\n\nGet the permissions of the owner of the file as a bitfield of\n\nValue Description\n01 Execute Permission\n02 Write Permission\n04 Read Permission\n\nFor allowed arguments, see stat.\n\n\n\n\n\n"
 },
 
 {
@@ -11853,7 +11853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.mv",
     "category": "function",
-    "text": "mv(src::AbstractString, dst::AbstractString; force::Bool=false)\n\nMove the file, link, or directory from src to dst. force=true will first remove an existing dst. Return dst.\n\n\n\n\n\n"
+    "text": "mv(src::AbstractString, dst::AbstractString; force::Bool=false)\n\nMove the file, link, or directory from src to dst. force=true will first remove an existing dst. Return dst.\n\nExamples\n\njulia> write(\"hello.txt\", \"world\");\n\njulia> mv(\"hello.txt\", \"goodbye.txt\")\n\"goodbye.txt\"\n\njulia> \"hello.txt\" in readdir()\nfalse\n\njulia> readline(\"goodbye.txt\")\n\"world\"\n\njulia> write(\"hello.txt\", \"world2\");\n\njulia> mv(\"hello.txt\", \"goodbye.txt\")\nERROR: ArgumentError: \'goodbye.txt\' exists. `force=true` is required to remove \'goodbye.txt\' before moving.\nStacktrace:\n [1] #checkfor_mv_cp_cptree#10(::Bool, ::Function, ::String, ::String, ::String) at ./file.jl:293\n[...]\n\njulia> mv(\"hello.txt\", \"goodbye.txt\", force=true)\n\"goodbye.txt\"\n\n\n\n\n\n\n"
 },
 
 {
@@ -11925,7 +11925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.isblockdev",
     "category": "function",
-    "text": "isblockdev(path) -> Bool\n\nReturns true if path is a block device, false otherwise.\n\n\n\n\n\n"
+    "text": "isblockdev(path) -> Bool\n\nReturn true if path is a block device, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -11933,7 +11933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.ischardev",
     "category": "function",
-    "text": "ischardev(path) -> Bool\n\nReturns true if path is a character device, false otherwise.\n\n\n\n\n\n"
+    "text": "ischardev(path) -> Bool\n\nReturn true if path is a character device, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -11941,7 +11941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.isdir",
     "category": "function",
-    "text": "isdir(path) -> Bool\n\nReturns true if path is a directory, false otherwise.\n\nExamples\n\njulia> isdir(homedir())\ntrue\n\njulia> isdir(\"not/a/directory\")\nfalse\n\n\n\n\n\n"
+    "text": "isdir(path) -> Bool\n\nReturn true if path is a directory, false otherwise.\n\nExamples\n\njulia> isdir(homedir())\ntrue\n\njulia> isdir(\"not/a/directory\")\nfalse\n\n\n\n\n\n"
 },
 
 {
@@ -11949,7 +11949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.isfifo",
     "category": "function",
-    "text": "isfifo(path) -> Bool\n\nReturns true if path is a FIFO, false otherwise.\n\n\n\n\n\n"
+    "text": "isfifo(path) -> Bool\n\nReturn true if path is a FIFO, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -11957,7 +11957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.isfile",
     "category": "function",
-    "text": "isfile(path) -> Bool\n\nReturns true if path is a regular file, false otherwise.\n\nExamples\n\njulia> isfile(homedir())\nfalse\n\njulia> f = open(\"test_file.txt\", \"w\");\n\njulia> isfile(f)\ntrue\n\njulia> close(f); rm(\"test_file.txt\")\n\n\n\n\n\n"
+    "text": "isfile(path) -> Bool\n\nReturn true if path is a regular file, false otherwise.\n\nExamples\n\njulia> isfile(homedir())\nfalse\n\njulia> f = open(\"test_file.txt\", \"w\");\n\njulia> isfile(f)\ntrue\n\njulia> close(f); rm(\"test_file.txt\")\n\n\n\n\n\n"
 },
 
 {
@@ -11965,7 +11965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.islink",
     "category": "function",
-    "text": "islink(path) -> Bool\n\nReturns true if path is a symbolic link, false otherwise.\n\n\n\n\n\n"
+    "text": "islink(path) -> Bool\n\nReturn true if path is a symbolic link, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -11973,7 +11973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.ismount",
     "category": "function",
-    "text": "ismount(path) -> Bool\n\nReturns true if path is a mount point, false otherwise.\n\n\n\n\n\n"
+    "text": "ismount(path) -> Bool\n\nReturn true if path is a mount point, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -11981,7 +11981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.ispath",
     "category": "function",
-    "text": "ispath(path) -> Bool\n\nReturns true if path is a valid filesystem path, false otherwise.\n\n\n\n\n\n"
+    "text": "ispath(path) -> Bool\n\nReturn true if path is a valid filesystem path, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -11989,7 +11989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.issetgid",
     "category": "function",
-    "text": "issetgid(path) -> Bool\n\nReturns true if path has the setgid flag set, false otherwise.\n\n\n\n\n\n"
+    "text": "issetgid(path) -> Bool\n\nReturn true if path has the setgid flag set, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -11997,7 +11997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.issetuid",
     "category": "function",
-    "text": "issetuid(path) -> Bool\n\nReturns true if path has the setuid flag set, false otherwise.\n\n\n\n\n\n"
+    "text": "issetuid(path) -> Bool\n\nReturn true if path has the setuid flag set, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -12005,7 +12005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.issocket",
     "category": "function",
-    "text": "issocket(path) -> Bool\n\nReturns true if path is a socket, false otherwise.\n\n\n\n\n\n"
+    "text": "issocket(path) -> Bool\n\nReturn true if path is a socket, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -12013,7 +12013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.issticky",
     "category": "function",
-    "text": "issticky(path) -> Bool\n\nReturns true if path has the sticky bit set, false otherwise.\n\n\n\n\n\n"
+    "text": "issticky(path) -> Bool\n\nReturn true if path has the sticky bit set, false otherwise.\n\n\n\n\n\n"
 },
 
 {
@@ -12045,7 +12045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.@__FILE__",
     "category": "macro",
-    "text": "@__FILE__ -> AbstractString\n\n@__FILE__ expands to a string with the path to the file containing the macrocall, or an empty string if evaluated by julia -e <expr>. Returns nothing if the macro was missing parser source information. Alternatively see PROGRAM_FILE.\n\n\n\n\n\n"
+    "text": "@__FILE__ -> AbstractString\n\nExpand to a string with the path to the file containing the macrocall, or an empty string if evaluated by julia -e <expr>. Return nothing if the macro was missing parser source information. Alternatively see PROGRAM_FILE.\n\n\n\n\n\n"
 },
 
 {
@@ -12053,7 +12053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.@__DIR__",
     "category": "macro",
-    "text": "@__DIR__ -> AbstractString\n\n@__DIR__ expands to a string with the absolute path to the directory of the file containing the macrocall. Returns the current working directory if run from a REPL or if evaluated by julia -e <expr>.\n\n\n\n\n\n"
+    "text": "@__DIR__ -> AbstractString\n\nExpand to a string with the absolute path to the directory of the file containing the macrocall. Return the current working directory if run from a REPL or if evaluated by julia -e <expr>.\n\n\n\n\n\n"
 },
 
 {
@@ -12061,7 +12061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.@__LINE__",
     "category": "macro",
-    "text": "@__LINE__ -> Int\n\n@__LINE__ expands to the line number of the location of the macrocall. Returns 0 if the line number could not be determined.\n\n\n\n\n\n"
+    "text": "@__LINE__ -> Int\n\nExpand to the line number of the location of the macrocall. Return 0 if the line number could not be determined.\n\n\n\n\n\n"
 },
 
 {
@@ -12069,7 +12069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.isabspath",
     "category": "function",
-    "text": "isabspath(path::AbstractString) -> Bool\n\nDetermines whether a path is absolute (begins at the root directory).\n\nExamples\n\njulia> isabspath(\"/home\")\ntrue\n\njulia> isabspath(\"home\")\nfalse\n\n\n\n\n\n"
+    "text": "isabspath(path::AbstractString) -> Bool\n\nDetermine whether a path is absolute (begins at the root directory).\n\nExamples\n\njulia> isabspath(\"/home\")\ntrue\n\njulia> isabspath(\"home\")\nfalse\n\n\n\n\n\n"
 },
 
 {
@@ -12077,7 +12077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.isdirpath",
     "category": "function",
-    "text": "isdirpath(path::AbstractString) -> Bool\n\nDetermines whether a path refers to a directory (for example, ends with a path separator).\n\nExamples\n\njulia> isdirpath(\"/home\")\nfalse\n\njulia> isdirpath(\"/home/\")\ntrue\n\n\n\n\n\n"
+    "text": "isdirpath(path::AbstractString) -> Bool\n\nDetermine whether a path refers to a directory (for example, ends with a path separator).\n\nExamples\n\njulia> isdirpath(\"/home\")\nfalse\n\njulia> isdirpath(\"/home/\")\ntrue\n\n\n\n\n\n"
 },
 
 {
