@@ -371,6 +371,7 @@ temp_pkg_dir() do project_path
         end # cd project_path
     end # @testset
 end
+=#
 
 temp_pkg_dir() do project_path
     @testset "invalid repo url" begin
@@ -383,7 +384,7 @@ temp_pkg_dir() do project_path
         end
     end
 end
-=#
+
 
 temp_pkg_dir() do project_path
     function with_dummy_env(f)
