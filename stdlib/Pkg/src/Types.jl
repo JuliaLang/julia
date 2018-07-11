@@ -535,7 +535,8 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
                     rev = pkg.repo.rev
                     GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
                 end
-                if upgrade_or_add && !pinned
+                upgrading = upgrade_or_add && !pinned
+                if upgrading
                     rev = pkg.repo.rev
                 else
                     # Not upgrading so the rev should be the current git-tree-sha
@@ -554,7 +555,9 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
                 gitobject, isbranch = get_object_branch(repo, rev)
                 # If the user gave a shortened commit SHA, might as well update it to the full one
                 try
-                    pkg.repo.rev = isbranch ? rev : string(LibGit2.GitHash(gitobject))
+                    if upgrading
+                        pkg.repo.rev = isbranch ? rev : string(LibGit2.GitHash(gitobject))
+                    end
                     LibGit2.with(LibGit2.peel(LibGit2.GitTree, gitobject)) do git_tree
                         @assert git_tree isa LibGit2.GitTree
                         pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))

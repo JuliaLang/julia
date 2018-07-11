@@ -75,7 +75,7 @@ temp_pkg_dir() do project_path
     end
 end
 
-temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
+@testset "tokens" begin
     tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git")
     @test tokens[1][2] ==              "git@github.com:JuliaLang/Example.jl.git"
     tokens = Pkg.REPLMode.tokenize("add git@github.com:JuliaLang/Example.jl.git#master")
@@ -93,12 +93,24 @@ temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     tokens = Pkg.REPLMode.tokenize("add git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git@0.5.0")
     @test tokens[1][2] ==              "git@gitlab-fsl.jsc.näsan.guvv:drats/URGA2010.jl.git"
     @test repr(tokens[1][3]) == "VersionRange(\"0.5.0\")"
+end
+
+temp_pkg_dir() do project_path; cd(project_path) do; mktempdir() do tmp_pkg_path
     pkg"activate ."
     pkg"add Example"
     @test isinstalled(TEST_PKG)
     v = Pkg.installed()[TEST_PKG.name]
     pkg"rm Example"
     pkg"add Example#master"
+
+    # Test upgrade --fixed doesn't change the tracking (https://github.com/JuliaLang/Pkg.jl/issues/434)
+    info = Pkg.Types.manifest_info(Pkg.Types.EnvCache(), TEST_PKG.uuid)
+    @test info["repo-rev"] == "master"
+    pkg"up --fixed"
+    info = Pkg.Types.manifest_info(Pkg.Types.EnvCache(), TEST_PKG.uuid)
+    @test info["repo-rev"] == "master"
+
+
     pkg"test Example"
     @test isinstalled(TEST_PKG)
     @test Pkg.installed()[TEST_PKG.name] > v
