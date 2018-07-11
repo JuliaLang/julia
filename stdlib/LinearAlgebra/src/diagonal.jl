@@ -326,7 +326,7 @@ ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} 
     (D = transD.parent; ldiv!(D, B))
 
 function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
-    broadcast!(/, parent(A), parent(A), diag(D))
+    broadcast!(\, parent(A), D.diag, parent(A))
     A
 end
 
@@ -349,7 +349,7 @@ function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
 end
 
 function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
-    broadcast!(/, parent(A), parent(A), reshape(diag(D), 1, :))
+    broadcast!(/, parent(A), parent(A), permutedims(D.diag))
     A
 end
 
@@ -358,7 +358,7 @@ rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
 rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
 
-(/)(A::AbstractMatrix, D::Diagonal) =
+(/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
     rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
 
 (\)(F::Factorization, D::Diagonal) =
