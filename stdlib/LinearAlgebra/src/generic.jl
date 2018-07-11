@@ -19,8 +19,8 @@ function generic_lmul!(s::Number, X::AbstractArray)
 end
 
 function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
-    if _length(C) != _length(X)
-        throw(DimensionMismatch("first array has length $(_length(C)) which does not match the length of the second, $(_length(X))."))
+    if length(C) != length(X)
+        throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
         @inbounds C[IC] = X[IX]*s
@@ -29,9 +29,9 @@ function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number)
 end
 
 function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray)
-    if _length(C) != _length(X)
-        throw(DimensionMismatch("first array has length $(_length(C)) which does not
-match the length of the second, $(_length(X))."))
+    if length(C) != length(X)
+        throw(DimensionMismatch("first array has length $(length(C)) which does not
+match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
         @inbounds C[IC] = s*X[IX]
@@ -300,7 +300,7 @@ function generic_norm2(x)
     (maxabs == 0 || isinf(maxabs)) && return maxabs
     (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
-    if isfinite(_length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
+    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
         sum::promote_type(Float64, T) = norm_sqr(v)
         while true
             y = iterate(x, s)
@@ -333,7 +333,7 @@ function generic_normp(x, p)
         T = typeof(float(norm(v)))
     end
     spp::promote_type(Float64, T) = p
-    if -1 <= p <= 1 || (isfinite(_length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
+    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
         sum::promote_type(Float64, T) = norm(v)^spp
         while true
             y = iterate(x, s)
@@ -471,6 +471,7 @@ julia> norm(-2, Inf)
 
 # special cases of opnorm
 function opnorm1(A::AbstractMatrix{T}) where T
+    @assert !has_offset_axes(A)
     m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
@@ -488,6 +489,7 @@ function opnorm1(A::AbstractMatrix{T}) where T
 end
 
 function opnorm2(A::AbstractMatrix{T}) where T
+    @assert !has_offset_axes(A)
     m,n = size(A)
     if m == 1 || n == 1 return norm2(A) end
     Tnorm = typeof(float(real(zero(T))))
@@ -495,6 +497,7 @@ function opnorm2(A::AbstractMatrix{T}) where T
 end
 
 function opnormInf(A::AbstractMatrix{T}) where T
+    @assert !has_offset_axes(A)
     m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
@@ -694,9 +697,9 @@ julia> dot([im; im], [1; 1])
 ```
 """
 function dot(x::AbstractArray, y::AbstractArray)
-    lx = _length(x)
-    if lx != _length(y)
-        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(_length(y))."))
+    lx = length(x)
+    if lx != length(y)
+        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
     end
     if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
@@ -851,6 +854,7 @@ true
 ```
 """
 function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
+    @assert !has_offset_axes(A, B)
     m, n = size(A)
     if m == n
         if istril(A)
@@ -1010,6 +1014,7 @@ false
 ```
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
+    @assert !has_offset_axes(A)
     m, n = size(A)
     for j in 1:min(n, m + k - 1)
         for i in max(1, j - k + 1):m
@@ -1051,6 +1056,7 @@ false
 ```
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
+    @assert !has_offset_axes(A)
     m, n = size(A)
     for j in max(1, k + 2):n
         for i in 1:min(j - k - 1, m)
@@ -1125,9 +1131,9 @@ isdiag(x::Number) = true
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
-    n = _length(x)
-    if n != _length(y)
-        throw(DimensionMismatch("x has length $n, but y has length $(_length(y))"))
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
     end
     for (IY, IX) in zip(eachindex(y), eachindex(x))
         @inbounds y[IY] += x[IX]*α
@@ -1136,8 +1142,8 @@ function axpy!(α, x::AbstractArray, y::AbstractArray)
 end
 
 function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
-    if _length(rx) != _length(ry)
-        throw(DimensionMismatch("rx has length $(_length(rx)), but ry has length $(_length(ry))"))
+    if length(rx) != length(ry)
+        throw(DimensionMismatch("rx has length $(length(rx)), but ry has length $(length(ry))"))
     elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
         throw(BoundsError(x, rx))
     elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
@@ -1150,8 +1156,8 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
 end
 
 function axpby!(α, x::AbstractArray, β, y::AbstractArray)
-    if _length(x) != _length(y)
-        throw(DimensionMismatch("x has length $(_length(x)), but y has length $(_length(y))"))
+    if length(x) != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
     for (IX, IY) in zip(eachindex(x), eachindex(y))
         @inbounds y[IY] = x[IX]*α + y[IY]*β
@@ -1163,6 +1169,7 @@ end
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but
 # ensures that tridiagonalization of Hermitian matrices become real. See lawn72
 @inline function reflector!(x::AbstractVector)
+    @assert !has_offset_axes(x)
     n = length(x)
     @inbounds begin
         ξ1 = x[1]
@@ -1186,6 +1193,7 @@ end
 
 # apply reflector from left
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix)
+    @assert !has_offset_axes(x)
     m, n = size(A)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))

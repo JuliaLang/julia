@@ -179,16 +179,16 @@ function setindex_shape_check(X::AbstractArray, I::Integer...)
 end
 
 setindex_shape_check(X::AbstractArray) =
-    (_length(X)==1 || throw_setindex_mismatch(X,()))
+    (length(X)==1 || throw_setindex_mismatch(X,()))
 
 setindex_shape_check(X::AbstractArray, i::Integer) =
-    (_length(X)==i || throw_setindex_mismatch(X, (i,)))
+    (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
-    (_length(X)==i || throw_setindex_mismatch(X, (i,)))
+    (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
-    (_length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
+    (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
 function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
     if length(X) != i*j
@@ -282,17 +282,15 @@ end
 Slice(S::Slice) = S
 axes(S::Slice) = (S,)
 unsafe_indices(S::Slice) = (S,)
-indices1(S::Slice) = S
+axes1(S::Slice) = S
 axes(S::Slice{<:OneTo}) = (S.indices,)
 unsafe_indices(S::Slice{<:OneTo}) = (S.indices,)
-indices1(S::Slice{<:OneTo}) = S.indices
+axes1(S::Slice{<:OneTo}) = S.indices
 
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
-errmsg(A) = error("size not supported for arrays with indices $(axes(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
-size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
-length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
-_length(S::Slice) = length(S.indices)
+size(S::Slice) = (length(S.indices),)
+length(S::Slice) = length(S.indices)
 unsafe_length(S::Slice) = unsafe_length(S.indices)
 getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
@@ -361,7 +359,7 @@ LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
 # AbstractArray implementation
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
-axes(iter::LinearIndices) = map(indices1, iter.indices)
+axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(unsafe_length, iter.indices)
 function getindex(iter::LinearIndices, i::Int)
     @_inline_meta

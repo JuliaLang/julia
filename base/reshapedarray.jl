@@ -102,12 +102,12 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape
 @inline function _reshape_uncolon(A, dims)
     @noinline throw1(dims) = throw(DimensionMismatch(string("new dimensions $(dims) ",
         "may have at most one omitted dimension specified by `Colon()`")))
-    @noinline throw2(A, dims) = throw(DimensionMismatch(string("array size $(_length(A)) ",
+    @noinline throw2(A, dims) = throw(DimensionMismatch(string("array size $(length(A)) ",
         "must be divisible by the product of the new dimensions $dims")))
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
     any(d -> d isa Colon, post) && throw1(dims)
-    sz, remainder = divrem(_length(A), prod(pre)*prod(post))
+    sz, remainder = divrem(length(A), prod(pre)*prod(post))
     remainder == 0 || throw2(A, dims)
     (pre..., Int(sz), post...)
 end
@@ -124,8 +124,8 @@ end
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
-rdims_trailing(l, inds...) = _length(l) * rdims_trailing(inds...)
-rdims_trailing(l) = _length(l)
+rdims_trailing(l, inds...) = length(l) * rdims_trailing(inds...)
+rdims_trailing(l) = length(l)
 rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val(N)), inds)
 rdims(out::Tuple{}, inds::Tuple{}) = () # N == 0, M == 0
 rdims(out::Tuple{}, inds::Tuple{Any}) = ()
@@ -145,13 +145,14 @@ _reshape(parent::Array, dims::Dims) = reshape(parent, dims)
 
 # When reshaping Vector->Vector, don't wrap with a ReshapedArray
 function _reshape(v::AbstractVector, dims::Dims{1})
+    @assert !has_offset_axes(v)
     len = dims[1]
-    len == length(v) || _throw_dmrs(_length(v), "length", len)
+    len == length(v) || _throw_dmrs(length(v), "length", len)
     v
 end
 # General reshape
 function _reshape(parent::AbstractArray, dims::Dims)
-    n = _length(parent)
+    n = length(parent)
     prod(dims) == n || _throw_dmrs(n, "size", dims)
     __reshape((parent, IndexStyle(parent)), dims)
 end
@@ -166,7 +167,7 @@ _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
     parent = p[1]
-    strds = front(size_to_strides(map(_length, axes(parent))..., 1))
+    strds = front(size_to_strides(map(length, axes(parent))..., 1))
     strds1 = map(s->max(1,Int(s)), strds)  # for resizing empty arrays
     mi = map(SignedMultiplicativeInverse, strds1)
     ReshapedArray(parent, dims, reverse(mi))
@@ -186,7 +187,7 @@ size(A::ReshapedArray) = A.dims
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
-parentindices(A::ReshapedArray) = map(s->1:s, size(parent(A)))
+parentindices(A::ReshapedArray) = map(OneTo, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 

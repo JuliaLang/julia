@@ -160,11 +160,13 @@ end
     lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
+    @assert !has_offset_axes(A)
     A .= A .* transpose(D.diag)
     return A
 end
 
 function lmul!(D::Diagonal, B::AbstractMatrix)
+    @assert !has_offset_axes(B)
     B .= D.diag .* B
     return B
 end
@@ -304,6 +306,7 @@ function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     v
 end
 function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
+    @assert !has_offset_axes(V)
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
@@ -326,6 +329,7 @@ ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} 
     (D = transD.parent; ldiv!(D, B))
 
 function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+    @assert !has_offset_axes(A)
     dd = D.diag
     m, n = size(A)
     if (k = length(dd)) ≠ n

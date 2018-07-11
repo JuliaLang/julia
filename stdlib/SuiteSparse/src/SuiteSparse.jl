@@ -11,14 +11,14 @@ import LinearAlgebra: ldiv!, rdiv!
 
 # Convert from 1-based to 0-based indices
 function decrement!(A::AbstractArray{T}) where T<:Integer
-    for i in 1:length(A); A[i] -= oneunit(T) end
+    for i in eachindex(A); A[i] -= oneunit(T) end
     A
 end
 decrement(A::AbstractArray{<:Integer}) = decrement!(copy(A))
 
 # Convert from 0-based to 1-based indices
 function increment!(A::AbstractArray{T}) where T<:Integer
-    for i in 1:length(A); A[i] += oneunit(T) end
+    for i in eachindex(A); A[i] += oneunit(T) end
     A
 end
 increment(A::AbstractArray{<:Integer}) = increment!(copy(A))

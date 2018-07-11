@@ -247,7 +247,7 @@ module IteratorsMD
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     # AbstractArray implementation
-    Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.indices1, iter.indices)
+    Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
     @inline function Base.getindex(iter::CartesianIndices{N,<:NTuple{N,Base.OneTo}}, I::Vararg{Int, N}) where {N}
         @boundscheck checkbounds(iter, I...)
@@ -255,7 +255,7 @@ module IteratorsMD
     end
     @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
         @boundscheck checkbounds(iter, I...)
-        CartesianIndex(I .- first.(Base.indices1.(iter.indices)) .+ first.(iter.indices))
+        CartesianIndex(I .- first.(Base.axes1.(iter.indices)) .+ first.(iter.indices))
     end
 
     ndims(R::CartesianIndices) = ndims(typeof(R))
@@ -321,7 +321,7 @@ module IteratorsMD
     end
 
     simd_inner_length(iter::CartesianIndices{0}, ::CartesianIndex) = 1
-    simd_inner_length(iter::CartesianIndices, I::CartesianIndex) = Base._length(iter.indices[1])
+    simd_inner_length(iter::CartesianIndices, I::CartesianIndex) = Base.length(iter.indices[1])
 
     simd_index(iter::CartesianIndices{0}, ::CartesianIndex, I1::Int) = first(iter)
     @inline function simd_index(iter::CartesianIndices, Ilast::CartesianIndex, I1::Int)
@@ -463,7 +463,7 @@ index_dimsum() = ()
 index_lengths() = ()
 @inline index_lengths(::Real, rest...) = (1, index_lengths(rest...)...)
 @inline index_lengths(A::AbstractArray, rest...) = (length(A), index_lengths(rest...)...)
-@inline index_lengths(A::Slice, rest...) = (_length(indices1(A)), index_lengths(rest...)...)
+@inline index_lengths(A::Slice, rest...) = (length(axes1(A)), index_lengths(rest...)...)
 
 # shape of array to create for getindex() with indices I, dropping scalars
 # returns a Tuple{Vararg{AbstractUnitRange}} of indices
@@ -647,7 +647,10 @@ _iterable(X::AbstractArray, I...) = X
     end
 end
 
-diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
+function diff(a::AbstractVector)
+    @assert !has_offset_axes(a)
+    [ a[i+1] - a[i] for i=1:length(a)-1 ]
+end
 
 """
     diff(A::AbstractVector)
@@ -895,7 +898,7 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
                              inds::Tuple{AbstractUnitRange,Vararg{Any}},
                              shiftamt::Tuple{Integer,Vararg{Any}})
     ind1, d = inds[1], shiftamt[1]
-    s = mod(d, _length(ind1))
+    s = mod(d, length(ind1))
     sf, sl = first(ind1)+s, last(ind1)-s
     r1, r2 = first(ind1):sf-1, sf:last(ind1)
     r3, r4 = first(ind1):sl, sl+1:last(ind1)
@@ -943,7 +946,7 @@ true
 function circcopy!(dest, src)
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
     indssrc, indsdest = axes(src), axes(dest)
-    if (szsrc = map(_length, indssrc)) != (szdest = map(_length, indsdest))
+    if (szsrc = map(length, indssrc)) != (szdest = map(length, indsdest))
         throw(DimensionMismatch("src and dest must have the same sizes (got $szsrc and $szdest)"))
     end
     shift = map((isrc, idest)->first(isrc)-first(idest), indssrc, indsdest)
@@ -955,7 +958,7 @@ end
 @inline function _circcopy!(dest, rdest, indsdest::Tuple{AbstractUnitRange,Vararg{Any}},
                             src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})
     indd1, inds1 = indsdest[1], indssrc[1]
-    l = _length(indd1)
+    l = length(indd1)
     s = mod(first(inds1)-first(indd1), l)
     sdf = first(indd1)+s
     rd1, rd2 = first(indd1):sdf-1, sdf:last(indd1)
@@ -1455,6 +1458,7 @@ function _extrema_dims(A::AbstractArray, dims)
 end
 
 @noinline function extrema!(B, A)
+    @assert !has_offset_axes(B, A)
     sA = size(A)
     sB = size(B)
     for I in CartesianIndices(sB)

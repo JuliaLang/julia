@@ -3,7 +3,8 @@
 module CHOLMOD
 
 import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
-             IndexStyle, IndexLinear, IndexCartesian, adjoint
+             IndexStyle, IndexLinear, IndexCartesian, adjoint, axes
+using Base: has_offset_axes
 
 using LinearAlgebra
 import LinearAlgebra: (\),
@@ -1040,6 +1041,7 @@ Base.copyto!(dest::AbstractArray{T,2}, D::Dense{T}) where {T<:VTypes} = _copy!(d
 Base.copyto!(dest::AbstractArray, D::Dense) = _copy!(dest, D)
 
 function _copy!(dest::AbstractArray, D::Dense)
+    @assert !has_offset_axes(dest)
     s = unsafe_load(pointer(D))
     n = s.nrow*s.ncol
     n <= length(dest) || throw(BoundsError(dest, n))
@@ -1237,6 +1239,7 @@ function size(F::Factor, i::Integer)
     return 1
 end
 size(F::Factor) = (size(F, 1), size(F, 2))
+axes(A::Union{Dense,Sparse,Factor}) = map(Base.OneTo, size(A))
 
 IndexStyle(::Dense) = IndexLinear()
 

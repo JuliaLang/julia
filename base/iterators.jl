@@ -774,15 +774,14 @@ _prod_size1(a, A) =
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
-_prod_indices(t::Tuple) = (_prod_indices1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
-_prod_indices1(a, ::HasShape)  = axes(a)
-_prod_indices1(a, ::HasLength) = (OneTo(length(a)),)
-_prod_indices1(a, A) =
+_prod_indices(t::Tuple) = (_prod_axes1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
+_prod_axes1(a, ::HasShape)  = axes(a)
+_prod_axes1(a, ::HasLength) = (OneTo(length(a)),)
+_prod_axes1(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 
 ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = prod(size(P))
-_length(p::ProductIterator) = prod(map(unsafe_length, axes(p)))
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)

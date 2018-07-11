@@ -4,6 +4,8 @@ __precompile__(true)
 
 module Base64
 
+using Base: has_offset_axes
+
 export
     Base64EncodePipe,
     base64encode,

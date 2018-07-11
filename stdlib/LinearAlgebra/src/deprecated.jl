@@ -186,6 +186,7 @@ _gradient(F::Vector, h::BitVector) = _gradient(F, Array(h))
 _gradient(F::BitVector, h::Vector) = _gradient(Array(F), h)
 _gradient(F::BitVector, h::BitVector) = _gradient(Array(F), Array(h))
 function _gradient(F::AbstractVector, h::Vector)
+    @assert !has_offset_axes(F)
     n = length(F)
     T = typeof(oneunit(eltype(F))/oneunit(eltype(h)))
     g = similar(F, T)
@@ -550,6 +551,7 @@ IndexStyle(::Type{<:RowVector}) = IndexLinear()
 
 # Generic behavior
 @inline function *(rowvec::RowVector, vec::AbstractVector)
+    @assert !has_offset_axes(rowvec, vec)
     if length(rowvec) != length(vec)
         throw(DimensionMismatch("A has dimensions $(size(rowvec)) but B has dimensions $(size(vec))"))
     end

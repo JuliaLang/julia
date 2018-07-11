@@ -156,6 +156,7 @@ Base.iterate(S::QRPivoted, ::Val{:p}) = (S.p, Val(:done))
 Base.iterate(S::QRPivoted, ::Val{:done}) = nothing
 
 function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
+    @assert !has_offset_axes(A)
     m, n = size(A)
     τ = zeros(T, min(m,n))
     for k = 1:min(m - 1 + !(T<:Real), n)
@@ -332,17 +333,22 @@ true
     compactly rather as two separate dense matrices.
 """
 function qr(A::AbstractMatrix{T}, arg) where T
+    @assert !has_offset_axes(A)
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
     return qr!(AA, arg)
 end
 function qr(A::AbstractMatrix{T}) where T
+    @assert !has_offset_axes(A)
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
     return qr!(AA)
 end
 qr(x::Number) = qr(fill(x,1,1))
-qr(v::AbstractVector) = qr(reshape(v, (length(v), 1)))
+function qr(v::AbstractVector)
+    @assert !has_offset_axes(v)
+    qr(reshape(v, (length(v), 1)))
+end
 
 # Conversions
 QR{T}(A::QR) where {T} = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
@@ -479,6 +485,7 @@ lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:Strid
 lmul!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
     LAPACK.ormqr!('L','N',A.factors,A.τ,B)
 function lmul!(A::QRPackedQ, B::AbstractVecOrMat)
+    @assert !has_offset_axes(B)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
     if mA != mB
@@ -538,6 +545,7 @@ lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:Bl
 lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
     (A = adjA.parent; LAPACK.ormqr!('L','C',A.factors,A.τ,B))
 function lmul!(adjA::Adjoint{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
+    @assert !has_offset_axes(B)
     A = adjA.parent
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
@@ -801,6 +809,7 @@ _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
 function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
+    @assert !has_offset_axes(B)
     S = promote_type(TA,TB)
     m, n = size(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
@@ -821,6 +830,7 @@ _ret_size(A::Factorization, b::AbstractVector) = (max(size(A, 2), length(b)),)
 _ret_size(A::Factorization, B::AbstractMatrix) = (max(size(A, 2), size(B, 1)), size(B, 2))
 
 function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}}) where T<:BlasReal
+    @assert !has_offset_axes(BIn)
     m, n = size(A)
     m == size(BIn, 1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(BIn,1)) rows"))
 

@@ -438,7 +438,7 @@ for T in (:Symmetric, :Hermitian), op in (:*, :/)
 end
 
 function factorize(A::HermOrSym{T}) where T
-    TT = typeof(sqrt(one(T)))
+    TT = typeof(sqrt(oneunit(T)))
     if TT <: BlasFloat
         return bunchkaufman(A)
     else # fallback

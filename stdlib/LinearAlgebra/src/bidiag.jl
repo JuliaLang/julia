@@ -6,6 +6,7 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     ev::V      # sub/super diagonal
     uplo::Char # upper bidiagonal ('U') or lower ('L')
     function Bidiagonal{T}(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(dv, ev)
         if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
@@ -352,6 +353,9 @@ mul!(C::AbstractMatrix, A::BiTri, B::Adjoint{<:Any,<:AbstractVecOrMat}) = A_mul_
 mul!(C::AbstractVector, A::BiTri, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
 function check_A_mul_B!_sizes(C, A, B)
+    @assert !has_offset_axes(C)
+    @assert !has_offset_axes(A)
+    @assert !has_offset_axes(B)
     nA, mA = size(A)
     nB, mB = size(B)
     nC, mC = size(C)
@@ -432,6 +436,8 @@ function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
 end
 
 function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
+    @assert !has_offset_axes(C)
+    @assert !has_offset_axes(B)
     nA = size(A,1)
     nB = size(B,2)
     if !(size(C,1) == size(B,1) == nA)
@@ -506,6 +512,7 @@ ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A
 ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
 ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
 function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
+    @assert !has_offset_axes(A, B)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
@@ -520,6 +527,7 @@ function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     B
 end
 function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+    @assert !has_offset_axes(adjA, B)
     A = adjA.parent
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
@@ -535,6 +543,7 @@ function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::A
     B
 end
 function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
+    @assert !has_offset_axes(transA, B)
     A = transA.parent
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
@@ -551,6 +560,7 @@ function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, 
 end
 #Generic solver using naive substitution
 function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) where T
+    @assert !has_offset_axes(A, b, x)
     N = size(A, 2)
     if N != length(b) || N != length(x)
         throw(DimensionMismatch("second dimension of A, $N, does not match one of the lengths of x, $(length(x)), or b, $(length(b))"))
