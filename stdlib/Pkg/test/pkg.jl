@@ -239,7 +239,7 @@ temp_pkg_dir() do project_path
                     Pkg.setprotocol!("notarealprotocol")
                     # Pkg.develop is broken, update to use when fixed
                     @test_throws CommandError pkg"develop Example"
-                    Pkg.setprotocol!()
+                    Pkg.setprotocol!("https")
                     pkg"develop Example"
                     @test isinstalled(TEST_PKG)
                 finally
