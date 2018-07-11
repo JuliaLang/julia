@@ -325,6 +325,11 @@ ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
 ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
     (D = transD.parent; ldiv!(D, B))
 
+function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
+    broadcast!(/, parent(A), parent(A), diag(D))
+    A
+end
+
 function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     dd = D.diag
     m, n = size(A)
@@ -343,11 +348,18 @@ function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     A
 end
 
+function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
+    broadcast!(/, parent(A), parent(A), reshape(diag(D), 1, :))
+    A
+end
 
 rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
     (D = adjD.parent; rdiv!(A, conj(D)))
 rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
+
+(/)(A::AbstractMatrix, D::Diagonal) =
+    rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
 
 (\)(F::Factorization, D::Diagonal) =
     ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
@@ -355,11 +367,6 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (F = adjF.parent; ldiv!(adjoint(F), Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
 (\)(A::Union{QR,QRCompactWY,QRPivoted}, B::Diagonal) =
     invoke(\, Tuple{Union{QR,QRCompactWY,QRPivoted}, AbstractVecOrMat}, A, B)
-
-(/)(U::UpperTriangular, D::Diagonal) = UpperTriangular(parent(U) ./ transpose(D.diag))
-(/)(L::LowerTriangular, D::Diagonal) = LowerTriangular(parent(L) ./ transpose(D.diag))
-(\)(D::Diagonal, U::UpperTriangular) = UpperTriangular(parent(U) ./ D.diag)
-(\)(D::Diagonal, L::LowerTriangular) = LowerTriangular(parent(L) ./ D.diag)
 
 function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
     valA = A.diag; nA = length(valA)
@@ -424,7 +431,9 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-(\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
+(\)(D::Diagonal, A::AbstractMatrix) =
+    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
+
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
