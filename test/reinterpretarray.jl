@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using .Main.TestHelpers.OAs
 
 A = Int64[1, 2, 3, 4]
 B = Complex{Int64}[5+6im, 7+8im, 9+10im]
@@ -87,3 +89,37 @@ A2 = S2[S2(0, 0)]
 @test_throws Base.PaddingError reinterpret(S2, A1)[1]
 reinterpret(S2, A1)[1] = S2(1, 2)
 @test A1[1] == S1(1, 2)
+
+# Unconventional axes
+let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
+    v = OffsetArray(a, (-1, 1))
+    r = reinterpret(Int64, v)
+    @test axes(r) === axes(v)
+    @test r[0,2] === reinterpret(Int64, v[0,2])
+    @test r[1,2] === reinterpret(Int64, v[1,2])
+    @test r[0,3] === reinterpret(Int64, v[0,3])
+    @test r[1,3] === reinterpret(Int64, v[1,3])
+    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is Base.Slice(0:1). Try reshaping first.") reinterpret(UInt32, v)
+    v = OffsetArray(a, (0, 1))
+    r = reinterpret(UInt32, v)
+    axsv = axes(v)
+    @test axes(r) === (oftype(axsv[1], 1:4), axsv[2])
+    for i = 1:2
+        rval = reinterpret(Tuple{UInt32,UInt32}, [v[i,2]])[1]
+        @test r[2i-1,2]   == rval[1]
+        @test r[2i,2] == rval[2]
+        rval = reinterpret(Tuple{UInt32,UInt32}, [v[i,3]])[1]
+        @test r[2i-1,3]   == rval[1]
+        @test r[2i,3] == rval[2]
+    end
+    r[4,2] = 7
+    @test r[4,2] === UInt32(7)
+    @test a[2,1] === reinterpret(Float64, [0x33333333, UInt32(7)])[1]
+    offsetvt = (-2, 4)
+    vt = OffsetArray(at, offsetvt)
+    istr = string(Int)
+    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr,$istr}` array to `$istr` when the first axis is Base.Slice(-1:0). Try reshaping first.") reinterpret(Int, vt)
+    vt = reshape(vt, 1:1, axes(vt)...)
+    r = reinterpret(Int, vt)
+    @test r == OffsetArray(reshape(1:8, 2, 2, 2), (0, offsetvt...))
+end
