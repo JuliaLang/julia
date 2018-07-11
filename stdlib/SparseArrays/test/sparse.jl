@@ -2245,7 +2245,9 @@ end
 @testset "sparse transpose adjoint" begin
     A = sprand(10, 10, 0.75)
     @test A' == SparseMatrixCSC(A')
+    @test SparseMatrixCSC(A') isa SparseMatrixCSC
     @test transpose(A) == SparseMatrixCSC(transpose(A))
+    @test SparseMatrixCSC(transpose(A)) isa SparseMatrixCSC
 end
 
 end # module
