@@ -156,7 +156,7 @@ including:
 - `dev`: default directory for package development
 - `logs`: log files (e.g. `manifest_usage.toml`, `repl_history.jl`)
 - `packages`: installed package versions
-- `registries`: clones of registries (e.g. `Uncurated`)
+- `registries`: clones of registries (e.g. `General`)
 
 **Load path:** a stack of environments where package identities, their
 dependencies, and entry-points are searched for. The load path is controlled in
@@ -209,9 +209,9 @@ In the Pkg REPL packages can be added with the `add` command followed by the nam
 ```
 (v0.7) pkg> add Example
    Cloning default registries into /Users/kristoffer/.julia/registries
-   Cloning registry Uncurated from "https://github.com/JuliaRegistries/Uncurated.git"
-  Updating registry at `~/.julia/registries/Uncurated`
-  Updating git-repo `https://github.com/JuliaRegistries/Uncurated.git`
+   Cloning registry General from "https://github.com/JuliaRegistries/General.git"
+  Updating registry at `~/.julia/registries/General`
+  Updating git-repo `https://github.com/JuliaRegistries/General.git`
  Resolving package versions...
   Updating `~/.julia/environments/v0.7/Project.toml`
   [7876af07] + Example v0.5.1
@@ -221,7 +221,7 @@ In the Pkg REPL packages can be added with the `add` command followed by the nam
 ```
 
 Here we added the package Example to the current project. In this example, we are using a fresh Julia installation,
-and this is our first time adding a package using Pkg. By default, Pkg clones Julia's Uncurated registry,
+and this is our first time adding a package using Pkg. By default, Pkg clones Julia's General registry,
 and uses this registry to look up packages requested for inclusion in the current environment.
 The status update shows a short form of the package UUID to the left, then the package name, and the version.
 Since standard libraries (e.g. `Test`) are shipped with Julia, they do not have a version. The project status contains the packages
@@ -477,8 +477,8 @@ shell> ls -l
 total 0
 
 (MyProject) pkg> add Example
-  Updating registry at `~/.julia/registries/Uncurated`
-  Updating git-repo `https://github.com/JuliaRegistries/Uncurated.git`
+  Updating registry at `~/.julia/registries/General`
+  Updating git-repo `https://github.com/JuliaRegistries/General.git`
  Resolving package versions...
   Updating `Project.toml`
   [7876af07] + Example v0.5.1
