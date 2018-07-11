@@ -284,7 +284,7 @@ unambiguous), unicode code point (`"\\u"` prefix) or hex (`"\\x"` prefix).
 The optional `esc` argument specifies any additional characters that should also be
 escaped by a prepending backslash (`\"` is also escaped by default in the first form).
 
-## Examples
+# Examples
 ```jldoctest
 julia> escape_string("aaa\\nbbb")
 "aaa\\\\nbbb"
@@ -355,7 +355,7 @@ The following escape sequences are recognised:
  - Hex bytes (`\\x` with 1-2 trailing hex digits)
  - Octal bytes (`\\` with 1-3 trailing octal digits)
 
-## Examples
+# Examples
 ```jldoctest
 julia> unescape_string("aaa\\\\nbbb") # C escape sequence
 "aaa\\nbbb"
@@ -463,13 +463,22 @@ macro raw_str(s); s; end
 ## multiline strings ##
 
 """
-    indentation(str::AbstractString; tabwidth=8)
+    indentation(str::AbstractString; tabwidth=8) -> (Int, Bool)
 
-Calculate the width of leading blank space, and also return if string is blank
+Calculate the width of leading white space. Return the width and a flag to indicate
+if the string is empty.
 
-Returns:
+# Examples
+```jldoctest
+julia> Base.indentation("")
+(0, true)
 
-* width of leading whitespace, flag if string is totally blank
+julia> Base.indentation("  a")
+(2, false)
+
+julia> Base.indentation("\\ta"; tabwidth=3)
+(3, false)
+```
 """
 function indentation(str::AbstractString; tabwidth=8)
     count = 0
@@ -488,11 +497,16 @@ end
 """
     unindent(str::AbstractString, indent::Int; tabwidth=8)
 
-Remove leading indentation from string
+Remove leading indentation from string.
 
-Returns:
+# Examples
+```jldoctest
+julia> Base.unindent("   a\\n   b", 2)
+" a\\n b"
 
-* `String` of multiline string, with leading indentation of `indent` removed
+julia> Base.unindent("\\ta\\n\\tb", 2, tabwidth=8)
+"      a\\n      b"
+```
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str
