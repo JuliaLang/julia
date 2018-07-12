@@ -35,7 +35,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
         (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T)
         ax1 = axes(a)[1]
         if N != 0 && sizeof(S) != sizeof(T)
-            dim = _length(ax1)
+            dim = length(ax1)
             rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
             first(ax1) == 1 || throwaxes1(S, T, ax1)
         end
@@ -77,7 +77,7 @@ end
 
 function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
-    f, l = first(paxs[1]), _length(paxs[1])
+    f, l = first(paxs[1]), length(paxs[1])
     size1 = div(l*sizeof(S), sizeof(T))
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
