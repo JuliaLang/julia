@@ -462,6 +462,9 @@ function __init__()
             ENV["OPENBLAS_NUM_THREADS"] = "8"
         elseif haskey(ENV, "JULIA_CPU_THREADS") # or exactly as specified
             ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
+        elseif haskey(ENV, "JULIA_CPU_CORES") # TODO: delete in 1.0 (deprecation)
+            Core.print("JULIA_CPU_CORES is deprecated, use JULIA_CPU_THREADS instead.\n")
+            ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
         end # otherwise, trust that openblas will pick CPU_THREADS anyways, without any intervention
     end
     # for the few uses of Libc.rand in Base:

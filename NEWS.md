@@ -524,6 +524,11 @@ This section lists changes that do not have deprecation warnings.
   * `dot(u, v)` now acts recursively. Instead of `sum(u[i]' * v[i] for i in ...)`, it computes
     `sum(dot(u[i], v[i]) for i in ...)`, similarly to `vecdot` before ([#27401]).
 
+  * `Sys.CPU_CORES` has been renamed to `Sys.CPU_THREADS`; it still gives the number
+    of "logical cores" (including hyperthreading) rather than the number of physical
+    cores present on the CPU. Similarly, the environment variable `JULIA_CPU_CORES` is
+    deprecated in favor of `JULIA_CPU_THREADS` ([#27856]).
+
 Library improvements
 --------------------
 
