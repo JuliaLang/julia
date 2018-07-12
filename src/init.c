@@ -837,8 +837,6 @@ void jl_get_builtin_hooks(void)
     jl_int8_type    = (jl_datatype_t*)core("Int8");
     jl_int16_type   = (jl_datatype_t*)core("Int16");
     jl_uint16_type  = (jl_datatype_t*)core("UInt16");
-    jl_uint32_type  = (jl_datatype_t*)core("UInt32");
-    jl_uint64_type  = (jl_datatype_t*)core("UInt64");
 
     jl_float16_type = (jl_datatype_t*)core("Float16");
     jl_float32_type = (jl_datatype_t*)core("Float32");
@@ -852,6 +850,8 @@ void jl_get_builtin_hooks(void)
     jl_uint8_type->super = jl_unsigned_type;
     jl_int32_type->super = jl_signed_type;
     jl_int64_type->super = jl_signed_type;
+    jl_uint32_type->super = jl_unsigned_type;
+    jl_uint64_type->super = jl_unsigned_type;
 
     jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
