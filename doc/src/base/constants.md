@@ -8,7 +8,7 @@ Base.C_NULL
 Base.VERSION
 Base.LOAD_PATH
 Base.Sys.BINDIR
-Base.Sys.CPU_CORES
+Base.Sys.CPU_LOGICAL_CORES
 Base.Sys.WORD_SIZE
 Base.Sys.KERNEL
 Base.Sys.ARCH

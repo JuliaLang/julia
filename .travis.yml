@@ -64,7 +64,7 @@ before_install:
         BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1";
         echo "override ARCH=$ARCH" >> Make.user;
         sudo sh -c "echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6";
-        export JULIA_CPU_CORES=4;
+        export JULIA_CPU_LOGICAL_CORES=4;
         export JULIA_TEST_MAXRSS_MB=1200;
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
@@ -90,7 +90,7 @@ before_install:
         export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$spawn_DYLD_FALLBACK_LIBRARY_PATH\" \$1";
         export BUILDOPTS="$BUILDOPTS spawn=\$(JULIA_MACOS_SPAWN)";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
-        export JULIA_CPU_CORES=2;
+        export JULIA_CPU_LOGICAL_CORES=2;
         export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - echo "override JULIA_CPU_TARGET=generic;native" >> Make.user

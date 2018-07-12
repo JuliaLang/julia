@@ -128,9 +128,9 @@ exists, or `emacs` otherwise.
 
 ## Parallelization
 
-### `JULIA_CPU_CORES`
+### `JULIA_CPU_LOGICAL_CORES`
 
-Overrides the global variable [`Base.Sys.CPU_CORES`](@ref), the number of
+Overrides the global variable [`Base.Sys.CPU_LOGICAL_CORES`](@ref), the number of
 logical CPU cores available.
 
 ### `JULIA_WORKER_TIMEOUT`

@@ -949,7 +949,7 @@ Library improvements
       directory, instead of the private `<prefix>/lib/julia` directory ([#16362]).
 
     * System reflection is now more consistently exposed from `Sys` and not `Base`
-      (e.g. constants such as `WORD_SIZE` and `CPU_CORES`). `OS_NAME` has been
+      (e.g. constants such as `WORD_SIZE` and `CPU_LOGICAL_CORES`). `OS_NAME` has been
       replaced by `Sys.KERNEL` and always reports the name of the kernel (as
       reported by `uname`). The `@windows_only` and `@osx` family of macros
       have been replaced with functions such as `is_windows()` and `is_apple()`.

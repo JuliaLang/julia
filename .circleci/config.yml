@@ -12,7 +12,7 @@ jobs:
       - image: circleci/python:2.7
         environment:
           ARCH: i686
-          JULIA_CPU_CORES: 4
+          JULIA_CPU_LOGICAL_CORES: 4
           JULIA_TEST_MAXRSS_MB: 800
     steps: &steps
       - run: | # install build dependencies
@@ -81,6 +81,6 @@ jobs:
       - image: circleci/python:2.7
         environment:
           ARCH: x86_64
-          JULIA_CPU_CORES: 4
+          JULIA_CPU_LOGICAL_CORES: 4
           JULIA_TEST_MAXRSS_MB: 800
     steps: *steps

@@ -457,12 +457,12 @@ function __init__()
     end
     # And try to prevent openblas from starting too many threads, unless/until specifically requested
     if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
-        cpu_cores = Sys.CPU_CORES::Int
+        cpu_cores = Sys.CPU_LOGICAL_CORES::Int
         if cpu_cores > 8 # always at most 8
             ENV["OPENBLAS_NUM_THREADS"] = "8"
-        elseif haskey(ENV, "JULIA_CPU_CORES") # or exactly as specified
+        elseif haskey(ENV, "JULIA_CPU_LOGICAL_CORES") # or exactly as specified
             ENV["OPENBLAS_NUM_THREADS"] = cpu_cores
-        end # otherwise, trust that openblas will pick CPU_CORES anyways, without any intervention
+        end # otherwise, trust that openblas will pick CPU_LOGICAL_CORES anyways, without any intervention
     end
     # for the few uses of Libc.rand in Base:
     Libc.srand()
