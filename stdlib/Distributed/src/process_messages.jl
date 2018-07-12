@@ -330,7 +330,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     for wt in wait_tasks; Base._wait(wt); end
 
     send_connection_hdr(controller, false)
-    send_msg_now(controller, MsgHeader(RRID(0,0), header.notify_oid), JoinCompleteMsg(Sys.CPU_CORES, getpid()))
+    send_msg_now(controller, MsgHeader(RRID(0,0), header.notify_oid), JoinCompleteMsg(Sys.CPU_THREADS, getpid()))
 end
 
 function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConfig)

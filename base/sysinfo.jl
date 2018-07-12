@@ -7,7 +7,7 @@ Provide methods for retrieving information about hardware and the operating syst
 
 export BINDIR,
        STDLIB,
-       CPU_CORES,
+       CPU_THREADS,
        CPU_NAME,
        WORD_SIZE,
        ARCH,
@@ -47,15 +47,15 @@ STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # fo
 
 # helper to avoid triggering precompile warnings
 
-global CPU_CORES
+global CPU_THREADS
 """
-    Sys.CPU_CORES
+    Sys.CPU_THREADS
 
 The number of logical CPU cores available in the system.
 
-See the Hwloc.jl package for extended information, including number of physical cores.
+See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-:CPU_CORES
+:CPU_THREADS
 
 """
     Sys.ARCH
@@ -87,11 +87,11 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 function __init__()
-    env_cores = get(ENV, "JULIA_CPU_CORES", "")
-    global CPU_CORES = if !isempty(env_cores)
+    env_cores = get(ENV, "JULIA_CPU_THREADS", "")
+    global CPU_THREADS = if !isempty(env_cores)
         env_cores = tryparse(Int, env_cores)
         if !(env_cores isa Int && env_cores > 0)
-            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1.\n")
+            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to 1.\n")
             env_cores = 1
         end
         env_cores

@@ -721,7 +721,7 @@ kwdef_val(::Type{T}) where {T} = T()
 # testing
 
 """
-    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_CORES / 2),
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
@@ -731,7 +731,7 @@ when `exit_on_error == true`.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
+function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error=false,
                   seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
@@ -740,7 +740,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
     exit_on_error && push!(tests, "--exit-on-error")
     seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
-    ENV2["JULIA_CPU_CORES"] = "$ncores"
+    ENV2["JULIA_CPU_THREADS"] = "$ncores"
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))

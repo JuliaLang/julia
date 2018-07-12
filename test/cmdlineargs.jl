@@ -51,14 +51,14 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         @test startswith(v[3], "┌ Warning: Failed to insert InteractiveUtils into module Main\n")
     end
     for nc in ("0", "-2", "x", "2x", " ")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
         @test v[1]
         @test v[2] == "1"
-        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1."
+        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to 1."
     end
     real_cores = string(ccall(:jl_cpu_cores, Int32, ()))
     for nc in ("1", " 1 ", " +1 ", " 0x1 ", "")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
         @test v[1]
         @test v[2] == (isempty(nc) ? real_cores : "1")
         @test isempty(v[3])

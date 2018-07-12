@@ -294,13 +294,13 @@ end
 """
     addprocs(; kwargs...) -> List of process identifiers
 
-Equivalent to `addprocs(Sys.CPU_CORES; kwargs...)`
+Equivalent to `addprocs(Sys.CPU_THREADS; kwargs...)`
 
 Note that workers do not run a `.julia/config/startup.jl` startup script, nor do they synchronize
 their global state (such as global variables, new method definitions, and loaded modules) with any
 of the other running processes.
 """
-addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
+addprocs(; kwargs...) = addprocs(Sys.CPU_THREADS; kwargs...)
 
 """
     addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
