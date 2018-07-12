@@ -1739,3 +1739,12 @@ T27078 = Vector{Vector{T}} where T
 # issue #28070
 g28070(f, args...) = f(args...)
 @test @inferred g28070(Core._apply, Base.:/, (1.0, 1.0)) == 1.0
+
+# issue #28079
+struct Foo28079 end
+@inline h28079(x, args...) = g28079(x, args...)
+@inline g28079(::Any, f, args...) = f(args...)
+test28079(p, n, m) = h28079(Foo28079(), Base.pointerref, p, n, m)
+cinfo_unoptimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=false)[].first
+cinfo_optimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=true)[].first
+@test cinfo_unoptimized.ssavaluetypes[end-1] === cinfo_optimized.ssavaluetypes[end-1] === Float32
