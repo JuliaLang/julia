@@ -437,7 +437,7 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
 end
 
 # do apply(af, fargs...), where af is a function value
-function abstract_apply(@nospecialize(aft), fargs::Vector{Any}, aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_apply(@nospecialize(aft), fargs::Union{Tuple{},Vector{Any}}, aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if !isa(aft, Const) && (!isType(aft) || has_free_typevars(aft))
         if !isconcretetype(aft) || (aft <: Builtin)
             # non-constant function of unknown type: bail now,
@@ -447,14 +447,14 @@ function abstract_apply(@nospecialize(aft), fargs::Vector{Any}, aargtypes::Vecto
         end
     end
     res = Union{}
-    nargs = length(fargs)
-    @assert nargs == length(aargtypes)
+    nargs = length(aargtypes)
+    @assert fargs === () || nargs == length(fargs)
     splitunions = 1 < countunionsplit(aargtypes) <= sv.params.MAX_APPLY_UNION_ENUM
     ctypes = Any[Any[aft]]
     for i = 1:nargs
         ctypes´ = []
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
-            cti = precise_container_type(fargs[i], ti, vtypes, sv)
+            cti = precise_container_type(fargs === () ? nothing : fargs[i], ti, vtypes, sv)
             if _any(t -> t === Bottom, cti)
                 continue
             end
@@ -519,7 +519,6 @@ end
 
 function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if f === _apply
-        length(fargs) > 1 || return Any
         return abstract_apply(argtypes[2], fargs[3:end], argtypes[3:end], vtypes, sv)
     end
 
