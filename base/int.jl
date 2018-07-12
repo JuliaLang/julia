@@ -553,14 +553,66 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 
 ## integer construction ##
 
+"""
+    @int128_str str
+
+Parse `str` as an [`Int128`](@ref).
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> @int128_str "123456789123"
+123456789123
+
+julia> @int128_str "123456789123.4"
+ERROR: LoadError: ArgumentError: invalid base 10 digit '.' in "123456789123.4"
+Stacktrace:
+ [1] tryparse_internal(::Type{Int128}, ::String, ::Int64, ::Int64, ::Int64, ::Bool) at ./parse.jl:118
+[...]
+```
+"""
 macro int128_str(s)
     return parse(Int128, s)
 end
 
+"""
+    @uint128_str str
+
+Parse `str` as an [`UInt128`](@ref).
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> @uint128_str "123456789123"
+0x00000000000000000000001cbe991a83
+
+julia> @uint128_str "-123456789123"
+ERROR: LoadError: ArgumentError: invalid base 10 digit '-' in "-123456789123"
+Stacktrace:
+ [1] tryparse_internal(::Type{UInt128}, ::String, ::Int64, ::Int64, ::Int64, ::Bool) at ./parse.jl:118
+[...]
+```
+"""
 macro uint128_str(s)
     return parse(UInt128, s)
 end
 
+"""
+    @big_str str
+
+Attempt to parse `str` as a [`BigInt`](@ref) or [`BigFloat`](@ref).
+Throw an [`ArgumentError`] if `str` is in the wrong format for representation
+as either of these types.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> @big_str "1_000_000_000_000"
+1000000000000
+
+julia> @big_str "_"
+ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
+Stacktrace:
+ [1] top-level scope at none:0
+```
+"""
 macro big_str(s)
     if '_' in s
         # remove _ in s[2:end-1]
