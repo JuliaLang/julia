@@ -349,7 +349,7 @@ end
 function handle_msg(msg::JoinCompleteMsg, header, r_stream, w_stream, version)
     w = map_sock_wrkr[r_stream]
     environ = something(w.config.environ, Dict())
-    environ[:cpu_cores] = msg.cpu_cores
+    environ[:cpu_threads] = msg.cpu_threads
     w.config.environ = environ
     w.config.ospid = msg.ospid
     w.version = version

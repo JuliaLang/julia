@@ -56,11 +56,11 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         @test v[2] == "1"
         @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to 1."
     end
-    real_cores = string(ccall(:jl_cpu_cores, Int32, ()))
+    real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("1", " 1 ", " +1 ", " 0x1 ", "")
         v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
         @test v[1]
-        @test v[2] == (isempty(nc) ? real_cores : "1")
+        @test v[2] == (isempty(nc) ? real_threads : "1")
         @test isempty(v[3])
     end
 end

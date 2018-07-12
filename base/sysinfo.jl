@@ -87,16 +87,16 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 function __init__()
-    env_cores = get(ENV, "JULIA_CPU_THREADS", "")
-    global CPU_THREADS = if !isempty(env_cores)
-        env_cores = tryparse(Int, env_cores)
-        if !(env_cores isa Int && env_cores > 0)
+    env_threads = get(ENV, "JULIA_CPU_THREADS", "")
+    global CPU_THREADS = if !isempty(env_threads)
+        env_threads = tryparse(Int, env_threads)
+        if !(env_threads isa Int && env_threads > 0)
             Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to 1.\n")
-            env_cores = 1
+            env_threads = 1
         end
-        env_cores
+        env_threads
     else
-        Int(ccall(:jl_cpu_cores, Int32, ()))
+        Int(ccall(:jl_cpu_threads, Int32, ()))
     end
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())

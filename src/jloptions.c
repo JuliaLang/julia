@@ -93,7 +93,7 @@ static const char opts[]  =
 
     // parallel options
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
-    "                           \"auto\" launches as many workers as the number of local cores\n"
+    "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
@@ -385,7 +385,7 @@ restart_switch:
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
-                jl_options.nprocs = jl_cpu_cores();
+                jl_options.nprocs = jl_cpu_threads();
             }
             else {
                 long nprocs = strtol(optarg, &endptr, 10);

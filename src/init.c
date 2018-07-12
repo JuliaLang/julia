@@ -689,7 +689,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
 
 #if defined(__linux__)
-    int ncores = jl_cpu_cores();
+    int ncores = jl_cpu_threads();
     if (ncores > 1) {
         cpu_set_t cpumask;
         CPU_ZERO(&cpumask);
