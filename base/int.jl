@@ -563,6 +563,9 @@ Parse `str` as an [`Int128`](@ref).
 julia> @int128_str "123456789123"
 123456789123
 
+julia> int128"123456789123"
+123456789123
+
 julia> @int128_str "123456789123.4"
 ERROR: LoadError: ArgumentError: invalid base 10 digit '.' in "123456789123.4"
 Stacktrace:
@@ -582,6 +585,9 @@ Parse `str` as an [`UInt128`](@ref).
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> @uint128_str "123456789123"
+0x00000000000000000000001cbe991a83
+
+julia> uint128"123456789123"
 0x00000000000000000000001cbe991a83
 
 julia> @uint128_str "-123456789123"
@@ -605,6 +611,9 @@ as either of these types.
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> @big_str "1_000_000_000_000"
+1000000000000
+
+julia> big"1_000_000_000_000"
 1000000000000
 
 julia> @big_str "_"
