@@ -398,6 +398,8 @@ function SparseMatrixCSC{Tv,Ti}(M::StridedMatrix) where {Tv,Ti}
     end
     return SparseMatrixCSC(size(M, 1), size(M, 2), colptr, rowval, nzval)
 end
+SparseMatrixCSC(M::Adjoint{<:Any,<:SparseMatrixCSC}) = copy(M)
+SparseMatrixCSC(M::Transpose{<:Any,<:SparseMatrixCSC}) = copy(M)
 
 # converting from SparseMatrixCSC to other matrix types
 function Matrix(S::SparseMatrixCSC{Tv}) where Tv
