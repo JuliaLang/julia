@@ -57,6 +57,9 @@ Base.bswap
 Base.hex2bytes
 Base.hex2bytes!
 Base.bytes2hex
+Base.@big_str
+Base.@int128_str
+Base.@uint128_str
 ```
 
 ## General Number Functions and Constants
