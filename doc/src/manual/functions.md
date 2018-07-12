@@ -760,6 +760,17 @@ they are equivalent to `broadcast` calls and are fused with other nested "dot" c
  `X .+= Y` etcetera is equivalent to `X .= X .+ Y` and results in a fused in-place assignment;
  see also [dot operators](@ref man-dot-operators).
 
+You can also combine dot operations with function chaining using [`|>`](@ref), as in this example:
+```jldoctest
+julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
+5-element Array{Real,1}:
+    1
+    0.5
+    6
+   -4
+ true
+```
+
 ## Further Reading
 
 We should mention here that this is far from a complete picture of defining functions. Julia has
