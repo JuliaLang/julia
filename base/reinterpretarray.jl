@@ -109,6 +109,7 @@ end
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         return reinterpret(T, a.parent[i1, tailinds...])
     else
+        @boundscheck checkbounds(a, i1, tailinds...)
         ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
         t = Ref{T}()
         s = Ref{S}()
@@ -159,6 +160,7 @@ end
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         return setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
     else
+        @boundscheck checkbounds(a, i1, tailinds...)
         ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
         t = Ref{T}(v)
         s = Ref{S}()

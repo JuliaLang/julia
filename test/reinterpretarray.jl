@@ -59,16 +59,53 @@ let a = fill(1.0, 5, 3)
     fill!(r, 2)
     @test all(a .=== reinterpret(Float64, [Int64(2)])[1])
     @test all(r .=== Int64(2))
+    for badinds in (0, 16, (0,1), (1,0), (6,3), (5,4))
+        @test_throws BoundsError r[badinds...]
+        @test_throws BoundsError r[badinds...] = -2
+    end
+    for goodinds in (1, 15, (1,1), (5,3))
+        r[goodinds...] = -2
+        @test r[goodinds...] == -2
+    end
     r = reinterpret(Int32, a)
     @test @inferred(IndexStyle(r)) == IndexLinear()
     fill!(r, 3)
     @test all(a .=== reinterpret(Float64, [(Int32(3), Int32(3))])[1])
     @test all(r .=== Int32(3))
+    for badinds in (0, 31, (0,1), (1,0), (11,3), (10,4))
+        @test_throws BoundsError r[badinds...]
+        @test_throws BoundsError r[badinds...] = -3
+    end
+    for goodinds in (1, 30, (1,1), (10,3))
+        r[goodinds...] = -3
+        @test r[goodinds...] == -3
+    end
     r = reinterpret(Int64, view(a, 1:2:5, :))
     @test @inferred(IndexStyle(r)) == IndexCartesian()
     fill!(r, 4)
     @test all(a[1:2:5,:] .=== reinterpret(Float64, [Int64(4)])[1])
     @test all(r .=== Int64(4))
+    for badinds in (0, 10, (0,1), (1,0), (4,3), (3,4))
+        @test_throws BoundsError r[badinds...]
+        @test_throws BoundsError r[badinds...] = -4
+    end
+    for goodinds in (1, 9, (1,1), (3,3))
+        r[goodinds...] = -4
+        @test r[goodinds...] == -4
+    end
+    r = reinterpret(Int32, view(a, 1:2:5, :))
+    @test @inferred(IndexStyle(r)) == IndexCartesian()
+    fill!(r, 5)
+    @test all(a[1:2:5,:] .=== reinterpret(Float64, [(Int32(5), Int32(5))])[1])
+    @test all(r .=== Int32(5))
+    for badinds in (0, 19, (0,1), (1,0), (7,3), (6,4))
+        @test_throws BoundsError r[badinds...]
+        @test_throws BoundsError r[badinds...] = -5
+    end
+    for goodinds in (1, 18, (1,1), (6,3))
+        r[goodinds...] = -5
+        @test r[goodinds...] == -5
+    end
 end
 
 # Error on reinterprets that would expose padding
