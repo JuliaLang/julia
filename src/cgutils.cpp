@@ -355,17 +355,18 @@ static size_t dereferenceable_size(jl_value_t *jt)
     else if (jl_is_datatype(jt) && ((jl_datatype_t*)jt)->layout) {
         return jl_datatype_size(jt);
     }
-    else {
-        return 0;
-    }
+    return 0;
 }
 
-// If given alignment is 0 and LLVM's assumed alignment for a load/store via ptr
-// might be stricter than the Julia alignment for jltype, return the alignment of jltype.
-// Otherwise return the given alignment.
-static unsigned julia_alignment(jl_value_t *jltype)
+// Return the min required / expected alignment of jltype (on the stack or heap)
+static unsigned julia_alignment(jl_value_t *jt)
 {
-    unsigned alignment = jl_datatype_align(jltype);
+    if (jl_is_array_type(jt)) {
+        // Array always has this alignment
+        return JL_SMALL_BYTE_ALIGNMENT;
+    }
+    assert(jl_is_datatype(jt) && ((jl_datatype_t*)jt)->layout);
+    unsigned alignment = jl_datatype_align(jt);
     assert(alignment <= JL_HEAP_ALIGNMENT);
     assert(JL_HEAP_ALIGNMENT % alignment == 0);
     return alignment;
@@ -386,26 +387,32 @@ static inline void maybe_mark_argument_dereferenceable(Argument *A, jl_value_t *
 }
 
 static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null,
-                                                           size_t size=0)
+                                                           size_t size, size_t align)
 {
-    // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
-    if (!can_be_null)
-        LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(jl_LLVMContext, None));
-    if (!size) {
-        return LI;
+    if (isa<PointerType>(LI->getType())) {
+        if (!can_be_null)
+            // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+            LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(jl_LLVMContext, None));
+        if (size) {
+            Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(T_int64, size));
+            LI->setMetadata(can_be_null ? LLVMContext::MD_dereferenceable_or_null : LLVMContext::MD_dereferenceable,
+                            MDNode::get(jl_LLVMContext, { OP }));
+            if (align > 1 && !LI->getType()->getPointerElementType()->isSized()) { // mimic LLVM Loads.cpp isAligned
+                Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(T_int64, align));
+                LI->setMetadata(LLVMContext::MD_align, MDNode::get(jl_LLVMContext, { OP }));
+            }
+        }
     }
-    llvm::SmallVector<Metadata *, 1> OPs;
-    OPs.push_back(ConstantAsMetadata::get(ConstantInt::get(T_int64, size)));
-    LI->setMetadata(can_be_null ? "dereferenceable_or_null" :
-                                  "dereferenceable",
-                    MDNode::get(jl_LLVMContext, OPs));
     return LI;
 }
 
-static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null,
-                                                           jl_value_t *jt)
+static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null, jl_value_t *jt)
 {
-    return maybe_mark_load_dereferenceable(LI, can_be_null, dereferenceable_size(jt));
+    size_t size = dereferenceable_size(jt);
+    unsigned alignment = 1;
+    if (size > 0)
+        alignment = julia_alignment(jt);
+    return maybe_mark_load_dereferenceable(LI, can_be_null, size, alignment);
 }
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
@@ -416,7 +423,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
         return literal_static_pointer_val(ctx, p);
     Value *pgv = literal_pointer_val_slot(ctx, p);
     return tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(
-                             ctx.builder.CreateLoad(T_pjlvalue, pgv), false, jl_typeof(p)));
+            ctx.builder.CreateLoad(T_pjlvalue, pgv), false, jl_typeof(p)));
 }
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
@@ -429,8 +436,8 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
     // bindings are prefixed with jl_bnd#
     Value *pgv = julia_pgv(ctx, "jl_bnd#", p->name, p->owner, p);
     return tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(
-                             ctx.builder.CreateLoad(T_pjlvalue, pgv), false,
-                             sizeof(jl_binding_t)));
+            ctx.builder.CreateLoad(T_pjlvalue, pgv), false,
+            sizeof(jl_binding_t), alignof(jl_binding_t)));
 }
 
 // bitcast a value, but preserve its address space when dealing with pointer types
@@ -1265,8 +1272,9 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     //    elt = data;
     //}
     //else {
-        Instruction *load = ctx.builder.CreateAlignedLoad(data, isboxed || alignment ?
-            alignment : julia_alignment(jltype), false);
+        Instruction *load = ctx.builder.CreateAlignedLoad(data,
+            isboxed || alignment ?  alignment : julia_alignment(jltype),
+            false);
         if (isboxed)
             load = maybe_mark_load_dereferenceable(load, true, jltype);
         if (tbaa) {
@@ -1435,19 +1443,25 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         if (is_datatype_all_pointers(stt)) {
             idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
             bool maybe_null = (unsigned)stt->ninitialized != nfields;
-            size_t minimum_field_size = (size_t)-1;
+            size_t minimum_field_size = std::numeric_limits<size_t>::max();
+            size_t minimum_align = JL_HEAP_ALIGNMENT;
             for (size_t i = 0; i < nfields; ++i) {
+                jl_value_t *ft = jl_field_type(stt, i);
                 minimum_field_size = std::min(minimum_field_size,
-                    dereferenceable_size(jl_field_type(stt, i)));
-                if (minimum_field_size == 0)
+                    dereferenceable_size(ft));
+                if (minimum_field_size == 0) {
+                    minimum_align = 1;
                     break;
+                }
+                minimum_align = std::min(minimum_align,
+                    (size_t)julia_alignment(ft));
             }
             Value *fldptr = ctx.builder.CreateInBoundsGEP(maybe_decay_tracked(
                 emit_bitcast(ctx, data_pointer(ctx, strct), T_pprjlvalue)), idx);
             Value *fld = tbaa_decorate(strct.tbaa,
                 maybe_mark_load_dereferenceable(
-                    ctx.builder.CreateLoad(fldptr),
-                    maybe_null, minimum_field_size));
+                    ctx.builder.CreateLoad(T_prjlvalue, fldptr),
+                    maybe_null, minimum_field_size, minimum_align));
             if (maybe_null)
                 null_pointer_check(ctx, fld);
             *ret = mark_julia_type(ctx, fld, true, jl_any_type);
@@ -1555,9 +1569,8 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         if (jl_field_isptr(jt, idx)) {
             bool maybe_null = idx >= (unsigned)jt->ninitialized;
             Instruction *Load = maybe_mark_load_dereferenceable(
-                ctx.builder.CreateLoad(T_prjlvalue, emit_bitcast(ctx, addr, T_pprjlvalue)),
-                maybe_null, jl_field_type(jt, idx)
-            );
+                    ctx.builder.CreateLoad(T_prjlvalue, emit_bitcast(ctx, addr, T_pprjlvalue)),
+                    maybe_null, jl_field_type(jt, idx));
             Value *fldv = tbaa_decorate(strct.tbaa, Load);
             if (maybe_null)
                 null_pointer_check(ctx, fldv);
@@ -2278,6 +2291,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
         ctx.builder.SetInsertPoint(postBB);
     }
     else {
+        assert(src.isboxed && "expected boxed value for sizeof/alignment computation");
         Value *datatype = emit_typeof_boxed(ctx, src);
         Value *copy_bytes = emit_datatype_size(ctx, datatype);
         if (skip) {
