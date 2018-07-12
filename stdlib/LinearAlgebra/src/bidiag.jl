@@ -5,16 +5,21 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V      # diagonal
     ev::V      # sub/super diagonal
     uplo::Char # upper bidiagonal ('U') or lower ('L')
-    function Bidiagonal{T}(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
+    function Bidiagonal{T,V}(dv, ev, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         @assert !has_offset_axes(dv, ev)
         if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
         new{T,V}(dv, ev, uplo)
     end
-    function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
-        Bidiagonal{T}(dv, ev, uplo)
-    end
+end
+function Bidiagonal{T,V}(dv, ev, uplo::Symbol) where {T,V<:AbstractVector{T}}
+    Bidiagonal{T,V}(dv, ev, char_uplo(uplo))
+end
+function Bidiagonal{T}(dv::AbstractVector, ev::AbstractVector, uplo::Union{Symbol,AbstractChar}) where {T}
+    Bidiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
+               convert(AbstractVector{T}, ev)::AbstractVector{T},
+               uplo)
 end
 
 """
@@ -57,7 +62,10 @@ julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
 ```
 """
 function Bidiagonal(dv::V, ev::V, uplo::Symbol) where {T,V<:AbstractVector{T}}
-    Bidiagonal{T}(dv, ev, char_uplo(uplo))
+    Bidiagonal{T,V}(dv, ev, char_uplo(uplo))
+end
+function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
+    Bidiagonal{T,V}(dv, ev, uplo)
 end
 
 """
@@ -95,6 +103,8 @@ function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
 end
 
 Bidiagonal(A::Bidiagonal) = A
+Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
+Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
 function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
@@ -165,11 +175,6 @@ promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Tridiagonal{promote_type(T,S)} : Tridiagonal
 promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 
-# No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
-Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
-# Convert Bidiagonal to Bidiagonal{T} by constructing a new instance with converted elements
-Bidiagonal{T}(A::Bidiagonal) where {T} =
-    Bidiagonal(convert(AbstractVector{T}, A.dv), convert(AbstractVector{T}, A.ev), A.uplo)
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 

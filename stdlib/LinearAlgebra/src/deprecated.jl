@@ -64,7 +64,8 @@ export lufact!
 # also uncomment constructor tests in test/linalg/bidiag.jl
 function Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T,S}
     depwarn(string("`Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T, S}`",
-        " is deprecated, manually convert both vectors to the same type instead."), :Bidiagonal)
+        " is deprecated, use `Bidiagonal{R}(dv, ev, uplo)` or `Bidiagonal{R,V}(dv, ev, uplo)` instead,",
+        " or convert both vectors to the same type manually."), :Bidiagonal)
     R = promote_type(T, S)
     Bidiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev), uplo)
 end
@@ -73,7 +74,8 @@ end
 # also uncomment constructor tests in test/linalg/tridiag.jl
 function SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) where {T,S}
     depwarn(string("`SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) ",
-        "where {T, S}` is deprecated, convert both vectors to the same type instead."), :SymTridiagonal)
+        "where {T, S}` is deprecated, use `SymTridiagonal{R}(dv, ev)` or `SymTridiagonal{R,V}(dv, ev)` instead,",
+        " or convert both vectors to the same type manually."), :SymTridiagonal)
     R = promote_type(T, S)
     SymTridiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev))
 end
@@ -82,7 +84,8 @@ end
 # also uncomment constructor tests in test/linalg/tridiag.jl
 function Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) where {Tl,Td,Tu}
     depwarn(string("`Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) ",
-        "where {Tl, Td, Tu}` is deprecated, convert all vectors to the same type instead."), :Tridiagonal)
+        "where {Tl, Td, Tu}` is deprecated, use `Tridiagonal{T}(dl, d, du)` or `Tridiagonal{T,V}(dl, d, du)` instead,",
+        " or convert all three vectors to the same type manually."), :Tridiagonal)
     Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
 end
 

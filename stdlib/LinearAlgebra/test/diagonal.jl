@@ -27,6 +27,11 @@ srand(1)
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
         end
+        @test eltype(Diagonal{elty}([1,2,3,4])) == elty
+        @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
+        DI = Diagonal([1,2,3,4])
+        @test Diagonal(DI) === DI
+        @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
     end

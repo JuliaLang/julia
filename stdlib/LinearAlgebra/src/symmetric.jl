@@ -4,6 +4,11 @@
 struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
+
+    function Symmetric{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
+        @assert !has_offset_axes(data)
+        new{T,S}(data, uplo)
+    end
 end
 """
     Symmetric(A, uplo=:U)
@@ -74,6 +79,11 @@ symmetric_type(::Type{T}) where {T<:Number} = T
 struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
+
+    function Hermitian{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
+        @assert !has_offset_axes(data)
+        new{T,S}(data, uplo)
+    end
 end
 """
     Hermitian(A, uplo=:U)

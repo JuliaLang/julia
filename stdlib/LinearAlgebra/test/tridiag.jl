@@ -72,11 +72,32 @@ end
             @test TT.d  === x
             @test TT.du === y
         end
+        ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
+        @test eltype(ST) == elty
+        TT = Tridiagonal{elty}([1,2,3], [1,2,3,4], [1,2,3])
+        @test eltype(TT) == elty
+        ST = SymTridiagonal{elty,Vector{elty}}(d, GenericArray(dl))
+        @test isa(ST, SymTridiagonal{elty,Vector{elty}})
+        TT = Tridiagonal{elty,Vector{elty}}(GenericArray(dl), d, GenericArray(dl))
+        @test isa(TT, Tridiagonal{elty,Vector{elty}})
         # enable when deprecations for 0.7 are dropped
         # @test_throws MethodError SymTridiagonal(dv, GenericArray(ev))
         # @test_throws MethodError SymTridiagonal(GenericArray(dv), ev)
         # @test_throws MethodError Tridiagonal(GenericArray(ev), dv, GenericArray(ev))
         # @test_throws MethodError Tridiagonal(ev, GenericArray(dv), ev)
+        # @test_throws MethodError SymTridiagonal{elty}(dv, GenericArray(ev))
+        # @test_throws MethodError Tridiagonal{elty}(GenericArray(ev), dv, GenericArray(ev))
+        STI = SymTridiagonal([1,2,3,4], [1,2,3])
+        TTI = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3])
+        TTI2 = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3], [1,2])
+        @test SymTridiagonal(STI) === STI
+        @test Tridiagonal(TTI)    === TTI
+        @test Tridiagonal(TTI2)   === TTI2
+        @test isa(SymTridiagonal{elty}(STI), SymTridiagonal{elty})
+        @test isa(Tridiagonal{elty}(TTI), Tridiagonal{elty})
+        TTI2y = Tridiagonal{elty}(TTI2)
+        @test isa(TTI2y, Tridiagonal{elty})
+        @test TTI2y.du2 == convert(Vector{elty}, [1,2])
     end
     @testset "interconversion of Tridiagonal and SymTridiagonal" begin
         @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
@@ -291,8 +312,12 @@ end
                     @test_throws DimensionMismatch Tldlt\rand(elty,n+1)
                     @test size(Tldlt) == size(Ts)
                     if elty <: AbstractFloat
+                        @test LinearAlgebra.LDLt{elty,SymTridiagonal{elty,Vector{elty}}}(Tldlt) === Tldlt
+                        @test LinearAlgebra.LDLt{elty}(Tldlt) === Tldlt
+                        @test typeof(convert(LinearAlgebra.LDLt{Float32,Matrix{Float32}},Tldlt)) ==
+                            LinearAlgebra.LDLt{Float32,Matrix{Float32}}
                         @test typeof(convert(LinearAlgebra.LDLt{Float32},Tldlt)) ==
-                            LinearAlgebra.LDLt{Float32,SymTridiagonal{elty,Vector{elty}}}
+                            LinearAlgebra.LDLt{Float32,SymTridiagonal{Float32,Vector{Float32}}}
                     end
                     for vv in (copy(v), view(v, 1:n))
                         invFsv = Fs\vv
