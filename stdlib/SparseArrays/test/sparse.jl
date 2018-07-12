@@ -118,6 +118,8 @@ end
 
     @testset "blockdiag concatenation" begin
         @test blockdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
+        @test blockdiag() == spzeros(0, 0)
+        @test nnz(blockdiag()) == 0
     end
 
     @testset "concatenation promotion" begin

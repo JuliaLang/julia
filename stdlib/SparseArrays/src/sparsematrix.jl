@@ -3139,7 +3139,7 @@ function blockdiag(X::SparseMatrixCSC...)
     n = sum(nX)
 
     Tv = promote_type(map(x->eltype(x.nzval), X)...)
-    Ti = promote_type(map(x->eltype(x.rowval), X)...)
+    Ti = isempty(X) ? Int : promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Vector{Ti}(undef, n+1)
     nnzX = Int[ nnz(x) for x in X ]
@@ -3158,6 +3158,7 @@ function blockdiag(X::SparseMatrixCSC...)
         nX_sofar += nX[i]
         mX_sofar += mX[i]
     end
+    colptr[n+1] = nnz_sofar + 1
 
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
