@@ -122,9 +122,6 @@ static jl_value_t *jl_idtable_type = NULL;
 static jl_typename_t *jl_idtable_typename = NULL;
 static arraylist_t builtin_typenames;
 
-// mark symbols for gen_sysimg_symtab.jl
-//#define GEN_SYMTAB_MODE
-
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
@@ -439,7 +436,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
 static int is_ast_node(jl_value_t *v)
 {
     // TODO: this accidentally copies QuoteNode(Expr(...)) and QuoteNode(svec(...))
-    return jl_is_symbol(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
+    return jl_is_slot(v) || jl_is_ssavalue(v) ||
         jl_is_uniontype(v) || jl_is_expr(v) || jl_is_newvarnode(v) ||
         jl_is_svec(v) || jl_is_tuple(v) || ((jl_datatype_t*)jl_typeof(v))->instance ||
         jl_is_int32(v) || jl_is_int64(v) || jl_is_bool(v) || jl_is_uint8(v) ||
@@ -568,14 +565,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             writetag(s->s, (jl_value_t*)LongSymbol_tag);
             write_int32(s->s, l);
         }
-#ifdef GEN_SYMTAB_MODE
-        write_uint8(s->s, 0);
-        ios_write(s->s, "JJJ", 3);
-#endif
         ios_write(s->s, jl_symbol_name((jl_sym_t*)v), l);
-#ifdef GEN_SYMTAB_MODE
-        write_uint8(s->s, 0);
-#endif
     }
     else if (jl_is_globalref(v)) {
         if (s->mode == MODE_AST && jl_globalref_mod(v) == s->tree_enclosing_module) {
@@ -1429,13 +1419,7 @@ static jl_value_t *jl_deserialize_value_symbol(jl_serializer_state *s, jl_value_
     else
         len = read_int32(s->s);
     char *name = (char*)(len >= 256 ? malloc(len + 1) : alloca(len + 1));
-#ifdef GEN_SYMTAB_MODE
-    (void)read_uint8(s->s); (void)read_uint8(s->s); (void)read_uint8(s->s); (void)read_uint8(s->s);
-#endif
     ios_read(s->s, name, len);
-#ifdef GEN_SYMTAB_MODE
-    (void)read_uint8(s->s);
-#endif
     name[len] = '\0';
     jl_value_t *sym = (jl_value_t*)jl_symbol(name);
     if (len >= 256)
@@ -2992,8 +2976,7 @@ void jl_init_serializer(void)
                      // everything above here represents a class of object rather than only a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
-                     call_sym, invoke_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
-                     lambda_sym, jl_symbol("tuple"), assign_sym, isdefined_sym, boundscheck_sym,
+                     call_sym, invoke_sym, goto_ifnot_sym, return_sym, jl_symbol("tuple"),
                      unreachable_sym,
 
                      // empirical list of very common symbols
