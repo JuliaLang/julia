@@ -804,9 +804,17 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
             end
         end
 
+        # Add target deps to deps (https://github.com/JuliaLang/Pkg.jl/issues/427)
         if !isempty(pkgs)
+            target_deps = deepcopy(pkgs)
             add_or_develop(localctx, pkgs)
             need_to_resolve = false # add resolves
+            info = manifest_info(localctx.env, pkg.uuid)
+            !haskey(info, "deps") && info["deps"] == Dict{String, Any}()
+            deps = info["deps"]
+            for deppkg in target_deps
+                deps[deppkg.name] = string(deppkg.uuid)
+            end
         end
 
         local new
