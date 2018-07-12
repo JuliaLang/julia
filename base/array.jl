@@ -71,8 +71,33 @@ Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref).
 """
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
+"""
+    DenseArray{T, N} <: AbstractArray{T,N}
+
+`N`-dimensional dense array with elements of type `T`.
+The elements of a dense array are stored contiguously in memory.
+"""
+DenseArray
+
+"""
+    DenseVector{T}
+
+One-dimensional [`DenseArray`](@ref) with elements of type `T`. Alias for `DenseArray{T,1}`.
+"""
 const DenseVector{T} = DenseArray{T,1}
+
+"""
+    DenseMatrix{T}
+
+Two-dimensional [`DenseArray`](@ref) with elements of type `T`. Alias for `DenseArray{T,2}`.
+"""
 const DenseMatrix{T} = DenseArray{T,2}
+
+"""
+    DenseVecOrMat{T}
+
+Union type of [`DenseVector{T}`](@ref) and [`DenseMatrix{T}`](@ref).
+"""
 const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
