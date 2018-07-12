@@ -29,4 +29,22 @@ function resize_nthreads!(A::AbstractVector, copyvalue=A[1])
     return A
 end
 
+"""
+	set_nthreads!(A, origarray::AbstracVector)
+Similar to `resize_nthreads!` but makes a deepcopy per value of the origin array.
+
+If `length(origarray)` is not equal to [`nthreads()`](@ref) it throws an error.
+This function in intended to be used to allocate `origarray` values per-thread,
+and should be called at `__init__` if `A` is a global constant.
+"""
+function set_nthreads!(A::AbstractVector, origarray::AbstractVector)
+	nthr = nthreads()
+	nthr > length(origarray) && throw(ArgumentError("Origin Array must have at least nthreads() elements!"))
+    resize!(A, nthr)
+	@threads for i = 1:nthr
+		A[i] = deepcopy(origarray[i])
+	end
+	return A
+end
+
 end

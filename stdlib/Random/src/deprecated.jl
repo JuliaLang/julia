@@ -14,7 +14,7 @@ function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
     _randjump(mt, DSFMT.GF2X(jumppoly), jumps)
 end
 
-@deprecate randjump(mt::MersenneTwister, jumps::Integer)  randjump(mt, big(10)^20, jumps)
+# @deprecate randjump(mt::MersenneTwister, jumps::Integer)  randjump(mt, big(10)^20, jumps)
 
 function randjump(r::MersenneTwister, steps::Integer, len::Integer)
     Base.depwarn("`randjump(rng, steps::Integer, len::Integer` is deprecated; use `Future.randjump` and `accumulate` instead", :randjump)

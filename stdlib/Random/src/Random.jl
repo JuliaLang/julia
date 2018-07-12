@@ -271,7 +271,8 @@ function __init__()
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module Random")
     end
-    ThreadRNG[] = randjump(GLOBAL_RNG, big(10)^20, Threads.nthreads()) 
+    rand_gens = accumulate(randjump, fill(2^30, Threads.nthreads()); init=GLOBAL_RNG)
+    Threads.set_nthreads!(ThreadRNG, rand_gens)
 end
 
 include("RNGs.jl")
