@@ -335,6 +335,11 @@ ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
 ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
     (D = transD.parent; ldiv!(D, B))
 
+function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
+    broadcast!(\, parent(A), D.diag, parent(A))
+    A
+end
+
 function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     @assert !has_offset_axes(A)
     dd = D.diag
@@ -354,11 +359,18 @@ function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     A
 end
 
+function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
+    broadcast!(/, parent(A), parent(A), permutedims(D.diag))
+    A
+end
 
 rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
     (D = adjD.parent; rdiv!(A, conj(D)))
 rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
+
+(/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
+    rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
 
 (\)(F::Factorization, D::Diagonal) =
     ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
@@ -430,7 +442,9 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-(\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
+(\)(D::Diagonal, A::AbstractMatrix) =
+    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
+
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 

@@ -460,4 +460,17 @@ end
     @test Transpose(x)*D*x == (Transpose(x)*D)*x == (Transpose(x)*Array(D))*x
 end
 
+@testset "Triangular division by Diagonal #27989" begin
+    K = 5
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        U = UpperTriangular(randn(elty, K, K))
+        L = LowerTriangular(randn(elty, K, K))
+        D = Diagonal(randn(elty, K))
+        @test (U / D)::UpperTriangular{elty} == UpperTriangular(Matrix(U) / Matrix(D))
+        @test (L / D)::LowerTriangular{elty} == LowerTriangular(Matrix(L) / Matrix(D))
+        @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
+        @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
+    end
+end
+
 end # module TestDiagonal
