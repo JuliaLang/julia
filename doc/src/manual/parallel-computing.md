@@ -49,7 +49,7 @@ to as "workers". When there is only one process, process 1 is considered a worke
 workers are considered to be all processes other than process 1.
 
 Let's try this out. Starting with `julia -p n` provides `n` worker processes on the local machine.
-Generally it makes sense for `n` to equal the number of CPU cores on the machine. Note that the `-p`
+Generally it makes sense for `n` to equal the number of CPU threads (logical cores) on the machine. Note that the `-p`
 argument implicitly loads module `Distributed`.
 
 
@@ -1200,7 +1200,7 @@ would typically specify only `io` or `host` / `port`:
     workers.
 
       * `count` with an integer value `n` will launch a total of `n` workers.
-      * `count` with a value of `:auto` will launch as many workers as the number of cores on that machine.
+      * `count` with a value of `:auto` will launch as many workers as the number of CPU threads (logical cores) on that machine.
       * `exename` is the name of the `julia` executable including the full path.
       * `exeflags` should be set to the required command line arguments for new workers.
   * `tunnel`, `bind_addr`, `sshflags` and `max_parallel` are used when a ssh tunnel is required to

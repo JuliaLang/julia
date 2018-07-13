@@ -452,7 +452,7 @@ function setup_launched_worker(manager, wconfig, launched_q)
     # same type. This is done by setting an appropriate value to `WorkerConfig.cnt`.
     cnt = something(wconfig.count, 1)
     if cnt === :auto
-        cnt = wconfig.environ[:cpu_cores]
+        cnt = wconfig.environ[:cpu_threads]
     end
     cnt = cnt - 1   # Removing self from the requested number
 

@@ -1358,7 +1358,7 @@ JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key,
 JL_DLLEXPORT int jl_errno(void);
 JL_DLLEXPORT void jl_set_errno(int e);
 JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf);
-JL_DLLEXPORT int jl_cpu_cores(void);
+JL_DLLEXPORT int jl_cpu_threads(void);
 JL_DLLEXPORT long jl_getpagesize(void);
 JL_DLLEXPORT long jl_getallocationgranularity(void);
 JL_DLLEXPORT int jl_is_debugbuild(void);
