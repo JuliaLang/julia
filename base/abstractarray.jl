@@ -183,7 +183,7 @@ other iterables, including strings and dictionaries, return an iterator object
 supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
-iterable object that is fast for all arguments (a `UnitRange`
+iterable object that is fast for all arguments (a [`UnitRange`](@ref)
 if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
@@ -281,7 +281,7 @@ first(a::AbstractArray) = a[first(eachindex(a))]
     first(coll)
 
 Get the first element of an iterable collection. Return the start point of an
-`AbstractRange` even if it is empty.
+[`AbstractRange`](@ref) even if it is empty.
 
 # Examples
 ```jldoctest
@@ -303,7 +303,7 @@ end
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
 accomplished by calling [`lastindex`](@ref) to get the last index. Return the end
-point of an `AbstractRange` even if it is empty.
+point of an [`AbstractRange`](@ref) even if it is empty.
 
 # Examples
 ```jldoctest
@@ -882,7 +882,7 @@ end
     getindex(A, inds...)
 
 Return a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, an `AbstractRange`, or a [`Vector`](@ref). See the manual section on
+`Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref). See the manual section on
 [array indexing](@ref man-array-indexing) for details.
 
 # Examples

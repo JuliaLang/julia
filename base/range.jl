@@ -31,8 +31,8 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
 """
     (:)(start, [step], stop)
 
-Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1, and `a:s:b`
-is similar but uses a step size of `s`.
+Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (a [`UnitRange`](@ref))
+, and `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref)).
 
 `:` is also used in indexing to select whole dimensions.
 """
@@ -49,11 +49,14 @@ end
     range(start; length, stop, step=1)
 
 Given a starting value, construct a range either by length or from `start` to `stop`,
-optionally with a given step (defaults to 1). One of `length` or `stop` is required.
-If `length`, `stop`, and `step` are all specified, they must agree.
+optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
+One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range.
+automatically such that there are `length` linearly spaced elements in the range (a [`LinRange`](@ref)).
+
+If `step` and `stop` are provided and `length` is not, the overall range length will be computed
+automatically such that the elements are `step` spaced (a [`StepRange`](@ref)).
 
 # Examples
 ```jldoctest
@@ -106,6 +109,12 @@ _range(::Nothing, ::Nothing, ::Nothing, ::Integer) = # range(nothing, length=l)
 
 ## 1-dimensional ranges ##
 
+"""
+    AbstractRange{T}
+
+Supertype for ranges with elements of type `T`.
+[`UnitRange`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractRange{T} <: AbstractArray{T,1} end
 
 RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
@@ -115,9 +124,53 @@ convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(
 
 ## ordinal ranges
 
+"""
+    OrdinalRange{T, S} <: AbstractRange{T}
+
+Supertype for ordinal ranges with elements of type `T` with
+spacing(s) of type `S`. The steps should be always-exact
+multiples of [`oneunit`](@ref), and `T` should be a "discrete"
+type, which cannot have values smaller than `oneunit`. For example,
+`Integer` or `Date` types would qualify, whereas `Float64` would not (since this
+type can represent values smaller than `oneunit(Float64)`.
+[`UnitRange`](@ref), [`StepRange`](@ref), and other types are subtypes of this.
+"""
 abstract type OrdinalRange{T,S} <: AbstractRange{T} end
+
+"""
+    AbstractUnitRange{T} <: OrdinalRange{T, T}
+
+Supertype for ranges with a step size of [`oneunit(T)`](@ref) with elements of type `T`.
+[`UnitRange`](@ref) and other types are subtypes of this.
+"""
 abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
 
+"""
+    StepRange{T, S} <: OrdinalRange{T, S}
+
+Ranges with elements of type `T` with spacing of type `S`. The step
+between each element is constant, and the range is defined in terms
+of a `start` and `stop` of type `T` and a `step` of type `S`. Neither
+`T` nor `S` should be floating point types. The syntax `a:b:c` with `b > 1`
+and `a`, `b`, and `c` all integers creates a `StepRange`.
+
+# Examples
+```jldoctest
+julia> collect(StepRange(1, Int8(2), 10))
+5-element Array{Int64,1}:
+ 1
+ 3
+ 5
+ 7
+ 9
+
+julia> typeof(StepRange(1, Int8(2), 10))
+StepRange{Int64,Int8}
+
+julia> typeof(1:3:6)
+StepRange{Int64,Int64}
+```
+"""
 struct StepRange{T,S} <: OrdinalRange{T,S}
     start::T
     step::S
@@ -177,6 +230,25 @@ steprange_last_empty(start, step, stop) = start - step
 
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
+"""
+    UnitRange{T<:Real}
+
+A range parameterized by a `start` and `stop` of type `T`, filled
+with elements spaced by `1` from `start` until `stop` is exceeded.
+The syntax `a:b` with `a` and `b` both `Integer`s creates a `UnitRange`.
+
+# Examples
+```jldoctest
+julia> collect(UnitRange(2.3, 5.2))
+3-element Array{Float64,1}:
+ 2.3
+ 3.3
+ 4.3
+
+julia> typeof(1:10)
+UnitRange{Int64}
+```
+"""
 struct UnitRange{T<:Real} <: AbstractUnitRange{T}
     start::T
     stop::T
@@ -260,6 +332,20 @@ StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S
 
 ## range with computed step
 
+"""
+    LinRange{T}
+
+A range with `len` linearly spaced elements between its `start` and `stop`.
+The size of the spacing is controlled by `len`, which must
+be an `Int`.
+
+# Examples
+```jldoctest
+julia> LinRange(1.5, 5.5, 9)
+9-element LinRange{Float64}:
+ 1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0,5.5
+```
+"""
 struct LinRange{T} <: AbstractRange{T}
     start::T
     stop::T
@@ -373,7 +459,7 @@ isempty(r::LinRange) = length(r) == 0
 """
     step(r)
 
-Get the step size of an `AbstractRange` object.
+Get the step size of an [`AbstractRange`](@ref) object.
 
 # Examples
 ```jldoctest
