@@ -183,8 +183,6 @@ end
             ver = read(buf, String)
             @test startswith(ver, "Julia Version $VERSION")
             @test occursin("Environment:", ver)
-            @test occursin("Package Status:", ver)
-            @test occursin("no packages installed", ver)
             @test isempty(readdir(dir))
         end
     end
