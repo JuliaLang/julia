@@ -408,6 +408,16 @@ let a = [1,2,3]
     @test a == [0,0,0]
 end
 
+# PR #28038 (prompt/getpass stream args)
+@test_throws MethodError Base.getpass(IOBuffer(), stdout, "pass")
+let buf = IOBuffer()
+    @test Base.prompt(IOBuffer("foo\nbar\n"), buf, "baz") == "foo"
+    @test String(take!(buf)) == "baz: "
+    @test Base.prompt(IOBuffer("\n"), buf, "baz", default="foobar") == "foobar"
+    @test String(take!(buf)) == "baz [foobar]: "
+    @test Base.prompt(IOBuffer("blah\n"), buf, "baz", default="foobar") == "blah"
+end
+
 # Test that we can VirtualProtect jitted code to writable
 @noinline function WeVirtualProtectThisToRWX(x, y)
     return x + y
