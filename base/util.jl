@@ -630,23 +630,24 @@ _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
 This is a helper macro that automatically defines a keyword-based constructor for the type
 declared in the expression `typedef`, which must be a `struct` or `mutable struct`
 expression. The default argument is supplied by declaring fields of the form `field::T =
-default`. If no default is provided then the default is provided by the `kwdef_val(T)`
-function.
+default` or `field = default`. If no default is provided then the keyword argument becomes
+a required keyword argument in the resulting type constructor.
 
 # Examples
 ```jldoctest
-julia> struct Bar end
-
 julia> Base.@kwdef struct Foo
-           a::Cint            # implied default Cint(0)
-           b::Cint = 1        # specified default
-           z::Cstring         # implied default Cstring(C_NULL)
-           y::Bar             # implied default Bar()
+           a::Int = 1         # specified default
+           b::String          # required keyword
        end
 Foo
 
+julia> Foo(b="hi")
+Foo(1, "hi")
+
 julia> Foo()
-Foo(0, 1, Cstring(0x0000000000000000), Bar())
+ERROR: UndefKeywordError: keyword argument b not assigned
+Stacktrace:
+[...]
 ```
 """
 macro kwdef(expr)
@@ -655,10 +656,15 @@ macro kwdef(expr)
     params_ex = Expr(:parameters)
     call_ex = Expr(:call, T)
     _kwdef!(expr.args[3], params_ex, call_ex)
-    quote
+    ret = quote
         Base.@__doc__($(esc(expr)))
-        $(esc(Expr(:call,T,params_ex))) = $(esc(call_ex))
     end
+    # Only define a constructor if the type has fields, otherwise we'll get a stack
+    # overflow on construction
+    if !isempty(params_ex.args)
+        push!(ret.args, :($(esc(Expr(:call, T, params_ex))) = $(esc(call_ex))))
+    end
+    ret
 end
 
 # @kwdef helper function
@@ -666,11 +672,19 @@ end
 function _kwdef!(blk, params_ex, call_ex)
     for i in eachindex(blk.args)
         ei = blk.args[i]
-        isa(ei, Expr) || continue
-        if ei.head == :(=)
+        if isa(ei, Symbol)
+            push!(params_ex.args, ei)
+            push!(call_ex.args, ei)
+        elseif !isa(ei, Expr)
+            continue
+        elseif ei.head == :(=)
             # var::Typ = defexpr
             dec = ei.args[1]  # var::Typ
-            var = dec.args[1] # var
+            if isa(dec, Expr) && dec.head == :(::)
+                var = dec.args[1]
+            else
+                var = dec
+            end
             def = ei.args[2]  # defexpr
             push!(params_ex.args, Expr(:kw, var, def))
             push!(call_ex.args, var)
@@ -678,9 +692,8 @@ function _kwdef!(blk, params_ex, call_ex)
         elseif ei.head == :(::)
             dec = ei # var::Typ
             var = dec.args[1] # var
-            def = :(Base.kwdef_val($(ei.args[2])))
-            push!(params_ex.args, Expr(:kw, var, def))
-            push!(call_ex.args, dec.args[1])
+            push!(params_ex.args, var)
+            push!(call_ex.args, var)
         elseif ei.head == :block
             # can arise with use of @static inside type decl
             _kwdef!(ei, params_ex, call_ex)
@@ -688,44 +701,6 @@ function _kwdef!(blk, params_ex, call_ex)
     end
     blk
 end
-
-
-
-"""
-    kwdef_val(T)
-
-The default value for a type for use with the `@kwdef` macro. Returns:
-
- - null pointer for pointer types (`Ptr{T}`, `Cstring`, `Cwstring`)
- - zero for integer types
- - no-argument constructor calls (e.g. `T()`) for all other types
-
-# Examples
-```jldoctest
-julia> struct Foo
-           i::Int
-       end
-
-julia> Base.kwdef_val(::Type{Foo}) = Foo(42)
-
-julia> Base.@kwdef struct Bar
-           y::Foo
-       end
-Bar
-
-julia> Bar()
-Bar(Foo(42))
-```
-"""
-function kwdef_val end
-
-kwdef_val(::Type{Ptr{T}}) where {T} = Ptr{T}(C_NULL)
-kwdef_val(::Type{Cstring}) = Cstring(C_NULL)
-kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
-
-kwdef_val(::Type{T}) where {T<:Integer} = zero(T)
-
-kwdef_val(::Type{T}) where {T} = T()
 
 # testing
 
