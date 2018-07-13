@@ -2076,11 +2076,11 @@ function hash(A::AbstractArray, h::UInt)
     # sparse array will likely only choose the same element repeatedly (zero in this case).
 
     # To achieve this, we work backwards, starting by hashing the last element of the
-    # array. After hashing each element, we skip the next `fibskip` elements, where
-    # `fibskip` is pulled from the Fibonacci sequence -- Fibonacci was chosen as a simple
-    # ~O(log(N)) algorithm that ensures we don't hit a common divisor of a dimension and
-    # only end up hashing one slice of the array (as might happen with powers of two).
-    # Finally, we find the next distinct value from the one we just hashed.
+    # array. After hashing each element, we skip `fibskip` elements, where `fibskip`
+    # is pulled from the Fibonacci sequence -- Fibonacci was chosen as a simple
+    # ~O(log(N)) algorithm that ensures we don't hit a common divisor of a dimension
+    # and only end up hashing one slice of the array (as might happen with powers of
+    # two). Finally, we find the next distinct value from the one we just hashed.
 
     # This is a little tricky since skipping an integer number of values inherently works
     # with linear indices, but `findprev` uses `keys`. Hoist out the conversion "maps":
@@ -2092,7 +2092,9 @@ function hash(A::AbstractArray, h::UInt)
     keyidx = last(ks)
     linidx = key_to_linear[keyidx]
     fibskip = prevfibskip = oneunit(linidx)
+    n = 0
     while true
+        n += 1
         # Hash the current key-index and its element
         elt = A[keyidx]
         h = hash(keyidx=>elt, h)
@@ -2102,7 +2104,16 @@ function hash(A::AbstractArray, h::UInt)
         linidx <= fibskip && break
         linidx -= fibskip
         keyidx = linear_to_key[linidx]
-        fibskip, prevfibskip = fibskip + prevfibskip, fibskip
+
+        # Only increase the Fibonacci skip once every N iterations. This was chosen
+        # to be big enough that all elements of small arrays get hashed while
+        # obscenely large arrays are still tractable. With a choice of N=4096, an
+        # entirely-distinct 8000-element array will have ~75% of its elements hashed,
+        # with every other element hashed in the first half of the array. At the same
+        # time, hashing a `typemax(Int64)`-length Float64 range takes about a second.
+        if mod(n, 4096) == 0
+            fibskip, prevfibskip = fibskip + prevfibskip, fibskip
+        end
 
         # Find a key index with a value distinct from `elt` -- might be `keyidx` itself
         keyidx = findprev(!isequal(elt), A, keyidx)
