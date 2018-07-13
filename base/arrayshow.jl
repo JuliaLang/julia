@@ -167,7 +167,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     postsp = ""
     @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)
-    rowsA, colsA = axes(X,1), axes(X,2)
+    rowsA, colsA = UnitRange(axes(X,1)), UnitRange(axes(X,2))
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
