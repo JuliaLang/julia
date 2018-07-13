@@ -98,6 +98,7 @@ end
 StrArrayStruct() = StrArrayStruct(C_NULL, 0)
 
 function free(sa_ref::Base.Ref{StrArrayStruct})
+    ensure_initialized()
     ccall((:git_strarray_free, :libgit2), Cvoid, (Ptr{StrArrayStruct},), sa_ref)
 end
 
@@ -124,6 +125,7 @@ end
 Buffer() = Buffer(C_NULL, 0, 0)
 
 function free(buf_ref::Base.Ref{Buffer})
+    ensure_initialized()
     ccall((:git_buf_free, :libgit2), Cvoid, (Ptr{Buffer},), buf_ref)
 end
 
@@ -999,7 +1001,7 @@ for (typ, owntyp, sup, cname) in [
                 @assert ptr != C_NULL
                 obj = new(ptr)
                 if fin
-                    Threads.atomic_add!(REFCOUNT, UInt(1))
+                    Threads.atomic_add!(REFCOUNT, 1)
                     finalizer(Base.close, obj)
                 end
                 return obj
@@ -1013,7 +1015,7 @@ for (typ, owntyp, sup, cname) in [
                 @assert ptr != C_NULL
                 obj = new(owner, ptr)
                 if fin
-                    Threads.atomic_add!(REFCOUNT, UInt(1))
+                    Threads.atomic_add!(REFCOUNT, 1)
                     finalizer(Base.close, obj)
                 end
                 return obj
@@ -1027,9 +1029,10 @@ for (typ, owntyp, sup, cname) in [
     end
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
+            ensure_initialized()
             ccall(($(string(cname, :_free)), :libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
             obj.ptr = C_NULL
-            if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
+            if Threads.atomic_sub!(REFCOUNT, 1) == 1
                 # will the last finalizer please turn out the lights?
                 ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
             end
@@ -1060,6 +1063,7 @@ mutable struct GitSignature <: AbstractGitObject
 end
 function Base.close(obj::GitSignature)
     if obj.ptr != C_NULL
+        ensure_initialized()
         ccall((:git_signature_free, :libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
         obj.ptr = C_NULL
     end
@@ -1156,8 +1160,10 @@ Consts.OBJECT(::Type{GitTag})           = Consts.OBJ_TAG
 Consts.OBJECT(::Type{GitUnknownObject}) = Consts.OBJ_ANY
 Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
 
-Consts.OBJECT(ptr::Ptr{Cvoid}) =
+function Consts.OBJECT(ptr::Ptr{Cvoid})
+    ensure_initialized()
     ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
+end
 
 """
     objtype(obj_type::Consts.OBJECT)
