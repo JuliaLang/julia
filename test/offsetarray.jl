@@ -190,8 +190,8 @@ show(io, parent(v))
 smry = summary(v)
 @test occursin("OffsetArray{Float64,1", smry)
 @test occursin("with indices -1:1", smry)
-function cmp_showf(printfunc, io, A)
-    ioc = IOContext(io, :limit => true, :compact => true)
+function cmp_showf(printfunc, io, A; options = ())
+    ioc = IOContext(io, :limit => true, :compact => true, options...)
     printfunc(ioc, A)
     str1 = String(take!(io))
     printfunc(ioc, parent(A))
@@ -202,7 +202,7 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)))       # rows&c
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # columns fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
-cmp_showf(Base.show, io, OffsetArray(rand(1,1,10^3,1), (1,2,3,4)))      # issue in #24393
+cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop=2/11, length=3*29), 3, 29), (-2, -15)); options=(:displaysize=>(53,210),))
 targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
             "$OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
             "$OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
