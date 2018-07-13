@@ -484,3 +484,8 @@ module SimilarUR
     @test_throws MethodError similar(a, Float64, (ur,))
     @test_throws MethodError similar(a, (2.0,3.0))
 end
+
+@testset "Issue 28101" begin
+    A = OffsetArray(reshape(16:-1:1, (4, 4)), (-3,5))
+    @test maximum(A, dims=1) == OffsetArray(maximum(parent(A), dims=1), A.offsets)
+end
