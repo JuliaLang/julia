@@ -274,11 +274,11 @@ static void schedule_all_finalizers(arraylist_t *flist)
 
 void jl_gc_run_all_finalizers(jl_ptls_t ptls)
 {
+    schedule_all_finalizers(&finalizer_list_marked);
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         schedule_all_finalizers(&ptls2->finalizers);
     }
-    schedule_all_finalizers(&finalizer_list_marked);
     run_finalizers(ptls);
 }
 
