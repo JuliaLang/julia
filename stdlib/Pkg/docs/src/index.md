@@ -272,9 +272,9 @@ we can explicitly track a branch (or commit) by appending `#branch` (or `#commit
   Updating git-repo `https://github.com/JuliaLang/Example.jl.git`
  Resolving package versions...
   Updating `~/.julia/environments/v0.7/Project.toml`
-  [7876af07] ~ Example v0.5.1 ⇒ v0.5.1+ #master [https://github.com/JuliaLang/Example.jl.git]
+  [7876af07] ~ Example v0.5.1 ⇒ v0.5.1+ #master (https://github.com/JuliaLang/Example.jl.git)
   Updating `~/.julia/environments/v0.7/Manifest.toml`
-  [7876af07] ~ Example v0.5.1 ⇒ v0.5.1+ #master [https://github.com/JuliaLang/Example.jl.git]
+  [7876af07] ~ Example v0.5.1 ⇒ v0.5.1+ #master (https://github.com/JuliaLang/Example.jl.git)
 ```
 
 The status output now shows that we are tracking the `master` branch of `Example`.
@@ -286,9 +286,9 @@ To go back to tracking the registry version of `Example`, the command `free` is 
 (v0.7) pkg> free Example
  Resolving package versions...
   Updating `~/.julia/environments/v0.7/Project.toml`
-  [7876af07] ~ Example v0.5.1+ #master [https://github.com/JuliaLang/Example.jl.git] ⇒ v0.5.1
+  [7876af07] ~ Example v0.5.1+ #master (https://github.com/JuliaLang/Example.jl.git) ⇒ v0.5.1
   Updating `~/.julia/environments/v0.7/Manifest.toml`
-  [7876af07] ~ Example v0.5.1+ #master [https://github.com/JuliaLang/Example.jl.git] ⇒ v0.5.1
+  [7876af07] ~ Example v0.5.1+ #master )https://github.com/JuliaLang/Example.jl.git) ⇒ v0.5.1
 ```
 
 
@@ -302,9 +302,9 @@ If a package is not in a registry, it can still be added by instead of the packa
  Resolving package versions...
 Downloaded MacroTools ─ v0.4.1
   Updating `~/.julia/environments/v0.7/Project.toml`
-  [e6797606] + ImportMacros v0.0.0 # [https://github.com/fredrikekre/ImportMacros.jl]
+  [e6797606] + ImportMacros v0.0.0 # (https://github.com/fredrikekre/ImportMacros.jl)
   Updating `~/.julia/environments/v0.7/Manifest.toml`
-  [e6797606] + ImportMacros v0.0.0 # [https://github.com/fredrikekre/ImportMacros.jl]
+  [e6797606] + ImportMacros v0.0.0 # (https://github.com/fredrikekre/ImportMacros.jl)
   [1914dd2f] + MacroTools v0.4.1
 ```
 
@@ -733,7 +733,7 @@ After a compatibility entry is put into the project file, `up` can be used to ap
 The format of the version specifier is described in detail below.
 
 !!! info
-  There is currently no way to give compatibility from the Pkg REPL mode so for now, one has to manually edit the project file.
+    There is currently no way to give compatibility from the Pkg REPL mode so for now, one has to manually edit the project file.
 
 #### Version specifier format
 

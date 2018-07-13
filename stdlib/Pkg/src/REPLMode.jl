@@ -777,17 +777,10 @@ end
 
 function do_generate!(ctx::Context, tokens::Vector{Token})
     isempty(tokens) && cmderror("`generate` requires a project name as an argument")
-    local pkg
-    while !isempty(tokens)
-        token = popfirst!(tokens)
-        if token isa String
-            pkg = token
-            break # TODO: error message?
-        else
-            cmderror("`generate` takes a name of the project to create")
-        end
-    end
-    API.generate(ctx, pkg)
+    token = popfirst!(tokens)
+    token isa String || cmderror("`generate` takes a name of the project to create")
+    isempty(tokens) || cmderror("`generate` takes a single project name as an argument")
+    API.generate(ctx, token)
 end
 
 function do_precompile!(ctx::Context, tokens::Vector{Token})
@@ -990,7 +983,8 @@ function promptf()
                 nothing
             end
             if project !== nothing
-                proj_dir = dirname(project_file)
+                proj_dir = ispath(project_file) ? realpath(project_file) : project_file
+                proj_dir = dirname(proj_dir)
                 projname = get(project, "name", nothing)
                 if startswith(pwd(), proj_dir) && projname !== nothing
                     name = projname
