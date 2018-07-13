@@ -1735,3 +1735,7 @@ Base.iterate(::Iterator27434, ::Any) = nothing
 f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
 T27078 = Vector{Vector{T}} where T
 @test f27078(T27078) === T27078.body
+
+# issue #28070
+g28070(f, args...) = f(args...)
+@test @inferred g28070(Core._apply, Base.:/, (1.0, 1.0)) == 1.0
