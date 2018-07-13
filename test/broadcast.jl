@@ -722,6 +722,17 @@ let X = zeros(2, 3)
     @test X == [1 1 1; 2 2 2]
 end
 
+# issue #27988: inference of Broadcast.flatten
+using .Broadcast: Broadcasted
+let
+    bc = Broadcasted(+, (Broadcasted(*, (1, 2)), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
+    @test @inferred(Broadcast.cat_nested(bc)) == (1,2,3,4,5)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 62
+    bc = Broadcasted(+, (Broadcasted(*, (1, Broadcasted(/, (2.0, 2.5)))), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
+    @test @inferred(Broadcast.cat_nested(bc)) == (1,2.0,2.5,3,4,5)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
+end
+
 # Issue #26127: multiple splats in a fused dot-expression
 let f(args...) = *(args...)
     x, y, z = (1,2), 3, (4, 5)
