@@ -14,7 +14,8 @@ const _REF_NAME = Ref.body.name
 # logic #
 #########
 
-function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState)
+function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
+                                  used::Bool = true)
     atype_params = unwrap_unionall(atype).parameters
     ft = unwrap_unionall(atype_params[1]) # TODO: ccall jl_first_argument_datatype here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
@@ -95,6 +96,9 @@ function abstract_call_gf_by_type(@nospecialize(f), argtypes::Vector{Any}, @nosp
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
         end
+    end
+    if !used && rettype !== Bottom
+        rettype = Any
     end
     if !(rettype === Any) # adding a new method couldn't refine (widen) this type
         for edge in edges
@@ -517,7 +521,7 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(a
     end
 end
 
-function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, used::Bool = true)
     if f === _apply
         return abstract_apply(argtypes[2], fargs[3:end], argtypes[3:end], vtypes, sv)
     end
@@ -763,11 +767,12 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
             end
         end
     end
-    return abstract_call_gf_by_type(f, argtypes, atype, sv)
+    return abstract_call_gf_by_type(f, argtypes, atype, sv, used)
 end
 
 # wrapper around `abstract_call` for first computing if `f` is available
-function abstract_eval_call(fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_eval_call(fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState,
+                            used::Bool = true)
     #print("call ", e.args[1], argtypes, "\n\n")
     for x in argtypes
         x === Bottom && return Bottom
@@ -790,9 +795,9 @@ function abstract_eval_call(fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{
         if typeintersect(widenconst(ft), Builtin) != Union{}
             return Any
         end
-        return abstract_call_gf_by_type(nothing, argtypes, argtypes_to_type(argtypes), sv)
+        return abstract_call_gf_by_type(nothing, argtypes, argtypes_to_type(argtypes), sv, used)
     end
-    return abstract_call(f, fargs, argtypes, vtypes, sv)
+    return abstract_call(f, fargs, argtypes, vtypes, sv, used)
 end
 
 function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
@@ -860,7 +865,7 @@ function sparam_type(@nospecialize(val))
     return AbstractEvalConstant(val)
 end
 
-function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
+function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState, used::Bool = true)
     if isa(e, QuoteNode)
         return AbstractEvalConstant((e::QuoteNode).value)
     elseif isa(e, SSAValue)
@@ -877,7 +882,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
     e = e::Expr
     if e.head === :call
         argtypes = Any[ abstract_eval(a, vtypes, sv) for a in e.args ]
-        t = abstract_eval_call(e.args, argtypes, vtypes, sv)
+        t = abstract_eval_call(e.args, argtypes, vtypes, sv, used)
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
         for i = 2:length(e.args)
@@ -1101,9 +1106,10 @@ function typeinf_local(frame::InferenceState)
                     end
                 elseif hd === :inbounds || hd === :meta || hd === :simdloop
                 else
-                    t = abstract_eval(stmt, changes, frame)
+                    used = !isempty(frame.ssavalue_uses[pc])
+                    t = abstract_eval(stmt, changes, frame, used)
                     t === Bottom && break
-                    if !isempty(frame.ssavalue_uses[pc])
+                    if used
                         record_ssa_assign(pc, t, frame)
                     else
                         frame.src.ssavaluetypes[pc] = t
