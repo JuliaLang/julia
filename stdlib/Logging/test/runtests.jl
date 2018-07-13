@@ -30,6 +30,17 @@ import Logging: min_enabled_level, shouldlog, handle_message
             (:yellow,    "Warning:", "@ Main b.jl:2")
         @test Logging.default_metafmt(Logging.Error, Main, :g, :i, "", 0) ==
             (:light_red, "Error:",   "@ Main :0")
+        # formatting of nothing
+        @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, "b.jl", 2) ==
+            (:yellow,    "Warning:", "@ b.jl:2")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, nothing, 2) ==
+            (:yellow,    "Warning:", "@ Main")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", nothing) ==
+            (:yellow,    "Warning:", "@ Main b.jl")
+        @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, nothing, 2) ==
+            (:yellow,    "Warning:", "")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2:5) ==
+            (:yellow,    "Warning:", "@ Main b.jl:2-5")
     end
 
     function dummy_metafmt(level, _module, group, id, file, line)

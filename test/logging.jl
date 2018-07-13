@@ -303,6 +303,13 @@ end
     │   b = asdf
     └ @ Base other.jl:101
     """
+
+    # nothing values
+    @test genmsg(Warn, "msg", nothing, nothing, nothing) ==
+    """
+    ┌ Warning: msg
+    └ @ nothing nothing:nothing
+    """
 end
 
 # Issue #26273

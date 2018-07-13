@@ -529,8 +529,8 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     for (key, val) in kwargs
         println(iob, "│   ", key, " = ", val)
     end
-    mod = _module === nothing ? "" : "$(_module) "
-    println(iob, "└ @ ", mod, filepath, ":", line)
+    println(iob, "└ @ ", something(_module, "nothing"), " ",
+            something(filepath, "nothing"), ":", something(line, "nothing"))
     write(logger.stream, take!(buf))
     nothing
 end
