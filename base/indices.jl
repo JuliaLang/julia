@@ -357,6 +357,17 @@ LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) whe
     LinearIndices(map(i->first(i):last(i), inds))
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
+promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
+    LinearIndices{N,indices_promote_type(R1,R2)}
+
+function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
+    R = promote_type(R1, R2)
+    Tuple{R,Vararg{R,N}}
+end
+
+convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R} =
+    LinearIndices(convert(R, inds.indices))
+
 # AbstractArray implementation
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = map(axes1, iter.indices)
