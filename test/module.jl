@@ -34,15 +34,11 @@ ccall(:jl_set_const, Void, (Ref{Module},Ref{Symbol},Any),
              (Ref{Module},Ref{Symbol},Any), Ref(Base), Ref(:testConst2), "hi")
 @test Base.testConst2 == 10
 
-# *Can* overwrite a const only if it's the same type.
+# Can't overwrite a const even if it's the same type.
 ccall(:jl_set_const, Void, (Ref{Module},Ref{Symbol},Any),
         Ref(Base), Ref(:testConst3), "initial")
-@test_warn "redefining constant testConst3" ccall(:jl_set_const, Void,
-         (Ref{Module},Ref{Symbol},Any), Ref(Base),
-         Ref(:testConst3), "modified")
-@test "modified" == Base.testConst3
+@test_throws ErrorException ccall(:jl_set_const, Void,
+         (Ref{Module},Ref{Symbol},Any), Ref(Base), Ref(:testConst3), "modified")
 
-@test_warn "redefining constant testConst3" ccall(:jl_set_global, Void,
-         (Ref{Module},Ref{Symbol},Any), Ref(Base),
-         Ref(:testConst3), "modified again")
-@test "modified again" == Base.testConst3
+@test_throws ErrorException ccall(:jl_set_global, Void,
+         (Ref{Module},Ref{Symbol},Any), Ref(Base), Ref(:testConst3), "modified")
