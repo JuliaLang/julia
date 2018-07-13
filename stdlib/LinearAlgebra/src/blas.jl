@@ -71,7 +71,7 @@ import Libdl
 
 # utility routines
 let lib = C_NULL
-global function vendor()
+global function determine_vendor()
     lib == C_NULL && (lib = Libdl.dlopen_e(Base.libblas_name))
     vend = :unknown
     if lib != C_NULL
@@ -86,6 +86,9 @@ global function vendor()
     return vend
 end
 end
+
+const _vendor = determine_vendor()
+vendor() = _vendor
 
 if vendor() == :openblas64
     macro blasfunc(x)
@@ -123,6 +126,7 @@ function set_num_threads(n::Integer)
     return nothing
 end
 
+const _testmat = [1.0 0.0; 0.0 -1.0]
 function check()
     blas = vendor()
     if blas == :openblas || blas == :openblas64
@@ -152,7 +156,7 @@ function check()
     #
     # Check if BlasInt is the expected bitsize, by triggering an error
     #
-    (_, info) = LinearAlgebra.LAPACK.potrf!('U', [1.0 0.0; 0.0 -1.0])
+    (_, info) = LinearAlgebra.LAPACK.potrf!('U', _testmat)
     if info != 2 # mangled info code
         if info == 2^33
             error("BLAS and LAPACK are compiled with 32-bit integer support, but Julia expects 64-bit integers. Please build Julia with USE_BLAS64=0.")
