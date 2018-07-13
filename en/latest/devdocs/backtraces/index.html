@@ -12,7 +12,7 @@ WARNING: Base.versioninfo is deprecated: it has been moved to the standard libra
 Add `using InteractiveUtils` to your imports.
   likely near /home/travis/build/JuliaLang/julia/doc/make.jl:148
 Julia Version 0.7.0-beta.unknown
-Commit 0e07246* (2018-07-13 01:53 UTC)
+Commit 1859a91* (2018-07-13 06:36 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
   CPU: Intel(R) Xeon(R) CPU @ 2.60GHz
@@ -21,7 +21,7 @@ Platform Info:
   LLVM: libLLVM-6.0.0 (ORCJIT, sandybridge)
 Environment:
   JULIA_TEST_MAXRSS_MB = 1200
-  JULIA_CPU_CORES = 4</code></pre><h2><a class="nav-anchor" id="Segfaults-during-bootstrap-(sysimg.jl)-1" href="#Segfaults-during-bootstrap-(sysimg.jl)-1">Segfaults during bootstrap (<code>sysimg.jl</code>)</a></h2><p>Segfaults toward the end of the <code>make</code> process of building Julia are a common symptom of something going wrong while Julia is preparsing the corpus of code in the <code>base/</code> folder.  Many factors can contribute toward this process dying unexpectedly, however it is as often as not due to an error in the C-code portion of Julia, and as such must typically be debugged with a debug build inside of <code>gdb</code>.  Explicitly:</p><p>Create a debug build of Julia:</p><pre><code class="language-none">$ cd &lt;julia_root&gt;
+  JULIA_CPU_THREADS = 4</code></pre><h2><a class="nav-anchor" id="Segfaults-during-bootstrap-(sysimg.jl)-1" href="#Segfaults-during-bootstrap-(sysimg.jl)-1">Segfaults during bootstrap (<code>sysimg.jl</code>)</a></h2><p>Segfaults toward the end of the <code>make</code> process of building Julia are a common symptom of something going wrong while Julia is preparsing the corpus of code in the <code>base/</code> folder.  Many factors can contribute toward this process dying unexpectedly, however it is as often as not due to an error in the C-code portion of Julia, and as such must typically be debugged with a debug build inside of <code>gdb</code>.  Explicitly:</p><p>Create a debug build of Julia:</p><pre><code class="language-none">$ cd &lt;julia_root&gt;
 $ make debug</code></pre><p>Note that this process will likely fail with the same error as a normal <code>make</code> incantation, however this will create a debug executable that will offer <code>gdb</code> the debugging symbols needed to get accurate backtraces.  Next, manually run the bootstrap process inside of <code>gdb</code>:</p><pre><code class="language-none">$ cd base/
 $ gdb -x ../contrib/debug_bootstrap.gdb</code></pre><p>This will start <code>gdb</code>, attempt to run the bootstrap process using the debug build of Julia, and print out a backtrace if (when) it segfaults.  You may need to hit <code>&lt;enter&gt;</code> a few times to get the full backtrace.  Create a <a href="https://gist.github.com">gist</a> with the backtrace, the <a href="#dev-version-info-1">version info</a>, and any other pertinent information you can think of and open a new <a href="https://github.com/JuliaLang/julia/issues?q=is%3Aopen">issue</a> on Github with a link to the gist.</p><h2><a class="nav-anchor" id="Segfaults-when-running-a-script-1" href="#Segfaults-when-running-a-script-1">Segfaults when running a script</a></h2><p>The procedure is very similar to <a href="#Segfaults-during-bootstrap-(sysimg.jl)-1">Segfaults during bootstrap (<code>sysimg.jl</code>)</a>.  Create a debug build of Julia, and run your script inside of a debugged Julia process:</p><pre><code class="language-none">$ cd &lt;julia_root&gt;
 $ make debug
