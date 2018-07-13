@@ -106,9 +106,21 @@ end
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], dims=1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], dims=1))) == Vector{Float64}
 
-# Heterogeneously typed arrays
-@test sum(Union{Float32, Float64}[1.0], dims=1) == [1.0]
-@test prod(Union{Float32, Float64}[1.0], dims=1) == [1.0]
+@testset "heterogeneously typed arrays" begin
+    for x in (sum(Union{Float32, Float64}[1.0], dims=1),
+              prod(Union{Float32, Float64}[1.0], dims=1))
+        @test x == [1.0]
+        @test x isa Vector{Float64}
+    end
+
+    x = sum(Real[1.0], dims=1)
+    @test x == [1.0]
+    @test x isa Vector{Real}
+
+    x = mapreduce(cos, +, Union{Int,Missing}[1, 2], dims=1)
+    @test x == mapreduce(cos, +, [1, 2], dims=1)
+    @test x isa Vector{Float64}
+end
 
 @test reduce((a,b) -> a|b, [true false; false false], dims=1, init=false) == [true false]
 let R = reduce((a,b) -> a+b, [1 2; 3 4], dims=2, init=0.0)
