@@ -6661,10 +6661,16 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_method_instance_t *lam, int specs
         Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage, funcName.str());
         add_named_global(f, fptr);
         const char **fdecl;
-        if (specsig)
+        if (specsig) {
             fdecl = &lam->functionObjectsDecls.specFunctionObject;
-        else
+            if (lam->invoke == jl_fptr_args)
+                lam->functionObjectsDecls.functionObject = "jl_fptr_args";
+            else if (lam->invoke == jl_fptr_sparam)
+                lam->functionObjectsDecls.functionObject = "jl_fptr_sparam";
+        }
+        else {
             fdecl = &lam->functionObjectsDecls.functionObject;
+        }
         assert(!*fdecl);
         *fdecl = strdup(f->getName().str().c_str());
         delete f;
