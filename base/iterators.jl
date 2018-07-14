@@ -15,7 +15,7 @@ using .Base:
     LinearIndices, (:), |, +, -, !==, !, <=, <, missing
 
 import .Base:
-    first, last,
+    esc, first, last,
     isempty, length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype,
     haskey, keys, values, pairs,
@@ -23,6 +23,14 @@ import .Base:
     popfirst!, isdone, peek
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+
+macro something(ex)
+    quote
+        result = $(esc(ex))
+        result === nothing && return nothing
+        result
+    end
+end
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)
@@ -253,144 +261,96 @@ get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
 
 # zip
 
-abstract type AbstractZipIterator end
-
 zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
 zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
 zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
 zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
 zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
 
-
-struct Zip1{I} <: AbstractZipIterator
-    a::I
+abstract type AbstractZipIterator end
+struct Zip1{A} <: AbstractZipIterator
+    a::A
 end
-zip(a) = Zip1(a)
+struct Zip{A,B<:AbstractZipIterator} <: AbstractZipIterator
+    a::A
+    b::B
+end
 length(z::Zip1) = length(z.a)
+length(z::Zip) = _min_length(z.a, z.b, IteratorSize(z.a), IteratorSize(z.b))
 size(z::Zip1) = size(z.a)
+size(z::Zip) = promote_shape(size(z.a), size(z.b))
 axes(z::Zip1) = axes(z.a)
-eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
-@propagate_inbounds function iterate(z::Zip1, state...)
-    n = iterate(z.a, state...)
-    n === nothing && return n
-    return ((n[1],), n[2])
-end
-@inline isdone(z::Zip1, state...) = isdone(z.a, state...)
+axes(z::Zip) = promote_shape(axes(z.a), axes(z.b))
+eltype(::Type{Zip1{A}}) where {A} = Tuple{eltype(A)}
+eltype(::Type{Zip{A,B}}) where {A,B} = tuple_type_cons(eltype(A), eltype(B))
+IteratorSize(::Type{Zip1{A}}) where {A} = IteratorSize(A)
+IteratorSize(::Type{Zip{A,B}}) where {A,B} = zip_iteratorsize(IteratorSize(A),IteratorSize(B))
+IteratorEltype(::Type{Zip1{A}}) where {A} = IteratorEltype(A)
+IteratorEltype(::Type{Zip{A,B}}) where {A,B} = and_iteratoreltype(IteratorEltype(A),IteratorEltype(B))
+reverse(z::Zip1) = Zip1(reverse(z.a))
+reverse(z::Zip) = Zip(reverse(z.a), reverse(z.b))
+@inline isdone(z::Zip1) = isdone(z.a)
+@inline isdone(z::Zip1, s) = isdone(z.a, first(s))
+@inline isdone(z::Zip) = isdone(z.a) | isdone(z.b)
+@inline isdone(z::Zip, s) = isdone(z.a, first(s)) | isdone(z.b, tail(s))
 
-IteratorSize(::Type{Zip1{I}}) where {I} = IteratorSize(I)
-IteratorEltype(::Type{Zip1{I}}) where {I} = IteratorEltype(I)
-
-struct Zip2{I1, I2} <: AbstractZipIterator
-    a::I1
-    b::I2
+# iterate(zip(a, b...)) -> (val_a, val_b...), (state_a, state_b...)
+@propagate_inbounds function iterate(z::Zip1)
+    a, sa = @something iterate(z.a)
+    (a,), (sa,)
 end
-zip(a, b) = Zip2(a, b)
-length(z::Zip2) = _min_length(z.a, z.b, IteratorSize(z.a), IteratorSize(z.b))
-size(z::Zip2) = promote_shape(size(z.a), size(z.b))
-axes(z::Zip2) = promote_shape(axes(z.a), axes(z.b))
-eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
-@inline isdone(z::Zip2) = isdone(z.a) | isdone(z.b)
-@inline isdone(z::Zip2, (sa, sb)::Tuple{Any, Any}) = isdone(z.a, sa) | isdone(z.b, sb)
-function zip_iterate(a, b, sta, stb) # the states are either Tuple{} or Tuple{Any}
-    da, db = isdone(a), isdone(b)
-    da === true && return nothing
-    db === true && return nothing
-    if da === missing
-       ya = iterate(a, sta...)
-       ya === nothing && return nothing
-    end
-    if db === missing
-       yb = iterate(b, stb...)
-       yb === nothing && return nothing
-    end
-    if da === false
-         ya = iterate(a, sta...)
-         ya === nothing && return nothing
-    end
-    if db === false
-         yb = iterate(b, stb...)
-         yb === nothing && return nothing
-    end
-    return (ya, yb)
+@propagate_inbounds function iterate(z::Zip1, s::Tuple)
+    a, sa = @something iterate(z.a, first(s))
+    (a,), (sa,)
 end
-let interleave(a, b) = ((a[1], b[1]), (a[2], b[2]))
-    global iterate
-    @propagate_inbounds function iterate(z::Zip2)
-        ys = zip_iterate(z.a, z.b, (), ())
-        ys === nothing && return nothing
-        return interleave(ys...)
+@propagate_inbounds function iterate(z::Zip)
+    done = isdone(z.a)
+    done === true && return nothing
+    if done === missing
+        a, sa = @something iterate(z.a)
     end
-    @propagate_inbounds function iterate(z::Zip2, st::Tuple{Any, Any})
-        ys = zip_iterate(z.a, z.b, (st[1],), (st[2],))
-        ys === nothing && return nothing
-        return interleave(ys...)
+    b, sb = @something iterate(z.b)
+    if done === false
+        a, sa = @something iterate(z.a)
     end
+    (a, b...), (sa, sb...)
 end
-
-IteratorSize(::Type{Zip2{I1,I2}}) where {I1,I2} = zip_iteratorsize(IteratorSize(I1),IteratorSize(I2))
-IteratorEltype(::Type{Zip2{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEltype(I1),IteratorEltype(I2))
-
-struct Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
-    a::I
-    z::Z
+@propagate_inbounds function iterate(z::Zip, s::Tuple)
+    sa′, sb′ = first(s), tail(s)
+    done = isdone(z.a)
+    done === true && return nothing
+    if done === missing
+        a, sa = @something iterate(z.a, sa′)
+    end
+    b, sb = @something iterate(z.b, sb′)
+    if done === false
+        a, sa = @something iterate(z.a, sa′)
+    end
+    (a, b...), (sa, sb...)
 end
 
 """
-    zip(iters...)
+    zip(a, b...)
 
-For a set of iterable objects, return an iterable of tuples, where the `i`th tuple contains
-the `i`th component of each input iterable.
+Run multiple iterators at the same time, until any of them is exhausted. The value type of
+the `zip` iterator is a tuple of values of its subiterators.
+
+Note: `zip` orders the calls to its subiterators in such a way that stateful iterators will
+not advance when another iterator finishes in the current iteration.
 
 # Examples
 ```jldoctest
-julia> a = 1:5
-1:5
-
-julia> b = ["e","d","b","c","a"]
-5-element Array{String,1}:
- "e"
- "d"
- "b"
- "c"
- "a"
-
-julia> c = zip(a,b)
-Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, ["e", "d", "b", "c", "a"])
-
-julia> length(c)
-5
-
-julia> first(c)
-(1, "e")
+julia> collect(zip(1:5, "abcde"))
+5-element Array{Tuple{Int64,Char},1}:
+ (1, 'a')
+ (2, 'b')
+ (3, 'c')
+ (4, 'd')
+ (5, 'e')
 ```
 """
+zip(a) = Zip1(a)
 zip(a, b, c...) = Zip(a, zip(b, c...))
-length(z::Zip) = _min_length(z.a, z.z, IteratorSize(z.a), IteratorSize(z.z))
-size(z::Zip) = promote_shape(size(z.a), size(z.z))
-axes(z::Zip) = promote_shape(axes(z.a), axes(z.z))
-eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
-@inline isdone(z::Zip) = isdone(z.a) | isdone(z.z)
-@inline isdone(z::Zip, (sa, sz)) = isdone(z.a, sa) | isdone(z.a, sz)
-let interleave(a, b) = ((a[1], b[1]...), (a[2], b[2]))
-    global iterate
-    @propagate_inbounds function iterate(z::Zip)
-        ys = zip_iterate(z.a, z.z, (), ())
-        ys === nothing && return nothing
-        return interleave(ys...)
-    end
-    @propagate_inbounds function iterate(z::Zip, st::Tuple{Any, Any})
-        ys = zip_iterate(z.a, z.z, (st[1],), (st[2],))
-        ys === nothing && return nothing
-        return interleave(ys...)
-    end
-end
-
-IteratorSize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(IteratorSize(I1),IteratorSize(I2))
-IteratorEltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(IteratorEltype(I1),IteratorEltype(I2))
-
-reverse(z::Zip1) = Zip1(reverse(z.a))
-reverse(z::Zip2) = Zip2(reverse(z.a), reverse(z.b))
-reverse(z::Zip) = Zip(reverse(z.a), reverse(z.z))
 
 # filter
 

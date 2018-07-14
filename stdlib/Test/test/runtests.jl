@@ -491,13 +491,15 @@ for i in 1:6
 end
 
 # test @inferred
-function uninferrable_function(i)
-    q = [1, "1"]
-    return q[i]
-end
-
-@test_throws ErrorException @inferred(uninferrable_function(1))
-@test @inferred(identity(1)) == 1
+uninferrable_function(i) = (1, "1")[i]
+uninferrable_small_union(i) = (1, nothing)[i]
+@test_throws ErrorException (@inferred uninferrable_function(1))
+@test (@inferred identity(1)) == 1
+@test (@inferred Nothing uninferrable_small_union(1)) === 1
+@test (@inferred Nothing uninferrable_small_union(2)) === nothing
+@test_throws ErrorException (@inferred Missing uninferrable_small_union(1))
+@test_throws ErrorException (@inferred Missing uninferrable_small_union(2))
+@test_throws ArgumentError (@inferred nothing uninferrable_small_union(1))
 
 # Ensure @inferred only evaluates the arguments once
 inferred_test_global = 0
@@ -512,8 +514,8 @@ end
 struct SillyArray <: AbstractArray{Float64,1} end
 Base.getindex(a::SillyArray, i) = rand() > 0.5 ? 0 : false
 @testset "@inferred works with A[i] expressions" begin
-    @test @inferred((1:3)[2]) == 2
-    test_result = @test_throws ErrorException @inferred(SillyArray()[2])
+    @test (@inferred (1:3)[2]) == 2
+    test_result = @test_throws ErrorException (@inferred SillyArray()[2])
     @test occursin("Bool", test_result.value.msg)
 end
 # Issue #14928
@@ -522,16 +524,12 @@ end
 
 # Issue #17105
 # @inferred with kwargs
-function inferrable_kwtest(x; y=1)
-    2x
-end
-function uninferrable_kwtest(x; y=1)
-    2x+y
-end
-@test @inferred(inferrable_kwtest(1)) == 2
-@test @inferred(inferrable_kwtest(1; y=1)) == 2
-@test @inferred(uninferrable_kwtest(1)) == 3
-@test @inferred(uninferrable_kwtest(1; y=2)) == 4
+inferrable_kwtest(x; y=1) = 2x
+uninferrable_kwtest(x; y=1) = 2x+y
+@test (@inferred inferrable_kwtest(1)) == 2
+@test (@inferred inferrable_kwtest(1; y=1)) == 2
+@test (@inferred uninferrable_kwtest(1)) == 3
+@test (@inferred uninferrable_kwtest(1; y=2)) == 4
 
 @test_throws ErrorException @testset "$(error())" for i in 1:10
 end

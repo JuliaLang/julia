@@ -23,6 +23,11 @@ let z = zip(1:2, 3:4, 5:6)
     @test eltype(z) == Tuple{Int,Int,Int}
 end
 
+let z = zip(1:2, 2:3, 3:4, 4:5, 5:6, 6:7, 7:8, 8:9, 9:10, 10:11), (v,s) = iterate(z)
+    @inferred Nothing iterate(z)
+    @inferred Nothing iterate(z, s)
+end
+
 @test eltype(Iterators.filter(isodd, 1:5)) == Int
 
 # typed `collect`
@@ -535,9 +540,13 @@ end
     @test eltype(Iterators.Stateful("a")) == Char
     # Interaction of zip/Stateful
     let a = Iterators.Stateful("a"), b = ""
-	@test isempty(collect(zip(a,b)))
-	@test !isempty(a)
-	@test isempty(collect(zip(b,a)))
-	@test !isempty(a)
+        @test isempty(collect(zip(a,b)))
+        @test !isempty(a)
+        @test isempty(collect(zip(b,a)))
+        @test !isempty(a)
+    end
+    let z = zip(Iterators.Stateful("ab"), Iterators.Stateful("b"), Iterators.Stateful("c"))
+        v, s = iterate(z)
+        @test Base.isdone(z, s)
     end
 end
