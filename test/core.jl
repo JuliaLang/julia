@@ -6279,3 +6279,16 @@ f27910() = ((),)[2]
 f9765(::Bool) = 1
 g9765() = f9765(isa(1, 1))
 @test_throws TypeError g9765()
+
+# Issue 28102
+struct HasPlain28102
+    plain::Int
+    HasPlain28102() = new()
+end
+@noinline function bam28102()
+    x = HasPlain28102()
+    if isdefined(x,:plain)
+        x.plain
+    end
+end
+@test isa(bam28102(), Int)
