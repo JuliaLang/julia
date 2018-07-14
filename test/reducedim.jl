@@ -50,14 +50,14 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     fill!(r, -1.5)
     @test minimum!(abs, r, Areduc, init=false) ≈ fill!(r2, -1.5)
 
-    @test sum(Areduc, dims=region) ≈ safe_sum(Areduc, region)
-    @test prod(Areduc, dims=region) ≈ safe_prod(Areduc, region)
-    @test maximum(Areduc, dims=region) ≈ safe_maximum(Areduc, region)
-    @test minimum(Areduc, dims=region) ≈ safe_minimum(Areduc, region)
-    @test sum(abs, Areduc, dims=region) ≈ safe_sumabs(Areduc, region)
-    @test sum(abs2, Areduc, dims=region) ≈ safe_sumabs2(Areduc, region)
-    @test maximum(abs, Areduc, dims=region) ≈ safe_maxabs(Areduc, region)
-    @test minimum(abs, Areduc, dims=region) ≈ safe_minabs(Areduc, region)
+    @test @inferred(sum(Areduc, dims=region)) ≈ safe_sum(Areduc, region)
+    @test @inferred(prod(Areduc, dims=region)) ≈ safe_prod(Areduc, region)
+    @test @inferred(maximum(Areduc, dims=region)) ≈ safe_maximum(Areduc, region)
+    @test @inferred(minimum(Areduc, dims=region)) ≈ safe_minimum(Areduc, region)
+    @test @inferred(sum(abs, Areduc, dims=region)) ≈ safe_sumabs(Areduc, region)
+    @test @inferred(sum(abs2, Areduc, dims=region)) ≈ safe_sumabs2(Areduc, region)
+    @test @inferred(maximum(abs, Areduc, dims=region)) ≈ safe_maxabs(Areduc, region)
+    @test @inferred(minimum(abs, Areduc, dims=region)) ≈ safe_minabs(Areduc, region)
 end
 
 # Test reduction along first dimension; this is special-cased for
