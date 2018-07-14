@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Dims{N}
+
+An `NTuple` of `N` `Int`s used to represent the dimensions
+of an [`AbstractArray`](@ref).
+"""
 Dims{N} = NTuple{N,Int}
 DimsInteger{N} = NTuple{N,Integer}
 Indices{N} = NTuple{N,AbstractUnitRange}

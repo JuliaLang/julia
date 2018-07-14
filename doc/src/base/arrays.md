@@ -22,6 +22,10 @@ Base.Matrix(::UndefInitializer, ::Any, ::Any)
 Base.Matrix(::Nothing, ::Any, ::Any)
 Base.Matrix(::Missing, ::Any, ::Any)
 Base.VecOrMat
+Core.DenseArray
+Base.DenseVector
+Base.DenseMatrix
+Base.DenseVecOrMat
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
@@ -83,6 +87,7 @@ Base.isassigned
 Base.Colon
 Base.CartesianIndex
 Base.CartesianIndices
+Base.Dims
 Base.LinearIndices
 Base.to_indices
 Base.checkbounds
