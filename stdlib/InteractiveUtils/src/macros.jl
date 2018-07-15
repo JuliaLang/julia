@@ -18,6 +18,9 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
         elseif ex0.head == :call
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))
+        elseif ex0.head == :ref
+            return Expr(:call, fcn, Base.getindex,
+                        Expr(:call, typesof, map(esc, ex0.args)...))
         elseif ex0.head == :(.)
             return Expr(:call, fcn, Base.getproperty,
                         Expr(:call, typesof, map(esc, ex0.args)...))

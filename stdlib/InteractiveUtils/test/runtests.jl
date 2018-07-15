@@ -202,6 +202,9 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 # issue #13264
 @test isa((@which vcat(1...)), Method)
 
+# PR #28122
+@test isa((@which [1][1]), Method)
+
 # issue #13464
 let t13464 = "hey there sailor"
     try
