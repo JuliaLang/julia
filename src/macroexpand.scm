@@ -30,7 +30,9 @@
              ;; expression in the next stage.
              (cons splat-token (cdr x))))
         ((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) x))
-         `(copyast (inert ,x)))
+         (if (eq? (car x) 'line)
+             `(inert ,x)
+             `(copyast (inert ,x))))
         (else
          (case (car x)
            ((inert) `(call (core QuoteNode)      ,@(bq-expand-arglist (cdr x) d)))
