@@ -206,7 +206,7 @@ end
 `@pure` gives the compiler a hint for the definition of a pure function,
 helping for type inference.
 
-A pure function can only depend on its input which must be immutable (symbols, numbers).
+A pure function can only depend on immutable information.
 This also means a `@pure` function cannot use any global mutable state, including
 generic functions. Calls to generic functions depend on method tables which are
 mutable global state.
