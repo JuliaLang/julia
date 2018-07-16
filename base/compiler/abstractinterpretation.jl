@@ -1168,9 +1168,18 @@ function typeinf_local(frame::InferenceState)
     nothing
 end
 
+function rettype(ci::CodeInfo)
+  rets = map(x -> x.args[1], filter(x -> isexpr(x, :return), ci.code))
+  return Union{map(r -> r isa SSAValue ? ci.ssavaluetypes[r.id] : typeof(r), rets)...}
+end
+
 # make as much progress on `frame` as possible (by handling cycles)
 function typeinf_nocycle(frame::InferenceState)
-    typeinf_local(frame)
+    if !frame.src.inferred
+      typeinf_local(frame)
+    else
+      frame.bestguess = rettype(frame.src)
+    end
 
     # If the current frame is part of a cycle, solve the cycle before finishing
     no_active_ips_in_callers = false

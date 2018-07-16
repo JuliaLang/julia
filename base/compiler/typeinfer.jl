@@ -255,7 +255,7 @@ end
 
 function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     id = slot_id(sl)
-    s = vtypes[id]
+    s = isempty(vtypes) ? VarState(Any, false) : vtypes[id]
     vt = maybe_widen_conditional(s.typ)
     if s.undef
         # find used-undef variables
