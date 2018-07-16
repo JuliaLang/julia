@@ -56,8 +56,11 @@ end
         end
 
         for (a,b) in [(T(12.8),T(0.8)),
-                      (prevfloat(realmin(T)), nextfloat(one(T),-2)),
-                      (nextfloat(zero(T),3), T(0.75)),
+                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(realmin(T)), nextfloat(one(T), -2)),
+                      (nextfloat(zero(T), 3), T(0.75)),
+                      (prevfloat(zero(T), -3), T(0.75)),
                       (nextfloat(zero(T)), T(0.5))]
 
             n = Int(log2(a/b))

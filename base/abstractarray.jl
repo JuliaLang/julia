@@ -83,12 +83,23 @@ function axes(A)
     map(OneTo, size(A))
 end
 
+"""
+    has_offset_axes(A)
+    has_offset_axes(A, B, ...)
+
+Return `true` if the indices of `A` start with something other than 1 along any axis.
+If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
+"""
+has_offset_axes(A)    = _tuple_any(x->first(x)!=1, axes(A))
+has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
+has_offset_axes(::Colon) = false
+
 # Performance optimization: get rid of a branch on `d` in `axes(A, d)`
 # for d=1. 1d arrays are heavily used, and the first dimension comes up
 # in other applications.
-indices1(A::AbstractArray{<:Any,0}) = OneTo(1)
-indices1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
-indices1(iter) = OneTo(length(iter))
+axes1(A::AbstractArray{<:Any,0}) = OneTo(1)
+axes1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
+axes1(iter) = OneTo(length(iter))
 
 unsafe_indices(A) = axes(A)
 unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
@@ -154,14 +165,12 @@ julia> length([1 2; 3 4])
 ```
 """
 length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
-_length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, axes(A)))) # circumvent missing size
-_length(A) = (@_inline_meta; length(A))
 
 # `eachindex` is mostly an optimization of `keys`
 eachindex(itrs...) = keys(itrs...)
 
 # eachindex iterates over all indices. IndexCartesian definitions are later.
-eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
+eachindex(A::AbstractVector) = (@_inline_meta(); axes1(A))
 
 """
     eachindex(A...)
@@ -209,8 +218,8 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     eachindex(IndexStyle(A,B...), A, B...)
 end
-eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(_length(A)))
-eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; indices1(A))
+eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(length(A)))
+eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     indsA = eachindex(IndexLinear(), A)
@@ -509,7 +518,7 @@ function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
     @_propagate_inbounds_meta
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
 end
-checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractVector{Bool}) = indx == indices1(I)
+checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractVector{Bool}) = indx == axes1(I)
 checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractArray{Bool}) = false
 function checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray)
     @_inline_meta
@@ -744,7 +753,7 @@ function copyto!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::Abstr
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
-    copyto!(dest, dstart, src, first(LinearIndices(src)), _length(src))
+    copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
@@ -837,7 +846,7 @@ function iterate(A::AbstractArray, state=(eachindex(A),))
     A[y[1]], (state[1], tail(y)...)
 end
 
-isempty(a::AbstractArray) = (_length(a) == 0)
+isempty(a::AbstractArray) = (length(a) == 0)
 
 
 ## range conversions ##
@@ -1148,9 +1157,9 @@ get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] :
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
-    ind = findall(in(indices1(A)), I)
+    ind = findall(in(axes1(A)), I)
     X[ind] = A[I[ind]]
-    Xind = indices1(X)
+    Xind = axes1(X)
     X[first(Xind):first(ind)-1] = default
     X[last(ind)+1:last(Xind)] = default
     X
@@ -1776,9 +1785,9 @@ _sub2ind(inds::Union{DimsInteger,Indices}, I1::AbstractVector{T}, I::AbstractVec
     _sub2ind_vecs(inds, I1, I...)
 function _sub2ind_vecs(inds, I::AbstractVector...)
     I1 = I[1]
-    Iinds = indices1(I1)
+    Iinds = axes1(I1)
     for j = 2:length(I)
-        indices1(I[j]) == Iinds || throw(DimensionMismatch("indices of I[1] ($(Iinds)) does not match indices of I[$j] ($(indices1(I[j])))"))
+        axes1(I[j]) == Iinds || throw(DimensionMismatch("indices of I[1] ($(Iinds)) does not match indices of I[$j] ($(axes1(I[j])))"))
     end
     Iout = similar(I1)
     _sub2ind!(Iout, inds, Iinds, I)

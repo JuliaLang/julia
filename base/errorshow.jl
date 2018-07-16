@@ -482,10 +482,56 @@ end
 # the location of a stackframe/method in the editor.
 global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
 
+const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
+
+function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
+    recorded_positions = IdDict{UInt, Vector{Int}}()
+    #= For each frame of hash h, recorded_positions[h] is the list of indices i
+    such that hash(t[i-1]) == h, ie the list of positions in which the
+    frame appears just before. =#
+
+    frame_counter = 1
+    while frame_counter < length(t)
+        (last_frame, n) = t[frame_counter]
+        frame_counter += 1 # Indicating the next frame
+
+        current_hash = hash(last_frame)
+        positions = get(recorded_positions, current_hash, Int[])
+        recorded_positions[current_hash] = push!(positions, frame_counter)
+
+        repetitions = 0
+        for index_p in length(positions)-1:-1:1 # More recent is more likely
+            p = positions[index_p]
+            cycle_length = frame_counter - p
+            i = frame_counter
+            j = p
+            while i < length(t) && t[i] == t[j]
+                i+=1 ; j+=1
+            end
+            if j >= frame_counter
+                #= At least one cycle repeated =#
+                repetitions = div(i - frame_counter + 1, cycle_length)
+                print(io, "\n ... (the last ", cycle_length, " lines are repeated ",
+                      repetitions, " more time", repetitions>1 ? "s)" : ")")
+                frame_counter += cycle_length * repetitions - 1
+                break
+            end
+        end
+
+        if repetitions==0
+            if with_prefix
+                show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter-1, "] "))
+                push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
+            else
+                show_trace_entry(io, last_frame, n)
+            end
+        end
+    end
+end
+
 function show_backtrace(io::IO, t::Vector)
     resize!(LAST_SHOWN_LINE_INFOS, 0)
-    filtered = Any[]
-    process_backtrace((fr, count) -> push!(filtered, (fr, count)), t)
+    filtered = process_backtrace(t)
     isempty(filtered) && return
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
@@ -497,25 +543,35 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     print(io, "\nStacktrace:")
-    frame_counter = 0
-    for (last_frame, n) in filtered
-        frame_counter += 1
-        show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
-        push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
+    if length(filtered) < BIG_STACKTRACE_SIZE
+        # Fast track: no duplicate stack frame detection.
+        frame_counter = 0
+        for (last_frame, n) in filtered
+            frame_counter += 1
+            show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
+            push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
+        end
+        return
     end
+
+    show_reduced_backtrace(IOContext(io, :backtrace => true), filtered, true)
 end
 
 function show_backtrace(io::IO, t::Vector{Any})
-    for entry in t
-        show_trace_entry(io, entry...)
+    if length(t) < BIG_STACKTRACE_SIZE
+        for entry in t
+            show_trace_entry(io, entry...)
+        end
+    else
+        show_reduced_backtrace(io, t, false)
     end
 end
 
-# call process_func on each frame in a backtrace
-function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax(Int); skipC = true)
+function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
     count = 0
+    ret = Any[]
     for i = eachindex(t)
         lkups = StackTraces.lookup(t[i])
         for lkup in lkups
@@ -530,7 +586,7 @@ function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax
 
             if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
                 if n > 0
-                    process_func(last_frame, n)
+                    push!(ret, (last_frame,n))
                 end
                 n = 1
                 last_frame = lkup
@@ -540,8 +596,9 @@ function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax
         end
     end
     if n > 0
-        process_func(last_frame, n)
+        push!(ret, (last_frame,n))
     end
+    return ret
 end
 
 """

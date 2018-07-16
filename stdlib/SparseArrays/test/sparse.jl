@@ -118,6 +118,8 @@ end
 
     @testset "blockdiag concatenation" begin
         @test blockdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
+        @test blockdiag() == spzeros(0, 0)
+        @test nnz(blockdiag()) == 0
     end
 
     @testset "concatenation promotion" begin
@@ -2240,6 +2242,14 @@ _length_or_count_or_five(x) = length(x)
         b[[6, 8, 13, 15, 23]] .= false
         @test setindex!(spzeros(5, 5), X, b) == setindex!(zeros(5, 5), X, b)
     end
+end
+
+@testset "sparse transpose adjoint" begin
+    A = sprand(10, 10, 0.75)
+    @test A' == SparseMatrixCSC(A')
+    @test SparseMatrixCSC(A') isa SparseMatrixCSC
+    @test transpose(A) == SparseMatrixCSC(transpose(A))
+    @test SparseMatrixCSC(transpose(A)) isa SparseMatrixCSC
 end
 
 end # module

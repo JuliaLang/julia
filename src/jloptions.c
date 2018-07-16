@@ -31,12 +31,12 @@ jl_options_t jl_options = { 0,    // quiet
                             -1,   // banner
                             NULL, // julia_bindir
                             NULL, // julia_bin
-                            NULL, // project
                             NULL, // cmds
                             NULL, // image_file (will be filled in below)
                             NULL, // cpu_target ("native", "core2", etc...)
                             0,    // nprocs
                             NULL, // machine_file
+                            NULL, // project
                             0,    // isinteractive
                             0,    // color
                             JL_OPTIONS_HISTORYFILE_ON, // history file
@@ -93,7 +93,7 @@ static const char opts[]  =
 
     // parallel options
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
-    "                           \"auto\" launches as many workers as the number of local cores\n"
+    "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
@@ -385,7 +385,7 @@ restart_switch:
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
-                jl_options.nprocs = jl_cpu_cores();
+                jl_options.nprocs = jl_cpu_threads();
             }
             else {
                 long nprocs = strtol(optarg, &endptr, 10);

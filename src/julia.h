@@ -234,7 +234,7 @@ typedef struct _jl_llvm_functions_t {
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     jl_array_t *code;  // Any array of statements
-    jl_value_t *codelocs; // Int array of indicies into the line table
+    jl_value_t *codelocs; // Int32 array of indicies into the line table
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
     jl_value_t *linetable; // Table of locations
@@ -1358,7 +1358,7 @@ JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key,
 JL_DLLEXPORT int jl_errno(void);
 JL_DLLEXPORT void jl_set_errno(int e);
 JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf);
-JL_DLLEXPORT int jl_cpu_cores(void);
+JL_DLLEXPORT int jl_cpu_threads(void);
 JL_DLLEXPORT long jl_getpagesize(void);
 JL_DLLEXPORT long jl_getallocationgranularity(void);
 JL_DLLEXPORT int jl_is_debugbuild(void);

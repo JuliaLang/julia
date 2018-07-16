@@ -950,6 +950,8 @@ the pipe. The `wr` end is given for convenience in case the old
 [`stdout`](@ref) object was cached by the user and needs to be replaced
 elsewhere.
 
+If called with the optional `stream` argument, then returns `stream` itself.
+
 !!! note
     `stream` must be a `TTY`, a `Pipe`, or a socket.
 """

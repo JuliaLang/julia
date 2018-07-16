@@ -56,3 +56,14 @@ function with_current_env(f)
         popfirst!(LOAD_PATH)
     end
 end
+
+function with_temp_env(f, env_name::AbstractString="Dummy")
+    env_path = joinpath(mktempdir(), env_name)
+    Pkg.generate(env_path)
+    Pkg.activate(env_path)
+    try
+        applicable(f, env_path) ? f(env_path) : f()
+    finally
+        Pkg.activate()
+    end
+end

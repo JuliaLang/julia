@@ -17,6 +17,12 @@
         @test expanduser(S("x")) == "x"
         @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
     end
+    @testset "Base.contractuser" begin
+        @test Base.contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
+        @test Base.contractuser(S(joinpath(homedir(), "x"))) ==
+              (Sys.iswindows() ? joinpath(homedir(), "x") : "~$(sep)x")
+        @test Base.contractuser(S("/foo/bar")) == "/foo/bar"
+    end
     @testset "isdirpath" begin
         @test !isdirpath(S("foo"))
         @test isdirpath(S("foo$sep"))

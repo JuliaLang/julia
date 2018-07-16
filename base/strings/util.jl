@@ -7,8 +7,8 @@ const Chars = Union{AbstractChar,Tuple{Vararg{<:AbstractChar}},AbstractVector{<:
 """
     startswith(s::AbstractString, prefix::AbstractString)
 
-Returns `true` if `s` starts with `prefix`. If `prefix` is a vector or set
-of characters, tests whether the first character of `s` belongs to that set.
+Return `true` if `s` starts with `prefix`. If `prefix` is a vector or set
+of characters, test whether the first character of `s` belongs to that set.
 
 See also [`endswith`](@ref).
 
@@ -27,8 +27,8 @@ startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in c
 """
     endswith(s::AbstractString, suffix::AbstractString)
 
-Returns `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
-characters, tests whether the last character of `s` belongs to that set.
+Return `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
+characters, test whether the last character of `s` belongs to that set.
 
 See also [`startswith`](@ref).
 

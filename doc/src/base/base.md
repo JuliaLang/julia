@@ -290,6 +290,7 @@ Base.@assert
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError
+Base.CompositeException
 Base.DimensionMismatch
 Core.DivideError
 Core.DomainError

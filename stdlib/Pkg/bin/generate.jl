@@ -1,12 +1,12 @@
 #!/usr/bin/env julia
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-prefix = joinpath(homedir(), ".julia", "registries", "Uncurated")
+prefix = joinpath(homedir(), ".julia", "registries", "General")
 
 write_toml(prefix, "Registry") do io
-    repo = "https://github.com/JuliaRegistries/Uncurated.git"
+    repo = "https://github.com/JuliaRegistries/General.git"
     uuid = string(uuid5(uuid_registry, repo))
-    println(io, "name = ", repr("Uncurated"))
+    println(io, "name = ", repr("General"))
     println(io, "uuid = ", repr(uuid))
     println(io, "repo = ", repr(repo))
     println(io, "\ndescription = \"\"\"")

@@ -32,7 +32,6 @@ const rm           = API.rm
 const up           = API.up
 const test         = API.test
 const gc           = API.gc
-const init         = API.init
 const build        = API.build
 const installed    = API.installed
 const pin          = API.pin

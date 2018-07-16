@@ -15,15 +15,15 @@ v0 = rand(4)
 v = OffsetArray(v0, (-3,))
 h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test axes(v) == (-2:1,)
-@test_throws ErrorException size(v)
-@test_throws ErrorException size(v, 1)
+@test size(v) == (4,)
+@test size(v, 1) == 4
 
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # IndexLinear
 S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
 @test axes(A) == axes(S) == (0:1, 3:4)
-@test_throws ErrorException size(A)
-@test_throws ErrorException size(A, 1)
+@test size(A) == (2,2)
+@test size(A, 1) == 2
 
 # Scalar indexing
 @test A[0,3] == A[1] == A[0,3,1] == S[0,3] == S[1] == S[0,3,1] == 1
@@ -82,6 +82,29 @@ for i = 1:9 @test A_3_3[i] == i end
 @test_throws BoundsError S[CartesianIndex(1,1)]
 @test eachindex(A) == 1:4
 @test eachindex(S) == CartesianIndices(axes(S)) == CartesianIndices(map(Base.Slice, (0:1,3:4)))
+
+# LinearIndices
+# issue 27986
+let a1 = [11,12,13], a2 = [1 2; 3 4]
+    b1 = OffsetArray(a1, (-3,))
+    i1 = LinearIndices(b1)
+    @test i1[-2] == -2
+    @test_throws BoundsError i1[-3]
+    @test_throws BoundsError i1[1]
+    @test i1[-2:end] === -2:0
+    @test @inferred(i1[-2:0]) === -2:0
+    @test_throws BoundsError i1[-3:end]
+    @test_throws BoundsError i1[-2:1]
+    b2 = OffsetArray(a2, (-3,5))
+    i2 = LinearIndices(b2)
+    @test i2[3] == 3
+    @test_throws BoundsError i2[0]
+    @test_throws BoundsError i2[5]
+    @test @inferred(i2[2:3])   === 2:3
+    @test @inferred(i2[1:2:4]) === 1:2:3
+    @test_throws BoundsError i2[1:5]
+    @test_throws BoundsError i2[1:2:5]
+end
 
 # logical indexing
 @test A[A .> 2] == [3,4]
@@ -167,8 +190,8 @@ show(io, parent(v))
 smry = summary(v)
 @test occursin("OffsetArray{Float64,1", smry)
 @test occursin("with indices -1:1", smry)
-function cmp_showf(printfunc, io, A)
-    ioc = IOContext(io, :limit => true, :compact => true)
+function cmp_showf(printfunc, io, A; options = ())
+    ioc = IOContext(io, :limit => true, :compact => true, options...)
     printfunc(ioc, A)
     str1 = String(take!(io))
     printfunc(ioc, parent(A))
@@ -179,7 +202,7 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)))       # rows&c
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # columns fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
-cmp_showf(Base.show, io, OffsetArray(rand(1,1,10^3,1), (1,2,3,4)))      # issue in #24393
+cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop=2/11, length=3*29), 3, 29), (-2, -15)); options=(:displaysize=>(53,210),))
 targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
             "$OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
             "$OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",

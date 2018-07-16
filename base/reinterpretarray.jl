@@ -26,12 +26,18 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
                 The resulting array would have non-integral first dimension.
             """))
         end
+        function throwaxes1(::Type{S}, ::Type{T}, ax1)
+            @_noinline_meta
+            throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` when the first axis is $ax1. Try reshaping first."))
+        end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
         (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T)
+        ax1 = axes(a)[1]
         if N != 0 && sizeof(S) != sizeof(T)
-            dim = size(a)[1]
+            dim = length(ax1)
             rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
+            first(ax1) == 1 || throwaxes1(S, T, ax1)
         end
         readable = array_subpadding(T, S)
         writable = array_subpadding(S, T)
@@ -69,6 +75,13 @@ function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
     tuple(size1, tail(psize)...)
 end
 
+function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
+    paxs = axes(a.parent)
+    f, l = first(paxs[1]), length(paxs[1])
+    size1 = div(l*sizeof(S), sizeof(T))
+    tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
+end
+
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
@@ -96,6 +109,7 @@ end
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         return reinterpret(T, a.parent[i1, tailinds...])
     else
+        @boundscheck checkbounds(a, i1, tailinds...)
         ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
         t = Ref{T}()
         s = Ref{S}()
@@ -146,6 +160,7 @@ end
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         return setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
     else
+        @boundscheck checkbounds(a, i1, tailinds...)
         ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
         t = Ref{T}(v)
         s = Ref{S}()

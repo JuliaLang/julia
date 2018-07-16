@@ -681,10 +681,13 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
 
-widen(::Type{<:Union{Int8, Int16}}) = Int
+
+widen(::Type{Int8}) = Int16
+widen(::Type{Int16}) = Int32
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen(::Type{<:Union{UInt8, UInt16}}) = UInt
+widen(::Type{UInt8}) = UInt16
+widen(::Type{UInt16}) = UInt32
 widen(::Type{UInt32}) = UInt64
 widen(::Type{UInt64}) = UInt128
 

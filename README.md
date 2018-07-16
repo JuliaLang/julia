@@ -86,7 +86,7 @@ Be sure to also configure your system to use the appropriate proxy settings, e.g
 
 By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.6` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout v0.6.3
+    git checkout v0.6.4
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).

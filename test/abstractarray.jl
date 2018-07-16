@@ -887,6 +887,14 @@ end
 
     @test CartesianIndices(fill(1., 2, 3)) == CartesianIndices((2,3))
     @test LinearIndices((2,3)) == [1 3 5; 2 4 6]
+
+    for IType in (CartesianIndices, LinearIndices)
+        I1 = IType((Base.OneTo(3),))
+        I2 = IType((1:3,))
+        @test !(I1 === I2)
+        J1, J2 = @inferred(promote(I1, I2))
+        @test J1 === J2
+    end
 end
 
 @testset "issue #25770" begin

@@ -133,7 +133,7 @@ function collect_project!(ctx::Context, pkg::PackageSpec, path::String, fix_deps
     project_file = projectfile_path(path)
     fix_deps_map[pkg.uuid] = valtype(fix_deps_map)()
     (project_file === nothing) && return false
-    project = read_project(project_file)
+    project = read_package(project_file)
     compat = get(project, "compat", Dict())
     if haskey(compat, "julia")
         if !(VERSION in Types.semver_spec(compat["julia"]))
@@ -442,41 +442,47 @@ function install_git(
     version::Union{VersionNumber,Nothing},
     version_path::String
 )::Nothing
-    repo, git_hash = Base.shred!(LibGit2.CachedCredentials()) do creds
-        clones_dir = joinpath(depots()[1], "clones")
-        ispath(clones_dir) || mkpath(clones_dir)
-        repo_path = joinpath(clones_dir, string(uuid))
-        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-            GitTools.clone(urls[1], repo_path; isbare=true, header = "[$uuid] $name from $(urls[1])", credentials=creds)
-        end
-        git_hash = LibGit2.GitHash(hash.bytes)
-        for url in urls
-            try LibGit2.with(LibGit2.GitObject, repo, git_hash) do g
-                end
-                break # object was found, we can stop
-            catch err
-                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+    repo = nothing
+    tree = nothing
+    try
+        repo, git_hash = Base.shred!(LibGit2.CachedCredentials()) do creds
+            clones_dir = joinpath(depots()[1], "clones")
+            ispath(clones_dir) || mkpath(clones_dir)
+            repo_path = joinpath(clones_dir, string(uuid))
+            repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+                GitTools.clone(urls[1], repo_path; isbare=true, header = "[$uuid] $name from $(urls[1])", credentials=creds)
             end
-            GitTools.fetch(repo, url, refspecs=refspecs, credentials=creds)
+            git_hash = LibGit2.GitHash(hash.bytes)
+            for url in urls
+                try LibGit2.with(LibGit2.GitObject, repo, git_hash) do g
+                    end
+                    break # object was found, we can stop
+                catch err
+                    err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+                end
+                GitTools.fetch(repo, url, refspecs=refspecs, credentials=creds)
+            end
+            return repo, git_hash
         end
-        return repo, git_hash
+        tree = try
+            LibGit2.GitObject(repo, git_hash)
+        catch err
+            err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+            error("$name: git object $(string(hash)) could not be found")
+        end
+        tree isa LibGit2.GitTree ||
+            error("$name: git object $(string(hash)) should be a tree, not $(typeof(tree))")
+        mkpath(version_path)
+        opts = LibGit2.CheckoutOptions(
+            checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
+            target_directory = Base.unsafe_convert(Cstring, version_path)
+        )
+        LibGit2.checkout_tree(repo, tree, options=opts)
+        return
+    finally
+        repo !== nothing && LibGit2.close(repo)
+        tree !== nothing && LibGit2.close(tree)
     end
-    tree = try
-        LibGit2.GitObject(repo, git_hash)
-    catch err
-        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-        error("$name: git object $(string(hash)) could not be found")
-    end
-    tree isa LibGit2.GitTree ||
-        error("$name: git object $(string(hash)) should be a tree, not $(typeof(tree))")
-    mkpath(version_path)
-    opts = LibGit2.CheckoutOptions(
-        checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
-        target_directory = Base.unsafe_convert(Cstring, version_path)
-    )
-    LibGit2.checkout_tree(repo, tree, options=opts)
-    close(repo); close(tree)
-    return
 end
 
 # install & update manifest
@@ -798,9 +804,17 @@ function with_dependencies_loadable_at_toplevel(f, mainctx::Context, pkg::Packag
             end
         end
 
+        # Add target deps to deps (https://github.com/JuliaLang/Pkg.jl/issues/427)
         if !isempty(pkgs)
+            target_deps = deepcopy(pkgs)
             add_or_develop(localctx, pkgs)
             need_to_resolve = false # add resolves
+            info = manifest_info(localctx.env, pkg.uuid)
+            !haskey(info, "deps") && info["deps"] == Dict{String, Any}()
+            deps = info["deps"]
+            for deppkg in target_deps
+                deps[deppkg.name] = string(deppkg.uuid)
+            end
         end
 
         local new
@@ -839,7 +853,7 @@ function collect_target_deps!(ctx::Context, pkgs::Vector{PackageSpec}, pkg::Pack
     end
     project = nothing
     if project_path !== nothing
-        project = read_project(project_path)
+        project = read_package(project_path)
     end
 
     # Pkg2 compatibiity with test/REQUIRE
@@ -1238,16 +1252,4 @@ function test(ctx::Context, pkgs::Vector{PackageSpec}; coverage=false)
     end
 end
 
-function init(ctx::Context)
-    project_file = ctx.env.project_file
-    isfile(project_file) &&
-        cmderror("Project already initialized at $project_file")
-    if !ctx.preview
-        mkpath(dirname(project_file))
-        touch(project_file)
-    end
-    printpkgstyle(ctx, :Initialized, "project at " * abspath(project_file))
-end
-
 end # module
-

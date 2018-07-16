@@ -408,6 +408,16 @@ let a = [1,2,3]
     @test a == [0,0,0]
 end
 
+# PR #28038 (prompt/getpass stream args)
+@test_throws MethodError Base.getpass(IOBuffer(), stdout, "pass")
+let buf = IOBuffer()
+    @test Base.prompt(IOBuffer("foo\nbar\n"), buf, "baz") == "foo"
+    @test String(take!(buf)) == "baz: "
+    @test Base.prompt(IOBuffer("\n"), buf, "baz", default="foobar") == "foobar"
+    @test String(take!(buf)) == "baz [foobar]: "
+    @test Base.prompt(IOBuffer("blah\n"), buf, "baz", default="foobar") == "blah"
+end
+
 # Test that we can VirtualProtect jitted code to writable
 @noinline function WeVirtualProtectThisToRWX(x, y)
     return x + y
@@ -640,4 +650,31 @@ end
     # tests
     @test isvalid(timestr_c)
     @test isvalid(timestr_aAbBpZ)
+end
+
+
+using Base: @kwdef
+
+@kwdef struct Test27970Typed
+    a::Int
+    b::String = "hi"
+end
+
+@kwdef struct Test27970Untyped
+    a
+end
+
+@kwdef struct Test27970Empty end
+
+@testset "No default values in @kwdef" begin
+    @test Test27970Typed(a=1) == Test27970Typed(1, "hi")
+    # Implicit type conversion (no assertion on kwarg)
+    @test Test27970Typed(a=0x03) == Test27970Typed(3, "hi")
+    @test_throws UndefKeywordError Test27970Typed()
+
+    @test Test27970Untyped(a=1) == Test27970Untyped(1)
+    @test_throws UndefKeywordError Test27970Untyped()
+
+    # Just checking that this doesn't stack overflow on construction
+    @test Test27970Empty() == Test27970Empty()
 end

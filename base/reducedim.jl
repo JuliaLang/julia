@@ -116,7 +116,7 @@ function _reducedim_init(f, op, fv, fop, A, region)
     if T !== Any && applicable(zero, T)
         x = f(zero(T))
         z = op(fv(x), fv(x))
-        Tr = typeof(z) == typeof(x) && !isbitstype(T) ? T : typeof(z)
+        Tr = z isa T ? T : typeof(z)
     else
         z = fv(fop(f, A))
         Tr = typeof(z)
@@ -169,7 +169,7 @@ function check_reducedims(R, A)
     had_nonreduc = false
     for i = 1:ndims(A)
         Ri, Ai = axes(R, i), axes(A, i)
-        sRi, sAi = _length(Ri), _length(Ai)
+        sRi, sAi = length(Ri), length(Ai)
         if sRi == 1
             if sAi > 1
                 if had_nonreduc
@@ -209,7 +209,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
 
     if has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
-        nslices = div(_length(A), lsiz)
+        nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i = 1:nslices
             @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
@@ -221,7 +221,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     keep, Idefault = Broadcast.shapeindexer(indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
-        i1 = first(indices1(R))
+        i1 = first(axes1(R))
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
@@ -663,7 +663,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     y = iterate(ks)
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
-        i1 = first(indices1(Rval))
+        i1 = first(axes1(Rval))
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             tmpRv = Rval[i1,IR]
@@ -795,7 +795,7 @@ function _findmax(A, region)
     end
 end
 
-reducedim1(R, A) = _length(indices1(R)) == 1
+reducedim1(R, A) = length(axes1(R)) == 1
 
 """
     argmin(A; dims) -> indices

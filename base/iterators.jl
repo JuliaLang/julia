@@ -774,15 +774,14 @@ _prod_size1(a, A) =
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
-_prod_indices(t::Tuple) = (_prod_indices1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
-_prod_indices1(a, ::HasShape)  = axes(a)
-_prod_indices1(a, ::HasLength) = (OneTo(length(a)),)
-_prod_indices1(a, A) =
+_prod_indices(t::Tuple) = (_prod_axes1(t[1], IteratorSize(t[1]))..., _prod_indices(tail(t))...)
+_prod_axes1(a, ::HasShape)  = axes(a)
+_prod_axes1(a, ::HasLength) = (OneTo(length(a)),)
+_prod_axes1(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 
 ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = prod(size(P))
-_length(p::ProductIterator) = prod(map(unsafe_length, axes(p)))
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
@@ -1035,13 +1034,13 @@ mutable struct Stateful{T, VS}
     end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
-        new{T, VS}(itr, iterate(itr)::VS, 0)
+        return new{T, VS}(itr, iterate(itr)::VS, 0)
     end
 end
 
 function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
     s.itr = itr
-    s.nextvalstate = iterate(itr)
+    setfield!(s, :nextvalstate, iterate(itr))
     s.taken = 0
     s
 end
@@ -1057,7 +1056,8 @@ else
     # having to typesubtract
     function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
         valstate === nothing && return nothing
-        iterate(itr, tail(valstate))
+        val, st = valstate
+        return iterate(itr, st)
     end
     function _approx_iter_type(itrT::Type, vstate::Type)
         vstate <: Union{Nothing, Tuple{Any, Any}} || return Any

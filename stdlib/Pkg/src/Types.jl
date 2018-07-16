@@ -22,7 +22,7 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, project_deps_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos_develop!, handle_repos_add!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
-    read_project, read_manifest, pathrepr, registries,
+    read_project, read_package, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
     PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED,
@@ -371,6 +371,19 @@ function read_project(file::String)
     isfile(file) ? open(read_project, file) : read_project(devnull)
 end
 
+_throw_package_err(x, f) = cmderror("expected a `$x` entry in project file at $(abspath(f))")
+function read_package(f::String)
+    project = read_project(f)
+    haskey(project, "name") || _throw_package_err("name", f)
+    haskey(project, "uuid") || _throw_package_err("uuid", f)
+    name = project["name"]
+    entry = joinpath(dirname(f), "src", "$name.jl")
+    if !isfile(entry)
+        cmderror("expected the file `src/$name.jl` to exist for package $name at $(dirname(f))")
+    end
+    return project
+end
+
 function read_manifest(io::IO)
     manifest = TOML.parse(io)
     for (name, infos) in manifest, info in infos
@@ -522,7 +535,8 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
                     rev = pkg.repo.rev
                     GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
                 end
-                if upgrade_or_add && !pinned
+                upgrading = upgrade_or_add && !pinned
+                if upgrading
                     rev = pkg.repo.rev
                 else
                     # Not upgrading so the rev should be the current git-tree-sha
@@ -541,7 +555,9 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
                 gitobject, isbranch = get_object_branch(repo, rev)
                 # If the user gave a shortened commit SHA, might as well update it to the full one
                 try
-                    pkg.repo.rev = isbranch ? rev : string(LibGit2.GitHash(gitobject))
+                    if upgrading
+                        pkg.repo.rev = isbranch ? rev : string(LibGit2.GitHash(gitobject))
+                    end
                     LibGit2.with(LibGit2.peel(LibGit2.GitTree, gitobject)) do git_tree
                         @assert git_tree isa LibGit2.GitTree
                         pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
@@ -590,17 +606,17 @@ function parse_package!(ctx, pkg, project_path)
     env = ctx.env
     project_file = projectfile_path(project_path)
     if project_file !== nothing
-        project_data = parse_toml(project_file)
+        project_data = read_package(project_file)
         pkg.uuid = UUID(project_data["uuid"])
         pkg.name = project_data["name"]
         if haskey(project_data, "version")
             pkg.version = VersionNumber(project_data["version"])
         else
-            @warn "project file for $(pkg.name) is missing a `version` entry"
+            @warn "project file for $(pkg.name) at $(project_path) is missing a `version` entry"
             Pkg.Operations.set_maximum_version_registry!(env, pkg)
         end
     else
-        @warn "packages will need to have a [Julia]Project.toml file in the future"
+        @warn "package $(pkg.name) at $(project_path) will need to have a [Julia]Project.toml file in the future"
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
         else
@@ -785,7 +801,7 @@ function ensure_resolved(env::EnvCache,
     cmderror(msg)
 end
 
-const DEFAULT_REGISTRIES = Dict("Uncurated" => "https://github.com/JuliaRegistries/Uncurated.git")
+const DEFAULT_REGISTRIES = Dict("General" => "https://github.com/JuliaRegistries/General.git")
 
 # Return paths of all registries in a depot
 function registries(depot::String)::Vector{String}
@@ -801,8 +817,19 @@ end
 function registries(; clone_default=true)::Vector{String}
     isempty(depots()) && return String[]
     user_regs = abspath(depots()[1], "registries")
+    # TODO: delete the following let block in Julia 1.0
+    let uncurated = joinpath(user_regs, "Uncurated"),
+        general = joinpath(user_regs, "General")
+        if ispath(uncurated) && !ispath(general)
+            mv(uncurated, general)
+            git_config_file = joinpath(general, ".git", "config")
+            cfg = read(git_config_file, String)
+            cfg = replace(cfg, r"\bUncurated\b" => "General")
+            write(git_config_file, cfg)
+        end
+    end
     if clone_default
-        if !ispath(user_regs)
+        if !ispath(user_regs) || isempty(readdir(user_regs))
             mkpath(user_regs)
             Base.shred!(LibGit2.CachedCredentials()) do creds
                 printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
