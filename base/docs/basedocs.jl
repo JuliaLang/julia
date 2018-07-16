@@ -1896,10 +1896,14 @@ Base.setproperty!
 """
     StridedArray{T, N}
 
-An `N` dimensional *strided* array with elements of type `T`. A strided array may *not* be contiguous
-in memory: elements are separated by constant stride(s). [`DenseArray`](@ref)s are `StridedArray`s with
-strides of `1` (thus, they are contiguous). A `StridedArray` with any stride larger than 1 is no longer
-contiguous.
+An `N` dimensional *strided* array with elements of type `T`. These arrays follow
+the [strided array interface](@ref man-interface-strided-arrays). If `A` is a
+`StridedArray`, then its elements are stored in memory with offsets, which may
+vary between dimensions but are constant within a dimension. For example, `A` could
+have stride 2 in dimension 1, and stride 3 in dimension 2. Incrementing `A` along
+dimension `d` jumps in memory by [`strides(A, d)`] slots. Strided arrays are
+particularly important and useful because they can sometimes be passed directly
+as pointers to foreign language libraries like BLAS.
 """
 StridedArray
 
