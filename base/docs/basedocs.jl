@@ -1893,4 +1893,35 @@ The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 """
 Base.setproperty!
 
+"""
+    StridedArray{T, N}
+
+An `N` dimensional *strided* array with elements of type `T`. A strided array may *not* be contiguous
+in memory: elements are separated by constant stride(s). [`DenseArray`](@ref)s are `StridedArray`s with
+strides of `1` (thus, they are contiguous). A `StridedArray` with any stride larger than 1 is no longer
+contiguous.
+"""
+StridedArray
+
+"""
+    StridedVector{T}
+
+One dimensional [`StridedArray`](@ref) with elements of type `T`.
+"""
+StridedVector
+
+"""
+    StridedMatrix{T}
+
+Two dimensional [`StridedArray`](@ref) with elements of type `T`.
+"""
+StridedMatrix
+
+"""
+    StridedVecOrMat{T}
+
+Union type of [`StridedVector`](@ref) and [`StridedMatrix`](@ref) with elements of type `T`.
+"""
+StridedVecOrMat
+
 end
