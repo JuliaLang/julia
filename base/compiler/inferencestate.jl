@@ -74,6 +74,9 @@ function InferenceState(result::InferenceResult, src::CodeInfo,
         slottypes[i] = at
     end
     s_types[1] = s_argtypes
+    if src.inferred
+        s_types = Any[[] for _ in s_types]
+    end
 
     ssavalue_uses = find_ssavalue_uses(code, nssavalues)
 
