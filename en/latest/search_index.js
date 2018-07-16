@@ -15397,7 +15397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Interactive Utilities",
     "title": "InteractiveUtils.versioninfo",
     "category": "function",
-    "text": "versioninfo(io::IO=stdout; verbose::Bool=false, packages::Bool=false)\n\nPrint information about the version of Julia in use. The output is controlled with boolean keyword arguments:\n\npackages: print information about installed packages\nverbose: print all additional information\n\n\n\n\n\n"
+    "text": "versioninfo(io::IO=stdout; verbose::Bool=false)\n\nPrint information about the version of Julia in use. The output is controlled with boolean keyword arguments:\n\nverbose: print all additional information\n\n\n\n\n\n"
 },
 
 {
