@@ -334,26 +334,26 @@ function getindex(G::Givens, i::Integer, j::Integer)
     end
 end
 
-function lmul!(G::Givens, A::AbstractVecOrMat)
+@inline function lmul!(G::Givens, A::AbstractVecOrMat)
     @assert !has_offset_axes(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
     end
-    @inbounds @simd for i = 1:n
+    @inbounds for i = 1:n
         a1, a2 = A[G.i1,i], A[G.i2,i]
         A[G.i1,i] =       G.c *a1 + G.s*a2
         A[G.i2,i] = -conj(G.s)*a1 + G.c*a2
     end
     return A
 end
-function rmul!(A::AbstractMatrix, G::Givens)
+@inline function rmul!(A::AbstractMatrix, G::Givens)
     @assert !has_offset_axes(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
     end
-    @inbounds @simd for i = 1:m
+    @inbounds for i = 1:m
         a1, a2 = A[i,G.i1], A[i,G.i2]
         A[i,G.i1] = a1*G.c - a2*G.s'
         A[i,G.i2] = a1*G.s + a2*G.c
