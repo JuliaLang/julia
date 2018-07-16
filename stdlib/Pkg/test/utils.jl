@@ -69,3 +69,16 @@ function with_temp_env(f, env_name::AbstractString="Dummy")
         Pkg.activate()
     end
 end
+
+function with_pkg_env(fn::Function, path::AbstractString="."; change_dir=false)
+    Pkg.activate(path)
+    try
+        if change_dir
+            cd(fn, path)
+        else
+            fn()
+        end
+    finally
+        Pkg.activate()
+    end
+end
