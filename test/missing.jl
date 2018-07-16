@@ -412,6 +412,76 @@ end
             @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
         end
     end
+
+    @testset "mapreduce over dims" begin
+        nm(x) = (@test !(eltype(x) >: Missing); x)
+        # Vary size to test splitting blocks with several configurations of missing values
+        for T in (Int, Float64),
+            A in (rand(T, 10), rand(T, 100, 1000), rand(T, 10000, 10)),
+            i in (1, 2, 1:2),
+            f in (identity, abs, abs2, cos),
+            (op, redf, init) in ((+, sum, x->oftype(f(one(eltype(x))), zero(eltype(x)))),
+                                  (*, prod, x->oftype(f(one(eltype(x))), one(eltype(x)))),
+                                  (max, maximum, x->f(first(skipmissing(x)))),
+                                  (min, minimum, x->f(first(skipmissing(x)))))
+            if T <: Integer
+                @test redf(A, dims=i) == nm(redf(skipmissing(A), dims=i)) ==
+                    nm(reduce(op, skipmissing(A), dims=i)) ==
+                    nm(mapreduce(identity, op, skipmissing(A), dims=i))
+            else
+                @test redf(A, dims=i) ≈ nm(redf(skipmissing(A), dims=i)) ==
+                    nm(reduce(op, skipmissing(A), dims=i)) ==
+                    nm(mapreduce(identity, op, skipmissing(A), dims=i))
+            end
+            @test mapreduce(f, op, A, dims=i) ≈
+                nm(mapreduce(f, op, skipmissing(A), dims=i))
+
+            maximum(i) > ndims(A) && (i = 1) # for mapslices
+            B = Array{Union{T,Missing}}(A)
+            replace!(x -> rand(Bool) ? x : missing, B)
+            # mapreduce fails for min and max if there are empty slices
+            if !(op in (min, max)) || !any(iszero, sum(!ismissing, B, dims=i))
+                if T === Int
+                    @test mapslices(x -> redf(skipmissing(x)), B, dims=i) ==
+                        nm(redf(skipmissing(B), dims=i))
+                else
+                    @test isapprox(mapslices(x -> redf(skipmissing(x)), B, dims=i),
+                        nm(redf(skipmissing(B), dims=i)), rtol=sqrt(eps()), atol=1e-16)
+                end
+                @test nm(redf(skipmissing(B), dims=i)) ==
+                    nm(reduce(op, skipmissing(B), dims=i)) ==
+                    nm(mapreduce(identity, op, skipmissing(B), dims=i))
+                @test isapprox(mapslices(x -> mapreduce(f, op, skipmissing(x), init=init(x)), B, dims=i),
+                               nm(mapreduce(f, op, skipmissing(B), dims=i)),
+                               rtol=sqrt(eps()), atol=1e-16)
+            elseif op in (min, max) && !(f in (abs, abs2))
+                @test_throws ArgumentError mapslices(x -> redf(skipmissing(x)), B, dims=i)
+                @test_throws ArgumentError redf(skipmissing(B), dims=i)
+                @test_throws ArgumentError reduce(op, skipmissing(B), dims=i)
+                @test_throws ArgumentError mapreduce(identity, op, skipmissing(B), dims=i)
+                @test_throws ArgumentError mapreduce(f, op, skipmissing(B), dims=i)
+            end
+
+            # Test block full of missing values
+            B[1:length(B)÷2] .= missing
+            if !(op in (min, max))
+                if T <: Integer
+                    @test mapslices(x -> redf(skipmissing(x)), B, dims=i) ==
+                        nm(redf(skipmissing(B), dims=i))
+                else
+                    @test isapprox(mapslices(x -> redf(skipmissing(x)), B, dims=i),
+                                   nm(redf(skipmissing(B), dims=i)),
+                                   atol=1e-16)
+                end
+                @test nm(redf(skipmissing(B), dims=i)) ==
+                    nm(reduce(op, skipmissing(B), dims=i)) ==
+                    nm(mapreduce(identity, op, skipmissing(B), dims=i))
+                @test isapprox(mapslices(x -> mapreduce(f, op, skipmissing(x), init=init(x)), B, dims=i),
+                               nm(mapreduce(f, op, skipmissing(B), dims=i)),
+                               rtol=sqrt(eps()), atol=1e-16)
+            end
+        end
+    end
 end
 
 @testset "coalesce" begin

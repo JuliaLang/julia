@@ -146,6 +146,9 @@ float(A::AbstractArray{Missing}) = A
     skipmissing(itr)
 
 Return an iterator over the elements in `itr` skipping [`missing`](@ref) values.
+In addition to supporting any function taking iterators, the resulting object
+implements reductions over dimensions (i.e. the `dims` argument to
+[`mapreduce`](@ref), [`reduce`](@ref) and special functions like [`sum`](@ref)).
 
 Use [`collect`](@ref) to obtain an `Array` containing the non-`missing` values in
 `itr`. Note that even if `itr` is a multidimensional array, the result will always
@@ -154,9 +157,6 @@ of the input.
 
 # Examples
 ```jldoctest
-julia> sum(skipmissing([1, missing, 2]))
-3
-
 julia> collect(skipmissing([1, missing, 2]))
 2-element Array{Int64,1}:
  1
@@ -166,6 +166,31 @@ julia> collect(skipmissing([1 missing; 2 missing]))
 2-element Array{Int64,1}:
  1
  2
+
+julia> sum(skipmissing([1, missing, 2]))
+3
+
+julia> B = [1 missing; 3 4]
+2×2 Array{Union{Missing, Int64},2}:
+ 1   missing
+ 3  4
+
+julia> sum(skipmissing(B), dims=1)
+1×2 Array{Int64,2}:
+ 4  4
+
+julia> sum(skipmissing(B), dims=2)
+2×1 Array{Int64,2}:
+ 1
+ 7
+
+julia> reduce(*, skipmissing(B), dims=1)
+1×2 Array{Int64,2}:
+ 3  4
+
+julia> mapreduce(cos, +, skipmissing(B), dims=1)
+1×2 Array{Float64,2}:
+ -0.44969  -0.653644
 ```
 """
 skipmissing(itr) = SkipMissing(itr)
@@ -192,8 +217,8 @@ end
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
 # additional loops to identify the two first non-missing values of each block
-mapreduce(f, op, itr::SkipMissing{<:AbstractArray}) =
-    _mapreduce(f, op, IndexStyle(itr.x), eltype(itr.x) >: Missing ? itr : itr.x)
+mapreduce(f, op, itr::SkipMissing{<:AbstractArray}; dims=:, kw...) =
+    _mapreduce_dim(f, op, kw.data, eltype(itr.x) >: Missing ? itr : itr.x, dims)
 
 function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     A = itr.x
@@ -279,6 +304,171 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         end
     end
 end
+
+# mapreduce over dimensions implementation
+
+_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, itr::SkipMissing{<:AbstractArray}, ::Colon) =
+    mapfoldl(f, op, itr; nt...)
+
+_mapreduce_dim(f, op, ::NamedTuple{()}, itr::SkipMissing{<:AbstractArray}, ::Colon) =
+    _mapreduce(f, op, IndexStyle(itr.x), itr)
+
+_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, itr::SkipMissing{<:AbstractArray}, dims) =
+    mapreducedim!(f, op, reducedim_initarray(itr, dims, nt.init), itr)
+
+_mapreduce_dim(f, op, ::NamedTuple{()}, itr::SkipMissing{<:AbstractArray}, dims) =
+    mapreducedim!(f, op, reducedim_init(f, op, itr, dims), itr)
+
+reducedim_initarray(itr::SkipMissing{<:AbstractArray}, region, init, ::Type{R}) where {R} =
+    reducedim_initarray(itr.x, region, init, R)
+reducedim_initarray(itr::SkipMissing{<:AbstractArray}, region, init::T) where {T} =
+    reducedim_initarray(itr.x, region, init, T)
+
+# initialization when computing minima and maxima requires a little care
+for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
+    @eval function reducedim_init(f, op::typeof($f1), itr::SkipMissing{<:AbstractArray}, region)
+        A = itr.x
+        T = eltype(itr)
+
+        # First compute the reduce indices. This will throw an ArgumentError
+        # if any region is invalid
+        ri = reduced_indices(A, region)
+
+        # Next, throw if reduction is over a region with length zero
+        any(i -> isempty(axes(A, i)), region) && _empty_reduce_error()
+
+        # Make a view of the first slice of the region
+        A1 = view(A, ri...)
+
+        if isempty(A1)
+            # If the slice is empty just return non-view, non-missing version as the initial array
+            return similar(A1, eltype(itr))
+        else
+            # otherwise use the min/max of the first slice as initial value
+            v0 = mapreduce(f, $f2, A1)
+
+            R = similar(A1, typeof(v0))
+
+            # if any value is missing in first slice, look for first
+            # non-missing value in each slice
+            if v0 === missing
+                v0 = nonmissingval(f, $f2, itr, R)
+                R = similar(A1, typeof(v0))
+            end
+
+            # but NaNs need to be avoided as initial values
+            v0 = v0 != v0 ? typeof(v0)($initval) : v0
+
+            # equivalent to reducedim_initarray, but we need R in advance
+            return fill!(R, v0)
+        end
+    end
+end
+
+# Iterate until we've encountered at least one non-missing value in each slice,
+# and return the min/max non-missing value of all clices
+function nonmissingval(f, op::Union{typeof(min), typeof(max)},
+                       itr::SkipMissing{<:AbstractArray}, R::AbstractArray)
+    A = itr.x
+    lsiz = check_reducedims(R,A)
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
+    keep, Idefault = Broadcast.shapeindexer(indsRt)
+    i = findfirst(!ismissing, A)
+    i === nothing && throw(ArgumentError("cannot reduce over array with only missing values"))
+    @inbounds v = A[i]
+    if reducedim1(R, A)
+        # keep track of state using a single variable when reducing along the first dimension
+        i1 = first(axes1(R))
+        @inbounds for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            filled = false
+            for i in axes(A, 1)
+                x = A[i, IA]
+                if x !== missing
+                    v = op(v, f(x))
+                    filled = true
+                    break
+                end
+            end
+            if !filled
+                throw(ArgumentError("cannot reduce over slices with only missing values"))
+            end
+        end
+    else
+        filled = fill!(similar(R, Bool), false)
+        allfilled = false
+        @inbounds for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            for i in axes(A, 1)
+                x = A[i, IA]
+                if x !== missing
+                    v = op(v, f(x))
+                    filled[i,IR] = true
+                end
+            end
+            (allfilled = all(filled)) && break
+        end
+        if !allfilled
+            throw(ArgumentError("cannot reduce over slices with only missing values"))
+        end
+    end
+    v
+end
+
+function _mapreducedim!(f, op, R::AbstractArray, itr::SkipMissing{<:AbstractArray})
+    A = itr.x
+    lsiz = check_reducedims(R,A)
+    isempty(A) && return R
+
+    if has_fast_linear_indexing(A) && lsiz > 16
+        # use mapreduce_impl, which is probably better tuned to achieve higher performance
+        nslices = div(length(A), lsiz)
+        ibase = first(LinearIndices(A))-1
+        for i = 1:nslices
+            x = mapreduce_impl(f, op, itr, ibase+1, ibase+lsiz)
+            if x !== nothing
+                @inbounds R[i] = op(R[i], something(x))
+            end
+            ibase += lsiz
+        end
+        return R
+    end
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
+    keep, Idefault = Broadcast.shapeindexer(indsRt)
+    if reducedim1(R, A)
+        # keep the accumulator as a local variable when reducing along the first dimension
+        i1 = first(axes1(R))
+        @inbounds for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            r = R[i1,IR]
+            @simd for i in axes(A, 1)
+                x = A[i, IA]
+                if x !== missing
+                    r = op(r, f(x))
+                end
+            end
+
+            R[i1,IR] = r
+        end
+    else
+        @inbounds for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            @simd for i in axes(A, 1)
+                x = A[i, IA]
+                if x !== missing
+                    R[i,IR] = op(R[i,IR], f(x))
+                end
+            end
+        end
+    end
+    return R
+end
+
+mapreducedim!(f, op, R::AbstractArray, A::SkipMissing{<:AbstractArray}) =
+    (_mapreducedim!(f, op, R, A); R)
+
+reducedim!(op, R::AbstractArray{RT}, A::SkipMissing{<:AbstractArray}) where {RT} =
+    mapreducedim!(identity, op, R, A)
 
 """
     coalesce(x, y...)
