@@ -40,80 +40,80 @@ mutable struct InferenceState
     limited::Bool
     inferred::Bool
     dont_work_on_me::Bool
+end
 
-    # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
-    function InferenceState(result::InferenceResult, src::CodeInfo,
-                            cached::Bool, params::Params)
-        linfo = result.linfo
-        code = src.code::Array{Any,1}
-        toplevel = !isa(linfo.def, Method)
+# src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
+function InferenceState(result::InferenceResult, src::CodeInfo,
+                        cached::Bool, params::Params)
+    linfo = result.linfo
+    code = src.code::Array{Any,1}
+    toplevel = !isa(linfo.def, Method)
 
-        sp = spvals_from_meth_instance(linfo::MethodInstance)
+    sp = spvals_from_meth_instance(linfo::MethodInstance)
 
-        if !src.inferred
-            nssavalues = src.ssavaluetypes::Int
-            src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
-        else
-            nssavalues = length(src.ssavaluetypes)
-        end
-
-        n = length(code)
-        s_edges = Any[ () for i = 1:n ]
-        s_types = Any[ () for i = 1:n ]
-
-        # initial types
-        nslots = length(src.slotnames)
-        argtypes = get_argtypes(result)
-        nargs = length(argtypes)
-        s_argtypes = VarTable(undef, nslots)
-        slottypes = Vector{Any}(undef, nslots)
-        for i in 1:nslots
-            at = (i > nargs) ? Bottom : argtypes[i]
-            s_argtypes[i] = VarState(at, i > nargs)
-            slottypes[i] = at
-        end
-        s_types[1] = s_argtypes
-
-        ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-
-        # exception handlers
-        cur_hand = ()
-        handler_at = Any[ () for i=1:n ]
-        n_handlers = 0
-
-        W = BitSet()
-        push!(W, 1) #initial pc to visit
-
-        if !toplevel
-            meth = linfo.def
-            inmodule = meth.module
-        else
-            inmodule = linfo.def::Module
-        end
-
-        if cached && !toplevel
-            min_valid = min_world(linfo.def)
-            max_valid = max_world(linfo.def)
-        else
-            min_valid = typemax(UInt)
-            max_valid = typemin(UInt)
-        end
-        frame = new(
-            params, result, linfo,
-            sp, slottypes, inmodule, 0,
-            src, min_valid, max_valid,
-            nargs, s_types, s_edges,
-            Union{}, W, 1, n,
-            cur_hand, handler_at, n_handlers,
-            ssavalue_uses,
-            Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
-            Vector{InferenceState}(), # callers_in_cycle
-            #=parent=#nothing,
-            cached, false, false, false)
-        result.result = frame
-        cached && push!(params.cache, result)
-        return frame
+    if !src.inferred
+        nssavalues = src.ssavaluetypes::Int
+        src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+    else
+        nssavalues = length(src.ssavaluetypes)
     end
+
+    n = length(code)
+    s_edges = Any[ () for i = 1:n ]
+    s_types = Any[ () for i = 1:n ]
+
+    # initial types
+    nslots = length(src.slotnames)
+    argtypes = get_argtypes(result)
+    nargs = length(argtypes)
+    s_argtypes = VarTable(undef, nslots)
+    slottypes = Vector{Any}(undef, nslots)
+    for i in 1:nslots
+        at = (i > nargs) ? Bottom : argtypes[i]
+        s_argtypes[i] = VarState(at, i > nargs)
+        slottypes[i] = at
+    end
+    s_types[1] = s_argtypes
+
+    ssavalue_uses = find_ssavalue_uses(code, nssavalues)
+
+    # exception handlers
+    cur_hand = ()
+    handler_at = Any[ () for i=1:n ]
+    n_handlers = 0
+
+    W = BitSet()
+    push!(W, 1) #initial pc to visit
+
+    if !toplevel
+        meth = linfo.def
+        inmodule = meth.module
+    else
+        inmodule = linfo.def::Module
+    end
+
+    if cached && !toplevel
+        min_valid = min_world(linfo.def)
+        max_valid = max_world(linfo.def)
+    else
+        min_valid = typemax(UInt)
+        max_valid = typemin(UInt)
+    end
+    frame = InferenceState(
+        params, result, linfo,
+        sp, slottypes, inmodule, 0,
+        src, min_valid, max_valid,
+        nargs, s_types, s_edges,
+        Union{}, W, 1, n,
+        cur_hand, handler_at, n_handlers,
+        ssavalue_uses,
+        Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
+        Vector{InferenceState}(), # callers_in_cycle
+        #=parent=#nothing,
+        cached, false, false, false)
+    result.result = frame
+    cached && push!(params.cache, result)
+    return frame
 end
 
 function InferenceState(result::InferenceResult, cached::Bool, params::Params)
