@@ -142,4 +142,14 @@ a2img  = randn(n,n)/2
     end
 end
 
+@testset "dgesvd OpenBLAS 0.3.1 regression" begin
+	# https://github.com/xianyi/OpenBLAS/issues/1666
+	shapes = [(300, 600), (600, 300)]
+	for shape in shapes
+		A = rand(Float64, (shape)...)
+		F = svd(A)
+		@test (F.U * Diagonal(F.S) * F.Vt) ≈ A
+	end
+end
+
 end # module TestSVD
