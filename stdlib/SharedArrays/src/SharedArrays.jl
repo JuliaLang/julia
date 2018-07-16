@@ -280,8 +280,13 @@ end
 
 const SharedVector{T} = SharedArray{T,1}
 const SharedMatrix{T} = SharedArray{T,2}
+
 SharedVector(A::Vector) = SharedArray(A)
 SharedMatrix(A::Matrix) = SharedArray(A)
+
+SharedVector{T}(m::Integer; kwargs...) where {T} = SharedArray{T}((m,); kwargs...)
+SharedMatrix{T}(m::Integer, n::Integer; kwargs...) where {T} = SharedArray{T}((m, n); kwargs...)
+
 
 
 length(S::SharedArray) = prod(S.dims)
