@@ -229,7 +229,7 @@ _log_record_ids = Set{Symbol}()
 # versions of the originating module, provided the log generating statement
 # itself doesn't change.
 function log_record_id(_module, level, message_ex)
-    modname = join(fullname(_module), "_")
+    modname = _module === nothing ?  "" : join(fullname(_module), "_")
     # Use (1<<31) to fit well within an (arbitriraly chosen) eight hex digits,
     # as we increment h to resolve any collisions.
     h = hash(string(modname, level, message_ex)) % (1<<31)
@@ -289,8 +289,8 @@ function logmsg_code(_module, file, line, level, message, exs...)
         end
     end
     # Note that it may be necessary to set `id` and `group` manually during bootstrap
-    id !== nothing || (id = :(log_record_id(_module, level, $exs)))
-    group !== nothing || (group = :(Symbol(splitext(basename($file))[1])))
+    id = something(id, :(log_record_id(_module, level, $exs)))
+    group = something(group, :(Symbol(splitext(basename(something($file, "")))[1])))
     quote
         level = $level
         std_level = convert(LogLevel, level)
@@ -529,8 +529,8 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     for (key, val) in kwargs
         println(iob, "│   ", key, " = ", val)
     end
-    mod = _module === nothing ? "" : "$(_module) "
-    println(iob, "└ @ ", mod, filepath, ":", line)
+    println(iob, "└ @ ", something(_module, "nothing"), " ",
+            something(filepath, "nothing"), ":", something(line, "nothing"))
     write(logger.stream, take!(buf))
     nothing
 end
