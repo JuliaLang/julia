@@ -198,7 +198,7 @@ function pathsep(paths::AbstractString...)
 end
 
 """
-    splitpath(path::AbstractString) -> [AbstractString, AbstractString, AbstractString...]
+    splitpath(path::AbstractString) -> Vector{String}
 
 Split a file path into all its path components. This is the opposite of
 `joinpath`. Returns an array of substrings, one for each directory or file in
