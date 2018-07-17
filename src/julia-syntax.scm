@@ -2998,13 +2998,22 @@ f(x) = yt(x)
 ;; clear capture bit for vars assigned once at the top, to avoid allocating
 ;; some unnecessary Boxes.
 (define (lambda-optimize-vars! lam)
+  ;; memoize all-methods-for to avoid O(n^2) behavior
+  (define allmethods-table (table))
+  (define (get-methods ex stmts)
+    (let ((mn (method-expr-name ex)))
+      (if (has? allmethods-table mn)
+          (get allmethods-table mn)
+          (let ((am (all-methods-for ex stmts)))
+            (put! allmethods-table mn am)
+            am))))
   (define (expr-uses-var ex v stmts)
     (cond ((assignment? ex) (expr-contains-eq v (caddr ex)))
           ((eq? (car ex) 'method)
            (and (length> ex 2)
                 ;; a method expression captures a variable if any methods for the
                 ;; same function do.
-                (let ((all-methods (all-methods-for ex (cons 'body stmts))))
+                (let ((all-methods (get-methods ex (cons 'body stmts))))
                   (any (lambda (ex)
                          (assq v (cadr (lam:vinfo (cadddr ex)))))
                        all-methods))))
