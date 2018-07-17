@@ -6441,6 +6441,62 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/collections/#Base.AbstractRange",
+    "page": "Collections and Data Structures",
+    "title": "Base.AbstractRange",
+    "category": "type",
+    "text": "AbstractRange{T}\n\nSupertype for ranges with elements of type T. UnitRange and other types are subtypes of this.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/collections/#Base.OrdinalRange",
+    "page": "Collections and Data Structures",
+    "title": "Base.OrdinalRange",
+    "category": "type",
+    "text": "OrdinalRange{T, S} <: AbstractRange{T}\n\nSupertype for ordinal ranges with elements of type T with spacing(s) of type S. The steps should be always-exact multiples of oneunit, and T should be a \"discrete\" type, which cannot have values smaller than oneunit. For example, Integer or Date types would qualify, whereas Float64 would not (since this type can represent values smaller than oneunit(Float64). UnitRange, StepRange, and other types are subtypes of this.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/collections/#Base.AbstractUnitRange",
+    "page": "Collections and Data Structures",
+    "title": "Base.AbstractUnitRange",
+    "category": "type",
+    "text": "AbstractUnitRange{T} <: OrdinalRange{T, T}\n\nSupertype for ranges with a step size of oneunit(T) with elements of type T. UnitRange and other types are subtypes of this.\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/collections/#Base.StepRange",
+    "page": "Collections and Data Structures",
+    "title": "Base.StepRange",
+    "category": "type",
+    "text": "StepRange{T, S} <: OrdinalRange{T, S}\n\nRanges with elements of type T with spacing of type S. The step between each element is constant, and the range is defined in terms of a start and stop of type T and a step of type S. Neither T nor S should be floating point types. The syntax a:b:c with b > 1 and a, b, and c all integers creates a StepRange.\n\nExamples\n\njulia> collect(StepRange(1, Int8(2), 10))\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\njulia> typeof(StepRange(1, Int8(2), 10))\nStepRange{Int64,Int8}\n\njulia> typeof(1:3:6)\nStepRange{Int64,Int64}\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/collections/#Base.UnitRange",
+    "page": "Collections and Data Structures",
+    "title": "Base.UnitRange",
+    "category": "type",
+    "text": "UnitRange{T<:Real}\n\nA range parameterized by a start and stop of type T, filled with elements spaced by 1 from start until stop is exceeded. The syntax a:b with a and b both Integers creates a UnitRange.\n\nExamples\n\njulia> collect(UnitRange(2.3, 5.2))\n3-element Array{Float64,1}:\n 2.3\n 3.3\n 4.3\n\njulia> typeof(1:10)\nUnitRange{Int64}\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/collections/#Base.LinRange",
+    "page": "Collections and Data Structures",
+    "title": "Base.LinRange",
+    "category": "type",
+    "text": "LinRange{T}\n\nA range with len linearly spaced elements between its start and stop. The size of the spacing is controlled by len, which must be an Int.\n\nExamples\n\njulia> LinRange(1.5, 5.5, 9)\n9-element LinRange{Float64}:\n 1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0,5.5\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/collections/#Constructors-and-Types-1",
+    "page": "Collections and Data Structures",
+    "title": "Constructors and Types",
+    "category": "section",
+    "text": "Base.AbstractRange\nBase.OrdinalRange\nBase.AbstractUnitRange\nBase.StepRange\nBase.UnitRange\nBase.LinRange"
+},
+
+{
     "location": "base/collections/#Base.isempty",
     "page": "Collections and Data Structures",
     "title": "Base.isempty",
@@ -7045,7 +7101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
 },
 
 {
@@ -7589,7 +7645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.::",
     "category": "function",
-    "text": "(:)(start, [step], stop)\n\nRange operator. a:b constructs a range from a to b with a step size of 1, and a:s:b is similar but uses a step size of s.\n\n: is also used in indexing to select whole dimensions.\n\n\n\n\n\n"
+    "text": "(:)(start, [step], stop)\n\nRange operator. a:b constructs a range from a to b with a step size of 1 (a UnitRange) , and a:s:b is similar but uses a step size of s (a StepRange).\n\n: is also used in indexing to select whole dimensions.\n\n\n\n\n\n"
 },
 
 {
@@ -7597,7 +7653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.range",
     "category": "function",
-    "text": "range(start; length, stop, step=1)\n\nGiven a starting value, construct a range either by length or from start to stop, optionally with a given step (defaults to 1). One of length or stop is required. If length, stop, and step are all specified, they must agree.\n\nIf length and stop are provided and step is not, the step size will be computed automatically such that there are length linearly spaced elements in the range.\n\nExamples\n\njulia> range(1, length=100)\n1:100\n\njulia> range(1, stop=100)\n1:100\n\njulia> range(1, step=5, length=100)\n1:5:496\n\njulia> range(1, step=5, stop=100)\n1:5:96\n\n\n\n\n\n"
+    "text": "range(start; length, stop, step=1)\n\nGiven a starting value, construct a range either by length or from start to stop, optionally with a given step (defaults to 1, a UnitRange). One of length or stop is required.  If length, stop, and step are all specified, they must agree.\n\nIf length and stop are provided and step is not, the step size will be computed automatically such that there are length linearly spaced elements in the range (a LinRange).\n\nIf step and stop are provided and length is not, the overall range length will be computed automatically such that the elements are step spaced (a StepRange).\n\nExamples\n\njulia> range(1, length=100)\n1:100\n\njulia> range(1, stop=100)\n1:100\n\njulia> range(1, step=5, length=100)\n1:5:496\n\njulia> range(1, step=5, stop=100)\n1:5:96\n\n\n\n\n\n"
 },
 
 {
@@ -14965,7 +15021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Distributed Computing",
     "title": "Base.wait",
     "category": "function",
-    "text": "wait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\nwait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\n"
+    "text": "wait(r::Future)\n\nWait for a value to become available for the specified future.\n\n\n\n\n\nwait(r::RemoteChannel, args...)\n\nWait for a value to become available on the specified remote channel.\n\n\n\n\n\nwait([x])\n\nBlock the current task until some event occurs, depending on the type of the argument:\n\nChannel: Wait for a value to be appended to the channel.\nCondition: Wait for notify on a condition.\nProcess: Wait for a process or process chain to exit. The exitcode field of a process can be used to determine success or failure.\nTask: Wait for a Task to finish. If the task fails with an exception, the exception is propagated (re-thrown in the task that called wait).\nRawFD: Wait for changes on a file descriptor (see the FileWatching package).\n\nIf no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to schedule or yieldto.\n\nOften wait is called within a while loop to ensure a waited-for condition is met before proceeding.\n\n\n\n\n\n"
 },
 
 {
