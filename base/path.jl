@@ -214,12 +214,13 @@ function splitpath(p::String)
     out = String[]
     while true
         isempty(p) && break
-        ismount(p) && (push!(out, dirname(p)); break)
-        isempty(basename(p)) && (p = dirname(p); continue)  # Trailing '/'.
-        push!(out, basename(p))
-        p = dirname(p)
+        d, b = splitdir(p)
+        ismount(p) && (push!(out, d); break)
+        isempty(b) && (p = d; continue)  # Trailing '/'.
+        push!(out, b)
+        p = d
     end
-    return reverse(out)
+    return reverse!(out)
 end
 
 joinpath(a::AbstractString) = a
