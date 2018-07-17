@@ -6,6 +6,7 @@ Function sets `+refs/*:refs/*` refspecs and `mirror` flag for remote reference.
 """
 function mirror_callback(remote::Ptr{Ptr{Cvoid}}, repo_ptr::Ptr{Cvoid},
                          name::Cstring, url::Cstring, payload::Ptr{Cvoid})
+    ensure_initialized()
     # Create the remote with a mirroring url
     fetch_spec = "+refs/*:refs/*"
     err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
@@ -40,6 +41,7 @@ function is_passphrase_required(private_key::AbstractString)
 end
 
 function user_abort()
+    ensure_initialized()
     # Note: Potentially it could be better to just throw a Julia error.
     ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
@@ -48,6 +50,7 @@ function user_abort()
 end
 
 function prompt_limit()
+    ensure_initialized()
     ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, maximum number of prompts reached.")
@@ -55,6 +58,7 @@ function prompt_limit()
 end
 
 function exhausted_abort()
+    ensure_initialized()
     ccall((:giterr_set_str, :libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "All authentication methods have failed.")
@@ -62,6 +66,7 @@ function exhausted_abort()
 end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload, username_ptr)
+    ensure_initialized()
     cred = p.credential::SSHCredential
     revised = false
 
@@ -173,6 +178,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
 end
 
 function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload)
+    ensure_initialized()
     cred = p.credential::UserPasswordCredential
     revised = false
 
@@ -326,6 +332,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     # with the requested authentication method.
     if err == 0
         if p.explicit !== nothing
+            ensure_initialized()
             ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
                   "The explicitly provided credential is incompatible with the requested " *
                   "authentication methods.")
