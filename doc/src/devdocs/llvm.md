@@ -285,7 +285,7 @@ The GC root placement pass will treat the `jl_roots` operand bundle as if it wer
 a regular operand. However, as a final step, after the GC roots are inserted,
 it will drop the operand bundle to avoid confusing instruction selection.
 
-### Supporting pointer_from_objref
+### Supporting pointer\_from\_objref
 
 `pointer_from_objref` is special because it requires the user to take explicit
 control of GC rooting. By our above invariants, this function is illegal,
