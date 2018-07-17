@@ -198,11 +198,11 @@ function pathsep(paths::AbstractString...)
 end
 
 """
-    splitpath(path::AbstractString) -> (AbstractString, AbstractString, AbstractString...)
+    splitpath(path::AbstractString) -> [AbstractString, AbstractString, AbstractString...]
 
 Split a file path into all its path components. This is the opposite of
-`joinpath`. Returns a tuple of strings, one for each directory or file in the
-path, including the root directory if present.
+`joinpath`. Returns an array of substrings, one for each directory or file in
+the path, including the root directory if present.
 
 # Examples
 ```jldoctest
@@ -211,13 +211,15 @@ julia> splitpath("/home/myuser/example.jl")
 ```
 """
 function splitpath(p::AbstractString)
-    out = ()
+    out = AbstractString[]
     while true
-        isempty(p) && return out
-        ismount(p) && return (dirname(p), out...)
+        isempty(p) && break
+        ismount(p) && (push!(out, dirname(p)); break)
         isempty(basename(p)) && (p = dirname(p); continue)  # Trailing '/'.
-        (p, out) = dirname(p), (basename(p), out...)
+        push!(out, basename(p))
+        p = dirname(p)
     end
+    return reverse(out)
 end
 
 joinpath(a::AbstractString) = a
