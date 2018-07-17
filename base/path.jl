@@ -15,7 +15,8 @@ export
     relpath,
     splitdir,
     splitdrive,
-    splitext
+    splitext,
+    splitpath
 
 if Sys.isunix()
     const path_separator    = "/"
@@ -194,6 +195,29 @@ function pathsep(paths::AbstractString...)
         m !== nothing && return m.match[1:1]
     end
     return path_separator
+end
+
+"""
+    splitpath(path::AbstractString) -> (AbstractString, AbstractString, AbstractString...)
+
+Split a file path into all its path components. This is the opposite of
+`joinpath`. Returns a tuple of strings, one for each directory or file in the
+path, including the root directory if present.
+
+# Examples
+```jldoctest
+julia> splitpath("/home/myuser/example.jl")
+("/", "home", "myuser", "example.jl")
+```
+"""
+function splitpath(p::AbstractString)
+    out = ()
+    while true
+        isempty(p) && return out  # Finished p.
+        dirname(p) == p && return (dirname(p), out...)  # Reached the root.
+        isempty(basename(p)) && (p = dirname(p); continue)  # Trailing '/'.
+        (p, out) = dirname(p), (basename(p), out...)
+    end
 end
 
 joinpath(a::AbstractString) = a

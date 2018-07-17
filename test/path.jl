@@ -85,6 +85,17 @@
     end
     @test relpath(S(joinpath("foo","bar")), S("foo")) == "bar"
 
+    @testset "splitpath" begin
+        @test ("a", "b") == splitpath("a/b")
+        @test ("/", "a", "b") == splitpath("/a/b")
+        @test ("/",) == splitpath("/")
+        @test ("a",) == splitpath("a/")
+        @test ("a", "b") == splitpath("a/b/")
+        @test () == splitpath("")
+        @test ("/",) == splitpath("///")
+        @test ("/", "a", "b") == splitpath("///a///b///")
+    end
+
     @testset "splitting" begin
         @test joinpath(splitdir(S(homedir()))...) == homedir()
         @test string(splitdrive(S(homedir()))...) == homedir()
