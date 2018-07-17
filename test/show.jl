@@ -866,10 +866,17 @@ test_repr("(!).:~")
 test_repr("a.:(begin
         #= none:3 =#
     end)")
+test_repr("a.:(=)")
+test_repr("a.:(:)")
+test_repr("(:).a")
 @test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
 @test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
 @test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"
 @test repr(Expr(:.)) == ":(\$(Expr(:.)))"
+@test repr(GlobalRef(Main, :a)) == ":(Main.a)"
+@test repr(GlobalRef(Main, :in)) == ":(Main.in)"
+@test repr(GlobalRef(Main, :+)) == ":(Main.:+)"
+@test repr(GlobalRef(Main, :(:))) == ":(Main.:(:))"
 
 # Test compact printing of homogeneous tuples
 @test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"
