@@ -800,7 +800,8 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         if (!definition->isva || np <= nargs)
             return 0;
     }
-    else if (definition->isva ? np != nargs : np < nargs) {
+    else if (definition->isva ? np < nargs-1 : np != nargs) {
+    //else if (definition->isva ? np != nargs : np < nargs) {
         return 0;
     }
 
@@ -959,6 +960,14 @@ static jl_method_instance_t *cache_method(
         compilationsig = jl_apply_tuple_type(newparams);
         temp2 = (jl_value_t*)compilationsig;
     }
+#if 0
+    jl_typemap_entry_t *sf_ =
+        jl_typemap_assoc_by_type(definition->specializations, compilationsig, NULL, /*subtype*/0, /*offs*/0, world, /*max_world_mask*/0);
+    if (!sf_ || !jl_is_method_instance(sf_->func.value)) {
+        jl_static_show(JL_STDERR, (jl_value_t*)tt);
+        jl_printf(JL_STDERR, "\n");
+    }
+#endif
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)compilationsig, sparams, world);
 
     jl_tupletype_t *cachett = tt;
@@ -1097,13 +1106,6 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
     if (entry != NULL) {
         jl_method_t *m = entry->func.method;
         if (!jl_has_call_ambiguities((jl_value_t*)tt, m)) {
-#ifdef TRACE_COMPILE
-            if (!jl_has_free_typevars((jl_value_t*)tt)) {
-                jl_printf(JL_STDERR, "precompile(");
-                jl_static_show(JL_STDERR, (jl_value_t*)tt);
-                jl_printf(JL_STDERR, ")\n");
-            }
-#endif
             if (!mt_cache) {
                 intptr_t nspec = (mt == jl_type_type_mt ? m->nargs + 1 : mt->max_args + 2);
                 jl_compilation_sig(tt, env, m, nspec, &newparams);
@@ -1114,6 +1116,17 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
             }
             else {
                 nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, tt, m, world, env, allow_exec);
+#ifdef TRACE_COMPILE
+                //int64_t t0 = jl_hrtime();
+                jl_compile_method_internal(&nf, world);
+                if (!jl_has_free_typevars((jl_value_t*)tt)) {
+                    //jl_printf(JL_STDERR, "%.6f\t", (jl_hrtime()-t0)/1e9);
+                    jl_printf(JL_STDERR, "precompile(");
+                    //jl_static_show(JL_STDERR, (jl_value_t*)tt);
+                    jl_static_show(JL_STDERR, (jl_value_t*)nf->specTypes);
+                    jl_printf(JL_STDERR, ")\n");
+                }
+#endif
             }
         }
     }
