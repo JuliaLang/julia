@@ -260,7 +260,7 @@ space 0 and then decaying to the appropriate address space afterwards.
 ### Supporting [`ccall`](@ref)
 
 One important aspect missing from the discussion so far is the handling of
-[`ccall`](@ref). [`ccall`](@ref) has the peculiar feature that the location and 
+[`ccall`](@ref). [`ccall`](@ref) has the peculiar feature that the location and
 scope of a use do not coincide. As an example consider:
 ```julia
 A = randn(1024)
@@ -268,16 +268,16 @@ ccall(:foo, Cvoid, (Ptr{Float64},), A)
 ```
 In lowering, the compiler will insert a conversion from the array to the
 pointer which drops the reference to the array value. However, we of course
-need to make sure that the array does stay alive while we're doing the 
-[`ccall`](@ref). To understand how this is done, first recall the lowering of the 
+need to make sure that the array does stay alive while we're doing the
+[`ccall`](@ref). To understand how this is done, first recall the lowering of the
 above code:
 ```julia
 return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), :(:ccall), 1, :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(:ccall), 1, :(A)))), :(A)))
 ```
 The last `:(A)`, is an extra argument list inserted during lowering that informs
 the code generator which Julia level values need to be kept alive for the
-duration of this [`ccall`](@ref). We then take this information and represent 
-it in an "operand bundle" at the IR level. An operand bundle is essentially a fake 
+duration of this [`ccall`](@ref). We then take this information and represent
+it in an "operand bundle" at the IR level. An operand bundle is essentially a fake
 use that is attached to the call site. At the IR level, this looks like so:
 ```llvm
 call void inttoptr (i64 ... to void (double*)*)(double* %5) [ "jl_roots"(%jl_value_t addrspace(10)* %A) ]
@@ -288,7 +288,7 @@ it will drop the operand bundle to avoid confusing instruction selection.
 
 ### Supporting [`pointer_from_objref`](@ref)
 
-[`pointer_from_objref`](@ref) is special because it requires the user to take 
+[`pointer_from_objref`](@ref) is special because it requires the user to take
 explicit control of GC rooting. By our above invariants, this function is illegal,
 because it performs an address space cast from 10 to 0. However, it can be useful,
 in certain situations, so we provide a special intrinsic:
