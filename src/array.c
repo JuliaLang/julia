@@ -606,7 +606,7 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
         oldnbytes += oldlen;
     }
     int newbuf = 0;
-    if (a->flags.how == 2) {
+    if (a->flags.how == 2 && !is_discriminated_union) {
         // already malloc'd - use realloc
         char *olddata = (char*)a->data - oldoffsnb;
         a->data = jl_gc_managed_realloc(olddata, nbytes, oldnbytes,
