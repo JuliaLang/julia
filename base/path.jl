@@ -213,8 +213,8 @@ julia> splitpath("/home/myuser/example.jl")
 function splitpath(p::AbstractString)
     out = ()
     while true
-        isempty(p) && return out  # Finished p.
-        dirname(p) == p && return (dirname(p), out...)  # Reached the root.
+        isempty(p) && return out
+        ismount(p) && return (dirname(p), out...)
         isempty(basename(p)) && (p = dirname(p); continue)  # Trailing '/'.
         (p, out) = dirname(p), (basename(p), out...)
     end
