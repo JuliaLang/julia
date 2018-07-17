@@ -210,8 +210,8 @@ julia> splitpath("/home/myuser/example.jl")
 ("/", "home", "myuser", "example.jl")
 ```
 """
-function splitpath(p::AbstractString)
-    out = AbstractString[]
+function splitpath(p::String)
+    out = String[]
     while true
         isempty(p) && break
         ismount(p) && (push!(out, dirname(p)); break)
