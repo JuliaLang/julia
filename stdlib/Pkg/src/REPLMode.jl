@@ -289,6 +289,22 @@ function do_cmd(repl::REPL.AbstractREPL, input::String; do_rethrow=false)
     end
 end
 
+function enforce_argument_order(tokens::Vector{Token})
+    prev_token = nothing
+    function check_prev_token(valid_type::DataType, error_message::AbstractString)
+        prev_token isa valid_type || cmderror(error_message)
+    end
+
+    for token in tokens
+        if token isa VersionRange
+            check_prev_token(String, "package name/uuid must precede version spec `@$token`")
+        elseif token isa Rev
+            check_prev_token(String, "package name/uuid must precede rev spec `#$(token.rev)`")
+        end
+        prev_token = token
+    end
+end
+
 function do_cmd!(tokens::Vector{Token}, repl)
     cmd = env_opt = nothing
     while !isempty(tokens)
@@ -315,6 +331,9 @@ function do_cmd!(tokens::Vector{Token}, repl)
         isempty(tokens) && cmderror("expected a command to preview")
         cmd = popfirst!(tokens)
     end
+
+    enforce_argument_order(tokens)
+
     # Using invokelatest to hide the functions from inference.
     # Otherwise it would try to infer everything here.
     cmd.kind == CMD_INIT        ? Base.invokelatest(          do_init!, ctx, tokens) :
@@ -615,21 +634,14 @@ function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKin
     isempty(tokens) &&
         cmderror("`$mode` – list packages to $mode")
     pkgs = PackageSpec[]
-    prev_token_was_package = false
     while !isempty(tokens)
-        parsed_package = false
         token = popfirst!(tokens)
         if token isa String
             push!(pkgs, parse_package(token; add_or_develop=true))
             cmd == CMD_DEVELOP && pkgs[end].repo == nothing && (pkgs[end].repo = Types.GitRepo("", ""))
-            parsed_package = true
         elseif token isa VersionRange
-            prev_token_was_package ||
-                cmderror("package name/uuid must precede version spec `@$token`")
             pkgs[end].version = VersionSpec(token)
         elseif token isa Rev
-            prev_token_was_package ||
-                cmderror("package name/uuid must precede rev spec `#$(token.rev)`")
             # WE did not get the repo from the
             pkg = pkgs[end]
             if pkg.repo == nothing
@@ -640,7 +652,6 @@ function do_add_or_develop!(ctx::Context, tokens::Vector{Token}, cmd::CommandKin
         elseif token isa Option
             cmderror("`$mode` doesn't take options: $token")
         end
-        prev_token_was_package = parsed_package
     end
     return API.add_or_develop(ctx, pkgs, mode=mode)
 end
@@ -652,18 +663,13 @@ function do_up!(ctx::Context, tokens::Vector{Token})
     pkgs = PackageSpec[]
     mode = PKGMODE_PROJECT
     level = UPLEVEL_MAJOR
-    prev_token_was_package = false
     while !isempty(tokens)
-        parsed_package = false
         token = popfirst!(tokens)
         if token isa String
             push!(pkgs, parse_package(token))
             pkgs[end].version = level
             pkgs[end].mode = mode
-            parsed_package = true
         elseif token isa VersionRange
-            prev_token_was_package ||
-                cmderror("package name/uuid must precede version spec `@$token`")
             pkgs[end].version = VersionSpec(token)
         elseif token isa Option
             if token.kind in (OPT_PROJECT, OPT_MANIFEST)
@@ -674,23 +680,17 @@ function do_up!(ctx::Context, tokens::Vector{Token})
                 cmderror("invalid option for `up`: $(token)")
             end
         end
-        prev_token_was_package = parsed_package
     end
     API.up(ctx, pkgs; level=level, mode=mode)
 end
 
 function do_pin!(ctx::Context, tokens::Vector{Token})
     pkgs = PackageSpec[]
-    prev_token_was_package = false
     while !isempty(tokens)
         token = popfirst!(tokens)
-        parsed_package = false
         if token isa String
             push!(pkgs, parse_package(token))
-            parsed_package = true
         elseif token isa VersionRange
-            prev_token_was_package ||
-                cmderror("package name/uuid must precede version spec `@$token`")
             if token.lower != token.upper
                 cmderror("pinning a package requires a single version, not a versionrange")
             end
@@ -698,7 +698,6 @@ function do_pin!(ctx::Context, tokens::Vector{Token})
         else
             cmderror("free only takes a list of packages ")
         end
-        prev_token_was_package = parsed_package
     end
     API.pin(ctx, pkgs)
 end
