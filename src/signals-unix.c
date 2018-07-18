@@ -120,6 +120,11 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ctx->uc_mcontext.sp = rsp;
     ctx->uc_mcontext.regs[29] = 0; // Clear link register (x29)
     ctx->uc_mcontext.pc = (uintptr_t)fptr;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    ctx->uc_mcontext.mc_gpregs.gp_sp = rsp;
+    ctx->uc_mcontext.mc_gpregs.gp_x[29] = 0; // Clear link register (x29)
+    ctx->uc_mcontext.mc_gpregs.gp_elr = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     uintptr_t target = (uintptr_t)fptr;

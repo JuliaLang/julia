@@ -506,6 +506,7 @@ public:
     virtual ~ROAllocator() {}
     virtual void finalize()
     {
+#ifndef _CPU_AARCH64_
         for (auto &alloc: allocations) {
             // ensure the mapped pages are consistent
             sys::Memory::InvalidateInstructionCache(alloc.wr_addr,
@@ -513,6 +514,7 @@ public:
             sys::Memory::InvalidateInstructionCache(alloc.rt_addr,
                                                     alloc.sz);
         }
+#endif
         completed.clear();
         allocations.clear();
     }

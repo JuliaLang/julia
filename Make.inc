@@ -693,6 +693,15 @@ else
 ISX86:=0
 endif
 
+# clang needs this flag to compile CRC instructions (used conditionally with detection)
+ifneq (,$(findstring aarch64,$(ARCH)))
+ifeq ($(USECLANG),1)
+ifeq ($(MARCH),)
+JCFLAGS += -mcrc
+endif
+endif
+endif
+
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char

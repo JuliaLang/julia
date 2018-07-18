@@ -10,10 +10,14 @@
 #include <fstream>
 #include <algorithm>
 
-#if defined(_CPU_AARCH64_) || __GLIBC_PREREQ(2, 16)
-#  include <sys/auxv.h>
-#else
-#  define DYN_GETAUXVAL
+#if defined(__GLIBC_PREREQ)
+#  if defined(_CPU_AARCH64_) || __GLIBC_PREREQ(2, 16)
+#    include <sys/auxv.h>
+#  else
+#    define DYN_GETAUXVAL
+#  endif
+#elif defined(__FreeBSD__)
+#    include <sys/auxv.h>
 #endif
 
 namespace ARM {
@@ -498,7 +502,16 @@ static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 #  define AT_HWCAP2 26
 #endif
 
-#if defined(DYN_GETAUXVAL)
+#if defined(__FreeBSD__)
+static inline unsigned long jl_getauxval(unsigned long type)
+{
+    unsigned long val;
+    if (elf_aux_info((int)type, &val, sizeof(val)) != 0) {
+        return 0;
+    }
+    return val;
+}
+#elif defined(DYN_GETAUXVAL)
 static bool getauxval_dlsym(unsigned long type, unsigned long *val)
 {
     static auto getauxval_p = (unsigned long (*)(unsigned long))

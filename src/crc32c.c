@@ -324,6 +324,9 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
 }
 
 // HW feature detection
+#ifndef HWCAP_CRC32
+#define HWCAP_CRC32 (1<<7)
+#endif
 #  ifdef __ARM_FEATURE_CRC32
 // The C code is compiled with CRC32 being required. Skip runtime dispatch.
 JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
