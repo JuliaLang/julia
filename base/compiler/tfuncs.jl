@@ -191,9 +191,7 @@ add_tfunc(checked_smul_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 10)
     ## other, misc intrinsics ##
 add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF,
-          # TODO: Lower this inlining cost. We currently need to prevent inlining llvmcall
-          # to avoid issues with its IR.
-          (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 1000)
+          (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 10)
 cglobal_tfunc(@nospecialize(fptr)) = Ptr{Cvoid}
 cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
 cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
