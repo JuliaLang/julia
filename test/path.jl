@@ -106,8 +106,8 @@
             @test splitpath("C:\\\\") == ["C:\\"]
             @test splitpath("J:\\") == ["J:\\"]
             @test splitpath("C:") == ["C:"]
-            @test splitpath("C:a") == ["C:"]
-            @test splitpath("C:a\\b") == ["C:"]
+            @test splitpath("C:a") == ["C:", "a"]
+            @test splitpath("C:a\\b") == ["C:", "a", "b"]
 
             @test splitpath("a\\") == ["a"]
             @test splitpath("a\\\\b\\\\") == ["a","b"]
