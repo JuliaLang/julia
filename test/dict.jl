@@ -835,11 +835,13 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # WeakKeyDict hashes with object-id
     AA = copy(A)
-    wkd = WeakKeyDict(A=>1, AA=>2)
-    @test length(wkd)==2
-    kk = collect(keys(wkd))
-    @test kk[1]==kk[2]
-    @test kk[1]!==kk[2]
+    GC.@preserve A AA begin
+        wkd = WeakKeyDict(A=>1, AA=>2)
+        @test length(wkd)==2
+        kk = collect(keys(wkd))
+        @test kk[1]==kk[2]
+        @test kk[1]!==kk[2]
+    end
 
     # WeakKeyDict compares false to non-WeakKeyDict
     @test IdDict(A=>1)!=WeakKeyDict(A=>1)
