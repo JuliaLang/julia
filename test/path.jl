@@ -89,22 +89,21 @@
         @test ["a", "b", "c"] == splitpath(joinpath("a","b","c"))
         @test [] == splitpath("")
 
+        # Unix-style paths are understood by all systems.
+        @test ["/", "a", "b"] == splitpath("/a/b")
+        @test ["/"] == splitpath("/")
+        @test ["a"] == splitpath("a/")
+        @test ["a", "b"] == splitpath("a/b/")
+        @test ["/"] == splitpath("///")
+        @test ["/", "a", "b"] == splitpath("///a///b///")
+
         if Sys.iswindows()
-            @test ["C:", "a", "b", "c"] == splitpath("C:\\\\a\\b\\c")
-            @test ["C:"] == splitpath("C:\\\\")
-            @test ["J:"] == splitpath("J:\\\\")
+            @test ["C:\\", "a", "b", "c"] == splitpath("C:\\\\a\\b\\c")
+            @test ["C:\\"] == splitpath("C:\\\\")
+            @test ["J:\\"] == splitpath("J:\\\\")
             @test ["a"] == splitpath("a\\")
             @test ["a","b"] == splitpath("a\\\\b\\\\")
-            # TODO: what should this do for a leading slash?
-            # (what does dirname() do for a leading slash?)
-            # @test ["\\", "a","b"] == splitpath("\\a\\b\\")
-        else
-            @test ["/", "a", "b"] == splitpath("/a/b")
-            @test ["/"] == splitpath("/")
-            @test ["a"] == splitpath("a/")
-            @test ["a", "b"] == splitpath("a/b/")
-            @test ["/"] == splitpath("///")
-            @test ["/", "a", "b"] == splitpath("///a///b///")
+            @test ["\\", "a","b"] == splitpath("\\a\\b\\")
         end
     end
 
