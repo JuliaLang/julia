@@ -214,13 +214,13 @@ function splitpath(p::String)
     out = String[]
     while !isempty(p)
         dir, base = splitdir(p)
-        dir == p && (push!(out, dir); break)  # Reached root node.
+        dir == p && (pushfirst!(out, dir); break)  # Reached root node.
         if !isempty(base)  # Skip trailing '/' in basename
-            push!(out, base)
+            pushfirst!(out, base)
         end
-        p = dir;
+        p = dir
     end
-    return reverse!(out)
+    return out
 end
 
 joinpath(a::AbstractString) = a

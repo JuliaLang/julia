@@ -86,34 +86,37 @@
     @test relpath(S(joinpath("foo","bar")), S("foo")) == "bar"
 
     @testset "splitpath" begin
-        @test ["a", "b", "c"] == splitpath(joinpath("a","b","c"))
-        @test [] == splitpath("")
+        @test splitpath(joinpath("a","b","c")) == ["a", "b", "c"]
+        @test splitpath("") == []
 
-        @test ["cats are", "gr8t"] == splitpath(joinpath("cats are", "gr8t"))
-        @test ["  ", " "] == splitpath(joinpath("  ", " "))
+        @test splitpath(joinpath("cats are", "gr8t")) == ["cats are", "gr8t"]
+        @test splitpath(joinpath("  ", " ")) == ["  ", " "]
 
         # Unix-style paths are understood by all systems.
-        @test ["/", "a", "b"] == splitpath("/a/b")
-        @test ["/"] == splitpath("/")
-        @test ["a"] == splitpath("a/")
-        @test ["a", "b"] == splitpath("a/b/")
-        @test ["a.dir", "b.txt"] == splitpath("a.dir/b.txt")
-        @test ["/"] == splitpath("///")
-        @test ["/", "a", "b"] == splitpath("///a///b///")
+        @test splitpath("/a/b") == ["/", "a", "b"]
+        @test splitpath("/") == ["/"]
+        @test splitpath("a/") == ["a"]
+        @test splitpath("a/b/") == ["a", "b"]
+        @test splitpath("a.dir/b.txt") == ["a.dir", "b.txt"]
+        @test splitpath("///") == ["/"]
+        @test splitpath("///a///b///") == ["/", "a", "b"]
 
         if Sys.iswindows()
-            @test ["C:\\", "a", "b", "c"] == splitpath("C:\\\\a\\b\\c")
-            @test ["C:\\"] == splitpath("C:\\\\")
-            @test ["J:\\"] == splitpath("J:\\")
-            @test ["C:"] == splitpath("C:")
-            @test ["a"] == splitpath("a\\")
-            @test ["a","b"] == splitpath("a\\\\b\\\\")
-            @test ["a.dir", "b.txt"] == splitpath("a.dir\\b.txt")
-            @test ["\\", "a","b"] == splitpath("\\a\\b\\")
+            @test splitpath("C:\\\\a\\b\\c") == ["C:\\", "a", "b", "c"]
+            @test splitpath("C:\\\\") == ["C:\\"]
+            @test splitpath("J:\\") == ["J:\\"]
+            @test splitpath("C:") == ["C:"]
+            @test splitpath("C:a") == ["C:"]
+            @test splitpath("C:a\\b") == ["C:"]
 
-            @test ["/", "a", "b", "c", "d", "e"] == splitpath("/a/b\\c/d\\\\e")
-            @test ["/"] == splitpath("/\\/\\")
-            @test ["\\","a","b"] == splitpath("\\/\\a/\\//b")
+            @test splitpath("a\\") == ["a"]
+            @test splitpath("a\\\\b\\\\") == ["a","b"]
+            @test splitpath("a.dir\\b.txt") == ["a.dir", "b.txt"]
+            @test splitpath("\\a\\b\\") == ["\\", "a","b"]
+
+            @test splitpath("/a/b\\c/d\\\\e") == ["/", "a", "b", "c", "d", "e"]
+            @test splitpath("/\\/\\") == ["/"]
+            @test splitpath("\\/\\a/\\//b") == ["\\","a","b"]
         end
     end
 
