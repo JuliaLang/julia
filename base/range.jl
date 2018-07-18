@@ -498,6 +498,11 @@ length(r::OneTo) = unsafe_length(r)
 length(r::StepRangeLen) = r.len
 length(r::LinRange) = r.len
 
+# Needed to fold the `firstindex` call in SimdLoop.simd_index
+firstindex(::UnitRange) = 1
+firstindex(::StepRange) = 1
+firstindex(::LinRange) = 1
+
 function length(r::StepRange{T}) where T<:Union{Int,UInt,Int64,UInt64}
     isempty(r) && return zero(T)
     if r.step > 1
