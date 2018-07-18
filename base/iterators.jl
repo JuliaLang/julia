@@ -224,6 +224,7 @@ pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 pairs(tuple::Tuple) = Pairs(tuple, keys(tuple))
 pairs(nt::NamedTuple) = Pairs(nt, keys(nt))
+pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
 length(v::Pairs) = length(v.itr)

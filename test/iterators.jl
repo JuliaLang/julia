@@ -541,3 +541,9 @@ end
 	@test !isempty(a)
     end
 end
+
+@testset "pair for Svec" begin
+    ps = pairs(Core.svec(:a, :b))
+    @test ps isa Iterators.Pairs
+    @test collect(ps) == [1 => :a, 2 => :b]
+end
