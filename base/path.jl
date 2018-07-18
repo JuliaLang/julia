@@ -207,18 +207,18 @@ the path, including the root directory if present.
 # Examples
 ```jldoctest
 julia> splitpath("/home/myuser/example.jl")
-("/", "home", "myuser", "example.jl")
+["/", "home", "myuser", "example.jl"]
 ```
 """
 function splitpath(p::String)
     out = String[]
-    while true
-        isempty(p) && break
-        d, b = splitdir(p)
-        ismount(p) && (push!(out, d); break)
-        isempty(b) && (p = d; continue)  # Trailing '/'.
-        push!(out, b)
-        p = d
+    while !isempty(p)
+        dir, base = splitdir(p)
+        dir == p && (push!(out, dir); break)  # Reached root node.
+        if !isempty(base)  # Skip trailing '/' in basename
+            push!(out, base)
+        end
+        p = dir;
     end
     return reverse!(out)
 end
