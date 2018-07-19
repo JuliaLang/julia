@@ -432,15 +432,13 @@ end
 
 @inline function exp2_kernel(k, i0, z, x::Float32)::Float32
 
-   #Compute r = exp2(y) = exp2ft[i0] * p(z)
+    #Compute r = exp2(y) = exp2ft[i0] * p(z)
     @inbounds tv = exp2f_table[i0]
-    u = tv * z
-    tv = tv + u * @horner(z, 0.6931472f0, 0.2402265f0) +
-    u * (z * z) * @horner(z, 0.05550541f0, 0.009618355f0)
+    tv += tv * z * @horner(z, 0.6931472f0, 0.2402265f0, 0.05550541f0, 0.009618355f0)
 
-   # Scale by 2^(k>>20)
-   reinterpret(Float64, (UInt64((0x3ff00000 + k)) <<32 ) | 0)
-   return tv * reinterpret(Float64, (UInt64((0x3ff00000 + k)) <<32 ) | 0)
+    # Scale by 2^(k>>20)
+    reinterpret(Float64, (UInt64((0x3ff00000 + k)) <<32 ) | 0)
+    return tv * reinterpret(Float64, (UInt64((0x3ff00000 + k)) <<32 ) | 0)
 end
 
 exp2(x::Real) = exp2(float(x))
