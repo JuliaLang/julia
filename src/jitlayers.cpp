@@ -410,6 +410,7 @@ void JuliaOJIT::DebugObjectRegistrar::registerObject(RTDyldObjHandleT H, const O
         NotifyGDB(SavedObject);
     }
 
+    JIT.NotifyFinalizer(*Object, *LO);
     SavedObjects.push_back(std::move(SavedObject));
 
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object,
@@ -681,7 +682,16 @@ Function *JuliaOJIT::FindFunctionNamed(const std::string &Name)
 
 void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 {
-    // TODO
+    if (!L)
+        return;
+    EventListeners.push_back(L);
+}
+
+void JuliaOJIT::NotifyFinalizer(const object::ObjectFile &Obj,
+                                const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
+{
+    for (auto &Listener : EventListeners)
+        Listener->NotifyObjectEmitted(Obj, LoadedObjectInfo);
 }
 
 const DataLayout& JuliaOJIT::getDataLayout() const

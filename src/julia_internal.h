@@ -473,6 +473,9 @@ extern char jl_using_intel_jitevents;
 #ifdef JL_USE_OPROFILE_JITEVENTS
 extern char jl_using_oprofile_jitevents;
 #endif
+#ifdef JL_USE_PERF_JITEVENTS
+extern char jl_using_perf_jitevents;
+#endif
 extern size_t jl_arr_xtralloc_limit;
 
 void jl_init_types(void);
