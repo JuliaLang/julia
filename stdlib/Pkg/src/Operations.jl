@@ -534,6 +534,9 @@ function apply_versions(ctx::Context, pkgs::Vector{PackageSpec}, hashes::Dict{UU
                 end
                 try
                     success = install_archive(urls[pkg.uuid], hashes[pkg.uuid], path)
+                    if ctx.use_only_tarballs_for_downloads && !success
+                        cmderror("failed to get tarball from $(urls[pkg.uuid])")
+                    end
                     put!(results, (pkg, success, path))
                 catch err
                     put!(results, (pkg, err, catch_backtrace()))

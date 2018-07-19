@@ -302,6 +302,19 @@ temp_pkg_dir() do project_path
     end
 end
 
+temp_pkg_dir() do project_path
+    @testset "libgit2 downloads" begin
+        Pkg.add(TEST_PKG.name; use_libgit2_for_all_downloads=true)
+        @test haskey(Pkg.installed(), TEST_PKG.name)
+        Pkg.rm(TEST_PKG.name)
+    end
+    @testset "tarball downloads" begin
+        Pkg.add("JSON"; use_only_tarballs_for_downloads=true)
+        @test haskey(Pkg.installed(), "JSON")
+        Pkg.rm("JSON")
+    end
+end
+
 @testset "parse package url win" begin
     @test typeof(Pkg.REPLMode.parse_package("https://github.com/abc/ABC.jl"; add_or_develop=true)) == PackageSpec
 end

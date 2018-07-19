@@ -325,6 +325,7 @@ Base.@kwdef mutable struct Context
     env::EnvCache = EnvCache()
     preview::Bool = false
     use_libgit2_for_all_downloads::Bool = false
+    use_only_tarballs_for_downloads::Bool = false
     num_concurrent_downloads::Int = 8
     graph_verbose::Bool = false
     stdlibs::Dict{UUID,String} = gather_stdlib_uuids()
