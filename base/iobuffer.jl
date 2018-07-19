@@ -16,6 +16,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
+        @assert !has_offset_axes(data)
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
     end
 end
@@ -117,7 +118,7 @@ function IOBuffer(;
         append=flags.append,
         truncate=flags.truncate,
         maxsize=maxsize)
-    buf.data[:] = 0
+    fill!(buf.data, 0)
     return buf
 end
 
@@ -167,11 +168,12 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
 end
 
 function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
+    @assert !has_offset_axes(a)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isbits(T) && isa(a,Array)
+    if isbitstype(T) && isa(a,Array)
         nb = UInt(nel * sizeof(T))
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
@@ -246,7 +248,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     if n > length(io.data)
         resize!(io.data, n)
     end
-    io.data[io.size+1:n] = 0
+    io.data[io.size+1:n] .= 0
     io.size = n
     io.ptr = min(io.ptr, n+1)
     ismarked(io) && io.mark > n && unmark(io)
@@ -401,6 +403,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
 end
 
 function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
+    @assert !has_offset_axes(a)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
@@ -435,22 +438,19 @@ read(io::GenericIOBuffer) = read!(io,StringVector(bytesavailable(io)))
 readavailable(io::GenericIOBuffer) = read(io)
 read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, bytesavailable(io))))
 
-function findfirst(delim::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, buf::IOBuffer)
+function occursin(delim::UInt8, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)
-    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim.x,bytesavailable(buf))
-    q == C_NULL && return nothing
-    return Int(q-p+1)
+    q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,bytesavailable(buf))
+    return q != C_NULL
 end
 
-function findfirst(isdelim::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, buf::GenericIOBuffer)
+function occursin(delim::UInt8, buf::GenericIOBuffer)
     data = buf.data
     for i = buf.ptr:buf.size
         @inbounds b = data[i]
-        if isdelim(b)
-            return i - buf.ptr + 1
-        end
+        b == delim && return true
     end
-    return nothing
+    return false
 end
 
 function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)

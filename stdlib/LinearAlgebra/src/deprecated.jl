@@ -6,46 +6,54 @@ using Base: @deprecate, depwarn
 
 @deprecate cond(F::LinearAlgebra.LU, p::Integer) cond(convert(AbstractArray, F), p)
 
+# deprecate vecnorm in favor of norm
+@deprecate vecnorm norm
+
+# deprecate vecdot in favor of dot
+@deprecate vecdot dot
+
 # PR #22188
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val(false))
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val(false))
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholfact(Hermitian(A, uplo))
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val(true), tol = tol)
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val(true), tol = tol)
+export cholfact, cholfact!
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholesky!(Hermitian(A, uplo), Val(false))
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholesky!(Hermitian(A, uplo))
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholesky(Hermitian(A, uplo), Val(false))
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholesky(Hermitian(A, uplo))
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholesky!(Hermitian(A, uplo), Val(true), tol = tol)
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholesky(Hermitian(A, uplo), Val(true), tol = tol)
 
 # PR #22245
 @deprecate isposdef(A::AbstractMatrix, UL::Symbol) isposdef(Hermitian(A, UL))
 @deprecate isposdef!(A::StridedMatrix, UL::Symbol) isposdef!(Hermitian(A, UL))
 
 # bkfact
-import .LinearAlgebra: bkfact, bkfact!
+export bkfact, bkfact!
 function bkfact(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A), rook::Bool = false)
     depwarn(string("`bkfact` with uplo and symmetric arguments is deprecated, ",
-        "use `bkfact($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
+        "use `bunchkaufman($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
         :bkfact)
-    return bkfact(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
+    return bunchkaufman(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
 end
 function bkfact!(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A), rook::Bool = false)
     depwarn(string("`bkfact!` with uplo and symmetric arguments is deprecated, ",
-        "use `bkfact!($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
+        "use `bunchkaufman!($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))` instead."),
         :bkfact!)
-    return bkfact!(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
+    return bunchkaufman!(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
 end
 
+export lufact!
 @deprecate sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatrix} sqrtm(A, Val(realmatrix))
-@deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lufact(A, Val(false))
-@deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lufact(A, Val(true))
-@deprecate lufact!(A::AbstractMatrix, ::Type{Val{false}}) lufact!(A, Val(false))
-@deprecate lufact!(A::AbstractMatrix, ::Type{Val{true}}) lufact!(A, Val(true))
-@deprecate qrfact(A::AbstractMatrix, ::Type{Val{false}}) qrfact(A, Val(false))
-@deprecate qrfact(A::AbstractMatrix, ::Type{Val{true}}) qrfact(A, Val(true))
-@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{false}}) qrfact!(A, Val(false))
-@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{true}}) qrfact!(A, Val(true))
-@deprecate cholfact(A::AbstractMatrix, ::Type{Val{false}}) cholfact(A, Val(false))
-@deprecate cholfact(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact(A, Val(true); tol = tol)
-@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{false}}) cholfact!(A, Val(false))
-@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact!(A, Val(true); tol = tol)
+@deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lu(A, Val(false))
+@deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lu(A, Val(true))
+@deprecate lufact!(A::AbstractMatrix, ::Type{Val{false}}) lu!(A, Val(false))
+@deprecate lufact!(A::AbstractMatrix, ::Type{Val{true}}) lu!(A, Val(true))
+@deprecate qrfact(A::AbstractMatrix, ::Type{Val{false}}) qr(A, Val(false))
+@deprecate qrfact(A::AbstractMatrix, ::Type{Val{true}}) qr(A, Val(true))
+@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{false}}) qr!(A, Val(false))
+@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{true}}) qr!(A, Val(true))
+@deprecate cholfact(A::AbstractMatrix, ::Type{Val{false}}) cholesky(A, Val(false))
+@deprecate cholfact(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholesky(A, Val(true); tol = tol)
+@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{false}}) cholesky!(A, Val(false))
+@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholesky!(A, Val(true); tol = tol)
 
 # PR #22703
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
@@ -56,7 +64,8 @@ end
 # also uncomment constructor tests in test/linalg/bidiag.jl
 function Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T,S}
     depwarn(string("`Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T, S}`",
-        " is deprecated, manually convert both vectors to the same type instead."), :Bidiagonal)
+        " is deprecated, use `Bidiagonal{R}(dv, ev, uplo)` or `Bidiagonal{R,V}(dv, ev, uplo)` instead,",
+        " or convert both vectors to the same type manually."), :Bidiagonal)
     R = promote_type(T, S)
     Bidiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev), uplo)
 end
@@ -65,7 +74,8 @@ end
 # also uncomment constructor tests in test/linalg/tridiag.jl
 function SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) where {T,S}
     depwarn(string("`SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) ",
-        "where {T, S}` is deprecated, convert both vectors to the same type instead."), :SymTridiagonal)
+        "where {T, S}` is deprecated, use `SymTridiagonal{R}(dv, ev)` or `SymTridiagonal{R,V}(dv, ev)` instead,",
+        " or convert both vectors to the same type manually."), :SymTridiagonal)
     R = promote_type(T, S)
     SymTridiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev))
 end
@@ -74,7 +84,8 @@ end
 # also uncomment constructor tests in test/linalg/tridiag.jl
 function Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) where {Tl,Td,Tu}
     depwarn(string("`Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) ",
-        "where {Tl, Td, Tu}` is deprecated, convert all vectors to the same type instead."), :Tridiagonal)
+        "where {Tl, Td, Tu}` is deprecated, use `Tridiagonal{T}(dl, d, du)` or `Tridiagonal{T,V}(dl, d, du)` instead,",
+        " or convert all three vectors to the same type manually."), :Tridiagonal)
     Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
 end
 
@@ -178,6 +189,7 @@ _gradient(F::Vector, h::BitVector) = _gradient(F, Array(h))
 _gradient(F::BitVector, h::Vector) = _gradient(Array(F), h)
 _gradient(F::BitVector, h::BitVector) = _gradient(Array(F), Array(h))
 function _gradient(F::AbstractVector, h::Vector)
+    @assert !has_offset_axes(F)
     n = length(F)
     T = typeof(oneunit(eltype(F))/oneunit(eltype(h)))
     g = similar(F, T)
@@ -331,7 +343,7 @@ end
 # (3) stdlib/LinearAlgebra/src/lq.jl
 
 
-@deprecate chol!(x::Number, uplo) chol(x) false
+@deprecate chol!(x::Number, uplo) sqrt(x) false
 
 ### deprecations for lazier, less jazzy linalg transition in the next several blocks ###
 
@@ -542,10 +554,11 @@ IndexStyle(::Type{<:RowVector}) = IndexLinear()
 
 # Generic behavior
 @inline function *(rowvec::RowVector, vec::AbstractVector)
+    @assert !has_offset_axes(rowvec, vec)
     if length(rowvec) != length(vec)
         throw(DimensionMismatch("A has dimensions $(size(rowvec)) but B has dimensions $(size(vec))"))
     end
-    sum(@inbounds(return rowvec[i]*vec[i]) for i = 1:length(vec))
+    sum(@inbounds(rowvec[i]*vec[i]) for i = 1:length(vec))
 end
 @inline *(rowvec::RowVector, mat::AbstractMatrix) = rvtranspose(transpose(mat) * rvtranspose(rowvec))
 *(::RowVector, ::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
@@ -630,7 +643,7 @@ pinv(v::RowVector, tol::Real=0) = rvadjoint(pinv(rvadjoint(v), tol))
 /(A::Matrix, B::RowVector) = rvadjoint(rvadjoint(B) \ adjoint(A))
 
 
-# dismabiguation methods
+# disambiguation methods
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Transpose{<:Any,<:RowVector}) = adjoint(A.parent) * B
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Transpose{<:Any,<:RowVector}) = A * rvtranspose(B.parent)
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:RowVector}) = transpose(A.parent) * B
@@ -1102,7 +1115,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
 
         # Matrix multiplication
         @deprecate A_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat}     lmul!(A, B)
-        @deprecate A_mul_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat}     lmul!(A, B)
+        @deprecate A_mul_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat}     rmul!(A, B)
 
         @deprecate At_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat}       lmul!(transpose(A), B)
         @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex}     lmul!(adjoint(A), B)
@@ -1260,3 +1273,323 @@ end
 @deprecate scale!(C::AbstractMatrix, a::AbstractVector, B::AbstractMatrix) mul!(C, Diagonal(a), B)
 
 Base.@deprecate_binding trace tr
+
+# deprecate lufact to lu
+export lufact
+@deprecate(lufact(S::LU), lu(S))
+@deprecate(lufact(x::Number), lu(x))
+@deprecate(lufact(A::AbstractMatrix{T}) where T, lu(A))
+@deprecate(lufact(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T, lu(A, pivot))
+@deprecate(lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T<:AbstractFloat}, lu(A, pivot))
+
+# deprecate schurfact to schur
+export schurfact
+@deprecate(schurfact(A::StridedMatrix{<:BlasFloat}), schur(A))
+@deprecate(schurfact(A::StridedMatrix{T}) where T, schur(A))
+@deprecate(schurfact(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat}, schur(A))
+@deprecate(schurfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}, schur(A))
+
+# deprecate lqfact to lq
+export lqfact
+@deprecate lqfact(A::StridedMatrix{<:BlasFloat}) lq(A)
+@deprecate lqfact(x::Number) lq(x)
+
+# deprecate qrfact to qr
+export qrfact
+@deprecate(qrfact(x::Number), qr(x))
+@deprecate(qrfact(v::AbstractVector), qr(v))
+@deprecate(qrfact(A::AbstractMatrix{T}) where T, qr(A))
+@deprecate(qrfact(A::AbstractMatrix{T}, arg) where T, qr(A, arg))
+
+# deprecate ldltfact to ldlt
+export ldltfact
+@deprecate(ldltfact(M::SymTridiagonal{T}) where T, ldlt(M))
+
+# deprecate lufact! to lu!
+# lufact! exported in a deprecation above
+@deprecate(lufact!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T<:BlasFloat, lufact!(A, pivot))
+@deprecate(lufact!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
+@deprecate(lufact!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true)), lu!(A, pivot))
+@deprecate(lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}, lu!(A, pivot))
+
+# deprecate schurfact! to schur!
+export schurfact!
+@deprecate(schurfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}, schur!(A, B))
+@deprecate(schurfact!(A::StridedMatrix{<:BlasFloat}), schur!(A))
+
+# deprecate lqfact! to lq!
+export lqfact!
+@deprecate(lqfact!(A::StridedMatrix{<:BlasFloat}), lq!(A))
+
+# deprecate qrfact! to qr!
+export qrfact!
+@deprecate(qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}), qr!(A, Val(false)))
+@deprecate(qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{true}), qr!(A, Val(true)))
+@deprecate(qrfact!(A::StridedMatrix{<:BlasFloat}), qr!(A))
+@deprecate(qrfact!(A::StridedMatrix, ::Val{false}), qr!(A, Val(false)))
+@deprecate(qrfact!(A::StridedMatrix, ::Val{true}), qr!(A, Val(true)))
+@deprecate(qrfact!(A::StridedMatrix), qr!(A))
+
+# deprecate ldltfact! to ldlt!
+export ldltfact!
+@deprecate(ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}, ldlt!(S))
+
+# deprecate svdfact! to svd!
+export svdfact!
+@deprecate(svdfact!(M::Bidiagonal{<:BlasReal}; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd!(M; full=full, thin=thin))
+@deprecate(svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T<:BlasFloat, svd!(A; full=full, thin=thin))
+@deprecate(svdfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat, svd!(A, B))
+@deprecate(svdfact!(A::AbstractTriangular), svd!(A))
+
+# deprecate svdfact to svd
+export svdfact
+@deprecate(svdfact(D::Diagonal), svd(D))
+@deprecate(svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Nothing} = nothing) where T, svd(A; full=full, thin=thin))
+@deprecate(svdfact(x::Number; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd(x; full=full, thin=thin))
+@deprecate(svdfact(x::Integer; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd(x; full=full, thin=thin))
+@deprecate(svdfact(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}, svd(A, B))
+@deprecate(svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}, svd(A, B))
+@deprecate(svdfact(x::Number, y::Number), svd(x, y))
+@deprecate(svdfact(M::Bidiagonal; full::Bool = false, thin::Union{Bool,Nothing} = nothing), svd(M; full=full, thin=thin))
+@deprecate(svdfact(A::AbstractTriangular), svd(A))
+
+# deprecate bkfact to bunchkaufman
+# bkfact exported in a deprecation above
+@deprecate(bkfact(A::AbstractMatrix{T}, rook::Bool=false) where {T}, bunchkaufman(A, rook))
+
+# deprecate bkfact! to bunchkaufman!
+export bkfact!
+@deprecate(bkfact!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false), bunchkaufman!(A, rook))
+@deprecate(bkfact!(A::Hermitian{T,S} where {T<:BlasComplex,S<:StridedMatrix{T}}, rook::Bool = false), bunchkaufman!(A, rook))
+@deprecate(bkfact!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false), bunchkaufman!(A, rook))
+
+# deprecate hessfact to hessenberg
+export hessfact
+@deprecate(hessfact(A::StridedMatrix{<:BlasFloat}), hessenberg(A))
+@deprecate(hessfact(A::StridedMatrix{T}) where T, hessenberg(A))
+
+# deprecate hessfact! to hessenberg!
+export hessenberg!
+@deprecate(hessfact!(A::StridedMatrix{<:BlasFloat}), hessenberg!(A))
+
+# deprecate eigfact to eigen
+export eigfact
+@deprecate(eigfact(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T, eigen(A; permute=permute, scale=scale))
+@deprecate(eigfact(x::Number), eigen(x))
+@deprecate(eigfact(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}, eigen(A, B))
+@deprecate(eigfact(A::Number, B::Number), eigen(A, B))
+
+@deprecate(eigfact(A::SymTridiagonal{T}) where T, eigen(A))
+@deprecate(eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T, eigen(A))
+@deprecate(eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T, eigen(A))
+
+@deprecate(eigfact(M::Bidiagonal), eigen(M))
+
+@deprecate(eigfact(A::RealHermSymComplexHerm), eigen(A))
+@deprecate(eigfact(A::RealHermSymComplexHerm, irange::UnitRange), eigen(A, irange))
+@deprecate(eigfact(A::RealHermSymComplexHerm, vl::Real, vh::Real), eigen(A, vl, vh))
+@deprecate(eigfact(A::AbstractTriangular), eigen(A))
+@deprecate(eigfact(D::Diagonal; permute::Bool=true, scale::Bool=true), eigen(D; permute=permute, scale=scale))
+
+# deprecate eigfact! to eigen!
+export eigfact!
+@deprecate(eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasReal, eigen!(A; permute=permute, scale=scale))
+@deprecate(eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasComplex, eigen!(A; permute=permute, scale=scale))
+@deprecate(eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal, eigen!(A, B))
+@deprecate(eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasComplex, eigen!(A, B))
+
+@deprecate(eigfact!(A::SymTridiagonal{<:BlasReal}), eigen!(A))
+@deprecate(eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange), eigen!(A, irange))
+@deprecate(eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real), eigen!(A, vl, vu))
+
+@deprecate(eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}), eigen!(A))
+@deprecate(eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange), eigen!(A, irange))
+@deprecate(eigfact!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal}, eigen!(A, vl, vh))
+@deprecate(eigfact!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix}, eigen!(A, B))
+@deprecate(eigfact!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix}, eigen!(A, B))
+
+# deprecate cholfact to cholesky
+# cholfact exported from deprecation above
+@deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{false}=Val(false)), cholesky(A, Val(false)))
+@deprecate(cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0), cholesky(A, Val(true); tol=tol))
+@deprecate(cholfact(x::Number, uplo::Symbol=:U), cholesky(x, uplo))
+
+# deprecate cholfact! to cholesky!
+# cholfact! exported from deprecation above
+@deprecate(cholfact!(A::RealHermSymComplexHerm, ::Val{false}=Val(false)), cholesky!(A, Val(false)))
+@deprecate(cholfact!(A::StridedMatrix, ::Val{false}=Val(false)), cholesky!(A, Val(false)))
+@deprecate(cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+@deprecate(cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+@deprecate(cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0), cholesky!(A, Val(true); tol=tol))
+
+# deprecate chol[!] to cholesky[!] with getproperty
+@deprecate(chol(A::RealHermSymComplexHerm), cholesky(A).U)
+@deprecate(chol(A::AbstractMatrix), cholesky(A).U)
+@deprecate(chol(x::Number, args...), sqrt(x))
+@deprecate(chol(J::UniformScaling), UniformScaling(sqrt(J.λ)))
+@deprecate(chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}), cholesky!(A).U, false)
+@deprecate(chol!(A::StridedMatrix), cholesky!(A).U, false)
+
+# deprecate eig in favor of eigen and destructuring via iteration
+# deprecate eig(...) in favor of eigfact and factorization destructuring
+export eig
+function eig(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+    depwarn(string("`eig(A[, permute, scale])` has been deprecated in favor of ",
+        "`eigen(A[, permute, scale])`. Whereas `eig(A[, permute, scale])` ",
+        "returns a tuple of arrays, `eigen(A[, permute, scale])` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigen(A[, permute, scale])...,)`. But going forward, consider ",
+        "using the direct result of `eigen(A[, permute, scale])` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigen(A[, permute, scale])`) ",
+        "or as an `Eigen` object (`X = eigen(A[, permute, scale])`)."), :eig)
+    return (eigen(A; permute=permute, scale=scale)...,)
+end
+function eig(A::AbstractMatrix, args...)
+    depwarn(string("`eig(A, args...)` has been deprecated in favor of ",
+        "`eigen(A, args...)`. Whereas `eig(A, args....)` ",
+        "returns a tuple of arrays, `eigen(A, args...)` returns ",
+        "an `Eigen` object. So for a direct replacement, use ",
+        "`(eigen(A, args...)...,)`. But going forward, consider ",
+        "using the direct result of `eigen(A, args...)` instead, ",
+        "either destructured into its components ",
+        "(`vals, vecs = eigen(A, args...)`) ",
+        "or as an `Eigen` object (`X = eigen(A, args...)`)."), :eig)
+    return (eigen(A, args...)...,)
+end
+eig(A::AbstractMatrix, B::AbstractMatrix) = _geneig(A, B)
+eig(A::Number, B::Number) = _geneig(A, B)
+function _geneig(A, B)
+    depwarn(string("`eig(A::AbstractMatrix, B::AbstractMatrix)` and ",
+    "`eig(A::Number, B::Number)` have been deprecated in favor of ",
+    "`eigen(A, B)`. Whereas the former each return a tuple of arrays, ",
+    "the latter returns a `GeneralizedEigen` object. So for a direct ",
+    "replacement, use `(eigen(A, B)...,)`. But going forward, consider ",
+    "using the direct result of `eigen(A, B)` instead, either ",
+    "destructured into its components (`vals, vecs = eigen(A, B)`), ",
+    "or as a `GeneralizedEigen` object (`X = eigen(A, B)`)."), :eig)
+    return (eigen(A, B)...,)
+end
+
+# deprecate transitional decomposition getindex methods out of the blocks
+function Base.getindex(S::LU, i::Integer)
+    depwarn(string("decomposition functions (e.g. `lu`) now return decomposition ",
+        "objects (e.g. `LU`), and indexing such objects is deprecated. Instead ",
+        "extract components via their accessors (e.g. `X.L`, `X.S`, and `X.p` for ",
+        "`X::LU`), or destructure the decomposition via iteration ",
+        "(e.g. `l, u, p = X` for `X::LU`)."), :getindex)
+    i == 1 ? (return S.L) :
+    i == 2 ? (return S.U) :
+    i == 3 ? (return S.p) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::Union{Eigen,GeneralizedEigen}, i::Integer)
+    depwarn(string("decomposition functions (e.g. `eig`) now return decomposition ",
+        "objects (e.g. `Eigen` and `GeneralizedEigen`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.values` and `X.vectors` for `X::Union{Eigen,GeneralizedEigen}`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `vals, vecs = X` for `X::Union{Eigen,GeneralizedEigen}`)."), :getindex)
+    i == 1 ? (return S.values) :
+    i == 2 ? (return S.vectors) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::Schur, i::Integer)
+    depwarn(string("decomposition functions (e.g. `schur`) now return decomposition ",
+        "objects (e.g. `Schur`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.T`, `X.Z`, and `X.values` for `X::Schur`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `t, z, vals = X` for `X::Schur`)."), :getindex)
+    i == 1 ? (return S.T) :
+    i == 2 ? (return S.Z) :
+    i == 3 ? (return S.values) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::GeneralizedSchur, i::Integer)
+    depwarn(string("decomposition functions (e.g. `schur`) now return decomposition ",
+        "objects (e.g. `GeneralizedSchur`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.S`, `X.T`, `X.Q`, `X.Z`, `X.α`, and `X.β` for `X::GeneralizedSchur`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `s, t, q, z, α, β = X` for `X::GeneralizedSchur`)."), :getindex)
+    i == 1 ? (return S.S) :
+    i == 2 ? (return S.T) :
+    i == 3 ? (return S.Q) :
+    i == 4 ? (return S.Z) :
+    i == 5 ? (return S.α) :
+    i == 6 ? (return S.β) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::LQ, i::Integer)
+    depwarn(string("decomposition functions (e.g. `lq`) now return decomposition ",
+        "objects (e.g. `LQ`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.L` and `X.Q` for `X::LQ`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `l, q = X` for `X::LQ`)."), :getindex)
+    i == 1 ? (return S.L) :
+    i == 2 ? (return S.Q) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::QR, i::Integer)
+    depwarn(string("decomposition functions (e.g. `qr`) now return decomposition ",
+        "objects (e.g. `QR`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.Q` and `X.R` for `X::QR`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `q, r = X` for `X::QR`)."), :getindex)
+    i == 1 ? (return S.Q) :
+    i == 2 ? (return S.R) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::QRCompactWY, i::Integer)
+    depwarn(string("decomposition functions (e.g. `qr`) now return decomposition ",
+        "objects (e.g. `QRCompactWY`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.Q` and `X.R` for `X::QR`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `q, r = X` for `X::QR`)."), :getindex)
+    i == 1 ? (return S.Q) :
+    i == 2 ? (return S.R) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::QRPivoted, i::Integer)
+    depwarn(string("decomposition functions (e.g. `qr`) now return decomposition ",
+        "objects (e.g. `QRPivoted`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.Q`, `X.R`, and `X.p` for `X::QRPivoted`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `q, r, p = X` for `X::QRPivoted`)."), :getindex)
+    i == 1 ? (return S.Q) :
+    i == 2 ? (return S.R) :
+    i == 3 ? (return S.p) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::SVD, i::Integer)
+    depwarn(string("decomposition functions (e.g. `svd`) now return decomposition ",
+        "objects (e.g. `SVD`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.U`, `X.S`, and `X.V` for `X::SVD`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `u, s, v = X` for `X::SVD`)."), :getindex)
+    i == 1 ? (return S.U) :
+    i == 2 ? (return S.S) :
+    i == 3 ? (return S.V) :
+        throw(BoundsError(S, i))
+end
+function Base.getindex(S::GeneralizedSVD, i::Integer)
+    depwarn(string("decomposition functions (e.g. `svd`) now return decomposition ",
+        "objects (e.g. `GeneralizedSVD`), and indexing such objects ",
+        "is deprecated. Instead extract components via their accessors ",
+        "(e.g. `X.U`, `X.V`, `X.Q`, `X.D1`, `X.D2`, and `X.R0` for `X::GeneralizedSVD`), ",
+        "or destructure the decomposition via iteration ",
+        "(e.g. `u, v, q, d1, d2, r0 = X` for `X::GeneralizedSVD`)."), :getindex)
+    i == 1 ? (return S.U) :
+    i == 2 ? (return S.V) :
+    i == 3 ? (return S.Q) :
+    i == 4 ? (return S.D1) :
+    i == 5 ? (return S.D2) :
+    i == 6 ? (return S.R0) :
+        throw(BoundsError(S, i))
+end

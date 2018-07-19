@@ -8,7 +8,7 @@ Interface to [libgit2](https://libgit2.github.com/).
 module LibGit2
 
 import Base: ==
-using Base: coalesce, notnothing
+using Base: something, notnothing
 using Base.Printf: @printf
 
 export with, GitRepo, GitConfig
@@ -16,7 +16,9 @@ export with, GitRepo, GitConfig
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
-const REFCOUNT = Threads.Atomic{UInt}()
+const REFCOUNT = Threads.Atomic{Int}(0)
+
+function ensure_initialized end
 
 include("utils.jl")
 include("consts.jl")
@@ -259,33 +261,49 @@ The keyword arguments are:
   * `remoteurl::AbstractString=""`: the URL of `remote`. If not specified,
     will be assumed based on the given name of `remote`.
   * `refspecs=AbstractString[]`: determines properties of the fetch.
-  * `payload=CredentialPayload()`: provides credentials and/or settings when authenticating
-    against a private `remote`.
+  * `credentials=nothing`: provides credentials and/or settings when authenticating against
+    a private `remote`.
+  * `callbacks=Callbacks()`: user provided callbacks and payloads.
 
 Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 """
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
-               payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}=CredentialPayload())
-    p = reset!(deprecate_nullable_creds(:fetch, "repo", payload), GitConfig(repo))
+               payload::Creds=nothing,
+               credentials::Creds=payload,
+               callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
+
+    deprecate_payload_keyword(:fetch, "repo", payload)
+    cred_payload = reset!(CredentialPayload(credentials), GitConfig(repo))
+    if !haskey(callbacks, :credentials)
+        callbacks[:credentials] = (credentials_cb(), cred_payload)
+    elseif haskey(callbacks, :credentials) && credentials !== nothing
+        throw(ArgumentError(string(
+            "Unable to both use the provided `credentials` as a payload when the ",
+            "`callbacks` also contain a credentials payload.")))
+    end
+
     result = try
-        fo = FetchOptions(callbacks=RemoteCallbacks(credentials=credentials_cb(), payload=p))
-        fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
+        remote_callbacks = RemoteCallbacks(callbacks)
+        fo = FetchOptions(callbacks=remote_callbacks)
+        fetch(rmt, refspecs, msg="from $(url(rmt))", options=fo)
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
-            reject(payload)
+            reject(cred_payload)
+        else
+            Base.shred!(cred_payload)
         end
         rethrow()
     finally
         close(rmt)
     end
-    approve(payload)
+    approve(cred_payload)
     return result
 end
 
@@ -300,8 +318,9 @@ The keyword arguments are:
   * `refspecs=AbstractString[]`: determines properties of the push.
   * `force::Bool=false`: determines if the push will be a force push,
      overwriting the remote branch.
-  * `payload=CredentialPayload()`: provides credentials and/or settings when authenticating
-    against a private `remote`.
+  * `credentials=nothing`: provides credentials and/or settings when authenticating against
+     a private `remote`.
+  * `callbacks=Callbacks()`: user provided callbacks and payloads.
 
 Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
 """
@@ -309,25 +328,40 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}=CredentialPayload())
-    p = reset!(deprecate_nullable_creds(:push, "repo", payload), GitConfig(repo))
+              payload::Creds=nothing,
+              credentials::Creds=payload,
+              callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
+
+    deprecate_payload_keyword(:push, "repo", payload)
+    cred_payload = reset!(CredentialPayload(credentials), GitConfig(repo))
+    if !haskey(callbacks, :credentials)
+        callbacks[:credentials] = (credentials_cb(), cred_payload)
+    elseif haskey(callbacks, :credentials) && credentials !== nothing
+        throw(ArgumentError(string(
+            "Unable to both use the provided `credentials` as a payload when the ",
+            "`callbacks` also contain a credentials payload.")))
+    end
+
     result = try
-        push_opts = PushOptions(callbacks=RemoteCallbacks(credentials=credentials_cb(), payload=p))
+        remote_callbacks = RemoteCallbacks(callbacks)
+        push_opts = PushOptions(callbacks=remote_callbacks)
         push(rmt, refspecs, force=force, options=push_opts)
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
-            reject(payload)
+            reject(cred_payload)
+        else
+            Base.shred!(cred_payload)
         end
         rethrow()
     finally
         close(rmt)
     end
-    approve(payload)
+    approve(cred_payload)
     return result
 end
 
@@ -476,6 +510,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
                 head_name = string(GitHash(head_ref))
             end
         end
+    catch
     end
 
     # search for commit to get a commit object
@@ -507,8 +542,9 @@ The keyword arguments are:
   * `remote_cb::Ptr{Cvoid}=C_NULL`: a callback which will be used to create the remote
     before it is cloned. If `C_NULL` (the default), no attempt will be made to create
     the remote - it will be assumed to already exist.
-  * `payload::CredentialPayload=CredentialPayload()`: provides credentials and/or settings
-    when authenticating against a private repository.
+  * `credentials::Creds=nothing`: provides credentials and/or settings when authenticating
+    against a private repository.
+  * `callbacks::Callbacks=Callbacks()`: user provided callbacks and payloads.
 
 Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
 
@@ -525,12 +561,24 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Cvoid} = C_NULL,
-               payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}=CredentialPayload())
+               payload::Creds=nothing,
+               credentials::Creds=payload,
+               callbacks::Callbacks=Callbacks())
+    deprecate_payload_keyword(:clone, "repo_url, repo_path", payload)
+    cred_payload = reset!(CredentialPayload(credentials))
+    if !haskey(callbacks, :credentials)
+        callbacks[:credentials] = (credentials_cb(), cred_payload)
+    elseif haskey(callbacks, :credentials) && credentials !== nothing
+        throw(ArgumentError(string(
+            "Unable to both use the provided `credentials` as a payload when the ",
+            "`callbacks` also contain a credentials payload.")))
+    end
+
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
     GC.@preserve lbranch begin
-        p = reset!(deprecate_nullable_creds(:clone, "repo_url, repo_path", payload))
-        fetch_opts = FetchOptions(callbacks = RemoteCallbacks(credentials=credentials_cb(), payload=p))
+        remote_callbacks = RemoteCallbacks(callbacks)
+        fetch_opts = FetchOptions(callbacks=remote_callbacks)
         clone_opts = CloneOptions(
                     bare = Cint(isbare),
                     checkout_branch = isempty(lbranch) ? Cstring(C_NULL) : Base.unsafe_convert(Cstring, lbranch),
@@ -541,12 +589,14 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
             clone(repo_url, repo_path, clone_opts)
         catch err
             if isa(err, GitError) && err.code == Error.EAUTH
-                reject(payload)
+                reject(cred_payload)
+            else
+                Base.shred!(cred_payload)
             end
             rethrow()
         end
     end
-    approve(payload)
+    approve(cred_payload)
     return repo
 end
 
@@ -686,7 +736,7 @@ function merge!(repo::GitRepo;
                 throw(GitError(Error.Merge, Error.ERROR,
                                "There is no fetch reference for this branch."))
             end
-            map(fh->GitAnnotated(repo,fh), fheads)
+            Base.map(fh->GitAnnotated(repo,fh), fheads)
         else # merge commitish
             [GitAnnotated(repo, committish)]
         end
@@ -744,7 +794,7 @@ function merge!(repo::GitRepo;
                merge_opts=merge_opts,
                checkout_opts=checkout_opts)
     finally
-        map(close, upst_anns)
+        Base.map(close, upst_anns)
     end
 end
 
@@ -915,22 +965,29 @@ function transact(f::Function, repo::GitRepo)
     end
 end
 
-function set_ssl_cert_locations(cert_loc)
-    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_file == C_NULL && cert_dir == C_NULL && return
-    @check ccall((:git_libgit2_opts, :libgit2), Cint,
-          (Cint, Cstring, Cstring),
-          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+## lazy libgit2 initialization
+
+function ensure_initialized()
+    x = Threads.atomic_cas!(REFCOUNT, 0, 1)
+    if x < 0
+        negative_refcount_error(x)::Union{}
+    end
+    if x == 0
+        initialize()
+    end
+    return nothing
 end
 
-function __init__()
+@noinline function negative_refcount_error(x::Int)
+    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
+end
+
+@noinline function initialize()
     @check ccall((:git_libgit2_init, :libgit2), Cint, ())
-    REFCOUNT[] = 1
 
     atexit() do
-        if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
-            # refcount zero, no objects to be finalized
+        # refcount zero, no objects to be finalized
+        if Threads.atomic_sub!(REFCOUNT, 1) >= 1
             ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
         end
     end
@@ -950,5 +1007,13 @@ function __init__()
     end
 end
 
+function set_ssl_cert_locations(cert_loc)
+    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_file == C_NULL && cert_dir == C_NULL && return
+    @check ccall((:git_libgit2_opts, :libgit2), Cint,
+          (Cint, Cstring, Cstring),
+          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+end
 
 end # module

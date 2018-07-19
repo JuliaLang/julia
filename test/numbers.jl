@@ -999,6 +999,19 @@ end
     @test !(1 > NaN)
 end
 
+@testset "Irrationals compared with Irrationals" begin
+    for i in (π, ℯ, γ, catalan)
+        for j in (π, ℯ, γ, catalan)
+            @test isequal(i==j, Float64(i)==Float64(j))
+            @test isequal(i!=j, Float64(i)!=Float64(j))
+            @test isequal(i<=j, Float64(i)<=Float64(j))
+            @test isequal(i>=j, Float64(i)>=Float64(j))
+            @test isequal(i<j, Float64(i)<Float64(j))
+            @test isequal(i>j, Float64(i)>Float64(j))
+        end
+    end
+end
+
 @testset "Irrationals compared with Rationals and Floats" begin
     @test Float64(pi,RoundDown) < pi
     @test Float64(pi,RoundUp) > pi
@@ -2013,7 +2026,7 @@ end
 @testset "widen and widemul" begin
     @test widen(1.5f0) === 1.5
     @test widen(Int32(42)) === Int64(42)
-    @test widen(Int8) === Int32
+    @test widen(Int8) === Int16
     @test widen(Int64) === Int128
     @test widen(Float32) === Float64
     @test widen(Float16) === Float32
@@ -2214,7 +2227,7 @@ end
         end
     end
 end
-@testset "angle(z::Real) = atan2(zero(z), z)" begin
+@testset "angle(z::Real) = atan(zero(z), z)" begin
     #function only returns two values, depending on sign
     @test angle(10) == 0.0
     @test angle(-10) == 3.141592653589793
@@ -2415,7 +2428,7 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     p = 2
     @test x^p == 1
     @test x^2 == 2
-    @test [x,x,x].^2 == [2,2,2]
+    @test [x, x, x].^2 == [2, 2, 2]
     for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
         for p in -4:4
             v = eval(:($T(2)^$p))
@@ -2430,6 +2443,7 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     end
     @test PR20889(2)^3 == 5
     @test [2,4,8].^-2 == [0.25, 0.0625, 0.015625]
+    @test [2, 4, 8].^-2 .* 4 == [1.0, 0.25, 0.0625] # nested literal_pow
     @test ℯ^-2 == exp(-2) ≈ inv(ℯ^2) ≈ (ℯ^-1)^2 ≈ sqrt(ℯ^-4)
 end
 module M20889 # do we get the expected behavior without importing Base.^?

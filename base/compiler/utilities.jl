@@ -4,12 +4,27 @@
 # generic #
 ###########
 
+if !isdefined(@__MODULE__, Symbol("@timeit"))
+    # This is designed to allow inserting timers when loading a second copy
+    # of inference for performing performance experiments.
+    macro timeit(args...)
+        esc(args[end])
+    end
+end
+
 # avoid cycle due to over-specializing `any` when used by inference
 function _any(@nospecialize(f), a)
     for x in a
         f(x) && return true
     end
     return false
+end
+
+function _all(@nospecialize(f), a)
+    for x in a
+        f(x) || return false
+    end
+    return true
 end
 
 function contains_is(itr, @nospecialize(x))
@@ -29,11 +44,11 @@ anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
-function istopfunction(topmod, @nospecialize(f), sym)
-    if isdefined(Main, :Base) && isdefined(Main.Base, sym) && isconst(Main.Base, sym) && f === getfield(Main.Base, sym)
-        return true
-    elseif isdefined(topmod, sym) && isconst(topmod, sym) && f === getfield(topmod, sym)
-        return true
+function istopfunction(@nospecialize(f), name::Symbol)
+    tn = typeof(f).name
+    if tn.mt.name === name
+        top = _topmod(tn.module)
+        return isdefined(top, name) && isconst(top, name) && f === getfield(top, name)
     end
     return false
 end
@@ -45,7 +60,6 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
-is_meta_expr(ex::Expr) = is_meta_expr_head(ex.head)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -63,30 +77,13 @@ function is_inlineable_constant(@nospecialize(x))
     return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
 end
 
-# count occurrences up to n+1
-function occurs_more(@nospecialize(e), pred, n)
-    if isa(e,Expr)
-        e = e::Expr
-        head = e.head
-        is_meta_expr_head(head) && return 0
-        c = 0
-        for a = e.args
-            c += occurs_more(a, pred, n)
-            if c>n
-                return c
-            end
-        end
-        return c
-    end
-    if pred(e)
-        return 1
-    end
-    return 0
-end
-
 ###########################
 # MethodInstance/CodeInfo #
 ###########################
+
+function invoke_api(li::MethodInstance)
+    return ccall(:jl_invoke_api, Cint, (Any,), li)
+end
 
 function get_staged(li::MethodInstance)
     try
@@ -103,6 +100,8 @@ function copy_code_info(c::CodeInfo)
     cnew.code = copy_exprargs(cnew.code)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
+    cnew.codelocs  = copy(cnew.codelocs)
+    cnew.linetable = copy(cnew.linetable)
     return cnew
 end
 
@@ -119,7 +118,7 @@ function retrieve_code_info(linfo::MethodInstance)
             c = copy_code_info(m.source)
         end
     end
-    return c
+    return c::CodeInfo
 end
 
 function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, world::UInt, preexisting::Bool=false)
@@ -143,48 +142,45 @@ function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleV
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt), method, atypes, sparams, world)
 end
 
-# TODO: Use these functions instead of directly manipulating
-# the "actual" method for appropriate places in inference (see #24676)
-function method_for_inference_heuristics(cinfo, default)
-    if isa(cinfo, CodeInfo)
-        # appropriate format for `sig` is svec(ftype, argtypes, world)
-        sig = cinfo.signature_for_inference_heuristics
-        if isa(sig, SimpleVector) && length(sig) == 3
-            methods = _methods(sig[1], sig[2], -1, sig[3])
-            if length(methods) == 1
-                _, _, m = methods[]
-                if isa(m, Method)
-                    return m
+# This function is used for computing alternate limit heuristics
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector, world::UInt)
+    if isdefined(method, :generator) && method.generator.expand_early
+        method_instance = code_for_method(method, sig, sparams, world, false)
+        if isa(method_instance, MethodInstance)
+            cinfo = get_staged(method_instance)
+            if isa(cinfo, CodeInfo)
+                method2 = cinfo.method_for_inference_limit_heuristics
+                if method2 isa Method
+                    return method2
                 end
             end
         end
     end
-    return default
+    return nothing
 end
 
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams, world)
-    if isdefined(method, :generator) && method.generator.expand_early
-        method_instance = code_for_method(method, sig, sparams, world, false)
-        if isa(method_instance, MethodInstance)
-            return method_for_inference_heuristics(get_staged(method_instance), method)
-        end
-    end
-    return method
-end
+argextype(@nospecialize(x), state) = argextype(x, state.src, state.sp, state.slottypes)
 
-function exprtype(@nospecialize(x), src, mod::Module)
+const empty_slottypes = Any[]
+
+function argextype(@nospecialize(x), src, spvals::SimpleVector, slottypes::Vector{Any} = empty_slottypes)
     if isa(x, Expr)
-        return (x::Expr).typ
+        if x.head === :static_parameter
+            return sparam_type(spvals[x.args[1]])
+        elseif x.head === :boundscheck
+            return Bool
+        elseif x.head === :copyast
+            return argextype(x.args[1], src, spvals, slottypes)
+        end
+        @assert false "argextype only works on argument-position values"
     elseif isa(x, SlotNumber)
-        return src.slottypes[(x::SlotNumber).id]
+        return slottypes[(x::SlotNumber).id]
     elseif isa(x, TypedSlot)
         return (x::TypedSlot).typ
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, src)
     elseif isa(x, Argument)
         return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] : src.argtypes[x.n]
-    elseif isa(x, Symbol)
-        return abstract_eval_global(mod, x::Symbol)
     elseif isa(x, QuoteNode)
         return AbstractEvalConstant((x::QuoteNode).value)
     elseif isa(x, GlobalRef)
@@ -206,7 +202,11 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
     for line in 1:length(body)
         e = body[line]
-        isa(e, Expr) && find_ssavalue_uses(e, uses, line)
+        if isa(e, SSAValue)
+            push!(uses[e.id], line)
+        elseif isa(e, Expr)
+            find_ssavalue_uses(e, uses, line)
+        end
     end
     return uses
 end
@@ -219,77 +219,25 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
         if skiparg
             skiparg = false
         elseif isa(a, SSAValue)
-            push!(uses[a.id + 1], line)
+            push!(uses[a.id], line)
         elseif isa(a, Expr)
             find_ssavalue_uses(a, uses, line)
         end
     end
 end
 
-function find_ssavalue_defs(body::Vector{Any}, nvals::Int)
-    defs = zeros(Int, nvals)
-    for line in 1:length(body)
-        e = body[line]
-        if isa(e, Expr) && e.head === :(=)
-            lhs = e.args[1]
-            if isa(lhs, SSAValue)
-                defs[lhs.id + 1] = line
-            end
-        end
-    end
-    return defs
-end
-
 # using a function to ensure we can infer this
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
 
-##############
-# LabelNodes #
-##############
+###########
+# options #
+###########
 
-# scan body for the value of the largest referenced label
-# so that we won't accidentally re-use it
-function label_counter(body::Vector{Any}, comefrom=true)
-    l = 0
-    for b in body
-        label = 0
-        if isa(b, LabelNode) && comefrom
-            label = b.label::Int
-        elseif isa(b, GotoNode)
-            label = b.label::Int
-        elseif isa(b, Expr)
-            if b.head == :gotoifnot
-                label = b.args[2]::Int
-            elseif b.head == :enter
-                label = b.args[1]::Int
-            elseif b.head === :(=) && comefrom
-                rhs = b.args[2]
-                if isa(rhs, PhiNode)
-                    for edge in rhs.edges
-                        edge = edge::Int + 1
-                        if edge > l
-                            l = edge
-                        end
-                    end
-                end
-            end
-        end
-        if label > l
-            l = label
-        end
-    end
-    return l
-end
-
-function get_label_map(body::Vector{Any})
-    nlabels = label_counter(body)
-    labelmap = zeros(Int, nlabels)
-    for i = 1:length(body)
-        el = body[i]
-        if isa(el, LabelNode)
-            # @assert labelmap[el.label] == 0
-            labelmap[el.label] = i
-        end
-    end
-    return labelmap
+inlining_enabled() = (JLOptions().can_inline == 1)
+coverage_enabled() = (JLOptions().code_coverage != 0)
+function inbounds_option()
+    opt_check_bounds = JLOptions().check_bounds
+    opt_check_bounds == 0 && return :default
+    opt_check_bounds == 1 && return :on
+    return :off
 end

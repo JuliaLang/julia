@@ -186,7 +186,7 @@ function mmap(io::IO,
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
-    isbits(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbits(T) == true"))
+    isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
     len = prod(dims) * sizeof(T)
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))

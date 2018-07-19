@@ -496,26 +496,8 @@ appropriate representable value. However, the manner in which this rounding is d
 changed if required according to the rounding modes presented in the [IEEE 754
 standard](https://en.wikipedia.org/wiki/IEEE_754-2008).
 
-```jldoctest
-julia> x = 1.1; y = 0.1;
-
-julia> x + y
-1.2000000000000002
-
-julia> setrounding(Float64,RoundDown) do
-           x + y
-       end
-1.2
-```
-
 The default mode used is always [`RoundNearest`](@ref), which rounds to the nearest representable
 value, with ties rounded towards the nearest value with an even least significant bit.
-
-!!! warning
-    Rounding is generally only correct for basic arithmetic functions ([`+`](@ref), [`-`](@ref),
-    [`*`](@ref), [`/`](@ref) and [`sqrt`](@ref)) and type conversion operations. Many other
-    functions assume the default [`RoundNearest`](@ref) mode is set, and can give erroneous results
-    when operating under other rounding modes.
 
 ### Background and References
 
@@ -636,8 +618,12 @@ julia> 2^2x
 64
 ```
 
-The precedence of numeric literal coefficients is the same as that of unary operators such as
-negation. So `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
+The precedence of numeric literal coefficients is slightly lower than that of
+unary operators such as negation.
+So `-2x` is parsed as `(-2) * x` and `√2x` is parsed as `(√2) * x`.
+However, numeric literal coefficients parse similarly to unary operators when
+combined with exponentiation.
+For example `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
 
 Numeric literals also work as coefficients to parenthesized expressions:
 
@@ -689,11 +675,19 @@ where syntactic conflicts arise:
     `0` multiplied by the variable `xff`.
   * The floating-point literal expression `1e10` could be interpreted as the numeric literal `1` multiplied
     by the variable `e10`, and similarly with the equivalent `E` form.
+  * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
+    `1.5` multiplied by the variable `f22`.
 
-In both cases, we resolve the ambiguity in favor of interpretation as numeric literals:
+In all cases, we resolve the ambiguity in favor of interpretation as numeric literals:
 
   * Expressions starting with `0x` are always hexadecimal literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
+  * Expressions starting with a numeric literal followed by `f` are always 32-bit floating-point literals.
+
+Unlike `E`, which is equivalent to `e` in numeric literals for historical reasons, `F` is just another
+letter and does not behave like `f` in numeric literals. Hence, expressions starting with a numeric literal
+followed by `F` are interpreted as the numerical literal multiplied by a variable, which means that, for
+example, `1.5F22` is equal to `1.5 * F22`.
 
 ## Literal zero and one
 

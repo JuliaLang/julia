@@ -1,5 +1,7 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 function needs_USE_GPL_LIBS(s::String)
-    contains(s, "CHOLMOD") && return true
+    occursin("CHOLMOD", s) && return true
     return false
 end
 
@@ -24,7 +26,7 @@ function fixup_precompile(new_precompile_file; merge=false)
         for line in eachline(file)
             line = strip(line)
             # filter out closures, which might have different generated names in different environments
-            contains(line, r"#[0-9]") && continue
+            occursin(r"#[0-9]", line) && continue
             # Other stuff than precompile statements might have been written to STDERR
             startswith(line, "precompile(Tuple{") || continue
             # Ok, add the line

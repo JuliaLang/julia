@@ -2,8 +2,8 @@
 
 using Random, Sockets
 
-const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "site", "v$(VERSION.major).$(VERSION.minor)")
-const STDLIBS = readdir(STDLIB_DIR)
+const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
+const STDLIBS = filter!(x -> isdir(joinpath(STDLIB_DIR, x)), readdir(STDLIB_DIR))
 
 """
 
@@ -41,7 +41,7 @@ function choosetests(choices = [])
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
-        "bigfloat", "sorting", "statistics", "spawn", "backtrace",
+        "bigfloat", "sorting", "spawn", "backtrace",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
@@ -51,9 +51,9 @@ function choosetests(choices = [])
         "some", "meta", "stacktraces", "docs",
         "misc", "threads",
         "enums", "cmdlineargs", "int",
-        "checked", "bitset", "floatfuncs", "compile", "inline",
+        "checked", "bitset", "floatfuncs", "precompile", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "specificity", "codegen",
+        "channels", "iostream", "secretbuffer", "specificity", "codegen",
         "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
     ]
 
@@ -124,27 +124,6 @@ function choosetests(choices = [])
         prepend!(tests, STDLIBS)
     end
 
-
-    explicit_pkg     =  "Pkg/pkg"        in tests
-    explicit_pkg3    =  "Pkg3/pkg"       in tests
-    explicit_libgit2 =  "LibGit2/online" in tests
-    new_tests = String[]
-    for test in tests
-        if test in STDLIBS
-            testfile = joinpath(STDLIB_DIR, test, "test", "testgroups")
-            if isfile(testfile)
-                prepend!(new_tests, (test * "/") .* readlines(testfile))
-            else
-                push!(new_tests, test)
-            end
-        end
-    end
-    filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
-    prepend!(tests, new_tests)
-    explicit_pkg     || filter!(x -> x != "Pkg/pkg",        tests)
-    explicit_pkg3    || filter!(x -> x != "Pkg3/pkg",       tests)
-    explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
-
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     if "ambiguous" in skip_tests
         filter!(x -> x != "ambiguous", tests)
@@ -178,9 +157,31 @@ function choosetests(choices = [])
         filter!(x -> x != "rounding", tests)
     end
 
-    # The shift and invert solvers need SuiteSparse for sparse input
-    Base.USE_GPL_LIBS || filter!(x->x != "IterativeEigensolvers", STDLIBS)
+    filter!(!in(skip_tests), tests)
 
+    explicit_pkg     =  "OldPkg/pkg"        in tests
+    explicit_pkg3    =  "Pkg/pkg"       in tests
+    explicit_libgit2 =  "LibGit2/online" in tests
+    new_tests = String[]
+    for test in tests
+        if test in STDLIBS
+            testfile = joinpath(STDLIB_DIR, test, "test", "testgroups")
+            if isfile(testfile)
+                testgroups = readlines(testfile)
+                length(testgroups) == 0 && error("no testgroups defined for $test")
+                prepend!(new_tests, (test * "/") .* testgroups)
+            else
+                push!(new_tests, test)
+            end
+        end
+    end
+    filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+    append!(tests, new_tests)
+    explicit_pkg     || filter!(x -> x != "OldPkg/pkg",        tests)
+    explicit_pkg3    || filter!(x -> x != "Pkg/pkg",       tests)
+    explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
+
+    # Filter out tests from the test groups in the stdlibs
     filter!(!in(skip_tests), tests)
 
     tests, net_on, exit_on_error, seed

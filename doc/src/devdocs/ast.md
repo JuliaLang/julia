@@ -1,7 +1,7 @@
 # Julia ASTs
 
 Julia has two representations of code. First there is a surface syntax AST returned by the parser
-(e.g. the [`parse`](@ref) function), and manipulated by macros. It is a structured representation
+(e.g. the [`Meta.parse`](@ref) function), and manipulated by macros. It is a structured representation
 of code as it is written, constructed by `julia-parser.scm` from a character stream. Next there
 is a lowered form, or IR (intermediate representation), which is used by type inference and code
 generation. In the lowered form there are fewer types of nodes, all macros are expanded, and all
@@ -19,6 +19,8 @@ The following data types exist in lowered form:
 
     Has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
     subexpressions.
+    While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
+    limited number of `Expr`s, mostly for calls, conditional branches (`gotoifnot`), and returns.
 
   * `Slot`
 
@@ -31,19 +33,12 @@ The following data types exist in lowered form:
 
   * `CodeInfo`
 
-    Wraps the IR of a method.
-
-  * `LineNumberNode`
-
-    Contains a number and a file name, specifying the line number the next statement came from.
-
-  * `LabelNode`
-
-    Branch target, a consecutively-numbered integer starting at 0.
+    Wraps the IR of a method. Its `code` field is an array of expressions to execute.
 
   * `GotoNode`
 
-    Unconditional branch.
+    Unconditional branch. The argument is the branch target, represented as an index in
+    the code array to jump to.
 
   * `QuoteNode`
 
@@ -57,12 +52,13 @@ The following data types exist in lowered form:
 
   * `SSAValue`
 
-    Refers to a consecutively-numbered (starting at 0) static single assignment (SSA) variable inserted
-    by the compiler.
+    Refers to a consecutively-numbered (starting at 1) static single assignment (SSA) variable inserted
+    by the compiler. The number (`id`) of an `SSAValue` is the code array index of the expression whose
+    value it represents.
 
   * `NewvarNode`
 
-    Marks a point where a variable is created. This has the effect of resetting a variable to undefined.
+    Marks a point where a variable (slot) is created. This has the effect of resetting a variable to undefined.
 
 
 ### Expr types
@@ -84,11 +80,11 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `gotoifnot`
 
-    Conditional branch. If `args[1]` is false, goes to label identified in `args[2]`.
+    Conditional branch. If `args[1]` is false, goes to the index identified in `args[2]`.
 
   * `=`
 
-    Assignment.
+    Assignment. In the IR, the first argument is always a Slot or a GlobalRef.
 
   * `method`
 
@@ -180,16 +176,6 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
     arguments are free-form. The following kinds of metadata are commonly used:
 
       * `:inline` and `:noinline`: Inlining hints.
-
-      * `:push_loc`: enters a sequence of statements from a specified source location.
-
-          * `args[2]` specifies a filename, as a symbol.
-          * `args[3]` optionally specifies the name of an (inlined) function that originally contained the
-            code.
-
-      * `:pop_loc`: returns to the source location before the matching `:push_loc`.
-
-          * `args[2]::Int` (optional) specifies the number of `push_loc` to pop
 
 
 ### Method
@@ -311,6 +297,15 @@ A temporary container for holding lowered source code.
 
     If an `Int`, it gives the number of compiler-inserted temporary locations in the
     function. If an array, specifies a type for each location.
+
+  * `linetable`
+
+    An array of source location objects
+
+  * `codelocs`
+
+    An array of integer indices into the `linetable`, giving the location associated
+    with each statement.
 
 Boolean properties:
 
@@ -544,3 +539,10 @@ component is optional (and omitted when the current line number, but not file na
 changes).
 
 These expressions are represented as `LineNumberNode`s in Julia.
+
+### Macros
+
+Macro hygiene is represented through the expression head pair `escape` and `hygienic-scope`.
+The result of a macro expansion is automatically wrapped in `(hygienic-scope block module)`,
+to represent the result of the new scope. The user can insert `(escape block)` inside
+to interpolate code from the caller.

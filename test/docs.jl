@@ -32,7 +32,7 @@ docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
+@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type"
 @test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
@@ -669,10 +669,9 @@ end
 @test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test contains(sprint(apropos, "pearson"), "cor")
-@test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
+@test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
 using Profile
-@test contains(sprint(apropos, "print"), "Profile.print")
+@test occursin("Profile.print", sprint(apropos, "print"))
 
 # Issue #13068.
 
@@ -1003,6 +1002,9 @@ end
 @test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
 @test hash(Text("docstring")) ≠ hash(HTML("docstring"))
 
+# issue #25172
+@test repr(MIME"text/html"(), HTML("a","b")) == "ab"
+
 # issue 21016
 module I21016
 
@@ -1118,3 +1120,21 @@ struct A_20087 end
 (a::A_20087)() = a
 
 @test docstrings_equal(@doc(A_20087()), doc"a")
+
+# issue #27832
+
+_last_atdoc = Core.atdoc
+Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+
+"""
+"""
+module M27832
+macro foo(x)
+    repr(x)
+end
+for fn in (:isdone,)
+    global xs = @foo $fn
+end
+end
+@test M27832.xs == ":(\$(Expr(:\$, :fn)))"
+Core.atdoc!(_last_atdoc)

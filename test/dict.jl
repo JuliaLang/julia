@@ -6,15 +6,12 @@ using Random
     p = Pair(10,20)
     @test p == (10=>20)
     @test isequal(p,10=>20)
-    @test start(p) == 1
-    @test next(p, 1) == (10,2)
-    @test !done(p, 1)
-    @test !done(p,2)
-    @test done(p,3)
-    @test !done(p,0)
+    @test iterate(p)[1] == 10
+    @test iterate(p, iterate(p)[2])[1] == 20
+    @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
     @test lastindex(p) == length(p) == 2
-    @test Base.indexed_next(p, 1, (1,2)) == (10,2)
-    @test Base.indexed_next(p, 2, (1,2)) == (20,3)
+    @test Base.indexed_iterate(p, 1, nothing) == (10,2)
+    @test Base.indexed_iterate(p, 2, nothing) == (20,3)
     @test (1=>2) < (2=>3)
     @test (2=>2) < (2=>3)
     @test !((2=>3) < (2=>3))
@@ -355,9 +352,9 @@ end
     # Check explicitly for the expected strings, since the CPU bitness effects
     # dictionary ordering.
     result = String(take!(buf))
-    @test contains(result, "Dict")
-    @test contains(result, "(1=>2)=>(3=>45)")
-    @test contains(result, "(3=>10)=>(10=>11)")
+    @test occursin("Dict", result)
+    @test occursin("(1=>2)=>(3=>45)", result)
+    @test occursin("(3=>10)=>(10=>11)", result)
 end
 
 mutable struct Alpha end
@@ -368,7 +365,7 @@ Base.show(io::IO, ::Alpha) = print(io,"α")
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
     local str = String(take!(sbuff))
-    @test !contains(str, "…")
+    @test !occursin("…", str)
     @test endswith(str, "α => 1")
 end
 
@@ -531,9 +528,6 @@ end
     @test 1 == @inferred get(d, 1, 1)
     @test pop!(d, -111, nothing) == nothing
     @test 1 == @inferred pop!(d, 1)
-    i = @inferred start(d)
-    @inferred next(d, i)
-    @inferred done(d, i)
 
     # get! and delete!
     d = @inferred IdDict(Pair(:a,1), Pair(:b,2), Pair(3,3))
@@ -564,6 +558,30 @@ end
     @test_throws ArgumentError IdDict([1, 2, 3, 4])
     # test rethrow of error in ctor
     @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
+end
+
+@testset "issue #26833, deletion from IdDict" begin
+    d = IdDict()
+    i = 1
+    # generate many hash collisions
+    while length(d) < 32 # expected to occur at i <≈ 2^16 * 2^5
+        if objectid(i) % UInt16 == 0x1111
+            push!(d, i => true)
+        end
+        i += 1
+    end
+    k = collect(keys(d))
+    @test haskey(d, k[1])
+    delete!(d, k[1])
+    @test length(d) == 31
+    @test !haskey(d, k[1])
+    @test haskey(d, k[end])
+    push!(d, k[end] => false)
+    @test length(d) == 31
+    @test haskey(d, k[end])
+    @test !pop!(d, k[end])
+    @test !haskey(d, k[end])
+    @test length(d) == 30
 end
 
 
@@ -689,13 +707,13 @@ const global hashoffset = [UInt(190)]
 
 Base.hash(s::MyString) = hash(s.str) + hashoffset[]
 Base.lastindex(s::MyString) = lastindex(s.str)
-Base.next(s::MyString, v::Int) = next(s.str, v)
+Base.iterate(s::MyString, v::Int=1) = iterate(s.str, v)
 Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
 ==(a::MyString, b::MyString) = (a.str == b.str)
 
 Base.hash(v::MyInt) = v.val + hashoffset[]
 Base.lastindex(v::MyInt) = lastindex(v.val)
-Base.next(v::MyInt, i::Int) = next(v.val, i)
+Base.iterate(v::MyInt, i...) = iterate(v.val, i...)
 Base.isequal(a::MyInt, b::MyInt) = isequal(a.val, b.val)
 ==(a::MyInt, b::MyInt) = (a.val == b.val)
 @testset "issue #15077" begin
@@ -811,6 +829,11 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(wkd, WeakKeyDict)
 
     @test_throws ArgumentError WeakKeyDict([1, 2, 3])
+
+    # issue #26939
+    d26939 = WeakKeyDict()
+    d26939[big"1.0" + 1.1] = 1
+    GC.gc() # make sure this doesn't segfault
 end
 
 @testset "issue #19995, hash of dicts" begin
@@ -902,7 +925,7 @@ end
         @test i isa AbstractSet
         @test i == Set([1])
     end
-    @test map(string, keys(d)) == Set(["1","3"])
+    @test Set(string(k) for k in keys(d)) == Set(["1","3"])
 end
 
 @testset "find" begin

@@ -353,7 +353,7 @@ function matchinds(needle, haystack; acronym = false)
         isempty(chars) && break
         while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if lowercase(char) == lowercase(chars[1]) &&
-           (!acronym || !isalpha(lastc))
+           (!acronym || !isletter(lastc))
             push!(is, i)
             popfirst!(chars)
         end
@@ -378,7 +378,7 @@ function fuzzyscore(needle, haystack)
     score += (acro ? 2 : 1)*length(is) # Matched characters
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
-    !isempty(is) && (score -= mean(is)/100) # Closer to beginning
+    !isempty(is) && (score -= sum(is)/length(is)/100) # Closer to beginning
     return score
 end
 
@@ -479,7 +479,7 @@ const builtins = ["abstract type", "baremodule", "begin", "break",
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!contains(x, r"#"), map(string, names))
+filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 
 accessible(mod::Module) =
     [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));

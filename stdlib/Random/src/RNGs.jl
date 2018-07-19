@@ -137,6 +137,7 @@ true
 MersenneTwister(seed=nothing) =
     srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
+
 function copy!(dst::MersenneTwister, src::MersenneTwister)
     copyto!(resize!(dst.seed, length(src.seed)), src.seed)
     copy!(dst.state, src.state)
@@ -159,7 +160,15 @@ copy(src::MersenneTwister) =
     r1.idxF == r2.idxF && r1.idxI == r2.idxI
 
 hash(r::MersenneTwister, h::UInt) =
-    foldr(hash, h, (r.seed, r.state, r.vals, r.ints, r.idxF, r.idxI))
+    foldr(hash, (r.seed, r.state, r.vals, r.ints, r.idxF, r.idxI); init=h)
+
+function fillcache_zeros!(r::MersenneTwister)
+    # the use of this function is not strictly necessary, but it makes
+    # comparing two MersenneTwister RNGs easier
+    fill!(r.vals, 0.0)
+    fill!(r.ints, zero(UInt128))
+    r
+end
 
 
 ### low level API
@@ -247,6 +256,7 @@ function make_seed()
             seed = hash(seed, parse(UInt64,
                                     read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
                                     base = 16))
+        catch
         end
         return make_seed(seed)
     end
@@ -270,9 +280,8 @@ function srand(r::MersenneTwister, seed::Vector{UInt32})
     copyto!(resize!(r.seed, length(seed)), seed)
     dsfmt_init_by_array(r.state, r.seed)
     mt_setempty!(r)
-    fill!(r.vals, 0.0) # not strictly necessary, but why not, makes comparing two MT easier
     mt_setempty!(r, UInt128)
-    fill!(r.ints, 0)
+    fillcache_zeros!(r)
     return r
 end
 
@@ -335,7 +344,7 @@ rand(r::MersenneTwister, T::SamplerUnion(Union{Bool,Int8,UInt8,Int16,UInt16,Int3
 
 function rand!(r::MersenneTwister, A::AbstractArray{Float64},
                I::SamplerTrivial{<:FloatInterval_64})
-    region = linearindices(A)
+    region = LinearIndices(A)
     # what follows is equivalent to this simple loop but more efficient:
     # for i=region
     #     @inbounds A[i] = rand(r, I[])
@@ -437,7 +446,7 @@ end
 # fills up A reinterpreted as an array of Float64 with n64 values
 function _rand!(r::MersenneTwister, A::Array{T}, n64::Int, I::FloatInterval_64) where T
     # n64 is the length in terms of `Float64` of the target
-    @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbits(T)
+    @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbitstype(T)
     GC.@preserve A rand!(r, UnsafeView{Float64}(pointer(A), n64), SamplerTrivial(I))
     A
 end
@@ -538,38 +547,15 @@ end
 
 #### from a range
 
-for T in BitInteger_types # eval because of ambiguity otherwise
-    @eval Sampler(rng::MersenneTwister, r::UnitRange{$T}, ::Val{1}) =
+for T in BitInteger_types, R=(1, Inf) # eval because of ambiguity otherwise
+    @eval Sampler(::Type{MersenneTwister}, r::UnitRange{$T}, ::Val{$R}) =
         SamplerRangeFast(r)
 end
 
 
 ### randjump
 
-"""
-    randjump(r::MersenneTwister, steps::Integer, len::Integer) -> Vector{MersenneTwister}
-
-Create an array of size `len` of initialized `MersenneTwister` RNG objects. The
-first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
-initialized such that a state of the RNG object in the array would be moved forward (without
-generating numbers) from a previous RNG object array element by `steps` steps.
-One such step corresponds to the generation of two `Float64` numbers.
-For each different value of `steps`, a large polynomial has to be generated internally.
-One is already pre-computed for `steps=big(10)^20`.
-"""
-randjump(r::MersenneTwister, steps::Integer, len::Integer) =
-    _randjump(r, DSFMT.calc_jump(steps), len)
-
+# Old randjump methods are deprecated, the scalar version is in the Future module.
 
 _randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X) =
-    MersenneTwister(copy(r.seed), DSFMT.dsfmt_jump(r.state, jumppoly))
-
-function _randjump(mt::MersenneTwister, jumppoly::DSFMT.GF2X, len::Integer)
-    mts = MersenneTwister[]
-    push!(mts, mt)
-    for i in 1:len-1
-        cmt = mts[end]
-        push!(mts, _randjump(cmt, jumppoly))
-    end
-    return mts
-end
+    fillcache_zeros!(MersenneTwister(copy(r.seed), DSFMT.dsfmt_jump(r.state, jumppoly)))

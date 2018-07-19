@@ -143,7 +143,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     // Only used for SIGFPE.
     // This doesn't seems to be reliable when the SIGFPE is generated
     // from a divide-by-zero exception, which is now handled by
-    // `catch_exception_raise`. It works fine when a signal is recieved
+    // `catch_exception_raise`. It works fine when a signal is received
     // due to `kill`/`raise` though.
     ucontext64_t *ctx = (ucontext64_t*)_ctx;
     rsp -= sizeof(void*);
@@ -358,6 +358,7 @@ static void jl_exit_thread0(int state)
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    int errno_save = errno;
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
 #if !defined(JL_DISABLE_LIBUNWIND)
     if (request == 1) {
@@ -388,6 +389,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     else if (request == 3) {
         jl_call_in_ctx(ptls, jl_exit_thread0_cb, sig, ctx);
     }
+    errno = errno_save;
 }
 
 #if defined(HAVE_TIMER)

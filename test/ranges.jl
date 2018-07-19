@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Dates, Random
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 
 # Compare precision in a manner sensitive to subnormals, which lose
 # precision compared to widening.
@@ -185,6 +186,12 @@ end
     @test isnan(Float64(x0/x0))
     @test isnan(Float64(x0/0))
     @test isnan(Float64(x0/0.0))
+
+    x = Base.TwicePrecision(Main.TestHelpers.PhysQuantity{1}(4.0))
+    @test x.hi*2 === Main.TestHelpers.PhysQuantity{1}(8.0)
+    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
+    @test x.hi/2 === Main.TestHelpers.PhysQuantity{1}(2.0)
+    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -418,7 +425,7 @@ end
     end
     @test s == 2
 
-    # loops covering the full range of smaller integer types
+    # loops covering the full range of integers
     s = 0
     for i = typemin(UInt8):typemax(UInt8)
         s += 1
@@ -426,10 +433,24 @@ end
     @test s == 256
 
     s = 0
+    for i = typemin(UInt):typemax(UInt)
+        i == 10 && break
+        s += 1
+    end
+    @test s == 10
+
+    s = 0
     for i = typemin(UInt8):one(UInt8):typemax(UInt8)
         s += 1
     end
     @test s == 256
+
+    s = 0
+    for i = typemin(UInt):1:typemax(UInt)
+        i == 10 && break
+        s += 1
+    end
+    @test s == 10
 
     # loops past typemax(Int)
     n = 0
@@ -477,15 +498,17 @@ end
     @test sum(0:0.1:10) == 505.
 end
 @testset "broadcasted operations with scalars" begin
-    @test broadcast(-, 1:3, 2) == -1:1
-    @test broadcast(-, 1:3, 0.25) == 1-0.25:3-0.25
-    @test broadcast(+, 1:3, 2) == 3:5
-    @test broadcast(+, 1:3, 0.25) == 1+0.25:3+0.25
-    @test broadcast(+, 1:2:6, 1) == 2:2:6
-    @test broadcast(+, 1:2:6, 0.3) == 1+0.3:2:5+0.3
-    @test broadcast(-, 1:2:6, 1) == 0:2:4
-    @test broadcast(-, 1:2:6, 0.3) == 1-0.3:2:5-0.3
-    @test broadcast(-, 2, 1:3) == 1:-1:-1
+    @test broadcast(-, 1:3) === -1:-1:-3
+    @test broadcast(-, 1:3, 2) === -1:1
+    @test broadcast(-, 1:3, 0.25) === 1-0.25:3-0.25
+    @test broadcast(+, 1:3) === 1:3
+    @test broadcast(+, 1:3, 2) === 3:5
+    @test broadcast(+, 1:3, 0.25) === 1+0.25:3+0.25
+    @test broadcast(+, 1:2:6, 1) === 2:2:6
+    @test broadcast(+, 1:2:6, 0.3) === 1+0.3:2:5+0.3
+    @test broadcast(-, 1:2:6, 1) === 0:2:4
+    @test broadcast(-, 1:2:6, 0.3) === 1-0.3:2:5-0.3
+    @test broadcast(-, 2, 1:3) === 1:-1:-1
 end
 @testset "operations between ranges and arrays" begin
     @test all(([1:5;] + (5:-1:1)) .== 6)
@@ -551,27 +574,33 @@ end
     @test [0.0:prevfloat(0.1):0.3;] == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
     @test [0.0:nextfloat(0.1):0.3;] == [0.0, nextfloat(0.1), nextfloat(0.2)]
 end
-@testset "issue #7420 for type $T" for T = (Float32, Float64,), # BigFloat),
-    a = -5:25,
-    s = [-5:-1; 1:25; ],
-    d = 1:25,
-    n = -1:15
 
-    denom = convert(T, d)
-    strt = convert(T, a)/denom
-    Δ     = convert(T, s)/denom
-    stop  = convert(T, (a + (n - 1) * s)) / denom
-    vals  = T[a:s:(a + (n - 1) * s); ] ./ denom
-    r = strt:Δ:stop
-    @test [r;] == vals
-    @test [range(strt, stop=stop, length=length(r));] == vals
-    n = length(r)
-    @test [r[1:n];] == [r;]
-    @test [r[2:n];] == [r;][2:end]
-    @test [r[1:3:n];] == [r;][1:3:n]
-    @test [r[2:2:n];] == [r;][2:2:n]
-    @test [r[n:-1:2];] == [r;][n:-1:2]
-    @test [r[n:-2:1];] == [r;][n:-2:1]
+function loop_range_values(::Type{T}) where T
+    for a = -5:25,
+        s = [-5:-1; 1:25; ],
+        d = 1:25,
+        n = -1:15
+
+        denom = convert(T, d)
+        strt = convert(T, a)/denom
+        Δ     = convert(T, s)/denom
+        stop  = convert(T, (a + (n - 1) * s)) / denom
+        vals  = T[a:s:(a + (n - 1) * s); ] ./ denom
+        r = strt:Δ:stop
+        @test [r;] == vals
+        @test [range(strt, stop=stop, length=length(r));] == vals
+        n = length(r)
+        @test [r[1:n];] == [r;]
+        @test [r[2:n];] == [r;][2:end]
+        @test [r[1:3:n];] == [r;][1:3:n]
+        @test [r[2:2:n];] == [r;][2:2:n]
+        @test [r[n:-1:2];] == [r;][n:-1:2]
+        @test [r[n:-2:1];] == [r;][n:-2:1]
+    end
+end
+
+@testset "issue #7420 for type $T" for T = (Float32, Float64,) # BigFloat),
+    loop_range_values(T)
 end
 
 @testset "issue #20373 (unliftable ranges with exact end points)" begin
@@ -800,14 +829,6 @@ end
     @test length(map(identity, UInt64(1):UInt64(5))) == 5
     @test length(map(identity, UInt128(1):UInt128(5))) == 5
 end
-@testset "mean/median" begin
-    for f in (mean, median)
-        for n = 2:5
-            @test f(2:n) == f([2:n;])
-            @test f(2:0.1:n) ≈ f([2:0.1:n;])
-        end
-    end
-end
 @testset "issue #8531" begin
     smallint = (Int === Int64 ?
                 (Int8,UInt8,Int16,UInt16,Int32,UInt32) :
@@ -875,7 +896,6 @@ end
 end
 
 @testset "LinRange ops" begin
-    @test start(LinRange(0,3,4)) == 1
     @test 2*LinRange(0,3,4) == LinRange(0,6,4)
     @test LinRange(0,3,4)*2 == LinRange(0,6,4)
     @test LinRange(0,3,4)/3 == LinRange(0,1,4)
@@ -990,7 +1010,10 @@ end
     for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
                range(1, stop=100, length=10), range(1f0, stop=100f0, length=10))
         float_r = float(_r)
-        big_r = big.(_r)
+        big_r = broadcast(big, _r)
+        big_rdot = big.(_r)
+        @test big_rdot == big_r
+        @test typeof(big_r) == typeof(big_rdot)
         @test typeof(big_r).name === typeof(_r).name
         if eltype(_r) <: AbstractFloat
             @test isa(float_r, typeof(_r))
@@ -1120,6 +1143,15 @@ end
         @test findall(in(2:(length(r) - 1)), r) === 2:(length(r) - 1)
         @test findall(in(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
     end
+    @test convert(Base.OneTo, 1:2) === Base.OneTo{Int}(2)
+    @test_throws ArgumentError("first element must be 1, got 2") convert(Base.OneTo, 2:3)
+    @test_throws ArgumentError("step must be 1, got 2") convert(Base.OneTo, 1:2:5)
+    @test Base.OneTo(1:2) === Base.OneTo{Int}(2)
+    @test Base.OneTo(1:1:2) === Base.OneTo{Int}(2)
+    @test Base.OneTo{Int32}(1:2) === Base.OneTo{Int32}(2)
+    @test Base.OneTo(Int32(1):Int32(2)) === Base.OneTo{Int32}(2)
+    @test Base.OneTo{Int16}(3.0) === Base.OneTo{Int16}(3)
+    @test_throws InexactError(:Int16, Int16, 3.2) Base.OneTo{Int16}(3.2)
 end
 
 @testset "range of other types" begin
@@ -1217,6 +1249,22 @@ end
     @test map(BigFloat, x) === x
 end
 
+@testset "broadcasting returns ranges" begin
+    x, r = 2, 1:5
+    @test @inferred(x .+ r) === 3:7
+    @test @inferred(r .+ x) === 3:7
+    @test @inferred(r .- x) === -1:3
+    @test @inferred(x .- r) === 1:-1:-3
+    @test @inferred(x .* r) === 2:2:10
+    @test @inferred(r .* x) === 2:2:10
+    @test @inferred(r ./ x) === 0.5:0.5:2.5
+    @test @inferred(x ./ r) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
+    @test @inferred(r .\ x) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
+    @test @inferred(x .\ r) === 0.5:0.5:2.5
+
+    @test @inferred(2 .* (r .+ 1) .+ 2) === 6:2:14
+end
+
 @testset "Bad range calls" begin
     @test_throws ArgumentError range(1)
     @test_throws ArgumentError range(nothing)
@@ -1230,5 +1278,94 @@ end
         @test @inferred(range(big(start), stop=big(stop), length=11)) isa LinRange{BigFloat}
         @test Float64.(@inferred(range(big(start), stop=big(stop), length=11))) == range(start, stop=stop, length=11)
         @test Float64.(@inferred(map(exp, range(big(start), stop=big(stop), length=11)))) == map(exp, range(start, stop=stop, length=11))
+    end
+end
+
+@testset "Issue #26532" begin
+    x = range(3, stop=3, length=5)
+    @test step(x) == 0.0
+    @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+end
+
+@testset "Issue #26608" begin
+    @test_throws BoundsError (Int8(-100):Int8(100))[400]
+    @test_throws BoundsError (-100:100)[typemax(UInt)]
+    @test_throws BoundsError (false:true)[3]
+end
+
+module NonStandardIntegerRangeTest
+
+using Test
+
+struct Position <: Integer
+    val::Int
+end
+Position(x::Position) = x # to resolve ambiguity with boot.jl:728
+
+struct Displacement <: Integer
+    val::Int
+end
+Displacement(x::Displacement) = x # to resolve ambiguity with boot.jl:728
+
+Base.:-(x::Displacement) = Displacement(-x.val)
+Base.:-(x::Position, y::Position) = Displacement(x.val - y.val)
+Base.:-(x::Position, y::Displacement) = Position(x.val - y.val)
+Base.:-(x::Displacement, y::Displacement) = Displacement(x.val - y.val)
+Base.:+(x::Position, y::Displacement) = Position(x.val + y.val)
+Base.:+(x::Displacement, y::Displacement) = Displacement(x.val + y.val)
+Base.:(<=)(x::Position, y::Position) = x.val <= y.val
+Base.:(<)(x::Position, y::Position) = x.val < y.val
+Base.:(<)(x::Displacement, y::Displacement) = x.val < y.val
+
+# for StepRange computation:
+Base.Unsigned(x::Displacement) = Unsigned(x.val)
+Base.rem(x::Displacement, y::Displacement) = Displacement(rem(x.val, y.val))
+Base.div(x::Displacement, y::Displacement) = Displacement(div(x.val, y.val))
+
+# required for collect (summing lengths); alternatively, should unsafe_length return Int by default?
+Base.promote_rule(::Type{Displacement}, ::Type{Int}) = Int
+Base.convert(::Type{Int}, x::Displacement) = x.val
+
+@testset "Ranges with nonstandard Integers" begin
+    for (start, stop) in [(2, 4), (3, 3), (3, -2)]
+        @test collect(Position(start) : Position(stop)) == Position.(start : stop)
+    end
+
+    for start in [3, 0, -2]
+        @test collect(Base.OneTo(Position(start))) == Position.(Base.OneTo(start))
+    end
+
+    for step in [-3, -2, -1, 1, 2, 3]
+        for start in [-1, 0, 2]
+            for stop in [start, start - 1, start + 2 * step, start + 2 * step + 1]
+                r1 = StepRange(Position(start), Displacement(step), Position(stop))
+                @test collect(r1) == Position.(start : step : stop)
+
+                r2 = Position(start) : Displacement(step) : Position(stop)
+                @test r1 === r2
+            end
+        end
+    end
+end
+
+end # module NonStandardIntegerRangeTest
+
+@testset "Issue #26619" begin
+    @test length(UInt(100) : -1 : 1) === UInt(100)
+    @test collect(UInt(5) : -1 : 3) == [UInt(5), UInt(4), UInt(3)]
+
+    let r = UInt(5) : -2 : 2
+        @test r.start === UInt(5)
+        @test r.step === -2
+        @test r.stop === UInt(3)
+        @test collect(r) == [UInt(5), UInt(3)]
+    end
+
+    for step in [-3, -2, -1, 1, 2, 3]
+        for start in [0, 15]
+            for stop in [0, 15]
+                @test collect(UInt(start) : step : UInt(stop)) == start : step : stop
+            end
+        end
     end
 end

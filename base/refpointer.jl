@@ -35,6 +35,14 @@ end
 
 eltype(x::Type{<:Ref{T}}) where {T} = @isdefined(T) ? T : Any
 convert(::Type{Ref{T}}, x::Ref{T}) where {T} = x
+size(x::Ref) = ()
+axes(x::Ref) = ()
+length(x::Ref) = 1
+ndims(x::Ref) = 0
+ndims(::Type{<:Ref}) = 0
+iterate(r::Ref) = (r[], nothing)
+iterate(r::Ref, s) = nothing
+IteratorSize(::Type{<:Ref}) = HasShape{0}()
 
 # create Ref objects for general object conversion
 unsafe_convert(::Type{Ref{T}}, x::Ref{T}) where {T} = unsafe_convert(Ptr{T}, x)
@@ -83,7 +91,7 @@ if is_primary_base_module
         return RefArray(a) # effectively a no-op
     end
     function Ref{P}(a::Array{T}) where P<:Union{Ptr,Cwstring,Cstring} where T
-        if (!isbits(T) && T <: eltype(P))
+        if (!isbitstype(T) && T <: eltype(P))
             # this Array already has the right memory layout for the requested Ref
             return RefArray(a,1,false) # root something, so that this function is type-stable
         else

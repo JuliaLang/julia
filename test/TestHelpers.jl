@@ -72,37 +72,44 @@ parenttype(A::OffsetArray) = parenttype(typeof(A))
 
 Base.parent(A::OffsetArray) = A.parent
 
-errmsg(A) = error("size not supported for arrays with indices $(axes(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
-Base.size(A::OffsetArray) = errmsg(A)
-Base.size(A::OffsetArray, d) = errmsg(A)
+Base.size(A::OffsetArray) = size(A.parent)
+Base.size(A::OffsetArray, d) = size(A.parent, d)
 Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianIndices(axes(A))
 Base.eachindex(::IndexLinear, A::OffsetVector) = axes(A, 1)
 
-# Implementations of indices and indices1. Since bounds-checking is
+# Implementations of indices and axes1. Since bounds-checking is
 # performance-critical and relies on indices, these are usually worth
 # optimizing thoroughly.
-@inline Base.axes(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? axes(parent(A))[d] .+ A.offsets[d] : (1:1)
+@inline Base.axes(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? Base.Slice(axes(parent(A))[d] .+ A.offsets[d]) : Base.Slice(1:1)
 @inline Base.axes(A::OffsetArray) = _indices(axes(parent(A)), A.offsets)  # would rather use ntuple, but see #15276
-@inline _indices(inds, offsets) = (inds[1] .+ offsets[1], _indices(tail(inds), tail(offsets))...)
+@inline _indices(inds, offsets) = (Base.Slice(inds[1] .+ offsets[1]), _indices(tail(inds), tail(offsets))...)
 _indices(::Tuple{}, ::Tuple{}) = ()
-Base.indices1(A::OffsetArray{T,0}) where {T} = 1:1  # we only need to specialize this one
+Base.axes1(A::OffsetArray{T,0}) where {T} = Base.Slice(1:1)  # we only need to specialize this one
 
+const OffsetAxis = Union{Integer, UnitRange, Base.Slice{<:UnitRange}}
 function Base.similar(A::OffsetArray, T::Type, dims::Dims)
     B = similar(parent(A), T, dims)
 end
-function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{UnitRange}})
-    B = similar(A, T, map(length, inds))
+function Base.similar(A::AbstractArray, T::Type, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}})
+    B = similar(A, T, map(indslength, inds))
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) =
-    OffsetArray(f(map(length, shape)), map(indsoffset, shape))
-Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:Array} =
-    OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
-Base.similar(::Type{T}, shape::Tuple{UnitRange,Vararg{UnitRange}}) where {T<:BitArray} =
-    OffsetArray(T(undef, map(length, shape)), map(indsoffset, shape))
+Base.similar(::Type{T}, shape::Tuple{OffsetAxis,Vararg{OffsetAxis}}) where {T<:AbstractArray} =
+    OffsetArray(T(undef, map(indslength, shape)), map(indsoffset, shape))
 
-Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
+Base.reshape(A::AbstractArray, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}}) = OffsetArray(reshape(A, map(indslength, inds)), map(indsoffset, inds))
+
+Base.fill(v, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(Array{typeof(v), N}(undef, map(indslength, inds)), map(indsoffset, inds)), v)
+Base.zeros(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
+    fill!(OffsetArray(Array{T, N}(undef, map(indslength, inds)), map(indsoffset, inds)), zero(T))
+Base.ones(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
+    fill!(OffsetArray(Array{T, N}(undef, map(indslength, inds)), map(indsoffset, inds)), one(T))
+Base.trues(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(BitArray{N}(undef, map(indslength, inds)), map(indsoffset, inds)), true)
+Base.falses(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(BitArray{N}(undef, map(indslength, inds)), map(indsoffset, inds)), false)
 
 @inline function Base.getindex(A::OffsetArray{T,N}, I::Vararg{Int,N}) where {T,N}
     checkbounds(A, I...)
@@ -162,9 +169,31 @@ _offset(out, ::Tuple{}, ::Tuple{}) = out
 
 indsoffset(r::AbstractRange) = first(r) - 1
 indsoffset(i::Integer) = 0
+indslength(r::AbstractRange) = length(r)
+indslength(i::Integer) = i
+
 
 Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
 
 end
+
+# Mimic a quantity with a physical unit that is not convertible to a real number
+struct PhysQuantity{n,T}   # n is like the exponent of the unit
+    val::T
+end
+PhysQuantity{n}(x::T) where {n,T} = PhysQuantity{n,T}(x)
+Base.zero(::Type{PhysQuantity{n,T}}) where {n,T} = PhysQuantity{n,T}(zero(T))
+Base.zero(x::PhysQuantity) = zero(typeof(x))
+Base.:+(x::PhysQuantity{n}, y::PhysQuantity{n}) where n = PhysQuantity{n}(x.val + y.val)
+Base.:-(x::PhysQuantity{n}, y::PhysQuantity{n}) where n = PhysQuantity{n}(x.val - y.val)
+Base.:*(x::PhysQuantity{n,T}, y::Int) where {n,T} = PhysQuantity{n}(x.val*y)
+Base.:/(x::PhysQuantity{n,T}, y::Int) where {n,T} = PhysQuantity{n}(x.val/y)
+Base.:*(x::PhysQuantity{n1,S}, y::PhysQuantity{n2,T}) where {n1,n2,S,T} =
+    PhysQuantity{n1+n2}(x.val*y.val)
+Base.:/(x::PhysQuantity{n1,S}, y::PhysQuantity{n2,T}) where {n1,n2,S,T} =
+    PhysQuantity{n1-n2}(x.val/y.val)
+Base.convert(::Type{PhysQuantity{0,T}}, x::Int) where T = PhysQuantity{0}(convert(T, x))
+Base.convert(::Type{P}, ::Int) where P<:PhysQuantity =
+    error("Int is incommensurate with PhysQuantity")
 
 end

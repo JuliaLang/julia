@@ -5,8 +5,8 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
-showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
+replstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), MIME("text/plain"), x), x)
+showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), x), x)
 
 @testset "IOContext" begin
     io = IOBuffer()
@@ -86,6 +86,8 @@ end
 @test_repr "x = ~y"
 @test_repr ":(:x, :y)"
 @test_repr ":(:(:(x)))"
+@test_repr "-\"\""
+@test_repr "-(<=)"
 
 # order of operations
 @test_repr "x + y * z"
@@ -432,7 +434,7 @@ let a = Expr(:quote,Expr(:$,:x8d003))
 end
 
 # issue #9865
-@test contains(replstr(Set(1:100)), r"^Set\(\[.+….+\]\)$")
+@test occursin(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
 
 # issue #11413
 @test string(:(*{1, 2})) == "*{1, 2}"
@@ -538,8 +540,8 @@ let filename = tempname()
     @test ret == [2]
 
     # stdin is unavailable on the workers. Run test on master.
-    @test contains(read(filename, String), "WARNING: hello")
-    ret = eval(Main, quote
+    @test occursin("WARNING: hello", read(filename, String))
+    ret = Core.eval(Main, quote
         remotecall_fetch(1, $filename) do fname
             open(fname) do f
                 redirect_stdin(f) do
@@ -549,7 +551,7 @@ let filename = tempname()
         end
     end)
 
-    @test contains(ret, "WARNING: hello")
+    @test occursin("WARNING: hello", ret)
     rm(filename)
 end
 
@@ -582,28 +584,28 @@ end
 @test !Base.inbase(Core)
 
 let repr = sprint(show, "text/plain", methods(Base.inbase))
-    @test contains(repr, "inbase(m::Module)")
+    @test occursin("inbase(m::Module)", repr)
 end
 let repr = sprint(show, "text/html", methods(Base.inbase))
-    @test contains(repr, "inbase(m::<b>Module</b>)")
+    @test occursin("inbase(m::<b>Module</b>)", repr)
 end
 
 f5971(x, y...; z=1, w...) = nothing
 let repr = sprint(show, "text/plain", methods(f5971))
-    @test contains(repr, "f5971(x, y...; z, w...)")
+    @test occursin("f5971(x, y...; z, w...)", repr)
 end
 let repr = sprint(show, "text/html", methods(f5971))
-    @test contains(repr, "f5971(x, y...; <i>z, w...</i>)")
+    @test occursin("f5971(x, y...; <i>z, w...</i>)", repr)
 end
 f16580(x, y...; z=1, w=y+x, q...) = nothing
 let repr = sprint(show, "text/html", methods(f16580))
-    @test contains(repr, "f16580(x, y...; <i>z, w, q...</i>)")
+    @test occursin("f16580(x, y...; <i>z, w, q...</i>)", repr)
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
-    @test contains(Base.url(which(sin, (Float64,))), "https://github.com/JuliaLang/julia/tree/v$VERSION/base/special/trig.jl#L")
+    @test occursin("https://github.com/JuliaLang/julia/tree/v$VERSION/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 else
-    @test contains(Base.url(which(sin, (Float64,))), "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/special/trig.jl#L")
+    @test occursin("https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 end
 
 # print_matrix should be able to handle small and large objects easily, test by
@@ -613,7 +615,7 @@ end
 @test replstr(Matrix(1.0I, 10, 10)) == "10×10 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
 # an array too long vertically to fit on screen, and too long horizontally:
 @test replstr(Vector(1.:100.)) == "100-element Array{Float64,1}:\n   1.0\n   2.0\n   3.0\n   4.0\n   5.0\n   6.0\n   7.0\n   8.0\n   9.0\n  10.0\n   ⋮  \n  92.0\n  93.0\n  94.0\n  95.0\n  96.0\n  97.0\n  98.0\n  99.0\n 100.0"
-@test contains(replstr(Vector(1.:100.)'), r"1×100 (LinearAlgebra\.)?Adjoint{Float64,Array{Float64,1}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0")
+@test occursin(r"1×100 (LinearAlgebra\.)?Adjoint{Float64,Array{Float64,1}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0", replstr(Vector(1.:100.)'))
 # too big in both directions to fit on screen:
 @test replstr((1.:100.)*(1:100)') == "100×100 Array{Float64,2}:\n   1.0    2.0    3.0    4.0    5.0    6.0  …    97.0    98.0    99.0    100.0\n   2.0    4.0    6.0    8.0   10.0   12.0      194.0   196.0   198.0    200.0\n   3.0    6.0    9.0   12.0   15.0   18.0      291.0   294.0   297.0    300.0\n   4.0    8.0   12.0   16.0   20.0   24.0      388.0   392.0   396.0    400.0\n   5.0   10.0   15.0   20.0   25.0   30.0      485.0   490.0   495.0    500.0\n   6.0   12.0   18.0   24.0   30.0   36.0  …   582.0   588.0   594.0    600.0\n   7.0   14.0   21.0   28.0   35.0   42.0      679.0   686.0   693.0    700.0\n   8.0   16.0   24.0   32.0   40.0   48.0      776.0   784.0   792.0    800.0\n   9.0   18.0   27.0   36.0   45.0   54.0      873.0   882.0   891.0    900.0\n  10.0   20.0   30.0   40.0   50.0   60.0      970.0   980.0   990.0   1000.0\n   ⋮                                  ⋮    ⋱                                 \n  92.0  184.0  276.0  368.0  460.0  552.0     8924.0  9016.0  9108.0   9200.0\n  93.0  186.0  279.0  372.0  465.0  558.0     9021.0  9114.0  9207.0   9300.0\n  94.0  188.0  282.0  376.0  470.0  564.0     9118.0  9212.0  9306.0   9400.0\n  95.0  190.0  285.0  380.0  475.0  570.0     9215.0  9310.0  9405.0   9500.0\n  96.0  192.0  288.0  384.0  480.0  576.0  …  9312.0  9408.0  9504.0   9600.0\n  97.0  194.0  291.0  388.0  485.0  582.0     9409.0  9506.0  9603.0   9700.0\n  98.0  196.0  294.0  392.0  490.0  588.0     9506.0  9604.0  9702.0   9800.0\n  99.0  198.0  297.0  396.0  495.0  594.0     9603.0  9702.0  9801.0   9900.0\n 100.0  200.0  300.0  400.0  500.0  600.0     9700.0  9800.0  9900.0  10000.0"
 
@@ -661,20 +663,13 @@ end
 
 # test structured zero matrix printing for select structured types
 let A = reshape(1:16, 4, 4)
-    @test contains(replstr(Diagonal(A)),
-        r"4×4 (LinearAlgebra\.)?Diagonal{Int(32|64),Array{Int(32|64),1}}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16")
-    @test contains(replstr(Bidiagonal(A, :U)),
-        r"4×4 (LinearAlgebra\.)?Bidiagonal{Int(32|64),Array{Int(32|64),1}}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16")
-    @test contains(replstr(Bidiagonal(A, :L)),
-        r"4×4 (LinearAlgebra\.)?Bidiagonal{Int(32|64),Array{Int(32|64),1}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16")
-    @test contains(replstr(SymTridiagonal(A + A')),
-        r"4×4 (LinearAlgebra\.)?SymTridiagonal{Int(32|64),Array{Int(32|64),1}}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32")
-    @test contains(replstr(Tridiagonal(diag(A, -1), diag(A), diag(A, +1))),
-        r"4×4 (LinearAlgebra\.)?Tridiagonal{Int(32|64),Array{Int(32|64),1}}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16")
-    @test contains(replstr(UpperTriangular(copy(A))),
-        r"4×4 (LinearAlgebra\.)?UpperTriangular{Int(32|64),Array{Int(32|64),2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16")
-    @test contains(replstr(LowerTriangular(copy(A))),
-        r"4×4 (LinearAlgebra\.)?LowerTriangular{Int(32|64),Array{Int(32|64),2}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16")
+    @test occursin(r"4×4 (LinearAlgebra\.)?Diagonal{Int(32|64),Array{Int(32|64),1}}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16", replstr(Diagonal(A)))
+    @test occursin(r"4×4 (LinearAlgebra\.)?Bidiagonal{Int(32|64),Array{Int(32|64),1}}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16", replstr(Bidiagonal(A, :U)))
+    @test occursin(r"4×4 (LinearAlgebra\.)?Bidiagonal{Int(32|64),Array{Int(32|64),1}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16", replstr(Bidiagonal(A, :L)))
+    @test occursin(r"4×4 (LinearAlgebra\.)?SymTridiagonal{Int(32|64),Array{Int(32|64),1}}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32", replstr(SymTridiagonal(A + A')))
+    @test occursin(r"4×4 (LinearAlgebra\.)?Tridiagonal{Int(32|64),Array{Int(32|64),1}}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16", replstr(Tridiagonal(diag(A, -1), diag(A), diag(A, +1))))
+    @test occursin(r"4×4 (LinearAlgebra\.)?UpperTriangular{Int(32|64),Array{Int(32|64),2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16", replstr(UpperTriangular(copy(A))))
+    @test occursin(r"4×4 (LinearAlgebra\.)?LowerTriangular{Int(32|64),Array{Int(32|64),2}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16", replstr(LowerTriangular(copy(A))))
 end
 
 # Vararg methods in method tables
@@ -731,10 +726,27 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
 @test_repr "continue"
 @test_repr "break"
 
-let x = [], y = []
+let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(x, y)
     push!(y, x)
-    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]]]"
+    push!(y, z)
+    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict([Any[#= circular reference @-3 =#]]=>[#= circular reference @-2 =#])]"
+    @test repr(z) == "Base.ImmutableDict([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]]=>[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
+    @test sprint(dump, x) == """
+        Array{Any}((1,))
+          1: Array{Any}((2,))
+            1: Array{Any}((1,))#= circular reference @-2 =#
+            2: Base.ImmutableDict{Array{Any,1},Array{Any,1}}
+              parent: Base.ImmutableDict{Array{Any,1},Array{Any,1}}
+                parent: #undef
+                key: #undef
+                value: #undef
+              key: Array{Any}((1,))#= circular reference @-3 =#
+              value: Array{Any}((2,))#= circular reference @-2 =#
+        """
+    dz = sprint(dump, z)
+    @test 10 < countlines(IOBuffer(dz)) < 40
+    @test sum(x -> 1, eachmatch(r"circular reference", dz)) == 4
 end
 
 # PR 16221
@@ -746,8 +758,8 @@ end
 @test string(Tuple{Array}) == "Tuple{Array}"
 
 # PR #16651
-@test !contains(repr(fill(1.,10,10)), "\u2026")
-@test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), fill(1.,30,30)), "\u2026")
+@test !occursin("\u2026", repr(fill(1.,10,10)))
+@test occursin("\u2026", sprint((io, x) -> show(IOContext(io, :limit => true), x), fill(1.,30,30)))
 
 let io = IOBuffer()
     ioc = IOContext(io, :limit => true)
@@ -767,7 +779,7 @@ end
 end
 
 let repr = sprint(dump, :(x = 1))
-    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n  typ: Any\n"
+    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
 end
 let repr = sprint(dump, Pair{String,Int64})
     @test repr == "Pair{String,Int64} <: Any\n  first::String\n  second::Int64\n"
@@ -780,15 +792,18 @@ let repr = sprint(dump, Int64)
 end
 let repr = sprint(dump, Any)
     @test length(repr) == 4
-    @test contains(repr, r"^Any\n")
+    @test occursin(r"^Any\n", repr)
     @test endswith(repr, '\n')
 end
 let repr = sprint(dump, Integer)
-    @test contains(repr, "Integer <: Real")
-    @test !contains(repr, "Any")
+    @test occursin("Integer <: Real", repr)
+    @test !occursin("Any", repr)
 end
 let repr = sprint(dump, Union{Integer, Float32})
     @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
+end
+let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
+    @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
 end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
@@ -804,6 +819,9 @@ let repr = sprint(dump, sin)
 end
 let repr = sprint(dump, Test)
     @test repr == "Module Test\n"
+end
+let repr = sprint(dump, nothing)
+    @test repr == "Nothing nothing\n"
 end
 let a = Vector{Any}(undef, 10000)
     a[2] = "elemA"
@@ -833,6 +851,9 @@ end
 @test repr(:(f.(X, Y))) == ":(f.(X, Y))"
 @test repr(:(f.(X))) == ":(f.(X))"
 @test repr(:(f.())) == ":(f.())"
+# broadcasted operators (#26517)
+@test_repr ":(y .= (+).(x, (*).(3, sin.(x))))"
+@test repr(:(y .= (+).(x, (*).(3, (sin).(x))))) == ":(y .= (+).(x, (*).(3, sin.(x))))"
 
 # pretty-printing of other `.` exprs
 test_repr("a.b")
@@ -884,7 +905,7 @@ let m = which(T20332{Int}(), (Int,)),
     mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
                m, Tuple{T20332{T}, Int} where T, Core.svec(), typemax(UInt))
     # test that this doesn't throw an error
-    @test contains(repr(mi), "MethodInstance for")
+    @test occursin("MethodInstance for", repr(mi))
 end
 
 @test sprint(show, Main) == "Main"
@@ -938,7 +959,7 @@ end
 
 let io = IOBuffer()
     show(io, MIME"text/html"(), f_with_params.body.name.mt)
-    @test contains(String(take!(io)), "f_with_params")
+    @test occursin("f_with_params", String(take!(io)))
 end
 
 @testset "printing of Val's" begin
@@ -972,8 +993,8 @@ end
     @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
         "2-element Array{Any,1}:\n Dict(1=>2) => (3=>4)\n          1 => 2     "
     # left-alignment when not using the "=>" symbol
-    @test replstr(Pair{Integer,Int64}[1=>2, 33=>4]) ==
-        "2-element Array{Pair{Integer,Int64},1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
+    @test replstr(Any[Pair{Integer,Int64}(1, 2), Pair{Integer,Int64}(33, 4)]) ==
+        "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
 end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
@@ -998,6 +1019,25 @@ end
         "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
     @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
         "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
+end
+
+@testset "arrays printing follows the :compact property when specified" begin
+    x = 3.141592653589793
+    @test showstr(x) == "3.141592653589793"
+    @test showstr([x, x]) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
+    @test showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
+    @test showstr([x x; x x]) == showstr([x x; x x], :compact => true) ==
+        "[3.14159 3.14159; 3.14159 3.14159]"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
+    @test replstr([x, x]) == replstr([x, x], :compact => false) ==
+        "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
+    @test replstr([x, x], :compact => true) ==
+        "2-element Array{Float64,1}:\n 3.14159\n 3.14159"
+    @test replstr([x x; x x]) == replstr([x x; x x], :compact => true) ==
+        "2×2 Array{Float64,2}:\n 3.14159  3.14159\n 3.14159  3.14159"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
 end
 
 @testset "Array printing with limited rows" begin
@@ -1074,7 +1114,7 @@ end
     io = IOBuffer()
     show(io, "text/html", m)
     s = String(take!(io))
-    @test contains(s, " in Base.Math ")
+    @test occursin(" in Base.Math ", s)
 end
 
 module AlsoExportsPair
@@ -1138,8 +1178,35 @@ end
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 
+    # issue #27680
+    @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+              "Set(Tuple{Float64,Float64}[(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
+              "Set(Tuple{Float64,Float64}[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
+
+    # issue #27747
+    let t = (x = Integer[1, 2],)
+        v = [t, t]
+        @test showstr(v) == "NamedTuple{(:x,),Tuple{Array{Integer,1}}}[(x = [1, 2],), (x = [1, 2],)]"
+        @test replstr(v) == "2-element Array{NamedTuple{(:x,),Tuple{Array{Integer,1}}},1}:\n (x = [1, 2],)\n (x = [1, 2],)"
+    end
+
     # issue #25857
     @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
+
+    # issues #25466 & #26256
+    @test replstr([:A => [1]]) == "1-element Array{Pair{Symbol,Array{$Int,1}},1}:\n :A => [1]"
+
+    # issue #26881
+    @test showstr([keys(Dict('a' => 'b'))]) == "Base.KeySet{Char,Dict{Char,Char}}[['a']]"
+    @test showstr([values(Dict('a' => 'b'))]) == "Base.ValueIterator{Dict{Char,Char}}[['b']]"
+    @test replstr([keys(Dict('a' => 'b'))]) == "1-element Array{Base.KeySet{Char,Dict{Char,Char}},1}:\n ['a']"
+
+    @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
+    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1=>2]"
+    @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1=>2)"
+
+    # issue #27979 (dislaying arrays of pairs containing arrays as first member)
+    @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1149,11 +1216,11 @@ end
 
     display(td, d)
     result = String(take!(td.io))
-    @test contains(result, summary(d))
+    @test occursin(summary(d), result)
 
     # Is every pair in the string?
     for el in d
-        @test contains(result, string(el))
+        @test occursin(string(el), result)
     end
 end
 
@@ -1161,14 +1228,14 @@ end
     K20111(x) = y -> x
     buf = IOBuffer()
     show(buf, methods(K20111(1)))
-    @test contains(String(take!(buf)), " 1 method for generic function")
+    @test occursin(" 1 method for generic function", String(take!(buf)))
 end
 
 @generated f22798(x::Integer, y) = :x
 @testset "#22798" begin
     buf = IOBuffer()
     show(buf, methods(f22798))
-    @test contains(String(take!(buf)), "f22798(x::Integer, y)")
+    @test occursin("f22798(x::Integer, y)", String(take!(buf)))
 end
 
 @testset "Intrinsic printing" begin
@@ -1176,8 +1243,8 @@ end
     let io = IOBuffer()
         show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
         str = String(take!(io))
-        @test contains(str, "arraylen")
-        @test contains(str, "(intrinsic function")
+        @test occursin("arraylen", str)
+        @test occursin("(intrinsic function", str)
     end
 end
 
@@ -1191,3 +1258,46 @@ end
     @test repr("text/plain", context=:compact=>true) == "\"text/plain\""
     @test repr(MIME("text/plain"), context=:compact=>true) == "MIME type text/plain"
 end
+
+@testset "#26799 BigInt summary" begin
+    @test Base.dims2string(tuple(BigInt(10))) == "10-element"
+    @test Base.inds2string(tuple(BigInt(10))) == "10"
+    @test summary(BigInt(1):BigInt(10)) == "10-element UnitRange{BigInt}"
+    @test summary(Base.OneTo(BigInt(10))) == "10-element Base.OneTo{BigInt}"
+end
+
+# Tests for code_typed linetable annotations
+function compute_annotations(f, types)
+    src = code_typed(f, types)[1][1]
+    ir = Core.Compiler.inflate_ir(src)
+    la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
+    max_loc_method = maximum(length(s) for s in la)
+    join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
+end
+
+@noinline leaffunc() = print()
+
+@inline g_line() = leaffunc()
+
+# Test that separate instances of the same function do not get merged
+@inline function f_line()
+   g_line()
+   g_line()
+   g_line()
+   nothing
+end
+h_line() = f_line()
+@test startswith(compute_annotations(h_line, Tuple{}), """
+    │╻╷ f_line
+    ││╻  g_line
+    ││╻  g_line""")
+
+# issue #27352
+@test_deprecated print(nothing)
+@test_deprecated print(stdout, nothing)
+@test_deprecated string(nothing)
+@test_deprecated string(1, "", nothing)
+@test_deprecated let x = nothing; "x = $x" end
+@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+@test_deprecated `/bin/foo $nothing`
+@test_deprecated `$nothing`

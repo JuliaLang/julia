@@ -353,7 +353,7 @@ JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 JL_DLLEXPORT int jl_errno(void) { return errno; }
 JL_DLLEXPORT void jl_set_errno(int e) { errno = e; }
 
-// -- get the number of CPU cores --
+// -- get the number of CPU threads (logical cores) --
 
 #ifdef _OS_WINDOWS_
 typedef DWORD (WINAPI *GAPC)(WORD);
@@ -362,7 +362,7 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-JL_DLLEXPORT int jl_cpu_cores(void)
+JL_DLLEXPORT int jl_cpu_threads(void)
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;

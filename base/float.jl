@@ -31,18 +31,21 @@ const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)
 const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 
+const Inf = Inf64
 """
-    Inf
+    Inf, Inf64
 
 Positive infinity of type [`Float64`](@ref).
 """
-const Inf = Inf64
+Inf, Inf64
+
+const NaN = NaN64
 """
-    NaN
+    NaN, NaN64
 
 A not-a-number value of type [`Float64`](@ref).
 """
-const NaN = NaN64
+NaN, NaN64
 
 ## conversions to floating-point ##
 Float16(x::Integer) = convert(Float16, convert(Float32, x))
@@ -271,6 +274,7 @@ float(x) = AbstractFloat(x)
 Return an appropriate type to represent a value of type `T` as a floating point value.
 Equivalent to `typeof(float(zero(T)))`.
 
+# Examples
 ```jldoctest
 julia> float(Complex{Int})
 Complex{Float64}
@@ -348,28 +352,26 @@ trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
 trunc(::Type{T}, x::Float16) where {T<:Integer} = trunc(T, Float32(x))
 
 # fallbacks
-floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,floor(x))
+floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
 floor(::Type{T}, x::Float16) where {T<:Integer} = floor(T, Float32(x))
-ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,ceil(x))
+ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
 ceil(::Type{T}, x::Float16) where {T<:Integer} = ceil(T, Float32(x))
-round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x))
+round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
 round(::Type{T}, x::Float16) where {T<:Integer} = round(T, Float32(x))
 
-trunc(x::Float64) = trunc_llvm(x)
-trunc(x::Float32) = trunc_llvm(x)
-trunc(x::Float16) = Float16(trunc(Float32(x)))
+round(x::Float64, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+round(x::Float32, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+round(x::Float64, r::RoundingMode{:Down})    = floor_llvm(x)
+round(x::Float32, r::RoundingMode{:Down})    = floor_llvm(x)
+round(x::Float64, r::RoundingMode{:Up})      = ceil_llvm(x)
+round(x::Float32, r::RoundingMode{:Up})      = ceil_llvm(x)
+round(x::Float64, r::RoundingMode{:Nearest}) = rint_llvm(x)
+round(x::Float32, r::RoundingMode{:Nearest}) = rint_llvm(x)
 
-floor(x::Float64) = floor_llvm(x)
-floor(x::Float32) = floor_llvm(x)
-floor(x::Float16) = Float16(floor(Float32(x)))
-
-ceil(x::Float64) = ceil_llvm(x)
-ceil(x::Float32) = ceil_llvm(x)
-ceil(x::Float16) = Float16( ceil(Float32(x)))
-
-round(x::Float64) = rint_llvm(x)
-round(x::Float32) = rint_llvm(x)
-round(x::Float16) = Float16(round(Float32(x)))
+round(x::Float16, r::RoundingMode{:ToZero}) = Float16(round(Float32(x), r))
+round(x::Float16, r::RoundingMode{:Down}) = Float16(round(Float32(x), r))
+round(x::Float16, r::RoundingMode{:Up}) = Float16(round(Float32(x), r))
+round(x::Float16, r::RoundingMode{:Nearest}) = Float16(round(Float32(x), r))
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
@@ -530,6 +532,7 @@ isnan(x::Real) = false
 
 Test whether a number is finite.
 
+# Examples
 ```jldoctest
 julia> isfinite(5)
 true
@@ -588,7 +591,7 @@ uabs(x::BitSigned) = unsigned(abs(x))
 
 
 """
-    nextfloat(x::AbstractFloat, n::Integer)
+    nextfloat(x::IEEEFloat, n::Integer)
 
 The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
 applications of `prevfloat` if `n < 0`.
@@ -640,6 +643,14 @@ such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
 nextfloat(x::AbstractFloat) = nextfloat(x,1)
 
 """
+    prevfloat(x::AbstractFloat, n::Integer)
+
+The result of `n` iterative applications of `prevfloat` to `x` if `n >= 0`, or `-n`
+applications of `nextfloat` if `n < 0`.
+"""
+prevfloat(x::AbstractFloat, d::Integer) = nextfloat(x, -d)
+
+"""
     prevfloat(x::AbstractFloat)
 
 Return the largest floating point number `y` of the same type as `x` such `y < x`. If no
@@ -662,7 +673,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -683,7 +694,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -764,6 +775,7 @@ default). This is defined as the gap between 1 and the next largest value repres
 `typeof(one(T))`, and is equivalent to `eps(one(T))`.  (Since `eps(T)` is a
 bound on the *relative error* of `T`, it is a "dimensionless" quantity like [`one`](@ref).)
 
+# Examples
 ```jldoctest
 julia> eps()
 2.220446049250313e-16
@@ -801,6 +813,7 @@ is the nearest floating point number to ``y``, then
 |y-x| \\leq \\operatorname{eps}(x)/2.
 ```
 
+# Examples
 ```jldoctest
 julia> eps(1.0)
 2.220446049250313e-16
@@ -876,14 +889,4 @@ float(r::StepRangeLen{T}) where {T} =
     StepRangeLen{typeof(float(T(r.ref)))}(float(r.ref), float(r.step), length(r), r.offset)
 function float(r::LinRange)
     LinRange(float(r.start), float(r.stop), length(r))
-end
-
-# big, broadcast over arrays
-# TODO: do the definitions below primarily pertaining to integers belong in float.jl?
-function big end # no prior definitions of big in sysimg.jl, necessitating this
-broadcast(::typeof(big), r::UnitRange) = big(r.start):big(last(r))
-broadcast(::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
-broadcast(::typeof(big), r::StepRangeLen) = StepRangeLen(big(r.ref), big(r.step), length(r), r.offset)
-function broadcast(::typeof(big), r::LinRange)
-    LinRange(big(r.start), big(r.stop), length(r))
 end

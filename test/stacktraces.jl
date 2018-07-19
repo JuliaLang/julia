@@ -141,7 +141,19 @@ end
 
 # Test that `removes_frames!` can correctly remove frames from within the module
 trace = StackTracesTestMod.unfiltered_stacktrace()
-@test contains(string(trace), "unfiltered_stacktrace")
+@test occursin("unfiltered_stacktrace", string(trace))
 
 trace = StackTracesTestMod.filtered_stacktrace()
-@test !contains(string(trace), "filtered_stacktrace")
+@test !occursin("filtered_stacktrace", string(trace))
+
+let bt, topline = @__LINE__
+try
+    let x = 1
+        y = 2x
+        z = 2z-1
+    end
+catch
+    bt = stacktrace(catch_backtrace())
+end
+@test bt[1].line == topline+4
+end

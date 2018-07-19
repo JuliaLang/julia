@@ -23,8 +23,8 @@ copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
 copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
 
 function copy!(dst::AbstractArray, src::AbstractArray)
-    size(dst) == size(src) || throw(ArgumentError(
-        "arrays must have the same size for copy! (consider using `copyto!`)"))
+    axes(dst) == axes(src) || throw(ArgumentError(
+        "arrays must have the same axes for copy! (consider using `copyto!`)"))
     copyto!(dst, src)
 end
 

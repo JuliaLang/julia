@@ -364,7 +364,7 @@ for result in eachrow(results)
     b = result[:backport]
     if (isna(a) && !isna(b)) || (isna(b) && !isna(a))
         color = :yellow
-    elseif a != b && contains(b, "pass")
+    elseif a != b && occursin("pass", b)
         color = :green
     elseif a != b
         color = :red

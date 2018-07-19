@@ -259,7 +259,7 @@ static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al)
 {
     unsigned countbits = union_isbits(eltype, fsz, al);
-    return countbits > 0 && countbits < 127;
+    return (countbits > 0 && countbits < 127) ? countbits : 0;
 }
 
 static int references_name(jl_value_t *p, jl_typename_t *name)
@@ -588,16 +588,7 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
     }
 }
 
-#define BOXN_FUNC(nb,nw)                                                \
-    JL_DLLEXPORT jl_value_t *jl_box##nb(jl_datatype_t *t, int##nb##_t x) \
-    {                                                                   \
-        jl_ptls_t ptls = jl_get_ptls_states();                          \
-        assert(jl_isbits(t));                                           \
-        assert(jl_datatype_size(t) == sizeof(x));                       \
-        jl_value_t *v = jl_gc_alloc(ptls, nw * sizeof(void*), t);       \
-        *(int##nb##_t*)jl_data_ptr(v) = x;                              \
-        return v;                                                       \
-    }                                                                   \
+#define PERMBOXN_FUNC(nb,nw)                                            \
     jl_value_t *jl_permbox##nb(jl_datatype_t *t, int##nb##_t x)         \
     {                                                                   \
         assert(jl_isbits(t));                                           \
@@ -606,13 +597,13 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
         *(int##nb##_t*)jl_data_ptr(v) = x;                              \
         return v;                                                       \
     }
-BOXN_FUNC(8,  1)
-BOXN_FUNC(16, 1)
-BOXN_FUNC(32, 1)
+PERMBOXN_FUNC(8,  1)
+PERMBOXN_FUNC(16, 1)
+PERMBOXN_FUNC(32, 1)
 #ifdef _P64
-BOXN_FUNC(64, 1)
+PERMBOXN_FUNC(64, 1)
 #else
-BOXN_FUNC(64, 2)
+PERMBOXN_FUNC(64, 2)
 #endif
 
 #define UNBOX_FUNC(j_type,c_type)                                       \

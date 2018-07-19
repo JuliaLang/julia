@@ -66,7 +66,7 @@ A265(fld::Int) = A265(Float64(fld))
 mutable struct B265{T}
     field1::T
     # dummy arg is present to prevent (::Type{T}){T}(arg) from matching the test calls
-    B265{T}(field1::Any, dummy::Nothing) where T = new(field1) # prevent generation of outer ctor
+    B265{T}(field1::Any, dummy::Nothing) where {T} = new(field1) # prevent generation of outer ctor
 end
   # define some constructors
 B265(x::Int, dummy::Nothing) = B265{Int}(x, dummy)
@@ -89,8 +89,8 @@ B265(x::Any, dummy::Nothing) = B265{UInt8}(x, dummy)
 @test (B265_(2)::B265{Float64}).field1 === 2.0e0
 @test (B265_(3)::B265{UInt8}).field1 === 0x03
 
-@test Base.return_types(B265_, (Int,)) == Any[Union{B265{Float64}, B265{Int}, B265{UInt8}}]
-@test Core.Compiler.return_type(B265_, (Int,)) == Union{B265{Float64}, B265{Int}, B265{UInt8}}
+@test Base.return_types(B265_, (Int,)) == Any[B265]
+@test Core.Compiler.return_type(B265_, (Int,)) == B265
 
 
 # test oldworld call / inference
@@ -152,7 +152,7 @@ let ex = t265.exception
         The applicable method may be too new: running in world age $wc265, while current world is $wc."""
     @test startswith(str, cmps)
     cmps = "\n  h265() at $loc_h265 (method too new to be called from this world context.)"
-    @test contains(str, cmps)
+    @test occursin(cmps, str)
 end
 
 # test for generated function correctness

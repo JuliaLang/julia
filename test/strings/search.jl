@@ -313,9 +313,9 @@ end
 @test findfirst(r"az", "foo,bar,baz") == 10:11
 @test findnext(r"az", "foo,bar,baz", 12) == nothing
 
-# contains with a String and Char needle
-@test contains("foo", "o")
-@test contains("foo", 'o')
+# occursin with a String and Char needle
+@test occursin("o", "foo")
+@test occursin('o', "foo")
 
 @test_throws ErrorException "ab" ∈ "abc"
 
@@ -328,3 +328,8 @@ end
 @test @inferred findall(isequal('a'), "éa") == [3]
 @test @inferred findall(isequal('€'), "€€") == [1, 4]
 @test @inferred isempty(findall(isequal('é'), ""))
+
+# issue #18109
+s_18109 = "fooα🐨βcd3"
+@test findlast(isequal('o'), s_18109) == 3
+@test findfirst(isequal('d'), s_18109) == 13

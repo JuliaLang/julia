@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.CoreLogging
+using Test, Base.CoreLogging
 import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
     handle_message, shouldlog, min_enabled_level, catch_exceptions
 
@@ -59,7 +59,7 @@ end
     @test record.file == Base.source_path()
     @test record.line == kwargs[:real_line]
     @test record.id isa Symbol
-    @test contains(String(record.id), r"^.*logging_[[:xdigit:]]{8}$")
+    @test occursin(r"^.*logging_[[:xdigit:]]{8}$", String(record.id))
 
     # User-defined metadata
     @test kwargs[:bar_val] === bar_val
@@ -69,13 +69,13 @@ end
 
     # Keyword values accessible from message block
     record2 = logs[2]
-    @test contains(record2, (Info,"test2"))
+    @test occursin((Info, "test2"), record2)
     kwargs = record2.kwargs
     @test kwargs[:value_in_msg_block] === 1000.0
 
     # Splatting of keywords
     record3 = logs[3]
-    @test contains(record3, (Info,"test3"))
+    @test occursin((Info, "test3"), record3)
     kwargs = record3.kwargs
     @test sort(collect(keys(kwargs))) == [:a, :b]
     @test kwargs[:a] === 1
@@ -109,6 +109,17 @@ end
     @test record._module == logger.shouldlog_args[2]
     @test record.group   == logger.shouldlog_args[3]
     @test record.id      == logger.shouldlog_args[4]
+
+    # handling of nothing
+    logger = TestLogger()
+    with_logger(logger) do
+        @info "foo" _module = nothing _file = nothing _line = nothing
+    end
+    @test length(logger.logs) == 1
+    record = logger.logs[1]
+    @test record._module == nothing
+    @test record.file == nothing
+    @test record.line == nothing
 end
 
 
@@ -150,6 +161,33 @@ end
         # Reset to default
         disable_logging(BelowMinLevel)
     end
+
+    @testset "Log level filtering - ENV" begin
+        logger = TestLogger()
+        with_logger(logger) do
+            for (e, r) in (("", false),
+                           (",,,,", false),
+                           ("al", false),
+                           ("all", true),
+                           ("a,b,all,c", true),
+                           ("a,b,,c", false),
+                           ("Mainb", false),
+                           ("aMain", false),
+                           ("Main", true),
+                           ("a,b,Main,c", true),
+                           ("Base", true),
+                           ("a,b,Base,c", true),
+                           ("Filesystem", true),
+                           ("a,b,Filesystem,c", true),
+                           ("a,b,Base.Filesystem,c", false))
+                ENV["JULIA_DEBUG"] = e
+                @test CoreLogging.env_override_minlevel(:Main, Base.Filesystem) === r
+                @test CoreLogging.current_logger_for_env(BelowMinLevel, :Main, Base.Filesystem) === (r ? logger : nothing)
+                @test CoreLogging.current_logger_for_env(Info, :Main, Base.Filesystem) === logger
+            end
+        end
+    end
+    ENV["JULIA_DEBUG"] = ""
 end
 
 #-------------------------------------------------------------------------------
@@ -265,14 +303,27 @@ end
     │   b = asdf
     └ @ Base other.jl:101
     """
+
+    # nothing values
+    @test genmsg(Warn, "msg", nothing, nothing, nothing) ==
+    """
+    ┌ Warning: msg
+    └ @ nothing nothing:nothing
+    """
 end
 
 # Issue #26273
 let m = Module(:Bare26273i, false)
-    eval(m, :(import Base: @error))
-    @test_logs (:error, "Hello") eval(m, quote
+    Core.eval(m, :(import Base: @error))
+    @test_logs (:error, "Hello") Core.eval(m, quote
         @error "Hello"
     end)
+end
+
+@testset "#26335: _module and _file kwargs" begin
+    ignored = Test.Ignored()
+    @test_logs (:warn, "a", ignored, ignored, ignored, "foo.jl") (@warn "a" _file="foo.jl")
+    @test_logs (:warn, "a", Base) (@warn "a" _module=Base)
 end
 
 end

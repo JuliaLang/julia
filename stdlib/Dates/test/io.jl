@@ -80,7 +80,7 @@ end
     b2 = "96/Feb/1"
     @test Dates.DateTime(b2, f) + Dates.Year(1900) + Dates.Day(14) == dt + Dates.Month(1)
     @test Dates.format(dt + Dates.Month(1) - Dates.Day(14), "yy/uuu/d") == b2
-    # Here we've specifed a text month name, but given a number
+    # Here we've specified a text month name, but given a number
     b3 = "96/2/15"
     @test_throws ArgumentError Dates.DateTime(b3, f)
     try
@@ -390,7 +390,7 @@ end
     Zulu = String
 
     function Dates.tryparsenext(d::Dates.DatePart{'Z'}, str, i, len)
-        Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
+        return Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
     end
 
     str = "2015-07-24T05:38:19.591Z"

@@ -77,10 +77,14 @@ end
     end
 end
 
+struct PNG end
+Base.show(io::IO, ::MIME"image/png", ::PNG) = print(io, "PNG")
+
 @testset "stringmime" begin
     @test stringmime("text/plain", [1 2;3 4]) == repr("text/plain", [1 2;3 4])
     @test stringmime("text/html", "raw html data") == "raw html data"
     @test stringmime("text/plain", "string") == "\"string\""
     @test stringmime("image/png", UInt8[2,3,4,7]) == "AgMEBw=="
     @test stringmime("text/plain", 3.141592653589793, context=:compact=>true) == "3.14159"
+    @test stringmime("image/png", PNG()) == stringmime(MIME("image/png"), PNG()) == "UE5H"
 end

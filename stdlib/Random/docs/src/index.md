@@ -11,7 +11,7 @@ streams of random numbers. Besides `MersenneTwister`, Julia also provides the `R
 type, which is a wrapper over the OS provided entropy.
 
 Most functions related to random generation accept an optional `AbstractRNG` as the first argument,
-`rng` , which defaults to the global one if not provided. Morever, some of them accept optionally
+`rng` , which defaults to the global one if not provided. Moreover, some of them accept optionally
 dimension specifications `dims...` (which can be given as a tuple) to generate arrays of random
 values.
 
@@ -21,7 +21,7 @@ A `MersenneTwister` or `RandomDevice` RNG can generate random numbers of the fol
 [`UInt32`](@ref), [`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref), [`UInt128`](@ref),
 [`BigInt`](@ref) (or complex numbers of those types).
 Random floating point numbers are generated uniformly in ``[0, 1)``. As `BigInt` represents
-unbounded integers, the interval must be specified (e.g. `rand(big(1:6))`).
+unbounded integers, the interval must be specified (e.g. `rand(big.(1:6))`).
 
 ```@docs
 Random.srand
@@ -34,7 +34,6 @@ Random.randn
 Random.randn!
 Random.randexp
 Random.randexp!
-Random.randjump
 Random.randstring
 Random.randsubseq
 Random.randsubseq!

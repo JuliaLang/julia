@@ -21,39 +21,30 @@ function prompt(msg::AbstractString; default::AbstractString="", password::Bool=
     Base.depwarn(string(
         "`LibGit2.prompt(msg::AbstractString; default::AbstractString=\"\", password::Bool=false)` is deprecated, use ",
         "`result = Base.prompt(msg, default=default, password=password); result === nothing ? \"\" : result` instead."), :prompt)
-    coalesce(Base.prompt(msg, default=default, password=password), "")
+    something(Base.prompt(msg, default=default, password=password), "")
 end
 
-# PR #23640
-# when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}`
-#  with `payload::CredentialPayload` from base/libgit2/libgit2.jl
-function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Union{AbstractCredential, CachedCredentials, Nothing})
-        # Note: Be careful not to show the contents of the credentials as it could reveal a
-        # password.
-        if payload === nothing
-            msg = "`LibGit2.$f($sig; payload=nothing)` is deprecated, use "
-            msg *= "`LibGit2.$f($sig; payload=LibGit2.CredentialPayload())` instead."
-            p = CredentialPayload()
-        else
-            cred = payload
-            C = typeof(cred)
-            msg = "`LibGit2.$f($sig; payload=$C(...))` is deprecated, use "
-            msg *= "`LibGit2.$f($sig; payload=LibGit2.CredentialPayload($C(...)))` instead."
-            p = CredentialPayload(cred)
-        end
-        Base.depwarn(msg, f)
-    else
-        p = payload::CredentialPayload
+# PR #26437
+# when this deprecation is deleted, remove all calls to it, and remove the keyword of:
+# `payload` from "src/LibGit2.jl"
+function deprecate_payload_keyword(f, sig, payload)
+    if payload !== nothing
+        Base.depwarn(string(
+            "`LibGit2.$f($sig; payload=cred)` is deprecated, use ",
+            "`LibGit2.$f($sig; credentials=cred)` instead."), f)
     end
-    return p
 end
 
 @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
 
 @eval Base @deprecate merge!(repo::$(GitRepo), args...; kwargs...) $(LibGit2.merge!)(repo, args...; kwargs...)
 @eval Base @deprecate push!(w::$(GitRevWalker), arg) $(LibGit2.push!)(w, arg)
+@eval Base @deprecate count(diff::$(GitDiff)) $(LibGit2.count)(diff)
+@eval Base @deprecate count(idx::$(GitIndex)) $(LibGit2.count)(idx)
+@eval Base @deprecate count(rb::$(GitRebase)) $(LibGit2.count)(rb)
+@eval Base @deprecate count(tree::$(GitTree)) $(LibGit2.count)(tree)
+@eval Base @deprecate count(f::Function, walker::$(GitRevWalker); kwargs...) $(LibGit2.count)(f, walker; kwargs...)
+@eval Base @deprecate map(f::Function, walker::$(GitRevWalker); kwargs...) $(LibGit2.map)(f, walker; kwargs...)
 
 # PR #24594
 @deprecate AbstractCredentials AbstractCredential false

@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    StringIndexError(str, i)
+
+An error occurred when trying to access `str` at index `i` that is not valid.
+"""
 struct StringIndexError <: Exception
     string::AbstractString
     index::Integer
@@ -75,6 +80,7 @@ pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s)+(i-1)
 
 ncodeunits(s::String) = Core.sizeof(s)
+sizeof(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
@@ -136,7 +142,8 @@ function _nextind_str(s, i::Int)
         return i′ < i ? nextind(s, i′) : i+1
     end
     # first continuation byte
-    @inbounds b = codeunit(s, i += 1)
+    (i += 1) > n && return i
+    @inbounds b = codeunit(s, i)
     b & 0xc0 ≠ 0x80 && return i
     ((i += 1) > n) | (l < 0xe0) && return i
     # second continuation byte
@@ -165,7 +172,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@propagate_inbounds function next(s::String, i::Int)
+@propagate_inbounds function iterate(s::String, i::Int=firstindex(s))
+    i > ncodeunits(s) && return nothing
     b = codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
@@ -255,12 +263,12 @@ function length(s::String, i::Int, j::Int)
     j < i && return 0
     @inbounds i, k = thisind(s, i), i
     c = j - i + (i == k)
-    _length(s, i, j, c)
+    length(s, i, j, c)
 end
 
-length(s::String) = _length(s, 1, ncodeunits(s), ncodeunits(s))
+length(s::String) = length(s, 1, ncodeunits(s), ncodeunits(s))
 
-@inline function _length(s::String, i::Int, n::Int, c::Int)
+@inline function length(s::String, i::Int, n::Int, c::Int)
     i < n || return c
     @inbounds b = codeunit(s, i)
     @inbounds while true
@@ -316,11 +324,11 @@ end
 codelen(c::Char) = 4 - (trailing_zeros(0xff000000 | reinterpret(UInt32, c)) >> 3)
 
 function string(a::Union{String,AbstractChar}...)
-    sprint() do io
-        for x in a
-            print(io, x)
-        end
+    io = IOBuffer()
+    for x in a
+        print(io, x)
     end
+    return String(resize!(io.data, io.size))
 end
 
 function repeat(s::String, r::Integer)

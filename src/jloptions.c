@@ -36,6 +36,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // cpu_target ("native", "core2", etc...)
                             0,    // nprocs
                             NULL, // machine_file
+                            NULL, // project
                             0,    // isinteractive
                             0,    // color
                             JL_OPTIONS_HISTORYFILE_ON, // history file
@@ -92,7 +93,7 @@ static const char opts[]  =
 
     // parallel options
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
-    "                           \"auto\" launches as many workers as the number of local cores\n"
+    "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
@@ -171,6 +172,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_sysimage_native_code,
            opt_compiled_modules,
            opt_machine_file,
+           opt_project,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:";
     static const struct option longopts[] = {
@@ -194,6 +196,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "procs",           required_argument, 0, 'p' },
         { "machinefile",     required_argument, 0, opt_machinefile },   // deprecated
         { "machine-file",    required_argument, 0, opt_machine_file },
+        { "project",         optional_argument, 0, opt_project },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
         { "startup-file",    required_argument, 0, opt_startup_file },
@@ -382,7 +385,7 @@ restart_switch:
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
-                jl_options.nprocs = jl_cpu_cores();
+                jl_options.nprocs = jl_cpu_threads();
             }
             else {
                 long nprocs = strtol(optarg, &endptr, 10);
@@ -398,6 +401,9 @@ restart_switch:
             jl_options.machine_file = strdup(optarg);
             if (!jl_options.machine_file)
                 jl_error("julia: failed to allocate memory");
+            break;
+        case opt_project:
+            jl_options.project = optarg ? strdup(optarg) : "@.";
             break;
         case opt_color:
             if (!strcmp(optarg, "yes"))

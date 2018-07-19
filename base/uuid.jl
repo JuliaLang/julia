@@ -30,7 +30,7 @@ let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
     function UUID(s::AbstractString)
         s = lowercase(s)
 
-        if !contains(s, r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+        if !occursin(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
             throw(ArgumentError("Malformed UUID string: $(repr(s))"))
         end
 
@@ -50,8 +50,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         u = u.value
         a = Base.StringVector(36)
         for i in groupings
-            d = u & 0xf
-            a[i] = '0' + d + 39*(d > 9)
+            a[i] = hex_chars[1 + u & 0xf]
             u >>= 4
         end
         a[24] = a[19] = a[14] = a[9] = '-'
@@ -59,4 +58,5 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
     end
 end
 
-show(io::IO, u::UUID) = write(io, string(u))
+print(io::IO, u::UUID) = print(io, string(u))
+show(io::IO, u::UUID) = print(io, "UUID(\"", u, "\")")

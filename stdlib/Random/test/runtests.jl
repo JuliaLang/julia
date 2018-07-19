@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, SparseArrays
+using Test: guardsrand
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
@@ -10,6 +11,8 @@ using Random
 using Random.DSFMT
 
 using Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
+
+import Future # randjump
 
 @testset "Issue #6573" begin
     srand(0)
@@ -120,7 +123,9 @@ end
 for T in [UInt32, UInt64, UInt128, Int128]
     local r, s
     s = big(typemax(T)-1000) : big(typemax(T)) + 10000
-    @test rand(s) != rand(s)
+    # s is a 11001-length array
+    @test rand(s) isa BigInt
+    @test sum(rand(s, 1000) .== rand(s, 1000)) <= 20
     @test big(typemax(T)-1000) <= rand(s) <= big(typemax(T)) + 10000
     r = rand(s, 1, 2)
     @test size(r) == (1, 2)
@@ -496,8 +501,8 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
 end
 
-# test MersenneTwister polynomial generation and jump
-let seed = rand(UInt)
+@testset "MersenneTwister polynomial generation and jump" begin
+    seed = rand(UInt)
     mta = MersenneTwister(seed)
     mtb = MersenneTwister(seed)
     step = 25000*2
@@ -512,11 +517,22 @@ let seed = rand(UInt)
 
     # test PRNG jump
 
-    mts = randjump(mta, 25000, size)
+    function randjumpvec(m, steps, len) # old version of randjump
+        mts = accumulate(Future.randjump, fill(steps, len-1); init=m)
+        pushfirst!(mts, m)
+        mts
+    end
+
+    mts = randjumpvec(mta, 25000, size)
     @test length(mts) == 4
 
     for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
         @test rand(mtb, Float64) == x
+    end
+
+    @testset "generated RNGs are in a deterministic state (relatively to ==)" begin
+        m = MersenneTwister()
+        @test Future.randjump(m, 25000) == Future.randjump(m, 25000)
     end
 end
 
@@ -566,10 +582,10 @@ let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
     # RNGs do not share their seed in randjump
-    let rs = randjump(r, big(10)^20, 2)
-        @test  rs[1].seed !== rs[2].seed
-        srand(rs[2])
-        @test seed == rs[1].seed != rs[2].seed
+    let r2 = Future.randjump(r, big(10)^20)
+        @test  r.seed !== r2.seed
+        srand(r2)
+        @test seed == r.seed != r2.seed
     end
     resize!(seed, 4)
     @test r.seed != seed
@@ -607,7 +623,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
             if eltype(c) == Char
                 @test issubset(s, c)
             else # UInt8
-                @test issubset(s, map(Char, c))
+                @test issubset(s, Set(Char(v) for v in c))
             end
         end
     end
@@ -651,9 +667,22 @@ struct RandomStruct23964 end
     @test_throws ArgumentError rand(RandomStruct23964())
 end
 
-@testset "rand(::$RNG, ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
+@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
                                                  T ∈ (Int32, UInt32, Int64, Int128, UInt128)
     RNG isa MersenneTwister && srand(RNG, rand(UInt128)) # for reproducibility
     r = T(1):T(108)
     @test rand(RNG, SamplerRangeFast(r)) ∈ r
+end
+
+@testset "rand! is allocation-free" begin
+    for A in (Array{Int}(undef, 20), Array{Float64}(undef, 5, 4), BitArray(undef, 20), BitArray(undef, 50, 40))
+        rand!(A)
+        @test @allocated(rand!(A)) == 0
+    end
+end
+
+@testset "gentype for UniformBits" begin
+    @test Random.gentype(Random.UInt52()) == UInt64
+    @test Random.gentype(Random.UInt52(UInt128)) == UInt128
+    @test Random.gentype(Random.UInt104()) == UInt128
 end

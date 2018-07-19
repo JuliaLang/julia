@@ -100,11 +100,13 @@ if Sys.iswindows()
         pager = shell_split(get(ENV, "PAGER", "more"))
         g = pager[1] == "more" ? "" : "g"
         run(Cmd(`$pager +$(line)$(g) \"$file\"`, windows_verbatim = true))
+        nothing
     end
 else
     function less(file::AbstractString, line::Integer)
         pager = shell_split(get(ENV, "PAGER", "less"))
         run(`$pager +$(line)g $file`)
+        nothing
     end
 end
 

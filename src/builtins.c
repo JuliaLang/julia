@@ -390,6 +390,8 @@ JL_CALLABLE(jl_f_sizeof)
             jl_error("type does not have a fixed size");
         return jl_box_long(jl_datatype_size(x));
     }
+    if (x == jl_bottom_type)
+        jl_error("The empty type does not have a well-defined size since it does not have instances.");
     if (jl_is_array(x)) {
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
     }
@@ -409,8 +411,6 @@ JL_CALLABLE(jl_f_issubtype)
 {
     JL_NARGS(<:, 2, 2);
     jl_value_t *a = args[0], *b = args[1];
-    if (jl_is_typevar(a)) a = ((jl_tvar_t*)a)->ub; // TODO should we still allow this?
-    if (jl_is_typevar(b)) b = ((jl_tvar_t*)b)->ub;
     JL_TYPECHK(<:, type, a);
     JL_TYPECHK(<:, type, b);
     return (jl_subtype(a,b) ? jl_true : jl_false);
@@ -437,6 +437,13 @@ JL_CALLABLE(jl_f_throw)
     JL_NARGS(throw, 1, 1);
     jl_throw(args[0]);
     return jl_nothing;
+}
+
+JL_CALLABLE(jl_f_ifelse)
+{
+    JL_NARGS(ifelse, 3, 3);
+    JL_TYPECHK(ifelse, bool, args[0]);
+    return (args[0] == jl_false ? args[2] : args[1]);
 }
 
 // apply ----------------------------------------------------------------------
@@ -793,9 +800,19 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
         JL_GC_POP();
         return u;
     }
+    if (jl_is_uniontype(t)) {
+        jl_value_t **u;
+        jl_value_t *r;
+        JL_GC_PUSHARGS(u, 2);
+        u[0] = get_fieldtype(((jl_uniontype_t*)t)->a, f);
+        u[1] = get_fieldtype(((jl_uniontype_t*)t)->b, f);
+        r = jl_type_union(u, 2);
+        JL_GC_POP();
+        return r;
+    }
+    if (!jl_is_datatype(t))
+        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, t);
     jl_datatype_t *st = (jl_datatype_t*)t;
-    if (!jl_is_datatype(st))
-        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, (jl_value_t*)st);
     int field_index;
     if (jl_is_long(f)) {
         field_index = jl_unbox_long(f) - 1;
@@ -989,7 +1006,6 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
                                             jl_expr_type);
     ex->head = head;
     ex->args = ar;
-    ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();
     return ex;
 }
@@ -1007,7 +1023,6 @@ JL_CALLABLE(jl_f__expr)
                                             jl_expr_type);
     ex->head = (jl_sym_t*)args[0];
     ex->args = ar;
-    ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();
     return (jl_value_t*)ex;
 }
@@ -1143,7 +1158,7 @@ static void add_intrinsic_properties(enum intrinsic f, unsigned nargs, void (*pf
 
 static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
 {
-    jl_value_t *i = jl_box32(jl_intrinsic_type, (int32_t)f);
+    jl_value_t *i = jl_permbox32(jl_intrinsic_type, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
     jl_set_const(inm, sym, i);
     jl_module_export(inm, sym);
@@ -1181,13 +1196,13 @@ static void add_builtin(const char *name, jl_value_t *v)
     jl_set_const(jl_core_module, jl_symbol(name), v);
 }
 
-jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
+jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return jl_gf_mtable(b)->cache.leaf->func.linfo->fptr;
+    return jl_gf_mtable(b)->cache.leaf->func.linfo->specptr.fptr1;
 }
 
-static void add_builtin_func(const char *name, jl_fptr_t fptr)
+static void add_builtin_func(const char *name, jl_fptr_args_t fptr)
 {
     jl_mk_builtin_func(NULL, name, fptr);
 }
@@ -1202,6 +1217,7 @@ void jl_init_primitives(void)
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
+    add_builtin_func("ifelse", jl_f_ifelse);
 
     // field access
     add_builtin_func("getfield",  jl_f_getfield);
@@ -1273,10 +1289,12 @@ void jl_init_primitives(void)
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
-    add_builtin("LabelNode", (jl_value_t*)jl_labelnode_type);
+    add_builtin("LineInfoNode", (jl_value_t*)jl_lineinfonode_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
     add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);
+    add_builtin("PhiCNode", (jl_value_t*)jl_phicnode_type);
+    add_builtin("UpsilonNode", (jl_value_t*)jl_upsilonnode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
@@ -1286,6 +1304,8 @@ void jl_init_primitives(void)
     add_builtin("UInt8", (jl_value_t*)jl_uint8_type);
     add_builtin("Int32", (jl_value_t*)jl_int32_type);
     add_builtin("Int64", (jl_value_t*)jl_int64_type);
+    add_builtin("UInt32", (jl_value_t*)jl_uint32_type);
+    add_builtin("UInt64", (jl_value_t*)jl_uint64_type);
 #ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);
 #else

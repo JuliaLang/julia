@@ -17,11 +17,39 @@ respectively.
 cglobal
 
 """
-    cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Cvoid}
+    CFunction struct
 
-Generate C-callable function pointer from the Julia function `f`. Type annotation of the return
-value in the callback function is a must for situations where Julia cannot infer the return
-type automatically.
+Garbage-collection handle for the return value from `@cfunction`
+when the first argument is annotated with '\\\$'.
+Like all `cfunction` handles, it should be passed to `ccall` as a `Ptr{Cvoid}`,
+and will be converted automatically at the call site to the appropriate type.
+
+See [`@cfunction`](@ref).
+"""
+struct CFunction <: Ref{Cvoid}
+    ptr::Ptr{Cvoid}
+    f::Any
+    _1::Ptr{Cvoid}
+    _2::Ptr{Cvoid}
+    let constructor = false end
+end
+unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
+
+"""
+    @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
+    @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
+
+Generate a C-callable function pointer from the Julia function `closure`
+for the given type signature.
+To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the signature.
+
+Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression
+(although it can include a splat expression). And that these arguments will be evaluated in global scope
+during compile-time (not deferred until runtime).
+Adding a '\\\$' in front of the function argument changes this to instead create a runtime closure
+over the local variable `callable`.
+
+See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
 
 # Examples
 ```julia-repl
@@ -29,11 +57,26 @@ julia> function foo(x::Int, y::Int)
            return x + y
        end
 
-julia> cfunction(foo, Int, Tuple{Int,Int})
+julia> @cfunction(foo, Int, (Int, Int))
 Ptr{Cvoid} @0x000000001b82fcd0
 ```
 """
-cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any), f, r, a)
+macro cfunction(f, at, rt)
+    if !(isa(rt, Expr) && rt.head === :tuple)
+        throw(ArgumentError("@cfunction argument types must be a literal tuple"))
+    end
+    rt.head = :call
+    pushfirst!(rt.args, GlobalRef(Core, :svec))
+    if isa(f, Expr) && f.head === :$
+        fptr = f.args[1]
+        typ = CFunction
+    else
+        fptr = QuoteNode(f)
+        typ = Ptr{Cvoid}
+    end
+    cfun = Expr(:cfunction, typ, fptr, at, rt, QuoteNode(:ccall))
+    return esc(cfun)
+end
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
     const Cchar = Int8
@@ -104,11 +147,14 @@ convert(::Type{Ptr{T}}, p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}} = Ptr{T}(p
 """
     pointer(array [, index])
 
-Get the native address of an array or string element. Be careful to ensure that a Julia
-reference to `a` exists as long as this pointer will be used. This function is "unsafe" like
-`unsafe_convert`.
+Get the native address of an array or string, optionally at a given location `index`.
 
-Calling `Ref(array[, index])` is generally preferable to this function.
+This function is "unsafe". Be careful to ensure that a Julia reference to
+`array` exists as long as this pointer will be used. The [`GC.@preserve`](@ref)
+macro should be used to protect the `array` argument from garbage collection
+within a given block of code.
+
+Calling [`Ref(array[, index])`](@ref Ref) is generally preferable to this function as it guarantees validity.
 """
 function pointer end
 
@@ -204,18 +250,24 @@ function transcode end
 
 transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
 transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
-transcode(::Type{T}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}}) where {T<:Union{Int32,UInt32}} =
+transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(Vector(src)))
+transcode(::Type{T}, src::CodeUnits{UInt8,String}) where {T<:Union{Int32,UInt32}} =
     transcode(T, String(src))
+
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
-    for c in src; print(buf, Char(c)); end
+    for c in src
+        print(buf, Char(c))
+    end
     take!(buf)
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
-function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}})
+function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
+    @assert !has_offset_axes(src)
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -265,7 +317,8 @@ function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,Stri
     return dst
 end
 
-function transcode(::Type{UInt8}, src::Vector{UInt16})
+function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
+    @assert !has_offset_axes(src)
     n = length(src)
     n == 0 && return UInt8[]
 

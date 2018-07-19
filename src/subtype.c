@@ -39,7 +39,7 @@ extern "C" {
 // Union type decision points are discovered while the algorithm works.
 // If a new Union decision is encountered, the `more` flag is set to tell
 // the forall/exists loop to grow the stack.
-// TODO: the stack probably needs to be artifically large because of some
+// TODO: the stack probably needs to be artificially large because of some
 // deeper problem (see #21191) and could be shrunk once that is fixed
 typedef struct {
     int depth;
@@ -248,6 +248,8 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
         return 0;
+    if (specificity && a == (jl_value_t*)jl_typeofbottom_type)
+        return 0;
     if (jl_is_concrete_type(a) && jl_is_concrete_type(b) &&
         // TODO: remove these 2 lines if and when Tuple{Union{}} === Union{}
         (((jl_datatype_t*)a)->name != jl_tuple_typename ||
@@ -359,11 +361,44 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         return a;
     if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->lb))
         return b;
-    if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b)) {
+    if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b) &&
+        // issue #24521: don't merge Type{T} where typeof(T) varies
+        !(jl_is_type_type(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(a)) != jl_typeof(jl_tparam0(b)))) {
         if (jl_subtype(a, b)) return b;
         if (jl_subtype(b, a)) return a;
     }
     return jl_new_struct(jl_uniontype_type, a, b);
+}
+
+// compute a greatest lower bound of `a` and `b`
+// in many cases, we need to over-estimate this by returning `b`.
+static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b)
+{
+    if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type)
+        return b;
+    if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type)
+        return a;
+    if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
+        return jl_bottom_type;
+    if (jl_is_uniontype(a) && in_union(a, b))
+        return b;
+    if (jl_is_uniontype(b) && in_union(b, a))
+        return a;
+    if (jl_is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
+        return b;
+    if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
+        return a;
+    if (jl_is_typevar(a) && obviously_egal(b, ((jl_tvar_t*)a)->ub))
+        return a;
+    if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->ub))
+        return b;
+    if (obviously_disjoint(a, b, 0))
+        return jl_bottom_type;
+    if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b)) {
+        if (jl_subtype(a, b)) return a;
+        if (jl_subtype(b, a)) return b;
+    }
+    return b;
 }
 
 static jl_unionall_t *rename_unionall(jl_unionall_t *u)
@@ -398,22 +433,26 @@ static jl_value_t *pick_union_element(jl_value_t *u, jl_stenv_t *e, int8_t R)
     return u;
 }
 
-// compare the current component of `u` to `t`. `R==1` means `u` came from the right side.
-static int subtype_union(jl_value_t *t, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
-{
-    jl_value_t *choice = pick_union_element((jl_value_t*)u, e, R);
-    return R ? subtype(t, choice, e, param) : subtype(choice, t, e, param);
-}
+static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
-// subtype(), but taking apart unions before handling vars
-static int subtype_ufirst(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+// subtype for variable bounds consistency check. needs its own forall/exists environment.
+static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
-    if (jl_is_uniontype(x) && jl_is_typevar(y))
-        return subtype_union(y, (jl_uniontype_t*)x, e, 0, 0);
-    if (jl_is_typevar(x) && jl_is_uniontype(y))
-        return (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b ||
-                subtype_union(x, (jl_uniontype_t*)y, e, 1, 0));
-    return subtype(x, y, e, 0);
+    jl_unionstate_t oldLunions = e->Lunions;
+    jl_unionstate_t oldRunions = e->Runions;
+    int sub;
+    memset(e->Lunions.stack, 0, sizeof(e->Lunions.stack));
+    memset(e->Runions.stack, 0, sizeof(e->Runions.stack));
+    e->Runions.depth = 0;
+    e->Runions.more = 0;
+    e->Lunions.depth = 0;
+    e->Lunions.more = 0;
+
+    sub = forall_exists_subtype(x, y, e, 0);
+
+    e->Runions = oldRunions;
+    e->Lunions = oldLunions;
+    return sub;
 }
 
 // use the current context to record where a variable occurred, for the purpose
@@ -448,17 +487,15 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_ufirst(b->ub, a, e);
+        return e->ignore_free || subtype_ccheck(b->ub, a, e);
     record_var_occurrence(bb, e, param);
     if (!bb->right)  // check ∀b . b<:a
-        return subtype_ufirst(bb->ub, a, e);
+        return subtype_ccheck(bb->ub, a, e);
     if (bb->ub == a)
         return 1;
-    if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ufirst(bb->lb, a, e)))
+    if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(bb->lb, a, e)))
         return 0;
-    // for contravariance we would need to compute a meet here, but
-    // because of invariance bb.ub ⊓ a == a here always. however for this
-    // to work we need to compute issub(left,right) before issub(right,left),
+    // for this to work we need to compute issub(left,right) before issub(right,left),
     // since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
     if (e->intersection) {
         jl_value_t *ub = intersect_ufirst(bb->ub, a, e, bb->depth0);
@@ -466,7 +503,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
             bb->ub = ub;
     }
     else {
-        bb->ub = a;  // meet(bb->ub, a)
+        bb->ub = simple_meet(bb->ub, a);
     }
     assert(bb->ub != (jl_value_t*)b);
     if (jl_is_typevar(a)) {
@@ -474,7 +511,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         if (aa && !aa->right && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
             // an "exists" var cannot equal a "forall" var inside it unless the forall
             // var has equal bounds.
-            return subtype_ufirst(aa->ub, aa->lb, e);
+            return subtype_ccheck(aa->ub, aa->lb, e);
         }
     }
     return 1;
@@ -485,17 +522,17 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_ufirst(a, b->lb, e);
+        return e->ignore_free || subtype_ccheck(a, b->lb, e);
     record_var_occurrence(bb, e, param);
     if (!bb->right)  // check ∀b . b>:a
-        return subtype_ufirst(a, bb->lb, e);
+        return subtype_ccheck(a, bb->lb, e);
     if (bb->lb == bb->ub) {
         if (jl_is_typevar(bb->lb) && !jl_is_type(a) && !jl_is_typevar(a))
             return var_gt((jl_tvar_t*)bb->lb, a, e, param);
         if (jl_is_typevar(a) && !jl_is_type(bb->lb) && !jl_is_typevar(bb->lb))
             return var_lt((jl_tvar_t*)a, bb->lb, e, param);
     }
-    if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ufirst(a, bb->ub, e)))
+    if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e)))
         return 0;
     bb->lb = simple_join(bb->lb, a);
     assert(bb->lb != (jl_value_t*)b);
@@ -520,11 +557,9 @@ static int is_leaf_bound(jl_value_t *v)
     return !jl_is_type(v) && !jl_is_typevar(v);
 }
 
-static int is_leaf_typevar(jl_value_t *v)
+static int is_leaf_typevar(jl_tvar_t *v)
 {
-    if (jl_is_typevar(v))
-        return is_leaf_typevar(((jl_tvar_t*)v)->lb);
-    return is_leaf_bound(v);
+    return is_leaf_bound(v->lb);
 }
 
 static jl_value_t *widen_Type(jl_value_t *t)
@@ -630,7 +665,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
     int diagonal = !vb.occurs_inv && vb.occurs_cov > 1;
-    if (ans && (vb.concrete || (diagonal && is_leaf_typevar((jl_value_t*)u->var)))) {
+    if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
             // upper bound is concrete.
@@ -765,6 +800,21 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
                 break;  // if y ends in `Vararg{Any}` skip checking everything
         }
         if (vx && vy) {
+            jl_tvar_t *yp1=NULL, *yp2=NULL;
+            jl_value_t *yva = unwrap_2_unionall(yi, &yp1, &yp2);
+            jl_tvar_t *xp1=NULL, *xp2=NULL;
+            jl_value_t *xva = unwrap_2_unionall(xi, &xp1, &xp2);
+            if ((jl_value_t*)xp1 == jl_tparam1(xva) || (jl_value_t*)xp2 == jl_tparam1(xva)) {
+                // check for unconstrained vararg on left, constrained on right
+                if (jl_is_long(jl_tparam1(yva)))
+                    return 0;
+                if (jl_is_typevar(jl_tparam1(yva))) {
+                    jl_varbinding_t *ylv = lookup(e, (jl_tvar_t*)jl_tparam1(yva));
+                    if (ylv && jl_is_long(ylv->lb))
+                        return 0;
+                }
+            }
+
             // skip testing element type if vararg lengths are 0
             if (jl_is_datatype(xi)) {
                 jl_value_t *xl = jl_tparam1(xi);
@@ -955,8 +1005,6 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     return x == y || jl_egal(x, y);
 }
 
-static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
-
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (obviously_egal(x, y)) return 1;
@@ -1038,6 +1086,7 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, in
         int set = e->Lunions.more;
         if (!sub || !set)
             break;
+        save_env(e, &saved, &se);
         for (int i = set; i <= lastset; i++)
             statestack_set(&e->Lunions, i, 0);
         lastset = set - 1;
@@ -1114,6 +1163,13 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
     if (obviously_egal(a, b))    return 1;
     if (obviously_unequal(a, b)) return 0;
     return jl_subtype(a, b) && jl_subtype(b, a);
+}
+
+JL_DLLEXPORT int jl_is_not_broken_subtype(jl_value_t *a, jl_value_t *b)
+{
+    // TODO: the final commented out check here isn't correct; it should be closer to the
+    // `issingletype` check used by `isnotbrokensubtype` in `base/compiler/typeutils.jl`
+    return !jl_is_kind(b) || !jl_is_type_type(a); // || jl_is_datatype_singleton((jl_datatype_t*)jl_tparam0(a));
 }
 
 int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt)
@@ -1559,7 +1615,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     else {
         res = intersect(u->body, t, e, param);
     }
-    vb->concrete |= (!vb->occurs_inv && vb->occurs_cov > 1 && is_leaf_typevar((jl_value_t*)u->var));
+    vb->concrete |= (!vb->occurs_inv && vb->occurs_cov > 1 && is_leaf_typevar(u->var));
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -2027,11 +2083,11 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 if (ii == jl_bottom_type) return jl_bottom_type;
                 if (jl_is_typevar(xp1)) {
                     jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)xp1);
-                    if (xb && is_leaf_typevar((jl_value_t*)xb->var)) xb->concrete = 1;
+                    if (xb && is_leaf_typevar(xb->var)) xb->concrete = 1;
                 }
                 if (jl_is_typevar(yp1)) {
                     jl_varbinding_t *yb = lookup(e, (jl_tvar_t*)yp1);
-                    if (yb && is_leaf_typevar((jl_value_t*)yb->var)) yb->concrete = 1;
+                    if (yb && is_leaf_typevar(yb->var)) yb->concrete = 1;
                 }
                 JL_GC_PUSH2(&ii, &i2);
                 // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
@@ -2053,11 +2109,15 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     break;
                 newparams[i] = ii;
             }
-            jl_value_t *res;
-            if (i < np)
-                res = jl_bottom_type;
-            else
-                res = jl_apply_type(xd->name->wrapper, newparams, np);
+            jl_value_t *res = jl_bottom_type;
+            if (i >= np) {
+                JL_TRY {
+                    res = jl_apply_type(xd->name->wrapper, newparams, np);
+                }
+                JL_CATCH {
+                    res = jl_bottom_type;
+                }
+            }
             JL_GC_POP();
             return res;
         }
@@ -2150,16 +2210,76 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 {
     int ntvars = jl_subtype_env_size((jl_value_t*)u);
     jl_svec_t *vec = jl_alloc_svec_uninit(ntvars);
-    JL_GC_PUSH1(&vec);
     jl_unionall_t *ua = (jl_unionall_t*)u;
     int i;
-    for(i=0; i < ntvars; i++) {
+    for (i = 0; i < ntvars; i++) {
         assert(jl_is_unionall(ua));
         jl_svecset(vec, i, ua->var);
         ua = (jl_unionall_t*)ua->body;
     }
-    JL_GC_POP();
     return vec;
+}
+
+// For (possibly unions or unionalls of) tuples `a` and `b`, return the tuple of
+// pointwise unions. Note that this may in general be wider than `Union{a,b}`.
+// If `a` and `b` are not (non va-)tuples of equal length (or unions or unionalls
+// of such), return NULL.
+jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
+{
+    if (jl_is_unionall(a)) {
+        jl_value_t *ans = switch_union_tuple(((jl_unionall_t*)a)->body, b);
+        if (ans == NULL)
+            return NULL;
+        JL_GC_PUSH1(&ans);
+        ans = jl_type_unionall(((jl_unionall_t*)a)->var, ans);
+        JL_GC_POP();
+        return ans;
+    }
+    if (jl_is_unionall(b)) {
+        jl_value_t *ans = switch_union_tuple(a, ((jl_unionall_t*)b)->body);
+        if (ans == NULL)
+            return NULL;
+        JL_GC_PUSH1(&ans);
+        ans = jl_type_unionall(((jl_unionall_t*)b)->var, ans);
+        JL_GC_POP();
+        return ans;
+    }
+    if (jl_is_uniontype(a)) {
+        a = switch_union_tuple(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)a)->b);
+        if (a == NULL)
+            return NULL;
+        JL_GC_PUSH1(&a);
+        jl_value_t *ans = switch_union_tuple(a, b);
+        JL_GC_POP();
+        return ans;
+    }
+    if (jl_is_uniontype(b)) {
+        b = switch_union_tuple(((jl_uniontype_t*)b)->a, ((jl_uniontype_t*)b)->b);
+        if (b == NULL)
+            return NULL;
+        JL_GC_PUSH1(&b);
+        jl_value_t *ans = switch_union_tuple(a, b);
+        JL_GC_POP();
+        return ans;
+    }
+    if (!jl_is_tuple_type(a) || !jl_is_tuple_type(b)) {
+        return NULL;
+    }
+    if (jl_nparams(a) != jl_nparams(b) || jl_is_va_tuple((jl_datatype_t*)a) ||
+            jl_is_va_tuple((jl_datatype_t*)b)) {
+        return NULL;
+    }
+    jl_svec_t *vec = jl_alloc_svec(jl_nparams(a));
+    JL_GC_PUSH1(&vec);
+    for (int i = 0; i < jl_nparams(a); i++) {
+        jl_value_t *ts[2];
+        ts[0] = jl_tparam(a, i);
+        ts[1] = jl_tparam(b, i);
+        jl_svecset(vec, i, jl_type_union(ts, 2));
+    }
+    jl_value_t *ans = (jl_value_t*)jl_apply_tuple_type(vec);
+    JL_GC_POP();
+    return ans;
 }
 
 // sets *issubty to 1 iff `a` is a subtype of `b`
@@ -2196,12 +2316,27 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         e.envsz = szb;
         *ans = intersect_all(a, b, &e);
         if (*ans == jl_bottom_type) goto bot;
-        // TODO: don't yet use the types returned by `intersect`, since it returns
-        // Unions of Tuples and other code can only handle direct Tuples.
-        if (!jl_is_datatype(jl_unwrap_unionall(*ans))) {
-            *ans = b;
+        // TODO: code dealing with method signatures is not able to handle unions, so if
+        // `a` and `b` are both tuples, we need to be careful and may not return a union,
+        // even if `intersect` produced one
+        int env_from_subtype = 1;
+        if (jl_is_tuple_type(jl_unwrap_unionall(a)) && jl_is_tuple_type(jl_unwrap_unionall(b)) &&
+            !jl_is_datatype(jl_unwrap_unionall(*ans))) {
+            jl_value_t *ans_unwrapped = jl_unwrap_unionall(*ans);
+            JL_GC_PUSH1(&ans_unwrapped);
+            if (jl_is_uniontype(ans_unwrapped)) {
+                ans_unwrapped = switch_union_tuple(((jl_uniontype_t*)ans_unwrapped)->a, ((jl_uniontype_t*)ans_unwrapped)->b);
+                if (ans_unwrapped != NULL) {
+                    *ans = jl_rewrap_unionall(ans_unwrapped, *ans);
+                }
+            }
+            JL_GC_POP();
+            if (!jl_is_datatype(jl_unwrap_unionall(*ans))) {
+                *ans = b;
+                env_from_subtype = 0;
+            }
         }
-        else {
+        if (env_from_subtype) {
             sz = szb;
             // TODO: compute better `env` directly during intersection.
             // for now, we attempt to compute env by using subtype on the intersection result
@@ -2296,8 +2431,10 @@ static int sub_msp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env)
 {
     JL_GC_PUSH2(&a, &b);
     while (env != NULL) {
-        a = jl_type_unionall(env->var, a);
-        b = jl_type_unionall(env->var, b);
+        if (jl_is_type(a) || jl_is_typevar(a))
+            a = jl_type_unionall(env->var, a);
+        if (jl_is_type(b) || jl_is_typevar(b))
+            b = jl_type_unionall(env->var, b);
         env = env->prev;
     }
     int sub = jl_subtype(a, b);
@@ -2374,7 +2511,7 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
         int cms = type_morespecific_(ce, pe, invariant, env);
         int eqv = !cms && eq_msp(ce, pe, env);
 
-        if (!cms && !eqv) {
+        if (!cms && !eqv && !sub_msp(ce, pe, env)) {
             /*
               A bound vararg tuple can be more specific despite disjoint elements in order to
               preserve transitivity. For example in
@@ -2567,6 +2704,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
 
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
         jl_datatype_t *tta = (jl_datatype_t*)a, *ttb = (jl_datatype_t*)b;
+        // Type{Union{}} is more specific than other types, so TypeofBottom must be too
+        if (tta == jl_typeofbottom_type && (jl_is_kind(b) || jl_is_type_type(b)))
+            return 1;
         int super = 0;
         while (tta != jl_any_type) {
             if (tta->name == ttb->name) {

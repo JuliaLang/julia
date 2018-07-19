@@ -10,6 +10,7 @@ export
     Threads,
     Iterators,
     Broadcast,
+    MathConstants,
 
 # Types
     AbstractChannel,
@@ -84,6 +85,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    SubstitutionString,
     Timer,
     UnitRange,
     Val,
@@ -212,7 +214,6 @@ export
     asind,
     asinh,
     atan,
-    atan2,
     atand,
     atanh,
     big,
@@ -261,7 +262,6 @@ export
     floor,
     fma,
     frexp,
-    gamma,
     gcd,
     gcdx,
     hypot,
@@ -285,8 +285,6 @@ export
     ldexp,
     leading_ones,
     leading_zeros,
-    lfact,
-    lgamma,
     log,
     log10,
     log1p,
@@ -324,7 +322,6 @@ export
     sign,
     signbit,
     signed,
-    signif,
     significand,
     sin,
     sinc,
@@ -350,16 +347,10 @@ export
     ≈,
     ≉,
 
-# specfun
-    beta,
-    lbeta,
-
 # arrays
     axes,
     broadcast!,
     broadcast,
-    broadcast_getindex,
-    broadcast_setindex!,
     cat,
     checkbounds,
     checkindex,
@@ -393,7 +384,6 @@ export
     isperm,
     issorted,
     last,
-    linearindices,
     mapslices,
     max,
     maximum!,
@@ -446,7 +436,6 @@ export
     zeros,
 
 # search, find, match and related functions
-    contains,
     eachmatch,
     endswith,
     findall,
@@ -459,6 +448,7 @@ export
     findnext,
     findprev,
     match,
+    occursin,
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
@@ -471,7 +461,6 @@ export
 
 # bitarrays
     falses,
-    flipbits!,
     trues,
 
 # dequeues
@@ -568,10 +557,10 @@ export
     escape_string,
     hex2bytes,
     hex2bytes!,
-    isalpha,
     isascii,
     iscntrl,
     isdigit,
+    isletter,
     islowercase,
     isnumeric,
     isprint,
@@ -637,25 +626,11 @@ export
     get_zero_subnormals,
     set_zero_subnormals,
 
-# statistics
-    cor,
-    cov,
-    mean!,
-    mean,
-    median!,
-    median,
-    middle,
-    quantile!,
-    quantile,
-    std,
-    stdm,
-    var,
-    varm,
-
 # iteration
     done,
     next,
     start,
+    iterate,
 
     enumerate,  # re-exported from Iterators
     zip,
@@ -705,6 +680,7 @@ export
     ismissing,
     missing,
     skipmissing,
+    something,
 
 # time
     sleep,
@@ -724,14 +700,15 @@ export
 
 # types
     convert,
-    # getproperty,
-    # setproperty!,
+    getproperty,
+    setproperty!,
     fieldoffset,
     fieldname,
     fieldnames,
     fieldcount,
-    # propertynames,
+    propertynames,
     isabstracttype,
+    isbitstype,
     isprimitivetype,
     isstructtype,
     isconcretetype,
@@ -784,7 +761,6 @@ export
 # misc
     atexit,
     atreplinit,
-    clipboard,
     exit,
     ntuple,
 
@@ -924,7 +900,7 @@ export
     withenv,
 
 # C interface
-    cfunction,
+    @cfunction,
     cglobal,
     disable_sigint,
     pointer,
@@ -975,7 +951,6 @@ export
     @allocated,
 
     # tasks
-    @schedule,
     @sync,
     @async,
     @task,

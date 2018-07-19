@@ -96,9 +96,8 @@ is specified as string sep.
 function print_matrix_row(io::IO,
         X::AbstractVecOrMat, A::Vector,
         i::Integer, cols::AbstractVector, sep::AbstractString)
-    isempty(A) || first(axes(cols,1)) == 1 || throw(DimensionMismatch("indices of cols ($(axes(cols,1))) must start at 1"))
-    for k = 1:length(A)
-        j = cols[k]
+    for (k, j) = enumerate(cols)
+        k > length(A) && break
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
@@ -168,7 +167,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     postsp = ""
     @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)
-    rowsA, colsA = axes(X,1), axes(X,2)
+    rowsA, colsA = UnitRange(axes(X,1)), UnitRange(axes(X,2))
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
@@ -176,13 +175,13 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     # each half a screen height in size.
     halfheight = div(screenheight,2)
     if m > screenheight
-        rowsA = [rowsA[1:halfheight]; rowsA[m-div(screenheight-1,2)+1:m]]
+        rowsA = [rowsA[(0:halfheight-1) .+ firstindex(rowsA)]; rowsA[(end-div(screenheight-1,2)+1):end]]
     end
     # Similarly for columns, only necessary to get alignments for as many
     # columns as could conceivably fit across the screen
     maxpossiblecols = div(screenwidth, 1+sepsize)
     if n > maxpossiblecols
-        colsA = [colsA[1:maxpossiblecols]; colsA[(n-maxpossiblecols+1):n]]
+        colsA = [colsA[(0:maxpossiblecols-1) .+ firstindex(colsA)]; colsA[(end-maxpossiblecols+1):end]]
     end
     A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize)
     # Nine-slicing is accomplished using print_matrix_row repeatedly
@@ -268,7 +267,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
                 ii = idxs[i]
                 ind = tailinds[i]
                 if length(ind) > 10
-                    if ii == ind[4] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
+                    if ii == ind[firstindex(ind)+3] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
                         for j=i+1:nd
                             szj = length(axes(a, j+2))
                             indj = tailinds[j]
@@ -280,7 +279,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
                         print(io, "...\n\n")
                         @goto skip
                     end
-                    if ind[3] < ii <= ind[end-3]
+                    if ind[firstindex(ind)+2] < ii <= ind[end-3]
                         @goto skip
                     end
                 end
@@ -415,9 +414,9 @@ _show_empty(io, X) = nothing # by default, we don't know this constructor
 
 # typeinfo aware (necessarily)
 function show(io::IO, X::AbstractArray)
-    @assert ndims(X) != 1
+    ndims(X) == 1 && return show_vector(io, X)
     prefix = typeinfo_prefix(io, X)
-    io = IOContext(io, :typeinfo => eltype(X), :compact => true)
+    io = IOContext(io, :typeinfo => eltype(X), :compact => get(io, :compact, true))
     isempty(X) ?
         _show_empty(io, X) :
         _show_nonempty(io, X, prefix)
@@ -431,10 +430,10 @@ end
 function show_vector(io::IO, v, opn='[', cls=']')
     print(io, typeinfo_prefix(io, v))
     # directly or indirectly, the context now knows about eltype(v)
-    io = IOContext(io, :typeinfo => eltype(v), :compact => true)
+    io = IOContext(io, :typeinfo => eltype(v), :compact => get(io, :compact, true))
     limited = get(io, :limit, false)
-    if limited && _length(v) > 20
-        inds = indices1(v)
+    if limited && length(v) > 20
+        inds = axes1(v)
         show_delim_array(io, v, opn, ",", "", false, inds[1], inds[1]+9)
         print(io, "  …  ")
         show_delim_array(io, v, "", ",", cls, false, inds[end-9], inds[end])
@@ -442,8 +441,6 @@ function show_vector(io::IO, v, opn='[', cls=']')
         show_delim_array(io, v, opn, ",", cls, false)
     end
 end
-
-show(io::IO, X::AbstractVector) = show_vector(io, X)
 
 
 ## Logic for displaying type information
@@ -476,16 +473,26 @@ end
 # X not constrained, can be any iterable (cf. show_vector)
 function typeinfo_prefix(io::IO, X)
     typeinfo = get(io, :typeinfo, Any)::Type
-    @assert X isa typeinfo "$(typeof(X)) is not a subtype of $typeinfo"
+    if !(X isa typeinfo)
+        typeinfo = Any # no error for user-defined types
+    end
     # what the context already knows about the eltype of X:
     eltype_ctx = typeinfo_eltype(typeinfo)
     eltype_X = eltype(X)
-    # Types hard-coded here are those which are created by default for a given syntax
-    if eltype_X == eltype_ctx || !isempty(X) && eltype_X in (Float64, Int, Char, String)
-        ""
-    elseif print_without_params(eltype_X)
-        string(unwrap_unionall(eltype_X).name) # Print "Array" rather than "Array{T,N}"
+    if X isa AbstractDict
+        if eltype_X == eltype_ctx || !isempty(X) && isconcretetype(keytype(X)) && isconcretetype(valtype(X))
+            string(typeof(X).name)
+        else
+            string(typeof(X))
+        end
     else
-        string(eltype_X)
+        # Types hard-coded here are those which are created by default for a given syntax
+        if eltype_X == eltype_ctx || !isempty(X) && eltype_X in (Float64, Int, Char, String)
+            ""
+        elseif print_without_params(eltype_X)
+            string(unwrap_unionall(eltype_X).name) # Print "Array" rather than "Array{T,N}"
+        else
+            string(eltype_X)
+        end
     end
 end

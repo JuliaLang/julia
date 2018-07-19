@@ -171,9 +171,26 @@ end
 end
 
 # Ensure only LLVM-supported types can be atomic
-@test_throws TypeError Atomic{Bool}
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{ComplexF64}
+
+function test_atomic_bools()
+    x = Atomic{Bool}(false)
+    # Arithmetic functions are not defined.
+    @test_throws MethodError atomic_add!(x, true)
+    @test_throws MethodError atomic_sub!(x, true)
+    # All the rest are:
+    for v in [true, false]
+        @test x[] == atomic_xchg!(x, v)
+        @test v == atomic_cas!(x, v, !v)
+    end
+    x = Atomic{Bool}(false)
+    @test false == atomic_max!(x, true); @test x[] == true
+    x = Atomic{Bool}(true)
+    @test true == atomic_and!(x, false); @test x[] == false
+end
+
+test_atomic_bools()
 
 # Test atomic memory ordering with load/store
 mutable struct CommBuf
@@ -383,20 +400,38 @@ for period in (0.06, Dates.Millisecond(60))
     end
 end
 
-complex_cfunction = function(a)
-    s = zero(eltype(a))
-    @inbounds @simd for i in a
-        s += muladd(a[i], a[i], -2)
-    end
-    return s
-end
 function test_thread_cfunction()
-    @threads for i in 1:1000
-        # Make sure this is not inferrable
-        # and a runtime call to `jl_function_ptr` will be created
-        ccall(:jl_function_ptr, Ptr{Cvoid}, (Any, Any, Any),
-              complex_cfunction, Float64, Tuple{Ref{Vector{Float64}}})
+    # ensure a runtime call to `get_trampoline` will be created
+    # TODO: get_trampoline is not thread-safe (as this test shows)
+    function complex_cfunction(a)
+        s = zero(eltype(a))
+        @inbounds @simd for i in a
+            s += muladd(a[i], a[i], -2)
+        end
+        return s
     end
+    fs = [ let a = zeros(10)
+            () -> complex_cfunction(a)
+        end for i in 1:1000 ]
+    @noinline cf(f) = @cfunction $f Float64 ()
+    cfs = Vector{Base.CFunction}(undef, length(fs))
+    cf1 = cf(fs[1])
+    @threads for i in 1:1000
+        cfs[i] = cf(fs[i])
+    end
+    @test cfs[1] == cf1
+    @test cfs[2] == cf(fs[2])
+    @test length(unique(cfs)) == 1000
+    ok = zeros(Int, nthreads())
+    @threads for i in 1:10000
+        i = mod1(i, 1000)
+        fi = fs[i]
+        cfi = cf(fi)
+        GC.@preserve cfi begin
+            ok[threadid()] += (cfi === cfs[i])
+        end
+    end
+    @test sum(ok) == 10000
 end
 test_thread_cfunction()
 
@@ -430,6 +465,7 @@ function test_load_and_lookup_18020(n)
             ccall(:jl_load_and_lookup,
                   Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
+        catch
         end
     end
 end

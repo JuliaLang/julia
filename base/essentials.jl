@@ -120,7 +120,10 @@ true
 function convert end
 
 convert(::Type{Any}, @nospecialize(x)) = x
-convert(::Type{T}, x::T) where {T} = (@_inline_meta; x)
+convert(::Type{T}, x::T) where {T} = x
+convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
+                                   # in the absence of inlining-enabled
+                                   # (due to fields typed as `Type`, which is generally a bad idea)
 
 """
     @eval [mod,] ex
@@ -129,40 +132,30 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    :(eval($__module__, $(Expr(:quote,ex))))
+    :(Core.eval($__module__, $(Expr(:quote,ex))))
 end
 macro eval(mod, ex)
-    :(eval($(esc(mod)), $(Expr(:quote,ex))))
+    :(Core.eval($(esc(mod)), $(Expr(:quote,ex))))
 end
 
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-# TODO: a better / more infer-able definition would pehaps be
-#   tuple_type_head(T::Type) = fieldtype(T::Type{<:Tuple}, 1)
-tuple_type_head(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
-function tuple_type_head(T::Union)
-    @_pure_meta
-    return Union{tuple_type_head(T.a), tuple_type_head(T.b)}
-end
-function tuple_type_head(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
-    return unwrapva(T.parameters[1])
-end
+tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
-tuple_type_tail(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
-function tuple_type_tail(T::Union)
+function tuple_type_tail(T::Type)
     @_pure_meta
-    return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
-end
-function tuple_type_tail(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
-    if isvatuple(T) && length(T.parameters) == 1
-        return T
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_tail(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+    else
+        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+        if isvatuple(T) && length(T.parameters) == 1
+            return T
+        end
+        return Tuple{argtail(T.parameters...)...}
     end
-    return Tuple{argtail(T.parameters...)...}
 end
 
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
@@ -204,13 +197,30 @@ end
 const _va_typename = Vararg.body.body.name
 function isvarargtype(@nospecialize(t))
     t = unwrap_unionall(t)
-    isa(t, DataType) && (t::DataType).name === _va_typename
+    return isa(t, DataType) && (t::DataType).name === _va_typename
 end
 
-isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
+function isvatuple(@nospecialize(t))
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        n = length(t.parameters)
+        return n > 0 && isvarargtype(t.parameters[n])
+    end
+    return false
+end
+
 function unwrapva(@nospecialize(t))
+    # NOTE: this returns a related type, but it's NOT a subtype of the original tuple
     t2 = unwrap_unionall(t)
-    isvarargtype(t2) ? t2.parameters[1] : t
+    return isvarargtype(t2) ? rewrap_unionall(t2.parameters[1], t) : t
+end
+
+function unconstrain_vararg_length(@nospecialize(va))
+    # construct a new Vararg type where its length is unconstrained,
+    # but its element type still captures any dependencies the input
+    # element type may have had on the input length
+    T = unwrap_unionall(va).parameters[1]
+    return rewrap_unionall(Vararg{T}, va)
 end
 
 typename(a) = error("typename does not apply to this type")
@@ -218,11 +228,13 @@ typename(a::DataType) = a.name
 function typename(a::Union)
     ta = typename(a.a)
     tb = typename(a.b)
-    ta === tb ? tb : error("typename does not apply to unions whose components have different typenames")
+    ta === tb || error("typename does not apply to unions whose components have different typenames")
+    return tb
 end
 typename(union::UnionAll) = typename(union.body)
 
 convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
+convert(::Type{Tuple{}}, x::Tuple{Any, Vararg{Any}}) = throw(MethodError(convert, (Tuple{}, x)))
 convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
     (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
 
@@ -334,9 +346,11 @@ reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
 """
-    sizeof(T)
+    sizeof(T::DataType)
+    sizeof(obj)
 
-Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
+Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
+Size, in bytes, of object `obj` if it is not `DataType`.
 
 # Examples
 ```jldoctest
@@ -345,9 +359,15 @@ julia> sizeof(Float32)
 
 julia> sizeof(ComplexF64)
 16
+
+julia> sizeof(1.0)
+8
+
+julia> sizeof([1.0:10.0;])
+80
 ```
 
-If `T` does not have a specific size, an error is thrown.
+If `DataType` `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
 julia> sizeof(AbstractArray)
@@ -368,19 +388,19 @@ function append_any(xs...)
     for x in xs
         for y in x
             if i > l
-                ccall(:jl_array_grow_end, Cvoid, (Any, UInt), out, 16)
+                _growend!(out, 16)
                 l += 16
             end
-            Core.arrayset(true, out, y, i)
+            arrayset(true, out, y, i)
             i += 1
         end
     end
-    ccall(:jl_array_del_end, Cvoid, (Any, UInt), out, l-i+1)
+    _deleteend!(out, l-i+1)
     out
 end
 
 # simple Array{Any} operations needed for bootstrap
-@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset($(Expr(:boundscheck)), A, x, i)
+@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
     precompile(f, args::Tuple{Vararg{Any}})
@@ -529,12 +549,11 @@ function length(v::SimpleVector)
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
-start(v::SimpleVector) = 1
-next(v::SimpleVector,i) = (v[i],i+1)
-done(v::SimpleVector,i) = (length(v) < i)
+iterate(v::SimpleVector, i=1) = (length(v) < i ? nothing : (v[i], i + 1))
+eltype(::Type{SimpleVector}) = Any
+keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
 axes(v::SimpleVector) = (OneTo(length(v)),)
-linearindices(v::SimpleVector) = axes(v, 1)
 axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
@@ -636,7 +655,10 @@ call obsolete versions of a function `f`.
 (The drawback is that `invokelatest` is somewhat slower than calling
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
-function invokelatest(f, args...; kwargs...)
+function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
+    if isempty(kwargs)
+        return Core._apply_latest(f, args)
+    end
     # We use a closure (`inner`) to handle kwargs.
     inner() = f(args...; kwargs...)
     Core._apply_latest(inner)
@@ -680,25 +702,6 @@ julia> start([4;2;3])
 function start end
 
 """
-    done(iter, state) -> Bool
-
-Test whether we are done iterating.
-
-# Examples
-```jldoctest
-julia> done(1:5, 3)
-false
-
-julia> done(1:5, 5)
-false
-
-julia> done(1:5, 6)
-true
-```
-"""
-function done end
-
-"""
     isempty(collection) -> Bool
 
 Determine whether a collection is empty (has no elements).
@@ -712,7 +715,11 @@ julia> isempty([1 2 3])
 false
 ```
 """
-isempty(itr) = done(itr, start(itr))
+function isempty(itr)
+    d = isdone(itr)
+    d !== missing && return d
+    iterate(itr) === nothing
+end
 
 """
     values(iterator)
@@ -764,3 +771,107 @@ ismissing(::Missing) = true
 function popfirst! end
 function peek end
 
+"""
+    @__LINE__ -> Int
+
+Expand to the line number of the location of the macrocall.
+Return `0` if the line number could not be determined.
+"""
+macro __LINE__()
+    return __source__.line
+end
+
+# Just for bootstrapping purposes below
+macro __FILE_SYMBOL__()
+    return Expr(:quote, __source__.file)
+end
+
+# Iteration
+"""
+    isdone(itr, state...) -> Union{Bool, Missing}
+
+This function provides a fast-path hint for iterator completion.
+This is useful for mutable iterators that want to avoid having elements
+consumed, if they are not going to be exposed to the user (e.g. to check
+for done-ness in `isempty` or `zip`). Mutable iterators that want to
+opt into this feature should define an isdone method that returns
+true/false depending on whether the iterator is done or not. Stateless
+iterators need not implement this function. If the result is `missing`,
+callers may go ahead and compute `iterate(x, state...) === nothing` to
+compute a definite answer.
+"""
+isdone(itr, state...) = missing
+
+"""
+    iterate(iter [, state]) -> Union{Nothing, Tuple{Any, Any}}
+
+Advance the iterator to obtain the next element. If no elements
+remain, nothing should be returned. Otherwise, a 2-tuple of the
+next element and the new iteration state should be returned.
+"""
+function iterate end
+
+# Compatibility with old iteration protocol
+function iterate(x, state)
+    @_inline_meta
+    done(x, state) && return nothing
+    return next(x, state)
+end
+const old_iterate_line_prev = (@__LINE__)
+iterate(x) = (@_inline_meta; iterate(x, start(x)))
+
+struct LegacyIterationCompat{I,T,S}
+    done::Bool
+    nextval::T
+    state::S
+    LegacyIterationCompat{I,T,S}() where {I,T,S} = new{I,T,S}(true)
+    LegacyIterationCompat{I,T,S}(nextval::T, state::S) where {I,T,S} = new{I,T,S}(false, nextval, state)
+end
+
+function has_non_default_iterate(T)
+    world = ccall(:jl_get_world_counter, UInt, ())
+    mt = Base._methods(iterate, Tuple{T}, -1, world)
+    # Check if this is the above method
+    if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == old_iterate_line_prev + 1)
+        return false
+    end
+    return true
+end
+
+const compat_start_line_prev = (@__LINE__)
+function start(itr::T) where {T}
+    has_non_default_iterate(T) || throw(MethodError(iterate, (itr,)))
+    y = iterate(itr)
+    y === nothing && return LegacyIterationCompat{T, Union{}, Union{}}()
+    val, state = y
+    LegacyIterationCompat{T, typeof(val), typeof(state)}(val, state)
+end
+
+function next(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S}
+    val, state = state.nextval, state.state
+    y = iterate(itr, state)
+    if y === nothing
+        return (val, LegacyIterationCompat{I,T,S}())
+    end
+    nextval, state = y
+    val, LegacyIterationCompat{I, typeof(nextval), typeof(state)}(nextval, state)
+end
+
+done(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S} = (@_inline_meta; state.done)
+# This is necessary to support the above compatibility layer,
+# eventually, this should just check for applicability of `iterate`
+function isiterable(T)::Bool
+    if !has_non_default_iterate(T)
+        world = ccall(:jl_get_world_counter, UInt, ())
+        mt = Base._methods(start, Tuple{T}, -1, world)
+        # Check if this is the fallback start method
+        if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == compat_start_line_prev + 2)
+            return false
+        end
+    end
+    return true
+end
+
+# This is required to avoid massive performance problems
+# due to the start(s::AbstractString) deprecation.
+iterate(s::AbstractString) = iterate(s, firstindex(s))

@@ -127,7 +127,7 @@ end
 open_streams = []
 function cleanup()
     for s_ in open_streams
-        try close(s_) end
+        try close(s_); catch; end
     end
     empty!(open_streams)
     for tsk in tasks
@@ -556,7 +556,7 @@ end
 
 let p = Pipe()
     Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
-    t = @schedule read(p)
+    t = @async read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))
         for i = 1:typemax(UInt16)
@@ -568,3 +568,6 @@ let p = Pipe()
     @test length(s) == 660_000 + typemax(UInt16)
     @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
 end
+
+# issue #26419
+@test Base.return_types(read, (String, Type{String})) == Any[String]

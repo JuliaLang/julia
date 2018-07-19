@@ -10,11 +10,11 @@
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
            '(:= ~ $=)))
 ;; comma - higher than assignment outside parentheses, lower when inside
-(define prec-pair '(=>))
+(define prec-pair (add-dots '(=>)))
 (define prec-conditional '(?))
 (define prec-arrow       (append!
                           '(-- -->)
-                          (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢))))
+                          (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻))))
 (define prec-lazy-or     '(|\|\||))
 (define prec-lazy-and    '(&&))
 (define prec-comparison
@@ -29,6 +29,7 @@
 (define prec-times       (add-dots '(* / ÷ % & ⋅ ∘ × |\\| ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗)))
 (define prec-rational    (add-dots '(//)))
 ;; `where`
+;; implicit multiplication (juxtaposition)
 ;; unary
 (define prec-power       (add-dots '(^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬)))
 (define prec-decl        '(|::|))
@@ -724,9 +725,14 @@
            (and (or (eq? (car ex) 'where) (eq? (car ex) '|::|))
                 (eventually-call? (cadr ex))))))
 
+(define (add-line-number blk linenode)
+  (if (and (pair? blk) (eq? (car blk) 'block))
+      `(block ,linenode ,@(cdr blk))
+      `(block ,linenode ,blk)))
+
 (define (short-form-function-loc ex lno)
   (if (eventually-call? (cadr ex))
-      `(= ,(cadr ex) (block (line ,lno ,current-filename) ,(caddr ex)))
+      `(= ,(cadr ex) ,(add-line-number (caddr ex) `(line ,lno ,current-filename)))
       ex))
 
 (define (parse-assignment s down)
@@ -950,13 +956,13 @@
                        ;; parse <:{T}(x::T) or <:(x::T) like other unary operators
                        ((or (eqv? next #\{) (eqv? next #\( ))
                         (ts:put-back! s op spc)
-                        (parse-where s parse-unary))
+                        (parse-where s parse-juxtapose))
                        (else
-                        (let ((arg (parse-where s parse-unary)))
+                        (let ((arg (parse-where s parse-juxtapose)))
                           (if (and (pair? arg) (eq? (car arg) 'tuple))
                               (cons op (cdr arg))
                               (list op arg)))))))
-        (parse-where s parse-unary))))
+        (parse-where s parse-juxtapose))))
 
 (define (parse-where-chain s first)
   (with-bindings ((where-enabled #f))
@@ -978,6 +984,52 @@
              (eq? (peek-token s) 'where))
         (parse-where-chain s ex)
         ex)))
+
+;; given an expression and the next token, is there a juxtaposition
+;; operator between them?
+(define (juxtapose? s expr t)
+  (and (or (number? expr)
+           (large-number? expr)
+           (and (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
+                (not (eqv? t #\@))   ;; disallow "x@time"
+                ;; issue #16427, disallow juxtaposition with block forms
+                (not (and (pair? expr) (or (block-form? (car expr))
+                                           (syntactic-unary-op? (car expr))
+                                           (initial-reserved-word? (car expr))))))
+           ;; to allow x'y as a special case
+           #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
+                (not (memv t '(#\( #\[ #\{))))
+           )
+       (not (ts:space? s))
+       (not (operator? t))
+       (not (closing-token? t))
+       (not (newline? t))
+       (or (and (not (string? expr)) (not (eqv? t #\")))
+           ;; issue #20575
+           (error "cannot juxtapose string literal"))
+       (not (initial-reserved-word? t))
+       ;; TODO: this would disallow juxtaposition with 0, which is ambiguous
+       ;; with e.g. hex literals `0x...`. however this is used for `0im`, which
+       ;; we might not want to break.
+       #;(or (not (and (eq? expr 0)
+                     (symbol? t)))
+           (error (string "invalid numeric constant \"" expr t "\"")))))
+
+(define (parse-juxtapose s)
+  (let ((first (parse-unary s)))
+    (let loop ((ex   first)
+               (args (list first)))
+      (let ((next (peek-token s)))
+        (if (juxtapose? s ex next)
+            (begin
+              #;(if (and (number? ex) (= ex 0))
+                    (error "juxtaposition with literal \"0\""))
+              (let ((next (parse-factor s)))
+                (loop `(call * ,ex ,next)
+                      (cons next args))))
+            (if (length= args 1)
+                (car args)
+                (list* 'call '* (reverse args))))))))
 
 (define (maybe-negate op num)
   (if (eq? op '-)
@@ -1012,10 +1064,10 @@
                           ;; unary negation; -2^x parsed as (- (^ 2 x)).
                           (begin (ts:put-back! s (maybe-negate op num) spc)
                                  (list 'call op (parse-factor s)))
-                          (parse-juxtapose num s)))
+                          num))
                     (parse-unary-call s op #t spc)))
               (parse-unary-call s op (unary-op? op) spc)))
-        (parse-juxtapose (parse-factor s) s))))
+        (parse-factor s))))
 
 (define (fix-syntactic-unary e)
   (let ((ce (car e)))
@@ -1039,13 +1091,11 @@
              (if (cdr parens) ;; found an argument list
                  (if opspc
                      (disallowed-space op #\( )
-                     (parse-juxtapose
-                      (parse-factor-with-initial-ex
-                       s
-                       (fix-syntactic-unary (cons op (tuple-to-arglist (car parens)))))
-                      s))
+                     (parse-factor-with-initial-ex
+                      s
+                      (fix-syntactic-unary (cons op (tuple-to-arglist (car parens))))))
                  (fix-syntactic-unary
-                  (list op (parse-juxtapose (parse-factor-with-initial-ex s (car parens)) s))))))
+                  (list op (parse-factor-with-initial-ex s (car parens)))))))
           ((not un)
            (error (string "\"" op "\" is not a unary operator")))
           (else
@@ -1055,46 +1105,6 @@
 
 (define block-form? (Set '(block quote if for while let function macro abstract primitive struct
                                  try module)))
-
-;; given an expression and the next token, is there a juxtaposition
-;; operator between them?
-(define (juxtapose? s expr t)
-  (and (or (number? expr)
-           (large-number? expr)
-           (and (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
-                (not (eqv? t #\@))   ;; disallow "x@time"
-                ;; issue #16427, disallow juxtaposition with block forms
-                (not (and (pair? expr) (or (block-form? (car expr))
-                                           (syntactic-unary-op? (car expr))
-                                           (initial-reserved-word? (car expr))))))
-           ;; to allow x'y as a special case
-           #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
-                (not (memv t '(#\( #\[ #\{))))
-           )
-       (not (ts:space? s))
-       (not (operator? t))
-       (not (closing-token? t))
-       (not (newline? t))
-       (or (and (not (string? expr)) (not (eqv? t #\")))
-           ;; issue #20575
-           (error "cannot juxtapose string literal"))
-       (not (initial-reserved-word? t))
-       ;; TODO: this would disallow juxtaposition with 0, which is ambiguous
-       ;; with e.g. hex literals `0x...`. however this is used for `0im`, which
-       ;; we might not want to break.
-       #;(or (not (and (eq? expr 0)
-                     (symbol? t)))
-           (error (string "invalid numeric constant \"" expr t "\"")))))
-
-(define (parse-juxtapose ex s)
-  (let ((next (peek-token s)))
-    ;; numeric literal juxtaposition is a unary operator
-    (cond ((juxtapose? s ex next)
-           (begin
-             #;(if (and (number? ex) (= ex 0))
-                 (error "juxtaposition with literal \"0\""))
-             `(call * ,ex ,(parse-unary s))))
-          (else ex))))
 
 ;; handle ^ and .^
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
@@ -1110,7 +1120,7 @@
                (list 'call t ex (parse-factor-after s)))
         ex)))
 
-(define (parse-factor-after s) (parse-RtoL s parse-unary is-prec-power? #f parse-factor-after))
+(define (parse-factor-after s) (parse-RtoL s parse-juxtapose is-prec-power? #f parse-factor-after))
 
 (define (parse-decl s)
   (parse-decl-with-initial-ex s (parse-call s)))
@@ -1125,7 +1135,7 @@
          ;; -> is unusual: it binds tightly on the left and
          ;; loosely on the right.
          (let ((lno (line-number-node s)))
-           `(-> ,ex (block ,lno ,(parse-eq* s)))))
+           `(-> ,ex ,(add-line-number (parse-eq* s) lno))))
         (else
          ex)))))
 
@@ -1240,13 +1250,16 @@
                     ((eqv? (peek-token s) ':)
                      (begin
                        (take-token s)
-                       `(|.| ,ex (quote ,(parse-atom s)))))
+                       (if (or (eqv? (peek-token s) #\newline)
+                               (ts:space? s)) ;; uses side effect of previous peek-token
+                           (error "space not allowed after \":\" used for quoting"))
+                       `(|.| ,ex (quote ,(parse-atom s #f)))))
                     ((eq? (peek-token s) '$)
                      (take-token s)
                      (let ((dollarex (parse-atom s)))
                        `(|.| ,ex (inert ($ ,dollarex)))))
                     (else
-                     (let ((name (parse-atom s)))
+                     (let ((name (parse-atom s #f)))
                        (if (and (pair? name) (eq? (car name) 'macrocall))
                            `(macrocall (|.| ,ex (quote ,(cadr name))) ; move macrocall outside by rewriting A.@B as @A.B
                                        ,@(cddr name))
@@ -1502,7 +1515,8 @@
              ((eq? nxt 'end)
               (list* 'try try-block (or catchv 'false)
                      ;; default to empty catch block in `try ... end`
-                     (or catchb (if finalb 'false '(block)))
+                     (or catchb (if finalb 'false (begin (parser-depwarn s "try without catch or finally" "")
+                                                         '(block))))
                      (if finalb (list finalb) '())))
              ((and (eq? nxt 'catch)
                    (not catchb))
@@ -1966,11 +1980,9 @@
   (cond ((eq? (car e) 'tuple)  (map =-to-kw (cdr e)))
         ((eq? (car e) 'block)
          (cond ((length= e 1) '())
-               ((length= e 2) (list (cadr e)))
+               ((length= e 2) (list (=-to-kw (cadr e))))
                ((length= e 3)
-                (if (assignment? (caddr e))
-                    `((parameters (kw ,@(cdr (caddr e)))) ,(cadr e))
-                    `((parameters ,(caddr e)) ,(cadr e))))
+                `((parameters ,(=-to-kw (caddr e))) ,(=-to-kw (cadr e))))
                (else
                 (error "more than one semicolon in argument list"))))
         (else
@@ -2320,7 +2332,10 @@
                  ':
                  (if (or (ts:space? s) (eqv? nxt #\newline))
                      (error "space not allowed after \":\" used for quoting")
-                     (list 'quote (parse-atom s #f))))))
+                     (list 'quote
+                           ;; being inside quote makes `end` non-special again. issue #27690
+                           (with-bindings ((end-symbol #f))
+                                          (parse-atom s #f)))))))
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))
@@ -2379,7 +2394,7 @@
             (let ((startloc  (line-number-node s))
                   (head (if (eq? (peek-token s) '|.|)
                             (begin (take-token s) '__dot__)
-                            (parse-unary-prefix s))))
+                            (parse-atom s #f))))
               (peek-token s)
               (if (ts:space? s)
                   (maybe-docstring
@@ -2387,14 +2402,7 @@
                                  ,startloc
                                  ,@(parse-space-separated-exprs s)))
                   (let ((call (parse-call-chain s head #t)))
-                    (if (and (pair? call) (eq? (car call) 'call))
-                        `(macrocall ,(macroify-name (cadr call))
-                                    ,startloc
-                                    ,@(cddr call))
-                        (maybe-docstring
-                         s `(macrocall ,(macroify-name call)
-                                       ,startloc
-                                       ,@(parse-space-separated-exprs s)))))))))
+                    (macroify-call s call startloc))))))
           ;; command syntax
           ((eqv? t #\`)
            (take-token s)
@@ -2418,6 +2426,19 @@
          `(|.| ,(cadr e)
                (quote ,(apply macroify-name (cadr (caddr e)) suffixes))))
         (else (error (string "invalid macro usage \"@(" (deparse e) ")\"" )))))
+
+(define (macroify-call s call startloc)
+  (cond ((and (pair? call) (eq? (car call) 'call))
+         `(macrocall ,(macroify-name (cadr call))
+                     ,startloc
+                     ,@(cddr call)))
+        ((and (pair? call) (eq? (car call) 'do))
+         `(do ,(macroify-call s (cadr call) startloc) ,(caddr call)))
+        (else
+         (maybe-docstring
+          s `(macrocall ,(macroify-name call)
+                        ,startloc
+                        ,@(parse-space-separated-exprs s))))))
 
 (define (called-macro-name e)
   (if (and (length= e 3) (eq? (car e) '|.|)

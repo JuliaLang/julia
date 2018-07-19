@@ -48,25 +48,19 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         # make sure this is a non-fatal error and the REPL still loads
         @test v[1]
         @test isempty(v[2])
-        @test startswith(v[3], """
-                         ┌ Warning: Failed to insert InteractiveUtils into module Main
-                         │   exception =
-                         │    ArgumentError: Module InteractiveUtils not found in current path.
-                         │    Run `Pkg.add("InteractiveUtils")` to install the InteractiveUtils package.
-                         │    Stacktrace:
-                         """)
+        @test startswith(v[3], "┌ Warning: Failed to import InteractiveUtils into module Main\n")
     end
-    for nc in ("0", "-2", "x", "2x", " ")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
+    real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
+    for nc in ("0", "-2", "x", "2x", " ", "")
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
+        @test v[1]
+        @test v[2] == real_threads
+        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads."
+    end
+    for nc in ("1", " 1 ", " +1 ", " 0x1 ")
+        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc))
         @test v[1]
         @test v[2] == "1"
-        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1."
-    end
-    real_cores = string(ccall(:jl_cpu_cores, Int32, ()))
-    for nc in ("1", " 1 ", " +1 ", " 0x1 ", "")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_CORES'`, "JULIA_CPU_CORES" => nc))
-        @test v[1]
-        @test v[2] == (isempty(nc) ? real_cores : "1")
         @test isempty(v[3])
     end
 end
@@ -222,26 +216,26 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g0`)
         @test code[2]
         code = code[1]
-        @test contains(code, "llvm.module.flags")
-        @test !contains(code, "llvm.dbg.cu")
-        @test !contains(code, "int.jl")
-        @test !contains(code, "Int64")
+        @test occursin("llvm.module.flags", code)
+        @test !occursin("llvm.dbg.cu", code)
+        @test !occursin("int.jl", code)
+        @test !occursin("Int64", code)
     end
     let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g1`)
         @test code[2]
         code = code[1]
-        @test contains(code, "llvm.module.flags")
-        @test contains(code, "llvm.dbg.cu")
-        @test contains(code, "int.jl")
-        @test !contains(code, "Int64")
+        @test occursin("llvm.module.flags", code)
+        @test occursin("llvm.dbg.cu", code)
+        @test occursin("int.jl", code)
+        @test !occursin("Int64", code)
     end
     let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), false, true)", `$exename -g2`)
         @test code[2]
         code = code[1]
-        @test contains(code, "llvm.module.flags")
-        @test contains(code, "llvm.dbg.cu")
-        @test contains(code, "int.jl")
-        @test contains(code, "\"Int64\"")
+        @test occursin("llvm.module.flags", code)
+        @test occursin("llvm.dbg.cu", code)
+        @test occursin("int.jl", code)
+        @test occursin("\"Int64\"", code)
     end
 
     # --check-bounds
@@ -424,7 +418,13 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
+            @test Base.current_project() === nothing
             @test success(`$exename -e "exit(0)"`)
+            for load_path in ["", "@", "@."]
+                withenv("JULIA_LOAD_PATH" => load_path) do
+                    @test success(`$exename -e "exit(!(Base.load_path() == []))"`)
+                end
+            end
         end
     end
 end
@@ -445,9 +445,9 @@ let exename = joinpath(Sys.BINDIR, Base.julia_exename()),
             p = run(pipeline(`$exename --sysimage=$nonexist_image`, stderr=err), wait=false)
             close(err.in)
             let s = read(err, String)
-                @test contains(s, "ERROR: could not load library \"$nonexist_image\"\n")
-                @test !contains(s, "Segmentation fault")
-                @test !contains(s, "EXCEPTION_ACCESS_VIOLATION")
+                @test occursin("ERROR: could not load library \"$nonexist_image\"\n", s)
+                @test !occursin("Segmentation fault", s)
+                @test !occursin("EXCEPTION_ACCESS_VIOLATION", s)
             end
             @test !success(p)
             @test !Base.process_signaled(p)
@@ -499,11 +499,10 @@ end
 
 # backtrace contains type and line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    success, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp
-        -E 'include("____nonexistent_file")'`)
-    @test !success
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'include("____nonexistent_file")'`)
+    @test !succ
     @test out == ""
-    @test contains(bt, "include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))")
+    @test occursin("include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))", bt)
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
     @test length(lno.captures) == 1
     @test parse(Int, lno.captures[1]) > 0

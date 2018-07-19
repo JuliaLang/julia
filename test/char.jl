@@ -116,23 +116,10 @@ end
         @test eltype(x) == Char
     end
 
-    #start(c::Char) = false
+    #iterate(c::Char)
     for x in testarrays
-        @test start(x) == false
-    end
-
-    #next(c::Char, state) = (c, true)
-    for x in testarrays
-        for state in [true, false]
-            @test next(x, state) == (x, true)
-        end
-    end
-
-    #done(c::Char, state) = state
-    for x in testarrays
-        for state in [true, false]
-            @test done(x, state) == state
-        end
+        @test iterate(x)[1] == x
+        @test iterate(x, iterate(x)[2]) == nothing
     end
 
     #isless(x::Char, y::Integer) = isless(UInt32(x), y)
@@ -218,7 +205,7 @@ end
             @test eof(io)
             close(io)
         end
-   finally
+    finally
         rm(file, force=true)
     end
 end
@@ -232,7 +219,7 @@ end
         end
         @test sprint(show, c) == rep
         if Base.isoverlong(c)
-            @test contains(sprint(show, "text/plain", c), rep*": [overlong]")
+            @test occursin(rep*": [overlong]", sprint(show, "text/plain", c))
         end
     end
 

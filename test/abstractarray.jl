@@ -119,11 +119,13 @@ end
         for i in ((), fill(0))
             @test LinearIndices(i)[1] == 1
             @test_throws BoundsError LinearIndices(i)[2]
+            @test_throws BoundsError LinearIndices(i)[1:2]
             @test LinearIndices(i)[1,1] == 1
             @test LinearIndices(i)[] == 1
             @test size(LinearIndices(i)) == ()
             @test CartesianIndices(i)[1] == CartesianIndex()
             @test_throws BoundsError CartesianIndices(i)[2]
+            @test_throws BoundsError CartesianIndices(i)[1:2]
         end
     end
 
@@ -135,6 +137,9 @@ end
         @test LinearIndices((3,))[2,1] == 2
         @test LinearIndices((3,))[[1]] == [1]
         @test size(LinearIndices((3,))) == (3,)
+        @test LinearIndices((3,))[1:2] === 1:2
+        @test LinearIndices((3,))[1:2:3] === 1:2:3
+        @test_throws BoundsError LinearIndices((3,))[2:4]
         @test_throws BoundsError CartesianIndices((3,))[2,2]
         #   ambiguity btw cartesian indexing and linear indexing in 1d when
         #   indices may be nontraditional
@@ -151,8 +156,8 @@ end
             k += 1
             @test linear[i,j] == linear[k] == k
             @test cartesian[k] == CartesianIndex(i,j)
-            @test LinearIndices((0:3,3:5))[i-1,j+2] == k
-            @test CartesianIndices((0:3,3:5))[k] == CartesianIndex(i-1,j+2)
+            @test LinearIndices(map(Base.Slice, (0:3,3:5)))[i-1,j+2] == k
+            @test CartesianIndices(map(Base.Slice, (0:3,3:5)))[k] == CartesianIndex(i-1,j+2)
         end
         @test linear[linear] == linear
         @test linear[vec(linear)] == vec(linear)
@@ -162,6 +167,9 @@ end
         @test cartesian[vec(linear)] == vec(cartesian)
         @test cartesian[cartesian] == cartesian
         @test cartesian[vec(cartesian)] == vec(cartesian)
+        @test linear[2:3] === 2:3
+        @test linear[3:-1:1] === 3:-1:1
+        @test_throws BoundsError linear[4:13]
     end
 
     @testset "3-dimensional" begin
@@ -176,10 +184,15 @@ end
             @test LinearIndices((1:4,1:3,1:2))[l] == l
             @test CartesianIndices((1:4,1:3,1:2))[i,j,k] == CartesianIndex(i,j,k)
             @test CartesianIndices((1:4,1:3,1:2))[l] == CartesianIndex(i,j,k)
-            @test LinearIndices((0:3,3:5,-101:-100))[i-1,j+2,k-102] == l
-            @test LinearIndices((0:3,3:5,-101:-100))[l] == l
-            @test CartesianIndices((0:3,3:5,-101:-100))[i,j,k] == CartesianIndex(i-1, j+2, k-102)
-            @test CartesianIndices((0:3,3:5,-101:-100))[l] == CartesianIndex(i-1, j+2, k-102)
+        end
+
+        l = 0
+        for k = -101:-100, j = 3:5, i = 0:3
+            l += 1
+            @test LinearIndices(map(Base.Slice, (0:3,3:5,-101:-100)))[i,j,k] == l
+            @test LinearIndices(map(Base.Slice, (0:3,3:5,-101:-100)))[l] == l
+            @test CartesianIndices(map(Base.Slice, (0:3,3:5,-101:-100)))[i,j,k] == CartesianIndex(i,j,k)
+            @test CartesianIndices(map(Base.Slice, (0:3,3:5,-101:-100)))[l] == CartesianIndex(i,j,k)
         end
 
         local A = reshape(Vector(1:9), (3,3))
@@ -456,13 +469,13 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
 
     # last(a)
     @test last(B) == B[lastindex(B)] == B[end] == A[end]
-    @test lastindex(B) == lastindex(A) == last(linearindices(B))
+    @test lastindex(B) == lastindex(A) == last(LinearIndices(B))
     @test lastindex(B, 1) == lastindex(A, 1) == last(axes(B, 1))
     @test lastindex(B, 2) == lastindex(A, 2) == last(axes(B, 2))
 
     # first(a)
     @test first(B) == B[firstindex(B)] == B[1] == A[1] # TODO: use B[begin] once parser transforms it
-    @test firstindex(B) == firstindex(A) == first(linearindices(B))
+    @test firstindex(B) == firstindex(A) == first(LinearIndices(B))
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
@@ -592,7 +605,7 @@ function test_cat(::Type{TestAbstractArray})
     D = [1:24...]
     i = rand(1:10)
 
-    @test cat(i) == Any[]
+    @test cat(;dims=i) == Any[]
     @test vcat() == Any[]
     @test hcat() == Any[]
     @test hcat(1, 1.0, 3, 3.0) == [1.0 1.0 3.0 3.0]
@@ -727,8 +740,8 @@ A = TSlowNIndexes(rand(2,2))
 @test first(A) == A.data[1]
 
 @testset "#16381" begin
-    @inferred size(rand(3,2,1), 2, 1)
-    @inferred size(rand(3,2,1), 2, 1, 3)
+    @inferred size(rand(3,2,1))
+    @inferred size(rand(3,2,1), 2)
 
     @test @inferred(axes(rand(3,2)))    == (1:3,1:2)
     @test @inferred(axes(rand(3,2,1)))  == (1:3,1:2,1:1)
@@ -860,15 +873,13 @@ end
 @testset "CartesianIndices" begin
     xrng = 2:4
     yrng = 1:5
-    CR = CartesianIndices((xrng,yrng))
+    CR = CartesianIndices(map(Base.Slice, (xrng,yrng)))
 
-    for (i,i_idx) in enumerate(xrng)
-        for (j,j_idx) in enumerate(yrng)
-            @test CR[i,j] == CartesianIndex(i_idx,j_idx)
-        end
+    for i in xrng, j in yrng
+        @test CR[i,j] == CartesianIndex(i,j)
     end
 
-    for i_lin in linearindices(CR)
+    for i_lin in LinearIndices(CR)
         i = (i_lin-1) % length(xrng) + 1
         j = (i_lin-i) ÷ length(xrng) + 1
         @test CR[i_lin] == CartesianIndex(xrng[i],yrng[j])
@@ -876,6 +887,14 @@ end
 
     @test CartesianIndices(fill(1., 2, 3)) == CartesianIndices((2,3))
     @test LinearIndices((2,3)) == [1 3 5; 2 4 6]
+
+    for IType in (CartesianIndices, LinearIndices)
+        I1 = IType((Base.OneTo(3),))
+        I2 = IType((1:3,))
+        @test !(I1 === I2)
+        J1, J2 = @inferred(promote(I1, I2))
+        @test J1 === J2
+    end
 end
 
 @testset "issue #25770" begin

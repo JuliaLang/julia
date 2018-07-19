@@ -50,7 +50,7 @@ function inline_code(stream::IO, md::MD)
         else
             result = strip(result)
             # An odd number of backticks wrapping the text will produce a `Code` node, while
-            # an even number will result in a `LaTeX` node. This allows for arbitary
+            # an even number will result in a `LaTeX` node. This allows for arbitrary
             # backtick combinations to be embedded inside the resulting node, i.e.
             #
             # `a`, ``a``, `` `a` ``, ``` ``a`` ```, ``` `a` ```, etc.
@@ -152,7 +152,7 @@ function _is_mailto(s::AbstractString)
     length(s) < 6 && return false
     # slicing strings is a bit risky, but this equality check is safe
     lowercase(s[1:6]) == "mailto:" || return false
-    return contains(s[6:end], _email_regex)
+    return occursin(_email_regex, s[6:end])
 end
 
 # –––––––––––

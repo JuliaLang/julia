@@ -296,6 +296,70 @@ end
 
 ## printing with color ##
 
+const text_colors = AnyDict(
+    :black         => "\033[30m",
+    :red           => "\033[31m",
+    :green         => "\033[32m",
+    :yellow        => "\033[33m",
+    :blue          => "\033[34m",
+    :magenta       => "\033[35m",
+    :cyan          => "\033[36m",
+    :white         => "\033[37m",
+    :light_black   => "\033[90m", # gray
+    :light_red     => "\033[91m",
+    :light_green   => "\033[92m",
+    :light_yellow  => "\033[93m",
+    :light_blue    => "\033[94m",
+    :light_magenta => "\033[95m",
+    :light_cyan    => "\033[96m",
+    :normal        => "\033[0m",
+    :default       => "\033[39m",
+    :bold          => "\033[1m",
+    :underline     => "\033[4m",
+    :blink         => "\033[5m",
+    :reverse       => "\033[7m",
+    :hidden        => "\033[8m",
+    :nothing       => "",
+)
+
+for i in 0:255
+    text_colors[i] = "\033[38;5;$(i)m"
+end
+
+const disable_text_style = AnyDict(
+    :bold      => "\033[22m",
+    :underline => "\033[24m",
+    :blink     => "\033[25m",
+    :reverse   => "\033[27m",
+    :hidden    => "\033[28m",
+    :normal    => "",
+    :default   => "",
+    :nothing   => "",
+)
+
+# Create a docstring with an automatically generated list
+# of colors.
+available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
+const possible_formatting_symbols = [:normal, :bold, :default]
+available_text_colors = cat(
+    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
+    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
+    dims=1)
+
+const available_text_colors_docstring =
+    string(join([string("`:", key,"`")
+                 for key in available_text_colors], ",\n", ", or \n"))
+
+"""Dictionary of color codes for the terminal.
+
+Available colors are: $available_text_colors_docstring as well as the integers 0 to 255 inclusive.
+
+The color `:default` will print text in the default color while the color `:normal`
+will print text with all text properties (like boldness) reset.
+Printing with the color `:nothing` will print the string without modifications.
+"""
+text_colors
+
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
     iscolor = get(io, :color, false)
@@ -336,7 +400,7 @@ printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) 
 printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, color=color)
 
-function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
@@ -377,68 +441,76 @@ will always be called.
 """
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
-securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
-if Sys.iswindows()
-function getpass(prompt::AbstractString)
-    print(prompt)
-    flush(stdout)
-    p = Vector{UInt8}(undef, 128) # mimic Unix getpass in ignoring more than 128-char passwords
-                          # (also avoids any potential memory copies arising from push!)
-    try
-        plen = 0
-        while true
-            c = ccall(:_getch, UInt8, ())
-            if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
-                break # EOF or return
-            elseif c == 0x00 || c == 0xe0
-                ccall(:_getch, UInt8, ()) # ignore function/arrow keys
-            elseif c == UInt8('\b') && plen > 0
-                plen -= 1 # delete last character on backspace
-            elseif !iscntrl(Char(c)) && plen < 128
-                p[plen += 1] = c
-            end
-        end
-        return unsafe_string(pointer(p), plen) # use unsafe_string rather than String(p[1:plen])
-                                               # to be absolutely certain we never make an extra copy
-    finally
-        securezero!(p)
-    end
+"""
+    Base.getpass(message::AbstractString) -> Base.SecretBuffer
 
-    return ""
+Display a message and wait for the user to input a secret, returning an `IO`
+object containing the secret.
+
+Note that on Windows, the secret might be displayed as it is typed; see
+`Base.winprompt` for securely retrieving username/password pairs from a
+graphical interface.
+"""
+function getpass end
+
+if Sys.iswindows()
+function getpass(input::TTY, output::IO, prompt::AbstractString)
+    input === stdin || throw(ArgumentError("getpass only works for stdin"))
+    print(output, prompt, ": ")
+    flush(output)
+    s = SecretBuffer()
+    plen = 0
+    while true
+        c = UInt8(ccall(:_getch, Cint, ()))
+        if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
+            break # EOF or return
+        elseif c == 0x00 || c == 0xe0
+            ccall(:_getch, Cint, ()) # ignore function/arrow keys
+        elseif c == UInt8('\b') && plen > 0
+            plen -= 1 # delete last character on backspace
+        elseif !iscntrl(Char(c)) && plen < 128
+            write(s, c)
+        end
+    end
+    return s
 end
 else
-getpass(prompt::AbstractString) = unsafe_string(ccall(:getpass, Cstring, (Cstring,), prompt))
+function getpass(input::TTY, output::IO, prompt::AbstractString)
+    (input === stdin && output === stdout) || throw(ArgumentError("getpass only works for stdin"))
+    msg = string(prompt, ": ")
+    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
+end
 end
 
+# allow new getpass methods to be defined if stdin has been
+# redirected to some custom stream, e.g. in IJulia.
+getpass(prompt::AbstractString) = getpass(stdin, stdout, prompt)
+
 """
-    prompt(message; default="", password=false) -> Union{String, Nothing}
+    prompt(message; default="") -> Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
-then the user can enter just a newline character to select the `default`. Alternatively,
-when the `password` keyword is `true` the characters entered by the user will not be
-displayed.
+then the user can enter just a newline character to select the `default`.
+
+See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
-function prompt(message::AbstractString; default::AbstractString="", password::Bool=false)
-    if Sys.iswindows() && password
-        error("Command line prompt not supported for password entry on windows. Use `Base.winprompt` instead")
-    end
-    msg = !isempty(default) ? "$message [$default]:" : "$message:"
-    if password
-        # `getpass` automatically chomps. We cannot tell an EOF from a '\n'.
-        uinput = getpass(msg)
-    else
-        print(msg)
-        uinput = readline(keep=true)
-        isempty(uinput) && return nothing  # Encountered an EOF
-        uinput = chomp(uinput)
-    end
+function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
+    msg = !isempty(default) ? "$message [$default]: " : "$message: "
+    print(output, msg)
+    uinput = readline(input, keep=true)
+    isempty(uinput) && return nothing  # Encountered an EOF
+    uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
 end
+
+# allow new prompt methods to be defined if stdin has been
+# redirected to some custom stream, e.g. in IJulia.
+prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, stdout, message, default=default)
 
 # Windows authentication prompt
 if Sys.iswindows()
@@ -519,7 +591,7 @@ if Sys.iswindows()
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]
         result = (String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
-                  String(transcode(UInt8, passbuf_)))
+                  SecretBuffer!(transcode(UInt8, passbuf_)))
         securezero!(passbuf_)
         securezero!(passbuf)
 
@@ -558,23 +630,24 @@ _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
 This is a helper macro that automatically defines a keyword-based constructor for the type
 declared in the expression `typedef`, which must be a `struct` or `mutable struct`
 expression. The default argument is supplied by declaring fields of the form `field::T =
-default`. If no default is provided then the default is provided by the `kwdef_val(T)`
-function.
+default` or `field = default`. If no default is provided then the keyword argument becomes
+a required keyword argument in the resulting type constructor.
 
 # Examples
 ```jldoctest
-julia> struct Bar end
-
 julia> Base.@kwdef struct Foo
-           a::Cint            # implied default Cint(0)
-           b::Cint = 1        # specified default
-           z::Cstring         # implied default Cstring(C_NULL)
-           y::Bar             # implied default Bar()
+           a::Int = 1         # specified default
+           b::String          # required keyword
        end
 Foo
 
+julia> Foo(b="hi")
+Foo(1, "hi")
+
 julia> Foo()
-Foo(0, 1, Cstring(0x0000000000000000), Bar())
+ERROR: UndefKeywordError: keyword argument b not assigned
+Stacktrace:
+[...]
 ```
 """
 macro kwdef(expr)
@@ -583,10 +656,15 @@ macro kwdef(expr)
     params_ex = Expr(:parameters)
     call_ex = Expr(:call, T)
     _kwdef!(expr.args[3], params_ex, call_ex)
-    quote
+    ret = quote
         Base.@__doc__($(esc(expr)))
-        $(esc(Expr(:call,T,params_ex))) = $(esc(call_ex))
     end
+    # Only define a constructor if the type has fields, otherwise we'll get a stack
+    # overflow on construction
+    if !isempty(params_ex.args)
+        push!(ret.args, :($(esc(Expr(:call, T, params_ex))) = $(esc(call_ex))))
+    end
+    ret
 end
 
 # @kwdef helper function
@@ -594,11 +672,19 @@ end
 function _kwdef!(blk, params_ex, call_ex)
     for i in eachindex(blk.args)
         ei = blk.args[i]
-        isa(ei, Expr) || continue
-        if ei.head == :(=)
+        if isa(ei, Symbol)
+            push!(params_ex.args, ei)
+            push!(call_ex.args, ei)
+        elseif !isa(ei, Expr)
+            continue
+        elseif ei.head == :(=)
             # var::Typ = defexpr
             dec = ei.args[1]  # var::Typ
-            var = dec.args[1] # var
+            if isa(dec, Expr) && dec.head == :(::)
+                var = dec.args[1]
+            else
+                var = dec
+            end
             def = ei.args[2]  # defexpr
             push!(params_ex.args, Expr(:kw, var, def))
             push!(call_ex.args, var)
@@ -606,9 +692,8 @@ function _kwdef!(blk, params_ex, call_ex)
         elseif ei.head == :(::)
             dec = ei # var::Typ
             var = dec.args[1] # var
-            def = :(Base.kwdef_val($(ei.args[2])))
-            push!(params_ex.args, Expr(:kw, var, def))
-            push!(call_ex.args, dec.args[1])
+            push!(params_ex.args, var)
+            push!(call_ex.args, var)
         elseif ei.head == :block
             # can arise with use of @static inside type decl
             _kwdef!(ei, params_ex, call_ex)
@@ -617,48 +702,10 @@ function _kwdef!(blk, params_ex, call_ex)
     blk
 end
 
-
-
-"""
-    kwdef_val(T)
-
-The default value for a type for use with the `@kwdef` macro. Returns:
-
- - null pointer for pointer types (`Ptr{T}`, `Cstring`, `Cwstring`)
- - zero for integer types
- - no-argument constructor calls (e.g. `T()`) for all other types
-
-# Examples
-```jldoctest
-julia> struct Foo
-           i::Int
-       end
-
-julia> Base.kwdef_val(::Type{Foo}) = Foo(42)
-
-julia> Base.@kwdef struct Bar
-           y::Foo
-       end
-Bar
-
-julia> Bar()
-Bar(Foo(42))
-```
-"""
-function kwdef_val end
-
-kwdef_val(::Type{Ptr{T}}) where {T} = Ptr{T}(C_NULL)
-kwdef_val(::Type{Cstring}) = Cstring(C_NULL)
-kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
-
-kwdef_val(::Type{T}) where {T<:Integer} = zero(T)
-
-kwdef_val(::Type{T}) where {T} = T()
-
 # testing
 
 """
-    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_CORES / 2),
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
@@ -668,7 +715,7 @@ when `exit_on_error == true`.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
+function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error=false,
                   seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
@@ -677,13 +724,13 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
     exit_on_error && push!(tests, "--exit-on-error")
     seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
-    ENV2["JULIA_CPU_CORES"] = "$ncores"
+    ENV2["JULIA_CPU_THREADS"] = "$ncores"
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()
-        versioninfo(buf)
+        Base.require(Base, :InteractiveUtils).versioninfo(buf)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end

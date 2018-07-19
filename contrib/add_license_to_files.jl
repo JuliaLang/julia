@@ -30,6 +30,7 @@ const excludedirs = [
 
 const skipfiles = [
     "../contrib/add_license_to_files.jl",
+    "../contrib/fixup_precompile.jl",
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
@@ -81,7 +82,7 @@ function check_lines!(
     remove = []
     for i in 1:length(lines)
         line = lines[i]
-        if contains(line, checktxt)
+        if occursin(checktxt, line)
             if strip(line) == strip(prefix * checktxt) || strip(line) == strip(checktxt)
                 push!(remove, i)
             else

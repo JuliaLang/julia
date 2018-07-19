@@ -18,6 +18,7 @@ end
 showerror(io::IO, ex::MissingException) =
     print(io, "MissingException: ", ex.msg)
 
+
 nonmissingtype(::Type{Union{T, Missing}}) where {T} = T
 nonmissingtype(::Type{Missing}) = Union{}
 nonmissingtype(::Type{T}) where {T} = T
@@ -29,12 +30,15 @@ for U in (:Nothing, :Missing)
         promote_rule(::Type{Union{S,$U}}, ::Type{T}) where {T,S} = Union{promote_type(T, S), $U}
         promote_rule(::Type{Any}, ::Type{$U}) = Any
         promote_rule(::Type{$U}, ::Type{Any}) = Any
-        promote_rule(::Type{$U}, ::Type{$U}) = U
+        # This definition is never actually used, but disambiguates the above definitions
+        promote_rule(::Type{$U}, ::Type{$U}) = $U
     end
 end
 promote_rule(::Type{Union{Nothing, Missing}}, ::Type{Any}) = Any
 promote_rule(::Type{Union{Nothing, Missing}}, ::Type{T}) where {T} =
     Union{Nothing, Missing, T}
+promote_rule(::Type{Union{Nothing, Missing, S}}, ::Type{T}) where {T,S} =
+    Union{Nothing, Missing, promote_type(T, S)}
 
 convert(::Type{Union{T, Missing}}, x) where {T} = convert(T, x)
 # To fix ambiguities
@@ -64,17 +68,13 @@ isless(::Any, ::Missing) = true
 
 # Unary operators/functions
 for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
-          :(abs), :(abs2), :(sign), :(real), :(imag),
-          :(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
-          :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
-          :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
-          :(log2), :(Math.exponent), :(sqrt), :(Math.gamma), :(Math.lgamma),
-          :(iseven), :(ispow2), :(isfinite), :(isinf), :(isodd),
+          :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan),
-          :(iszero), :(transpose), :(adjoint), :(float), :(conj))
-    @eval $(f)(::Missing) = missing
+          :(iszero), :(transpose), :(adjoint), :(float), :(conj),
+	  :(abs), :(abs2), :(iseven), :(ispow2),
+	  :(real), :(imag), :(sign))
+    @eval ($f)(::Missing) = missing
 end
-
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
     @eval function $(f)(::Type{Union{T, Missing}}) where T
         T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
@@ -176,45 +176,133 @@ end
 IteratorSize(::Type{<:SkipMissing}) = SizeUnknown()
 IteratorEltype(::Type{SkipMissing{T}}) where {T} = IteratorEltype(T)
 eltype(::Type{SkipMissing{T}}) where {T} = nonmissingtype(eltype(T))
-# Fallback implementation for general iterables: we cannot access a value twice,
-# so after finding the next non-missing element in start() or next(), we have to
-# pass it in the iterator state, which introduces a type instability since the value
-# is missing if the input does not contain any non-missing element.
-@inline function Base.start(itr::SkipMissing)
-    s = start(itr.x)
-    v = missing
-    @inbounds while !done(itr.x, s) && v isa Missing
-        v, s = next(itr.x, s)
+
+function iterate(itr::SkipMissing, state...)
+    y = iterate(itr.x, state...)
+    y === nothing && return nothing
+    item, state = y
+    while item === missing
+        y = iterate(itr.x, state)
+        y === nothing && return nothing
+        item, state = y
     end
-    (v, s)
+    item, state
 end
-@inline Base.done(itr::SkipMissing, state) = ismissing(state[1]) && done(itr.x, state[2])
-@inline function Base.next(itr::SkipMissing, state)
-    v1, s = state
-    v2 = missing
-    @inbounds while !done(itr.x, s) && v2 isa Missing
-        v2, s = next(itr.x, s)
+
+# Optimized mapreduce implementation
+# The generic method is faster when !(eltype(A) >: Missing) since it does not need
+# additional loops to identify the two first non-missing values of each block
+mapreduce(f, op, itr::SkipMissing{<:AbstractArray}) =
+    _mapreduce(f, op, IndexStyle(itr.x), eltype(itr.x) >: Missing ? itr : itr.x)
+
+function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
+    A = itr.x
+    local ai
+    inds = LinearIndices(A)
+    i = first(inds)
+    ilast = last(inds)
+    while i <= ilast
+        @inbounds ai = A[i]
+        ai === missing || break
+        i += 1
     end
-    (v1, (v2, s))
-end
-# Optimized implementation for AbstractArray, relying on the ability to access x[i] twice:
-# once in done() to find the next non-missing entry, and once in next() to return it.
-# This works around the type instability problem of the generic fallback.
-@inline function _next_nonmissing_ind(x::AbstractArray, s)
-    idx = eachindex(x)
-    @inbounds while !done(idx, s)
-        i, new_s = next(idx, s)
-        x[i] isa Missing || break
-        s = new_s
+    i > ilast && return mapreduce_empty(f, op, eltype(itr))
+    a1 = ai
+    i += 1
+    while i <= ilast
+        @inbounds ai = A[i]
+        ai === missing || break
+        i += 1
     end
-    s
+    i > ilast && return mapreduce_first(f, op, a1)
+    # We know A contains at least two non-missing entries: the result cannot be nothing
+    something(mapreduce_impl(f, op, itr, first(inds), last(inds)))
 end
-@inline Base.start(itr::SkipMissing{<:AbstractArray}) =
-    _next_nonmissing_ind(itr.x, start(eachindex(itr.x)))
-@inline Base.done(itr::SkipMissing{<:AbstractArray}, state) =
-    done(eachindex(itr.x), state)
-@inline function Base.next(itr::SkipMissing{<:AbstractArray}, state)
-    i, state = next(eachindex(itr.x), state)
-    @inbounds v = itr.x[i]::eltype(itr)
-    (v, _next_nonmissing_ind(itr.x, state))
+
+_mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapfoldl(f, op, itr)
+
+mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
+    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
+
+# Returns nothing when the input contains only missing values, and Some(x) otherwise
+@noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
+                                  ifirst::Integer, ilast::Integer, blksize::Int)
+    A = itr.x
+    if ifirst == ilast
+        @inbounds a1 = A[ifirst]
+        if a1 === missing
+            return nothing
+        else
+            return Some(mapreduce_first(f, op, a1))
+        end
+    elseif ifirst + blksize > ilast
+        # sequential portion
+        local ai
+        i = ifirst
+        while i <= ilast
+            @inbounds ai = A[i]
+            ai === missing || break
+            i += 1
+        end
+        i > ilast && return nothing
+        a1 = ai::eltype(itr)
+        i += 1
+        while i <= ilast
+            @inbounds ai = A[i]
+            ai === missing || break
+            i += 1
+        end
+        i > ilast && return Some(mapreduce_first(f, op, a1))
+        a2 = ai::eltype(itr)
+        i += 1
+        v = op(f(a1), f(a2))
+        @simd for i = i:ilast
+            @inbounds ai = A[i]
+            if ai !== missing
+                v = op(v, f(ai))
+            end
+        end
+        return Some(v)
+    else
+        # pairwise portion
+        imid = (ifirst + ilast) >> 1
+        v1 = mapreduce_impl(f, op, itr, ifirst, imid, blksize)
+        v2 = mapreduce_impl(f, op, itr, imid+1, ilast, blksize)
+        if v1 === nothing && v2 === nothing
+            return nothing
+        elseif v1 === nothing
+            return v2
+        elseif v2 === nothing
+            return v1
+        else
+            return Some(op(something(v1), something(v2)))
+        end
+    end
 end
+
+"""
+    coalesce(x, y...)
+
+Return the first value in the arguments which is not equal to [`missing`](@ref),
+if any. Otherwise return `missing`.
+
+# Examples
+
+```jldoctest
+julia> coalesce(missing, 1)
+1
+
+julia> coalesce(1, missing)
+1
+
+julia> coalesce(nothing, 1)  # returns `nothing`
+
+julia> coalesce(missing, missing)
+missing
+```
+"""
+function coalesce end
+
+coalesce() = missing
+coalesce(x::Missing, y...) = coalesce(y...)
+coalesce(x::Any, y...) = x

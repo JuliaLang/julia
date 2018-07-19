@@ -42,17 +42,21 @@ test_code_reflections(test_ast_reflection, code_typed)
 
 end # module ReflectionTest
 
-# isbits
+# isbits, isbitstype
 
-@test !isbits(Array{Int})
-@test isbits(Float32)
-@test isbits(Int)
-@test !isbits(AbstractString)
-@test isbits(Tuple{Int, Vararg{Int, 2}})
-@test !isbits(Tuple{Int, Vararg{Int}})
-@test !isbits(Tuple{Integer, Vararg{Int, 2}})
-@test isbits(Tuple{Int, Vararg{Any, 0}})
-@test isbits(Tuple{Vararg{Any, 0}})
+@test !isbitstype(Array{Int})
+@test isbitstype(Float32)
+@test isbitstype(Int)
+@test !isbitstype(AbstractString)
+@test isbitstype(Tuple{Int, Vararg{Int, 2}})
+@test !isbitstype(Tuple{Int, Vararg{Int}})
+@test !isbitstype(Tuple{Integer, Vararg{Int, 2}})
+@test isbitstype(Tuple{Int, Vararg{Any, 0}})
+@test isbitstype(Tuple{Vararg{Any, 0}})
+@test isbits(1)
+@test isbits((1,2))
+@test !isbits([1])
+@test isbits(nothing)
 
 # issue #16670
 @test isconcretetype(Int)
@@ -205,8 +209,6 @@ end
 # PR 13825
 let ex = :(a + b)
     @test string(ex) == "a + b"
-    ex.typ = Integer
-    @test string(ex) == "(a + b)::Integer"
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
@@ -233,6 +235,7 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
+@test_throws ErrorException fieldnames(Union{})
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
@@ -274,9 +277,12 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
     world = typemax(UInt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
-    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
-    @test llvmf != C_NULL
-    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf) != C_NULL
+    llvmf1 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
+    @test llvmf1 != C_NULL
+    llvmf2 = ccall(:jl_get_llvmf_decl, Ptr{Cvoid}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, false, params)
+    @test llvmf2 != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf1) != C_NULL
+    @test ccall(:jl_get_llvm_fptr, Ptr{Cvoid}, (Ptr{Cvoid},), llvmf2) != C_NULL
 end
 
 # issue #15714
@@ -331,20 +337,18 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     for str in (sprint(code_warntype, f, types),
                 repr("text/plain", src))
         for var in must_used_vars
-            @test contains(str, string(var))
+            @test occursin(string(var), str)
         end
-        @test !contains(str, "::Any")
-        @test !contains(str, "::ANY")
         # Check that we are not printing the bare slot numbers
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
             if name in dupnames
-                if name in must_used_vars && contains(str, Regex("_$i\\b"))
+                if name in must_used_vars && occursin(Regex("_$i\\b"), str)
                     must_used_checked[name] = true
                     global used_dup_var_tested15714 = true
                 end
             else
-                @test !contains(str, Regex("_$i\\b"))
+                @test !occursin(Regex("_$i\\b"), str)
                 if name in must_used_vars
                     global used_unique_var_tested15714 = true
                 end
@@ -363,7 +367,7 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(src.slotnames)
         name = src.slotnames[i]
-        if name in must_used_vars && contains(str, Regex("_$i\\b"))
+        if name in must_used_vars && occursin(Regex("_$i\\b"), str)
             must_used_checked[name] = true
         end
     end
@@ -395,7 +399,9 @@ end
 tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), cfunction(tracer, Cvoid, Tuple{Ptr{Cvoid}}))
+let ctracer = @cfunction(tracer, Cvoid, (Ptr{Cvoid},))
+    ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), ctracer)
+end
 meth = which(tracefoo,Tuple{Any,Any})
 ccall(:jl_trace_method, Cvoid, (Any,), meth)
 @test tracefoo(1, 2) == 3
@@ -408,7 +414,9 @@ ccall(:jl_register_method_tracer, Cvoid, (Ptr{Cvoid},), C_NULL)
 
 # Method Tracing test
 methtracer(x::Ptr{Cvoid}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cfunction(methtracer, Cvoid, Tuple{Ptr{Cvoid}}))
+let cmethtracer = @cfunction(methtracer, Cvoid, (Ptr{Cvoid},))
+    ccall(:jl_register_newmeth_tracer, Cvoid, (Ptr{Cvoid},), cmethtracer)
+end
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
@@ -486,7 +494,7 @@ else
     @test h16850 === nothing
 end
 
-# PR #18888: code_typed shouldn't cache if not optimizing
+# PR #18888: code_typed shouldn't cache, return_types should
 let
     world = typemax(UInt)
     f18888() = return nothing
@@ -500,6 +508,10 @@ let
     @test !isdefined(code, :inferred)
 
     code_typed(f18888, Tuple{}; optimize=true)
+    code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
+    @test !isdefined(code, :inferred)
+
+    Base.return_types(f18888, Tuple{})
     code = Core.Compiler.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test isdefined(code, :inferred)
 end
@@ -573,12 +585,13 @@ end
 @test_throws ErrorException sizeof(Vector{Int})
 @test_throws ErrorException sizeof(Symbol)
 @test_throws ErrorException sizeof(Core.SimpleVector)
+@test_throws ErrorException sizeof(Union{})
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
 @test nfields(nothing) == fieldcount(Nothing) == 0
 @test nfields(1) == 0
-@test fieldcount(Union{}) == 0
+@test_throws ErrorException fieldcount(Union{})
 @test fieldcount(Tuple{Any,Any,T} where T) == 3
 @test fieldcount(Complex) == fieldcount(ComplexF32) == 2
 @test fieldcount(Union{ComplexF32,ComplexF64}) == 2

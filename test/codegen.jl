@@ -21,7 +21,7 @@ get_llvm_noopt(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_
 
 if opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
-    @test !contains(get_llvm(identity, Tuple{String}), " call ")
+    @test !occursin(" call ", get_llvm(identity, Tuple{String}))
 end
 
 jl_string_ptr(s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
@@ -36,7 +36,7 @@ function test_loads_no_call(ir, load_types)
             end
             continue
         end
-        @test !contains(line, " call ")
+        @test !occursin(" call ", line)
         load_split = split(line, " load ", limit=2)
         if !coverage && length(load_split) >= 2
             @test load_idx <= length(load_types)
@@ -76,6 +76,9 @@ end
 function test_jl_dump_compiles_toplevel_thunks()
     tfile = tempname()
     io = open(tfile, "w")
+    # Make sure to cause compilation of the eval function
+    # before calling it below.
+    Core.eval(Main, Any[:(nothing)][1])
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
@@ -89,7 +92,7 @@ end
 
 if opt_level > 0
     # Make sure `jl_string_ptr` is inlined
-    @test !contains(get_llvm(jl_string_ptr, Tuple{String}), " call ")
+    @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
     s = "aaa"
     @test jl_string_ptr(s) == pointer_from_objref(s) + sizeof(Int)
     # String
@@ -171,24 +174,30 @@ Base.unsafe_convert(::Type{Ref{PtrStruct}}, at::Tuple) =
 breakpoint_ptrstruct(a::RealStruct) =
     ccall(:jl_breakpoint, Cvoid, (Ref{PtrStruct},), a)
 
-if opt_level > 0
-    @test !contains(get_llvm(pointer_not_safepoint, Tuple{}), "%gcframe")
-    compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
-    @test contains(compare_large_struct_ir, "call i32 @memcmp")
-    @test !contains(compare_large_struct_ir, "%gcframe")
+@noinline r_typeassert(c) = c ? (1,1) : nothing
+function f_typeassert(c)
+    r_typeassert(c)::Tuple
+end
+@test !occursin("jl_subtype", get_llvm(f_typeassert, Tuple{Bool}))
 
-    @test contains(get_llvm(MutableStruct, Tuple{}), "jl_gc_pool_alloc")
+if opt_level > 0
+    @test !occursin("%gcframe", get_llvm(pointer_not_safepoint, Tuple{}))
+    compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
+    @test occursin("call i32 @memcmp", compare_large_struct_ir)
+    @test !occursin("%gcframe", compare_large_struct_ir)
+
+    @test occursin("jl_gc_pool_alloc", get_llvm(MutableStruct, Tuple{}))
     breakpoint_mutable_ir = get_llvm(breakpoint_mutable, Tuple{MutableStruct})
-    @test !contains(breakpoint_mutable_ir, "%gcframe")
-    @test !contains(breakpoint_mutable_ir, "jl_gc_pool_alloc")
+    @test !occursin("%gcframe", breakpoint_mutable_ir)
+    @test !occursin("jl_gc_pool_alloc", breakpoint_mutable_ir)
 
     breakpoint_badref_ir = get_llvm(breakpoint_badref, Tuple{MutableStruct})
-    @test !contains(breakpoint_badref_ir, "%gcframe")
-    @test !contains(breakpoint_badref_ir, "jl_gc_pool_alloc")
+    @test !occursin("%gcframe", breakpoint_badref_ir)
+    @test !occursin("jl_gc_pool_alloc", breakpoint_badref_ir)
 
     breakpoint_ptrstruct_ir = get_llvm(breakpoint_ptrstruct, Tuple{RealStruct})
-    @test !contains(breakpoint_ptrstruct_ir, "%gcframe")
-    @test !contains(breakpoint_ptrstruct_ir, "jl_gc_pool_alloc")
+    @test !occursin("%gcframe", breakpoint_ptrstruct_ir)
+    @test !occursin("jl_gc_pool_alloc", breakpoint_ptrstruct_ir)
 end
 
 function two_breakpoint(a::Float64)
@@ -206,19 +215,19 @@ end
 if opt_level > 0
     breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Cvoid, (Ref{Float64},), a),
                                  Tuple{Float64})
-    @test !contains(breakpoint_f64_ir, "jl_gc_pool_alloc")
+    @test !occursin("jl_gc_pool_alloc", breakpoint_f64_ir)
     breakpoint_any_ir = get_llvm((a)->ccall(:jl_breakpoint, Cvoid, (Ref{Any},), a),
                                  Tuple{Float64})
-    @test contains(breakpoint_any_ir, "jl_gc_pool_alloc")
+    @test occursin("jl_gc_pool_alloc", breakpoint_any_ir)
     two_breakpoint_ir = get_llvm(two_breakpoint, Tuple{Float64})
-    @test !contains(two_breakpoint_ir, "jl_gc_pool_alloc")
-    @test contains(two_breakpoint_ir, "llvm.lifetime.end")
+    @test !occursin("jl_gc_pool_alloc", two_breakpoint_ir)
+    @test occursin("llvm.lifetime.end", two_breakpoint_ir)
 
     @test load_dummy_ref(1234) === 1234
     load_dummy_ref_ir = get_llvm(load_dummy_ref, Tuple{Int})
-    @test !contains(load_dummy_ref_ir, "jl_gc_pool_alloc")
+    @test !occursin("jl_gc_pool_alloc", load_dummy_ref_ir)
     # Hopefully this is reliable enough. LLVM should be able to optimize this to a direct return.
-    @test contains(load_dummy_ref_ir, "ret $Iptr %0")
+    @test occursin("ret $Iptr %0", load_dummy_ref_ir)
 end
 
 # Issue 22770
@@ -308,11 +317,11 @@ g24108(x::B24108) = f24108(x.x.x)
 @test g22421_2(Ref(7), Ref(8), false) === 24
 
 if opt_level > 0
-    @test !contains(get_llvm(g22421_1, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
-                    "%gcframe")
-    @test !contains(get_llvm(g22421_2, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
-                    "%gcframe")
-    @test !contains(get_llvm(g24108, Tuple{B24108}), "%gcframe")
+    @test !occursin("%gcframe",
+                    get_llvm(g22421_1, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}))
+    @test !occursin("%gcframe",
+                    get_llvm(g22421_2, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}))
+    @test !occursin("%gcframe", get_llvm(g24108, Tuple{B24108}))
 end
 
 str_22330 = """

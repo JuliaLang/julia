@@ -48,8 +48,8 @@ end
 @test length(run(pipeline(`$echocmd hello`, sortcmd), wait=false).processes) == 2
 
 out = read(`$echocmd hello` & `$echocmd world`, String)
-@test contains(out,"world")
-@test contains(out,"hello")
+@test occursin("world", out)
+@test occursin("hello", out)
 @test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
@@ -59,7 +59,7 @@ Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
 let a, p
     a = Base.Condition()
-    @schedule begin
+    @async begin
         p = run(pipeline(yescmd,devnull), wait=false)
         Base.notify(a,p)
         @test !success(p)
@@ -165,6 +165,7 @@ let r, t
     t = @async begin
         try
             wait(r)
+        catch
         end
         p = run(`$sleepcmd 1`, wait=false); wait(p)
         @test p.exitcode == 0
@@ -267,7 +268,7 @@ let fname = tempname(), p
     oldhandle = OLD_STDERR.handle
     OLD_STDERR.status = Base.StatusClosing
     OLD_STDERR.handle = C_NULL
-    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, cfunction(thrash, Cvoid, Tuple{Ptr{Cvoid}}))
+    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), oldhandle, @cfunction(thrash, Cvoid, (Ptr{Cvoid},)))
     sleep(1)
     import Base.zzzInvalidIdentifier
     """
@@ -455,7 +456,7 @@ if Sys.isunix()
     let ps = Pipe[]
         ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
         try
-            for i = 1 : 100 * coalesce(ulimit_n, 1000)
+            for i = 1 : 100 * something(ulimit_n, 1000)
                 p = Pipe()
                 Base.link_pipe!(p)
                 push!(ps, p)
@@ -485,7 +486,7 @@ let c19864 = readchomp(pipeline(ignorestatus(
             Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
             throw(Error19864())'`),
     stderr=catcmd))
-    @test contains(c19864, "ERROR: correct19864")
+    @test occursin("ERROR: correct19864", c19864)
 end
 
 # accessing the command elements as an array or iterator:
@@ -500,20 +501,20 @@ let c = `ls -l "foo bar"`
 end
 
 ## Deadlock in spawning a cmd (#22832)
-# FIXME?
-#let out = Pipe(), inpt = Pipe()
-#    Base.link_pipe!(out, reader_supports_async=true)
-#    Base.link_pipe!(inpt, writer_supports_async=true)
-#    p = run(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull), wait=false)
-#    @async begin # feed cat with 2 MB of data (zeros)
-#        write(inpt, zeros(UInt8, 1048576 * 2))
-#        close(inpt)
-#    end
-#    sleep(0.5) # give cat a chance to fill the write buffer for stdout
-#    close(out.in) # make sure we can still close the write end
-#    @test sizeof(readstring(out)) == 1048576 * 2 # make sure we get all the data
-#    @test success(p)
-#end
+let out = Pipe(), inpt = Pipe()
+    Base.link_pipe!(out, reader_supports_async=true)
+    Base.link_pipe!(inpt, writer_supports_async=true)
+    p = run(pipeline(catcmd, stdin=inpt, stdout=out, stderr=devnull), wait=false)
+    @async begin # feed cat with 2 MB of data (zeros)
+        write(inpt, zeros(UInt8, 1048576 * 2))
+        close(inpt)
+    end
+    sleep(1) # give cat a chance to fill the write buffer for stdout
+    close(inpt.out)
+    close(out.in) # make sure we can still close the write end
+    @test sizeof(read(out)) == 1048576 * 2 # make sure we get all the data
+    @test success(p)
+end
 
 # `kill` error conditions
 let p = run(`$sleepcmd 100`, wait=false)
@@ -528,4 +529,93 @@ end
 # Second argument of shell_parse
 let s = "   \$abc   "
     @test s[Base.shell_parse(s)[2]] == "abc"
+end
+
+# Logging macros should not output to finalized streams (#26687)
+let
+    cmd = `$(Base.julia_cmd()) -e 'finalizer(x->@info(x), "Hello")'`
+    output = readchomp(pipeline(cmd, stderr=catcmd))
+    @test occursin("Info: Hello", output)
+end
+
+# Sys.which() testing
+psep = if Sys.iswindows() ";" else ":" end
+withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
+    julia_exe = joinpath(Sys.BINDIR, "julia")
+    if Sys.iswindows()
+        julia_exe *= ".exe"
+    end
+
+    @test Sys.which("julia") == realpath(julia_exe)
+    @test Sys.which(julia_exe) == realpath(julia_exe)
+end
+
+mktempdir() do dir
+    withenv("PATH" => "$(dir)$(psep)$(ENV["PATH"])") do
+        # Test that files lacking executable permissions fail Sys.which
+        # but only on non-Windows systems, as Windows doesn't care...
+        foo_path = joinpath(dir, "foo")
+        touch(foo_path)
+        chmod(foo_path, 0o777)
+        if !Sys.iswindows()
+            @test Sys.which("foo") == realpath(foo_path)
+            @test Sys.which(foo_path) == realpath(foo_path)
+
+            chmod(foo_path, 0o666)
+            @test Sys.which("foo") === nothing
+            @test Sys.which(foo_path) === nothing
+        end
+
+        # Test that completely missing files also return nothing
+        @test Sys.which("this_is_not_a_command") === nothing
+    end
+end
+
+mktempdir() do dir
+    withenv("PATH" => "$(joinpath(dir, "bin1"))$(psep)$(joinpath(dir, "bin2"))$(psep)$(ENV["PATH"])") do
+        # Test that we have proper priorities
+        mkpath(joinpath(dir, "bin1"))
+        mkpath(joinpath(dir, "bin2"))
+        foo1_path = joinpath(dir, "bin1", "foo")
+        foo2_path = joinpath(dir, "bin2", "foo")
+
+        # On windows, we find things with ".exe" and ".com"
+        if Sys.iswindows()
+            foo1_path *= ".exe"
+            foo2_path *= ".com"
+        end
+
+        touch(foo1_path)
+        touch(foo2_path)
+        chmod(foo1_path, 0o777)
+        chmod(foo2_path, 0o777)
+        @test Sys.which("foo") == realpath(foo1_path)
+
+        # chmod() doesn't change which() on Windows, so don't bother to test that
+        if !Sys.iswindows()
+            chmod(foo1_path, 0o666)
+            @test Sys.which("foo") == realpath(foo2_path)
+            chmod(foo1_path, 0o777)
+        end
+
+        if Sys.iswindows()
+            # On windows, check that pwd() takes precedence, except when we provide a path
+            cd(joinpath(dir, "bin2")) do
+                @test Sys.which("foo") == realpath(foo2_path)
+                @test Sys.which(foo1_path) == realpath(foo1_path)
+            end
+        end
+
+        # Check that "bin1/bar" will actually run "bin1/bar"
+        bar_path = joinpath(dir, "bin1", "bar")
+        if Sys.iswindows()
+            bar_path *= ".exe"
+        end
+
+        touch(bar_path)
+        chmod(bar_path, 0o777)
+        cd(dir) do
+            @test Sys.which(joinpath("bin1", "bar")) == realpath(bar_path)
+        end
+    end
 end

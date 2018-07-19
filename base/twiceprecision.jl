@@ -280,7 +280,7 @@ end
 
 function *(x::TwicePrecision, v::Number)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    x * TwicePrecision{typeof(x.hi*v)}(v)
+    x * TwicePrecision(oftype(x.hi*v, v))
 end
 function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
@@ -298,7 +298,7 @@ end
 *(x::TwicePrecision, y::TwicePrecision) = *(promote(x, y)...)
 
 function /(x::TwicePrecision, v::Number)
-    x / TwicePrecision{typeof(x.hi/v)}(v)
+    x / TwicePrecision(oftype(x.hi/v, v))
 end
 
 function /(x::TwicePrecision, y::TwicePrecision)
@@ -639,7 +639,7 @@ end
 _linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEEFloat} = _linspace(T, start, stop, len, 1)
 function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T<:IEEEFloat
     len < 2 && return _linspace1(T, start_n/den, stop_n/den, len)
-    start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len)
+    start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len, 1)
     tmin = -start_n/(Float64(stop_n) - Float64(start_n))
     imin = round(Int, tmin*(len-1)+1)
     imin = clamp(imin, 1, Int(len))

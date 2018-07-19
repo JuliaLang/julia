@@ -4,11 +4,6 @@ using Base: @deprecate, depwarn
 
 # BEGIN 0.7 deprecations
 
-# PR #22475
-import Base: cat
-@deprecate cat(::Type{Val{N}}, A::_SparseConcatGroup...) where {N} cat(Val(N), A...)
-@deprecate cat(::Type{Val{N}}, A::_DenseConcatGroup...) where {N} cat(Val(N), A...)
-
 # deprecate remaining vectorized methods over SparseVectors (zero-preserving)
 for op in (:floor, :ceil, :trunc, :round,
         :log1p, :expm1,  :sinpi,
@@ -136,7 +131,7 @@ end
 import Base: Ac_mul_B, At_mul_B
 import Base: A_mul_Bc, A_mul_Bt, Ac_mul_Bc, At_mul_Bt
 import Base: At_ldiv_B, Ac_ldiv_B
-import LinearAlgebra: A_mul_B!, Ac_mul_B!, At_mul_B!, A_ldiv_B!
+import LinearAlgebra: A_mul_B!, Ac_mul_B!, At_mul_B!, A_ldiv_B!, A_rdiv_Bt!
 import LinearAlgebra: At_ldiv_B!, Ac_ldiv_B!, A_rdiv_B!, A_rdiv_Bc!, mul!, ldiv!, rdiv!
 
 # A[ct]_(mul|ldiv|rdiv)_B[ct][!] methods from base/sparse/linalg.jl, to deprecate
@@ -222,6 +217,9 @@ end
 import Base: asyncmap
 @deprecate asyncmap(f, s::AbstractSparseArray...; kwargs...) sparse(asyncmap(f, map(Array, s)...; kwargs...))
 
+# PR 26347: implicit scalar broadcasting within setindex!
+@deprecate setindex!(A::SparseMatrixCSC{<:Any,<:Any}, x, i::Union{Integer, AbstractVector{<:Integer}, Colon}, j::Union{Integer, AbstractVector{<:Integer}, Colon}) (A[i, j] .= x; A)
+
 #25395 keywords unlocked
 @deprecate dropzeros(x, trim)     dropzeros(x, trim = trim)
 @deprecate dropzeros!(x, trim)    dropzeros!(x, trim = trim)
@@ -233,6 +231,9 @@ Base.@deprecate_binding blkdiag blockdiag
 @deprecate complex(x::AbstractVector{<:Real}, y::AbstractSparseVector{<:Real}) complex.(x, y)
 @deprecate complex(x::AbstractSparseVector{<:Real}, y::AbstractVector{<:Real}) complex.(x, y)
 
+@deprecate diff(a::SparseMatrixCSC, dim::Integer) diff(a, dims=dim)
+
+@deprecate findnz(A::AbstractMatrix) (I = findall(!iszero, A); (getindex.(I, 1), getindex.(I, 2), A[I]))
 
 # END 0.7 deprecations
 

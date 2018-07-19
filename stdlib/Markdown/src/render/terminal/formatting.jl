@@ -11,7 +11,7 @@ lines(s) = split(s, "\n")
 
 # This could really be more efficient
 function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
-    if contains(s, r"\n")
+    if occursin(r"\n", s)
         return vcat(map(s->wrapped_lines(io, s, width = width, i = i), split(s, "\n"))...)
     end
     ws = words(s)
@@ -35,12 +35,11 @@ wrapped_lines(io::IO, f::Function, args...; width = 80, i = 0) =
 
 function print_wrapped(io::IO, s...; width = 80, pre = "", i = 0)
     lines = wrapped_lines(io, s..., width = width, i = i)
-    println(io, lines[1])
+    print(io, lines[1])
     for line in lines[2:end]
-        println(io, pre, line)
+        print(io, '\n', pre, line)
     end
     length(lines), length(pre) + ansi_length(lines[end])
 end
 
 print_wrapped(f::Function, io::IO, args...; kws...) = print_wrapped(io, f, args...; kws...)
-

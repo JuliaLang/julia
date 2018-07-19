@@ -509,12 +509,12 @@ julia> f(1)
 julia> g(1)
 "definition for Int"
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "original definition"
 
 julia> t = @async f(wait()); yield();
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "definition for Int"
 ```
 

@@ -9,11 +9,6 @@ struct BitPerm_19352
     BitPerm_19352(xs::Vararg{Any,8}) = BitPerm(map(UInt8, xs))
 end
 
-# #17198
-@test_throws BoundsError convert(Tuple{Int}, (1.0, 2.0, 3.0))
-# #21238
-@test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
-
 @testset "conversion and construction" begin
     @test convert(Tuple, ()) === ()
     @test convert(Tuple, (1, 2)) === (1, 2)
@@ -41,17 +36,23 @@ end
     @test convert(NTuple{3, Int}, (1.0, 2, 0x3)) === (1, 2, 3)
     @test convert(Tuple{Int, Int, Float64}, (1.0, 2, 0x3)) === (1, 2, 3.0)
 
-    # TODO: seems like these all should throw BoundsError?
     @test_throws MethodError convert(Tuple{Int}, ())
+    @test_throws MethodError convert(Tuple{Any}, ())
     @test_throws MethodError convert(Tuple{Int, Vararg{Int}}, ())
-    @test_throws BoundsError convert(Tuple{}, (1, 2, 3))
-    @test_throws BoundsError convert(Tuple{}, (1.0, 2, 3))
+    @test_throws MethodError convert(Tuple{}, (1, 2, 3))
+    @test_throws MethodError convert(Tuple{}, (1.0, 2, 3))
     @test_throws MethodError convert(NTuple{3, Int}, ())
     @test_throws MethodError convert(NTuple{3, Int}, (1, 2))
-    @test_throws BoundsError convert(NTuple{3, Int}, (1, 2, 3, 4))
+    @test_throws MethodError convert(NTuple{3, Int}, (1, 2, 3, 4))
     @test_throws MethodError convert(Tuple{Int, Int, Float64}, ())
     @test_throws MethodError convert(Tuple{Int, Int, Float64}, (1, 2))
-    @test_throws BoundsError convert(Tuple{Int, Int, Float64}, (1, 2, 3, 4))
+    @test_throws MethodError convert(Tuple{Int, Int, Float64}, (1, 2, 3, 4))
+    # #17198
+    @test_throws MethodError convert(Tuple{Int}, (1.0, 2.0, 3.0))
+    # #21238
+    @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
+    # issue #26589
+    @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
 
     # PR #15516
     @test Tuple{Char,Char}("za") === ('z','a')
@@ -128,6 +129,9 @@ end
     @test_throws BoundsError getindex((5,6,7,8), [true, false, false, true, true])
 
     @test getindex((5,6,7,8), []) === ()
+    @test getindex((1,9,9,3),:) === (1,9,9,3)
+    @test getindex((),:) === ()
+    @test getindex((1,),:) === (1,)
 
     @testset "boolean arrays" begin
         # issue #19719
@@ -152,19 +156,16 @@ end
 end
 
 @testset "iterating" begin
-    @test start((1,2,3)) === 1
+    @test iterate(()) === nothing
+    t = (1,2,3)
+    y1 = iterate(t)
+    y2 = iterate(t, y1[2])
+    y3 = iterate(t, y2[2])
+    @test y3 !== nothing
+    @test iterate(t, y3[2]) === nothing
 
-    @test done((), 1)
-    @test !done((1,2,3), 3)
-    @test done((1,2,3), 4)
-
-    @test next((5,6,7), 1) === (5, 2)
-    @test next((5,6,7), 3) === (7, 4)
-    @test_throws BoundsError next((5,6,7), 0)
-    @test_throws BoundsError next((), 1)
-
-    @test eachindex((2,5,"foo")) === 1:3
-    @test eachindex((2,5,"foo"), (1,2,5,7)) === 1:4
+    @test eachindex((2,5,"foo")) === Base.OneTo(3)
+    @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
 end
 
 

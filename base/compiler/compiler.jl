@@ -24,6 +24,7 @@ include(mod, x) = Core.include(mod, x)
 
 # essential files and libraries
 include("essentials.jl")
+include("some.jl")
 include("ctypes.jl")
 include("generator.jl")
 include("reflection.jl")
@@ -64,12 +65,6 @@ include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 
-# map-reduce operators
-macro simd(forloop)
-    esc(forloop)
-end
-include("reduce.jl")
-
 # core structures
 include("bitarray.jl")
 include("bitset.jl")
@@ -82,10 +77,6 @@ include("namedtuple.jl")
 
 # core docsystem
 include("docs/core.jl")
-
-# SubArray
-include("subarray.jl")
-macro views(x); esc(x); end
 
 # sorting
 function sort end
@@ -100,9 +91,6 @@ using .Sort
 ############
 # compiler #
 ############
-
-inlining_enabled() = (JLOptions().can_inline == 1)
-coverage_enabled() = (JLOptions().code_coverage != 0)
 
 include("compiler/utilities.jl")
 include("compiler/validation.jl")

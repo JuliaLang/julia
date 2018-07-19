@@ -80,19 +80,6 @@ notify_error(c::Condition, err) = notify(c, err, true, true)
 
 n_waiters(c::Condition) = length(c.waitq)
 
-# schedule an expression to run asynchronously, with minimal ceremony
-"""
-    @schedule
-
-Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
-Similar to [`@async`](@ref) except that an enclosing `@sync` does NOT wait for tasks
-started with an `@schedule`.
-"""
-macro schedule(expr)
-    thunk = esc(:(()->($expr)))
-    :(enq_work(Task($thunk)))
-end
-
 ## scheduler and work queue
 
 global const Workqueue = Task[]
@@ -117,6 +104,7 @@ If a second argument `val` is provided, it will be passed to the task (via the r
 [`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
 
+# Examples
 ```jldoctest
 julia> a5() = sum(i for i in 1:1000);
 
@@ -345,7 +333,7 @@ end
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
-Waiting tasks are woken after an intial delay of `delay` seconds, and then repeating with the given
+Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
 `interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
 the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
@@ -449,7 +437,7 @@ end
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
 calls the function `callback`.
 
-Waiting tasks are woken and the function `callback` is called after an intial delay of `delay` seconds,
+Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
 and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
 is only triggered once. The function `callback` is called with a single argument, the timer itself.
 When the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)

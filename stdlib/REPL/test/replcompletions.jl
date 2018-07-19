@@ -3,11 +3,12 @@
 using REPL.REPLCompletions
 using Test
 using Random
-import Pkg
+import OldPkg
 
 let ex = quote
     module CompletionFoo
         using Random
+        import Test
 
         mutable struct Test_y
             yy
@@ -82,19 +83,19 @@ let ex = quote
         test_dict_ℂ = Dict(1=>2)
     end
     ex.head = :toplevel
-    eval(Main, ex)
+    Core.eval(Main, ex)
 end
 
 function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
-    # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
+    # Unlike the version in test/pkg.jl, this does not run OldPkg.init so does not
     # clone METADATA (only Pkg and LibGit2 tests should need internet access)
     tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
-        @test !isdir(Pkg.dir())
+        @test !isdir(OldPkg.dir())
         try
-            mkpath(Pkg.dir())
-            @test isdir(Pkg.dir())
+            mkpath(OldPkg.dir())
+            @test isdir(OldPkg.dir())
             fn()
         finally
             rm(tmpdir, recursive=true)
@@ -102,9 +103,15 @@ function temp_pkg_dir_noinit(fn::Function)
     end
 end
 
-test_complete(s) = completions(s,lastindex(s))
-test_scomplete(s) = shell_completions(s,lastindex(s))
-test_bslashcomplete(s) = bslash_completions(s,lastindex(s))[2]
+function map_completion_text(completions)
+    c, r, res = completions
+    return map(completion_text, c), r, res
+end
+
+test_complete(s) = map_completion_text(completions(s,lastindex(s)))
+test_scomplete(s) =  map_completion_text(shell_completions(s,lastindex(s)))
+test_bslashcomplete(s) =  map_completion_text(bslash_completions(s,lastindex(s))[2])
+test_complete_context(s) =  map_completion_text(completions(s,lastindex(s),Main.CompletionFoo))
 
 let s = ""
     c, r = test_complete(s)
@@ -420,7 +427,7 @@ let s = """CompletionFoo.test4("\\"","""
 end
 
 ########## Test where the current inference logic fails ########
-# Fails due to inferrence fails to determine a concrete type for arg 1
+# Fails due to inference fails to determine a concrete type for arg 1
 # But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
 let s = "CompletionFoo.test5(AbstractArray[[]][1],"
     c, r, res = test_complete(s)
@@ -440,7 +447,7 @@ let s = "CompletionFoo.kwtest( "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test contains(c[1], "x, y, w...")
+    @test occursin("x, y, w...", c[1])
 end
 
 # Test of inference based getfield completion
@@ -496,31 +503,56 @@ end
 # Test completion of packages
 mkp(p) = ((@assert !isdir(p)); mkpath(p))
 temp_pkg_dir_noinit() do
-    # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
-    # but not <Mod>/ if no corresponding .jl file is found
-    pkg_dir = Pkg.dir("CompletionFooPackage", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
+    push!(LOAD_PATH, OldPkg.dir())
+    try
+        # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
+        # but not <Mod>/ if no corresponding .jl file is found
+        pkg_dir = OldPkg.dir("CompletionFooPackage", "src")
+        mkp(pkg_dir)
+        touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
 
-    pkg_dir = Pkg.dir("CompletionFooPackage2.jl", "src")
-    mkp(pkg_dir)
-    touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
+        pkg_dir = OldPkg.dir("CompletionFooPackage2.jl", "src")
+        mkp(pkg_dir)
+        touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
 
-    touch(Pkg.dir("CompletionFooPackage3.jl"))
+        touch(OldPkg.dir("CompletionFooPackage3.jl"))
 
-    mkp(Pkg.dir("CompletionFooPackageNone"))
-    mkp(Pkg.dir("CompletionFooPackageNone2.jl"))
+        mkp(OldPkg.dir("CompletionFooPackageNone"))
+        mkp(OldPkg.dir("CompletionFooPackageNone2.jl"))
 
-    s = "using Completion"
-    c,r = test_complete(s)
-    @test "CompletionFoo" in c #The module
-    @test "CompletionFooPackage" in c #The package
-    @test "CompletionFooPackage2" in c #The package
-    @test "CompletionFooPackage3" in c #The package
-    @test !("CompletionFooPackageNone" in c) #The package
-    @test !("CompletionFooPackageNone2" in c) #The package
-    @test s[r] == "Completion"
+        s = "using Completion"
+        c,r = test_complete(s)
+        @test "CompletionFoo" in c #The module
+        @test "CompletionFooPackage" in c #The package
+        @test "CompletionFooPackage2" in c #The package
+        @test "CompletionFooPackage3" in c #The package
+        @test !("CompletionFooPackageNone" in c) #The package
+        @test !("CompletionFooPackageNone2" in c) #The package
+        @test s[r] == "Completion"
+    finally
+        @test pop!(LOAD_PATH) == OldPkg.dir()
+    end
 end
+
+path = joinpath(tempdir(),randstring())
+pushfirst!(LOAD_PATH, path)
+try
+    mkpath(path)
+    write(joinpath(path, "Project.toml"),
+        """
+        name = "MyProj"
+
+        [deps]
+        MyPack = "09ebe64f-f76c-4f21-bef2-bd9be6c77e76"
+        """)
+        c, r, res = test_complete("using MyP")
+        @test "MyPack" in c
+        @test "MyProj" in c
+finally
+    @test popfirst!(LOAD_PATH) == path
+    rm(path, recursive=true)
+end
+
 
 path = joinpath(tempdir(),randstring())
 push!(LOAD_PATH, path)
@@ -539,15 +571,6 @@ try
     c, r, res = test_complete("using Test_p")
     @test !("Test_pack" in c)
     @test "Test_pack2" in c
-
-    # Test that it also completes on .jl files in pwd()
-    cd(Pack_folder) do
-        open("Text.txt","w") do f end
-        open("Pack.jl","w") do f end
-        c, r, res = test_complete("using ")
-        @test "Pack" in c
-        @test !("Text.txt" in c)
-    end
 finally
     @test pop!(LOAD_PATH) == path
     rm(path, recursive=true)
@@ -589,6 +612,7 @@ let s, c, r
     # Issue #8047
     s = "@show \"/dev/nul\""
     c,r = completions(s, 15)
+    c = map(completion_text, c)
     @test "null" in c
     @test r == 13:15
     @test s[r] == "nul"
@@ -659,28 +683,29 @@ let s, c, r
     end
 
     # Tests detecting of files in the env path (in shell mode)
-    let path, s, c, r, file
-        oldpath = ENV["PATH"]
+    let path, file
         path = tempdir()
-        # PATH can also contain folders which we aren't actually allowed to read.
         unreadable = joinpath(tempdir(), "replcompletion-unreadable")
-        ENV["PATH"] = string(path, ":", unreadable)
 
-        file = joinpath(path, "tmp-executable")
-        touch(file)
-        chmod(file, 0o755)
-        mkdir(unreadable)
-        chmod(unreadable, 0o000)
+        try
+            file = joinpath(path, "tmp-executable")
+            touch(file)
+            chmod(file, 0o755)
+            mkdir(unreadable)
+            chmod(unreadable, 0o000)
 
-        s = "tmp-execu"
-        c,r = test_scomplete(s)
-        @test "tmp-executable" in c
-        @test r == 1:9
-        @test s[r] == "tmp-execu"
-
-        rm(file)
-        rm(unreadable)
-        ENV["PATH"] = oldpath
+            # PATH can also contain folders which we aren't actually allowed to read.
+            withenv("PATH" => string(path, ":", unreadable)) do
+                s = "tmp-execu"
+                c,r = test_scomplete(s)
+                @test "tmp-executable" in c
+                @test r == 1:9
+                @test s[r] == "tmp-execu"
+            end
+        finally
+            rm(file)
+            rm(unreadable)
+        end
     end
 
     # Make sure completion results are unique in case things are in the env path twice.
@@ -712,27 +737,27 @@ end
 end
 
 #test that it can auto complete with spaces in file/path
-let path = tempdir(),
-    space_folder = randstring() * " α",
-    dir = joinpath(path, space_folder),
+mktempdir() do path
+    space_folder = randstring() * " α"
+    dir = joinpath(path, space_folder)
     dir_space = replace(space_folder, " " => "\\ ")
 
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
             s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
-            c,r = test_scomplete(s)
+            c, r = test_scomplete(s)
             @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file" in c
 
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
-            c,r = test_complete(s)
+            c, r = test_complete(s)
             @test r == lastindex(s)-4:lastindex(s)
             @test "space\\ .file\"" in c
         end
         # Test for issue #10324
         s = "cd(\"$dir_space"
-        c,r = test_complete(s)
+        c, r = test_complete(s)
         @test r == 5:15
         @test s[r] ==  dir_space
 
@@ -744,11 +769,11 @@ let path = tempdir(),
                 if !(c in ['\'','$']) # As these characters hold special meaning
                     # in shell commands the shell path completion cannot complete
                     # paths with these characters
-                    c,r,res = test_scomplete(test_dir)
+                    c, r, res = test_scomplete(test_dir)
                     @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                     @test res
                 end
-                c,r,res  = test_complete("\""*test_dir)
+                c, r, res = test_complete("\""*test_dir)
                 @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                 @test res
             finally
@@ -836,6 +861,7 @@ function test_dict_completion(dict_name)
     @test c == Any["\"abcd\"]"]
     s = "$dict_name[\"abcd]"  # trailing close bracket
     c, r = completions(s, lastindex(s) - 1)
+    c = map(completion_text, c)
     @test c == Any["\"abcd\""]
     s = "$dict_name[:b"
     c, r = test_complete(s)
@@ -901,3 +927,104 @@ test_dict_completion("test_repl_comp_customdict")
     @test "tϵsτcmδ`" in c
 end
 
+# Test completion in context
+
+# No CompletionFoo.CompletionFoo
+let s = ""
+    c, r = test_complete_context(s)
+    @test !("CompletionFoo" in c)
+end
+
+# Can see `rand()` after `using Random`
+let s = "r"
+    c, r = test_complete_context(s)
+    @test "rand" in c
+    @test r == 1:1
+    @test s[r] == "r"
+end
+
+# Can see `Test.AbstractTestSet` after `import Test`
+let s = "Test.A"
+    c, r = test_complete_context(s)
+    @test "AbstractTestSet" in c
+    @test r == 6:6
+    @test s[r] == "A"
+end
+
+# Can complete relative import
+let s = "import ..M"
+    c, r = test_complete_context(s)
+    @test_broken "Main" in c
+    @test r == 10:10
+    @test s[r] == "M"
+end
+
+let s = ""
+    c, r = test_complete_context(s)
+    @test "bar" in c
+    @test r == 1:0
+    @test s[r] == ""
+end
+
+let s = "f"
+    c, r = test_complete_context(s)
+    @test "foo" in c
+    @test r == 1:1
+    @test s[r] == "f"
+    @test !("foobar" in c)
+end
+
+let s = "@f"
+    c, r = test_complete_context(s)
+    @test "@foobar" in c
+    @test r == 1:2
+    @test s[r] == "@f"
+    @test !("foo" in c)
+end
+
+let s = "type_test.x"
+    c, r = test_complete_context(s)
+    @test "xx" in c
+    @test r == 11:11
+    @test s[r] == "x"
+end
+
+let s = "bar.no_val_available"
+    c, r = test_complete_context(s)
+    @test length(c)==0
+end
+
+let s = "type_test.xx.y"
+    c, r = test_complete_context(s)
+    @test "yy" in c
+    @test r == 14:14
+    @test s[r] == "y"
+end
+
+let s = "Base.return_types(getin"
+    c, r = test_complete_context(s)
+    @test "getindex" in c
+    @test r == 19:23
+    @test s[r] == "getin"
+end
+
+let s = "using Test, Random"
+    c, r = test_complete_context(s)
+    @test !("RandomDevice" in c)
+end
+
+let s = "test(1,1, "
+    c, r, res = test_complete_context(s)
+    @test !res
+    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
+    @test length(c) == 3
+    @test r == 1:4
+    @test s[r] == "test"
+end
+
+let s = "prevind(\"θ\",1,"
+    c, r, res = test_complete_context(s)
+    @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
+    @test r == 1:7
+    @test s[r] == "prevind"
+end

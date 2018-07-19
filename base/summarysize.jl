@@ -45,7 +45,7 @@ function summarysize(obj;
         else
             nf = _nfields(x)
             ft = typeof(x).types
-            if !isbits(ft[i]) && isdefined(x, i)
+            if !isbitstype(ft[i]) && isdefined(x, i)
                 val = getfield(x, i)
             end
         end
@@ -65,6 +65,7 @@ end
 (ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj)
 # define the general case separately to make sure it is not specialized for every type
 @noinline function _summarysize(ss::SummarySize, @nospecialize obj)
+    isdefined(typeof(obj), :instance) && return 0
     # NOTE: this attempts to discover multiple copies of the same immutable value,
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
@@ -108,7 +109,7 @@ function (ss::SummarySize)(obj::Array)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
         size += Core.sizeof(obj)
-        if !isbits(eltype(obj)) && !isempty(obj)
+        if !isbitstype(eltype(obj)) && !isempty(obj)
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end

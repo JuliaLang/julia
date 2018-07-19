@@ -16,8 +16,26 @@ include(joinpath(BASE_TEST_PATH, "testenv.jl"))
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
 
+
+function kill_timer(delay)
+    # Give ourselves a generous timer here, just to prevent
+    # this causing e.g. a CI hang when there's something unexpected in the output.
+    # This is really messy and leaves the process in an undefined state.
+    # the proper and correct way to do this in real code would be to destroy the
+    # IO handles: `close(stdout_read); close(stdin_write)`
+    test_task = current_task()
+    function kill_test(t)
+        # **DON'T COPY ME.**
+        # The correct way to handle timeouts is to close the handle:
+        # e.g. `close(stdout_read); close(stdin_write)`
+        schedule(test_task, "hard kill repl test"; error=true)
+        print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
+    end
+    return Timer(kill_test, delay)
+end
+
 # REPL tests
-function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
+function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -31,6 +49,7 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
     repl.options = options
 
+    hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
     f(input.in, output.out, repl)
     t = @async begin
         close(input.in)
@@ -40,6 +59,7 @@ function fake_repl(f; options::REPL.Options=REPL.Options(confirm_exit=false))
     @test read(err.out, String) == ""
     #display(read(output.out, String))
     Base._wait(t)
+    close(hard_kill)
     nothing
 end
 
@@ -83,35 +103,49 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "\\alpha\t")
     readuntil(stdout_read,"α")
     write(stdin_write, '\x03')
-    # Test cd feature in shell mode.  We limit to 40 characters when
-    # calling readuntil() to suppress the warning it (currently) gives for
-    # long strings.
+    # Test cd feature in shell mode.
     origpwd = pwd()
     mktempdir() do tmpdir
+        # Test `cd`'ing to an absolute path
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd $(escape_string(tmpdir))\n")
-        readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
-        readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
+        readuntil(stdout_read, "cd $(escape_string(tmpdir))")
+        readuntil(stdout_read, realpath(tmpdir))
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
         @test pwd() == realpath(tmpdir)
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "cd -\n")
-        readuntil(stdout_read, origpwd[max(1,end-39):end])
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
-        @test pwd() == origpwd
+
+        # Test using `cd` to move to the home directory
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd\n")
-        readuntil(stdout_read, realpath(homedir())[max(1,end-39):end])
+        readuntil(stdout_read, realpath(homedir()))
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
         @test pwd() == realpath(homedir())
+
+        # Test using `-` to jump backward to tmpdir
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "cd -\n")
+        readuntil(stdout_read, tmpdir)
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+        @test pwd() == realpath(tmpdir)
+
+        # Test using `~` in `cd` commands
+        if !Sys.iswindows()
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd ~\n")
+            readuntil(stdout_read, realpath(homedir()))
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
+            @test pwd() == realpath(homedir())
+        end
+        cd(origpwd)
     end
-    cd(origpwd)
 
     # issue #20482
     #if !Sys.iswindows()
@@ -119,8 +153,8 @@ fake_repl() do stdin_write, stdout_read, repl
     #    readuntil(stdout_read, "shell> ")
     #    write(stdin_write, "echo hello >/dev/null\n")
     #    let s = readuntil(stdout_read, "\n", keep=true)
-    #        @test contains(s, "shell> ") # make sure we echoed the prompt
-    #        @test contains(s, "echo hello >/dev/null") # make sure we echoed the input
+    #        @test occursin("shell> ", s) # make sure we echoed the prompt
+    #        @test occursin("echo hello >/dev/null", s) # make sure we echoed the input
     #    end
     #    @test readuntil(stdout_read, "\n", keep=true) == "\e[0m\n"
     #end
@@ -131,11 +165,35 @@ fake_repl() do stdin_write, stdout_read, repl
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "'\n") # invalid input
         s = readuntil(stdout_read, "\n")
-        @test contains(s, "shell> ") # check for the echo of the prompt
-        @test contains(s, "'") # check for the echo of the input
+        @test occursin("shell> ", s) # check for the echo of the prompt
+        @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
         @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
               startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
+    end
+
+    # issue #27293
+    if Sys.isunix()
+        let s, old_stdout = stdout
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "echo ~")
+            s = readuntil(stdout_read, "~")
+
+            proc_stdout_read, proc_stdout = redirect_stdout()
+            get_stdout = @async read(proc_stdout_read, String)
+            try
+                write(stdin_write, "\n")
+                readuntil(stdout_read, "\n")
+                s = readuntil(stdout_read, "\n")
+            finally
+                redirect_stdout(old_stdout)
+            end
+            @test s == "\e[0m" # the child has exited
+            close(proc_stdout)
+            # check for the correct, expanded response
+            @test occursin(expanduser("~"), fetch(get_stdout))
+        end
     end
 
     # issues #22176 & #20482
@@ -146,8 +204,8 @@ fake_repl() do stdin_write, stdout_read, repl
     #        readuntil(stdout_read, "shell> ")
     #        write(stdin_write, "echo \$123 >$tmp\n")
     #        let s = readuntil(stdout_read, "\n")
-    #            @test contains(s, "shell> ") # make sure we echoed the prompt
-    #            @test contains(s, "echo \$123 >$tmp") # make sure we echoed the input
+    #            @test occursin("shell> ", s) # make sure we echoed the prompt
+    #            @test occursin("echo \$123 >$tmp", s) # make sure we echoed the input
     #        end
     #        @test readuntil(stdout_read, "\n", keep=true) == "\e[0m\n"
     #        @test read(tmp, String) == "123\n"
@@ -173,11 +231,11 @@ fake_repl() do stdin_write, stdout_read, repl
                 # if shell width is precisely the text width,
                 # we may print some extra characters to fix the cursor state
                 s = readuntil(stdout_read, "\n", keep=true)
-                @test contains(s, "shell> ")
+                @test occursin("shell> ", s)
                 s = readuntil(stdout_read, "\n", keep=true)
                 @test s == "\r\r\n"
             else
-                @test contains(s, "shell> ")
+                @test occursin("shell> ", s)
             end
             s = readuntil(stdout_read, "\n", keep=true)
             @test s == "\e[0m\n" # the child has exited
@@ -193,7 +251,7 @@ fake_repl() do stdin_write, stdout_read, repl
     let
         write(stdin_write, "\0\n")
         s = readuntil(stdout_read, "\n\n")
-        @test !contains(s, "invalid character")
+        @test !occursin("invalid character", s)
     end
 
     # Test that accepting a REPL result immediately shows up, not
@@ -201,14 +259,12 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "1+1\n") # populate history with a trivial input
     readline(stdout_read)
     write(stdin_write, "\e[A\n")
-    t = Timer(10) do t
-        isopen(t) || return
-        error("Stuck waiting for the repl to write `1+1`")
+    let t = kill_timer(60)
+        # yield make sure this got processed
+        readuntil(stdout_read, "1+1")
+        readuntil(stdout_read, "\n\n")
+        close(t) # cancel timeout
     end
-    # yield make sure this got processed
-    readuntil(stdout_read, "1+1")
-    close(t)
-    readuntil(stdout_read, "\n\n")
 
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
@@ -230,10 +286,6 @@ fake_repl() do stdin_write, stdout_read, repl
     # Test down arrow to go back to history
     # populate history with a trivial input
 
-    t = Timer(10) do t
-        isopen(t) || return
-        error("Stuck waiting for history test")
-    end
     s1 = "12345678"; s2 = "23456789"
     write(stdin_write, s1, '\n')
     readuntil(stdout_read, s1)
@@ -245,11 +297,12 @@ fake_repl() do stdin_write, stdout_read, repl
     # Now, down arrow, enter, should get us back to 2
     write(stdin_write, "\e[B\n")
     readuntil(stdout_read, s2)
-    close(t)
 
     # Close REPL ^D
     write(stdin_write, '\x04')
     Base._wait(repltask)
+
+    nothing
 end
 
 function buffercontents(buf::IOBuffer)
@@ -699,7 +752,7 @@ function test19864()
     REPL.print_response(buf, Error19864(), [], false, false, nothing)
     return String(take!(buf))
 end
-@test contains(test19864(), "correct19864")
+@test occursin("correct19864", test19864())
 
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
@@ -837,13 +890,12 @@ for keys = [altkeys, merge(altkeys...)],
 
             # Check that the correct prompt was displayed
             output = readuntil(stdout_read, "1 * 1;", keep=true)
-            @test !contains(LineEdit.prompt_string(altprompt), output)
-            @test !contains("julia> ", output)
+            @test !occursin(output, LineEdit.prompt_string(altprompt))
+            @test !occursin(output, "julia> ")
 
             # Check the history file
             history = read(histfile, String)
-            @test contains(history,
-                           r"""
+            @test occursin(r"""
                            ^\#\ time:\ .*\n
                             \#\ mode:\ julia\n
                             \t1\ \+\ 1;\n
@@ -858,7 +910,7 @@ for keys = [altkeys, merge(altkeys...)],
                             \#\ time:\ .*\n
                             \#\ mode:\ julia\n
                             \t1\ \*\ 1;\n$
-                           """xm)
+                           """xm, history)
         end
     finally
         rm(histfile, force=true)
@@ -907,5 +959,21 @@ for (line, expr) in Pair[
     ]
     #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
     buf = IOBuffer()
-    @test eval(Base, REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+    @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+end
+
+# PR #27562
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    write(stdin_write, "ans\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m:((Base.Math.float)(_1))"
+    write(stdin_write, '\x04')
+    Base._wait(repltask)
 end

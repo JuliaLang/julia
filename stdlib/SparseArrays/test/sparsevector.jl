@@ -41,9 +41,9 @@ end
     end
 end
 @testset "show" begin
-    @test contains(string(spv_x1), "1.25")
-    @test contains(string(spv_x1), "-0.75")
-    @test contains(string(spv_x1), "3.5")
+    @test occursin("1.25", string(spv_x1))
+    @test occursin("-0.75", string(spv_x1))
+    @test occursin("3.5", string(spv_x1))
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -208,7 +208,7 @@ end
         let x = sprand(10, 10, 0.5)
             I = rand(1:size(x, 2), 10)
             bI = falses(size(x, 2))
-            bI[I] = true
+            bI[I] .= true
             r = x[1,bI]
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
@@ -218,7 +218,7 @@ end
         let x = sprand(10, 0.5)
             I = rand(1:length(x), 5)
             bI = falses(length(x))
-            bI[I] = true
+            bI[I] .= true
             r = x[bI]
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
@@ -476,8 +476,8 @@ end
                 @test issparse(hcat(othervecormat, spvec))
                 @test issparse(hvcat((2,), spvec, othervecormat))
                 @test issparse(hvcat((2,), othervecormat, spvec))
-                @test issparse(cat((1,2), spvec, othervecormat))
-                @test issparse(cat((1,2), othervecormat, spvec))
+                @test issparse(cat(spvec, othervecormat; dims=(1,2)))
+                @test issparse(cat(othervecormat, spvec; dims=(1,2)))
             end
             # The preceding tests should cover multi-way combinations of those types, but for good
             # measure test a few multi-way combinations involving those types
@@ -487,8 +487,8 @@ end
             @test issparse(hcat(densemat, spmat, spvec, densevec, diagmat))
             @test issparse(hvcat((5,), diagmat, densevec, spvec, densemat, spmat))
             @test issparse(hvcat((5,), spvec, densemat, diagmat, densevec, spmat))
-            @test issparse(cat((1,2), densemat, diagmat, spmat, densevec, spvec))
-            @test issparse(cat((1,2), spvec, diagmat, densevec, spmat, densemat))
+            @test issparse(cat(densemat, diagmat, spmat, densevec, spvec; dims=(1,2)))
+            @test issparse(cat(spvec, diagmat, densevec, spmat, densemat; dims=(1,2)))
         end
         @testset "vertical concatenation of SparseVectors with different el- and ind-type (#22225)" begin
             spv6464 = SparseVector(0, Int64[], Int64[])
@@ -708,16 +708,16 @@ end
 
 ### Reduction
 
-@testset "sum, vecnorm" begin
+@testset "sum, norm" begin
     x = spv_x1
     @test sum(x) == 4.0
     @test sum(abs, x) == 5.5
     @test sum(abs2, x) == 14.375
 
-    @test vecnorm(x) == sqrt(14.375)
-    @test vecnorm(x, 1) == 5.5
-    @test vecnorm(x, 2) == sqrt(14.375)
-    @test vecnorm(x, Inf) == 3.5
+    @test norm(x) == sqrt(14.375)
+    @test norm(x, 1) == 5.5
+    @test norm(x, 2) == sqrt(14.375)
+    @test norm(x, Inf) == 3.5
 end
 
 @testset "maximum, minimum" begin
@@ -1008,19 +1008,6 @@ end
         end
     end
 end
-@testset "kron" begin
-    testdims = ((5,10), (20,12), (25,30))
-    for (m,n) in testdims
-        x = sprand(m, 0.4)
-        y = sprand(n, 0.3)
-        @test Vector(kron(x,y)) == kron(Vector(x), Vector(y))
-        @test Vector(kron(Vector(x),y)) == kron(Vector(x), Vector(y))
-        @test Vector(kron(x,Vector(y))) == kron(Vector(x), Vector(y))
-        # test different types
-        z = convert(SparseVector{Float16, Int8}, y)
-        @test Vector(kron(x, z)) == kron(Vector(x), Vector(z))
-    end
-end
 
 @testset "fkeep!" begin
     x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
@@ -1038,39 +1025,43 @@ end
     SparseArrays.fkeep!(xdrop, f_drop)
     @test exact_equal(xdrop, SparseVector(7, [1, 3, 4, 7], [3., -1., 1., 3.]))
 end
-@testset "dropzeros[!]" begin
-    let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegzeros = 5
-        for m in testdims
-            v = sprand(m, nzprob)
-            struczerosv = findall(x -> x == 0, v)
-            poszerosinds = unique(rand(struczerosv, targetnumposzeros))
-            negzerosinds = unique(rand(struczerosv, targetnumnegzeros))
-            vposzeros = setindex!(copy(v), 2, poszerosinds)
-            vnegzeros = setindex!(copy(v), -2, negzerosinds)
-            vbothsigns = setindex!(copy(vposzeros), -2, negzerosinds)
-            map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval, vposzeros.nzval)
-            map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval, vnegzeros.nzval)
-            map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval, vbothsigns.nzval)
-            for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
-                # Basic functionality / dropzeros!
-                @test dropzeros!(copy(vwithzeros)) == v
-                @test dropzeros!(copy(vwithzeros), trim = false) == v
-                # Basic functionality / dropzeros
-                @test dropzeros(vwithzeros) == v
-                @test dropzeros(vwithzeros, trim = false) == v
-                # Check trimming works as expected
-                @test length(dropzeros!(copy(vwithzeros)).nzval) == length(v.nzval)
-                @test length(dropzeros!(copy(vwithzeros)).nzind) == length(v.nzind)
-                @test length(dropzeros!(copy(vwithzeros), trim = false).nzval) == length(vwithzeros.nzval)
-                @test length(dropzeros!(copy(vwithzeros), trim = false).nzind) == length(vwithzeros.nzind)
-            end
-        end
-        # original dropzeros! test
-        xdrop = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
-        xdrop.nzval[[2, 4, 6]] = 0.0
-        SparseArrays.dropzeros!(xdrop)
-        @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
+
+@testset "dropzeros[!] with length=$m" for m in (10, 20, 30)
+    srand(123)
+    nzprob, targetnumposzeros, targetnumnegzeros = 0.4, 5, 5
+    v = sprand(m, nzprob)
+    struczerosv = findall(x -> x == 0, v)
+    poszerosinds = unique(rand(struczerosv, targetnumposzeros))
+    negzerosinds = unique(rand(struczerosv, targetnumnegzeros))
+    vposzeros = copy(v)
+    vposzeros[poszerosinds] .= 2
+    vnegzeros = copy(v)
+    vnegzeros[negzerosinds] .= -2
+    vbothsigns = copy(vposzeros)
+    vbothsigns[negzerosinds] .= -2
+    map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval, vposzeros.nzval)
+    map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval, vnegzeros.nzval)
+    map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval, vbothsigns.nzval)
+    for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
+        # Basic functionality / dropzeros!
+        @test dropzeros!(copy(vwithzeros)) == v
+        @test dropzeros!(copy(vwithzeros), trim = false) == v
+        # Basic functionality / dropzeros
+        @test dropzeros(vwithzeros) == v
+        @test dropzeros(vwithzeros, trim = false) == v
+        # Check trimming works as expected
+        @test length(dropzeros!(copy(vwithzeros)).nzval) == length(v.nzval)
+        @test length(dropzeros!(copy(vwithzeros)).nzind) == length(v.nzind)
+        @test length(dropzeros!(copy(vwithzeros), trim = false).nzval) == length(vwithzeros.nzval)
+        @test length(dropzeros!(copy(vwithzeros), trim = false).nzind) == length(vwithzeros.nzind)
     end
+end
+
+@testset "original dropzeros! test" begin
+    xdrop = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
+    xdrop.nzval[[2, 4, 6]] .= 0.0
+    SparseArrays.dropzeros!(xdrop)
+    @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
 end
 
 # It's tempting to share data between a SparseVector and a SparseMatrix,
@@ -1126,7 +1117,7 @@ end
     # test vector with sparsity approx 1/2
     let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
         @test Vector(sort(x)) == sort(Vector(x))
-        # apply three distinct tranformations where zeros sort into start/middle/end
+        # apply three distinct transformations where zeros sort into start/middle/end
         @test Vector(sort(x, by=abs)) == sort(Vector(x), by=abs)
         @test Vector(sort(x, by=sign)) == sort(Vector(x), by=sign)
         @test Vector(sort(x, by=inv)) == sort(Vector(x), by=inv)

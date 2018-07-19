@@ -262,7 +262,11 @@ julia> counter()
 2
 ```
 
-See also the closures in the examples in the next two sections.
+See also the closures in the examples in the next two sections. A variable
+such as `x` in the first example and `state` in the second that is inherited
+from the enclosing scope by the inner function is sometimes called a
+*captured* variable. Captured variables can present performance challenges
+discussed in [performance tips](@ref man-performance-tips).
 
 The distinction between inheriting global scope and nesting local scope
 can lead to some slight differences between functions
@@ -363,7 +367,7 @@ julia> Fs = Vector{Any}(undef, 2); i = 1;
 
 julia> while i <= 2
            Fs[i] = ()->i
-           i += 1
+           global i += 1
        end
 
 julia> Fs[1]()
@@ -384,7 +388,7 @@ julia> while i <= 2
            let i = i
                Fs[i] = ()->i
            end
-           i += 1
+           global i += 1
        end
 
 julia> Fs[1]()
@@ -489,5 +493,85 @@ not supported.
 Special top-level assignments, such as those performed by the `function` and `struct` keywords,
 are constant by default.
 
-Note that `const` only affects the variable binding; the variable may be bound to a mutable object
-(such as an array), and that object may still be modified.
+Note that `const` only affects the variable binding; the variable may be bound to a mutable
+object (such as an array), and that object may still be modified. Additionally when one tries
+to assign a value a variable that is declared constant the following scenarios are possible:
+
+* if a new value has a different type than the type of the constant then an error is thrown:
+```jldoctest
+julia> const x = 1.0
+1.0
+
+julia> x = 1
+ERROR: invalid redefinition of constant x
+```
+* if a new value has the same type as the constant then a warning is printed:
+```jldoctest
+julia> const y = 1.0
+1.0
+
+julia> y = 2.0
+WARNING: redefining constant y
+2.0
+```
+* if an assignment would not result in the change of variable value no message is given:
+```jldoctest
+julia> const z = 100
+100
+
+julia> z = 100
+100
+```
+The last rule applies for immutable objects even if the vairable binding would change, e.g.:
+```julia-repl
+julia> const s1 = "1"
+"1"
+
+julia> s2 = "1"
+"1"
+
+julia> pointer.([s1, s2], 1)
+2-element Array{Ptr{UInt8},1}:
+ Ptr{UInt8} @0x00000000132c9638
+ Ptr{UInt8} @0x0000000013dd3d18
+
+julia> s1 = s2
+"1"
+
+julia> pointer.([s1, s2], 1)
+2-element Array{Ptr{UInt8},1}:
+ Ptr{UInt8} @0x0000000013dd3d18
+ Ptr{UInt8} @0x0000000013dd3d18
+```
+However, for mutable objects the warning is printed as expected:
+```jldoctest
+julia> const a = [1]
+1-element Array{Int64,1}:
+ 1
+
+julia> a = [1]
+WARNING: redefining constant a
+1-element Array{Int64,1}:
+ 1
+```
+
+Note that although possible, changing the value of a variable that is declared as constant
+is strongly discouraged. For instance, if a method references a constant and is already
+compiled before the constant is changed then it might keep using the old value:
+```jldoctest
+julia> const x = 1
+1
+
+julia> f() = x
+f (generic function with 1 method)
+
+julia> f()
+1
+
+julia> x = 2
+WARNING: redefining constant x
+2
+
+julia> f()
+1
+```

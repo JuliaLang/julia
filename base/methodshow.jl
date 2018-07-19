@@ -202,7 +202,7 @@ function url(m::Method)
     (m.file == :null || m.file == :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || contains(file, r"In\[[0-9]+\]") && return ""
+    line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)

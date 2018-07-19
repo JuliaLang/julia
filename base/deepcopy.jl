@@ -54,7 +54,7 @@ end
 function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
     nf = nfields(x)
-    (isbits(T) || nf == 0) && return x
+    (isbitstype(T) || nf == 0) && return x
     if haskey(stackdict, x)
         return stackdict[x]
     end
@@ -79,7 +79,7 @@ function deepcopy_internal(x::Array, stackdict::IdDict)
 end
 
 function _deepcopy_array_t(@nospecialize(x), T, stackdict::IdDict)
-    if isbits(T)
+    if isbitstype(T)
         return (stackdict[x]=copy(x))
     end
     dest = similar(x)
@@ -87,7 +87,7 @@ function _deepcopy_array_t(@nospecialize(x), T, stackdict::IdDict)
     for i = 1:(length(x)::Int)
         if ccall(:jl_array_isassigned, Cint, (Any, Csize_t), x, i-1) != 0
             xi = ccall(:jl_arrayref, Any, (Any, Csize_t), x, i-1)
-            if !isbits(typeof(xi))
+            if !isbitstype(typeof(xi))
                 xi = deepcopy_internal(xi, stackdict)
             end
             ccall(:jl_arrayset, Cvoid, (Any, Any, Csize_t), dest, xi, i-1)
@@ -101,7 +101,7 @@ function deepcopy_internal(x::Union{Dict,IdDict}, stackdict::IdDict)
         return stackdict[x]::typeof(x)
     end
 
-    if isbits(eltype(x))
+    if isbitstype(eltype(x))
         return (stackdict[x] = copy(x))
     end
 

@@ -56,6 +56,15 @@ float(::Type{<:AbstractIrrational}) = Float64
 ==(::Irrational{s}, ::Irrational{s}) where {s} = true
 ==(::AbstractIrrational, ::AbstractIrrational) = false
 
+<(::Irrational{s}, ::Irrational{s}) where {s} = false
+function <(x::AbstractIrrational, y::AbstractIrrational)
+    Float64(x) != Float64(y) || throw(MethodError(<, (x, y)))
+    return Float64(x) < Float64(y)
+end
+
+<=(::Irrational{s}, ::Irrational{s}) where {s} = true
+<=(x::AbstractIrrational, y::AbstractIrrational) = x==y || x<y
+
 # Irrationals, by definition, can't have a finite representation equal them exactly
 ==(x::AbstractIrrational, y::Real) = false
 ==(x::Real, y::AbstractIrrational) = false
@@ -124,6 +133,8 @@ for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::AbstractIrrational, y::AbstractIrrational) = $op(Float64(x),Float64(y))
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
+
+round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 macro irrational(sym, val, def)
     esym = esc(sym)
