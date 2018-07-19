@@ -40,6 +40,16 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
     end
 end
 
+function count_int(val::Int, arr::Vector{Int})
+    n = 0
+    for x in arr
+        if x === val
+            n += 1
+        end
+    end
+    n
+end
+
 function verify_ir(ir::IRCode)
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
@@ -52,10 +62,44 @@ function verify_ir(ir::IRCode)
             error()
         end
         last_end = last(block.stmts)
+        terminator = ir.stmts[last_end]
         for p in block.preds
             p == 0 && continue
-            if !(idx in ir.cfg.blocks[p].succs)
-                @verify_error "Predeccsor $p of block $idx not in successor list"
+            c = count_int(idx, ir.cfg.blocks[p].succs)
+            if c == 0
+                @verify_error "Predecessor $p of block $idx not in successor list"
+                error()
+            elseif c == 2
+                if count_int(p, block.preds) != 2
+                    @verify_error "Double edge from $p to $idx not correctly accounted"
+                    error()
+                end
+            end
+        end
+        if isa(terminator, ReturnNode)
+            if !isempty(block.succs)
+                @verify_error "Block $idx ends in return or unreachable, but has successors"
+                error()
+            end
+        elseif isa(terminator, GotoNode)
+            if length(block.succs) != 1 || block.succs[1] != terminator.label
+                @verify_error "Block $idx successors ($(block.succs)), does not match GotoNode terminator"
+                error()
+            end
+        elseif isa(terminator, GotoIfNot)
+            if length(block.succs) != 2 || (block.succs != [terminator.dest, idx+1] && block.succs != [idx+1, terminator.dest])
+                @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
+                error()
+            end
+        elseif isexpr(terminator, :enter)
+            if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
+                ccall(:jl_, Cvoid, (Any,), terminator)
+                @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
+                error()
+            end
+        else
+            if length(block.succs) != 1 || block.succs[1] != idx + 1
+                @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator"
                 error()
             end
         end

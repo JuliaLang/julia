@@ -112,22 +112,27 @@ end
 
 function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     ir = just_construct_ssa(ci, copy_exprargs(ci.code), nargs, sv)
-    #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
+    #@Base.show ("after_construct", ir)
     @timeit "compact 1" ir = compact!(ir)
+    #@Base.show ("before_inlining", ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv)
     #@timeit "verify 2" verify_ir(ir)
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
+    #@Base.show ("after_inlining", ir)
+    verify_ir(ir); verify_linetable(ir.linetable)
+    #@Base.show ("before_compact", ir)
     ir = compact!(ir)
-    #@Base.show ("before_sroa", ir)
+    verify_ir(ir); verify_linetable(ir.linetable)
+    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
     @timeit "SROA" ir = getfield_elim_pass!(ir, domtree)
     #@Base.show ir.new_nodes
     #@Base.show ("after_sroa", ir)
     ir = adce_pass!(ir)
     #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
+    #@Base.show ("after_type_lift", ir)
     @timeit "compact 3" ir = compact!(ir)
-    #@Base.show ir
+    #@Base.show ("final", ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
