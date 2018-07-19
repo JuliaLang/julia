@@ -437,10 +437,12 @@ end
 
 function highlight_region(lwrite::String, regstart::Int, regstop::Int, written::Int, slength::Int)
     if written <= regstop <= written+slength
-        lwrite = lwrite[1:regstop-written] * Base.disable_text_style[:reverse] * lwrite[regstop-written+1:end]
+        i = thisind(lwrite, regstop-written)
+        lwrite = lwrite[1:i] * Base.disable_text_style[:reverse] * lwrite[nextind(lwrite, i):end]
     end
     if written <= regstart <= written+slength
-        lwrite = lwrite[1:regstart-written] * Base.text_colors[:reverse] * lwrite[regstart-written+1:end]
+        i = thisind(lwrite, regstart-written)
+        lwrite = lwrite[1:i] * Base.text_colors[:reverse] * lwrite[nextind(lwrite, i):end]
     end
     lwrite
 end
