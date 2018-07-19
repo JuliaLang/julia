@@ -43,6 +43,7 @@ Fully implemented by:
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
+  * [`WeakKeyIdDict`](@ref)
   * `EachLine`
   * `AbstractString`
   * [`Set`](@ref)
@@ -79,6 +80,7 @@ Fully implemented by:
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
+  * [`WeakKeyIdDict`](@ref)
   * `AbstractString`
   * [`Set`](@ref)
   * [`NamedTuple`](@ref)

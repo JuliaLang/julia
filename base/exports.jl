@@ -93,6 +93,7 @@ export
     Vector,
     VersionNumber,
     WeakKeyDict,
+    WeakKeyIdDict,
 
 # Ccall types
     Cchar,

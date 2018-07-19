@@ -780,77 +780,90 @@ end
 Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a deprecation
 
 @testset "WeakKeyDict" begin
+    for WD in [WeakKeyDict, WeakKeyIdDict]
+        A = [1]
+        B = [2]
+        C = [3]
+        local x = 0
+        local y = 0
+        local z = 0
+        finalizer(a->(x+=1), A)
+        finalizer(b->(y+=1), B)
+        finalizer(c->(z+=1), C)
+
+        # construction
+        wkd = WD()
+        wkd[A] = 2
+        wkd[B] = 3
+        wkd[C] = 4
+        dd = convert(Dict{Any,Any},wkd)
+        @test WD(dd) == wkd
+        @test convert(WD{Any, Any}, dd) == wkd
+        @test isa(WD(dd), WD{Any,Any})
+        @test WD(A=>2, B=>3, C=>4) == wkd
+        @test isa(WD(A=>2, B=>3, C=>4), WD{Array{Int,1},Int})
+        @test WD(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
+        @test WD([(A,2), (B,3), (C,4)]) == wkd
+        @test WD(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
+        @test copy(wkd) == wkd
+
+        @test length(wkd) == 3
+        @test !isempty(wkd)
+        res = pop!(wkd, C)
+        @test res == 4
+        @test C ∉ keys(wkd)
+        @test 4 ∉ values(wkd)
+        @test length(wkd) == 2
+        @test !isempty(wkd)
+        wkd = filter!( p -> p.first != B, wkd)
+        @test B ∉ keys(wkd)
+        @test 3 ∉ values(wkd)
+        @test length(wkd) == 1
+        @test WD(Pair(A, 2)) == wkd
+        @test !isempty(wkd)
+
+        wkd = empty!(wkd)
+        @test wkd == empty(wkd)
+        @test typeof(wkd) == typeof(empty(wkd))
+        @test length(wkd) == 0
+        @test isempty(wkd)
+        @test isa(wkd, WD)
+
+        @test_throws ArgumentError WD([1, 2, 3])
+
+        # WeakKeyDict does not convert keys
+        @test_throws ArgumentError WD{Int,Any}(5.0=>1)
+
+        # WeakKeyDict compares false to non-WeakKeyDict
+        @test IdDict(A=>1)!=WD(A=>1)
+        @test Dict(A=>1)!=WD(A=>1)
+
+        # issue #26939
+        d26939 = WD()
+        d26939[big"1.0" + 1.1] = 1
+        GC.gc() # make sure this doesn't segfault
+    end
+
+    # WeakKeyIdDict hashes with object-id
     A = [1]
-    B = [2]
-    C = [3]
-    local x = 0
-    local y = 0
-    local z = 0
-    finalizer(a->(x+=1), A)
-    finalizer(b->(y+=1), B)
-    finalizer(c->(z+=1), C)
-
-    # construction
-    wkd = WeakKeyDict()
-    wkd[A] = 2
-    wkd[B] = 3
-    wkd[C] = 4
-    dd = convert(Dict{Any,Any},wkd)
-    @test WeakKeyDict(dd) == wkd
-    @test convert(WeakKeyDict{Any, Any}, dd) == wkd
-    @test isa(WeakKeyDict(dd), WeakKeyDict{Any,Any})
-    @test WeakKeyDict(A=>2, B=>3, C=>4) == wkd
-    @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
-    @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
-    @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
-    @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
-    @test copy(wkd) == wkd
-
-    @test length(wkd) == 3
-    @test !isempty(wkd)
-    res = pop!(wkd, C)
-    @test res == 4
-    @test C ∉ keys(wkd)
-    @test 4 ∉ values(wkd)
-    @test length(wkd) == 2
-    @test !isempty(wkd)
-    wkd = filter!( p -> p.first != B, wkd)
-    @test B ∉ keys(wkd)
-    @test 3 ∉ values(wkd)
-    @test length(wkd) == 1
-    @test WeakKeyDict(Pair(A, 2)) == wkd
-    @test !isempty(wkd)
-
-    wkd = empty!(wkd)
-    @test wkd == empty(wkd)
-    @test typeof(wkd) == typeof(empty(wkd))
-    @test length(wkd) == 0
-    @test isempty(wkd)
-    @test isa(wkd, WeakKeyDict)
-
-    @test_throws ArgumentError WeakKeyDict([1, 2, 3])
-
-    # WeakKeyDict does not convert keys
-    @test_throws ArgumentError WeakKeyDict{Int,Any}(5.0=>1)
-
-    # WeakKeyDict hashes with object-id
     AA = copy(A)
     GC.@preserve A AA begin
-        wkd = WeakKeyDict(A=>1, AA=>2)
+        wkd = WeakKeyIdDict(A=>1, AA=>2)
         @test length(wkd)==2
         kk = collect(keys(wkd))
         @test kk[1]==kk[2]
         @test kk[1]!==kk[2]
     end
 
-    # WeakKeyDict compares false to non-WeakKeyDict
-    @test IdDict(A=>1)!=WeakKeyDict(A=>1)
-    @test Dict(A=>1)!=WeakKeyDict(A=>1)
+    # WeakKeyDict uses normal hashes
+    GC.@preserve A AA begin
+        wkd = WeakKeyDict(A=>1, AA=>2)
+        @test length(wkd)==1
+        kk = collect(keys(wkd))
+        @test kk[1]==A
+        @test kk[1]==AA
+    end
 
-    # issue #26939
-    d26939 = WeakKeyDict()
-    d26939[big"1.0" + 1.1] = 1
-    GC.gc() # make sure this doesn't segfault
 end
 
 @testset "issue #19995, hash of dicts" begin

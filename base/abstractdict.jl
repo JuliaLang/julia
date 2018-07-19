@@ -453,7 +453,7 @@ end
 
 function isequal(l::AbstractDict, r::AbstractDict)
     l === r && return true
-    if isa(l,IdDict) != isa(r,IdDict)
+    if isa(l,IdDict) != isa(r,IdDict) || isa(l,WeakKeyDict) != isa(r,WeakKeyDict) || isa(l,WeakKeyIdDict) != isa(r,WeakKeyIdDict)
         return false
     end
     if length(l) != length(r) return false end
@@ -467,7 +467,7 @@ end
 
 function ==(l::AbstractDict, r::AbstractDict)
     l === r && return true
-    if isa(l,IdDict) != isa(r,IdDict) || isa(l,WeakKeyDict) != isa(r,WeakKeyDict)
+    if isa(l,IdDict) != isa(r,IdDict) || isa(l,WeakKeyDict) != isa(r,WeakKeyDict) || isa(l,WeakKeyIdDict) != isa(r,WeakKeyIdDict)
         return false
     end
     length(l) != length(r) && return false
