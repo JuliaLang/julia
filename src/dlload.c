@@ -56,7 +56,7 @@ static int endswith_extension(const char *path)
 
 #define PATHBUF 512
 
-extern char *julia_home;
+extern char *julia_bindir;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
@@ -109,7 +109,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle)
 {
 #ifdef _OS_WINDOWS_
     if (!handle) return -1;
-    return FreeLibrary((HMODULE) handle);
+    return !FreeLibrary((HMODULE) handle);
 #else
     dlerror(); /* Reset error status. */
     if (!handle) return -1;
@@ -190,15 +190,6 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
         if (handle)
             goto done;
     }
-
-#if defined(__linux__) || defined(__FreeBSD__)
-    // check map of versioned libs from "libX" to full soname "libX.so.ver"
-    if (!abspath && n_extensions > 1) { // soname map only works for libX
-        handle = jl_dlopen_soname(modname, strlen(modname), flags);
-        if (handle)
-            goto done;
-    }
-#endif
 
 notfound:
     if (throw_err)

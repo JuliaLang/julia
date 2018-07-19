@@ -44,41 +44,39 @@ static int exec_program(char *program)
         // (including the ones that would have been caught) to abort.
         uintptr_t *volatile bt_data = NULL;
         size_t bt_size = ptls->bt_size;
+        volatile int shown_err = 0;
+        jl_printf(JL_STDERR, "error during bootstrap:\n");
         JL_TRY {
             if (errs) {
                 bt_data = (uintptr_t*)malloc(bt_size * sizeof(void*));
                 memcpy(bt_data, ptls->bt_data, bt_size * sizeof(void*));
-                jl_call2(jl_get_function(jl_base_module, "show"), errs, e);
-                jl_printf(JL_STDERR, "\n");
-                free(bt_data);
+                jl_value_t *showf = jl_get_function(jl_base_module, "show");
+                if (showf != NULL) {
+                    jl_call2(showf, errs, e);
+                    jl_printf(JL_STDERR, "\n");
+                    shown_err = 1;
+                }
             }
         }
         JL_CATCH {
+        }
+        if (bt_data) {
             ptls->bt_size = bt_size;
             memcpy(ptls->bt_data, bt_data, bt_size * sizeof(void*));
             free(bt_data);
-            errs = NULL;
         }
-        if (!errs) {
-            jl_printf(JL_STDERR, "error during bootstrap:\n");
+        if (!shown_err) {
             jl_static_show(JL_STDERR, e);
             jl_printf(JL_STDERR, "\n");
-            jlbacktrace();
-            jl_printf(JL_STDERR, "\n");
         }
+        jlbacktrace();
+        jl_printf(JL_STDERR, "\n");
         return 1;
     }
     return 0;
 }
 
 void jl_lisp_prompt();
-
-#ifndef _WIN32
-JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
-{
-    return raise(SIGTSTP);
-}
-#endif
 
 #ifdef JL_GF_PROFILE
 static void print_profile(void)
@@ -165,8 +163,6 @@ static NOINLINE int true_main(int argc, char *argv[])
     return 0;
 }
 
-extern JL_DLLEXPORT uint64_t jl_cpuid_tag();
-
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
@@ -231,11 +227,6 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         argv[i] = (wchar_t*)arg;
     }
 #endif
-    if (argc >= 2 && strcmp((char *)argv[1], "--cpuid") == 0) {
-        /* Used by the build system to name CPUID-specific binaries */
-        printf("%" PRIx64, jl_cpuid_tag());
-        return 0;
-    }
     libsupport_init();
     int lisp_prompt = (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0);
     if (lisp_prompt) {
@@ -245,6 +236,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     jl_parse_opts(&argc, (char***)&argv);
     julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     if (lisp_prompt) {
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         jl_lisp_prompt();
         return 0;
     }

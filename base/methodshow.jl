@@ -11,8 +11,8 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
         n = n.args[1]  # handle n::T in arg list
     end
     s = string(n)
-    i = search(s,'#')
-    if i > 0
+    i = findfirst(isequal('#'), s)
+    if i !== nothing
         s = s[1:i-1]
     end
     if t === Any && !isempty(s)
@@ -42,6 +42,15 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     return s, string_with_env(env, t)
 end
 
+function method_argnames(m::Method)
+    if !isdefined(m, :source) && isdefined(m, :generator)
+        return m.generator.argnames
+    end
+    argnames = Vector{Any}(undef, m.nargs)
+    ccall(:jl_fill_argnames, Cvoid, (Any, Any), m.source, argnames)
+    return argnames
+end
+
 function arg_decl_parts(m::Method)
     tv = Any[]
     sig = m.sig
@@ -52,8 +61,7 @@ function arg_decl_parts(m::Method)
     file = m.file
     line = m.line
     if isdefined(m, :source) || isdefined(m, :generator)
-        argnames = Vector{Any}(m.nargs)
-        ccall(:jl_fill_argnames, Void, (Any, Any), isdefined(m, :source) ? m.source : m.generator.inferred, argnames)
+        argnames = method_argnames(m)
         show_env = ImmutableDict{Symbol, Any}()
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
@@ -67,7 +75,7 @@ function arg_decl_parts(m::Method)
 end
 
 function kwarg_decl(m::Method, kwtype::DataType)
-    sig = rewrap_unionall(Tuple{kwtype, Core.AnyVector, unwrap_unionall(m.sig).parameters...}, m.sig)
+    sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, typemax(UInt))
     if kwli !== nothing
         kwli = kwli::Method
@@ -76,7 +84,7 @@ function kwarg_decl(m::Method, kwtype::DataType)
         # ensure the kwarg... is always printed last. The order of the arguments are not
         # necessarily the same as defined in the function
         i = findfirst(x -> endswith(string(x), "..."), kws)
-        i == 0 && return kws
+        i === nothing && return kws
         push!(kws, kws[i])
         return deleteat!(kws, i)
     end
@@ -94,7 +102,7 @@ function show_method_params(io::IO, tv)
     end
 end
 
-function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
+function show(io::IO, m::Method; kwtype::Union{DataType, Nothing}=nothing)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     ft0 = sig.parameters[1]
@@ -108,7 +116,7 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
                 # TODO: more accurate test? (tn.name === "#" name)
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -121,8 +129,8 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
-    if !isnull(kwtype)
-        kwargs = kwarg_decl(m, get(kwtype))
+    if kwtype !== nothing
+        kwargs = kwarg_decl(m, kwtype)
         if !isempty(kwargs)
             print(io, "; ")
             join(io, kwargs, ", ", ", ")
@@ -149,7 +157,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
-    kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
+    kwtype = isdefined(mt, :kwsorter) ? typeof(mt.kwsorter) : nothing
     n = rest = 0
     local last
 
@@ -177,13 +185,13 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
-show(io::IO, mt::MethodTable) = show_method_table(io, MethodList(mt))
+show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
 
 function inbase(m::Module)
     if m == Base
         true
     else
-        parent = module_parent(m)
+        parent = parentmodule(m)
         parent === m ? false : inbase(parent)
     end
 end
@@ -194,8 +202,9 @@ function url(m::Method)
     (m.file == :null || m.file == :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
-    Sys.iswindows() && (file = replace(file, '\\', '/'))
+    line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""
+    Sys.iswindows() && (file = replace(file, '\\' => '/'))
+    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -203,7 +212,8 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    else
+    elseif root_module_exists(libgit2_id)
+        LibGit2 = root_module(libgit2_id)
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
@@ -222,10 +232,12 @@ function url(m::Method)
         catch
             return fileurl(file)
         end
+    else
+        return fileurl(file)
     end
 end
 
-function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
+function show(io::IO, ::MIME"text/html", m::Method; kwtype::Union{DataType, Nothing}=nothing)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     ft0 = sig.parameters[1]
@@ -235,7 +247,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -253,8 +265,8 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
-    if !isnull(kwtype)
-        kwargs = kwarg_decl(m, get(kwtype))
+    if kwtype !== nothing
+        kwargs = kwarg_decl(m, kwtype)
         if !isempty(kwargs)
             print(io, "; <i>")
             join(io, kwargs, ", ", ", ")
@@ -262,6 +274,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
         end
     end
     print(io, ")")
+    print(io, " in ", m.module)
     if line > 0
         u = url(m)
         if isempty(u)
@@ -281,7 +294,7 @@ function show(io::IO, mime::MIME"text/html", ms::MethodList)
     ns = string(name)
     what = startswith(ns, '@') ? "macro" : "generic function"
     print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
-    kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
+    kwtype = isdefined(mt, :kwsorter) ? typeof(mt.kwsorter) : nothing
     for meth in ms
         print(io, "<li> ")
         show(io, mime, meth; kwtype=kwtype)
@@ -290,15 +303,17 @@ function show(io::IO, mime::MIME"text/html", ms::MethodList)
     print(io, "</ul>")
 end
 
-show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList(mt))
+show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, MethodList(mt))
 
-# pretty-printing of AbstractVector{Method} for output of methodswith:
+# pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
     resize!(LAST_SHOWN_LINE_INFOS, 0)
+    first = true
     for (i, m) in enumerate(mt)
+        first || println(io)
+        first = false
         print(io, "[$(i)] ")
         show(io, m)
-        println(io)
         push!(LAST_SHOWN_LINE_INFOS, (string(m.file), m.line))
     end
 end

@@ -18,7 +18,7 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
 endif
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifneq ($(ARCH),x86_64)
@@ -33,41 +33,23 @@ LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 else
-LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="-L$(build_shlibdir) -lcurl"
+LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="curl"
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
-LIBGIT2_OPTS += -DUSE_HTTPS=ON -DTLS_BACKEND="mbedTLS" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DSHA1_BACKEND="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
-
-# We need to bundle ca certs on linux now that we're using libgit2 with ssl
-ifneq (,$(findstring $(OS),Linux FreeBSD))
-OPENSSL_DIR=$(shell openssl version -d | cut -d '"' -f 2)
-# This certfile location observed on Ubuntu 16.04
-ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca-certificates.crt ] && echo exists),exists)
-CERTFILE=$(OPENSSL_DIR)/certs/ca-certificates.crt
-# This certfile location observed on openSUSE Leap 42.1
-else ifeq ($(shell [ -e $(OPENSSL_DIR)/ca-bundle.pem ] && echo exists),exists)
-CERTFILE=$(OPENSSL_DIR)/ca-bundle.pem
-# This certfile location observed on Ubuntu 14.04 and FreeBSD
-else ifeq ($(shell [ -e $(OPENSSL_DIR)/cert.pem ] && echo exists),exists)
-CERTFILE=$(OPENSSL_DIR)/cert.pem
-# This certfile location observed on Debian 7
-else ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca.pem ] && echo exists),exists)
-CERTFILE=$(OPENSSL_DIR)/certs/ca.pem
-endif
-endif # Linux and FreeBSD
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
-$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls.patch
+	echo 1 > $@
+
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls2.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls2.patch
 	echo 1 > $@
 
 $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
@@ -75,30 +57,10 @@ $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-verify.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-fixup.patch
-	echo 1 > $@
-
-$(build_datarootdir)/julia/cert.pem: $(CERTFILE)
-	mkdir -p $(build_datarootdir)/julia
-	cp -f $(CERTFILE) $@
-
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls2.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied
-
-ifneq ($(CERTFILE),)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem
-endif
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
@@ -131,6 +93,7 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libgit2.$$(SHLIB_EXT) $$(build_shlibdir)/libgit2.$$(SHLIB_EXT)))
 
 clean-libgit2:
+	-rm $(build_datarootdir)/julia/cert.pem
 	-rm $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
@@ -140,3 +103,17 @@ configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
 compile-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 fastcheck-libgit2: #none
 check-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked
+
+
+# Also download and install a cacert.pem file:
+$(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem:
+	$(JLDOWNLOAD) $@ https://curl.haxx.se/ca/cacert-$(MOZILLA_CACERT_VERSION).pem
+
+$(build_datarootdir)/julia/cert.pem: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem | $(build_datarootdir)
+	$(JLCHECKSUM) $<
+	mkdir -p $(build_datarootdir)/julia
+	cp $< $@
+
+$(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libgit2 install status
+libgit2-install-mozilla-cacert: $(build_datarootdir)/julia/cert.pem
+get-libgit2: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem

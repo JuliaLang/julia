@@ -125,6 +125,21 @@ There are three possible points of return from this function, returning the valu
 expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
+A return type can also be specified in the function declaration using the `::` operator. This converts
+the return value to the specified type.
+
+```jldoctest
+julia> function g(x, y)::Int8
+           return x * y
+       end;
+
+julia> typeof(g(1, 2))
+Int8
+```
+
+This function will always return an `Int8` regardless of the types of `x` and `y`.
+See [Type Declarations](@ref) for more on return types.
+
 ## Operators Are Functions
 
 In Julia, most operators are just functions with support for special syntax. (The exceptions are
@@ -158,16 +173,16 @@ Under the name `f`, the function does not support infix notation, however.
 
 A few special expressions correspond to calls to functions with non-obvious names. These are:
 
-| Expression        | Calls                  |
-|:----------------- |:---------------------- |
-| `[A B C ...]`     | [`hcat`](@ref)       |
-| `[A; B; C; ...]`  | [`vcat`](@ref)       |
-| `[A B; C D; ...]` | [`hvcat`](@ref)      |
-| `A'`              | [`adjoint`](@ref) |
-| `A.'`             | [`transpose`](@ref)  |
-| `1:n`             | [`colon`](@ref)      |
-| `A[i]`            | [`getindex`](@ref)   |
-| `A[i]=x`          | [`setindex!`](@ref)  |
+| Expression        | Calls                   |
+|:----------------- |:----------------------- |
+| `[A B C ...]`     | [`hcat`](@ref)          |
+| `[A; B; C; ...]`  | [`vcat`](@ref)          |
+| `[A B; C D; ...]` | [`hvcat`](@ref)         |
+| `A'`              | [`adjoint`](@ref)       |
+| `A[i]`            | [`getindex`](@ref)      |
+| `A[i] = x`        | [`setindex!`](@ref)     |
+| `A.n`             | [`getproperty`](@ref Base.getproperty) |
+| `A.n = x`         | [`setproperty!`](@ref Base.setproperty!) |
 
 ## [Anonymous Functions](@id man-anonymous-functions)
 
@@ -179,12 +194,12 @@ syntaxes:
 
 ```jldoctest
 julia> x -> x^2 + 2x - 1
-(::#1) (generic function with 1 method)
+#1 (generic function with 1 method)
 
 julia> function (x)
            x^2 + 2x - 1
        end
-(::#3) (generic function with 1 method)
+#3 (generic function with 1 method)
 ```
 
 This creates a function taking one argument `x` and returning the value of the polynomial `x^2 +
@@ -220,6 +235,48 @@ An anonymous function accepting multiple arguments can be written using the synt
 A zero-argument anonymous function is written as `()->3`. The idea of a function with no arguments
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
+
+## Tuples
+
+Julia has a built-in data structure called a *tuple* that is closely related to function
+arguments and return values.
+A tuple is a fixed-length container that can hold any values, but cannot be modified
+(it is *immutable*).
+Tuples are constructed with commas and parentheses, and can be accessed via indexing:
+
+```jldoctest
+julia> (1, 1+1)
+(1, 2)
+
+julia> (1,)
+(1,)
+
+julia> x = (0.0, "hello", 6*7)
+(0.0, "hello", 42)
+
+julia> x[2]
+"hello"
+```
+
+Notice that a length-1 tuple must be written with a comma, `(1,)`, since `(1)` would just
+be a parenthesized value.
+`()` represents the empty (length-0) tuple.
+
+## Named Tuples
+
+The components of tuples can optionally be named, in which case a *named tuple* is
+constructed:
+
+```jldoctest
+julia> x = (a=1, b=1+1)
+(a = 1, b = 2)
+
+julia> x.a
+1
+```
+
+Named tuples are very similar to tuples, except that fields can additionally be accessed by name
+using dot syntax (`x.a`).
 
 ## Multiple Return Values
 
@@ -320,7 +377,7 @@ In all these cases, `x` is bound to a tuple of the trailing values passed to `ba
 It is possible to constrain the number of values passed as a variable argument; this will be discussed
 later in [Parametrically-constrained Varargs methods](@ref).
 
-On the flip side, it is often handy to "splice" the values contained in an iterable collection
+On the flip side, it is often handy to "splat" the values contained in an iterable collection
 into a function call as individual arguments. To do this, one also uses `...` but in the function
 call instead:
 
@@ -349,7 +406,7 @@ julia> bar(x...)
 (1, 2, (3, 4))
 ```
 
-Furthermore, the iterable object spliced into a function call need not be a tuple:
+Furthermore, the iterable object splatted into a function call need not be a tuple:
 
 ```jldoctest barfunc
 julia> x = [3,4]
@@ -371,7 +428,7 @@ julia> bar(x...)
 (1, 2, (3, 4))
 ```
 
-Also, the function that arguments are spliced into need not be a varargs function (although it
+Also, the function that arguments are splatted into need not be a varargs function (although it
 often is):
 
 ```jldoctest
@@ -397,38 +454,47 @@ Closest candidates are:
   baz(::Any, ::Any) at none:1
 ```
 
-As you can see, if the wrong number of elements are in the spliced container, then the function
+As you can see, if the wrong number of elements are in the splatted container, then the function
 call will fail, just as it would if too many arguments were given explicitly.
 
 ## Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore might not need to
-be passed explicitly in every call. For example, the library function [`parse(T, num, base)`](@ref)
-interprets a string as a number in some base. The `base` argument defaults to `10`. This behavior
-can be expressed concisely as:
+be passed explicitly in every call. For example, the function [`Date(y, [m, d])`](@ref)
+from `Dates` module constructs a `Date` type for a given year `y`, month `m` and day `d`.
+However, `m` and `d` arguments are optional and their default value is `1`.
+This behavior can be expressed concisely as:
 
 ```julia
-function parse(T, num, base=10)
-    ###
+function Date(y::Int64, m::Int64=1, d::Int64=1)
+    err = validargs(Date, y, m, d)
+    err === nothing || throw(err)
+    return Date(UTD(totaldays(y, m, d)))
 end
 ```
 
-With this definition, the function can be called with either two or three arguments, and `10`
-is automatically passed when a third argument is not specified:
+Observe, that this definition calls another method of `Date` function that takes one argument
+of `UTInstant{Day}` type.
+
+With this definition, the function can be called with either one, two or three arguments, and
+`1` is automatically passed when any of the arguments is not specified:
 
 ```jldoctest
-julia> parse(Int,"12",10)
-12
+julia> using Dates
 
-julia> parse(Int,"12",3)
-5
+julia> Date(2000, 12, 12)
+2000-12-12
 
-julia> parse(Int,"12")
-12
+julia> Date(2000, 12)
+2000-12-01
+
+julia> Date(2000)
+2000-01-01
 ```
 
 Optional arguments are actually just a convenient syntax for writing multiple method definitions
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
+This can be checked for our `Date` function example by calling `methods` function.
 
 ## Keyword Arguments
 
@@ -475,19 +541,30 @@ function f(x; y=0, kwargs...)
 end
 ```
 
-Inside `f`, `kwargs` will be a collection of `(key,value)` tuples, where each `key` is a symbol.
-Such collections can be passed as keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
-Dictionaries can also be used for this purpose.
+If a keyword argument is not assigned a default value in the method definition,
+then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
+if the caller does not assign it a value:
+```julia
+function f(x; y)
+    ###
+end
+f(3, y=5) # ok, y is assigned
+f(3)      # throws UndefKeywordError(:y)
+```
 
-One can also pass `(key,value)` tuples, or any iterable expression (such as a `=>` pair) that
-can be assigned to such a tuple, explicitly after a semicolon. For example, `plot(x, y; (:width,2))`
-and `plot(x, y; :width => 2)` are equivalent to `plot(x, y, width=2)`. This is useful in situations
-where the keyword name is computed at runtime.
+Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as
+keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
+
+One can also pass `key => value` expressions after a semicolon. For example, `plot(x, y; :width => 2)`
+is equivalent to `plot(x, y, width=2)`. This is useful in situations where the keyword name is computed
+at runtime.
 
 The nature of keyword arguments makes it possible to specify the same argument more than once.
 For example, in the call `plot(x, y; options..., width=2)` it is possible that the `options` structure
 also contains a value for `width`. In such a case the rightmost occurrence takes precedence; in
-this example, `width` is certain to have the value `2`.
+this example, `width` is certain to have the value `2`. However, explicitly specifying the same keyword
+argument multiple times, for example `plot(x, y, width=2, width=3)`, is not allowed and results in
+a syntax error.
 
 ## Evaluation Scope of Default Values
 
@@ -577,6 +654,12 @@ normally or threw an exception. (The `try/finally` construct will be described i
 With the `do` block syntax, it helps to check the documentation or implementation to know how
 the arguments of the user function are initialized.
 
+A `do` block, like any other inner function, can "capture" variables from its
+enclosing scope. For example, the variable `data` in the above example of
+`open...do` is captured from the outer scope. Captured variables
+can create performance challenges as discussed in [performance tips](@ref man-performance-tips).
+
+
 ## [Dot Syntax for Vectorizing Functions](@id man-vectorized)
 
 In technical-computing languages, it is common to have "vectorized" versions of functions, which
@@ -598,9 +681,9 @@ julia> A = [1.0, 2.0, 3.0]
 
 julia> sin.(A)
 3-element Array{Float64,1}:
- 0.841471
- 0.909297
- 0.14112
+ 0.8414709848078965
+ 0.9092974268256817
+ 0.1411200080598672
 ```
 
 Of course, you can omit the dot if you write a specialized "vector" method of `f`, e.g. via `f(A::AbstractArray) = map(f, A)`,
@@ -623,9 +706,9 @@ julia> B = [4.0, 5.0, 6.0];
 
 julia> f.(pi, A)
 3-element Array{Float64,1}:
- 13.4248
- 17.4248
- 21.4248
+ 13.42477796076938
+ 17.42477796076938
+ 21.42477796076938
 
 julia> f.(A, B)
 3-element Array{Float64,1}:
@@ -650,7 +733,8 @@ the results (see [Pre-allocating outputs](@ref)). A convenient syntax for this i
 is equivalent to `broadcast!(identity, X, ...)` except that, as above, the `broadcast!` loop is
 fused with any nested "dot" calls. For example, `X .= sin.(Y)` is equivalent to `broadcast!(sin, X, Y)`,
 overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-indexing expression,
-e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g. `broadcast!(sin, view(X, 2:endof(X)), Y)`,
+e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
+`broadcast!(sin, view(X, 2:lastindex(X)), Y)`,
 so that the left-hand side is updated in-place.
 
 Since adding dots to many operations and function calls in an expression
@@ -665,16 +749,27 @@ julia> X = similar(Y); # pre-allocate output array
 
 julia> @. X = sin(cos(Y)) # equivalent to X .= sin.(cos.(Y))
 4-element Array{Float64,1}:
-  0.514395
- -0.404239
- -0.836022
- -0.608083
+  0.5143952585235492
+ -0.4042391538522658
+ -0.8360218615377305
+ -0.6080830096407656
 ```
 
 Binary (or unary) operators like `.+` are handled with the same mechanism:
 they are equivalent to `broadcast` calls and are fused with other nested "dot" calls.
  `X .+= Y` etcetera is equivalent to `X .= X .+ Y` and results in a fused in-place assignment;
  see also [dot operators](@ref man-dot-operators).
+
+You can also combine dot operations with function chaining using [`|>`](@ref), as in this example:
+```jldoctest
+julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
+5-element Array{Real,1}:
+    1
+    0.5
+    6
+   -4
+ true
+```
 
 ## Further Reading
 

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using LinearAlgebra
+
 @test reim(2 + 3im) == (2, 3)
 
 for T in (Int64, Float64)
@@ -9,8 +11,8 @@ for T in (Int64, Float64)
     @test complex(Complex{T}) == Complex{T}
 end
 
-#showcompact
-@test sprint(showcompact, complex(1, 0)) == "1+0im"
+#show
+@test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
 @test sprint(show, complex(true, true)) == "Complex(true,true)"
 
 @testset "arithmetic" begin
@@ -774,18 +776,14 @@ end
     @test isequal(atan(complex( NaN, NaN)),complex( NaN, NaN))
 end
 
-@testset "lexcmp" begin
-    @test lexcmp(1.0-1.0im, 1.0+0.0im) == -1
-    @test lexcmp(0.0+0.0im, 0.0+0.0im) == 0
-    @test lexcmp(1.0-1.0im, 0.0+0.0im) == 1
-end
-
 # misc.
 
 @test complex(1//2,1//3)^2 === complex(5//36, 1//3)
 @test complex(2,2)^2 === complex(0,8)
-@test_throws DomainError complex(2,2)^(-2)
-@test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
+let p = -2
+    @test_throws DomainError complex(2,2)^p
+end
+@test complex(2,2)^(-2) === complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
 
 @test complex.(1.0, [1.0, 1.0]) == [complex(1.0, 1.0), complex(1.0, 1.0)]
 @test complex.([1.0, 1.0], 1.0) == [complex(1.0, 1.0), complex(1.0, 1.0)]
@@ -895,21 +893,21 @@ end
 end
 
 @testset "round and float, PR #8291" begin
-    @test round(Complex(1.125, 0.875), 2) == Complex(1.12, 0.88)
+    @test round(Complex(1.125, 0.875), digits=2) == Complex(1.12, 0.88)
     @test round(Complex(1.5, 0.5), RoundDown, RoundUp) == Complex(1.0, 1.0)
-    @test round.([1:5;] + im) == [1:5;] + im
-    @test round.([1:5;] + 0.5im) == [1.0:5.0;]
+    @test round.([1:5;] .+ im) == [1:5;] .+ im
+    @test round.([1:5;] .+ 0.5im) == [1.0:5.0;]
 
     @test float(Complex(1, 2)) == Complex(1.0, 2.0)
-    @test round(float(Complex(π, ℯ)),3) == Complex(3.142, 2.718)
+    @test round(float(Complex(π, ℯ)), digits=3) == Complex(3.142, 2.718)
 end
 
-@testset "Complex32 arithmetic, PR #10003" begin
-    @test Float16(1)+Float16(1)im === Complex32(1, 1)
-    @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === Complex32(1, -1)
-    @test Float16(1)*im === Complex32(im)
-    @test Float16(1)/im === Complex32(0,-1)
-    @test Float16(1)^im === Complex32(1) === Float16(1)+Float16(0)im
+@testset "ComplexF16 arithmetic, PR #10003" begin
+    @test Float16(1)+Float16(1)im === ComplexF16(1, 1)
+    @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === ComplexF16(1, -1)
+    @test Float16(1)*im === ComplexF16(im)
+    @test Float16(1)/im === ComplexF16(0,-1)
+    @test Float16(1)^im === ComplexF16(1) === Float16(1)+Float16(0)im
 end
 
 # issue/PR #10148
@@ -931,7 +929,7 @@ end
         @inferred sin(x)
         @inferred cos(x)
         @inferred norm(x)
-        @inferred vecnorm(x)
+        @inferred opnorm(x)
     end
 end
 
@@ -959,9 +957,9 @@ end
 
 @testset "expm1 type stability" begin
     x = @inferred expm1(0.1im)
-    @test x isa Complex128
+    @test x isa ComplexF64
     x = @inferred expm1(0.1f0im)
-    @test x isa Complex64
+    @test x isa ComplexF32
 end
 
 @testset "array printing with exponent format" begin
@@ -986,4 +984,84 @@ end
         @test isequal(one(T) / complex(one(T),  zero(T)), Complex(one(T), -zero(T)))
         @test isequal(one(T) / complex(one(T), -zero(T)), Complex(one(T),  zero(T)))
     end
+end
+
+@testset "complex^real, issue #14342" begin
+    for T in (Float32, Float64, BigFloat), p in (T(-21//10), -21//10)
+        z = T(2)+0im
+        @test real(z^p) ≈ 2^p
+        @test signbit(imag(z^p))
+    end
+    @test (2+0im)^(-21//10) === (2//1+0im)^(-21//10) === 2^-2.1 - 0.0im
+end
+
+@testset "more cpow" begin
+    # for testing signs of zeros, it is useful to convert ±0.0 to ±1e-15
+    zero2small(r::Real) = iszero(r) ? copysign(1e-15, r) : r
+    zero2small(z::Complex) = complex(zero2small(real(z)), zero2small(imag(z)))
+    ≋(x::Real, y::Real) = x*y == 0 ? abs(x) < 1e-8 && abs(y) < 1e-8 && signbit(x)==signbit(y) : isfinite(x) ? x ≈ y : isequal(x, y)
+    ≋(x::Complex, y::Complex) = real(x) ≋ real(y) && imag(x) ≋ imag(y)
+    ≟(x,y) = isequal(x,y)
+
+    # test z^p for positive/negative/zero real and imaginary parts of z and p:
+    v=(-2.7,-3.0,-2.0,-0.0,+0.0,2.0,3.0,2.7)
+    for zr=v, zi=v, pr=v, pi=v
+        z = complex(zr,zi)
+        p = iszero(pi) ? pr : complex(pr,pi)
+        if isinteger(p)
+            c = zero2small(z)^Integer(pr)
+        else
+            c = exp(zero2small(p) * log(zero2small(z)))
+        end
+        if !iszero(z*p) # z==0 or p==0 is tricky, check it separately
+            @test z^p ≋ c
+            if isreal(p)
+                @test z^(p + 1e-15im) ≈ z^(p - 1e-15im) ≈ c
+                if isinteger(p)
+                    @test isequal(z^Integer(pr), z^p)
+                end
+            elseif (zr != 0 || !signbit(zr)) && (zi != 0 || !signbit(zi))
+                @test isequal((Complex{Int}(z*10)//10)^p, z^p)
+            end
+        end
+    end
+
+    @test 2 ^ (0.3 + 0.0im) === 2.0 ^ (0.3 + 0.0im) === conj(2.0 ^ (0.3 - 0.0im)) ≋  2.0 ^ (0.3 + 1e-15im)
+    @test 0.2 ^ (0.3 + 0.0im) === conj(0.2 ^ (0.3 - 0.0im)) ≋  0.2 ^ (0.3 + 1e-15im)
+    @test (0.0 - 0.0im)^2.0 === (0.0 - 0.0im)^2 === (0.0 - 0.0im)^1.1 === (0.0 - 0.0im) ^ (1.1 + 2.3im) === 0.0 - 0.0im
+    @test (0.0 - 0.0im)^-2.0 ≟ (0.0 - 0.0im)^-2 ≟ (0.0 - 0.0im)^-1.1 ≟ (0.0 - 0.0im) ^ (-1.1 + 2.3im) ≟ NaN + NaN*im
+    @test (1.0+0.0)^(1.2+0.7im) === 1.0 + 0.0im
+    @test (-1.0+0.0)^(2.0+0.7im) ≈ exp(-0.7π)
+    @test (-4.0+0.0im)^1.5 === (-4.0)^(1.5+0.0im) === (-4)^(1.5+0.0im) === (-4)^(3//2+0im) === 0.0 - 8.0im
+
+    # issue #24515:
+    @test (Inf + Inf*im)^2.0 ≟ (Inf + Inf*im)^2 ≟ NaN + Inf*im
+    @test (0+0im)^-3.0 ≟ (0+0im)^-3 ≟ NaN + NaN*im
+    @test (1.0+0.0im)^1e300 === 1.0 + 0.0im
+    @test Inf^(-Inf + 0.0im) == (Inf + 0.0im)^(-Inf - 0.0im) == (Inf - 0.0im)^(-Inf - 0.0im) == (Inf - 0.0im)^-Inf == 0
+
+    # NaN propagation
+    @test (0 + NaN*im)^1 ≟ (0 + NaN*im)^1.0 ≟ (0 + NaN*im)^(1.0+0im) ≟ 0.0 + NaN*im
+    @test (0 + NaN*im)^2 ≟ (0 + NaN*im)^2.0 ≟ (0 + NaN*im)^(2.0+0im) ≟ NaN + NaN*im
+    @test (NaN + 0im)^2.0 ≟ (NaN + 0im)^(2.0+0im) ≟ (2+0im)^NaN ≟ NaN + 0im
+    @test (NaN + 0im)^2.5 ≟ NaN^(2.5+0im) ≟ (NaN + NaN*im)^2.5 ≟ (-2+0im)^NaN ≟ (2+0im)^(1+NaN*im) ≟ NaN + NaN*im
+
+    # more Inf cases:
+    @test (Inf + 0im)^Inf === Inf^(Inf + 0im) === (Inf + 0im)^(Inf + 0im) == Inf + 0im
+    @test (-Inf + 0im)^(0.7 + 0im) === (-Inf + 1im)^(0.7 + 0im) === conj((-Inf - 1im)^(0.7 + 0im)) === -Inf + Inf*im
+    @test (-Inf + 0.0im) ^ 3.1 === conj((-Inf - 0.0im) ^ 3.1) === -Inf - Inf*im
+    @test (3.0+0.0im)^(Inf + 1im) === (3.0-0.0im)^(Inf + 1im) === conj((3.0+0.0im)^(Inf - 1im)) === Inf + Inf*im
+
+    # The following cases should arguably give Inf + Inf*im, but currently
+    # give partial NaNs instead.  Marking as broken for now (since Julia 0.4 at least),
+    # in the hope that someday we can fix these corner cases.  (Python gets them wrong too.)
+    @test_broken (Inf + 1im)^3 === (Inf + 1im)^3.0 === (Inf + 1im)^(3+0im) === Inf + Inf*im
+    @test_broken (Inf + 1im)^3.1 === (Inf + 1im)^(3.1+0im) === Inf + Inf*im
+
+    # cases where phase angle is non-finite yield NaN + NaN*im:
+    @test NaN + NaN*im ≟ Inf ^ (2 + 3im) ≟ (Inf + 1im) ^ (2 + 3im) ≟ (Inf*im) ^ (2 + 3im) ≟
+          3^(Inf*im) ≟ (-3)^(Inf + 0im) ≟ (-3)^(Inf + 1im) ≟ (3+1im)^Inf ≟
+          (3+1im)^(Inf + 1im) ≟ (1e200+1e-200im)^Inf ≟ (1e200+1e-200im)^(Inf+1im)
+
+    @test @inferred(2.0^(3.0+0im)) === @inferred((2.0+0im)^(3.0+0im)) === @inferred((2.0+0im)^3.0) === 8.0+0.0im
 end

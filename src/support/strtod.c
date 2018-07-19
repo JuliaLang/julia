@@ -54,6 +54,7 @@ JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 //   C stdlib functions
 
 #include <ctype.h>
+#include <errno.h>
 
 int case_insensitive_match(const char *s, const char *t)
 {

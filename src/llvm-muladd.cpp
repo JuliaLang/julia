@@ -91,14 +91,22 @@ bool CombineMulAdd::runOnFunction(Function &F)
             it++;
             switch (I.getOpcode()) {
             case Instruction::FAdd: {
+#if JL_LLVM_VERSION >= 60000
+                if (!I.isFast())
+#else
                 if (!I.hasUnsafeAlgebra())
+#endif
                     continue;
                 checkCombine(m, &I, I.getOperand(0), I.getOperand(1), false, false) ||
                     checkCombine(m, &I, I.getOperand(1), I.getOperand(0), false, false);
                 break;
             }
             case Instruction::FSub: {
+#if JL_LLVM_VERSION >= 60000
+                if (!I.isFast())
+#else
                 if (!I.hasUnsafeAlgebra())
+#endif
                     continue;
                 checkCombine(m, &I, I.getOperand(0), I.getOperand(1), true, false) ||
                     checkCombine(m, &I, I.getOperand(1), I.getOperand(0), true, true);

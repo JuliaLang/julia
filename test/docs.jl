@@ -2,6 +2,12 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
+using Markdown
+using REPL
+
+using REPL: @repl, repl_latex, _repl, accessible
+using InteractiveUtils: apropos
+
 # For curmod_*
 include("testenv.jl")
 
@@ -24,18 +30,19 @@ function docstring_startswith(d1, d2)
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
-@doc "Doc abstract type" ->
+@doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
+@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type"
+@test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
-@doc "Helps test if macros can be documented with `@doc \"...\" -> @...`." ->
+@doc "Helps test if macros can be documented with `@doc \"...\" @...`."
 :@macro_doctest
 
 @test (@doc @macro_doctest) !== nothing
 
 # test that random stuff interpolated into docstrings doesn't break search or other methods here
-doc"""
+@doc doc"""
 break me:
 
     code
@@ -65,6 +72,8 @@ end
 const LINE_NUMBER = @__LINE__() + 1
 "DocsTest"
 module DocsTest
+
+using Markdown
 
 "f-1"
 function f(x)
@@ -522,6 +531,8 @@ end
 
 module I15424
 
+using REPL
+
 struct LazyHelp
     text
 end
@@ -540,7 +551,7 @@ function Base.Docs.catdoc(hs::LazyHelp...)
     end
 end
 
-Docs.docsearch(haystack::LazyHelp, needle) = Docs.docsearch(haystack.text, needle)
+REPL.docsearch(haystack::LazyHelp, needle) = REPL.docsearch(haystack.text, needle)
 
 @doc LazyHelp("LazyHelp\n") LazyHelp
 @doc LazyHelp("LazyHelp(text)\n") LazyHelp(text)
@@ -548,11 +559,16 @@ Docs.docsearch(haystack::LazyHelp, needle) = Docs.docsearch(haystack.text, needl
 end
 
 let d = @doc(I15424.LazyHelp)
-    @test stringmime("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+    @test repr("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
 end
 
 # Issue #13385.
-@test @doc(I) !== nothing
+struct I13385
+    λ
+end
+"issue #13385"
+const i13385 = I13385(true)
+@test @doc(i13385) !== nothing
 
 # Issue #12700.
 @test docstrings_equal(@doc(DocsTest.@m), doc"Inner.@m")
@@ -586,7 +602,7 @@ end
 
 f1_11993()
 
-@doc "Document inline function with old syntax" ->
+@doc "Document inline function with old syntax"
 @inline f2_11993() = nothing
 
 @test (@doc f2_11993) !== nothing
@@ -633,29 +649,29 @@ f12593_2() = 1
 @test (@doc f12593_2) !== nothing
 
 # @test Docs.doc(svdvals, Tuple{Vector{Float64}}) === nothing
-@test Docs.doc(svdvals, Tuple{Float64}) !== nothing
+# @test Docs.doc(svdvals, Tuple{Float64}) !== nothing
 
 # crude test to make sure we sort docstring output by method specificity
 @test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
                         Docs.doc(getindex, Tuple{Type{Int64},Int}))
 
 # test that macro documentation works
-@test (Docs.@repl :@assert) !== nothing
+@test (@repl :@assert) !== nothing
 
-@test (Docs.@repl 0) !== nothing
+@test (@repl 0) !== nothing
 
 let t = @doc(DocsTest.t(::Int, ::Int))
-    @test docstrings_equal(Docs.@repl(DocsTest.t(0, 0)), t)
-    @test docstrings_equal(Docs.@repl(DocsTest.t(::Int, ::Int)), t)
+    @test docstrings_equal(@repl(DocsTest.t(0, 0)), t)
+    @test docstrings_equal(@repl(DocsTest.t(::Int, ::Int)), t)
 end
 
 # Issue #13467.
-@test (Docs.@repl :@r_str) !== nothing
+@test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test contains(sprint(apropos, "pearson"), "cor")
-@test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
-@test contains(sprint(apropos, "print"), "Profile.print")
+@test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
+using Profile
+@test occursin("Profile.print", sprint(apropos, "print"))
 
 # Issue #13068.
 
@@ -822,7 +838,7 @@ $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_pre
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
 
-let d = @doc Undocumented.f
+let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)),"""
@@ -832,7 +848,7 @@ let d = @doc Undocumented.f
     """)
 end
 
-let d = @doc Undocumented.undocumented
+let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)), """
@@ -880,15 +896,15 @@ let x = Binding(Base, Symbol("@time"))
     @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x
-    @test @var(Base.Pkg.@time) == x
+    @test @var(Base.Iterators.@time) == x
 end
 
-let x = Binding(Base.LinAlg, :norm)
+let x = Binding(Iterators, :enumerate)
     @test defined(x) == true
-    @test @var(norm) == x
-    @test @var(Base.norm) == x
-    @test @var(Base.LinAlg.norm) == x
-    @test @var(Base.Pkg.Dir.norm) == x
+    @test @var(enumerate) == x
+    @test @var(Base.enumerate) == x
+    @test @var(Iterators.enumerate) == x
+    @test @var(Base.Iterators.enumerate) == x
 end
 
 let x = Binding(Core, :Int)
@@ -896,14 +912,13 @@ let x = Binding(Core, :Int)
     @test @var(Int) == x
     @test @var(Base.Int) == x
     @test @var(Core.Int) == x
-    @test @var(Base.Pkg.Resolve.Int) == x
 end
 
-let x = Binding(Base, :Pkg)
+let x = Binding(Base, :Iterators)
     @test defined(x) == true
-    @test @var(Pkg) == x
-    @test @var(Base.Pkg) == x
-    @test @var(Main.Pkg) == x
+    @test @var(Iterators) == x
+    @test @var(Base.Iterators) == x
+    @test @var(Main.Iterators) == x
 end
 
 let x = Binding(Base, :VERSION)
@@ -923,48 +938,21 @@ let x = Binding(curmod, :bindingdoesnotexist)
 end
 
 let x = Binding(Main, :+)
-    @test parse(string(x)) == :(Base.:+)
+    @test Meta.parse(string(x)) == :(Base.:+)
 end
 
-let x = Binding(Base, :parse)
-    @test parse(string(x)) == :(Base.parse)
+let x = Binding(Meta, :parse)
+    @test Meta.parse(string(x)) == :(Base.Meta.parse)
 end
 
 let x = Binding(Main, :⊕)
-    @test parse(string(x)) == :(⊕)
+    @test Meta.parse(string(x)) == :(⊕)
 end
 
 doc_util_path = Symbol(joinpath("docs", "utils.jl"))
-# Docs.helpmode tests: we test whether the correct expressions are being generated here,
-# rather than complete integration with Julia's REPL mode system.
-for (line, expr) in Pair[
-    "sin"          => :sin,
-    "Base.sin"     => :(Base.sin),
-    "@time(x)"     => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none), :x),
-    "@time"        => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
-    ":@time"       => Expr(:quote, (Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)))),
-    "@time()"      => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
-    "Base.@time()" => Expr(:macrocall, Expr(:., :Base, QuoteNode(Symbol("@time"))), LineNumberNode(1, :none)),
-    "ccall"        => :ccall, # keyword
-    "while       " => :while, # keyword, trailing spaces should be stripped.
-    "0"            => 0,
-    "\"...\""      => "...",
-    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
-    ]
-    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(117, doc_util_path), STDOUT, expr)
-    buf = IOBuffer()
-    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
-end
 
-let save_color = Base.have_color
-    try
-        @eval Base have_color = false
-        @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
-        @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
-    finally
-        @eval Base have_color = $save_color
-    end
-end
+@test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
+@test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
 
 # issue #15684
 begin
@@ -990,9 +978,20 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-@test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::typeof(1.0)))))
-@test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::String))))
-
+let dt1 = _repl(:(dynamic_test(1.0)))
+    @test dt1 isa Expr
+    @test dt1.args[1] isa Expr
+    @test dt1.args[1].head === :macrocall
+    @test dt1.args[1].args[1] == Symbol("@doc")
+    @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
+end
+let dt2 = _repl(:(dynamic_test(::String)))
+    @test dt2 isa Expr
+    @test dt2.args[1] isa Expr
+    @test dt2.args[1].head === :macrocall
+    @test dt2.args[1].args[1] == Symbol("@doc")
+    @test dt2.args[1].args[3] == :(dynamic_test(::String))
+end
 
 # Equality testing
 
@@ -1002,6 +1001,9 @@ dynamic_test.x = "test 2"
 @test Text("docstring1") ≠ Text("docstring2")
 @test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
 @test hash(Text("docstring")) ≠ hash(HTML("docstring"))
+
+# issue #25172
+@test repr(MIME"text/html"(), HTML("a","b")) == "ab"
 
 # issue 21016
 module I21016
@@ -1066,3 +1068,73 @@ end
 end
 @test Main.f23011() == 2
 @test docstrings_equal(@doc(Main.f23011), doc"second")
+
+# issue 22098
+"an empty macro"
+macro mdoc22098 end
+@test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")
+
+# issue #24468
+let ex = try
+    include_string(@__MODULE__, """
+
+    \"\"\"
+    an example
+    \"\"\"
+    function hello(param::Vector{In64_nOt_DeFiNeD__})
+    end
+    """)
+catch e
+    e
+end
+    @test ex.line == 2
+end
+
+struct t_docs_abc end
+@test "t_docs_abc" in accessible(@__MODULE__)
+
+# Call overloading issue #20087
+"""
+Docs for `MyFunc` struct.
+"""
+mutable struct MyFunc
+    x
+end
+
+"""
+Docs for calling `f::MyFunc`.
+"""
+function (f::MyFunc)(x)
+    f.x = x
+    return f
+end
+
+@test docstrings_equal(@doc(MyFunc(2)),
+doc"""
+Docs for calling `f::MyFunc`.
+""")
+
+struct A_20087 end
+
+"""a"""
+(a::A_20087)() = a
+
+@test docstrings_equal(@doc(A_20087()), doc"a")
+
+# issue #27832
+
+_last_atdoc = Core.atdoc
+Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+
+"""
+"""
+module M27832
+macro foo(x)
+    repr(x)
+end
+for fn in (:isdone,)
+    global xs = @foo $fn
+end
+end
+@test M27832.xs == ":(\$(Expr(:\$, :fn)))"
+Core.atdoc!(_last_atdoc)

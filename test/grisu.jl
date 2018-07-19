@@ -14,7 +14,7 @@ function trimrep(buffer)
 end
 
 const bufsize = 500
-buffer = Array{UInt8}(bufsize)
+buffer = Vector{UInt8}(undef, bufsize)
 fill!(buffer,0)
 bignums = [Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum()]
 

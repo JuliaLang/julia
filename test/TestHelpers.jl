@@ -2,22 +2,10 @@
 
 module TestHelpers
 
+using Serialization
+
 include("dimensionful.jl")
 export Furlong
-
-mutable struct FakeTerminal <: Base.Terminals.UnixTerminal
-    in_stream::Base.IO
-    out_stream::Base.IO
-    err_stream::Base.IO
-    hascolor::Bool
-    raw::Bool
-    FakeTerminal(stdin,stdout,stderr,hascolor=true) =
-        new(stdin,stdout,stderr,hascolor,false)
-end
-
-Base.Terminals.hascolor(t::FakeTerminal) = t.hascolor
-Base.Terminals.raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
-Base.Terminals.size(t::FakeTerminal) = (24, 80)
 
 function open_fake_pty()
     @static if Sys.iswindows()
@@ -53,62 +41,6 @@ function with_fake_pty(f)
     end
 end
 
-function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
-    output_file = tempname()
-    wrapped_code = """
-    result = let
-        $code
-    end
-    open("$output_file", "w") do fp
-        serialize(fp, result)
-    end
-    """
-    cmd = `$(Base.julia_cmd()) --startup-file=no -e $wrapped_code`
-    try
-        challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
-        return open(output_file, "r") do fp
-            deserialize(fp)
-        end
-    finally
-        isfile(output_file) && rm(output_file)
-    end
-    return nothing
-end
-
-function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
-    function format_output(output)
-        debug ? "Process output found:\n\"\"\"\n$(read(seekstart(out), String))\n\"\"\"" : ""
-    end
-    out = IOBuffer()
-    with_fake_pty() do slave, master
-        p = spawn(detach(cmd), slave, slave, slave)
-        # Kill the process if it takes too long. Typically occurs when process is waiting for input
-        @async begin
-            sleep(timeout)
-            kill(p)
-            close(master)
-        end
-        try
-            for (challenge, response) in challenges
-                process_exited(p) && error("Too few prompts. $(format_output(out))")
-
-                write(out, readuntil(master, challenge))
-                if !isopen(master)
-                    error("Could not locate challenge: \"$challenge\". $(format_output(out))")
-                end
-                write(master, response)
-            end
-            wait(p)
-        finally
-            kill(p)
-        end
-        # Determine if the process was explicitly killed
-        killed = process_exited(p) && (p.exitcode != 0 || p.termsignal != 0)
-        killed && error("Too many prompts. $(format_output(out))")
-    end
-    nothing
-end
-
 # OffsetArrays (arrays with indexing that doesn't start at 1)
 
 # This test file is designed to exercise support for generic indexing,
@@ -129,8 +61,10 @@ OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 OffsetArray(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) where {T,N} = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) where {T,N} = OffsetArray(A, offsets)
 
-OffsetArray{T,N}(inds::Indices{N}) where {T,N} = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
-OffsetArray{T}(inds::Indices{N}) where {T,N} = OffsetArray{T,N}(inds)
+OffsetArray{T,N}(::UndefInitializer, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N,Array{T,N}}(Array{T,N}(undef, map(length, inds)), map(indsoffset, inds))
+OffsetArray{T}(::UndefInitializer, inds::Indices{N}) where {T,N} =
+    OffsetArray{T,N}(undef, inds)
 
 Base.IndexStyle(::Type{T}) where {T<:OffsetArray} = Base.IndexStyle(parenttype(T))
 parenttype(::Type{OffsetArray{T,N,AA}}) where {T,N,AA} = AA
@@ -138,32 +72,44 @@ parenttype(A::OffsetArray) = parenttype(typeof(A))
 
 Base.parent(A::OffsetArray) = A.parent
 
-errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
-Base.size(A::OffsetArray) = errmsg(A)
-Base.size(A::OffsetArray, d) = errmsg(A)
-Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianRange(indices(A))
-Base.eachindex(::IndexLinear, A::OffsetVector) = indices(A, 1)
+Base.size(A::OffsetArray) = size(A.parent)
+Base.size(A::OffsetArray, d) = size(A.parent, d)
+Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianIndices(axes(A))
+Base.eachindex(::IndexLinear, A::OffsetVector) = axes(A, 1)
 
-# Implementations of indices and indices1. Since bounds-checking is
+# Implementations of indices and axes1. Since bounds-checking is
 # performance-critical and relies on indices, these are usually worth
 # optimizing thoroughly.
-@inline Base.indices(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? indices(parent(A))[d] + A.offsets[d] : (1:1)
-@inline Base.indices(A::OffsetArray) = _indices(indices(parent(A)), A.offsets)  # would rather use ntuple, but see #15276
-@inline _indices(inds, offsets) = (inds[1]+offsets[1], _indices(tail(inds), tail(offsets))...)
+@inline Base.axes(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? Base.Slice(axes(parent(A))[d] .+ A.offsets[d]) : Base.Slice(1:1)
+@inline Base.axes(A::OffsetArray) = _indices(axes(parent(A)), A.offsets)  # would rather use ntuple, but see #15276
+@inline _indices(inds, offsets) = (Base.Slice(inds[1] .+ offsets[1]), _indices(tail(inds), tail(offsets))...)
 _indices(::Tuple{}, ::Tuple{}) = ()
-Base.indices1(A::OffsetArray{T,0}) where {T} = 1:1  # we only need to specialize this one
+Base.axes1(A::OffsetArray{T,0}) where {T} = Base.Slice(1:1)  # we only need to specialize this one
 
+const OffsetAxis = Union{Integer, UnitRange, Base.Slice{<:UnitRange}}
 function Base.similar(A::OffsetArray, T::Type, dims::Dims)
     B = similar(parent(A), T, dims)
 end
-function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{UnitRange}})
-    B = similar(A, T, map(length, inds))
+function Base.similar(A::AbstractArray, T::Type, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}})
+    B = similar(A, T, map(indslength, inds))
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(length, shape)), map(indsoffset, shape))
+Base.similar(::Type{T}, shape::Tuple{OffsetAxis,Vararg{OffsetAxis}}) where {T<:AbstractArray} =
+    OffsetArray(T(undef, map(indslength, shape)), map(indsoffset, shape))
 
-Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
+Base.reshape(A::AbstractArray, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}}) = OffsetArray(reshape(A, map(indslength, inds)), map(indsoffset, inds))
+
+Base.fill(v, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(Array{typeof(v), N}(undef, map(indslength, inds)), map(indsoffset, inds)), v)
+Base.zeros(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
+    fill!(OffsetArray(Array{T, N}(undef, map(indslength, inds)), map(indsoffset, inds)), zero(T))
+Base.ones(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
+    fill!(OffsetArray(Array{T, N}(undef, map(indslength, inds)), map(indsoffset, inds)), one(T))
+Base.trues(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(BitArray{N}(undef, map(indslength, inds)), map(indsoffset, inds)), true)
+Base.falses(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
+    fill!(OffsetArray(BitArray{N}(undef, map(indslength, inds)), map(indsoffset, inds)), false)
 
 @inline function Base.getindex(A::OffsetArray{T,N}, I::Vararg{Int,N}) where {T,N}
     checkbounds(A, I...)
@@ -223,9 +169,31 @@ _offset(out, ::Tuple{}, ::Tuple{}) = out
 
 indsoffset(r::AbstractRange) = first(r) - 1
 indsoffset(i::Integer) = 0
+indslength(r::AbstractRange) = length(r)
+indslength(i::Integer) = i
+
 
 Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
 
 end
+
+# Mimic a quantity with a physical unit that is not convertible to a real number
+struct PhysQuantity{n,T}   # n is like the exponent of the unit
+    val::T
+end
+PhysQuantity{n}(x::T) where {n,T} = PhysQuantity{n,T}(x)
+Base.zero(::Type{PhysQuantity{n,T}}) where {n,T} = PhysQuantity{n,T}(zero(T))
+Base.zero(x::PhysQuantity) = zero(typeof(x))
+Base.:+(x::PhysQuantity{n}, y::PhysQuantity{n}) where n = PhysQuantity{n}(x.val + y.val)
+Base.:-(x::PhysQuantity{n}, y::PhysQuantity{n}) where n = PhysQuantity{n}(x.val - y.val)
+Base.:*(x::PhysQuantity{n,T}, y::Int) where {n,T} = PhysQuantity{n}(x.val*y)
+Base.:/(x::PhysQuantity{n,T}, y::Int) where {n,T} = PhysQuantity{n}(x.val/y)
+Base.:*(x::PhysQuantity{n1,S}, y::PhysQuantity{n2,T}) where {n1,n2,S,T} =
+    PhysQuantity{n1+n2}(x.val*y.val)
+Base.:/(x::PhysQuantity{n1,S}, y::PhysQuantity{n2,T}) where {n1,n2,S,T} =
+    PhysQuantity{n1-n2}(x.val/y.val)
+Base.convert(::Type{PhysQuantity{0,T}}, x::Int) where T = PhysQuantity{0}(convert(T, x))
+Base.convert(::Type{P}, ::Int) where P<:PhysQuantity =
+    error("Int is incommensurate with PhysQuantity")
 
 end

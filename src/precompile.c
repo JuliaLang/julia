@@ -47,7 +47,7 @@ void jl_write_compiler_output(void)
     jl_module_init_order = jl_alloc_vec_any(0);
     int i, l = jl_array_len(worklist);
     for (i = 0; i < l; i++) {
-        jl_value_t *m = jl_arrayref(worklist, i);
+        jl_value_t *m = jl_ptrarrayref(worklist, i);
         if (jl_get_global((jl_module_t*)m, jl_symbol("__init__"))) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
         }
@@ -93,9 +93,9 @@ void jl_write_compiler_output(void)
 // and expanding the Union may give a leaf function
 static void _compile_all_tvar_union(jl_value_t *methsig)
 {
-    if (!jl_is_unionall(methsig) && jl_is_leaf_type(methsig)) {
+    if (!jl_is_unionall(methsig) && jl_is_dispatch_tupletype(methsig)) {
         // usually can create a specialized version of the function,
-        // if the signature is already a leaftype
+        // if the signature is already a dispatch type
         if (jl_compile_hint((jl_tupletype_t*)methsig))
             return;
     }
@@ -126,7 +126,7 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
         }
         if (!jl_has_concrete_subtype(sig))
             goto getnext; // signature wouldn't be callable / is invalid -- skip it
-        if (jl_is_leaf_type(sig)) {
+        if (jl_is_concrete_type(sig)) {
             if (jl_compile_hint((jl_tupletype_t*)sig))
                 goto getnext; // success
         }
@@ -143,7 +143,7 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
                 }
                 else {
                     jl_value_t *ty = jl_nth_union_component(tv->ub, j);
-                    if (!jl_is_leaf_type(ty))
+                    if (!jl_is_concrete_type(ty))
                         ty = (jl_value_t*)jl_new_typevar(tv->name, tv->lb, ty);
                     env[2 * i + 1] = ty;
                     idx[i] = j + 1;
@@ -174,7 +174,9 @@ static void _compile_all_union(jl_value_t *sig)
             ++count_unions;
         else if (ty == jl_bottom_type)
             return; // why does this method exist?
-        else if (!jl_is_leaf_type(ty) && !jl_has_free_typevars(ty))
+        else if (jl_is_datatype(ty) && !jl_has_free_typevars(ty) &&
+                 ((!jl_is_kind(ty) && ((jl_datatype_t*)ty)->isconcretetype) ||
+                  ((jl_datatype_t*)ty)->name == jl_type_typename))
             return; // no amount of union splitting will make this a leaftype signature
     }
 
@@ -191,7 +193,7 @@ static void _compile_all_union(jl_value_t *sig)
     JL_GC_PUSH2(&p, &methsig);
     int idx_ctr = 0, incr = 0;
     while (!incr) {
-        jl_svec_t *p = jl_alloc_svec_uninit(l);
+        p = jl_alloc_svec_uninit(l);
         for (i = 0, idx_ctr = 0, incr = 1; i < l; i++) {
             jl_value_t *ty = jl_svecref(sigbody->parameters, i);
             if (jl_is_uniontype(ty)) {
@@ -243,7 +245,7 @@ static void _compile_all_deq(jl_array_t *found)
             jl_gc_wb(m, linfo);
         }
 
-        if (linfo->jlcall_api == 2)
+        if (linfo->invoke != jl_fptr_trampoline)
             continue;
         src = m->source;
         // TODO: the `unspecialized` field is not yet world-aware, so we can't store
@@ -251,7 +253,7 @@ static void _compile_all_deq(jl_array_t *found)
         //src = jl_type_infer(&linfo, jl_world_counter, 1);
         //m->unspecialized = linfo;
         //jl_gc_wb(m, linfo);
-        //if (linfo->jlcall_api == 2)
+        //if (linfo->trampoline != jl_fptr_trampoline)
         //    continue;
 
         // first try to create leaf signatures from the signature declaration and compile those
@@ -272,8 +274,7 @@ static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
     if (m->source &&
         (!m->unspecialized ||
          (m->unspecialized->functionObjectsDecls.functionObject == NULL &&
-          m->unspecialized->jlcall_api != 2 &&
-          m->unspecialized->fptr == NULL))) {
+          m->unspecialized->invoke == jl_fptr_trampoline))) {
         // found a lambda that still needs to be compiled
         jl_array_ptr_1d_push(found, (jl_value_t*)ml);
     }
@@ -286,10 +287,7 @@ static void compile_all_enq_(jl_methtable_t *mt, void *env)
     jl_typemap_visitor(mt->defs, compile_all_enq__, env);
 }
 
-void jl_foreach_mtable_in_module(
-        jl_module_t *m,
-        void (*visit)(jl_methtable_t *mt, void *env),
-        void *env);
+void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), void *env);
 
 static void jl_compile_all_defs(void)
 {
@@ -298,7 +296,7 @@ static void jl_compile_all_defs(void)
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
     while (1) {
-        jl_foreach_mtable_in_module(jl_main_module, compile_all_enq_, m);
+        jl_foreach_reachable_mtable(compile_all_enq_, m);
         size_t changes = jl_array_len(m);
         if (!changes)
             break;
@@ -308,24 +306,43 @@ static void jl_compile_all_defs(void)
     JL_GC_POP();
 }
 
+static int precompile_enq_all_cache__(jl_typemap_entry_t *l, void *closure)
+{
+    jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
+    return 1;
+}
+
 static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
 {
     if (jl_is_method_instance(l->func.value) &&
             l->func.linfo->functionObjectsDecls.functionObject == NULL &&
-            l->func.linfo->jlcall_api != 2)
+            l->func.linfo->invoke != jl_fptr_const_return &&
+            (l->func.linfo->inferred &&
+             l->func.linfo->inferred != jl_nothing &&
+             jl_ast_flag_inferred((jl_array_t*)l->func.linfo->inferred) &&
+             !jl_ast_flag_inlineable((jl_array_t*)l->func.linfo->inferred)))
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
     return 1;
 }
 
 static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *closure)
 {
-    jl_typemap_visitor(def->func.method->specializations, precompile_enq_specialization_, closure);
+    jl_method_t *m = def->func.method;
+    if (m->name == jl_symbol("__init__") && jl_is_dispatch_tupletype(m->sig)) {
+        // ensure `__init__()` gets strongly-hinted, specialized, and compiled
+        jl_specializations_get_linfo(m, m->sig, jl_emptysvec, jl_world_counter);
+        jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)m->sig);
+    }
+    else {
+        jl_typemap_visitor(def->func.method->specializations, precompile_enq_specialization_, closure);
+    }
     return 1;
 }
 
 static void precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
 {
     jl_typemap_visitor(mt->defs, precompile_enq_all_specializations__, env);
+    jl_typemap_visitor(mt->cache, precompile_enq_all_cache__, env);
 }
 
 static void jl_compile_specializations(void)
@@ -334,7 +351,7 @@ static void jl_compile_specializations(void)
     // type signatures that were inferred but haven't been compiled
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
-    jl_foreach_mtable_in_module(jl_main_module, precompile_enq_all_specializations_, m);
+    jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
     size_t i, l;
     for (i = 0, l = jl_array_len(m); i < l; i++) {
         jl_compile_hint((jl_tupletype_t*)jl_array_ptr_ref(m, i));

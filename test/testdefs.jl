@@ -1,27 +1,31 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function runtests(name, isolate=true)
-    old_print_setting = Base.Test.TESTSET_PRINT_ENABLE[]
-    Base.Test.TESTSET_PRINT_ENABLE[] = false
+using Test, Random
+
+function runtests(name, path, isolate=true; seed=nothing)
+    old_print_setting = Test.TESTSET_PRINT_ENABLE[]
+    Test.TESTSET_PRINT_ENABLE[] = false
     try
         if isolate
             # Simple enough to type and random enough so that no one will hard
             # code it in the test
-            mod_name = Symbol("Test", rand(1:100), "Main_", replace(name, '/', '_'))
+            mod_name = Symbol("Test", rand(1:100), "Main_", replace(name, '/' => '_'))
             m = @eval(Main, module $mod_name end)
         else
             m = Main
         end
-        @eval(m, using Base.Test)
+        @eval(m, using Test, Random)
         ex = quote
             @timed @testset $"$name" begin
-                include($"$name.jl")
+                # srand(nothing) will fail
+                $seed != nothing && srand($seed)
+                include($"$path.jl")
             end
         end
-        res_and_time_data = eval(m, ex)
+        res_and_time_data = Core.eval(m, ex)
         rss = Sys.maxrss()
         #res_and_time_data[1] is the testset
-        passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Base.Test.get_test_counts(res_and_time_data[1])
+        passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Test.get_test_counts(res_and_time_data[1])
         if res_and_time_data[1].anynonpass == false
             res_and_time_data = (
                                  (passes+c_passes,broken+c_broken),
@@ -32,7 +36,7 @@ function runtests(name, isolate=true)
         end
         vcat(collect(res_and_time_data), rss)
     finally
-        Base.Test.TESTSET_PRINT_ENABLE[] = old_print_setting
+        Test.TESTSET_PRINT_ENABLE[] = old_print_setting
     end
 end
 

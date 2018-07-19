@@ -7,25 +7,25 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        sech, csch, coth, asech, acsch, acoth,
        sinpi, cospi, sinc, cosc,
        cosd, cotd, cscd, secd, sind, tand,
-       acosd, acotd, acscd, asecd, asind, atand, atan2,
+       acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, significand,
-       lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
+       hypot, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
-       beta, lbeta, @evalpoly
+       @evalpoly
 
-import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
+import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd, rem,
              exp10, expm1, log1p
 
-using Base: sign_mask, exponent_mask, exponent_one,
+using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask
 
 using Core.Intrinsics: sqrt_llvm
 
-using Base.IEEEFloat
+using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
@@ -52,15 +52,22 @@ end
 """
     clamp(x, lo, hi)
 
-Return `x` if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments
+Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
 are promoted to a common type.
 
+# Examples
 ```jldoctest
 julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
 3-element Array{BigFloat,1}:
  3.141592653589793238462643383279502884197169399375105820974944592307816406286198
- 2.000000000000000000000000000000000000000000000000000000000000000000000000000000
- 9.000000000000000000000000000000000000000000000000000000000000000000000000000000
+ 2.0
+ 9.0
+
+julia> clamp.([11,8,5],10,6) # an example where lo > hi
+3-element Array{Int64,1}:
+  6
+  6
+ 10
 ```
 """
 clamp(x::X, lo::L, hi::H) where {X,L,H} =
@@ -104,6 +111,7 @@ that is, the coefficients are given in ascending order by power of `z`.  This ma
 to efficient inline code that uses either Horner's method or, for complex `z`, a more
 efficient Goertzel-like algorithm.
 
+# Examples
 ```jldoctest
 julia> @evalpoly(3, 1, 0, 1)
 10
@@ -145,6 +153,7 @@ end
 
 Convert `x` from radians to degrees.
 
+# Examples
 ```jldoctest
 julia> rad2deg(pi)
 180.0
@@ -157,6 +166,7 @@ rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
 
 Convert `x` from degrees to radians.
 
+# Examples
 ```jldoctest
 julia> deg2rad(90)
 1.5707963267948966
@@ -176,12 +186,27 @@ log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
-```jldoctest
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log(4,8)
 1.5
 
 julia> log(4,2)
 0.5
+
+julia> log(-2, 3)
+ERROR: DomainError with log:
+-2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
+Stacktrace:
+ [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
+[...]
+
+julia> log(2, -3)
+ERROR: DomainError with log:
+-3.0 will only return a complex result if called with a complex argument. Try -3.0(Complex(x)).
+Stacktrace:
+ [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
+[...]
 ```
 
 !!! note
@@ -201,7 +226,6 @@ log(b::Number, x::Number) = log(promote(b,x)...)
 # type specific math functions
 
 const libm = Base.libm_name
-const openspecfun = "libopenspecfun"
 
 # functions with no domain error
 """
@@ -209,35 +233,43 @@ const openspecfun = "libopenspecfun"
 
 Compute hyperbolic sine of `x`.
 """
-sinh(x)
+sinh(x::Number)
 
 """
     cosh(x)
 
 Compute hyperbolic cosine of `x`.
 """
-cosh(x)
+cosh(x::Number)
 
 """
     tanh(x)
 
 Compute hyperbolic tangent of `x`.
 """
-tanh(x)
+tanh(x::Number)
 
 """
-    atan(x)
+    atan(y)
+    atan(y, x)
 
-Compute the inverse tangent of `x`, where the output is in radians.
+Compute the inverse tangent of `y` or `y/x`, respectively.
+
+For one argument, this is the angle in radians between the positive *x*-axis and the point
+(1, *y*), returning a value in the interval ``[-\\pi/2, \\pi/2]``.
+
+For two arguments, this is the angle in radians between the positive *x*-axis and the
+point (*x*, *y*), returning a value in the interval ``[-\\pi, \\pi]``. This corresponds to a
+standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
 """
-atan(x)
+atan(x::Number)
 
 """
     asinh(x)
 
 Compute the inverse hyperbolic sine of `x`.
 """
-asinh(x)
+asinh(x::Number)
 
 """
     expm1(x)
@@ -245,16 +277,13 @@ asinh(x)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
+for f in (:cbrt, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-exp(x::Real) = exp(float(x))
-exp10(x::Real) = exp10(float(x))
-
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
 """
@@ -265,9 +294,13 @@ Return the cube root of `x`, i.e. ``x^{1/3}``. Negative values are accepted
 
 The prefix operator `∛` is equivalent to `cbrt`.
 
+# Examples
 ```jldoctest
 julia> cbrt(big(27))
-3.000000000000000000000000000000000000000000000000000000000000000000000000000000
+3.0
+
+julia> cbrt(big(-27))
+-3.0
 ```
 """
 cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
@@ -328,60 +361,57 @@ end
 
 Compute sine of `x`, where `x` is in radians.
 """
-sin(x)
+sin(x::Number)
 
 """
     cos(x)
 
 Compute cosine of `x`, where `x` is in radians.
 """
-cos(x)
+cos(x::Number)
 
 """
     tan(x)
 
 Compute tangent of `x`, where `x` is in radians.
 """
-tan(x)
+tan(x::Number)
 
 """
     asin(x)
 
 Compute the inverse sine of `x`, where the output is in radians.
 """
-asin(x)
+asin(x::Number)
 
 """
     acos(x)
 
 Compute the inverse cosine of `x`, where the output is in radians
 """
-acos(x)
+acos(x::Number)
 
 """
     acosh(x)
 
 Compute the inverse hyperbolic cosine of `x`.
 """
-acosh(x)
+acosh(x::Number)
 
 """
     atanh(x)
 
 Compute the inverse hyperbolic tangent of `x`.
 """
-atanh(x)
+atanh(x::Number)
 
 """
     log(x)
 
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
-
-There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
-faster and more accurate.
 """
-log(x)
+log(x::Number)
 
 """
     log2(x)
@@ -390,12 +420,19 @@ Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negativ
 [`Real`](@ref) arguments.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log2(4)
 2.0
 
 julia> log2(10)
 3.321928094887362
+
+julia> log2(-2)
+ERROR: DomainError with -2.0:
+NaN result for non-NaN input.
+Stacktrace:
+ [1] nan_dom_err at ./math.jl:325 [inlined]
+[...]
 ```
 """
 log2(x)
@@ -407,12 +444,19 @@ Compute the logarithm of `x` to base 10.
 Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log10(100)
 2.0
 
 julia> log10(2)
 0.3010299956639812
+
+julia> log10(-2)
+ERROR: DomainError with -2.0:
+NaN result for non-NaN input.
+Stacktrace:
+ [1] nan_dom_err at ./math.jl:325 [inlined]
+[...]
 ```
 """
 log10(x)
@@ -423,41 +467,29 @@ log10(x)
 Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
 arguments less than -1.
 
-There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
-faster and more accurate.
-
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log1p(-0.5)
 -0.6931471805599453
 
 julia> log1p(0)
 0.0
+
+julia> log1p(-2)
+ERROR: DomainError with log1p:
+-2.0 will only return a complex result if called with a complex argument. Try -2.0(Complex(x)).
+Stacktrace:
+ [1] throw_complex_domainerror(::Float64, ::Symbol) at ./math.jl:31
+[...]
 ```
 """
 log1p(x)
-for f in (:sin, :cos, :tan, :acos, :acosh, :atanh, :log, :log2, :log10,
-          :lgamma, :log1p)
+for f in (:log2, :log10)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
         @inline ($f)(x::Real) = ($f)(float(x))
     end
-end
-
-@inline asin(x::Real) = asin(float(x))
-
-"""
-    sincos(x)
-
-Compute sine and cosine of `x`, where `x` is in radians.
-"""
-@inline function sincos(x)
-    res = Base.FastMath.sincos_fast(x)
-    if (isnan(res[1]) | isnan(res[2])) & !isnan(x)
-        throw(DomainError(x, "NaN result for non-NaN input."))
-    end
-    return res
 end
 
 @inline function sqrt(x::Union{Float32,Float64})
@@ -470,6 +502,22 @@ end
 
 Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
+
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> sqrt(big(81))
+9.0
+
+julia> sqrt(big(-81))
+ERROR: DomainError with -8.1e+01:
+NaN result for non-NaN input.
+Stacktrace:
+ [1] sqrt(::BigFloat) at ./mpfr.jl:501
+[...]
+
+julia> sqrt(big(complex(-81)))
+0.0 + 9.0im
+```
 """
 sqrt(x::Real) = sqrt(float(x))
 
@@ -479,7 +527,7 @@ sqrt(x::Real) = sqrt(float(x))
 Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = 10^10;
 
 julia> hypot(a, a)
@@ -489,9 +537,7 @@ julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError with -2.914184810805068e18:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
+[...]
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
@@ -501,8 +547,8 @@ function hypot(x::T, y::T) where T<:Number
     if ax < ay
         ax, ay = ay, ax
     end
-    if ax == 0
-        r = ay / one(ax)
+    if iszero(ax)
+        r = ay / oneunit(ax)
     else
         r = ay / ax
     end
@@ -525,19 +571,10 @@ end
 
 Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
-hypot(x::Number...) = vecnorm(x)
+hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
 
-"""
-    atan2(y, x)
-
-Compute the inverse tangent of `y/x`, using the signs of both `x` and `y` to determine the
-quadrant of the return value.
-"""
-atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
-atan2(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan2", T)
-
-atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,), y, x)
-atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
+atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
+atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
 
 max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
@@ -585,7 +622,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
     end
     n = e % Int
     k += n
-    # overflow, if k is larger than maximum posible exponent
+    # overflow, if k is larger than maximum possible exponent
     if k >= exponent_raw_max(T)
         return flipsign(T(Inf), x)
     end
@@ -717,13 +754,16 @@ rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x),
 """
     modf(x)
 
-Return a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts
+Return a tuple `(fpart, ipart)` of the fractional and integral parts of a number. Both parts
 have the same sign as the argument.
 
 # Examples
 ```jldoctest
 julia> modf(3.5)
 (0.5, 3.0)
+
+julia> modf(-3.5)
+(-0.5, -3.0)
 ```
 """
 modf(x) = rem(x,one(x)), trunc(x)
@@ -754,23 +794,10 @@ end
     end
     z
 end
-@inline ^(x::Float64, y::Integer) = x ^ Float64(y)
-@inline ^(x::Float32, y::Integer) = x ^ Float32(y)
-@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
+@inline ^(x::Float64, y::Integer) = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+@inline ^(x::Float32, y::Integer) = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
-
-function angle_restrict_symm(theta)
-    P1 = 4 * 7.8539812564849853515625e-01
-    P2 = 4 * 3.7748947079307981766760e-08
-    P3 = 4 * 2.6951514290790594840552e-15
-
-    y = 2*floor(theta/(2*pi))
-    r = ((theta - y*P1) - y*P2) - y*P3
-    if (r > pi)
-        r -= (2*pi)
-    end
-    return r
-end
 
 ## rem2pi-related calculations ##
 
@@ -778,7 +805,7 @@ function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
     # double-double numbers and returns the high double. References:
     # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
-    # [2] https://dx.doi.org/10.1007/BF01397083
+    # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
     zh = r+s
@@ -967,9 +994,10 @@ mod2pi(x) = rem2pi(x,RoundDown)
 """
     muladd(x, y, z)
 
-Combined multiply-add, computes `x*y+z` allowing the add and multiply to be contracted with
-each other or ones from other `muladd` and `@fastmath` to form `fma`
-if the transformation can improve performance.
+Combined multiply-add: computes `x*y+z`, but allowing the add and multiply to be merged
+with each other or with surrounding operations for performance.
+For example, this may be implemented as an [`fma`](@ref) if the hardware supports it
+efficiently.
 The result can be different on different machines and can also be different on the same machine
 due to constant propagation or other optimizations.
 See [`fma`](@ref).
@@ -991,27 +1019,33 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
              :atanh,:exp,:exp2,:exp10,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
-        $func(a::Complex32) = Complex32($func(Complex64(a)))
+        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
     end
 end
 
-for func in (:atan2,:hypot)
+for func in (:atan,:hypot)
     @eval begin
         $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(b)))
     end
 end
 
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
+sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 # More special functions
-include(joinpath("special", "exp.jl"))
-include(joinpath("special", "exp10.jl"))
-include(joinpath("special", "trig.jl"))
-include(joinpath("special", "gamma.jl"))
-include(joinpath("special", "rem_pio2.jl"))
+include("special/exp.jl")
+include("special/exp10.jl")
+include("special/hyperbolic.jl")
+include("special/trig.jl")
+include("special/rem_pio2.jl")
+include("special/log.jl")
 
-module JuliaLibm
-include(joinpath("special", "log.jl"))
+# `missing` definitions for functions in this module
+for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
+          :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
+          :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
+          :(log2), :(exponent), :(sqrt))
+    @eval $(f)(::Missing) = missing
 end
 
 end # module

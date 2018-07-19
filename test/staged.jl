@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.Printf: @sprintf
+using Random
+
 @generated function staged_t1(a,b)
     if a == Int
         return :(a+b)
@@ -56,7 +59,7 @@ splat2(3, 3:5)
 @test String(take!(stagediobuf)) == "($intstr, UnitRange{$intstr})"
 
 # varargs specialization with parametric @generated functions (issue #8944)
-@generated function splat3(A::AbstractArray{T,N}, indx::RangeIndex...) where {T,N}
+@generated function splat3(A::AbstractArray{T,N}, indx::Base.RangeIndex...) where {T,N}
     print(stagediobuf, indx)
     :(nothing)
 end
@@ -67,20 +70,20 @@ splat3(A, 1:2, 1, 1:2)
 @test String(take!(stagediobuf)) == "(UnitRange{$intstr}, $intstr, UnitRange{$intstr})"
 
 B = view(A, 1:3, 2, 1:3)
-@generated function mygetindex(S::SubArray, indexes::Real...)
+@generated function mygetindex(S::SubArray, indices::Real...)
     T, N, A, I = S.parameters
-    if N != length(indexes)
-        error("Wrong number of indexes supplied")
+    if N != length(indices)
+        error("Wrong number of indices supplied")
     end
     Ip = I.parameters
     NP = length(Ip)
-    indexexprs = Array{Expr}(NP)
+    indexexprs = Vector{Expr}(undef, NP)
     j = 1
     for i = 1:NP
         if Ip[i] == Int
-            indexexprs[i] = :(S.indexes[$i])
+            indexexprs[i] = :(S.indices[$i])
         else
-            indexexprs[i] = :(S.indexes[$i][indexes[$j]])
+            indexexprs[i] = :(S.indices[$i][indices[$j]])
             j += 1
         end
     end
@@ -138,18 +141,21 @@ end
 
 # @generated functions that throw (shouldn't segfault or throw)
 module TestGeneratedThrow
-    using Base.Test
+    using Test, Random
 
     @generated function bar(x)
         error("I'm not happy with type $x")
     end
 
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
+    inited = false
     function __init__()
-        code_typed(foo,(); optimize = false)
-        cfunction(foo,Void,Tuple{})
+        code_typed(foo, (); optimize = false)
+        @cfunction(foo, Cvoid, ())
+        global inited = true
     end
 end
+@test TestGeneratedThrow.inited
 
 # @generated functions including inner functions
 @generated function _g_f_with_inner(x)
@@ -188,9 +194,7 @@ let gf_err2
         return nothing
     end
     @test_throws ErrorException gf_err2(code_typed)
-    @test_throws ErrorException gf_err2(code_llvm)
-    @test_throws ErrorException gf_err2(code_native)
-    @test gf_err_ref[] == 12
+    @test gf_err_ref[] == 4
     @test gf_err2(code_lowered) === nothing
 end
 
@@ -239,8 +243,7 @@ f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
 @generated function f22440(y)
     sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
     code_info = Base.uncompressed_ast(method)
-    body = Expr(:block, code_info.code...)
-    Base.Core.Inference.substitute!(body, 0, Any[], sig, Any[spvals...], 0, :propagate)
+    Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 0, 0, :propagate)
     return code_info
 end
 
@@ -250,3 +253,34 @@ end
 @test f22440(0.0) === f22440kernel(0.0)
 @test f22440(0.0f0) === f22440kernel(0.0f0)
 @test f22440(0) === f22440kernel(0)
+
+# PR #23168
+
+function f23168(a, x)
+    push!(a, 1)
+    if @generated
+        :(y = x + x)
+    else
+        y = 2x
+    end
+    push!(a, y)
+    if @generated
+        :(y = (y, $x))
+    else
+        y = (y, typeof(x))
+    end
+    push!(a, 3)
+    return y
+end
+
+let a = Any[]
+    @test f23168(a, 3) == (6, Int)
+    @test a == [1, 6, 3]
+    @test occursin(" + ", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("2 * ", string(Base.uncompressed_ast(first(methods(f23168)))))
+    @test occursin("2 * ", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
+end
+
+# issue #18747
+@test_throws ErrorException eval(:(f(x) = @generated g() = x))

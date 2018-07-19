@@ -124,7 +124,7 @@ The variable `relation` is declared inside the `if` block, but used outside. How
 on this behavior, make sure all possible code paths define a value for the variable. The following
 change to the above function results in a runtime error
 
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> function test(x,y)
            if x < y
                relation = "less than"
@@ -315,7 +315,7 @@ one can write `<cond> || <statement>` (which could be read as: <cond> *or else* 
 
 For example, a recursive factorial routine could be defined like this:
 
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> function fact(n::Int)
            n >= 0 || error("n must be non-negative")
            n == 0 && return 1
@@ -332,7 +332,9 @@ julia> fact(0)
 julia> fact(-1)
 ERROR: n must be non-negative
 Stacktrace:
- [1] fact(::Int64) at ./none:2
+ [1] error at ./error.jl:33 [inlined]
+ [2] fact(::Int64) at ./none:2
+ [3] top-level scope
 ```
 
 Boolean operations *without* short-circuit evaluation can be done with the bitwise boolean operators
@@ -381,7 +383,7 @@ julia> i = 1;
 
 julia> while i <= 5
            println(i)
-           i += 1
+           global i += 1
        end
 1
 2
@@ -412,9 +414,10 @@ julia> for i = 1:5
 Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. If the variable `i` has not been introduced in an other
-scope, in the `for` loop form, it is visible only inside of the `for` loop, and not afterwards.
-You'll either need a new interactive session instance or a different variable name to test this:
+during which the variable is visible. If the variable `i` has not been introduced in another
+scope, in the `for` loop form, it is visible only inside of the `for` loop, and not
+outside/afterwards. You'll either need a new interactive session instance or a different variable
+name to test this:
 
 ```jldoctest
 julia> for j = 1:5
@@ -468,7 +471,7 @@ julia> while true
            if i >= 5
                break
            end
-           i += 1
+           global i += 1
        end
 1
 2
@@ -476,9 +479,9 @@ julia> while true
 4
 5
 
-julia> for i = 1:1000
-           println(i)
-           if i >= 5
+julia> for j = 1:1000
+           println(j)
+           if j >= 5
                break
            end
        end
@@ -524,14 +527,32 @@ julia> for i = 1:2, j = 3:4
 (2, 4)
 ```
 
-A `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
+With this syntax, iterables may still refer to outer loop variables; e.g. `for i = 1:n, j = 1:i`
+is valid.
+However a `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
+Both variables (`i` and `j`) are set to their current iteration values each time the inner loop runs.
+Therefore, assignments to `i` will not be visible to subsequent iterations:
+
+```jldoctest
+julia> for i = 1:2, j = 3:4
+           println((i, j))
+           i = 0
+       end
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)
+```
+
+If this example were rewritten to use a `for` keyword for each variable, then the output would
+be different: the second and fourth values would contain `0`.
 
 ## Exception Handling
 
 When an unexpected condition occurs, a function may be unable to return a reasonable value to
 its caller. In such cases, it may be best for the exceptional condition to either terminate the
-program, printing a diagnostic error message, or if the programmer has provided code to handle
-such exceptional circumstances, allow that code to take the appropriate action.
+program while printing a diagnostic error message, or if the programmer has provided code to handle
+such exceptional circumstances then allow that code to take the appropriate action.
 
 ### Built-in `Exception`s
 
@@ -542,7 +563,7 @@ below all interrupt the normal flow of control.
 |:----------------------------- |
 | [`ArgumentError`](@ref)       |
 | [`BoundsError`](@ref)         |
-| `CompositeException`          |
+| [`CompositeException`](@ref)  |
 | [`DivideError`](@ref)         |
 | [`DomainError`](@ref)         |
 | [`EOFError`](@ref)            |
@@ -558,12 +579,12 @@ below all interrupt the normal flow of control.
 | [`RemoteException`](@ref)     |
 | [`MethodError`](@ref)         |
 | [`OverflowError`](@ref)       |
-| [`ParseError`](@ref)          |
+| [`Meta.ParseError`](@ref)     |
 | [`SystemError`](@ref)         |
 | [`TypeError`](@ref)           |
 | [`UndefRefError`](@ref)       |
 | [`UndefVarError`](@ref)       |
-| `UnicodeError`                |
+| [`StringIndexError`](@ref)    |
 
 For example, the [`sqrt`](@ref) function throws a [`DomainError`](@ref) if applied to a negative
 real value:
@@ -573,9 +594,7 @@ julia> sqrt(-1)
 ERROR: DomainError with -1.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
+[...]
 ```
 
 You may define your own exceptions in the following way:
@@ -590,7 +609,7 @@ Exceptions can be created explicitly with [`throw`](@ref). For example, a functi
 for nonnegative numbers could be written to [`throw`](@ref) a [`DomainError`](@ref) if the argument
 is negative:
 
-```jldoctest
+```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> f(x) = x>=0 ? exp(-x) : throw(DomainError(x, "argument must be nonnegative"))
 f (generic function with 1 method)
 
@@ -653,7 +672,7 @@ Suppose we want to stop execution immediately if the square root of a negative n
 To do this, we can define a fussy version of the [`sqrt`](@ref) function that raises an error
 if its argument is negative:
 
-```jldoctest fussy_sqrt
+```jldoctest fussy_sqrt; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> fussy_sqrt(x) = x >= 0 ? sqrt(x) : error("negative x not allowed")
 fussy_sqrt (generic function with 1 method)
 
@@ -663,14 +682,16 @@ julia> fussy_sqrt(2)
 julia> fussy_sqrt(-1)
 ERROR: negative x not allowed
 Stacktrace:
- [1] fussy_sqrt(::Int64) at ./none:1
+ [1] error at ./error.jl:33 [inlined]
+ [2] fussy_sqrt(::Int64) at ./none:1
+ [3] top-level scope
 ```
 
 If `fussy_sqrt` is called with a negative value from another function, instead of trying to continue
 execution of the calling function, it returns immediately, displaying the error message in the
 interactive session:
 
-```jldoctest fussy_sqrt
+```jldoctest fussy_sqrt; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
 julia> function verbose_fussy_sqrt(x)
            println("before fussy_sqrt")
            r = fussy_sqrt(x)
@@ -688,28 +709,10 @@ julia> verbose_fussy_sqrt(-1)
 before fussy_sqrt
 ERROR: negative x not allowed
 Stacktrace:
- [1] fussy_sqrt at ./none:1 [inlined]
- [2] verbose_fussy_sqrt(::Int64) at ./none:3
-```
-
-### Warnings and informational messages
-
-Julia also provides other functions that write messages to the standard error I/O, but do not
-throw any `Exception`s and hence do not interrupt execution:
-
-```jldoctest
-julia> info("Hi"); 1+1
-INFO: Hi
-2
-
-julia> warn("Hi"); 1+1
-WARNING: Hi
-2
-
-julia> error("Hi"); 1+1
-ERROR: Hi
-Stacktrace:
- [1] error(::String) at ./error.jl:21
+ [1] error at ./error.jl:33 [inlined]
+ [2] fussy_sqrt at ./none:1 [inlined]
+ [3] verbose_fussy_sqrt(::Int64) at ./none:3
+ [4] top-level scope
 ```
 
 ### The `try/catch` statement
@@ -736,8 +739,8 @@ julia> f(-1)
 It is important to note that in real code computing this function, one would compare `x` to zero
 instead of catching an exception. The exception is much slower than simply comparing and branching.
 
-`try/catch` statements also allow the `Exception` to be saved in a variable. In this contrived
-example, the following example calculates the square root of the second element of `x` if `x`
+`try/catch` statements also allow the `Exception` to be saved in a variable. The following
+contrived example calculates the square root of the second element of `x` if `x`
 is indexable, otherwise assumes `x` is a real number and returns its square root:
 
 ```jldoctest
@@ -765,10 +768,7 @@ julia> sqrt_second(-9)
 ERROR: DomainError with -9.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt at ./math.jl:472 [inlined]
- [4] sqrt_second(::Int64) at ./none:7
+[...]
 ```
 
 Note that the symbol following `catch` will always be interpreted as a name for the exception,
@@ -788,12 +788,6 @@ try bad()
 catch
     x
 end
-```
-
-The `catch` clause is not strictly necessary; when omitted, the default return value is `nothing`.
-
-```jldoctest
-julia> try error() end # Returns nothing
 ```
 
 The power of the `try/catch` construct lies in the ability to unwind a deeply nested computation
@@ -936,7 +930,7 @@ True kernel threads are discussed under the topic of [Parallel Computing](@ref).
 
 ### Core task operations
 
-Let us explore the low level construct [`yieldto`](@ref) to underestand how task switching works.
+Let us explore the low level construct [`yieldto`](@ref) to understand how task switching works.
 `yieldto(task,value)` suspends the current task, switches to the specified `task`, and causes
 that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
 is the only operation required to use task-style control flow; instead of calling and returning
@@ -961,7 +955,7 @@ In addition to [`yieldto`](@ref), a few other basic functions are needed to use 
 ### Tasks and events
 
 Most task switches occur as a result of waiting for events such as I/O requests, and are performed
-by a scheduler included in the standard library. The scheduler maintains a queue of runnable tasks,
+by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks,
 and executes an event loop that restarts tasks based on external events such as message arrival.
 
 The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);
@@ -980,8 +974,8 @@ A task created explicitly by calling [`Task`](@ref) is initially not known to th
 allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
 a task waits for an event, it still gets restarted automatically when the event happens, as you
 would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily
-waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@schedule`](@ref)
-or [`@async`](@ref) macros (see [Parallel Computing](@ref) for more details).
+waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@async`](@ref)
+macro (see [Parallel Computing](@ref) for more details).
 
 ### Task states
 

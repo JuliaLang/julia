@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Iterators.Enumerate
+using Base.Iterators: Enumerate
 
 """
     asyncmap(f, c...; ntasks=0, batch_size=nothing)
@@ -23,11 +23,11 @@ then be a function that must accept a `Vector` of argument tuples and must
 return a vector of results. The input vector will have a length of `batch_size` or less.
 
 The following examples highlight execution in different tasks by returning
-the `object_id` of the tasks in which the mapping function is executed.
+the `objectid` of the tasks in which the mapping function is executed.
 
 First, with `ntasks` undefined, each element is processed in a different task.
 ```
-julia> tskoid() = object_id(current_task());
+julia> tskoid() = objectid(current_task());
 
 julia> asyncmap(x->tskoid(), 1:5)
 5-element Array{UInt64,1}:
@@ -73,7 +73,7 @@ julia> asyncmap(batch_func, 1:5; ntasks=2, batch_size=2)
 
 !!! note
     Currently, all tasks in Julia are executed in a single OS thread co-operatively. Consequently,
-    `ayncmap` is beneficial only when the mapping function involves any I/O - disk, network, remote
+    `asyncmap` is beneficial only when the mapping function involves any I/O - disk, network, remote
     worker invocation, etc.
 
 """
@@ -124,8 +124,8 @@ function verify_ntasks(iterable, ntasks)
     end
 
     if ntasks == 0
-        chklen = iteratorsize(iterable)
-        if (chklen == HasLength()) || (chklen == HasShape())
+        chklen = IteratorSize(iterable)
+        if (chklen isa HasLength) || (chklen isa HasShape)
             ntasks = max(1,min(100, length(iterable)))
         else
             ntasks = 100
@@ -175,7 +175,7 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
     close(chnl)
 
     # check and throw any exceptions from the worker tasks
-    foreach(x->(v=wait(x); isa(v, Exception) && throw(v)), worker_tasks)
+    foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), worker_tasks)
 
     # check if there was a genuine problem with asyncrun
     (asyncrun_excp !== nothing) && throw(asyncrun_excp)
@@ -211,7 +211,7 @@ function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
 end
 
 function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
-    t = @schedule begin
+    t = @async begin
         retval = nothing
 
         try
@@ -246,9 +246,9 @@ end
 
 # Special handling for some types.
 function asyncmap(f, s::AbstractString; kwargs...)
-    s2 = Array{Char,1}(length(s))
+    s2 = Vector{Char}(undef, length(s))
     asyncmap!(f, s2, s; kwargs...)
-    return convert(String, s2)
+    return String(s2)
 end
 
 # map on a single BitArray returns a BitArray if the mapping function is boolean.
@@ -258,13 +258,6 @@ function asyncmap(f, b::BitArray; kwargs...)
         return BitArray(b2)
     end
     return b2
-end
-
-# TODO: Optimize for sparse arrays
-# For now process as regular arrays and convert back
-function asyncmap(f, s::AbstractSparseArray...; kwargs...)
-    sa = map(Array, s)
-    return sparse(asyncmap(f, sa...; kwargs...))
 end
 
 mutable struct AsyncCollector
@@ -281,7 +274,7 @@ end
 """
     AsyncCollector(f, results, c...; ntasks=0, batch_size=nothing) -> iterator
 
-Returns an iterator which applies `f` to each element of `c` asynchronously
+Return an iterator which applies `f` to each element of `c` asynchronously
 and collects output into `results`.
 
 Keyword args `ntasks` and `batch_size` have the same behavior as in
@@ -289,8 +282,8 @@ Keyword args `ntasks` and `batch_size` have the same behavior as in
 be a function which operates on an array of argument tuples.
 
 !!! note
-    `next(::AsyncCollector, state) -> (nothing, state)`. A successful return
-    from `next` indicates that the next element from the input collection is
+    `iterate(::AsyncCollector, state) -> (nothing, state)`. A successful return
+    from `iterate` indicates that the next element from the input collection is
     being processed asynchronously. It blocks until a free worker task becomes
     available.
 
@@ -306,14 +299,16 @@ mutable struct AsyncCollectorState
     chnl::Channel
     worker_tasks::Array{Task,1}
     enum_state      # enumerator state
+    AsyncCollectorState(chnl::Channel, worker_tasks::Vector) =
+        new(chnl, convert(Vector{Task}, worker_tasks))
 end
 
-function start(itr::AsyncCollector)
+function iterate(itr::AsyncCollector)
     itr.ntasks = verify_ntasks(itr.enumerator, itr.ntasks)
     itr.batch_size = verify_batch_size(itr.batch_size)
     if itr.batch_size !== nothing
         exec_func = batch -> begin
-            # extract indexes from the input tuple
+            # extract indices from the input tuple
             batch_idxs = map(x->x[1], batch)
 
             # and the args tuple....
@@ -326,29 +321,31 @@ function start(itr::AsyncCollector)
         exec_func = (i,args) -> (itr.results[i]=itr.f(args...))
     end
     chnl, worker_tasks = setup_chnl_and_tasks((i,args) -> (itr.results[i]=itr.f(args...)), itr.ntasks, itr.batch_size)
-    return AsyncCollectorState(chnl, worker_tasks, start(itr.enumerator))
+    return iterate(itr, AsyncCollectorState(chnl, worker_tasks))
 end
 
-function done(itr::AsyncCollector, state::AsyncCollectorState)
-    if !isopen(state.chnl) || done(itr.enumerator, state.enum_state)
-        close(state.chnl)
+function wait_done(itr::AsyncCollector, state::AsyncCollectorState)
+    close(state.chnl)
 
-        # wait for all tasks to finish
-        foreach(x->(v=wait(x); isa(v, Exception) && throw(v)), state.worker_tasks)
-        empty!(state.worker_tasks)
-        return true
-    else
-        return false
-    end
+    # wait for all tasks to finish
+    foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), state.worker_tasks)
+    empty!(state.worker_tasks)
 end
 
-function next(itr::AsyncCollector, state::AsyncCollectorState)
+function iterate(itr::AsyncCollector, state::AsyncCollectorState)
     if itr.nt_check && (length(state.worker_tasks) < itr.ntasks())
         start_worker_task!(state.worker_tasks, itr.f, state.chnl)
     end
 
     # Get index and mapped function arguments from enumeration iterator.
-    (i, args), state.enum_state = next(itr.enumerator, state.enum_state)
+    y = isdefined(state, :enum_state) ?
+        iterate(itr.enumerator, state.enum_state) :
+        iterate(itr.enumerator)
+    if y === nothing
+        wait_done(itr, state)
+        return nothing
+    end
+    (i, args), state.enum_state = y
     put!(state.chnl, (i, args))
 
     return (nothing, state)
@@ -377,29 +374,28 @@ end
 
 mutable struct AsyncGeneratorState
     i::Int
+    collector_done::Bool
     collector_state::AsyncCollectorState
+    AsyncGeneratorState(i::Int) = new(i, false)
 end
 
-start(itr::AsyncGenerator) = AsyncGeneratorState(0, start(itr.collector))
-
-# Done when source async collector is done and all results have been consumed.
-function done(itr::AsyncGenerator, state::AsyncGeneratorState)
-    done(itr.collector, state.collector_state) && isempty(itr.collector.results)
-end
-
-function next(itr::AsyncGenerator, state::AsyncGeneratorState)
+function iterate(itr::AsyncGenerator, state::AsyncGeneratorState=AsyncGeneratorState(0))
     state.i += 1
 
     results_dict = itr.collector.results
-    while !haskey(results_dict, state.i)
-        if done(itr.collector, state.collector_state)
-            # `done` waits for async tasks to finish. if we do not have the index
+    while !state.collector_done && !haskey(results_dict, state.i)
+        y = isdefined(state, :collector_state) ?
+            iterate(itr.collector, state.collector_state) :
+            iterate(itr.collector)
+        if y === nothing
+            # `check_done` waits for async tasks to finish. if we do not have the index
             # we are looking for, it is an error.
-            !haskey(results_dict, state.i) && error("Error processing index ", i)
+            state.collector_done = true
             break;
         end
-        _, state.collector_state = next(itr.collector, state.collector_state)
+        _, state.collector_state = y
     end
+    state.collector_done && isempty(results_dict) && return nothing
     r = results_dict[state.i]
     delete!(results_dict, state.i)
 
@@ -408,7 +404,8 @@ end
 
 # pass-through iterator traits to the iterable
 # on which the mapping function is being applied
-iteratorsize(itr::AsyncGenerator) = iteratorsize(itr.collector.enumerator)
+IteratorSize(::Type{AsyncGenerator}) = SizeUnknown()
+IteratorEltype(::Type{AsyncGenerator}) = EltypeUnknown()
 size(itr::AsyncGenerator) = size(itr.collector.enumerator)
 length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 
@@ -420,5 +417,5 @@ returning a collection.
 """
 function asyncmap!(f, r, c1, c...; ntasks=0, batch_size=nothing)
     foreach(identity, AsyncCollector(f, r, c1, c...; ntasks=ntasks, batch_size=batch_size))
-    c
+    r
 end

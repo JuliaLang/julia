@@ -12,6 +12,8 @@
     ADD_I(udiv_int, 2) \
     ADD_I(srem_int, 2) \
     ADD_I(urem_int, 2) \
+    ADD_I(add_ptr, 2) \
+    ADD_I(sub_ptr, 2) \
     ADD_I(neg_float, 1) \
     ADD_I(add_float, 2) \
     ADD_I(sub_float, 2) \
@@ -81,7 +83,6 @@
     ADD_I(abs_float, 1) \
     ADD_I(copysign_float, 2) \
     ADD_I(flipsign_int, 2) \
-    ADD_I(select_value, 3) \
     ADD_I(ceil_llvm, 1) \
     ADD_I(floor_llvm, 1) \
     ADD_I(trunc_llvm, 1) \

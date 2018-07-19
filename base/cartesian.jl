@@ -13,7 +13,7 @@ export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
 
 Generate `N` nested loops, using `itersym` as the prefix for the iteration variables.
 `rangeexpr` may be an anonymous-function expression, or a simple symbol `var` in which case
-the range is `indices(var, d)` for dimension `d`.
+the range is `axes(var, d)` for dimension `d`.
 
 Optionally, you can provide "pre" and "post" expressions. These get executed first and last,
 respectively, in the body of each loop. For example:
@@ -24,9 +24,9 @@ respectively, in the body of each loop. For example:
 
 would generate:
 
-    for i_2 = indices(A, 2)
+    for i_2 = axes(A, 2)
         j_2 = min(i_2, 5)
-        for i_1 = indices(A, 1)
+        for i_1 = axes(A, 1)
             j_1 = min(i_1, 5)
             s += A[j_1, j_2]
         end
@@ -41,7 +41,7 @@ end
 
 function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
     @gensym d
-    _nloops(N, itersym, :($d->indices($arraysym, $d)), args...)
+    _nloops(N, itersym, :($d->Base.axes($arraysym, $d)), args...)
 end
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
@@ -81,12 +81,8 @@ julia> @macroexpand Base.Cartesian.@nref 3 A i
 :(A[i_1, i_2, i_3])
 ```
 """
-macro nref(N, A, sym)
-    _nref(N, A, sym)
-end
-
-function _nref(N::Int, A::Symbol, ex)
-    vars = [ inlineanonymous(ex,i) for i = 1:N ]
+macro nref(N::Int, A::Symbol, ex)
+    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:ref, A, vars...))
 end
 
@@ -96,7 +92,7 @@ end
 Generate a function call expression. `sym` represents any number of function arguments, the
 last of which may be an anonymous-function expression and is expanded into `N` arguments.
 
-For example `@ncall 3 func a` generates
+For example, `@ncall 3 func a` generates
 
     func(a_1, a_2, a_3)
 
@@ -105,14 +101,10 @@ while `@ncall 2 func a b i->c[i]` yields
     func(a, b, c[1], c[2])
 
 """
-macro ncall(N, f, sym...)
-    _ncall(N, f, sym...)
-end
-
-function _ncall(N::Int, f, args...)
+macro ncall(N::Int, f, args...)
     pre = args[1:end-1]
     ex = args[end]
-    vars = [ inlineanonymous(ex,i) for i = 1:N ]
+    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:call, f, pre..., vars...))
 end
 
@@ -132,12 +124,8 @@ quote
 end
 ```
 """
-macro nexprs(N, ex)
-    _nexprs(N, ex)
-end
-
-function _nexprs(N::Int, ex::Expr)
-    exs = [ inlineanonymous(ex,i) for i = 1:N ]
+macro nexprs(N::Int, ex::Expr)
+    exs = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:block, exs...))
 end
 
@@ -159,17 +147,13 @@ while `@nextract 3 x d->y[2d-1]` yields
     x_3 = y[5]
 
 """
-macro nextract(N, esym, isym)
-    _nextract(N, esym, isym)
-end
-
-function _nextract(N::Int, esym::Symbol, isym::Symbol)
-    aexprs = [Expr(:escape, Expr(:(=), inlineanonymous(esym, i), :(($isym)[$i]))) for i = 1:N]
+macro nextract(N::Int, esym::Symbol, isym::Symbol)
+    aexprs = Any[ Expr(:escape, Expr(:(=), inlineanonymous(esym, i), :(($isym)[$i]))) for i = 1:N ]
     Expr(:block, aexprs...)
 end
 
-function _nextract(N::Int, esym::Symbol, ex::Expr)
-    aexprs = [Expr(:escape, Expr(:(=), inlineanonymous(esym, i), inlineanonymous(ex,i))) for i = 1:N]
+macro nextract(N::Int, esym::Symbol, ex::Expr)
+    aexprs = Any[ Expr(:escape, Expr(:(=), inlineanonymous(esym, i), inlineanonymous(ex,i))) for i = 1:N ]
     Expr(:block, aexprs...)
 end
 
@@ -182,15 +166,11 @@ evaluate to `true`.
 `@nall 3 d->(i_d > 1)` would generate the expression `(i_1 > 1 && i_2 > 1 && i_3 > 1)`. This
 can be convenient for bounds-checking.
 """
-macro nall(N, criterion)
-    _nall(N, criterion)
-end
-
-function _nall(N::Int, criterion::Expr)
+macro nall(N::Int, criterion::Expr)
     if criterion.head != :->
         throw(ArgumentError("second argument must be an anonymous function expression yielding the criterion"))
     end
-    conds = [Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
+    conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
     Expr(:&&, conds...)
 end
 
@@ -202,15 +182,11 @@ evaluate to `true`.
 
 `@nany 3 d->(i_d > 1)` would generate the expression `(i_1 > 1 || i_2 > 1 || i_3 > 1)`.
 """
-macro nany(N, criterion)
-    _nany(N, criterion)
-end
-
-function _nany(N::Int, criterion::Expr)
+macro nany(N::Int, criterion::Expr)
     if criterion.head != :->
         error("Second argument must be an anonymous function expression yielding the criterion")
     end
-    conds = [Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
+    conds = Any[ Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N ]
     Expr(:||, conds...)
 end
 
@@ -220,12 +196,8 @@ end
 Generates an `N`-tuple. `@ntuple 2 i` would generate `(i_1, i_2)`, and `@ntuple 2 k->k+1`
 would generate `(2,3)`.
 """
-macro ntuple(N, ex)
-    _ntuple(N, ex)
-end
-
-function _ntuple(N::Int, ex)
-    vars = [ inlineanonymous(ex,i) for i = 1:N ]
+macro ntuple(N::Int, ex)
+    vars = Any[ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:tuple, vars...))
 end
 
@@ -298,38 +270,41 @@ function lreplace!(sym::Symbol, r::LReplace)
 end
 
 function lreplace!(str::AbstractString, r::LReplace)
-    i = start(str)
+    i = firstindex(str)
     pat = r.pat_str
-    j = start(pat)
+    j = firstindex(pat)
     matching = false
     local istart::Int
-    while !done(str, i)
-        cstr, i = next(str, i)
+    while i <= ncodeunits(str)
+        cstr = str[i]
+        i = nextind(str, i)
         if !matching
-            if cstr != '_' || done(str, i)
+            if cstr != '_' || i > ncodeunits(str)
                 continue
             end
             istart = i
-            cstr, i = next(str, i)
+            cstr = str[i]
+            i = nextind(str, i)
         end
-        if !done(pat, j)
-            cr, j = next(pat, j)
+        if j <= lastindex(pat)
+            cr = pat[j]
+            j = nextind(pat, j)
             if cstr == cr
                 matching = true
             else
                 matching = false
-                j = start(pat)
+                j = firstindex(pat)
                 i = istart
                 continue
             end
         end
-        if matching && done(pat, j)
-            if done(str, i) || next(str, i)[1] == '_'
+        if matching && j > lastindex(pat)
+            if i > lastindex(str) || str[i] == '_'
                 # We have a match
                 return string(str[1:prevind(str, istart)], r.val, lreplace!(str[i:end], r))
             end
             matching = false
-            j = start(pat)
+            j = firstindex(pat)
             i = istart
         end
     end

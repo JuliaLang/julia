@@ -1,7 +1,7 @@
 # Julia ASTs
 
 Julia has two representations of code. First there is a surface syntax AST returned by the parser
-(e.g. the [`parse`](@ref) function), and manipulated by macros. It is a structured representation
+(e.g. the [`Meta.parse`](@ref) function), and manipulated by macros. It is a structured representation
 of code as it is written, constructed by `julia-parser.scm` from a character stream. Next there
 is a lowered form, or IR (intermediate representation), which is used by type inference and code
 generation. In the lowered form there are fewer types of nodes, all macros are expanded, and all
@@ -19,6 +19,8 @@ The following data types exist in lowered form:
 
     Has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
     subexpressions.
+    While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
+    limited number of `Expr`s, mostly for calls, conditional branches (`gotoifnot`), and returns.
 
   * `Slot`
 
@@ -31,19 +33,12 @@ The following data types exist in lowered form:
 
   * `CodeInfo`
 
-    Wraps the IR of a method.
-
-  * `LineNumberNode`
-
-    Contains a single number, specifying the line number the next statement came from.
-
-  * `LabelNode`
-
-    Branch target, a consecutively-numbered integer starting at 0.
+    Wraps the IR of a method. Its `code` field is an array of expressions to execute.
 
   * `GotoNode`
 
-    Unconditional branch.
+    Unconditional branch. The argument is the branch target, represented as an index in
+    the code array to jump to.
 
   * `QuoteNode`
 
@@ -57,12 +52,13 @@ The following data types exist in lowered form:
 
   * `SSAValue`
 
-    Refers to a consecutively-numbered (starting at 0) static single assignment (SSA) variable inserted
-    by the compiler.
+    Refers to a consecutively-numbered (starting at 1) static single assignment (SSA) variable inserted
+    by the compiler. The number (`id`) of an `SSAValue` is the code array index of the expression whose
+    value it represents.
 
   * `NewvarNode`
 
-    Marks a point where a variable is created. This has the effect of resetting a variable to undefined.
+    Marks a point where a variable (slot) is created. This has the effect of resetting a variable to undefined.
 
 
 ### Expr types
@@ -82,17 +78,13 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
     Reference a static parameter by index.
 
-  * `line`
-
-    Line number and file name metadata. Unlike a `LineNumberNode`, can also contain a file name.
-
   * `gotoifnot`
 
-    Conditional branch. If `args[1]` is false, goes to label identified in `args[2]`.
+    Conditional branch. If `args[1]` is false, goes to the index identified in `args[2]`.
 
   * `=`
 
-    Assignment.
+    Assignment. In the IR, the first argument is always a Slot or a GlobalRef.
 
   * `method`
 
@@ -140,7 +132,7 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `new`
 
-    Allocates a new struct-like object. First argument is the type. The `new` pseudo-function is lowered
+    Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
     to this, and the type is always inserted by the compiler.  This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 
@@ -184,14 +176,6 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
     arguments are free-form. The following kinds of metadata are commonly used:
 
       * `:inline` and `:noinline`: Inlining hints.
-
-      * `:push_loc`: enters a sequence of statements from a specified source location.
-
-          * `args[2]` specifies a filename, as a symbol.
-          * `args[3]` optionally specifies the name of an (inlined) function that originally contained the
-            code.
-
-      * `:pop_loc`: returns to the source location before the matching `:push_loc`.
 
 
 ### Method
@@ -314,6 +298,15 @@ A temporary container for holding lowered source code.
     If an `Int`, it gives the number of compiler-inserted temporary locations in the
     function. If an array, specifies a type for each location.
 
+  * `linetable`
+
+    An array of source location objects
+
+  * `codelocs`
+
+    An array of integer indices into the `linetable`, giving the location associated
+    with each statement.
+
 Boolean properties:
 
   * `inferred`
@@ -337,10 +330,11 @@ Boolean properties:
 
 ## Surface syntax AST
 
-Front end ASTs consist entirely of `Expr`s and atoms (e.g. symbols, numbers). There is generally
-a different expression head for each visually distinct syntactic form. Examples will be given
-in s-expression syntax. Each parenthesized list corresponds to an Expr, where the first element
-is the head. For example `(call f x)` corresponds to `Expr(:call, :f, :x)` in Julia.
+Front end ASTs consist almost entirely of `Expr`s and atoms (e.g. symbols, numbers).
+There is generally a different expression head for each visually distinct syntactic form.
+Examples will be given in s-expression syntax.
+Each parenthesized list corresponds to an Expr, where the first element is the head.
+For example `(call f x)` corresponds to `Expr(:call, :f, :x)` in Julia.
 
 ### Calls
 
@@ -359,7 +353,7 @@ f(x) do a,b
 end
 ```
 
-parses as `(call f (-> (tuple a b) (block body)) x)`.
+parses as `(do (call f x) (-> (tuple a b) (block body)))`.
 
 ### Operators
 
@@ -436,12 +430,12 @@ parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x
 
 | Input               | AST                                          |
 |:------------------- |:-------------------------------------------- |
-| `import a`          | `(import a)`                                 |
-| `import a.b.c`      | `(import a b c)`                             |
-| `import ...a`       | `(import . . . a)`                           |
-| `import a.b, c.d`   | `(toplevel (import a b) (import c d))`       |
-| `import Base: x`    | `(import Base x)`                            |
-| `import Base: x, y` | `(toplevel (import Base x) (import Base y))` |
+| `import a`          | `(import (. a))`                             |
+| `import a.b.c`      | `(import (. a b c))`                         |
+| `import ...a`       | `(import (. . . . a))`                       |
+| `import a.b, c.d`   | `(import (. a b) (. c d))`                   |
+| `import Base: x`    | `(import (: (. Base) (. x)))`                |
+| `import Base: x, y` | `(import (: (. Base) (. x) (. y)))`          |
 | `export a, b`       | `(export a b)`                               |
 
 ### Numbers
@@ -526,3 +520,29 @@ The first argument is a boolean telling whether the type is mutable.
 `try` blocks parse as `(try try_block var catch_block finally_block)`. If no variable is present
 after `catch`, `var` is `#f`. If there is no `finally` clause, then the last argument is not present.
 
+### Quote expressions
+
+Julia source syntax forms for code quoting (`quote` and `:( )`) support interpolation with `$`.
+In Lisp terminology, this means they are actually "backquote" or "quasiquote" forms.
+Internally, there is also a need for code quoting without interpolation.
+In Julia's scheme code, non-interpolating quote is represented with the expression head `inert`.
+
+`inert` expressions are converted to Julia `QuoteNode` objects.
+These objects wrap a single value of any type, and when evaluated simply return that value.
+
+A `quote` expression whose argument is an atom also gets converted to a `QuoteNode`.
+
+### Line numbers
+
+Source location information is represented as `(line line_num file_name)` where the third
+component is optional (and omitted when the current line number, but not file name,
+changes).
+
+These expressions are represented as `LineNumberNode`s in Julia.
+
+### Macros
+
+Macro hygiene is represented through the expression head pair `escape` and `hygienic-scope`.
+The result of a macro expansion is automatically wrapped in `(hygienic-scope block module)`,
+to represent the result of the new scope. The user can insert `(escape block)` inside
+to interpolate code from the caller.

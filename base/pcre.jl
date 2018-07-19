@@ -4,24 +4,26 @@
 
 module PCRE
 
+import ..RefValue
+
 include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))  # include($BUILDROOT/base/pcre_h.jl)
 
 const PCRE_LIB = "libpcre2-8"
 
-const JIT_STACK = Ref{Ptr{Void}}(C_NULL)
-const MATCH_CONTEXT = Ref{Ptr{Void}}(C_NULL)
+const JIT_STACK = RefValue{Ptr{Cvoid}}(C_NULL)
+const MATCH_CONTEXT = RefValue{Ptr{Cvoid}}(C_NULL)
 
 function __init__()
     try
         JIT_STACK_START_SIZE = 32768
         JIT_STACK_MAX_SIZE = 1048576
-        JIT_STACK[] = ccall((:pcre2_jit_stack_create_8, PCRE_LIB), Ptr{Void},
-                                 (Cint, Cint, Ptr{Void}),
+        JIT_STACK[] = ccall((:pcre2_jit_stack_create_8, PCRE_LIB), Ptr{Cvoid},
+                                 (Cint, Cint, Ptr{Cvoid}),
                                  JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE, C_NULL)
         MATCH_CONTEXT[] = ccall((:pcre2_match_context_create_8, PCRE_LIB),
-                                     Ptr{Void}, (Ptr{Void},), C_NULL)
-        ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Void,
-              (Ptr{Void}, Ptr{Void}, Ptr{Void}), MATCH_CONTEXT[], C_NULL, JIT_STACK[])
+                                     Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
+        ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Cvoid,
+              (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), MATCH_CONTEXT[], C_NULL, JIT_STACK[])
     catch ex
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module PCRE")
@@ -47,7 +49,8 @@ const COMPILE_MASK      =
       NO_START_OPTIMIZE |
       NO_UTF_CHECK      |
       UNGREEDY          |
-      UTF
+      UTF               |
+      UCP
 
 const EXECUTE_MASK      =
       NEWLINE_ANY       |
@@ -69,10 +72,10 @@ const OPTIONS_MASK = COMPILE_MASK | EXECUTE_MASK
 
 const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
-function info(regex::Ptr{Void}, what::Integer, ::Type{T}) where T
-    buf = Ref{T}()
+function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
+    buf = RefValue{T}()
     ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Int32,
-                (Ptr{Void}, Int32, Ptr{Void}),
+                (Ptr{Cvoid}, Int32, Ptr{Cvoid}),
                 regex, what, buf)
     if ret != 0
         error(ret == ERROR_NULL      ? "NULL regex object" :
@@ -85,50 +88,50 @@ end
 
 function get_ovec(match_data)
     ptr = ccall((:pcre2_get_ovector_pointer_8, PCRE_LIB), Ptr{Csize_t},
-                (Ptr{Void},), match_data)
+                (Ptr{Cvoid},), match_data)
     n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
-              (Ptr{Void},), match_data)
-    unsafe_wrap(Array, ptr, 2n, false)
+              (Ptr{Cvoid},), match_data)
+    unsafe_wrap(Array, ptr, 2n, own = false)
 end
 
 function compile(pattern::AbstractString, options::Integer)
-    errno = Ref{Cint}(0)
-    erroff = Ref{Csize_t}(0)
-    re_ptr = ccall((:pcre2_compile_8, PCRE_LIB), Ptr{Void},
-                   (Ptr{UInt8}, Csize_t, UInt32, Ref{Cint}, Ref{Csize_t}, Ptr{Void}),
+    errno = RefValue{Cint}(0)
+    erroff = RefValue{Csize_t}(0)
+    re_ptr = ccall((:pcre2_compile_8, PCRE_LIB), Ptr{Cvoid},
+                   (Ptr{UInt8}, Csize_t, UInt32, Ref{Cint}, Ref{Csize_t}, Ptr{Cvoid}),
                    pattern, sizeof(pattern), options, errno, erroff, C_NULL)
     re_ptr == C_NULL && error("PCRE compilation error: $(err_message(errno[])) at offset $(erroff[])")
     re_ptr
 end
 
-function jit_compile(regex::Ptr{Void})
+function jit_compile(regex::Ptr{Cvoid})
     errno = ccall((:pcre2_jit_compile_8, PCRE_LIB), Cint,
-                  (Ptr{Void}, UInt32), regex, JIT_COMPLETE)
+                  (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE)
     errno == 0 || error("PCRE JIT error: $(err_message(errno))")
 end
 
 free_match_data(match_data) =
-    ccall((:pcre2_match_data_free_8, PCRE_LIB), Void, (Ptr{Void},), match_data)
+    ccall((:pcre2_match_data_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), match_data)
 
 free_re(re) =
-    ccall((:pcre2_code_free_8, PCRE_LIB), Void, (Ptr{Void},), re)
+    ccall((:pcre2_code_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), re)
 
 free_jit_stack(stack) =
-    ccall((:pcre2_jit_stack_free_8, PCRE_LIB), Void, (Ptr{Void},), stack)
+    ccall((:pcre2_jit_stack_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), stack)
 
 free_match_context(context) =
-    ccall((:pcre2_match_context_free_8, PCRE_LIB), Void, (Ptr{Void},), context)
+    ccall((:pcre2_match_context_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), context)
 
 function err_message(errno)
-    buffer = Vector{UInt8}(256)
-    ccall((:pcre2_get_error_message_8, PCRE_LIB), Void,
+    buffer = Vector{UInt8}(undef, 256)
+    ccall((:pcre2_get_error_message_8, PCRE_LIB), Cvoid,
           (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
-    unsafe_string(pointer(buffer))
+    GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
 function exec(re,subject,offset,options,match_data)
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
-               (Ptr{Void}, Ptr{UInt8}, Csize_t, Csize_t, Cuint, Ptr{Void}, Ptr{Void}),
+               (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, Cuint, Ptr{Cvoid}, Ptr{Cvoid}),
                re, subject, sizeof(subject), offset, options, match_data, MATCH_CONTEXT[])
     # rc == -1 means no match, -2 means partial match.
     rc < -2 && error("PCRE.exec error: $(err_message(rc))")
@@ -137,26 +140,26 @@ end
 
 function create_match_data(re)
     ccall((:pcre2_match_data_create_from_pattern_8, PCRE_LIB),
-          Ptr{Void}, (Ptr{Void}, Ptr{Void}), re, C_NULL)
+          Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), re, C_NULL)
 end
 
 function substring_number_from_name(re, name)
   ccall((:pcre2_substring_number_from_name_8, PCRE_LIB), Cint,
-        (Ptr{Void}, Cstring), re, name)
+        (Ptr{Cvoid}, Cstring), re, name)
 end
 
 function substring_length_bynumber(match_data, number)
-    s = Ref{Csize_t}()
+    s = RefValue{Csize_t}()
     rc = ccall((:pcre2_substring_length_bynumber_8, PCRE_LIB), Cint,
-          (Ptr{Void}, UInt32, Ref{Csize_t}), match_data, number, s)
+          (Ptr{Cvoid}, UInt32, Ref{Csize_t}), match_data, number, s)
     rc < 0 && error("PCRE error: $(err_message(rc))")
     convert(Int, s[])
 end
 
 function substring_copy_bynumber(match_data, number, buf, buf_size)
-    s = Ref{Csize_t}(buf_size)
+    s = RefValue{Csize_t}(buf_size)
     rc = ccall((:pcre2_substring_copy_bynumber_8, PCRE_LIB), Cint,
-               (Ptr{Void}, UInt32, Ptr{UInt8}, Ref{Csize_t}),
+               (Ptr{Cvoid}, UInt32, Ptr{UInt8}, Ref{Csize_t}),
                match_data, number, buf, s)
     rc < 0 && error("PCRE error: $(err_message(rc))")
     convert(Int, s[])

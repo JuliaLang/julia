@@ -35,18 +35,11 @@ extern Function *juliapersonality_func;
 #endif
 
 
-#ifdef JULIA_ENABLE_THREADING
-extern size_t jltls_states_func_idx;
-extern size_t jltls_offset_idx;
-#endif
-
 typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level);
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump_native=false);
 void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
-GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
-                                    uintptr_t init, size_t &idx);
 void* jl_get_globalvar(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
 void jl_add_to_shadow(Module *m);
@@ -149,6 +142,9 @@ public:
 
     JuliaOJIT(TargetMachine &TM);
 
+    void RegisterJITEventListener(JITEventListener *L);
+    std::vector<JITEventListener *> EventListeners;
+    void NotifyFinalizer(const object::ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addGlobalMapping(const GlobalValue *GV, void *Addr);
     void *getPointerToGlobalIfAvailable(StringRef S);
@@ -160,7 +156,6 @@ public:
     uint64_t getGlobalValueAddress(const std::string &Name);
     uint64_t getFunctionAddress(const std::string &Name);
     Function *FindFunctionNamed(const std::string &Name);
-    void RegisterJITEventListener(JITEventListener *L);
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;
 private:
@@ -191,6 +186,7 @@ Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
 Pass *createPropagateJuliaAddrspaces();
+Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)

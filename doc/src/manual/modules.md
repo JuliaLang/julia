@@ -17,8 +17,6 @@ using BigLib: thing1, thing2
 
 import Base.show
 
-importall OtherLib
-
 export MyType, foo
 
 struct MyType
@@ -44,17 +42,16 @@ the system will search for it among variables exported by `Lib` and import it if
 This means that all uses of that global within the current module will resolve to the definition
 of that variable in `Lib`.
 
-The statement `using BigLib: thing1, thing2` is a syntactic shortcut for `using BigLib.thing1, BigLib.thing2`.
+The statement `using BigLib: thing1, thing2` brings just the identifiers `thing1` and `thing2`
+into scope from module `BigLib`. If these names refer to functions, adding methods to them
+will not be allowed (you may only "use" them, not extend them).
 
-The `import` keyword supports all the same syntax as `using`, but only operates on a single name
+The `import` keyword supports the same syntax as `using`, but only operates on a single name
 at a time. It does not add modules to be searched the way `using` does. `import` also differs
-from `using` in that functions must be imported using `import` to be extended with new methods.
+from `using` in that functions imported using `import` can be extended with new methods.
 
 In `MyModule` above we wanted to add a method to the standard `show` function, so we had to write
 `import Base.show`. Functions whose names are only visible via `using` cannot be extended.
-
-The keyword `importall` explicitly imports all names exported by the specified module, as if
-`import` were individually used on all of them.
 
 Once a variable is made visible via `using` or `import`, a module may not create its own variable
 with the same name. Imported variables are read-only; assigning to a global variable always affects
@@ -84,12 +81,10 @@ functions into the current workspace:
 | Import Command                  | What is brought into scope                                                      | Available for method extension              |
 |:------------------------------- |:------------------------------------------------------------------------------- |:------------------------------------------- |
 | `using MyModule`                | All `export`ed names (`x` and `y`), `MyModule.x`, `MyModule.y` and `MyModule.p` | `MyModule.x`, `MyModule.y` and `MyModule.p` |
-| `using MyModule.x, MyModule.p`  | `x` and `p`                                                                     |                                             |
 | `using MyModule: x, p`          | `x` and `p`                                                                     |                                             |
 | `import MyModule`               | `MyModule.x`, `MyModule.y` and `MyModule.p`                                     | `MyModule.x`, `MyModule.y` and `MyModule.p` |
 | `import MyModule.x, MyModule.p` | `x` and `p`                                                                     | `x` and `p`                                 |
 | `import MyModule: x, p`         | `x` and `p`                                                                     | `x` and `p`                                 |
-| `importall MyModule`            | All `export`ed names (`x` and `y`)                                              | `x` and `y`                                 |
 
 ### Modules and files
 
@@ -125,19 +120,20 @@ end
 There are three important standard modules: Main, Core, and Base.
 
 Main is the top-level module, and Julia starts with Main set as the current module.  Variables
-defined at the prompt go in Main, and `whos()` lists variables in Main.
+defined at the prompt go in Main, and `varinfo()` lists variables in Main.
 
 Core contains all identifiers considered "built in" to the language, i.e. part of the core language
 and not libraries. Every module implicitly specifies `using Core`, since you can't do anything
 without those definitions.
 
-Base is the standard library (the contents of base/). All modules implicitly contain `using Base`,
+Base is a module that contains basic functionality (the contents of base/). All modules implicitly contain `using Base`,
 since this is needed in the vast majority of cases.
 
 ### Default top-level definitions and bare modules
 
-In addition to `using Base`, modules also automatically contain a definition of the `eval` function,
-which evaluates expressions within the context of that module.
+In addition to `using Base`, modules also automatically contain
+definitions of the `eval` and `include` functions,
+which evaluate expressions/files within the global scope of that module.
 
 If these default definitions are not wanted, modules can be defined using the keyword `baremodule`
 instead (note: `Core` is still imported, as per above). In terms of `baremodule`, a standard
@@ -149,7 +145,7 @@ baremodule Mod
 using Base
 
 eval(x) = Core.eval(Mod, x)
-eval(m,x) = Core.eval(m, x)
+include(p) = Base.include(Mod, p)
 
 ...
 
@@ -158,14 +154,14 @@ end
 
 ### Relative and absolute module paths
 
-Given the statement `using Foo`, the system looks for `Foo` within `Main`. If the module does
-not exist, the system attempts to `require("Foo")`, which typically results in loading code from
-an installed package.
+Given the statement `using Foo`, the system consults an internal table of top-level modules
+to look for one named `Foo`. If the module does not exist, the system attempts to `require(:Foo)`,
+which typically results in loading code from an installed package.
 
-However, some modules contain submodules, which means you sometimes need to access a module that
-is not directly available in `Main`. There are two ways to do this. The first is to use an absolute
-path, for example `using Base.Sort`. The second is to use a relative path, which makes it easier
-to import submodules of the current module or any of its enclosing modules:
+However, some modules contain submodules, which means you sometimes need to access a non-top-level
+module. There are two ways to do this. The first is to use an absolute path, for example
+`using Base.Sort`. The second is to use a relative path, which makes it easier to import submodules
+of the current module or any of its enclosing modules:
 
 ```
 module Parent
@@ -196,8 +192,9 @@ The global variable [`LOAD_PATH`](@ref) contains the directories Julia searches 
 push!(LOAD_PATH, "/Path/To/My/Module/")
 ```
 
-Putting this statement in the file `~/.juliarc.jl` will extend [`LOAD_PATH`](@ref) on every Julia startup.
-Alternatively, the module load path can be extended by defining the environment variable `JULIA_LOAD_PATH`.
+Putting this statement in the file `~/.julia/config/startup.jl` will extend [`LOAD_PATH`](@ref) on
+every Julia startup. Alternatively, the module load path can be extended by defining the environment
+variable `JULIA_LOAD_PATH`.
 
 ### Namespace miscellanea
 
@@ -226,7 +223,7 @@ versions of modules to reduce this time.
 To create an incremental precompiled module file, add `__precompile__()` at the top of your module
 file (before the `module` starts). This will cause it to be automatically compiled the first time
 it is imported. Alternatively, you can manually call `Base.compilecache(modulename)`. The resulting
-cache files will be stored in `Base.LOAD_CACHE_PATH[1]`. Subsequently, the module is automatically
+cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
 recompiled upon `import` whenever any of its dependencies change; dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by `include_dependency(path)`
 in the module file(s).
@@ -278,10 +275,10 @@ be initialized at runtime (not at compile time) because the pointer address will
 to run.  You could accomplish this by defining the following `__init__` function in your module:
 
 ```julia
-const foo_data_ptr = Ref{Ptr{Void}}(0)
+const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
 function __init__()
-    ccall((:foo_init, :libfoo), Void, ())
-    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Void}, ())
+    ccall((:foo_init, :libfoo), Cvoid, ())
+    foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
     nothing
 end
 ```
@@ -304,9 +301,9 @@ are a trickier case.  In the common case where the keys are numbers, strings, sy
 `Expr`, or compositions of these types (via arrays, tuples, sets, pairs, etc.) they are safe to
 precompile.  However, for a few other key types, such as `Function` or `DataType` and generic
 user-defined types where you haven't defined a `hash` method, the fallback `hash` method depends
-on the memory address of the object (via its `object_id`) and hence may change from run to run.
+on the memory address of the object (via its `objectid`) and hence may change from run to run.
 If you have one of these key types, or if you aren't sure, to be safe you can initialize this
-dictionary from within your `__init__` function. Alternatively, you can use the `ObjectIdDict`
+dictionary from within your `__init__` function. Alternatively, you can use the `IdDict`
 dictionary type, which is specially handled by precompilation so that it is safe to initialize
 at compile-time.
 
@@ -333,7 +330,7 @@ Other known potential failure scenarios include:
    at the end of compilation. All subsequent usages of this incrementally compiled module will start
    from that same counter value.
 
-   Note that `object_id` (which works by hashing the memory pointer) has similar issues (see notes
+   Note that `objectid` (which works by hashing the memory pointer) has similar issues (see notes
    on `Dict` usage below).
 
    One alternative is to use a macro to capture [`@__MODULE__`](@ref) and store it alone with the current `counter` value,
@@ -347,11 +344,11 @@ Other known potential failure scenarios include:
    of via its lookup path. For example, (in global scope):
 
    ```julia
-   #mystdout = Base.STDOUT #= will not work correctly, since this will copy Base.STDOUT into this module =#
+   #mystdout = Base.stdout #= will not work correctly, since this will copy Base.stdout into this module =#
    # instead use accessor functions:
-   getstdout() = Base.STDOUT #= best option =#
+   getstdout() = Base.stdout #= best option =#
    # or move the assignment into the runtime:
-   __init__() = global mystdout = Base.STDOUT #= also works =#
+   __init__() = global mystdout = Base.stdout #= also works =#
    ```
 
 Several additional restrictions are placed on the operations that can be done while precompiling
@@ -361,12 +358,12 @@ code to help the user avoid other wrong-behavior situations:
    emitted when the incremental precompile flag is set.
 2. `global const` statements from local scope after `__init__()` has been started (see issue #12010
    for plans to add an error for this)
-3. Replacing a module (or calling [`workspace()`](@ref)) is a runtime error while doing an incremental precompile.
+3. Replacing a module is a runtime error while doing an incremental precompile.
 
 A few other points to be aware of:
 
 1. No code reload / cache invalidation is performed after changes are made to the source files themselves,
-   (including by [`Pkg.update`](@ref)), and no cleanup is done after [`Pkg.rm`](@ref)
+   (including by [`Pkg.update`], and no cleanup is done after [`Pkg.rm`]
 2. The memory sharing behavior of a reshaped array is disregarded by precompilation (each view gets
    its own copy)
 3. Expecting the filesystem to be unchanged between compile-time and runtime e.g. [`@__FILE__`](@ref)/`source_path()`
@@ -386,5 +383,5 @@ command line flag `--compiled-modules={yes|no}` enables you to toggle module pre
 off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
 are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
 manually and it will respect `__precompile__()` directives for the module. The state of this command
-line flag is passed to [`Pkg.build`](@ref) to disable automatic precompilation triggering when installing,
+line flag is passed to [`Pkg.build`] to disable automatic precompilation triggering when installing,
 updating, and explicitly building packages.

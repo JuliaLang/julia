@@ -41,7 +41,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
   - Try some simple debugging techniques to help isolate the problem.
     - Try running the code with the debug build of Julia with `make debug`, which produces the `usr/bin/julia-debug`.
     - Consider running `julia-debug` with a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
-    - If Julia segfaults, try following [these debugging tips](https://docs.julialang.org/en/latest/devdocs/backtraces.html#Reporting-and-analyzing-crashes-(segfaults)-1) to help track down the specific origin of the bug.
+    - If Julia segfaults, try following [these debugging tips](https://docs.julialang.org/en/latest/devdocs/backtraces#Reporting-and-analyzing-crashes-(segfaults)-1) to help track down the specific origin of the bug.
 
 2. If the problem is caused by a Julia package rather than core Julia, file a bug report with the relevant package author rather than here.
 
@@ -84,7 +84,7 @@ There are never enough tests. Track [code coverage at Coveralls](https://coveral
 
 2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
 
-3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/latest/stdlib/test may be helpful in explaining how the testing infrastructure works.
+3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/latest/stdlib/Test/ may be helpful in explaining how the testing infrastructure works.
 
 4. Run `make test-all` to rebuild Julia and run your new test(s). If you had to fix a bug or add functionality in `base`, this will ensure that your test passes and that you have not introduced extraneous whitespace.
 
@@ -178,7 +178,7 @@ Examples written within docstrings can be used as testcases known as "doctests" 
     "DOCSTRING TEST"
     ```
 
-A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc check` from the root directory. It is recommended to add the header `# Examples` above the doctests.
+A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc doctest=true` from the root directory. It is recommended to add the header `# Examples` above the doctests.
 
 #### News-worthy changes
 
@@ -225,10 +225,9 @@ your changes.
 Here is the standard procedure:
 
 1. If you are planning changes to any types or macros, make those
-   changes, commit them, and build julia using `make`. (This is
+   changes and build julia using `make`. (This is
    necessary because `Revise` cannot handle changes to type
-   definitions or macros.) By making a git commit, you "shield" these
-   changes from the `git stash` procedure described below. Unless it's
+   definitions or macros.) Unless it's
    required to get Julia to build, you do not have to add any
    functionality based on the new types, just the type definitions
    themselves.
@@ -236,32 +235,17 @@ Here is the standard procedure:
 2. Start a Julia REPL session. Then issue the following commands:
 
 ```julia
-using Revise    # if you aren't launching it in your .juliarc.jl
+using Revise    # if you aren't launching it in your `.julia/config/startup.jl`
 Revise.track(Base)
 ```
 
 3. Edit files in `base/`, save your edits, and test the
-   functionality. Once you are satisfied that things work as desired,
-   make another commit and rebuild julia.
+   functionality.
 
-Should you for some reason need to quit and restart your REPL session
-before finishing your changes, the procedure above will fail because
-`Revise.track`
-[cannot detect changes in source files that occurred after Julia was built](https://github.com/JuliaLang/julia/issues/23448)---it
-will only detect changes to source files that occur after tracking is
-initiated.  Consequently, any changes made prior to
-`Revise.track(Base)` will not be incorporated into your new REPL
-session. You can work around this by temporarily reverting all source
-files to their original state. From somewhere in the `julia`
-directory, start your REPL session and do the following:
-
-```julia
-shell> git stash  # ensure that the code in `base/` matches its state when you built julia
-
-julia> Revise.track(Base)  # Revise's source code cache is synchronized with what's running
-
-shell> git stash pop  # restore any in-progress changes (will now be tracked)
-```
+If you need to restart your Julia session, just start at step 2 above.
+`Revise.track(Base)` will note any changes from when Julia was last
+built and incorporate them automatically. You only need to rebuild
+Julia if you made code-changes that Revise cannot handle.
 
 ### Code Formatting Guidelines
 

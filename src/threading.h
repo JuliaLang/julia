@@ -11,7 +11,7 @@ extern "C" {
 #include "threadgroup.h"
 #include "julia.h"
 
-#define PROFILE_JL_THREADING            1
+#define PROFILE_JL_THREADING            0
 
 // thread ID
 extern jl_ptls_t *jl_all_tls_states;
@@ -40,7 +40,7 @@ enum {
 typedef struct {
     uint8_t command;
     jl_method_instance_t *mfunc;
-    jl_generic_fptr_t fptr;
+    jl_callptr_t fptr;
     jl_value_t **args;
     uint32_t nargs;
     jl_value_t *ret;

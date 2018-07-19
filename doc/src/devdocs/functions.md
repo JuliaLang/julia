@@ -135,7 +135,7 @@ or "keyword sorter", or "kwsorter", and is stored in the `kwsorter` field of `Me
 Every definition in the kwsorter function has the same arguments as some definition in the normal
 method table, except with a single `Array` argument prepended. This array contains alternating
 symbols and values that represent the passed keyword arguments. The kwsorter's job is to move
-keyword arguments into their canonical positions based on name, plus evaluate and substite any
+keyword arguments into their canonical positions based on name, plus evaluate and substitute any
 needed default value expressions. The result is a normal positional argument list, which is then
 passed to yet another function.
 
@@ -241,13 +241,13 @@ element instead of the second.
 
 The front end generates type declarations for all closures. Initially, this was implemented by
 generating normal type declarations. However, this produced an extremely large number of constructors,
-all of which were trivial (simply passing all arguments through to `new`). Since methods are partially
+all of which were trivial (simply passing all arguments through to [`new`](@ref)). Since methods are partially
 ordered, inserting all of these methods is O(n^2), plus there are just too many of them to keep
 around. This was optimized by generating `struct_type` expressions directly (bypassing default
 constructor generation), and using `new` directly to create closure instances. Not the prettiest
 thing ever, but you do what you gotta do.
 
 The next problem was the `@test` macro, which generated a 0-argument closure for each test case.
-This is not really necessary, since each test case is simply run once in place. Therefore I modified
-`@test` to expand to a try-catch block that records the test result (true, false, or exception
+This is not really necessary, since each test case is simply run once in place. Therefore, `@test`
+was modified to expand to a try-catch block that records the test result (true, false, or exception
 raised) and calls the test suite handler on it.

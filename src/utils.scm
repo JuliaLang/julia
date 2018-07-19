@@ -40,12 +40,13 @@
                 (cdr expr)))))
 
 ;; same as above, with predicate
-(define (expr-contains-p p expr)
-  (or (p expr)
-      (and (pair? expr)
-           (not (quoted? expr))
-           (any (lambda (y) (expr-contains-p p y))
-                (cdr expr)))))
+(define (expr-contains-p p expr (filt (lambda (x) #t)))
+  (and (filt expr)
+       (or (p expr)
+           (and (pair? expr)
+                (not (quoted? expr))
+                (any (lambda (y) (expr-contains-p p y filt))
+                     (cdr expr))))))
 
 ;; find all subexprs satisfying `p`, applying `key` to each one
 (define (expr-find-all p expr key (filt (lambda (x) #t)))

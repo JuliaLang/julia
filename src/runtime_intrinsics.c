@@ -18,7 +18,7 @@ const unsigned int host_char_bit = 8;
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(bitcast, datatype, ty);
-    if (!jl_is_leaf_type(ty) || !jl_is_primitivetype(ty))
+    if (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty))
         jl_error("bitcast: target type not a leaf primitive type");
     if (!jl_is_primitivetype(jl_typeof(v)))
         jl_error("bitcast: value not a primitive type");
@@ -37,7 +37,6 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
     JL_TYPECHK(pointerref, pointer, p);
     JL_TYPECHK(pointerref, long, i)
     JL_TYPECHK(pointerref, long, align);
-    // TODO: alignment
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     if (ety == (jl_value_t*)jl_any_type) {
         jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
@@ -58,7 +57,6 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
     JL_TYPECHK(pointerref, long, align);
-    // TODO: alignment
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     if (ety == (jl_value_t*)jl_any_type) {
         jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
@@ -67,11 +65,12 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     else {
         if (!jl_is_datatype(ety))
             jl_error("pointerset: invalid pointer");
-        size_t nb = LLT_ALIGN(jl_datatype_size(ety), jl_datatype_align(ety));
+        size_t elsz = jl_datatype_size(ety);
+        size_t nb = LLT_ALIGN(elsz, jl_datatype_align(ety));
         char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
         if (jl_typeof(x) != ety)
             jl_error("pointerset: type mismatch in assign");
-        jl_assign_bits(pp, x);
+        memcpy(pp, x, elsz);
     }
     return p;
 }
@@ -83,8 +82,8 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
         v == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
             (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
 
-    if (!jl_is_leaf_type(rt))
-        jl_error("cglobal: type argument not a leaftype");
+    if (!jl_is_concrete_type(rt))
+        jl_error("cglobal: type argument not concrete");
 
     if (jl_is_tuple(v) && jl_nfields(v) == 1)
         v = jl_fieldref(v, 0);
@@ -350,27 +349,26 @@ jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name,
 
 static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
     intrinsic_1_t op = select_intrinsic_1(osize2, (const intrinsic_1_t*)voidlist);
-    op(osize * host_char_bit, pa, jl_data_ptr(newv));
-    return newv;
+    void *pr = alloca(osize2);
+    op(osize * host_char_bit, pa, pr);
+    return jl_new_bits(ty, pr);
 }
 
 static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
     intrinsic_u1_t op = select_intrinsic_u1(osize2, (const intrinsic_u1_t*)voidlist);
-    unsigned cnt = op(osize * host_char_bit, pa);
-    // TODO: the following memset/memcpy assumes little-endian
+    uint64_t cnt = op(osize * host_char_bit, pa);
+    // TODO: the following assume little-endian
     // for big-endian, need to copy from the other end of cnt
-    if (osize > sizeof(unsigned)) {
-        // perform zext, if needed
-        memset((char*)jl_data_ptr(newv) + sizeof(unsigned), 0, osize - sizeof(unsigned));
-        osize = sizeof(unsigned);
+    if (osize <= sizeof(cnt)) {
+        return jl_new_bits(ty, &cnt);
     }
-    memcpy(jl_data_ptr(newv), &cnt, osize);
+    jl_value_t *newv = jl_gc_alloc(ptls, osize, ty);
+    // perform zext, if needed
+    memset((char*)jl_data_ptr(newv) + sizeof(cnt), 0, osize - sizeof(cnt));
+    memcpy(jl_data_ptr(newv), &cnt, sizeof(cnt));
     return newv;
 }
 
@@ -386,7 +384,6 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
 
 static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const char *name, intrinsic_cvt_t op)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *aty = jl_typeof(a);
     if (!jl_is_primitivetype(aty))
         jl_errorf("%s: value is not a primitive type", name);
@@ -395,12 +392,13 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(aty);
     unsigned osize = jl_datatype_size(ty);
-    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
-    op(aty == (jl_value_t*)jl_bool_type ? 1 : isize * host_char_bit, pa,
-            osize * host_char_bit, jl_data_ptr(newv));
-    if (ty == (jl_value_t*)jl_bool_type)
-        return *(uint8_t*)jl_data_ptr(newv) & 1 ? jl_true : jl_false;
-    return newv;
+    void *pr = alloca(osize);
+    unsigned isize_bits = isize * host_char_bit;
+    unsigned osize_bits = osize * host_char_bit;
+    if (aty == (jl_value_t*)jl_bool_type)
+       isize_bits = 1;
+    op(isize_bits, pa, osize_bits, pr);
+    return jl_new_bits(ty, pr);
 }
 
 // floating point
@@ -545,7 +543,7 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b);
     unsigned sz = jl_datatype_size(ty);
     unsigned sz2 = next_power_of_two(sz);
-    unsigned szb = jl_datatype_size(tyb);
+    unsigned szb = cvtb ? jl_datatype_size(tyb) : sz;
     if (sz2 > sz) {
         /* round type up to the appropriate c-type and set/clear the unused bits */
         void *pa2 = alloca(sz2);
@@ -554,10 +552,12 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
         pa = pa2;
     }
     if (sz2 > szb) {
-        /* round type up to the appropriate c-type and set/clear/truncate the unused bits */
+        /* round type up to the appropriate c-type and set/clear/truncate the unused bits
+         * (zero-extend if cvtb is set, since in that case b is unsigned while the sign of a comes from the op)
+         */
         void *pb2 = alloca(sz2);
         memcpy(pb2, pb, szb);
-        memset((char*)pb2 + szb, getsign(pb, sz), sz2 - szb);
+        memset((char*)pb2 + szb, cvtb ? 0 : getsign(pb, szb), sz2 - szb);
         pb = pb2;
     }
     jl_value_t *newv = lambda2(ty, pa, pb, sz, sz2, list);
@@ -566,13 +566,10 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
 
 static inline jl_value_t *jl_intrinsiclambda_2(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
+    void *pr = alloca(sz2);
     intrinsic_2_t op = select_intrinsic_2(sz2, (const intrinsic_2_t*)voidlist);
-    op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
-    if (ty == (jl_value_t*)jl_bool_type)
-        return *(uint8_t*)jl_data_ptr(newv) & 1 ? jl_true : jl_false;
-    return newv;
+    op(sz * host_char_bit, pa, pb, pr);
+    return jl_new_bits(ty, pr);
 }
 
 static inline jl_value_t *jl_intrinsiclambda_cmp(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
@@ -587,7 +584,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     jl_value_t *params[2];
     params[0] = ty;
     params[1] = (jl_value_t*)jl_bool_type;
-    jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params,2);
+    jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)tuptyp)->size, tuptyp);
 
@@ -600,16 +597,12 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
 }
 static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
+    void *pr = alloca(sz2);
     intrinsic_checked_t op = select_intrinsic_checked(sz2, (const intrinsic_checked_t*)voidlist);
-    int ovflw = op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
+    int ovflw = op(sz * host_char_bit, pa, pb, pr);
     if (ovflw)
         jl_throw(jl_diverror_exception);
-    if (ty == (jl_value_t*)jl_bool_type)
-        return *(uint8_t*)jl_data_ptr(newv) & 1 ? jl_true : jl_false;
-
-    return newv;
+    return jl_new_bits(ty, pr);
 }
 
 // floating point
@@ -703,8 +696,10 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
 un_iintrinsic_fast(LLVMNeg, neg, neg_int, u)
 #define add(a,b) a + b
 bi_iintrinsic_fast(LLVMAdd, add, add_int, u)
+bi_iintrinsic_fast(LLVMAdd, add, add_ptr, u)
 #define sub(a,b) a - b
 bi_iintrinsic_fast(LLVMSub, sub, sub_int, u)
+bi_iintrinsic_fast(LLVMSub, sub, sub_ptr, u)
 #define mul(a,b) a * b
 bi_iintrinsic_fast(LLVMMul, mul, mul_int, u)
 #define div(a,b) a / b
@@ -805,10 +800,8 @@ bi_iintrinsic_fast(LLVMXor, xor_op, xor_int, u)
 bi_iintrinsic_cnvtb_fast(LLVMShl, shl_op, shl_int, u, 1)
 #define lshr_op(a,b) (b >= 8 * sizeof(a)) ? 0 : a >> b
 bi_iintrinsic_cnvtb_fast(LLVMLShr, lshr_op, lshr_int, u, 1)
-#define ashr_op(a,b) \
-        /* if ((signed)a > 0) [in two's complement] ? ... : ...) */ \
-        (a >> (host_char_bit * sizeof(a) - 1)) ? ~(b >= 8 * sizeof(a) ? 0 : (~a) >> b) : (b >= 8 * sizeof(a) ? 0 : a >> b)
-bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, u, 1)
+#define ashr_op(a,b) ((b < 0 || b >= 8 * sizeof(a)) ? a >> (8*sizeof(a) - 1) : a >> b)
+bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //#define bswap_op(a) __builtin_bswap(a)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
 un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)
@@ -888,12 +881,6 @@ un_fintrinsic(floor_float,floor_llvm)
 un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
-
-JL_DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b)
-{
-    JL_TYPECHK(isfalse, bool, isfalse);
-    return (isfalse == jl_false ? b : a);
-}
 
 JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {

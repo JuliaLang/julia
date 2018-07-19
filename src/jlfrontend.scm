@@ -43,6 +43,15 @@
                                       tab)))
                 ((lambda)       tab)
                 ((local)        tab)
+                ((scope-block)
+                 ;; TODO: when deprecation for implicit global assignment inside loops
+                 ;; is removed, remove this code and just return `tab` in this case
+                 (let ((tab2 (table)))
+                   (find-possible-globals- (cadr e) tab2)
+                   (for-each (lambda (v) (if (has? tab2 v) (del! tab2 v)))
+                             (append (find-local-decls (cadr e)) (find-local-def-decls (cadr e))))
+                   (for-each (lambda (v) (put! tab v #t))
+                             (table.keys tab2))))
                 ((break-block)  (find-possible-globals- (caddr e) tab))
                 ((module toplevel) '())
                 (else
@@ -87,33 +96,36 @@
                                      ,@(map (lambda (v) `(implicit-global ,v)) gv)
                                      ,ex))))))
           (if (and (null? (cdadr (caddr th)))
-                   (= 0 (cadddr (caddr th))))
-              ;; if no locals, return just body of function
-              (cadddr th)
+                   (and (length= (lam:body th) 2)
+                        (let ((retval (cadadr (lam:body th))))
+                          (or (and (pair? retval) (eq? (car retval) 'lambda))
+                              (simple-atom? retval)))))
+              ;; generated functions use the pattern (body (return (lambda ...))), which
+              ;; needs to be unwrapped to just the lambda (CodeInfo).
+              (cadadr (lam:body th))
               `(thunk ,th))))))
 
 (define *in-expand* #f)
 
+(define (toplevel-only-expr? e)
+  (and (pair? e)
+       (or (memq (car e) '(toplevel line module import importall using export
+                                    error incomplete))
+           (and (eq? (car e) 'global) (every symbol? (cdr e))
+                (every (lambda (x) (not (memq x '(true false)))) (cdr e))))))
+
 (define (expand-toplevel-expr e)
-  (cond ((or (atom? e)
-             (and (pair? e)
-                  (or (memq (car e) '(toplevel line module import importall using export
-                                               error incomplete))
-                      (and (eq? (car e) 'global) (every symbol? (cdr e))))))
-         (if (eq? e '_)
-             (syntax-deprecation #f "_ as an rvalue" ""))
+  (cond ((or (atom? e) (toplevel-only-expr? e))
+         (if (underscore-symbol? e)
+             (syntax-deprecation "underscores as an rvalue" "" #f))
          e)
         (else
          (let ((last *in-expand*))
            (if (not last)
                (begin (reset-gensyms)
                       (set! *in-expand* #t)))
-           (let ((ex (expand-toplevel-expr-- e)))
-             (set! *in-expand* last)
-             (if (and (length= ex 2) (eq? (car ex) 'body))
-                 ;; (body (return x)) => x
-                 (cadadr ex)
-                 ex))))))
+           (begin0 (expand-toplevel-expr-- e)
+                   (set! *in-expand* last))))))
 
 ;; construct default definitions of `eval` for non-bare modules
 ;; called by jl_eval_module_expr
@@ -128,10 +140,15 @@
           (block
            ,loc
            (call (core eval) ,name ,x)))
-       (= (call eval m ,x)
-          (block
-           ,loc
-           (call (core eval) m ,x)))
+       (if (&& (call (top isdefined) (core Main) (quote Base))
+               (call (top isdefined) (|.| (core Main) (quote Base)) (quote @deprecate)))
+           (call eval
+                 (quote
+                  (macrocall (|.| (|.| (core Main) (quote Base)) (quote @deprecate))
+                             (line 0 none)
+                             (call eval m x)
+                             (call (|.| Core (quote eval)) m x) ; should be (core eval), but format as Core.eval(m, x) for deprecation warning
+                             false))))
        (= (call include ,x)
           (block
            ,loc
@@ -202,22 +219,15 @@
    (jl-parse-all (open-input-file filename) filename)
    (lambda (e) #f)))
 
-(define *depwarn* #t)
-(define (jl-parser-depwarn w)
-  (let ((prev *depwarn*))
-    (set! *depwarn* (eq? w #t))
-    prev))
-
-(define *deperror* #f)
-(define (jl-parser-deperror e)
-  (let ((prev *deperror*))
-    (set! *deperror* (eq? e #t))
-    prev))
-
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)
   (parser-wrap (lambda ()
                  (expand-toplevel-expr expr))))
+
+(define (jl-expand-to-thunk-stmt expr)
+  (jl-expand-to-thunk (if (toplevel-only-expr? expr)
+                          expr
+                          `(block ,expr (null)))))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)
@@ -229,3 +239,45 @@
            (newline)
            (prn e))
    (lambda () (profile s))))
+
+
+; --- logging ---
+; Utilities for logging messages from the frontend, in a way which can be
+; controlled from julia code.
+
+; Log a general deprecation message at line node location `lno`
+(define (deprecation-message msg lno)
+  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
+    (frontend-depwarn msg file line)))
+
+; Log a syntax deprecation from line node location `lno`
+(define (syntax-deprecation what instead lno)
+  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
+    (deprecation-message (format-syntax-deprecation what instead file line #f) lno)))
+
+; Extract line and file from a line number node, defaulting to (0, none)
+; respectively if lno is absent (`#f`) or doesn't contain a file
+(define (extract-line-file lno)
+  (cond ((or (not lno) (null? lno)) '(0 none))
+        ((not (eq? (car lno) 'line)) (error "lno is not a line number node"))
+        ((length= lno 2) `(,(cadr lno) none))
+        (else (cdr lno))))
+
+(define (format-syntax-deprecation what instead file line exactloc)
+  (string "Deprecated syntax `" what "`"
+          (if (or (= line 0) (eq? file 'none))
+            ""
+            (string (if exactloc " at " " around ") file ":" line))
+          "."
+          (if (equal? instead "") ""
+            (string #\newline "Use `" instead "` instead."))))
+
+; Corresponds to --depwarn 0="no", 1="yes", 2="error"
+(define *depwarn-opt* 1)
+
+; Emit deprecation warning via julia logging layer.
+(define (frontend-depwarn msg file line)
+  ; (display (string msg "; file = " file "; line = " line #\newline)))
+  (case *depwarn-opt*
+    (1 (julia-logmsg 1000 'depwarn (symbol (string file line)) file line msg))
+    (2 (error msg))))

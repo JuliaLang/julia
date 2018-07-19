@@ -136,6 +136,12 @@ julia> 0x123456789abcdef
 
 julia> typeof(ans)
 UInt64
+
+julia> 0x11112222333344445555666677778888
+0x11112222333344445555666677778888
+
+julia> typeof(ans)
+UInt128
 ```
 
 This behavior is based on the observation that when one uses unsigned hex literals for integer
@@ -154,11 +160,36 @@ julia> 0b10
 julia> typeof(ans)
 UInt8
 
-julia> 0o10
+julia> 0o010
 0x08
 
 julia> typeof(ans)
 UInt8
+
+julia> 0x00000000000000001111222233334444
+0x00000000000000001111222233334444
+
+julia> typeof(ans)
+UInt128
+```
+
+As for hexadecimal literals, binary and octal literals produce unsigned integer types. The size
+of the binary data item is the minimal needed size, if the leading digit of the literal is not
+`0`. In the case of leading zeros, the size is determined by the minimal needed size for a
+literal, which has the same length but leading digit `1`. That allows the user to control
+the size.
+Values, which cannot be stored in `UInt128` cannot be written as such literals.
+
+Binary, octal, and hexadecimal literals may be signed by a `-` immediately preceding the
+unsigned literal. They produce an unsigned integer of the same size as the unsigned literal
+would do, with the two's complement of the value:
+
+```jldoctest
+julia> -0x2
+0xfe
+
+julia> -0x0002
+0xfffe
 ```
 
 The minimum and maximum representable values of primitive numeric types such as integers are given
@@ -218,7 +249,8 @@ second argument is zero.
 
 ## Floating-Point Numbers
 
-Literal floating-point numbers are represented in the standard formats:
+Literal floating-point numbers are represented in the standard formats, using
+[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E-notation) when necessary:
 
 ```jldoctest
 julia> 1.0
@@ -267,7 +299,8 @@ julia> typeof(ans)
 Float32
 ```
 
-Hexadecimal floating-point literals are also valid, but only as [`Float64`](@ref) values:
+Hexadecimal floating-point literals are also valid, but only as [`Float64`](@ref) values,
+with `p` preceding the base-2 exponent:
 
 ```jldoctest
 julia> 0x1p0
@@ -305,16 +338,16 @@ julia> 10_000, 0.000_000_005, 0xdead_beef, 0b1011_0010
 
 Floating-point numbers have [two zeros](https://en.wikipedia.org/wiki/Signed_zero), positive zero
 and negative zero. They are equal to each other but have different binary representations, as
-can be seen using the `bits` function: :
+can be seen using the [`bitstring`](@ref) function:
 
 ```jldoctest
 julia> 0.0 == -0.0
 true
 
-julia> bits(0.0)
+julia> bitstring(0.0)
 "0000000000000000000000000000000000000000000000000000000000000000"
 
-julia> bits(-0.0)
+julia> bitstring(-0.0)
 "1000000000000000000000000000000000000000000000000000000000000000"
 ```
 
@@ -443,13 +476,13 @@ julia> nextfloat(x)
 julia> prevfloat(x)
 1.2499999f0
 
-julia> bits(prevfloat(x))
+julia> bitstring(prevfloat(x))
 "00111111100111111111111111111111"
 
-julia> bits(x)
+julia> bitstring(x)
 "00111111101000000000000000000000"
 
-julia> bits(nextfloat(x))
+julia> bitstring(nextfloat(x))
 "00111111101000000000000000000001"
 ```
 
@@ -458,30 +491,13 @@ also have adjacent binary integer representations.
 
 ### Rounding modes
 
-If a number doesn't have an exact floating-point representation, it must be rounded to an appropriate
-representable value, however, if wanted, the manner in which this rounding is done can be changed
-according to the rounding modes presented in the [IEEE 754 standard](https://en.wikipedia.org/wiki/IEEE_754-2008).
-
-```jldoctest
-julia> x = 1.1; y = 0.1;
-
-julia> x + y
-1.2000000000000002
-
-julia> setrounding(Float64,RoundDown) do
-           x + y
-       end
-1.2
-```
+If a number doesn't have an exact floating-point representation, it must be rounded to an
+appropriate representable value. However, the manner in which this rounding is done can be
+changed if required according to the rounding modes presented in the [IEEE 754
+standard](https://en.wikipedia.org/wiki/IEEE_754-2008).
 
 The default mode used is always [`RoundNearest`](@ref), which rounds to the nearest representable
 value, with ties rounded towards the nearest value with an even least significant bit.
-
-!!! warning
-    Rounding is generally only correct for basic arithmetic functions ([`+`](@ref), [`-`](@ref),
-    [`*`](@ref), [`/`](@ref) and [`sqrt`](@ref)) and type conversion operations. Many other
-    functions assume the default [`RoundNearest`](@ref) mode is set, and can give erroneous results
-    when operating under other rounding modes.
 
 ### Background and References
 
@@ -580,7 +596,7 @@ julia> setprecision(40) do
 
 ## [Numeric Literal Coefficients](@id man-numeric-literal-coefficients)
 
-To make common numeric formulas and expressions clearer, Julia allows variables to be immediately
+To make common numeric formulae and expressions clearer, Julia allows variables to be immediately
 preceded by a numeric literal, implying multiplication. This makes writing polynomial expressions
 much cleaner:
 
@@ -602,8 +618,12 @@ julia> 2^2x
 64
 ```
 
-The precedence of numeric literal coefficients is the same as that of unary operators such as
-negation. So `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
+The precedence of numeric literal coefficients is slightly lower than that of
+unary operators such as negation.
+So `-2x` is parsed as `(-2) * x` and `√2x` is parsed as `(√2) * x`.
+However, numeric literal coefficients parse similarly to unary operators when
+combined with exponentiation.
+For example `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
 
 Numeric literals also work as coefficients to parenthesized expressions:
 
@@ -611,6 +631,11 @@ Numeric literals also work as coefficients to parenthesized expressions:
 julia> 2(x-1)^2 - 3(x-1) + 1
 3
 ```
+!!! note
+    The precedence of numeric literal coefficients used for implicit
+    multiplication is higher than other binary operators such as multiplication
+    (`*`), and division (`/`, `\`, and `//`).  This means, for example, that
+    `1 / 2im` equals `-0.5im` and `6 // 2(2 + 1)` equals `1 // 1`.
 
 Additionally, parenthesized expressions can be used as coefficients to variables, implying multiplication
 of the expression by the variable:
@@ -650,11 +675,19 @@ where syntactic conflicts arise:
     `0` multiplied by the variable `xff`.
   * The floating-point literal expression `1e10` could be interpreted as the numeric literal `1` multiplied
     by the variable `e10`, and similarly with the equivalent `E` form.
+  * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
+    `1.5` multiplied by the variable `f22`.
 
-In both cases, we resolve the ambiguity in favor of interpretation as a numeric literals:
+In all cases, we resolve the ambiguity in favor of interpretation as numeric literals:
 
   * Expressions starting with `0x` are always hexadecimal literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
+  * Expressions starting with a numeric literal followed by `f` are always 32-bit floating-point literals.
+
+Unlike `E`, which is equivalent to `e` in numeric literals for historical reasons, `F` is just another
+letter and does not behave like `f` in numeric literals. Hence, expressions starting with a numeric literal
+followed by `F` are interpreted as the numerical literal multiplied by a variable, which means that, for
+example, `1.5F22` is equal to `1.5 * F22`.
 
 ## Literal zero and one
 
@@ -682,5 +715,5 @@ julia> one(Int32)
 1
 
 julia> one(BigFloat)
-1.000000000000000000000000000000000000000000000000000000000000000000000000000000
+1.0
 ```

@@ -1,17 +1,17 @@
-; RUN: opt -load libjulia.so -LateLowerGCFrame -S %s | FileCheck %s
+; RUN: opt -load libjulia%shlibext -LateLowerGCFrame -S %s | FileCheck %s
 
 %jl_value_t = type opaque
 
 declare void @boxed_simple(%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)*)
 declare %jl_value_t addrspace(10)* @jl_box_int64(i64)
-declare %jl_value_t*** @jl_get_ptls_states()
+declare %jl_value_t*** @julia.ptls_states()
 declare void @jl_safepoint()
 declare %jl_value_t addrspace(10)* @jl_apply_generic(%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)**, i32)
 
 define void @simple(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @simple
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
 ; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
 ; CHECK: call %jl_value_t addrspace(10)* @jl_box_int64
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
@@ -34,7 +34,7 @@ define void @leftover_alloca(%jl_value_t addrspace(10)* %a) {
 ; relying on mem2reg to catch simple cases such as this earlier
 ; CHECK-LABEL: @leftover_alloca
 ; CHECK: %var = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %var = alloca %jl_value_t addrspace(10)*
     store %jl_value_t addrspace(10)* %a, %jl_value_t addrspace(10)** %var
     %b = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %var
@@ -48,7 +48,7 @@ declare void @union_arg({%jl_value_t addrspace(10)*, i8})
 
 define void @simple_union() {
 ; CHECK-LABEL: @simple_union
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
 ; CHECK: %a = call { %jl_value_t addrspace(10)*, i8 } @union_ret()
     %a = call { %jl_value_t addrspace(10)*, i8 } @union_ret()
 ; CHECK: [[GEP0:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
@@ -62,7 +62,7 @@ declare void @one_arg_boxed(%jl_value_t addrspace(10)*)
 
 define void @select_simple(i64 %a, i64 %b) {
 ; CHECK-LABEL: @select_simple
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
     %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
     %cmp = icmp eq i64 %a, %b
@@ -75,7 +75,7 @@ define void @phi_simple(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @phi_simple
 ; CHECK:   %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %cmp = icmp eq i64 %a, %b
     br i1 %cmp, label %alabel, label %blabel
 alabel:
@@ -97,7 +97,7 @@ declare void @one_arg_decayed(i64 addrspace(12)*)
 define void @select_lift(i64 %a, i64 %b) {
 ; CHECK-LABEL: @select_lift
 ; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
     %adecayed = addrspacecast %jl_value_t addrspace(10)* %aboxed to i64 addrspace(12)*
     %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
@@ -112,7 +112,7 @@ define void @select_lift(i64 %a, i64 %b) {
 define void @phi_lift(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @phi_lift
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %cmp = icmp eq i64 %a, %b
     br i1 %cmp, label %alabel, label %blabel
 alabel:
@@ -129,11 +129,36 @@ common:
     ret void
 }
 
+define void @phi_lift_union(i64 %a, i64 %b) {
+top:
+; CHECK-LABEL: @phi_lift_union
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    %cmp = icmp eq i64 %a, %b
+    br i1 %cmp, label %alabel, label %blabel
+alabel:
+    %u = call { %jl_value_t addrspace(10)*, i8 } @union_ret()
+; CHECK: %aboxed = extractvalue { %jl_value_t addrspace(10)*, i8 } %u, 0
+    %aboxed = extractvalue { %jl_value_t addrspace(10)*, i8 } %u, 0
+    %adecayed = addrspacecast %jl_value_t addrspace(10)* %aboxed to i64 addrspace(12)*
+; CHECK: extractvalue { %jl_value_t addrspace(10)*, i8 } %u, 0
+; CHECK-NEXT: br label %common
+    br label %common
+blabel:
+    %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
+    %bdecayed = addrspacecast %jl_value_t addrspace(10)* %bboxed to i64 addrspace(12)*
+    br label %common
+common:
+; CHECK: %gclift = phi %jl_value_t addrspace(10)* [ %{{.*}}, %alabel ], [ %bboxed, %blabel ]
+    %phi = phi i64 addrspace(12)* [ %adecayed, %alabel ], [ %bdecayed, %blabel ]
+    call void @one_arg_decayed(i64 addrspace(12)* %phi)
+    ret void
+}
+
 define void @live_if_live_out(i64 %a, i64 %b) {
 ; CHECK-LABEL: @live_if_live_out
 top:
 ; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
 ; The failure case is failing to realize that `aboxed` is live across the first
 ; one_arg_boxed safepoint and putting bboxed in the same root slot
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
@@ -150,7 +175,7 @@ succ:
 define %jl_value_t addrspace(10)* @ret_use(i64 %a, i64 %b) {
 ; CHECK-LABEL: @ret_use
 ; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
 ; CHECK: store %jl_value_t addrspace(10)* %aboxed
     %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
@@ -161,7 +186,7 @@ define i8 @nosafepoint(%jl_value_t addrspace(10)* dereferenceable(16)) {
 ; CHECK-LABEL: @nosafepoint
 ; CHECK-NOT: %gcframe
 top:
-  %1 = call %jl_value_t*** @jl_get_ptls_states()
+  %1 = call %jl_value_t*** @julia.ptls_states()
   %2 = bitcast %jl_value_t*** %1 to %jl_value_t addrspace(10)**
   %3 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %2, i64 3
   %4 = bitcast %jl_value_t addrspace(10)** %3 to i64**
@@ -179,7 +204,7 @@ top:
 define void @global_ref() {
 ; CHECK-LABEL: @global_ref
 ; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %loaded = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** getelementptr (%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** inttoptr (i64 140540744325952 to %jl_value_t addrspace(10)**), i64 1)
 ; CHECK: store %jl_value_t addrspace(10)* %loaded, %jl_value_t addrspace(10)**
     call void @one_arg_boxed(%jl_value_t addrspace(10)* %loaded)
@@ -190,7 +215,7 @@ define %jl_value_t addrspace(10)* @no_redundant_rerooting(i64 %a, i1 %cond) {
 ; CHECK-LABEL: @no_redundant_rerooting
 ; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
 top:
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
 ; CHECK: store %jl_value_t addrspace(10)* %aboxed
 ; CHECK-NEXT: call void @jl_safepoint()
@@ -214,7 +239,7 @@ define void @memcpy_use(i64 %a, i64 *%aptr) {
 ; CHECK-LABEL: @memcpy_use
 ; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
 top:
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
 ; CHECK: store %jl_value_t addrspace(10)* %aboxed
     call void @jl_safepoint()
@@ -223,3 +248,143 @@ top:
     ret void
 }
 
+declare token @llvm.julia.gc_preserve_begin(...)
+declare void @llvm.julia.gc_preserve_end(token)
+
+define void @gc_preserve(i64 %a) {
+; CHECK-LABEL: @gc_preserve
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: store %jl_value_t addrspace(10)* %aboxed
+    call void @jl_safepoint()
+    %tok = call token (...) @llvm.julia.gc_preserve_begin(%jl_value_t addrspace(10)* %aboxed)
+    %aboxed2 = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: store %jl_value_t addrspace(10)* %aboxed2
+    call void @jl_safepoint()
+    call void @llvm.julia.gc_preserve_end(token %tok)
+    %aboxed3 = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: store %jl_value_t addrspace(10)* %aboxed3
+    call void @jl_safepoint()
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %aboxed2)
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %aboxed3)
+    ret void
+}
+
+@gv1 = external global %jl_value_t*
+@gv2 = external global %jl_value_t addrspace(10)*
+
+define %jl_value_t addrspace(10)* @gv_const() {
+; CHECK-LABEL: @gv_const
+; CHECK-NOT: %gcframe
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    %v10 = load %jl_value_t*, %jl_value_t** @gv1, !tbaa !2
+    %v1 = addrspacecast %jl_value_t* %v10 to %jl_value_t addrspace(10)*
+    %v2 = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** @gv2, !tbaa !2
+    call void @jl_safepoint()
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %v1)
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %v2)
+    ret %jl_value_t addrspace(10)* %v1
+}
+
+define %jl_value_t addrspace(10)* @vec_jlcallarg(%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)**, i32) {
+; CHECK-LABEL: @vec_jlcallarg
+; CHECK-NOT: %gcframe
+  %v4 = call %jl_value_t*** @julia.ptls_states()
+  %v5 = bitcast %jl_value_t addrspace(10)** %1 to <2 x %jl_value_t addrspace(10)*>*
+  %v6 = load <2 x %jl_value_t addrspace(10)*>, <2 x %jl_value_t addrspace(10)*>* %v5, align 8
+  %v7 = extractelement <2 x %jl_value_t addrspace(10)*> %v6, i32 0
+  ret %jl_value_t addrspace(10)* %v7
+}
+
+declare %jl_value_t addrspace(10) *@alloc()
+
+define %jl_value_t addrspace(10)* @vec_loadobj() {
+; CHECK-LABEL: @vec_loadobj
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+  %v4 = call %jl_value_t*** @julia.ptls_states()
+  %obj = call %jl_value_t addrspace(10) *@alloc()
+  %v1 = bitcast %jl_value_t addrspace(10) * %obj to %jl_value_t addrspace(10)* addrspace(10)*
+  %v5 = bitcast %jl_value_t addrspace(10)* addrspace(10)* %v1 to <2 x %jl_value_t addrspace(10)*> addrspace(10)*
+  %v6 = load <2 x %jl_value_t addrspace(10)*>, <2 x %jl_value_t addrspace(10)*> addrspace(10)* %v5, align 8
+  %obj2 = call %jl_value_t addrspace(10) *@alloc()
+  %v7 = extractelement <2 x %jl_value_t addrspace(10)*> %v6, i32 0
+  ret %jl_value_t addrspace(10)* %v7
+}
+
+declare i1 @check_property(%jl_value_t addrspace(10)* %val)
+define void @loopyness(i1 %cond1, %jl_value_t addrspace(10) *%arg) {
+; CHECK-LABEL: @loopyness
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+    %ptls = call %jl_value_t*** @julia.ptls_states()
+    br label %header
+
+header:
+    %phi = phi %jl_value_t addrspace(10)* [null, %top], [%obj, %latch]
+    br i1 %cond1, label %a, label %latch
+
+a:
+; This needs a store
+; CHECK-LABEL: a:
+; CHECK:  [[GEP1:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; CHECK:  store %jl_value_t addrspace(10)* %phi, %jl_value_t addrspace(10)** [[GEP1]]
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %phi)
+    br label %latch
+
+latch:
+; This as well in case we went the other path
+; CHECK:  [[GEP2:%.*]] = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %gcframe, i32 [[GEPSLOT0]]
+; CHECK:  store %jl_value_t addrspace(10)* %phi, %jl_value_t addrspace(10)** [[GEP2]]
+    %obj = call %jl_value_t addrspace(10)* @alloc()
+    %cond = call i1 @check_property(%jl_value_t addrspace(10)* %phi)
+    br i1 %cond, label %exit, label %header
+
+exit:
+    ret void
+}
+
+define %jl_value_t addrspace(10)* @phi_union(i1 %cond) {
+; CHECK-LABEL: @phi_union
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+top:
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  br i1 %cond, label %a, label %b
+
+a:
+  %obj = call %jl_value_t addrspace(10) *@alloc()
+  %aobj = insertvalue {%jl_value_t addrspace(10)*, i8} undef, %jl_value_t addrspace(10)* %obj, 0
+  %aunion = insertvalue {%jl_value_t addrspace(10)*, i8} undef, i8 -126, 1
+  br label %join
+
+b:
+  %bunion = call {%jl_value_t addrspace(10)*, i8} @union_ret()
+  br label %join
+
+join:
+  %phi = phi {%jl_value_t addrspace(10)*, i8} [%aunion, %a], [%bunion, %b]
+  call void @jl_safepoint()
+  %rval = extractvalue { %jl_value_t addrspace(10)*, i8 } %phi, 0
+  ret %jl_value_t addrspace(10)* %rval
+}
+
+define %jl_value_t addrspace(10)* @select_union(i1 %cond) {
+; CHECK-LABEL: @select_union
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+top:
+  %ptls = call %jl_value_t*** @julia.ptls_states()
+  %obj = call %jl_value_t addrspace(10) *@alloc()
+  %aobj = insertvalue {%jl_value_t addrspace(10)*, i8} undef, %jl_value_t addrspace(10)* %obj, 0
+  %aunion = insertvalue {%jl_value_t addrspace(10)*, i8} undef, i8 -126, 1
+  %bunion = call {%jl_value_t addrspace(10)*, i8} @union_ret()
+  %select = select i1 %cond, {%jl_value_t addrspace(10)*, i8} %aunion, {%jl_value_t addrspace(10)*, i8} %bunion
+  call void @jl_safepoint()
+  %rval = extractvalue { %jl_value_t addrspace(10)*, i8 } %select, 0
+  ret %jl_value_t addrspace(10)* %rval
+}
+
+!0 = !{!"jtbaa"}
+!1 = !{!"jtbaa_const", !0, i64 0}
+!2 = !{!1, !1, i64 0, i64 1}

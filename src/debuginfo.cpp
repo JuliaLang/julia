@@ -37,6 +37,7 @@ using llvm_file_magic = sys::fs::file_magic;
 #if defined(_OS_LINUX_)
 #  include <link.h>
 #endif
+#include "processor.h"
 
 #include <string>
 #include <sstream>
@@ -338,9 +339,11 @@ public:
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
+        std::vector<std::pair<jl_method_instance_t*, uintptr_t>> def_spec;
+        std::vector<std::pair<jl_method_instance_t*, uintptr_t>> def_invoke;
         auto symbols = object::computeSymbolSizes(debugObj);
         bool first = true;
-        for(const auto &sym_size : symbols) {
+        for (const auto &sym_size : symbols) {
             const object::SymbolRef &sym_iter = sym_size.first;
             auto SymbolTypeOrError = sym_iter.getType();
             assert(SymbolTypeOrError);
@@ -381,14 +384,17 @@ public:
                     triggered_linfos.push_back(linfo);
                 linfo_in_flight.erase(linfo_it);
                 const char *F = linfo->functionObjectsDecls.functionObject;
-                if (!linfo->fptr && F && sName.equals(F)) {
-                    int jlcall_api = jl_jlcall_api(F);
-                    if (linfo->inferred || jlcall_api != 1) {
-                        linfo->jlcall_api = jlcall_api;
-                        linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
+                const char *specF = linfo->functionObjectsDecls.specFunctionObject;
+                if (linfo->invoke == jl_fptr_trampoline) {
+                    if (specF && sName.equals(specF)) {
+                        def_spec.push_back({linfo, Addr});
+                        if (!strcmp(F, "jl_fptr_args"))
+                            def_invoke.push_back({linfo, (uintptr_t)&jl_fptr_args});
+                        else if (!strcmp(F, "jl_fptr_sparam"))
+                            def_invoke.push_back({linfo, (uintptr_t)&jl_fptr_sparam});
                     }
-                    else {
-                        linfo->unspecialized_ducttape = (jl_fptr_t)(uintptr_t)Addr;
+                    else if (sName.equals(F)) {
+                        def_invoke.push_back({linfo, Addr});
                     }
                 }
             }
@@ -407,6 +413,11 @@ public:
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
            }
+           // now process these in order, so we ensure the closure values are updated before removing the trampoline
+           for (auto &def : def_spec)
+               def.first->specptr.fptr = (void*)def.second;
+           for (auto &def : def_invoke)
+               def.first->invoke = (jl_callptr_t)def.second;
         }
         uv_rwlock_wrunlock(&threadsafe);
         jl_gc_safe_leave(ptls, gc_state);
@@ -706,20 +717,14 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
 }
 
 static uint64_t jl_sysimage_base;
-static const char *sysimg_fvars_base = nullptr;
-static const int32_t *sysimg_fvars_offsets;
+static jl_sysimg_fptrs_t sysimg_fptrs;
 static jl_method_instance_t **sysimg_fvars_linfo;
 static size_t sysimg_fvars_n;
-static const void *sysimg_fvars(size_t idx)
-{
-    return sysimg_fvars_base + sysimg_fvars_offsets[idx];
-}
-void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *offsets,
+void jl_register_fptrs(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n)
 {
     jl_sysimage_base = (uintptr_t)sysimage_base;
-    sysimg_fvars_base = base;
-    sysimg_fvars_offsets = offsets;
+    sysimg_fptrs = *fptrs;
     sysimg_fvars_linfo = linfos;
     sysimg_fvars_n = n;
 }
@@ -738,7 +743,7 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
                                        int64_t slide, bool untrusted_dladdr)
 {
     // Assume we only need base address for sysimg for now
-    if (!insysimage || !sysimg_fvars_base)
+    if (!insysimage || !sysimg_fptrs.base)
         saddr = nullptr;
     bool needs_saddr = saddr && (!*saddr || untrusted_dladdr);
     bool needs_name = name && (!*name || untrusted_dladdr);
@@ -746,7 +751,9 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
     if (needs_saddr) {
 #if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && !defined(JL_DISABLE_LIBUNWIND)
         unw_proc_info_t pip;
-        if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer, &pip, NULL) == 0) {
+        // Seems that libunwind may return NULL IP depending on what info it finds...
+        if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer,
+                                    &pip, NULL) == 0 && pip.start_ip) {
             *saddr = (void*)pip.start_ip;
             needs_saddr = false;
         }
@@ -1089,9 +1096,17 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         return 1;
     }
     frame0->fromC = !isSysImg;
-    if (isSysImg && sysimg_fvars_base && saddr) {
+    if (isSysImg && sysimg_fptrs.base && saddr) {
+        intptr_t diff = (uintptr_t)saddr - (uintptr_t)sysimg_fptrs.base;
+        for (size_t i = 0; i < sysimg_fptrs.nclones; i++) {
+            if (diff == sysimg_fptrs.clone_offsets[i]) {
+                uint32_t idx = sysimg_fptrs.clone_idxs[i] & jl_sysimg_val_mask;
+                frame0->linfo = sysimg_fvars_linfo[idx];
+                break;
+            }
+        }
         for (size_t i = 0; i < sysimg_fvars_n; i++) {
-            if (saddr == sysimg_fvars(i)) {
+            if (diff == sysimg_fptrs.offsets[i]) {
                 frame0->linfo = sysimg_fvars_linfo[i];
                 break;
             }
@@ -1480,7 +1495,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     std::vector<uintptr_t> start_ips(nentries);
     size_t cur_entry = 0;
     // Cache the previously parsed CIE entry so that we can support multiple
-    // CIE's (may not happen) without parsing it everytime.
+    // CIE's (may not happen) without parsing it every time.
     const uint8_t *cur_cie = nullptr;
     DW_EH_PE encoding = DW_EH_PE_omit;
     processFDEs((char*)Addr, Size, [&](const char *Entry) {

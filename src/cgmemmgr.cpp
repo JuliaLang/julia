@@ -258,6 +258,31 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
 #ifdef _OS_LINUX_
 // Using `/proc/self/mem`, A.K.A. Keno's remote memory manager.
 
+ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr)
+{
+    static_assert(sizeof(off_t) >= 8, "off_t is smaller than 64bits");
+#ifdef _P64
+    const uintptr_t sign_bit = uintptr_t(1) << 63;
+    if (__unlikely(sign_bit & addr)) {
+        // This case should not happen with default kernel on 64bit since the address belongs
+        // to kernel space (linear mapping).
+        // However, it seems possible to change this at kernel compile time.
+
+        // pwrite doesn't support offset with sign bit set but lseek does.
+        // This is obviously not thread safe but none of the mem manager does anyway...
+        // From the kernel code, `lseek` with `SEEK_SET` can't fail.
+        // However, this can possibly confuse the glibc wrapper to think that
+        // we have invalid input value. Use syscall directly to be sure.
+        syscall(SYS_lseek, (long)fd, addr, (long)SEEK_SET);
+        // The return value can be -1 when the glibc syscall function
+        // think we have an error return with and `addr` that's too large.
+        // Ignore the return value for now.
+        return write(fd, buf, nbyte);
+    }
+#endif
+    return pwrite(fd, buf, nbyte, (off_t)addr);
+}
+
 // Do not call this directly.
 // Use `get_self_mem_fd` which has a guard to call this only once.
 static int _init_self_mem()
@@ -290,7 +315,7 @@ static int _init_self_mem()
     assert(test_pg != MAP_FAILED && "Cannot allocate executable memory");
 
     const uint64_t v = 0xffff000012345678u;
-    int ret = pwrite(fd, (const void*)&v, sizeof(uint64_t), (uintptr_t)test_pg);
+    int ret = pwrite_addr(fd, (const void*)&v, sizeof(uint64_t), (uintptr_t)test_pg);
     if (ret != sizeof(uint64_t) || *(volatile uint64_t*)test_pg != v) {
         munmap(test_pg, jl_page_size);
         close(fd);
@@ -309,7 +334,7 @@ static int get_self_mem_fd()
 static void write_self_mem(void *dest, void *ptr, size_t size)
 {
     while (size > 0) {
-        ssize_t ret = pwrite(get_self_mem_fd(), ptr, size, (uintptr_t)dest);
+        ssize_t ret = pwrite_addr(get_self_mem_fd(), ptr, size, (uintptr_t)dest);
         if ((size_t)ret == size)
             return;
         if (ret == -1 && (errno == EAGAIN || errno == EINTR))

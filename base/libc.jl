@@ -1,8 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libc
+@doc """
+Interface to libc, the C standard library.
+""" Libc
 
 import Base: transcode
+import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
     errno, strerror, flush_cstdio, systemsleep, time, transcode
@@ -15,41 +19,39 @@ include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # inc
 ## RawFD ##
 
 # Wrapper for an OS file descriptor (on both Unix and Windows)
-struct RawFD
-    fd::Int32
-    RawFD(fd::Integer) = new(fd)
-    RawFD(fd::RawFD) = fd
-end
+primitive type RawFD 32 end
+RawFD(fd::Integer) = bitcast(RawFD, Cint(fd))
+RawFD(fd::RawFD) = fd
+Base.cconvert(::Type{Cint}, fd::RawFD) = bitcast(Cint, fd)
 
-Base.cconvert(::Type{Int32}, fd::RawFD) = fd.fd
-
-dup(x::RawFD) = RawFD(ccall((@static Sys.iswindows() ? :_dup : :dup), Int32, (Int32,), x.fd))
+dup(x::RawFD) = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,), x)
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
-                (Int32, Int32), src.fd, target.fd))
+                (RawFD, RawFD), src, target))
 
 # Wrapper for an OS file descriptor (for Windows)
 if Sys.iswindows()
-    struct WindowsRawSocket
-        handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
-    end
-    Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
-    _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle, Ptr{Void}, (Cint,), fd.fd))
+    primitive type WindowsRawSocket sizeof(Ptr) * 8 end # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
+    WindowsRawSocket(handle::Ptr{Cvoid}) = bitcast(WindowsRawSocket, handle)
+    WindowsRawSocket(handle::WindowsRawSocket) = handle
+
+    Base.cconvert(::Type{Ptr{Cvoid}}, fd::WindowsRawSocket) = bitcast(Ptr{Cvoid}, fd)
+    _get_osfhandle(fd::RawFD) = ccall(:_get_osfhandle, WindowsRawSocket, (RawFD,), fd)
     _get_osfhandle(fd::WindowsRawSocket) = fd
     function dup(src::WindowsRawSocket)
-        new_handle = Ref{Ptr{Void}}(-1)
-        my_process = ccall(:GetCurrentProcess, stdcall, Ptr{Void}, ())
+        new_handle = Ref(WindowsRawSocket(Ptr{Cvoid}(-1)))
+        my_process = ccall(:GetCurrentProcess, stdcall, Ptr{Cvoid}, ())
         DUPLICATE_SAME_ACCESS = 0x2
         status = ccall(:DuplicateHandle, stdcall, Int32,
-            (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Ptr{Void}}, UInt32, Int32, UInt32),
-            my_process, src.handle, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
+            (Ptr{Cvoid}, WindowsRawSocket, Ptr{Cvoid}, Ptr{WindowsRawSocket}, UInt32, Int32, UInt32),
+            my_process, src, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
         status == 0 && error("dup failed: $(FormatMessage())")
         return new_handle[]
     end
     function dup(src::WindowsRawSocket, target::RawFD)
-        fd = ccall(:_open_osfhandle, Int32, (Ptr{Void}, Int32), dup(src), 0)
-        dup(RawFD(fd), target)
-        ccall(:_close, Int32, (Int32,), fd)
+        fd = ccall(:_open_osfhandle, RawFD, (WindowsRawSocket, Int32), dup(src), 0)
+        dup(fd, target)
+        ccall(:_close, Int32, (RawFD,), fd)
         nothing
     end
 
@@ -60,14 +62,14 @@ end
 ## FILE (not auto-finalized) ##
 
 struct FILE
-    ptr::Ptr{Void}
+    ptr::Ptr{Cvoid}
 end
 
 modestr(s::IO) = modestr(isreadable(s), iswritable(s))
 modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
 function FILE(fd::RawFD, mode)
-    FILEp = ccall((@static Sys.iswindows() ? :_fdopen : :fdopen), Ptr{Void}, (Cint, Cstring), fd, mode)
+    FILEp = ccall((@static Sys.iswindows() ? :_fdopen : :fdopen), Ptr{Cvoid}, (Cint, Cstring), fd, mode)
     systemerror("fdopen", FILEp == C_NULL)
     FILE(FILEp)
 end
@@ -78,17 +80,16 @@ function FILE(s::IO)
     f
 end
 
-Base.unsafe_convert(T::Union{Type{Ptr{Void}},Type{Ptr{FILE}}}, f::FILE) = convert(T, f.ptr)
-Base.close(f::FILE) = systemerror("fclose", ccall(:fclose, Cint, (Ptr{Void},), f.ptr) != 0)
-Base.convert(::Type{FILE}, s::IO) = FILE(s)
+Base.unsafe_convert(T::Union{Type{Ptr{Cvoid}},Type{Ptr{FILE}}}, f::FILE) = convert(T, f.ptr)
+Base.close(f::FILE) = systemerror("fclose", ccall(:fclose, Cint, (Ptr{Cvoid},), f.ptr) != 0)
 
 function Base.seek(h::FILE, offset::Integer)
-    systemerror("fseek", ccall(:fseek, Cint, (Ptr{Void}, Clong, Cint),
+    systemerror("fseek", ccall(:fseek, Cint, (Ptr{Cvoid}, Clong, Cint),
                                h.ptr, offset, 0) != 0)
     h
 end
 
-Base.position(h::FILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
+Base.position(h::FILE) = ccall(:ftell, Clong, (Ptr{Cvoid},), h.ptr)
 
 # flush C stdio output from external libraries
 
@@ -97,7 +98,7 @@ Base.position(h::FILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
 
 Flushes the C `stdout` and `stderr` streams (which may have been written to by external C code).
 """
-flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
+flush_cstdio() = ccall(:jl_flush_cstdio, Cvoid, ())
 
 ## time-related functions ##
 
@@ -106,7 +107,7 @@ if Sys.isunix()
     systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32, s*1e6))
 elseif Sys.iswindows()
     function systemsleep(s::Real)
-        ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32, s * 1e3))
+        ccall(:Sleep, stdcall, Cvoid, (UInt32,), round(UInt32, s * 1e3))
         return Int32(0)
     end
 else
@@ -169,12 +170,13 @@ library.
 """
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
+# Use wcsftime instead of strftime to support different locales
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Base.StringVector(128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ref{TmStruct}),
-              timestr, length(timestr), fmt, tm)
+    wctimestr = Vector{Cwchar_t}(undef, 128)
+    n = ccall(:wcsftime, Csize_t, (Ptr{Cwchar_t}, Csize_t, Cwstring, Ref{TmStruct}),
+              wctimestr, length(wctimestr), fmt, tm)
     n == 0 && return ""
-    return String(resize!(timestr,n))
+    return transcode(String, resize!(wctimestr, n))
 end
 
 """
@@ -202,7 +204,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !ismatch(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
+        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -242,14 +244,14 @@ getpid() = ccall(:jl_getpid, Int32, ())
 Get the local machine's host name.
 """
 function gethostname()
-    hn = Vector{UInt8}(256)
+    hn = Vector{UInt8}(undef, 256)
     err = @static if Sys.iswindows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else
         ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
     end
     systemerror("gethostname", err != 0)
-    return unsafe_string(pointer(hn))
+    return GC.@preserve hn unsafe_string(pointer(hn))
 end
 
 ## system error handling ##
@@ -265,7 +267,7 @@ sets it. Specifically, you cannot call `errno` at the next prompt in a REPL, bec
 code is executed between prompts.
 """
 errno() = ccall(:jl_errno, Cint, ())
-errno(e::Integer) = ccall(:jl_set_errno, Void, (Cint,), e)
+errno(e::Integer) = ccall(:jl_set_errno, Cvoid, (Cint,), e)
 
 """
     strerror(n=errno())
@@ -299,14 +301,14 @@ if Sys.iswindows()
         FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
         lpMsgBuf = Ref{Ptr{UInt16}}()
         lpMsgBuf[] = 0
-        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
+        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Cvoid}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Cvoid}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
         len == 0 && return ""
-        buf = Vector{UInt16}(len)
-        unsafe_copy!(pointer(buf), p, len)
-        ccall(:LocalFree, stdcall, Ptr{Void}, (Ptr{Void},), p)
+        buf = Vector{UInt16}(undef, len)
+        GC.@preserve buf unsafe_copyto!(pointer(buf), p, len)
+        ccall(:LocalFree, stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), p)
         return transcode(String, buf)
     end
 end
@@ -321,33 +323,55 @@ on pointers retrieved from other C libraries. `Ptr` objects obtained from C libr
 be freed by the free functions defined in that library, to avoid assertion failures if
 multiple `libc` libraries exist on the system.
 """
-free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
+free(p::Ptr) = ccall(:free, Cvoid, (Ptr{Cvoid},), p)
 
 """
-    malloc(size::Integer) -> Ptr{Void}
+    malloc(size::Integer) -> Ptr{Cvoid}
 
 Call `malloc` from the C standard library.
 """
-malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
+malloc(size::Integer) = ccall(:malloc, Ptr{Cvoid}, (Csize_t,), size)
 
 """
-    realloc(addr::Ptr, size::Integer) -> Ptr{Void}
+    realloc(addr::Ptr, size::Integer) -> Ptr{Cvoid}
 
 Call `realloc` from the C standard library.
 
 See warning in the documentation for `free` regarding only using this on memory originally
 obtained from `malloc`.
 """
-realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
+realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
 
 """
-    calloc(num::Integer, size::Integer) -> Ptr{Void}
+    calloc(num::Integer, size::Integer) -> Ptr{Cvoid}
 
 Call `calloc` from the C standard library.
 """
-calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Void}, (Csize_t, Csize_t), num, size)
+calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
 
 free(p::Cstring) = free(convert(Ptr{UInt8}, p))
 free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
+
+## Random numbers ##
+
+# To limit dependency on rand functionality implemented in the Random module,
+# Libc.rand is used in file.jl, and could be used in error.jl (but it breaks a test)
+"""
+    rand([T::Type])
+
+Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
+by composing two calls to `rand()`. `T` can be `UInt32` or `Float64`.
+"""
+rand() = ccall(:rand, Cint, ())
+# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
+rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
+rand(::Type{Float64}) = rand(UInt32) / 2^32
+
+"""
+    srand([seed])
+
+Interface to the C `srand(seed)` function.
+"""
+srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 end # module

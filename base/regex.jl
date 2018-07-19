@@ -4,17 +4,17 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX
-const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.ALT_BSUX | PCRE.UCP
+const DEFAULT_MATCH_OPTS = zero(UInt32)
 
 mutable struct Regex
     pattern::String
     compile_options::UInt32
     match_options::UInt32
-    regex::Ptr{Void}
-    extra::Ptr{Void}
+    regex::Ptr{Cvoid}
+    extra::Ptr{Cvoid}
     ovec::Vector{Csize_t}
-    match_data::Ptr{Void}
+    match_data::Ptr{Cvoid}
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
@@ -29,10 +29,10 @@ mutable struct Regex
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL,
                          C_NULL, Csize_t[], C_NULL))
-        finalizer(re, re->begin
-                              re.regex == C_NULL || PCRE.free_re(re.regex)
-                              re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
-                          end)
+        finalizer(re) do re
+            re.regex == C_NULL || PCRE.free_re(re.regex)
+            re.match_data == C_NULL || PCRE.free_match_data(re.match_data)
+        end
         re
     end
 end
@@ -40,11 +40,15 @@ end
 function Regex(pattern::AbstractString, flags::AbstractString)
     options = DEFAULT_COMPILER_OPTS
     for f in flags
-        options |= f=='i' ? PCRE.CASELESS  :
-                   f=='m' ? PCRE.MULTILINE :
-                   f=='s' ? PCRE.DOTALL    :
-                   f=='x' ? PCRE.EXTENDED  :
-                   throw(ArgumentError("unknown regex flag: $f"))
+        if f == 'a'
+            options &= ~PCRE.UCP
+        else
+            options |= f=='i' ? PCRE.CASELESS  :
+                       f=='m' ? PCRE.MULTILINE :
+                       f=='s' ? PCRE.DOTALL    :
+                       f=='x' ? PCRE.EXTENDED  :
+                       throw(ArgumentError("unknown regex flag: $f"))
+        end
     end
     Regex(pattern, options, DEFAULT_MATCH_OPTS)
 end
@@ -63,8 +67,9 @@ end
 """
     @r_str -> Regex
 
-Construct a regex, such as `r"^[a-z]*\$"`. The regex also accepts one or more flags, listed
-after the ending quote, to change its behaviour:
+Construct a regex, such as `r"^[a-z]*\$"`, without interpolation and unescaping (except for
+quotation mark `"` which still has to be escaped). The regex also accepts one or more flags,
+listed after the ending quote, to change its behaviour:
 
 - `i` enables case-insensitive matching
 - `m` treats the `^` and `\$` tokens as matching the start and end of individual lines, as
@@ -72,26 +77,30 @@ after the ending quote, to change its behaviour:
 - `s` allows the `.` modifier to match newlines.
 - `x` enables "comment mode": whitespace is enabled except when escaped with `\\`, and `#`
   is treated as starting a comment.
+- `a` disables `UCP` mode (enables ASCII mode). By default `\\B`, `\\b`, `\\D`, `\\d`, `\\S`,
+  `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
+  these sequences only match ASCII characters.
 
-For example, this regex has all three flags enabled:
-
+# Examples
 ```jldoctest
 julia> match(r"a+.*b+.*?d\$"ism, "Goodbye,\\nOh, angry,\\nBad world\\n")
 RegexMatch("angry,\\nBad world")
 ```
+This regex has the first three flags enabled.
 """
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
 function show(io::IO, re::Regex)
-    imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
+    imsxa = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED|PCRE.UCP
     opts = re.compile_options
-    if (opts & ~imsx) == DEFAULT_COMPILER_OPTS
+    if (opts & ~imsxa) == (DEFAULT_COMPILER_OPTS & ~imsxa)
         print(io, 'r')
         print_quoted_literal(io, re.pattern)
         if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
         if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
         if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
         if (opts & PCRE.EXTENDED ) != 0; print(io, 'x'); end
+        if (opts & PCRE.UCP      ) == 0; print(io, 'a'); end
     else
         print(io, "Regex(")
         show(io, re.pattern)
@@ -106,7 +115,7 @@ end
 
 struct RegexMatch
     match::SubString{String}
-    captures::Vector{Union{Void,SubString{String}}}
+    captures::Vector{Union{Nothing,SubString{String}}}
     offset::Int
     offsets::Vector{Int}
     regex::Regex
@@ -141,24 +150,17 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
-"""
-    ismatch(r::Regex, s::AbstractString) -> Bool
-
-Test whether a string contains a match of the given regular expression.
-"""
-function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
+function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, String(s), offset, r.match_options,
                      r.match_data)
 end
 
-function ismatch(r::Regex, s::SubString, offset::Integer=0)
+function occursin(r::Regex, s::SubString; offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, s, offset, r.match_options,
                      r.match_data)
 end
-
-(r::Regex)(s) = ismatch(r, s)
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
@@ -167,6 +169,25 @@ Search for the first match of the regular expression `r` in `s` and return a `Re
 object containing the match, or nothing if the match failed. The matching substring can be
 retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
 `m.captures` The optional `idx` argument specifies an index at which to start the search.
+
+# Examples
+```jldoctest
+julia> rx = r"a(.)a"
+r"a(.)a"
+
+julia> m = match(rx, "cabac")
+RegexMatch("aba", 1="b")
+
+julia> m.captures
+1-element Array{Union{Nothing, SubString{String}},1}:
+ "b"
+
+julia> m.match
+"aba"
+
+julia> match(rx, "cabac", 3) === nothing
+true
+```
 """
 function match end
 
@@ -178,85 +199,85 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     end
     ovec = re.ovec
     n = div(length(ovec),2) - 1
-    mat = SubString(str, ovec[1]+1, ovec[2])
-    cap = Union{Void,SubString{String}}[
-            ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
+    mat = SubString(str, ovec[1]+1, prevind(str, ovec[2]+1))
+    cap = Union{Nothing,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
+                                        SubString(str, ovec[2i+1]+1,
+                                                  prevind(str, ovec[2i+2]+1)) for i=1:n]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
     RegexMatch(mat, cap, ovec[1]+1, off, re)
 end
 
-match(r::Regex, s::AbstractString) = match(r, s, start(s))
+match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
 match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     "regex matching is only available for the String type; use String(s) to convert"
 ))
 
-"""
-    matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
-
-Return a vector of the matching substrings from [`eachmatch`](@ref).
-"""
-function matchall(re::Regex, str::String, overlap::Bool=false)
-    regex = compile(re).regex
-    n = sizeof(str)
-    matches = SubString{String}[]
-    offset = UInt32(0)
-    opts = re.match_options
-    opts_nonempty = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
-    prevempty = false
-    ovec = re.ovec
-    while true
-        result = PCRE.exec(regex, str, offset, prevempty ? opts_nonempty : opts, re.match_data)
-        if !result
-            if prevempty && offset < n
-                offset = UInt32(nextind(str, offset + 1) - 1)
-                prevempty = false
-                continue
-            else
-                break
-            end
-        end
-
-        push!(matches, SubString(str, ovec[1]+1, ovec[2]))
-        prevempty = offset == ovec[2]
-        if overlap
-            if !prevempty
-                offset = UInt32(ovec[1]+1)
-            end
-        else
-            offset = ovec[2]
-        end
-    end
-    matches
-end
-
-matchall(re::Regex, str::SubString, overlap::Bool=false) =
-    matchall(re, String(str), overlap)
-
-function search(str::Union{String,SubString}, re::Regex, idx::Integer)
-    if idx > nextind(str,endof(str))
+# TODO: return only start index and update deprecation
+function findnext(re::Regex, str::Union{String,SubString}, idx::Integer)
+    if idx > nextind(str,lastindex(str))
         throw(BoundsError())
     end
     opts = re.match_options
     compile(re)
-    PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
-        ((Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)) : (0:-1)
+    if PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
+        (Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)
+    else
+        nothing
+    end
 end
-search(s::AbstractString, r::Regex, idx::Integer) = throw(ArgumentError(
+findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
     "regex search is only available for the String type; use String(s) to convert"
 ))
-search(s::AbstractString, r::Regex) = search(s,r,start(s))
+findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 
+"""
+    SubstitutionString(substr)
+
+Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
+substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
+
+```jldoctest
+julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
+s"Hello \\\\g<name>, it's \\\\1"
+
+julia> subst = s"Hello \\g<name>, it's \\1"
+s"Hello \\\\g<name>, it's \\\\1"
+
+julia> typeof(subst)
+SubstitutionString{String}
+
+```
+
+"""
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
-endof(s::SubstitutionString) = endof(s.string)
-next(s::SubstitutionString, idx::Int) = next(s.string, idx)
+ncodeunits(s::SubstitutionString) = ncodeunits(s.string)
+codeunit(s::SubstitutionString) = codeunit(s.string)
+codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
+isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)
+iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)
+
 function show(io::IO, s::SubstitutionString)
     print(io, "s")
     show(io, s.string)
 end
 
+"""
+    @s_str -> SubstitutionString
+
+Construct a substitution string, used for regular expression substitutions.  Within the
+string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
+`\\g<groupname>` refers to a named capture group with name `groupname`.
+
+```jldoctest
+julia> msg = "#Hello# from Julia";
+
+julia> replace(msg, r"#(.+)# from (?<from>\\w+)" => s"FROM: \\g<from>; MESSAGE: \\1")
+"FROM: Julia; MESSAGE: Hello"
+```
+"""
 macro s_str(string) SubstitutionString(string) end
 
 replace_err(repl) = error("Bad replacement string: $repl")
@@ -276,8 +297,8 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     LBRACKET = '<'
     RBRACKET = '>'
     repl = repl_s.string
-    i = start(repl)
-    e = endof(repl)
+    i = firstindex(repl)
+    e = lastindex(repl)
     while i <= e
         if repl[i] == SUB_CHAR
             next_i = nextind(repl, i)
@@ -285,11 +306,11 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
             if repl[next_i] == SUB_CHAR
                 write(io, SUB_CHAR)
                 i = nextind(repl, next_i)
-            elseif isnumber(repl[next_i])
+            elseif isdigit(repl[next_i])
                 group = parse(Int, repl[next_i])
                 i = nextind(repl, next_i)
                 while i <= e
-                    if isnumber(repl[i])
+                    if isdigit(repl[i])
                         group = 10group + parse(Int, repl[i])
                         i = nextind(repl, i)
                     else
@@ -311,7 +332,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 end
                 #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
-                if all(isnumber,groupname)
+                if all(isdigit, groupname)
                     _write_capture(io, re, parse(Int, groupname))
                 else
                     group = PCRE.substring_number_from_name(re.regex, groupname)
@@ -340,24 +361,9 @@ struct RegexMatchIterator
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{RegexMatchIterator}) = RegexMatch
-start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, UInt32(0))
-done(itr::RegexMatchIterator, prev_match) = (prev_match === nothing)
-iteratorsize(::Type{RegexMatchIterator}) = SizeUnknown()
+IteratorSize(::Type{RegexMatchIterator}) = SizeUnknown()
 
-# Assumes prev_match is not nothing
-function next(itr::RegexMatchIterator, prev_match)
-    prevempty = isempty(prev_match.match)
-
-    if itr.overlap
-        if !prevempty
-            offset = nextind(itr.string, prev_match.offset)
-        else
-            offset = prev_match.offset
-        end
-    else
-        offset = prev_match.offset + endof(prev_match.match)
-    end
-
+function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
     opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
     while true
         mat = match(itr.regex, itr.string, offset,
@@ -372,24 +378,50 @@ function next(itr::RegexMatchIterator, prev_match)
                 break
             end
         else
-            return (prev_match, mat)
+            if itr.overlap
+                if !isempty(mat.match)
+                    offset = nextind(itr.string, mat.offset)
+                else
+                    offset = mat.offset
+                end
+            else
+                offset = mat.offset + ncodeunits(mat.match)
+            end
+            return (mat, (offset, isempty(mat.match)))
         end
     end
-    (prev_match, nothing)
-end
-
-function eachmatch(re::Regex, str::AbstractString, ovr::Bool)
-    RegexMatchIterator(re,str,ovr)
+    nothing
 end
 
 """
-    eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
+    eachmatch(r::Regex, s::AbstractString; overlap::Bool=false])
 
 Search for all matches of a the regular expression `r` in `s` and return a iterator over the
 matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from distinct character ranges.
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> m = eachmatch(rx, "a1a2a3a")
+Base.RegexMatchIterator(r"a.a", "a1a2a3a", false)
+
+julia> collect(m)
+2-element Array{RegexMatch,1}:
+ RegexMatch("a1a")
+ RegexMatch("a3a")
+
+julia> collect(eachmatch(rx, "a1a2a3a", overlap = true))
+3-element Array{RegexMatch,1}:
+ RegexMatch("a1a")
+ RegexMatch("a2a")
+ RegexMatch("a3a")
+```
 """
-eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
+eachmatch(re::Regex, str::AbstractString; overlap = false) =
+    RegexMatchIterator(re, str, overlap)
 
 ## comparison ##
 

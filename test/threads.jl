@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 using Base.Threads
 
 # threading constructs
@@ -25,9 +25,9 @@ function test_threaded_loop_and_atomic_add()
     @test x[] == 10000
     # Next test checks that all loop iterations ran,
     # and were unique (via pigeon-hole principle).
-    @test findfirst(found,false) == 0
+    @test !(false in found)
     if was_inorder
-        println(STDERR, "Warning: threaded loop executed in order")
+        println(stderr, "Warning: threaded loop executed in order")
     end
 end
 
@@ -47,8 +47,8 @@ function test_threaded_atomic_minmax(m::T,n::T) where T
     mid = m + (n-m)>>1
     x = Atomic{T}(mid)
     y = Atomic{T}(mid)
-    oldx = Array{T}(n-m+1)
-    oldy = Array{T}(n-m+1)
+    oldx = Vector{T}(undef, n-m+1)
+    oldy = Vector{T}(undef, n-m+1)
     @threads for i = m:n
         oldx[i-m+1] = atomic_min!(x, T(i))
         oldy[i-m+1] = atomic_max!(y, T(i))
@@ -124,7 +124,7 @@ function threaded_gc_locked(::Type{LockT}) where LockT
     @threads for i = 1:20
         @test lock(critical) === nothing
         @test islocked(critical)
-        gc(false)
+        GC.gc(false)
         @test unlock(critical) === nothing
     end
     @test !islocked(critical)
@@ -159,7 +159,7 @@ end
 end
 
 module M14726_2
-using Base.Test
+using Test
 using Base.Threads
 @threads for i in 1:100
     # Make sure current module is the same as the one on the thread that
@@ -171,9 +171,26 @@ end
 end
 
 # Ensure only LLVM-supported types can be atomic
-@test_throws TypeError Atomic{Bool}
 @test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{Complex128}
+@test_throws TypeError Atomic{ComplexF64}
+
+function test_atomic_bools()
+    x = Atomic{Bool}(false)
+    # Arithmetic functions are not defined.
+    @test_throws MethodError atomic_add!(x, true)
+    @test_throws MethodError atomic_sub!(x, true)
+    # All the rest are:
+    for v in [true, false]
+        @test x[] == atomic_xchg!(x, v)
+        @test v == atomic_cas!(x, v, !v)
+    end
+    x = Atomic{Bool}(false)
+    @test false == atomic_max!(x, true); @test x[] == true
+    x = Atomic{Bool}(true)
+    @test true == atomic_and!(x, false); @test x[] == false
+end
+
+test_atomic_bools()
 
 # Test atomic memory ordering with load/store
 mutable struct CommBuf
@@ -200,7 +217,7 @@ function test_atomic_read(commbuf::CommBuf, n::Int)
         correct &= var1 >= var2
         var1 == n && break
         # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Void, ())
+        ccall(:jl_gc_safepoint, Cvoid, ())
     end
     commbuf.correct_read = correct
 end
@@ -245,7 +262,7 @@ function test_fence(p::Peterson, id::Int, n::Int)
         while p.flag[otherid][] != 0 && p.turn[] == otherid
             # busy wait
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
         # critical section
         p.critical[id][] = 1
@@ -302,7 +319,7 @@ function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
             old = atomic_cas!(var, T(i-1), T(i))
             old == T(i-1) && break
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
     end
 end
@@ -347,6 +364,8 @@ for T in (Int32, Int64, Float32, Float64)
     @test varmax[] === T(maximum(1:nloops))
     @test varmin[] === T(0)
 end
+
+using Dates
 for period in (0.06, Dates.Millisecond(60))
     let async = Base.AsyncCondition(), t
         c = Condition()
@@ -355,12 +374,12 @@ for period in (0.06, Dates.Millisecond(60))
             wait(c)
             t = Timer(period)
             wait(t)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
             wait(c)
             sleep(period)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
-            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         end))
         wait(c)
         notify(c)
@@ -381,20 +400,38 @@ for period in (0.06, Dates.Millisecond(60))
     end
 end
 
-complex_cfunction = function(a)
-    s = zero(eltype(a))
-    @inbounds @simd for i in a
-        s += muladd(a[i], a[i], -2)
-    end
-    return s
-end
 function test_thread_cfunction()
-    @threads for i in 1:1000
-        # Make sure this is not inferrable
-        # and a runtime call to `jl_function_ptr` will be created
-        ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any),
-              complex_cfunction, Float64, Tuple{Ref{Vector{Float64}}})
+    # ensure a runtime call to `get_trampoline` will be created
+    # TODO: get_trampoline is not thread-safe (as this test shows)
+    function complex_cfunction(a)
+        s = zero(eltype(a))
+        @inbounds @simd for i in a
+            s += muladd(a[i], a[i], -2)
+        end
+        return s
     end
+    fs = [ let a = zeros(10)
+            () -> complex_cfunction(a)
+        end for i in 1:1000 ]
+    @noinline cf(f) = @cfunction $f Float64 ()
+    cfs = Vector{Base.CFunction}(undef, length(fs))
+    cf1 = cf(fs[1])
+    @threads for i in 1:1000
+        cfs[i] = cf(fs[i])
+    end
+    @test cfs[1] == cf1
+    @test cfs[2] == cf(fs[2])
+    @test length(unique(cfs)) == 1000
+    ok = zeros(Int, nthreads())
+    @threads for i in 1:10000
+        i = mod1(i, 1000)
+        fi = fs[i]
+        cfi = cf(fi)
+        GC.@preserve cfi begin
+            ok[threadid()] += (cfi === cfs[i])
+        end
+    end
+    @test sum(ok) == 10000
 end
 test_thread_cfunction()
 
@@ -426,8 +463,9 @@ function test_load_and_lookup_18020(n)
     @threads for i in 1:n
         try
             ccall(:jl_load_and_lookup,
-                  Ptr{Void}, (Cstring, Cstring, Ref{Ptr{Void}}),
+                  Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
+        catch
         end
     end
 end
@@ -449,3 +487,19 @@ function test_nested_loops()
     end
 end
 test_nested_loops()
+
+function test_thread_too_few_iters()
+    x = Atomic()
+    a = zeros(Int, nthreads()+2)
+    threaded_loop(a, 1:nthreads()-1, x)
+    found = zeros(Bool, nthreads()+2)
+    for i=1:nthreads()-1
+        found[a[i]] = true
+    end
+    @test x[] == nthreads()-1
+    # Next test checks that all loop iterations ran,
+    # and were unique (via pigeon-hole principle).
+    @test !(false in found[1:nthreads()-1])
+    @test !(true in found[nthreads():end])
+end
+test_thread_too_few_iters()

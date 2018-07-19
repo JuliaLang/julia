@@ -3,7 +3,7 @@
 #define DEBUG_TYPE "lower_ptls"
 #undef DEBUG
 
-// LLVM pass to optimize TLS access and remove references to julia intrinsics
+// LLVM pass to lower TLS access and remove references to julia intrinsics
 
 #include "llvm-version.h"
 #include "support/dtypes.h"
@@ -24,50 +24,51 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "codegen_shared.h"
 #include "julia_assert.h"
 
 using namespace llvm;
 
-extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
+std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
+                                           bool isConstant=false);
 
 namespace {
 
 struct LowerPTLS: public ModulePass {
     static char ID;
-    LowerPTLS(bool _imaging_mode=false)
+    LowerPTLS(bool imaging_mode=false)
         : ModulePass(ID),
-          imaging_mode(_imaging_mode)
+          imaging_mode(imaging_mode)
     {}
 
 private:
-    bool imaging_mode;
+    const bool imaging_mode;
+    Module *M;
+    Function *ptls_getter;
+    LLVMContext *ctx;
+    MDNode *tbaa_const;
+    PointerType *T_ptls_getter;
+    PointerType *T_ppjlvalue;
+    PointerType *T_pppjlvalue;
+    Type *T_int8;
+    Type *T_size;
+    PointerType *T_pint8;
+#ifdef JULIA_ENABLE_THREADING
+    GlobalVariable *ptls_slot{nullptr};
+    GlobalVariable *ptls_offset{nullptr};
+    void set_ptls_attrs(CallInst *ptlsStates) const;
+    Instruction *emit_ptls_tp(Value *offset, Instruction *insertBefore) const;
+    template<typename T> T *add_comdat(T *G) const;
+    GlobalVariable *create_aliased_global(Type *T, StringRef name) const;
+#else
+    GlobalVariable *static_tls;
+#endif
+    void fix_ptls_use(CallInst *ptlsStates);
     bool runOnModule(Module &M) override;
-    void runOnFunction(LLVMContext &ctx, Module &M, Function *F,
-                       Function *ptls_getter, Type *T_ppjlvalue, MDNode *tbaa_const);
 };
 
-static void ensure_global(const char *name, Type *t, Module &M,
-                          bool dllimport=false)
-{
-    if (M.getNamedValue(name))
-        return;
-    GlobalVariable *proto = new GlobalVariable(M, t, false,
-                                               GlobalVariable::ExternalLinkage,
-                                               NULL, name);
-#ifdef _OS_WINDOWS_
-    // setting JL_DLLEXPORT correctly only matters when building a binary
-    // (global_proto will strip this from the JIT)
-    if (dllimport) {
-        // add the __declspec(dllimport) attribute
-        proto->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-    }
-#else // _OS_WINDOWS_
-    (void)proto;
-#endif // _OS_WINDOWS_
-}
-
 #ifdef JULIA_ENABLE_THREADING
-static void setCallPtlsAttrs(CallInst *ptlsStates)
+void LowerPTLS::set_ptls_attrs(CallInst *ptlsStates) const
 {
 #if JL_LLVM_VERSION >= 50000
     ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
@@ -78,46 +79,46 @@ static void setCallPtlsAttrs(CallInst *ptlsStates)
 #endif
 }
 
-static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlvalue,
-                                 Instruction *insertBefore)
+Instruction *LowerPTLS::emit_ptls_tp(Value *offset, Instruction *insertBefore) const
 {
-    auto T_int8 = Type::getInt8Ty(ctx);
-    auto T_pint8 = PointerType::get(T_int8, 0);
-#  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-    // Workaround LLVM bug by hiding the offset computation
-    // (and therefore the optimization opportunity) from LLVM.
-    // Ref https://github.com/JuliaLang/julia/issues/17288
-    static const std::string const_asm_str = [&] () {
-        std::stringstream stm;
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+    if (insertBefore->getFunction()->callsFunctionThatReturnsTwice()) {
+        // Workaround LLVM bug by hiding the offset computation
+        // (and therefore the optimization opportunity) from LLVM.
+        // Ref https://github.com/JuliaLang/julia/issues/17288
+        static const std::string const_asm_str = [&] () {
+            std::stringstream stm;
 #  if defined(_CPU_X86_64_)
-        stm << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
+            stm << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
 #  else
-        stm << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
+            stm << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
 #  endif
-        return stm.str();
-    }();
+            return stm.str();
+        }();
 #  if defined(_CPU_X86_64_)
-    const char *dyn_asm_str = "movq %fs:0, $0;\naddq $1, $0";
+        const char *dyn_asm_str = "movq %fs:0, $0;\naddq $1, $0";
 #  else
-    const char *dyn_asm_str = "movl %gs:0, $0;\naddl $1, $0";
+        const char *dyn_asm_str = "movl %gs:0, $0;\naddl $1, $0";
 #  endif
 
-    // The add instruction clobbers flags
-    Value *tls;
-    if (offset) {
-        std::vector<Type*> args(0);
-        args.push_back(offset->getType());
-        auto tp = InlineAsm::get(FunctionType::get(T_pint8, args, false),
-                                 dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
-        tls = CallInst::Create(tp, offset, "ptls_i8", insertBefore);
+        // The add instruction clobbers flags
+        Value *tls;
+        if (offset) {
+            std::vector<Type*> args(0);
+            args.push_back(offset->getType());
+            auto tp = InlineAsm::get(FunctionType::get(T_pint8, args, false),
+                                     dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
+            tls = CallInst::Create(tp, offset, "ptls_i8", insertBefore);
+        }
+        else {
+            auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
+                                     const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}",
+                                     false);
+            tls = CallInst::Create(tp, "ptls_i8", insertBefore);
+        }
+        return new BitCastInst(tls, T_pppjlvalue, "ptls", insertBefore);
     }
-    else {
-        auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
-                                 const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}", false);
-        tls = CallInst::Create(tp, "ptls_i8", insertBefore);
-    }
-    return new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0), "ptls", insertBefore);
-#  elif defined(_CPU_AARCH64_) || (defined(__ARM_ARCH) && __ARM_ARCH >= 7)
+#endif
     // AArch64/ARM doesn't seem to have this issue.
     // (Possibly because there are many more registers and the offset is
     // positive and small)
@@ -126,42 +127,62 @@ static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlva
     // the add for now.
 #if defined(_CPU_AARCH64_)
     const char *asm_str = "mrs $0, tpidr_el0";
-#else
+#elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
     const char *asm_str = "mrc p15, 0, $0, c13, c0, 3";
+#elif defined(_CPU_X86_64_)
+    const char *asm_str = "movq %fs:0, $0";
+#elif defined(_CPU_X86_)
+    const char *asm_str = "movl %gs:0, $0";
+#else
+    const char *asm_str = nullptr;
+    assert(0 && "Cannot emit thread pointer for this architecture.");
 #endif
-    if (!offset) {
-        auto T_size = (sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) : Type::getInt32Ty(ctx));
+    if (!offset)
         offset = ConstantInt::getSigned(T_size, jl_tls_offset);
-    }
     auto tp = InlineAsm::get(FunctionType::get(T_pint8, false), asm_str, "=r", false);
     Value *tls = CallInst::Create(tp, "thread_ptr", insertBefore);
     tls = GetElementPtrInst::Create(T_int8, tls, {offset}, "ptls_i8", insertBefore);
-    return new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0), "ptls", insertBefore);
-#  else
-    (void)T_pint8;
-    assert(0 && "Cannot emit thread pointer for this architecture.");
-    return nullptr;
-#  endif
+    return new BitCastInst(tls, T_pppjlvalue, "ptls", insertBefore);
 }
 
+GlobalVariable *LowerPTLS::create_aliased_global(Type *T, StringRef name) const
+{
+    // Create a static global variable and points a global alias to it so that
+    // the address is visible externally but LLVM can still assume that the
+    // address of this variable doesn't need dynamic relocation
+    // (can be accessed with a single PC-rel load).
+    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::InternalLinkage,
+                                 Constant::getNullValue(T), name + ".real");
+    add_comdat(GlobalAlias::create(T, 0, GlobalVariable::ExternalLinkage,
+                                   name, GV, M));
+    return GV;
+}
+
+template<typename T>
+inline T *LowerPTLS::add_comdat(T *G) const
+{
+#if defined(_OS_WINDOWS_)
+    // Add comdat information to make MSVC link.exe happy
+    // it's valid to emit this for ld.exe too,
+    // but makes it very slow to link for no benefit
+#if defined(_COMPILER_MICROSOFT_)
+    Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
+    // ELF only supports Comdat::Any
+    jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
+    G->setComdat(jl_Comdat);
+#endif
+    // add __declspec(dllexport) to everything marked for export
+    if (G->getLinkage() == GlobalValue::ExternalLinkage)
+        G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
+    else
+        G->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+#endif
+    return G;
+}
 #endif
 
-void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
-                              Function *ptls_getter, Type *T_ppjlvalue, MDNode *tbaa_const)
+void LowerPTLS::fix_ptls_use(CallInst *ptlsStates)
 {
-    CallInst *ptlsStates = NULL;
-    for (auto I = F->getEntryBlock().begin(), E = F->getEntryBlock().end();
-         I != E; ++I) {
-        if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
-            if (callInst->getCalledValue() == ptls_getter) {
-                ptlsStates = callInst;
-                break;
-            }
-        }
-    }
-    if (!ptlsStates)
-        return;
-
     if (ptlsStates->use_empty()) {
         ptlsStates->eraseFromParent();
         return;
@@ -169,86 +190,99 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
 
 #ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
-        GlobalVariable *GV = cast<GlobalVariable>(
-            M.getNamedValue("jl_get_ptls_states.ptr"));
         if (jl_tls_elf_support) {
-            GlobalVariable *OffsetGV = cast<GlobalVariable>(
-                M.getNamedValue("jl_tls_offset.val"));
             // if (offset != 0)
             //     ptls = tp + offset;
             // else
             //     ptls = getter();
-            auto offset = new LoadInst(OffsetGV, "", ptlsStates);
+            auto offset = new LoadInst(T_size, ptls_offset, "", false, ptlsStates);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
             auto cmp = new ICmpInst(ptlsStates, CmpInst::ICMP_NE, offset,
                                     Constant::getNullValue(offset->getType()));
-            MDBuilder MDB(ctx);
+            MDBuilder MDB(*ctx);
             SmallVector<uint32_t, 2> Weights{9, 1};
             TerminatorInst *fastTerm;
             TerminatorInst *slowTerm;
             SplitBlockAndInsertIfThenElse(cmp, ptlsStates, &fastTerm, &slowTerm,
                                           MDB.createBranchWeights(Weights));
 
-            auto fastTLS = emit_ptls_tp(ctx, offset, T_ppjlvalue, fastTerm);
-            auto phi = PHINode::Create(PointerType::get(T_ppjlvalue, 0), 2, "", ptlsStates);
+            auto fastTLS = emit_ptls_tp(offset, fastTerm);
+            auto phi = PHINode::Create(T_pppjlvalue, 2, "", ptlsStates);
             ptlsStates->replaceAllUsesWith(phi);
             ptlsStates->moveBefore(slowTerm);
-            auto getter = new LoadInst(GV, "", ptlsStates);
+            auto getter = new LoadInst(T_ptls_getter, ptls_slot, "", false, ptlsStates);
             getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
             ptlsStates->setCalledFunction(getter);
-            setCallPtlsAttrs(ptlsStates);
+            set_ptls_attrs(ptlsStates);
 
             phi->addIncoming(fastTLS, fastTLS->getParent());
             phi->addIncoming(ptlsStates, ptlsStates->getParent());
 
             return;
         }
-        auto getter = new LoadInst(GV, "", ptlsStates);
+        // In imaging mode, we emit the function address as a load of a static
+        // variable to be filled (in `staticdata.c`) at initialization time of the sysimg.
+        // This way we can by pass the extra indirection in `jl_get_ptls_states`
+        // since we may not know which getter function to use ahead of time.
+        auto getter = new LoadInst(T_ptls_getter, ptls_slot, "", false, ptlsStates);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+        getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
         ptlsStates->setCalledFunction(getter);
-        setCallPtlsAttrs(ptlsStates);
+        set_ptls_attrs(ptlsStates);
     }
     else if (jl_tls_offset != -1) {
-        ptlsStates->replaceAllUsesWith(emit_ptls_tp(ctx, nullptr, T_ppjlvalue, ptlsStates));
+        ptlsStates->replaceAllUsesWith(emit_ptls_tp(nullptr, ptlsStates));
         ptlsStates->eraseFromParent();
     }
     else {
-        setCallPtlsAttrs(ptlsStates);
+        // use the address of the actual getter function directly
+        auto val = ConstantInt::get(T_size, (uintptr_t)jl_get_ptls_states_getter());
+        ptlsStates->setCalledFunction(ConstantExpr::getIntToPtr(val, T_ptls_getter));
+        set_ptls_attrs(ptlsStates);
     }
 #else
-    ptlsStates->replaceAllUsesWith(M.getNamedValue("jl_tls_states"));
+    ptlsStates->replaceAllUsesWith(static_tls);
     ptlsStates->eraseFromParent();
 #endif
 }
 
-bool LowerPTLS::runOnModule(Module &M)
+bool LowerPTLS::runOnModule(Module &_M)
 {
-    MDNode *tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
-
-    Function *ptls_getter = M.getFunction("jl_get_ptls_states");
+    M = &_M;
+    ptls_getter = M->getFunction("julia.ptls_states");
     if (!ptls_getter)
-        return true;
-    LLVMContext &ctx = M.getContext();
-    FunctionType *functype = ptls_getter->getFunctionType();
-    auto T_ppjlvalue =
-        cast<PointerType>(functype->getReturnType())->getElementType();
+        return false;
+
+    ctx = &M->getContext();
+    tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
+
+    auto FT_ptls_getter = ptls_getter->getFunctionType();
+    T_ptls_getter = FT_ptls_getter->getPointerTo();
+    T_pppjlvalue = cast<PointerType>(FT_ptls_getter->getReturnType());
+    T_ppjlvalue = cast<PointerType>(T_pppjlvalue->getElementType());
+    T_int8 = Type::getInt8Ty(*ctx);
+    T_size = sizeof(size_t) == 8 ? Type::getInt64Ty(*ctx) : Type::getInt32Ty(*ctx);
+    T_pint8 = T_int8->getPointerTo();
 #ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
-        ensure_global("jl_get_ptls_states.ptr", functype->getPointerTo(), M);
-        ensure_global("jl_tls_offset.val",
-                      sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) : Type::getInt32Ty(ctx), M);
+        ptls_slot = create_aliased_global(T_ptls_getter, "jl_get_ptls_states_slot");
+        ptls_offset = create_aliased_global(T_size, "jl_tls_offset");
     }
 #else
-    ensure_global("jl_tls_states", T_ppjlvalue, M, imaging_mode);
+    static_tls = new GlobalVariable(*M, T_ppjlvalue, false, GlobalVariable::ExternalLinkage,
+                                    NULL, "jl_tls_states");
 #endif
-    for (auto F = M.begin(), E = M.end(); F != E; ++F) {
-        if (F->isDeclaration())
-            continue;
-        runOnFunction(ctx, M, &*F, ptls_getter, T_ppjlvalue, tbaa_const);
+
+    for (auto it = ptls_getter->user_begin(); it != ptls_getter->user_end();) {
+        auto call = cast<CallInst>(*it);
+        ++it;
+        assert(call->getCalledValue() == ptls_getter);
+        fix_ptls_use(call);
     }
-#ifndef JULIA_ENABLE_THREADING
+    assert(ptls_getter->use_empty());
     ptls_getter->eraseFromParent();
-#endif
     return true;
 }
 

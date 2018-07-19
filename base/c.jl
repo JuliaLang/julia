@@ -5,11 +5,11 @@
 import Core.Intrinsics: cglobal, bitcast
 
 """
-    cglobal((symbol, library) [, type=Void])
+    cglobal((symbol, library) [, type=Cvoid])
 
 Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
 in [`ccall`](@ref).
-Returns a `Ptr{Type}`, defaulting to `Ptr{Void}` if no `Type` argument is
+Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is
 supplied.
 The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
 respectively.
@@ -17,11 +17,39 @@ respectively.
 cglobal
 
 """
-    cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Void}
+    CFunction struct
 
-Generate C-callable function pointer from the Julia function `f`. Type annotation of the return
-value in the callback function is a must for situations where Julia cannot infer the return
-type automatically.
+Garbage-collection handle for the return value from `@cfunction`
+when the first argument is annotated with '\\\$'.
+Like all `cfunction` handles, it should be passed to `ccall` as a `Ptr{Cvoid}`,
+and will be converted automatically at the call site to the appropriate type.
+
+See [`@cfunction`](@ref).
+"""
+struct CFunction <: Ref{Cvoid}
+    ptr::Ptr{Cvoid}
+    f::Any
+    _1::Ptr{Cvoid}
+    _2::Ptr{Cvoid}
+    let constructor = false end
+end
+unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
+
+"""
+    @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
+    @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
+
+Generate a C-callable function pointer from the Julia function `closure`
+for the given type signature.
+To pass the return value to a `ccall`, use the argument type `Ptr{Cvoid}` in the signature.
+
+Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression
+(although it can include a splat expression). And that these arguments will be evaluated in global scope
+during compile-time (not deferred until runtime).
+Adding a '\\\$' in front of the function argument changes this to instead create a runtime closure
+over the local variable `callable`.
+
+See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
 
 # Examples
 ```julia-repl
@@ -29,11 +57,26 @@ julia> function foo(x::Int, y::Int)
            return x + y
        end
 
-julia> cfunction(foo, Int, Tuple{Int,Int})
-Ptr{Void} @0x000000001b82fcd0
+julia> @cfunction(foo, Int, (Int, Int))
+Ptr{Cvoid} @0x000000001b82fcd0
 ```
 """
-cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
+macro cfunction(f, at, rt)
+    if !(isa(rt, Expr) && rt.head === :tuple)
+        throw(ArgumentError("@cfunction argument types must be a literal tuple"))
+    end
+    rt.head = :call
+    pushfirst!(rt.args, GlobalRef(Core, :svec))
+    if isa(f, Expr) && f.head === :$
+        fptr = f.args[1]
+        typ = CFunction
+    else
+        fptr = QuoteNode(f)
+        typ = Ptr{Cvoid}
+    end
+    cfun = Expr(:cfunction, typ, fptr, at, rt, QuoteNode(:ccall))
+    return esc(cfun)
+end
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
     const Cchar = Int8
@@ -90,23 +133,28 @@ Cwchar_t
     end
 end
 
-# construction from typed pointers
-convert(::Type{Cstring}, p::Ptr{<:Union{Int8,UInt8}}) = bitcast(Cstring, p)
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = bitcast(Cwstring, p)
-convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8}} = bitcast(Ptr{T}, p)
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
+# construction from pointers
+Cstring(p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = bitcast(Cstring, p)
+Cwstring(p::Union{Ptr{Cwchar_t},Ptr{Cvoid}})       = bitcast(Cwstring, p)
+(::Type{Ptr{T}})(p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = bitcast(Ptr{T}, p)
+(::Type{Ptr{T}})(p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}}  = bitcast(Ptr{Cwchar_t}, p)
 
-# construction from untyped pointers
-convert(::Type{T}, p::Ptr{Void}) where {T<:Union{Cstring,Cwstring}} = bitcast(T, p)
+convert(::Type{Cstring}, p::Union{Ptr{Int8},Ptr{UInt8},Ptr{Cvoid}}) = Cstring(p)
+convert(::Type{Cwstring}, p::Union{Ptr{Cwchar_t},Ptr{Cvoid}}) = Cwstring(p)
+convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8,Cvoid}} = Ptr{T}(p)
+convert(::Type{Ptr{T}}, p::Cwstring) where {T<:Union{Cwchar_t,Cvoid}} = Ptr{T}(p)
 
 """
     pointer(array [, index])
 
-Get the native address of an array or string element. Be careful to ensure that a Julia
-reference to `a` exists as long as this pointer will be used. This function is "unsafe" like
-`unsafe_convert`.
+Get the native address of an array or string, optionally at a given location `index`.
 
-Calling `Ref(array[, index])` is generally preferable to this function.
+This function is "unsafe". Be careful to ensure that a Julia reference to
+`array` exists as long as this pointer will be used. The [`GC.@preserve`](@ref)
+macro should be used to protect the `array` argument from garbage collection
+within a given block of code.
+
+Calling [`Ref(array[, index])`](@ref Ref) is generally preferable to this function as it guarantees validity.
 """
 function pointer end
 
@@ -125,7 +173,7 @@ cconvert(::Type{Cstring}, s::AbstractString) =
     cconvert(Cstring, String(s)::String)
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
-    v = transcode(Cwchar_t, Vector{UInt8}(String(s)))
+    v = transcode(Cwchar_t, String(s))
     !isempty(v) && v[end] == 0 || push!(v, 0)
     return v
 end
@@ -138,7 +186,7 @@ containsnul(p::Ptr, len) =
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::Union{String,Vector{UInt8}})
+function unsafe_convert(::Type{Cstring}, s::Union{String,AbstractVector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -157,7 +205,8 @@ function unsafe_convert(::Type{Cwstring}, v::Vector{Cwchar_t})
 end
 
 # symbols are guaranteed not to contain embedded NUL
-convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
+cconvert(::Type{Cstring}, s::Symbol) = s
+unsafe_convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
 @static if ccall(:jl_get_UNAME, Any, ()) === :NT
 """
@@ -171,7 +220,7 @@ same argument.
 This is only available on Windows.
 """
 function cwstring(s::AbstractString)
-    bytes = Vector{UInt8}(String(s))
+    bytes = codeunits(String(s))
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return push!(transcode(UInt16, bytes), 0)
 end
@@ -199,19 +248,26 @@ Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode(::Type{T}, src::Vector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
 transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
-transcode(::Type{T}, src::Vector{UInt8}) where {T<:Union{Int32,UInt32}} = transcode(T, String(src))
+transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(Vector(src)))
+transcode(::Type{T}, src::CodeUnits{UInt8,String}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(src))
+
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
-    for c in src; print(buf, Char(c)); end
+    for c in src
+        print(buf, Char(c))
+    end
     take!(buf)
 end
 transcode(::Type{String}, src::String) = src
-transcode(T, src::String) = transcode(T, Vector{UInt8}(src))
+transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
-function transcode(::Type{UInt16}, src::Vector{UInt8})
+function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
+    @assert !has_offset_axes(src)
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -261,7 +317,8 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
     return dst
 end
 
-function transcode(::Type{UInt8}, src::Vector{UInt16})
+function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
+    @assert !has_offset_axes(src)
     n = length(src)
     n == 0 && return UInt8[]
 
@@ -339,8 +396,8 @@ end
 # reennable_sigint is provided so that immediate ctrl-c handling is
 # re-enabled within a sigatomic region, e.g. inside a Julia callback function
 # within a long-running C routine.
-sigatomic_begin() = ccall(:jl_sigatomic_begin, Void, ())
-sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
+sigatomic_begin() = ccall(:jl_sigatomic_begin, Cvoid, ())
+sigatomic_end() = ccall(:jl_sigatomic_end, Cvoid, ())
 
 """
     disable_sigint(f::Function)
@@ -382,7 +439,7 @@ function reenable_sigint(f::Function)
 end
 
 function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString,Symbol}=string(f))
-    ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
+    ccall(:jl_extern_c, Cvoid, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
 function expand_ccallable(rt, def)

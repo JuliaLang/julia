@@ -57,6 +57,7 @@ typedef struct {
 
 // Cache of thread local change to global metadata during GC
 // This is sync'd after marking.
+typedef union _jl_gc_mark_data jl_gc_mark_data_t;
 typedef struct {
     // thread local increment of `perm_scanned_bytes`
     size_t perm_scanned_bytes;
@@ -76,12 +77,12 @@ typedef struct {
     jl_mutex_t stack_lock;
     void **pc_stack;
     void **pc_stack_end;
-    char *data_stack;
+    jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
 // This includes all the thread local states we care about for a thread.
 #define JL_MAX_BT_SIZE 80000
-typedef struct _jl_tls_states_t {
+struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     size_t world_age;
     struct _jl_value_t *exception_in_transit;
@@ -130,7 +131,7 @@ typedef struct _jl_tls_states_t {
     int finalizers_inhibited;
     arraylist_t finalizers;
     jl_gc_mark_cache_t gc_cache;
-} jl_tls_states_t;
+};
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__

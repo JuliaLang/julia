@@ -1,14 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-@test length(ExponentialBackOff(n=10)) == 10
-@test collect(ExponentialBackOff(n=10, first_delay=0.01))[1] == 0.01
-@test maximum(ExponentialBackOff(n=10, max_delay=0.06)) == 0.06
-ratio(x) = x[2:end]./x[1:end-1]
-@test all(x->x ≈ 10.0, ratio(collect(ExponentialBackOff(n=10, max_delay=Inf, factor=10, jitter=0.0))))
-srand(12345)
-@test (mean(ratio(collect(ExponentialBackOff(n=100, max_delay=Inf, factor=1, jitter=0.1)))) - 1.0) < 1e-4
-
-let
+@testset "ExponentialBackOff" begin
+    @test length(ExponentialBackOff(n=10)) == 10
+    @test collect(ExponentialBackOff(n=10, first_delay=0.01))[1] == 0.01
+    @test maximum(ExponentialBackOff(n=10, max_delay=0.06)) == 0.06
+    ratio(x) = x[2:end]./x[1:end-1]
+    @test all(x->x ≈ 10.0, ratio(collect(ExponentialBackOff(n=10, max_delay=Inf, factor=10, jitter=0.0))))
+    Test.guardsrand(12345) do
+        x = ratio(collect(ExponentialBackOff(n=100, max_delay=Inf, factor=1, jitter=0.1)))
+        xm = sum(x) / length(x)
+        @test (xm - 1.0) < 1e-4
+    end
+end
+@testset "retrying after errors" begin
     function foo_error(c, n)
         c[1] += 1
         if c[1] <= n
@@ -53,7 +57,7 @@ let
     @test c[1] == 1
 
     c = [0]
-    ex = try retry(foo_error, check=(s,e)->(s,try e.http_status_code == "503" end != true))(c,2) catch e; e end
+    ex = try retry(foo_error, check=(s,e)->(s,try e.http_status_code == "503"; catch; end != true))(c,2) catch e; e end
     @test typeof(ex) == ErrorException
     @test ex.msg == "foo"
     @test c[1] == 2
@@ -63,6 +67,11 @@ let
     @test typeof(ex) == ErrorException
     @test ex.msg == "foo"
     @test c[1] == 1
+
+    # Test example in docstring where the check function doesn't return the state.
+    c = [0]
+    @test retry(foo_error, check=(s,e)->e.msg == "foo")(c,1) == 7
+    @test c[1] == 2
 
     # Functions with keyword arguments
     foo_kwargs(x; y=5) = x + y

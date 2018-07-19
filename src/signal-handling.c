@@ -229,7 +229,7 @@ void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_
     size_t i, n = *bt_size;
     if (sig)
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
-    jl_safe_printf("while loading %s, in expression starting on line %d\n", jl_filename, jl_lineno);
+    jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context)
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context);
     for (i = 0; i < n; i++)

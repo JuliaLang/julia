@@ -62,7 +62,7 @@ end
 
 @test filemode(file) & 0o444 > 0 # readable
 @test filemode(file) & 0o222 > 0 # writable
-chmod(file, filemode(file) & 0o7555)
+@test chmod(file, filemode(file) & 0o7555) == file
 @test filemode(file) & 0o222 == 0
 chmod(file, filemode(file) | 0o222)
 @test filemode(file) & 0o111 == 0
@@ -79,10 +79,28 @@ if Sys.iswindows()
     @test filemode(file) & 0o777 == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
+    function get_umask()
+        umask = ccall(:umask, UInt32, (UInt32,), 0)
+        ccall(:umask, UInt32, (UInt32,), umask)
+        return umask
+    end
+
     mktempdir() do tmpdir
+        umask = get_umask()
         tmpfile=joinpath(tmpdir, "tempfile.txt")
+        tmpfile2=joinpath(tmpdir, "tempfile2.txt")
         touch(tmpfile)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
+        chmod(tmpfile, 0o777)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
         chmod(tmpfile, 0o707)
+        cp(tmpfile, tmpfile2)
+        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        rm(tmpfile2)
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
         permissions=0o776
@@ -171,7 +189,7 @@ if !Sys.iswindows()
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
         @test stat(file).gid !=0
         @test stat(file).uid ==0
-        chown(file, -1, 0)
+        @test chown(file, -1, 0) == file
         @test stat(file).gid ==0
         @test stat(file).uid ==0
     else
@@ -180,98 +198,8 @@ if !Sys.iswindows()
     end
 else
     # test that chown doesn't cause any errors for Windows
-    @test chown(file, -2, -2) === nothing
+    @test chown(file, -2, -2) == file
 end
-
-#######################################################################
-# This section tests file watchers.                                   #
-#######################################################################
-function test_file_poll(channel,interval,timeout_s)
-    rc = poll_file(file, interval, timeout_s)
-    put!(channel,rc)
-end
-
-function test_timeout(tval)
-    tic()
-    channel = Channel(1)
-    @async test_file_poll(channel, 10, tval)
-    tr = take!(channel)
-    t_elapsed = toq()
-    @test tr[1] === Base.Filesystem.StatStruct() && tr[2] === EOFError()
-    @test tval <= t_elapsed
-end
-
-function test_touch(slval)
-    tval = slval*1.1
-    channel = Channel(1)
-    @async test_file_poll(channel, tval/3, tval)
-    sleep(tval/3)  # one poll period
-    f = open(file,"a")
-    write(f,"Hello World\n")
-    close(f)
-    tr = take!(channel)
-    @test ispath(tr[1]) && ispath(tr[2])
-end
-
-function test_watch_file_timeout(tval)
-    watch = @async watch_file(file, tval)
-    @test wait(watch) == Base.Filesystem.FileEvent(false, false, true)
-end
-
-function test_watch_file_change(tval)
-    watch = @async watch_file(file, tval)
-    sleep(tval/3)
-    open(file, "a") do f
-        write(f, "small change\n")
-    end
-    @test wait(watch) == Base.Filesystem.FileEvent(false, true, false)
-end
-
-function test_monitor_wait(tval)
-    fm = FileMonitor(file)
-    @async begin
-        sleep(tval)
-        f = open(file,"a")
-        write(f,"Hello World\n")
-        close(f)
-    end
-    fname, events = wait(fm)
-    close(fm)
-    if Sys.islinux() || Sys.iswindows() || Sys.isapple()
-        @test fname == basename(file)
-    else
-        @test fname == ""  # platforms where F_GETPATH is not available
-    end
-    @test events.changed
-end
-
-function test_monitor_wait_poll()
-    pfw = PollingFileWatcher(file, 5.007)
-    @async begin
-        sleep(2.5)
-        f = open(file,"a")
-        write(f,"Hello World\n")
-        close(f)
-    end
-    (old, new) = wait(pfw)
-    close(pfw)
-    @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
-end
-
-test_timeout(0.1)
-test_timeout(1)
-test_touch(6)
-test_monitor_wait(0.1)
-test_monitor_wait(0.1)
-test_monitor_wait_poll()
-test_monitor_wait_poll()
-test_watch_file_timeout(0.1)
-test_watch_file_change(6)
-
-@test_throws Base.UVError watch_file("____nonexistent_file", 10)
-@test(@elapsed(
-    @test(poll_file("____nonexistent_file", 1, 3.1) ===
-          (Base.Filesystem.StatStruct(), EOFError()))) > 3)
 
 ##############
 # mark/reset #
@@ -308,10 +236,10 @@ close(s)
 my_tempdir = tempdir()
 @test isdir(my_tempdir) == true
 
-path = tempname()
-# Issue #9053.
-@test ispath(path) == Sys.iswindows()
-ispath(path) && rm(path)
+let path = tempname()
+    # issue #9053
+    @test !ispath(path)
+end
 
 (p, f) = mktemp()
 print(f, "Here is some text")
@@ -342,7 +270,7 @@ end
 emptyfile = joinpath(dir, "empty")
 touch(emptyfile)
 emptyf = open(emptyfile)
-@test isempty(readlines(emptyf, chomp=false))
+@test isempty(readlines(emptyf, keep=true))
 close(emptyf)
 rm(emptyfile)
 
@@ -424,7 +352,7 @@ cp(afile, bfile)
 
 cfile = joinpath(dir, "c.txt")
 write(cfile, "This is longer than the contents of afile")
-cp(afile, cfile; remove_destination=true)
+cp(afile, cfile; force=true)
 
 a_stat = stat(afile)
 b_stat = stat(bfile)
@@ -511,8 +439,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         return test_src_paths, test_cp_paths
     end
 
-    function cp_follow_symlinks_false_check(s, d; remove_destination=false)
-        cp(s, d; remove_destination=remove_destination, follow_symlinks=false)
+    function cp_follow_symlinks_false_check(s, d; force=false)
+        cp(s, d; force=force, follow_symlinks=false)
         @test isdir(s) == isdir(d)
         @test islink(s) == islink(d)
         islink(s) && @test readlink(s) == readlink(d)
@@ -522,12 +450,12 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test length(readdir(d)) == 1
     end
 
-    function mv_check(s, d, d_mv; remove_destination=true)
+    function mv_check(s, d, d_mv; force=true)
         # setup dest
-        cp(s, d; remove_destination=true, follow_symlinks=false)
+        cp(s, d; force=true, follow_symlinks=false)
         stat_d = stat(d)
         # mv(rename) dst to dst_mv
-        mv(d, d_mv; remove_destination=remove_destination)
+        mv(d, d_mv; force=force)
         stat_d_mv = stat(d_mv)
         # make sure d does not exist anymore
         @test !ispath(d)
@@ -543,7 +471,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test Base.samefile(stat_d, stat_d_mv)
     end
 
-    ## Test require `remove_destination=true` (remove destination first) for existing
+    ## Test require `force=true` (remove destination first) for existing
     #  directories and existing links to directories
     # cp ----------------------------------------------------
     mktempdir() do tmpdir
@@ -560,24 +488,24 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         for (s, d) in zip(test_src_paths2, test_new_paths2)
             cp_follow_symlinks_false_check(s, d)
         end
-        # Test require `remove_destination=true`
+        # Test require `force=true`
         for s in test_src_paths1
             for d in test_new_paths2
-                @test_throws ArgumentError cp(s, d; remove_destination=false)
-                @test_throws ArgumentError cp(s, d; remove_destination=false, follow_symlinks=true)
+                @test_throws ArgumentError cp(s, d; force=false)
+                @test_throws ArgumentError cp(s, d; force=false, follow_symlinks=true)
             end
         end
         # Test remove the existing path first and copy
         # need to use here the test_src_paths2:
         # otherwise ArgumentError: 'src' and 'dst' refer to the same file/dir.
         for (s, d) in zip(test_src_paths2, test_new_paths1)
-            cp_follow_symlinks_false_check(s, d; remove_destination=true)
+            cp_follow_symlinks_false_check(s, d; force=true)
         end
         # Test remove the existing path first and copy an empty dir
         emptydir = joinpath(maindir1, "emptydir")
         mkdir(emptydir)
         for d in test_new_paths1
-            cp(emptydir, d; remove_destination=true, follow_symlinks=false)
+            cp(emptydir, d; force=true, follow_symlinks=false)
             # Expect no link because a dir is copied (follow_symlinks=false does not effect this)
             @test isdir(d) && !islink(d)
             # none should contain any file
@@ -594,16 +522,16 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         test_src_paths1, test_new_paths1 = setup_dirs(maindir1)
         test_src_paths2, test_new_paths2 = setup_dirs(maindir2)
         for (s, d) in zip(test_src_paths1, test_new_paths1)
-            cp_follow_symlinks_false_check(s, d; remove_destination=true)
+            cp_follow_symlinks_false_check(s, d; force=true)
         end
         for (s, d) in zip(test_src_paths2, test_new_paths2)
-            cp_follow_symlinks_false_check(s, d; remove_destination=true)
+            cp_follow_symlinks_false_check(s, d; force=true)
         end
 
-        # Test require `remove_destination=true`
+        # Test require `force=true`
         for s in test_src_paths1
             for d in test_new_paths2
-                @test_throws ArgumentError mv(s, d; remove_destination=false)
+                @test_throws ArgumentError mv(s, d; force=false)
             end
         end
         # Test remove the existing path first and move
@@ -611,7 +539,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         # otherwise ArgumentError: 'src' and 'dst' refer to the same file/dir.This is not supported.
         for (s, d) in zip(test_src_paths2, test_new_paths1)
             d_mv = joinpath(dirname(d), "$(basename(d))_mv")
-            mv_check(s, d, d_mv; remove_destination=true)
+            mv_check(s, d, d_mv; force=true)
         end
     end
 
@@ -648,7 +576,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         # move the 3 maindirs
         for d in [maindir_new, maindir_new_keepsym, maindir]
             d_mv = joinpath(dirname(d), "$(basename(d))_mv")
-            mv(d, d_mv; remove_destination=true)
+            mv(d, d_mv; force=true)
         end
     end
 
@@ -661,13 +589,13 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         for src in dirs
             for dst in dirs
                 # cptree
-                @test_throws ArgumentError Base.cptree(src,dst; remove_destination=true, follow_symlinks=false)
-                @test_throws ArgumentError Base.cptree(src,dst; remove_destination=true, follow_symlinks=true)
+                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=true)
                 # cp
-                @test_throws ArgumentError cp(src,dst; remove_destination=true, follow_symlinks=false)
-                @test_throws ArgumentError cp(src,dst; remove_destination=true, follow_symlinks=true)
+                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=true)
                 # mv
-                @test_throws ArgumentError mv(src,dst; remove_destination=true)
+                @test_throws ArgumentError mv(src,dst; force=true)
             end
         end
     end
@@ -677,13 +605,13 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         dst = joinpath(tmpdir, "dst")
         @test !ispath(none_existing_src)
         # cptree
-        @test_throws ArgumentError Base.cptree(none_existing_src,dst; remove_destination=true, follow_symlinks=false)
-        @test_throws ArgumentError Base.cptree(none_existing_src,dst; remove_destination=true, follow_symlinks=true)
+        @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=false)
+        @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=true)
         # cp
-        @test_throws Base.UVError cp(none_existing_src,dst; remove_destination=true, follow_symlinks=false)
-        @test_throws Base.UVError cp(none_existing_src,dst; remove_destination=true, follow_symlinks=true)
+        @test_throws Base.UVError cp(none_existing_src,dst; force=true, follow_symlinks=false)
+        @test_throws Base.UVError cp(none_existing_src,dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base.UVError mv(none_existing_src,dst; remove_destination=true)
+        @test_throws Base.UVError mv(none_existing_src,dst; force=true)
     end
 end
 
@@ -714,8 +642,8 @@ if !Sys.iswindows()
         return test_src_paths, test_new_paths, file_txt
     end
 
-    function cp_follow_symlinks_false_check(s, d, file_txt; remove_destination=false)
-        cp(s, d; remove_destination=remove_destination, follow_symlinks=false)
+    function cp_follow_symlinks_false_check(s, d, file_txt; force=false)
+        cp(s, d; force=force, follow_symlinks=false)
         @test isfile(s) == isfile(d)
         @test islink(s) == islink(d)
         islink(s) && @test readlink(s) == readlink(d)
@@ -724,12 +652,12 @@ if !Sys.iswindows()
         @test read(s, String) == read(d, String) == file_txt
     end
 
-    function mv_check(s, d, d_mv, file_txt; remove_destination=true)
+    function mv_check(s, d, d_mv, file_txt; force=true)
         # setup dest
-        cp(s, d; remove_destination=true, follow_symlinks=false)
+        cp(s, d; force=true, follow_symlinks=false)
         stat_d = stat(d)
         # mv(rename) dst to dst_mv
-        mv(d, d_mv; remove_destination=remove_destination)
+        mv(d, d_mv; force=force)
         stat_d_mv = stat(d_mv)
         # make sure d does not exist anymore
         @test !ispath(d)
@@ -744,7 +672,7 @@ if !Sys.iswindows()
         @test Base.samefile(stat_d, stat_d_mv)
     end
 
-    ## Test require `remove_destination=true` (remove destination first) for existing
+    ## Test require `force=true` (remove destination first) for existing
     #  files and existing links to files
     # cp ----------------------------------------------------
     mktempdir() do tmpdir
@@ -761,25 +689,25 @@ if !Sys.iswindows()
         for (s, d) in zip(test_src_paths2, test_new_paths2)
             cp_follow_symlinks_false_check(s, d, file_txt2)
         end
-        # Test require `remove_destination=true`
+        # Test require `force=true`
         for s in test_src_paths1
             for d in test_new_paths2
-                @test_throws ArgumentError cp(s, d; remove_destination=false)
-                @test_throws ArgumentError cp(s, d; remove_destination=false, follow_symlinks=true)
+                @test_throws ArgumentError cp(s, d; force=false)
+                @test_throws ArgumentError cp(s, d; force=false, follow_symlinks=true)
             end
         end
         # Test remove the existing path first and copy
         # need to use here the test_src_paths2:
         # otherwise ArgumentError: 'src' and 'dst' refer to the same file/dir.This is not supported.
         for (s, d) in zip(test_src_paths2, test_new_paths1)
-            cp_follow_symlinks_false_check(s, d, file_txt2; remove_destination=true)
+            cp_follow_symlinks_false_check(s, d, file_txt2; force=true)
         end
         # Test remove the existing path first and copy an other file
         otherfile = joinpath(tmpdir, "otherfile.txt")
         otherfile_content = "This is otherfile.txt with unicode - 这是一个文件"
         write(otherfile, otherfile_content)
         for d in test_new_paths1
-            cp(otherfile, d; remove_destination=true, follow_symlinks=false)
+            cp(otherfile, d; force=true, follow_symlinks=false)
             # Expect no link because a file is copied (follow_symlinks=false does not effect this)
             @test isfile(d) && !islink(d)
             # all should contain otherfile_content
@@ -801,10 +729,10 @@ if !Sys.iswindows()
         for (s, d) in zip(test_src_paths2, test_new_paths2)
             cp_follow_symlinks_false_check(s, d, file_txt2)
         end
-        # Test require `remove_destination=true`
+        # Test require `force=true`
         for s in test_src_paths1
             for d in test_new_paths2
-                @test_throws ArgumentError mv(s, d; remove_destination=false)
+                @test_throws ArgumentError mv(s, d; force=false)
             end
         end
         # Test remove the existing path first and move
@@ -812,7 +740,7 @@ if !Sys.iswindows()
         # otherwise ArgumentError: 'src' and 'dst' refer to the same file/dir.This is not supported.
         for (s, d) in zip(test_src_paths2, test_new_paths1)
             d_mv = joinpath(dirname(d), "$(basename(d))_mv")
-            mv_check(s, d, d_mv, file_txt2; remove_destination=true)
+            mv_check(s, d, d_mv, file_txt2; force=true)
         end
     end
 
@@ -875,7 +803,7 @@ if !Sys.iswindows()
         # As expected this will leave some absolute links broken #11145#issuecomment-99315168
         for d in [copytodir, maindir_new, maindir_new_keepsym, maindir]
             d_mv = joinpath(dirname(d), "$(basename(d))_mv")
-            mv(d, d_mv; remove_destination=true)
+            mv(d, d_mv; force=true)
         end
     end
     # issue  ----------------------------------------------------
@@ -887,13 +815,13 @@ if !Sys.iswindows()
         for src in files
             for dst in files
                 # cptree
-                @test_throws ArgumentError Base.cptree(src,dst; remove_destination=true, follow_symlinks=false)
-                @test_throws ArgumentError Base.cptree(src,dst; remove_destination=true, follow_symlinks=true)
+                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=true)
                 # cp
-                @test_throws ArgumentError cp(src,dst; remove_destination=true, follow_symlinks=false)
-                @test_throws ArgumentError cp(src,dst; remove_destination=true, follow_symlinks=true)
+                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=true)
                 # mv
-                @test_throws ArgumentError mv(src,dst; remove_destination=true)
+                @test_throws ArgumentError mv(src,dst; force=true)
             end
         end
     end
@@ -906,8 +834,8 @@ end
 ###################
 
 function test_LibcFILE(FILEp)
-    buf = Array{UInt8}(8)
-    str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp)
+    buf = Vector{UInt8}(undef, 8)
+    str = ccall(:fread, Csize_t, (Ptr{Cvoid}, Csize_t, Csize_t, Ptr{Cvoid}), buf, 1, 8, FILEp)
     @test String(buf) == "Hello, w"
     @test position(FILEp) == 8
     seek(FILEp, 5)
@@ -919,7 +847,7 @@ let f = open(file, "w")
     write(f, "Hello, world!")
     close(f)
     f = open(file, "r")
-    test_LibcFILE(convert(Libc.FILE, f))
+    test_LibcFILE(Libc.FILE(f))
     close(f)
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
@@ -933,7 +861,7 @@ end
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
         stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch,
         isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid,
-        issetuid, issocket, issticky, realpath, watch_file, poll_file)
+        issetuid, issocket, issticky, realpath)
     local f
     @test_throws ArgumentError f("adir\0bad")
 end
@@ -1068,6 +996,26 @@ rm(dir)
 @test !ispath(file)
 @test !ispath(dir)
 
+
+
+##################
+# Return values of mkpath, mkdir, cp, mv and touch
+####################
+mktempdir() do dir
+    name1 = joinpath(dir, "apples")
+    name2 = joinpath(dir, "bannanas")
+    @test touch(name1)==name1
+    @test mv(name1, name2) == name2
+    @test cp(name2, name1) == name1
+    namedir = joinpath(dir, "chalk")
+    namepath = joinpath(dir, "chalk","cheese","fresh")
+    @test mkdir(namedir) == namedir
+    @test mkpath(namepath) == namepath
+end
+
+
+
+
 # issue #9687
 let n = tempname()
     w = open(n, "a")
@@ -1081,41 +1029,6 @@ let n = tempname()
     rm(n)
 end
 
-#issue #12992
-function test_12992()
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    gc()
-    gc()
-end
-
-# Make sure multiple close is fine
-function test2_12992()
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    close(pfw)
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    close(pfw)
-    pfw = PollingFileWatcher(@__FILE__, 0.01)
-    close(pfw)
-    close(pfw)
-    gc()
-    gc()
-end
-
-test_12992()
-test_12992()
-test_12992()
-
-test2_12992()
-test2_12992()
-test2_12992()
-
 # issue 13559
 if !Sys.iswindows()
 function test_13559()
@@ -1123,18 +1036,19 @@ function test_13559()
     run(`mkfifo $fn`)
     # use subprocess to write 127 bytes to FIFO
     writer_cmds = """
+        using Test
         x = open($(repr(fn)), "w")
         for i in 1:120
             write(x, 0xaa)
         end
         flush(x)
-        Test.@test read(STDIN, Int8) == 31
+        Test.@test read(stdin, Int8) == 31
         for i in 1:7
             write(x, 0xaa)
         end
         close(x)
     """
-    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=STDERR), "w")
+    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=stderr), "w")
     # quickly read FIFO, draining it and blocking but not failing with EOFError yet
     r = open(fn, "r")
     # 15 proper reads
@@ -1150,23 +1064,25 @@ function test_13559()
 end
 test_13559()
 end
-@test_throws ArgumentError mkpath("fakepath", -1)
+@test_throws ArgumentError mkpath("fakepath", mode = -1)
 
 # issue #22566
-if !Sys.iswindows()
+# issue #24037 (disabling on FreeBSD)
+if !Sys.iswindows() && !(Sys.isbsd() && !Sys.isapple())
     function test_22566()
         fn = tempname()
         run(`mkfifo $fn`)
 
         script = """
+            using Test
             x = open($(repr(fn)), "w")
             write(x, 0x42)
             flush(x)
-            Test.@test read(STDIN, Int8) == 21
+            Test.@test read(stdin, Int8) == 21
             close(x)
         """
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
-        p = open(pipeline(cmd, stderr=STDERR), "w")
+        p = open(pipeline(cmd, stderr=stderr), "w")
 
         r = open(fn, "r")
         @test read(r, Int8) == 66

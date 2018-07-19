@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo
+using Core: CodeInfo, SimpleVector
 
 const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
 abstract type AbstractSet{T} end
-abstract type Associative{K,V} end
+abstract type AbstractDict{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
@@ -16,6 +16,14 @@ macro _inline_meta()
 end
 macro _noinline_meta()
     Expr(:meta, :noinline)
+end
+
+macro _gc_preserve_begin(arg1)
+    Expr(:gc_preserve_begin, esc(arg1))
+end
+
+macro _gc_preserve_end(token)
+    Expr(:gc_preserve_end, esc(token))
 end
 
 """
@@ -76,9 +84,9 @@ julia> convert(Int, 3.0)
 3
 
 julia> convert(Int, 3.5)
-ERROR: InexactError: convert(Int64, 3.5)
+ERROR: InexactError: Int64(Int64, 3.5)
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:701
+[...]
 ```
 
 If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
@@ -98,35 +106,14 @@ julia> convert(Rational{Int64}, x)
 6004799503160661//18014398509481984
 ```
 
-If `T` is a collection type and `x` a collection, the result of `convert(T, x)` may alias
-`x`.
+If `T` is a collection type and `x` a collection, the result of
+`convert(T, x)` may alias all or part of `x`.
 ```jldoctest
-julia> x = Int[1,2,3];
+julia> x = Int[1, 2, 3];
 
 julia> y = convert(Vector{Int}, x);
 
 julia> y === x
-true
-```
-Similarly, if `T` is a composite type and `x` a related instance, the result of
-`convert(T, x)` may alias part or all of `x`.
-```jldoctest
-julia> x = speye(5);
-
-julia> typeof(x)
-SparseMatrixCSC{Float64,Int64}
-
-julia> y = convert(SparseMatrixCSC{Float64,Int64}, x);
-
-julia> z = convert(SparseMatrixCSC{Float32,Int64}, y);
-
-julia> y === x
-true
-
-julia> z === x
-false
-
-julia> z.colptr === x.colptr
 true
 ```
 """
@@ -134,6 +121,9 @@ function convert end
 
 convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
+convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
+                                   # in the absence of inlining-enabled
+                                   # (due to fields typed as `Type`, which is generally a bad idea)
 
 """
     @eval [mod,] ex
@@ -142,40 +132,30 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    :(eval($__module__, $(Expr(:quote,ex))))
+    :(Core.eval($__module__, $(Expr(:quote,ex))))
 end
 macro eval(mod, ex)
-    :(eval($(esc(mod)), $(Expr(:quote,ex))))
+    :(Core.eval($(esc(mod)), $(Expr(:quote,ex))))
 end
 
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-# TODO: a better / more infer-able definition would pehaps be
-#   tuple_type_head(T::Type) = fieldtype(T::Type{<:Tuple}, 1)
-tuple_type_head(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
-function tuple_type_head(T::Union)
-    @_pure_meta
-    return Union{tuple_type_head(T.a), tuple_type_head(T.b)}
-end
-function tuple_type_head(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
-    return unwrapva(T.parameters[1])
-end
+tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
-tuple_type_tail(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
-function tuple_type_tail(T::Union)
+function tuple_type_tail(T::Type)
     @_pure_meta
-    return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
-end
-function tuple_type_tail(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
-    if isvatuple(T) && length(T.parameters) == 1
-        return T
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_tail(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+    else
+        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+        if isvatuple(T) && length(T.parameters) == 1
+            return T
+        end
+        return Tuple{argtail(T.parameters...)...}
     end
-    return Tuple{argtail(T.parameters...)...}
 end
 
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
@@ -217,13 +197,30 @@ end
 const _va_typename = Vararg.body.body.name
 function isvarargtype(@nospecialize(t))
     t = unwrap_unionall(t)
-    isa(t, DataType) && (t::DataType).name === _va_typename
+    return isa(t, DataType) && (t::DataType).name === _va_typename
 end
 
-isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
+function isvatuple(@nospecialize(t))
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        n = length(t.parameters)
+        return n > 0 && isvarargtype(t.parameters[n])
+    end
+    return false
+end
+
 function unwrapva(@nospecialize(t))
+    # NOTE: this returns a related type, but it's NOT a subtype of the original tuple
     t2 = unwrap_unionall(t)
-    isvarargtype(t2) ? t2.parameters[1] : t
+    return isvarargtype(t2) ? rewrap_unionall(t2.parameters[1], t) : t
+end
+
+function unconstrain_vararg_length(@nospecialize(va))
+    # construct a new Vararg type where its length is unconstrained,
+    # but its element type still captures any dependencies the input
+    # element type may have had on the input length
+    T = unwrap_unionall(va).parameters[1]
+    return rewrap_unionall(Vararg{T}, va)
 end
 
 typename(a) = error("typename does not apply to this type")
@@ -231,11 +228,13 @@ typename(a::DataType) = a.name
 function typename(a::Union)
     ta = typename(a.a)
     tb = typename(a.b)
-    ta === tb ? tb : error("typename does not apply to unions whose components have different typenames")
+    ta === tb || error("typename does not apply to unions whose components have different typenames")
+    return tb
 end
 typename(union::UnionAll) = typename(union.body)
 
 convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
+convert(::Type{Tuple{}}, x::Tuple{Any, Vararg{Any}}) = throw(MethodError(convert, (Tuple{}, x)))
 convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
     (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
 
@@ -276,6 +275,19 @@ convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
     oftype(x, y)
 
 Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+
+# Examples
+```jldoctest
+julia> x = 4;
+
+julia> y = 3.;
+
+julia> oftype(x, y)
+3
+
+julia> oftype(y, x)
+4.0
+```
 """
 oftype(x, y) = convert(typeof(x), y)
 
@@ -285,7 +297,7 @@ signed(x::UInt) = reinterpret(Int, x)
 # conversions used by ccall
 ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
-ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
+ptr_arg_unsafe_convert(::Type{Ptr{Cvoid}}, x) = x
 
 """
     cconvert(T,x)
@@ -313,19 +325,11 @@ unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
     reinterpret(type, A)
 
 Change the type-interpretation of a block of memory.
-For arrays, this constructs an array with the same binary data as the given
+For arrays, this constructs a view of the array with the same binary data as the given
 array, but with the specified element type.
 For example,
 `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 [`Float32`](@ref).
-
-!!! warning
-
-    It is not allowed to `reinterpret` an array to an element type with a larger alignment then
-    the alignment of the array. For a normal `Array`, this is the alignment of its element type.
-    For a reinterpreted array, this is the alignment of the `Array` it was reinterpreted from.
-    For example, `reinterpret(UInt32, UInt8[0, 0, 0, 0])` is not allowed but
-    `reinterpret(UInt32, reinterpret(UInt8, Float32[1.0]))` is allowed.
 
 # Examples
 ```jldoctest
@@ -333,8 +337,8 @@ julia> reinterpret(Float32, UInt32(7))
 1.0f-44
 
 julia> reinterpret(Float32, UInt32[1 2 3 4 5])
-1×5 Array{Float32,2}:
- 1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45
+1×5 reinterpret(Float32, ::Array{UInt32,2}):
+ 1.4013e-45  2.8026e-45  4.2039e-45  5.60519e-45  7.00649e-45
 ```
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
@@ -342,26 +346,34 @@ reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
 """
-    sizeof(T)
+    sizeof(T::DataType)
+    sizeof(obj)
 
-Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
+Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
+Size, in bytes, of object `obj` if it is not `DataType`.
 
 # Examples
 ```jldoctest
 julia> sizeof(Float32)
 4
 
-julia> sizeof(Complex128)
+julia> sizeof(ComplexF64)
 16
+
+julia> sizeof(1.0)
+8
+
+julia> sizeof([1.0:10.0;])
+80
 ```
 
-If `T` does not have a specific size, an error is thrown.
+If `DataType` `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
-julia> sizeof(Base.LinAlg.LU)
+julia> sizeof(AbstractArray)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
- [1] sizeof(::Type{T} where T) at ./essentials.jl:367
+[...]
 ```
 """
 sizeof(x) = Core.sizeof(x)
@@ -370,25 +382,25 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    out = Vector{Any}(4)
+    out = Vector{Any}(undef, 4)
     l = 4
     i = 1
     for x in xs
         for y in x
             if i > l
-                ccall(:jl_array_grow_end, Void, (Any, UInt), out, 16)
+                _growend!(out, 16)
                 l += 16
             end
-            Core.arrayset(true, out, y, i)
+            arrayset(true, out, y, i)
             i += 1
         end
     end
-    ccall(:jl_array_del_end, Void, (Any, UInt), out, l-i+1)
+    _deleteend!(out, l-i+1)
     out
 end
 
 # simple Array{Any} operations needed for bootstrap
-@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset($(Expr(:boundscheck)), A, x, i)
+@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
     precompile(f, args::Tuple{Vararg{Any}})
@@ -417,25 +429,29 @@ esc(@nospecialize(e)) = Expr(:escape, e)
 
 Annotates the expression `blk` as a bounds checking block, allowing it to be elided by [`@inbounds`](@ref).
 
-Note that the function in which `@boundscheck` is written must be inlined into
-its caller with [`@inline`](@ref) in order for `@inbounds` to have effect.
+!!! note
+    The function in which `@boundscheck` is written must be inlined into
+    its caller in order for `@inbounds` to have effect.
 
-```jldoctest
+# Examples
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> @inline function g(A, i)
            @boundscheck checkbounds(A, i)
            return "accessing (\$A)[\$i]"
-       end
-       f1() = return g(1:2, -1)
-       f2() = @inbounds return g(1:2, -1)
-f2 (generic function with 1 method)
+       end;
+
+julia> f1() = return g(1:2, -1);
+
+julia> f2() = @inbounds return g(1:2, -1);
 
 julia> f1()
 ERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]
 Stacktrace:
- [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:428
- [2] checkbounds at ./abstractarray.jl:392 [inlined]
- [3] g at ./REPL[20]:2 [inlined]
- [4] f1() at ./REPL[20]:5
+ [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:455
+ [2] checkbounds at ./abstractarray.jl:420 [inlined]
+ [3] g at ./none:2 [inlined]
+ [4] f1() at ./none:1
+ [5] top-level scope
 
 julia> f2()
 "accessing (1:2)[-1]"
@@ -484,14 +500,29 @@ end
 macro inbounds(blk)
     return Expr(:block,
         Expr(:inbounds, true),
-        esc(blk),
-        Expr(:inbounds, :pop))
+        Expr(:local, Expr(:(=), :val, esc(blk))),
+        Expr(:inbounds, :pop),
+        :val)
 end
 
+"""
+    @label name
+
+Labels a statement with the symbolic label `name`. The label marks the end-point
+of an unconditional jump with [`@goto name`](@ref).
+"""
 macro label(name::Symbol)
     return esc(Expr(:symboliclabel, name))
 end
 
+"""
+    @goto name
+
+`@goto name` unconditionally jumps to the statement at the location [`@label name`](@ref).
+
+`@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
+error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
+"""
 macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
@@ -499,24 +530,31 @@ end
 # SimpleVector
 
 function getindex(v::SimpleVector, i::Int)
-    if !(1 <= i <= length(v))
+    @boundscheck if !(1 <= i <= length(v))
         throw(BoundsError(v,i))
     end
-    x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    t = @_gc_preserve_begin v
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
     x == C_NULL && throw(UndefRefError())
-    return unsafe_pointer_to_objref(x)
+    o = unsafe_pointer_to_objref(x)
+    @_gc_preserve_end t
+    return o
 end
 
-# TODO: add gc use intrinsic call instead of noinline
-length(v::SimpleVector) = (@_noinline_meta; unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v))))
-endof(v::SimpleVector) = length(v)
-start(v::SimpleVector) = 1
-next(v::SimpleVector,i) = (v[i],i+1)
-done(v::SimpleVector,i) = (i > length(v))
+function length(v::SimpleVector)
+    t = @_gc_preserve_begin v
+    l = unsafe_load(convert(Ptr{Int},pointer_from_objref(v)))
+    @_gc_preserve_end t
+    return l
+end
+firstindex(v::SimpleVector) = 1
+lastindex(v::SimpleVector) = length(v)
+iterate(v::SimpleVector, i=1) = (length(v) < i ? nothing : (v[i], i + 1))
+eltype(::Type{SimpleVector}) = Any
+keys(v::SimpleVector) = OneTo(length(v))
 isempty(v::SimpleVector) = (length(v) == 0)
-indices(v::SimpleVector) = (OneTo(length(v)),)
-linearindices(v::SimpleVector) = indices(v, 1)
-indices(v::SimpleVector, d) = d <= 1 ? indices(v)[d] : OneTo(1)
+axes(v::SimpleVector) = (OneTo(length(v)),)
+axes(v::SimpleVector, d) = d <= 1 ? axes(v)[d] : OneTo(1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)
     length(v1)==length(v2) || return false
@@ -533,9 +571,10 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 """
     isassigned(array, i) -> Bool
 
-Tests whether the given array has a value associated with index `i`. Returns `false`
+Test whether the given array has a value associated with index `i`. Return `false`
 if the index is out of bounds, or has an undefined reference.
 
+# Examples
 ```jldoctest
 julia> isassigned(rand(3, 3), 5)
 true
@@ -559,7 +598,9 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
-    x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    t = @_gc_preserve_begin v
+    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
+    @_gc_preserve_end t
     return x != C_NULL
 end
 
@@ -571,8 +612,11 @@ Colons (:) are used to signify indexing entire objects or dimensions at once.
 Very few operations are defined on Colons directly; instead they are converted
 by [`to_indices`](@ref) to an internal vector type (`Base.Slice`) to represent the
 collection of indices they span before being used.
+
+The singleton instance of `Colon` is also a function used to construct ranges;
+see [`:`](@ref).
 """
-struct Colon
+struct Colon <: Function
 end
 const (:) = Colon()
 
@@ -601,36 +645,6 @@ end
 
 Val(x) = (@_pure_meta; Val{x}())
 
-# used by interpolating quote and some other things in the front end
-function vector_any(@nospecialize xs...)
-    n = length(xs)
-    a = Vector{Any}(n)
-    @inbounds for i = 1:n
-        Core.arrayset(false, a, xs[i], i)
-    end
-    a
-end
-
-function as_kwargs(xs::Union{AbstractArray,Associative})
-    n = length(xs)
-    to = Vector{Any}(n*2)
-    i = 1
-    for (k, v) in xs
-        to[i]   = k::Symbol
-        to[i+1] = v
-        i += 2
-    end
-    return to
-end
-
-function as_kwargs(xs)
-    to = Vector{Any}(0)
-    for (k, v) in xs
-        ccall(:jl_array_ptr_1d_push2, Void, (Any, Any, Any), to, k::Symbol, v)
-    end
-    return to
-end
-
 """
     invokelatest(f, args...; kwargs...)
 
@@ -641,7 +655,10 @@ call obsolete versions of a function `f`.
 (The drawback is that `invokelatest` is somewhat slower than calling
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
-function invokelatest(f, args...; kwargs...)
+function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
+    if isempty(kwargs)
+        return Core._apply_latest(f, args)
+    end
     # We use a closure (`inner`) to handle kwargs.
     inner() = f(args...; kwargs...)
     Core._apply_latest(inner)
@@ -685,25 +702,6 @@ julia> start([4;2;3])
 function start end
 
 """
-    done(iter, state) -> Bool
-
-Test whether we are done iterating.
-
-# Examples
-```jldoctest
-julia> done(1:5, 3)
-false
-
-julia> done(1:5, 5)
-false
-
-julia> done(1:5, 6)
-true
-```
-"""
-function done end
-
-"""
     isempty(collection) -> Bool
 
 Determine whether a collection is empty (has no elements).
@@ -717,7 +715,11 @@ julia> isempty([1 2 3])
 false
 ```
 """
-isempty(itr) = done(itr, start(itr))
+function isempty(itr)
+    d = isdone(itr)
+    d !== missing && return d
+    iterate(itr) === nothing
+end
 
 """
     values(iterator)
@@ -726,5 +728,150 @@ For an iterator or collection that has keys and values, return an iterator
 over the values.
 This function simply returns its argument by default, since the elements
 of a general iterator are normally considered its "values".
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2);
+
+julia> values(d)
+Base.ValueIterator for a Dict{String,Int64} with 2 entries. Values:
+  2
+  1
+
+julia> values([2])
+1-element Array{Int64,1}:
+ 2
+```
 """
 values(itr) = itr
+
+"""
+    Missing
+
+A type with no fields whose singleton instance [`missing`](@ref) is used
+to represent missing values.
+"""
+struct Missing end
+
+"""
+    missing
+
+The singleton instance of type [`Missing`](@ref) representing a missing value.
+"""
+const missing = Missing()
+
+"""
+    ismissing(x)
+
+Indicate whether `x` is [`missing`](@ref).
+"""
+ismissing(::Any) = false
+ismissing(::Missing) = true
+
+function popfirst! end
+function peek end
+
+"""
+    @__LINE__ -> Int
+
+Expand to the line number of the location of the macrocall.
+Return `0` if the line number could not be determined.
+"""
+macro __LINE__()
+    return __source__.line
+end
+
+# Just for bootstrapping purposes below
+macro __FILE_SYMBOL__()
+    return Expr(:quote, __source__.file)
+end
+
+# Iteration
+"""
+    isdone(itr, state...) -> Union{Bool, Missing}
+
+This function provides a fast-path hint for iterator completion.
+This is useful for mutable iterators that want to avoid having elements
+consumed, if they are not going to be exposed to the user (e.g. to check
+for done-ness in `isempty` or `zip`). Mutable iterators that want to
+opt into this feature should define an isdone method that returns
+true/false depending on whether the iterator is done or not. Stateless
+iterators need not implement this function. If the result is `missing`,
+callers may go ahead and compute `iterate(x, state...) === nothing` to
+compute a definite answer.
+"""
+isdone(itr, state...) = missing
+
+"""
+    iterate(iter [, state]) -> Union{Nothing, Tuple{Any, Any}}
+
+Advance the iterator to obtain the next element. If no elements
+remain, nothing should be returned. Otherwise, a 2-tuple of the
+next element and the new iteration state should be returned.
+"""
+function iterate end
+
+# Compatibility with old iteration protocol
+function iterate(x, state)
+    @_inline_meta
+    done(x, state) && return nothing
+    return next(x, state)
+end
+const old_iterate_line_prev = (@__LINE__)
+iterate(x) = (@_inline_meta; iterate(x, start(x)))
+
+struct LegacyIterationCompat{I,T,S}
+    done::Bool
+    nextval::T
+    state::S
+    LegacyIterationCompat{I,T,S}() where {I,T,S} = new{I,T,S}(true)
+    LegacyIterationCompat{I,T,S}(nextval::T, state::S) where {I,T,S} = new{I,T,S}(false, nextval, state)
+end
+
+function has_non_default_iterate(T)
+    world = ccall(:jl_get_world_counter, UInt, ())
+    mt = Base._methods(iterate, Tuple{T}, -1, world)
+    # Check if this is the above method
+    if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == old_iterate_line_prev + 1)
+        return false
+    end
+    return true
+end
+
+const compat_start_line_prev = (@__LINE__)
+function start(itr::T) where {T}
+    has_non_default_iterate(T) || throw(MethodError(iterate, (itr,)))
+    y = iterate(itr)
+    y === nothing && return LegacyIterationCompat{T, Union{}, Union{}}()
+    val, state = y
+    LegacyIterationCompat{T, typeof(val), typeof(state)}(val, state)
+end
+
+function next(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S}
+    val, state = state.nextval, state.state
+    y = iterate(itr, state)
+    if y === nothing
+        return (val, LegacyIterationCompat{I,T,S}())
+    end
+    nextval, state = y
+    val, LegacyIterationCompat{I, typeof(nextval), typeof(state)}(nextval, state)
+end
+
+done(itr::I, state::LegacyIterationCompat{I,T,S}) where {I,T,S} = (@_inline_meta; state.done)
+# This is necessary to support the above compatibility layer,
+# eventually, this should just check for applicability of `iterate`
+function isiterable(T)::Bool
+    if !has_non_default_iterate(T)
+        world = ccall(:jl_get_world_counter, UInt, ())
+        mt = Base._methods(start, Tuple{T}, -1, world)
+        # Check if this is the fallback start method
+        if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == compat_start_line_prev + 2)
+            return false
+        end
+    end
+    return true
+end
+
+# This is required to avoid massive performance problems
+# due to the start(s::AbstractString) deprecation.
+iterate(s::AbstractString) = iterate(s, firstindex(s))

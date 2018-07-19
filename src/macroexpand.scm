@@ -2,49 +2,50 @@
 
 ;; backquote expansion
 
-(define (splice-expr? e)
-  ;; ($ (tuple (... x)))
-  (and (length= e 2)          (eq? (car e)   '$)
-       (length= (cadr e) 2)   (eq? (caadr e) 'tuple)
-       (vararg? (cadadr e))))
+(define splat-token '(__splat__))
 
-(define (wrap-with-splice x)
-  `(call (core _expr) (inert $)
-         (call (core _expr) (inert tuple)
-               (call (core _expr) (inert |...|) ,x))))
+(define (bq-expand-arglist lst d)
+  (let loop ((lst lst)
+             (out '()))
+    (if (null? lst)
+        (reverse! out)
+        (let ((nxt (julia-bq-expand- (car lst) d)))
+          (if (and (pair? nxt) (eq? (car nxt) splat-token))
+              (loop (cdr lst) (revappend (cdr nxt) out))
+              (loop (cdr lst) (cons nxt out)))))))
 
-(define (julia-bq-bracket x d)
-  (if (splice-expr? x)
-      (if (= d 0)
-          (cadr (cadr (cadr x)))
-          (list 'call '(top vector_any)
-                (wrap-with-splice (julia-bq-expand (cadr (cadr (cadr x))) (- d 1)))))
-      (list 'call '(top vector_any) (julia-bq-expand x d))))
-
-(define (julia-bq-expand x d)
+(define (julia-bq-expand- x d)
   (cond ((or (eq? x 'true) (eq? x 'false))  x)
         ((or (symbol? x) (ssavalue? x))     (list 'inert x))
         ((atom? x)  x)
-        ((eq? (car x) 'quote)
-         `(call (core _expr) (inert quote) ,(julia-bq-expand (cadr x) (+ d 1))))
-        ((eq? (car x) '$)
-         (if (and (= d 0) (length= x 2))
-             (cadr x)
-             (if (splice-expr? (cadr x))
-                 `(call (core splicedexpr) (inert $)
-                        (call (top append_any) ,(julia-bq-bracket (cadr x) (- d 1))))
-                 `(call (core _expr) (inert $) ,(julia-bq-expand (cadr x) (- d 1))))))
+        ((and (= d 0) (eq? (car x) '$))
+         (if (length= x 2)
+             (if (vararg? (cadr x))
+                 ;; splice expr ($ (... x))
+                 `(... ,(cadr (cadr x)))
+                 ;; otherwise normal interpolation
+                 (cadr x))
+             ;; in e.g. `quote quote $$(x...) end end` multiple expressions can be
+             ;; spliced into `$`, which then need to be spliced into the enclosing
+             ;; expression in the next stage.
+             (cons splat-token (cdr x))))
         ((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) x))
-         `(copyast (inert ,x)))
-        ((not (any splice-expr? x))
-         `(call (core _expr) ,.(map (lambda (ex) (julia-bq-expand ex d)) x)))
+         (if (eq? (car x) 'line)
+             `(inert ,x)
+             `(copyast (inert ,x))))
         (else
-         (let loop ((p (cdr x)) (q '()))
-           (if (null? p)
-               (let ((forms (reverse q)))
-                 `(call (core splicedexpr) ,(julia-bq-expand (car x) d)
-                        (call (top append_any) ,@forms)))
-               (loop (cdr p) (cons (julia-bq-bracket (car p) d) q)))))))
+         (case (car x)
+           ((inert) `(call (core QuoteNode)      ,@(bq-expand-arglist (cdr x) d)))
+           ((line)  `(call (core LineNumberNode) ,@(bq-expand-arglist (cdr x) d)))
+           ((quote) `(call (core _expr)          ,@(bq-expand-arglist x (+ d 1))))
+           (($)     `(call (core _expr)          ,@(bq-expand-arglist x (- d 1))))
+           (else    `(call (core _expr)          ,@(bq-expand-arglist x d)))))))
+
+(define (julia-bq-expand x d)
+  (let ((e (julia-bq-expand- x d)))
+    (if (and (pair? e) (eq? (car e) splat-token))
+        '(error "\"...\" expression outside call")
+        e)))
 
 ;; hygiene
 
@@ -60,9 +61,12 @@
    ;; function definition
    (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    (cons 'varlist (safe-llist-positional-args (fix-arglist argl))))
-   (pattern-lambda (function (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
-                   (cons 'varlist (append (safe-llist-positional-args (fix-arglist argl))
-                                          (typevar-names wheres))))
+   (pattern-lambda (function (where callspec . wheres) body)
+                   (let ((others (pattern-expand1 vars-introduced-by-patterns `(function ,callspec ,body))))
+                     (cons 'varlist (append (if (and (pair? others) (eq? (car others) 'varlist))
+                                                (cdr others)
+                                                '())
+                                            (typevar-names wheres)))))
 
    (pattern-lambda (function (tuple . args) body)
                    `(-> (tuple ,@args) ,body))
@@ -72,7 +76,7 @@
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    `(function (call ,name ,@argl) ,body))
-   (pattern-lambda (= (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+   (pattern-lambda (= (where callspec . wheres) body)
                    (cons 'function (cdr __)))
 
    ;; anonymous function
@@ -85,6 +89,8 @@
 
    ;; where
    (pattern-lambda (where ex . vars)
+                   (cons 'varlist (typevar-names vars)))
+   (pattern-lambda (= (curly ex . vars) rhs)
                    (cons 'varlist (typevar-names vars)))
 
    ;; let
@@ -149,14 +155,14 @@
 
    (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    (cons 'varlist (safe-llist-keyword-args (fix-arglist argl))))
-   (pattern-lambda (function (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
-                   (cons 'varlist (safe-llist-keyword-args (fix-arglist argl))))
+   (pattern-lambda (function (where callspec . wheres) body)
+                   `(function ,callspec ,body))
 
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    `(function (call ,name ,@argl) ,body))
-   (pattern-lambda (= (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+   (pattern-lambda (= (where callspec . wheres) body)
                    (cons 'function (cdr __)))
    ))
 
@@ -210,18 +216,25 @@
 
 ;; arg names, looking only at positional args
 (define (safe-llist-positional-args lst (escaped #f))
-  (safe-arg-names
-   (filter (lambda (a) (not (and (pair? a)
-                                 (eq? (car a) 'parameters))))
-           lst)
-   escaped))
+  (receive
+   (params normal) (separate (lambda (a) (and (pair? a)
+                                              (eq? (car a) 'parameters)))
+                             lst)
+   (safe-arg-names
+    (append normal
+            ;; rest keywords name is not a keyword
+            (apply append (map (lambda (a) (filter vararg? a))
+                               params)))
+    escaped)))
 
 ;; arg names from keyword arguments, and positional arguments with escaped names
 (define (safe-llist-keyword-args lst)
-  (let ((kwargs (apply nconc
-                       (map cdr
-                            (filter (lambda (a) (and (pair? a) (eq? (car a) 'parameters)))
-                                    lst)))))
+  (let* ((kwargs (apply nconc
+                        (map cdr
+                             (filter (lambda (a) (and (pair? a) (eq? (car a) 'parameters)))
+                                     lst))))
+         ;; rest keywords name is not a keyword
+         (kwargs (filter (lambda (x) (not (vararg? x))) kwargs)))
     (append
      (safe-arg-names kwargs #f)
      (safe-arg-names kwargs #t)
@@ -280,7 +293,7 @@
    m parent-scope inarg))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
          e)
         ((symbol? e)
          (let ((a (assq e env)))
@@ -304,10 +317,10 @@
                              ((assignment? arg)
                               `(global
                                 (= ,(unescape (cadr arg))
-                                   ,(resolve-expansion-vars-with-new-env (caddr arg) env m inarg))))
+                                   ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))))
                              (else
-                              `(global ,(resolve-expansion-vars-with-new-env arg env m inarg))))))
-           ((using import importall export meta line inbounds boundscheck simdloop) (map unescape e))
+                              `(global ,(resolve-expansion-vars-with-new-env arg env m parent-scope inarg))))))
+           ((using import importall export meta line inbounds boundscheck simdloop gc_preserve gc_preserve_end) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
@@ -399,11 +412,6 @@
   (if (and (pair? e) (eq? (car e) 'tuple))
       (apply append (map decl-vars* (cdr e)))
       (list (decl-var* e))))
-
-(define (function-def? e)
-  (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
-                     (and (eq? (car e) '=) (length= e 3)
-                          (eventually-call? (cadr e))))))
 
 ;; count hygienic / escape pairs
 ;; and fold together a list resulting from applying the function to

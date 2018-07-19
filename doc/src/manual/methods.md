@@ -242,8 +242,11 @@ julia> g(2, 3.0)
 8.0
 
 julia> g(2.0, 3.0)
-ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
-[...]
+ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
+  g(x, y::Float64) in Main at none:1
+  g(x::Float64, y) in Main at none:1
+Possible fix, define
+  g(::Float64, ::Float64)
 ```
 
 Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
@@ -506,12 +509,12 @@ julia> f(1)
 julia> g(1)
 "definition for Int"
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "original definition"
 
 julia> t = @async f(wait()); yield();
 
-julia> wait(schedule(t, 1))
+julia> fetch(schedule(t, 1))
 "definition for Int"
 ```
 
@@ -590,7 +593,7 @@ The subtypes of `AbstractArray` typically implement two methods to
 achieve this:
 A method to convert the input array to a subtype of a specific `AbstractArray{T, N}` abstract type;
 and a method to make a new uninitialized array with a specific element type.
-Sample implementations of these can be found in the standard library.
+Sample implementations of these can be found in Julia Base.
 Here is a basic example usage of them, guaranteeing that `input` and
 `output` are of the same type:
 
@@ -602,11 +605,11 @@ output = similar(input, Eltype)
 As an extension of this, in cases where the algorithm needs a copy of
 the input array,
 [`convert`](@ref) is insufficient as the return value may alias the original input.
-Combining [`similar`](@ref) (to make the output array) and [`copy!`](@ref) (to fill it with the input data)
+Combining [`similar`](@ref) (to make the output array) and [`copyto!`](@ref) (to fill it with the input data)
 is a generic way to express the requirement for a mutable copy of the input argument:
 
 ```julia
-copy_with_eltype(input, Eltype) = copy!(similar(input, Eltype), input)
+copy_with_eltype(input, Eltype) = copyto!(similar(input, Eltype), input)
 ```
 
 ### Iterated dispatch
@@ -714,7 +717,7 @@ function matmul(a::AbstractMatrix, b::AbstractMatrix)
 
     # this is wrong, since depending on the return value
     # of type-inference is very brittle (as well as not being optimizable):
-    # R = return_types(op, (eltype(a), eltype(b)))
+    # R = Base.return_types(op, (eltype(a), eltype(b)))
 
     ## but, finally, this works:
     R = promote_op(op, eltype(a), eltype(b))
@@ -786,10 +789,10 @@ Closest candidates are:
 More usefully, it is possible to constrain varargs methods by a parameter. For example:
 
 ```julia
-function getindex(A::AbstractArray{T,N}, indexes::Vararg{Number,N}) where {T,N}
+function getindex(A::AbstractArray{T,N}, indices::Vararg{Number,N}) where {T,N}
 ```
 
-would be called only when the number of `indexes` matches the dimensionality of the array.
+would be called only when the number of `indices` matches the dimensionality of the array.
 
 When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
 written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.
@@ -862,7 +865,7 @@ julia> p(3)
 ```
 
 This mechanism is also the key to how type constructors and closures (inner functions that refer
-to their surrounding environment) work in Julia, discussed [later in the manual](@ref constructors-and-conversion).
+to their surrounding environment) work in Julia.
 
 ## Empty generic functions
 

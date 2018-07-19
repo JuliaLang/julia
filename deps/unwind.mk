@@ -4,7 +4,7 @@ LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC)
 LIBUNWIND_CPPFLAGS :=
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://s3.amazonaws.com/julialang/src/libunwind-$(UNWIND_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://julialang-s3.julialang.org/src/libunwind-$(UNWIND_VER).tar.gz
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
@@ -32,7 +32,11 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-freebsd-mapper.patch-applied: $(SR
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p0 -f < $(SRCDIR)/patches/libunwind-freebsd-mapper.patch
 	echo 1 > $@
 
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-freebsd-mapper.patch-applied
+$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-Fix-incorrect-cfi-execution.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-freebsd-mapper.patch-applied
+	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-dwarf-Fix-incorrect-cfi-execution.patch
+	echo 1 > $@
+
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-Fix-incorrect-cfi-execution.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo

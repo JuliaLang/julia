@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.llvmcall
+using Base: llvmcall
+using InteractiveUtils: code_llvm
 
 #function add1234(x::Tuple{Int32,Int32,Int32,Int32})
 #    llvmcall("""%3 = add <4 x i32> %1, %0
@@ -48,8 +49,8 @@ end
 
 # Test whether llvmcall escapes the function name correctly
 baremodule PlusTest
-    using Base.llvmcall
-    using Base.Test
+    using Base: llvmcall
+    using Test
     using Base
 
     function +(x::Int32, y::Int32)
@@ -86,7 +87,7 @@ function declared_floor(x::Float64)
 end
 @test declared_floor(4.2) ≈ 4.
 ir = sprint(code_llvm, declared_floor, Tuple{Float64})
-@test contains(ir, "call double @llvm.floor.f64") # should be inlined
+@test occursin("call double @llvm.floor.f64", ir) # should be inlined
 
 function doubly_declared_floor(x::Float64)
     llvmcall(
@@ -139,7 +140,7 @@ function confuse_declname_parsing()
     llvmcall(
         ("""declare i64 addrspace(0)* @foobar()""",
          """ret void"""),
-    Void, Tuple{})
+    Cvoid, Tuple{})
 end
 confuse_declname_parsing()
 
@@ -155,9 +156,10 @@ end
 call_jl_errno()
 
 module ObjLoadTest
-    using Base: Test, llvmcall, @ccallable
+    using Base: llvmcall, @ccallable
+    using Test
     didcall = false
-    @ccallable Void function jl_the_callback()
+    @ccallable Cvoid function jl_the_callback()
         global didcall
         didcall = true
         nothing
@@ -170,7 +172,7 @@ module ObjLoadTest
         """
         call void @jl_the_callback()
         ret void
-        """),Void,Tuple{})
+        """),Cvoid,Tuple{})
     end
     do_the_call()
     @test didcall
@@ -185,15 +187,16 @@ if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so ju
         Base.llvmcall(
          """%1 = getelementptr i64, i64* null, i64 1
             ret void""",
-        Void, Tuple{})
+        Cvoid, Tuple{})
     end
-    code_llvm(DevNull, foo, ())
+    code_llvm(devnull, foo, ())
 else
-    println("INFO: skipping gep parentage test on llvm < 3.6")
+    @info "Skipping gep parentage test on llvm < 3.6"
 end
 
 module CcallableRetTypeTest
-    using Base: Test, llvmcall, @ccallable
+    using Base: llvmcall, @ccallable
+    using Test
     @ccallable function jl_test_returns_float()::Float64
         return 42
     end
