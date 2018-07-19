@@ -222,6 +222,7 @@ include("set.jl")
 include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
+include("strings/substring.jl")
 
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
