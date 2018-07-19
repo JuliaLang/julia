@@ -99,10 +99,10 @@ reducedim_initarray(A::AbstractArray, region, init::T) where {T} = reducedim_ini
 promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
 promote_union(T) = T
 
-function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A, region)
+function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region)
     _reducedim_init(f, op, zero, sum, A, region)
 end
-function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A, region)
+function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::AbstractArray, region)
     _reducedim_init(f, op, one, prod, A, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
@@ -145,11 +145,11 @@ for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
         end
     end
 end
-reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A, region) =
-    reducedim_initarray(A, region, zero(f(zero(eltype(A)))))
+reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
+    reducedim_initarray(A, region, zero(f(zero(T))))
 
-reducedim_init(f, op::typeof(&), A, region) = reducedim_initarray(A, region, true)
-reducedim_init(f, op::typeof(|), A, region) = reducedim_initarray(A, region, false)
+reducedim_init(f, op::typeof(&), A::AbstractArray, region) = reducedim_initarray(A, region, true)
+reducedim_init(f, op::typeof(|), A::AbstractArray, region) = reducedim_initarray(A, region, false)
 
 # specialize to make initialization more efficient for common cases
 

@@ -324,6 +324,20 @@ reducedim_initarray(itr::SkipMissing{<:AbstractArray}, region, init, ::Type{R}) 
 reducedim_initarray(itr::SkipMissing{<:AbstractArray}, region, init::T) where {T} =
     reducedim_initarray(itr.x, region, init, T)
 
+reducedim_init(f, op::Union{typeof(+),typeof(add_sum)},
+               itr::SkipMissing{<:AbstractArray}, region) =
+    _reducedim_init(f, op, zero, sum, itr, region)
+reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)},
+               itr::SkipMissing{<:AbstractArray}, region) =
+    _reducedim_init(f, op, one, prod, itr, region)
+reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max),
+               itr::SkipMissing{<:AbstractArray}, region) =
+    reducedim_initarray(itr, region, zero(f(zero(eltype(itr)))))
+reducedim_init(f, op::typeof(&), itr::SkipMissing{<:AbstractArray}, region) =
+    reducedim_initarray(itr, region, true)
+reducedim_init(f, op::typeof(|), itr::SkipMissing{<:AbstractArray}, region) =
+    reducedim_initarray(itr, region, false)
+
 # initialization when computing minima and maxima requires a little care
 for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
     @eval function reducedim_init(f, op::typeof($f1), itr::SkipMissing{<:AbstractArray}, region)
