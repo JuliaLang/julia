@@ -830,6 +830,23 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     @test_throws ArgumentError WeakKeyDict([1, 2, 3])
 
+    # WeakKeyDict does not convert keys
+    @test_throws ArgumentError WeakKeyDict{Int,Any}(5.0=>1)
+
+    # WeakKeyDict hashes with object-id
+    AA = copy(A)
+    GC.@preserve A AA begin
+        wkd = WeakKeyDict(A=>1, AA=>2)
+        @test length(wkd)==2
+        kk = collect(keys(wkd))
+        @test kk[1]==kk[2]
+        @test kk[1]!==kk[2]
+    end
+
+    # WeakKeyDict compares false to non-WeakKeyDict
+    @test IdDict(A=>1)!=WeakKeyDict(A=>1)
+    @test Dict(A=>1)!=WeakKeyDict(A=>1)
+
     # issue #26939
     d26939 = WeakKeyDict()
     d26939[big"1.0" + 1.1] = 1

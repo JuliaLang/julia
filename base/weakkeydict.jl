@@ -2,6 +2,15 @@
 
 # weak key dictionaries
 
+# Type to wrap a WeakRef to furbish it with objectid comparison and hashing.
+struct WeakRefForWeakDict
+    w::WeakRef
+    WeakRefForWeakDict(wr::WeakRef) = new(wr)
+end
+WeakRefForWeakDict(val) = WeakRefForWeakDict(WeakRef(val))
+==(wr1::WeakRefForWeakDict, wr2::WeakRefForWeakDict) = wr1.w.value===wr2.w.value
+hash(wr::WeakRefForWeakDict, h::UInt) = hash_uint(3h - objectid(wr.w.value))
+
 """
     WeakKeyDict([itr])
 
@@ -12,13 +21,13 @@ referenced in a hash table.
 See [`Dict`](@ref) for further help.
 """
 mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
-    ht::Dict{WeakRef,V}
+    ht::Dict{WeakRefForWeakDict,V}
     lock::Threads.RecursiveSpinLock
     finalizer::Function
 
     # Constructors mirror Dict's
     function WeakKeyDict{K,V}() where V where K
-        t = new(Dict{Any,V}(), Threads.RecursiveSpinLock(), identity)
+        t = new(Dict{WeakRefForWeakDict,V}(), Threads.RecursiveSpinLock(), identity)
         t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
             if islocked(t)
@@ -75,32 +84,32 @@ lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
 trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 
 function setindex!(wkh::WeakKeyDict{K}, v, key) where K
-    k = convert(K, key)
-    finalizer(wkh.finalizer, k)
+    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    finalizer(wkh.finalizer, key)
     lock(wkh) do
-        wkh.ht[WeakRef(k)] = v
+        wkh.ht[WeakRefForWeakDict(key)] = v
     end
     return wkh
 end
 
 function getkey(wkh::WeakKeyDict{K}, kk, default) where K
     return lock(wkh) do
-        k = getkey(wkh.ht, kk, secret_table_token)
+        k = getkey(wkh.ht, WeakRefForWeakDict(kk), secret_table_token)
         k === secret_table_token && return default
-        return k.value::K
+        return k.w.value::K
     end
 end
 
-get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
-get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
-get!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get!(wkh.ht, key, default), wkh)
-get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get!(default, wkh.ht, key), wkh)
-pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
-pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
-delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, key), wkh)
+get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, WeakRefForWeakDict(key), default), wkh)
+get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, WeakRefForWeakDict(key)), wkh)
+get!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get!(wkh.ht, WeakRefForWeakDict(key), default), wkh)
+get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get!(default, wkh.ht, WeakRefForWeakDict(key)), wkh)
+pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, WeakRefForWeakDict(key)), wkh)
+pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, WeakRefForWeakDict(key), default), wkh)
+delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, WeakRefForWeakDict(key)), wkh)
 empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
-haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, key), wkh)
-getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key), wkh)
+haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, WeakRefForWeakDict(key)), wkh)
+getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, WeakRefForWeakDict(key)), wkh)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 length(t::WeakKeyDict) = length(t.ht)
 
@@ -120,7 +129,7 @@ function iterate(t::WeakKeyDict{K,V}, state) where V where K
     y = iterate(t.ht, tail(state)...)
     y === nothing && return nothing
     wkv, i = y
-    kv = Pair{K,V}(wkv[1].value::K, wkv[2])
+    kv = Pair{K,V}(wkv[1].w.value::K, wkv[2])
     return (kv, (gc_token, i))
 end
 

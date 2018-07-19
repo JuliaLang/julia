@@ -467,7 +467,7 @@ end
 
 function ==(l::AbstractDict, r::AbstractDict)
     l === r && return true
-    if isa(l,IdDict) != isa(r,IdDict)
+    if isa(l,IdDict) != isa(r,IdDict) || isa(l,WeakKeyDict) != isa(r,WeakKeyDict)
         return false
     end
     length(l) != length(r) && return false
