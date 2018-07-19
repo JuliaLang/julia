@@ -384,9 +384,12 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             node_idx = popfirst!(new_nodes_perm)
             new_node = new_nodes[node_idx]
             node_idx += length(code.stmts)
+            if !floop && !verbose_linetable
+                print(io, " "^(max_lineno_width + 1))
+            end
             if print_sep
-                if floop
-                    Base.print(io, bb_start_str)
+                if idx == first(bbrange) && floop
+                    print(io, bb_start_str)
                 else
                     Base.print(io, "│  "," "^max_bb_idx_size)
                 end
@@ -400,6 +403,9 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
                 expr_type_printer(io, new_node.typ)
             end
             Base.println(io)
+        end
+        if !floop && !verbose_linetable
+            print(io, " "^(max_lineno_width + 1))
         end
         if print_sep
             if idx == first(bbrange) && floop
