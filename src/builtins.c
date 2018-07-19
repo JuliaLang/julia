@@ -390,6 +390,8 @@ JL_CALLABLE(jl_f_sizeof)
             jl_error("type does not have a fixed size");
         return jl_box_long(jl_datatype_size(x));
     }
+    if (x == jl_bottom_type)
+        jl_error("The empty type does not have a well-defined size since it does not have instances.");
     if (jl_is_array(x)) {
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
     }
@@ -1302,6 +1304,8 @@ void jl_init_primitives(void)
     add_builtin("UInt8", (jl_value_t*)jl_uint8_type);
     add_builtin("Int32", (jl_value_t*)jl_int32_type);
     add_builtin("Int64", (jl_value_t*)jl_int64_type);
+    add_builtin("UInt32", (jl_value_t*)jl_uint32_type);
+    add_builtin("UInt64", (jl_value_t*)jl_uint64_type);
 #ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);
 #else

@@ -237,6 +237,7 @@ end
 ## solvers
 function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
+    @assert !has_offset_axes(A, B)
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
@@ -282,6 +283,7 @@ end
 
 function bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
+    @assert !has_offset_axes(A, B)
     nrowB, ncolB = size(B, 1), size(B, 2)
     ncol = LinearAlgebra.checksquare(A)
     if nrowB != ncol
@@ -920,6 +922,7 @@ function lmul!(b::Number, A::SparseMatrixCSC)
 end
 
 function \(A::SparseMatrixCSC, B::AbstractVecOrMat)
+    @assert !has_offset_axes(A, B)
     m, n = size(A)
     if m == n
         if istril(A)
@@ -943,6 +946,7 @@ for (xformtype, xformop) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
         function \(xformA::($xformtype){<:Any,<:SparseMatrixCSC}, B::AbstractVecOrMat)
             A = xformA.parent
+            @assert !has_offset_axes(A, B)
             m, n = size(A)
             if m == n
                 if istril(A)
@@ -1005,4 +1009,5 @@ function factorize(A::LinearAlgebra.RealHermSymComplexHerm{Float64,<:SparseMatri
     end
 end
 
-eigen(A::SparseMatrixCSC) = error("Use IterativeEigensolvers.eigs() instead of eigen() for sparse matrices.")
+eigen(A::SparseMatrixCSC) =
+    error("eigen(A) not supported for sparse matrices. Use for example eigs(A) from the Arpack package instead.")

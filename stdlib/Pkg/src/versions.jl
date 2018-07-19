@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ################
 # VersionBound #
@@ -247,21 +248,27 @@ Base.show(io::IO, s::VersionSpec) = print(io, "VersionSpec(\"", s, "\")")
 # Semver notation #
 ###################
 
-const ver_reg = r"^([~^]?)?[v]?([0-9]+?)(?:\.([0-9]+?))?(?:\.([0-9]+?))?$"
 
 function semver_spec(s::String)
+    s = replace(s, " " => "")
     ranges = VersionRange[]
     for ver in split(s, ',')
-        push!(ranges, semver_interval(strip(ver)))
+        range = nothing
+        found_match = false
+        for (ver_reg, f) in ver_regs
+            if occursin(ver_reg, ver)
+                range = f(match(ver_reg, ver))
+                found_match = true
+                break
+            end
+        end
+        found_match || error("invalid version specifier: $s")
+        push!(ranges, range)
     end
     return VersionSpec(ranges)
 end
 
-function semver_interval(s::AbstractString)
-    if !occursin(ver_reg, s)
-        error("invalid version specifier: $s")
-    end
-    m = match(ver_reg, s)
+function semver_interval(m::RegexMatch)
     @assert length(m.captures) == 4
     n_significant = count(x -> x !== nothing, m.captures) - 1
     typ, _major, _minor, _patch = m.captures
@@ -269,7 +276,7 @@ function semver_interval(s::AbstractString)
     minor = (n_significant < 2) ? 0 : parse(Int, _minor)
     patch = (n_significant < 3) ? 0 : parse(Int, _patch)
     if n_significant == 3 && major == 0 && minor == 0 && patch == 0
-        error("invalid version: $s")
+        error("invalid version: \"0.0.0\"")
     end
     # Default type is :caret
     vertyp = (typ == "" || typ == "^") ? :caret : :tilde
@@ -296,3 +303,43 @@ function semver_interval(s::AbstractString)
         end
     end
 end
+
+const _inf = Pkg.Types.VersionBound("*")
+function inequality_interval(m::RegexMatch)
+    @assert length(m.captures) == 4
+    typ, _major, _minor, _patch = m.captures
+    n_significant = count(x -> x !== nothing, m.captures) - 1
+    major =                           parse(Int, _major)
+    minor = (n_significant < 2) ? 0 : parse(Int, _minor)
+    patch = (n_significant < 3) ? 0 : parse(Int, _patch)
+    if n_significant == 3 && major == 0 && minor == 0 && patch == 0
+        error("invalid version: $s")
+    end
+    v = VersionBound(major, minor, patch)
+    if typ == "<"
+        nil = VersionBound(0, 0, 0)
+        if v[3] == 0
+            if v[2] == 0
+                v1 = VersionBound(v[1]-1)
+            else
+                v1 = VersionBound(v[1], v[2]-1)
+            end
+        else
+            v1 = VersionBound(v[1], v[2], v[3]-1)
+        end
+        return VersionRange(nil, v1)
+    elseif typ == "="
+        return VersionRange(v)
+    elseif typ == ">=" || typ == "≥"
+           return VersionRange(v, _inf)
+    else
+        error("invalid prefix $typ")
+    end
+end
+
+const version = "v?([0-9]+?)(?:\\.([0-9]+?))?(?:\\.([0-9]+?))?"
+const ver_regs =
+[
+    Regex("^([~^]?)?$version\$") => semver_interval, # 0.5 ^0.4 ~0.3.2
+    Regex("^((?:≥)|(?:>=)|(?:=)|(?:<)|(?:=))v?$version\$")  => inequality_interval,# < 0.2 >= 0.5,2
+]

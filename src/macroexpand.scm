@@ -30,7 +30,9 @@
              ;; expression in the next stage.
              (cons splat-token (cdr x))))
         ((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) x))
-         `(copyast (inert ,x)))
+         (if (eq? (car x) 'line)
+             `(inert ,x)
+             `(copyast (inert ,x))))
         (else
          (case (car x)
            ((inert) `(call (core QuoteNode)      ,@(bq-expand-arglist (cdr x) d)))
@@ -59,9 +61,12 @@
    ;; function definition
    (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    (cons 'varlist (safe-llist-positional-args (fix-arglist argl))))
-   (pattern-lambda (function (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
-                   (cons 'varlist (append (safe-llist-positional-args (fix-arglist argl))
-                                          (typevar-names wheres))))
+   (pattern-lambda (function (where callspec . wheres) body)
+                   (let ((others (pattern-expand1 vars-introduced-by-patterns `(function ,callspec ,body))))
+                     (cons 'varlist (append (if (and (pair? others) (eq? (car others) 'varlist))
+                                                (cdr others)
+                                                '())
+                                            (typevar-names wheres)))))
 
    (pattern-lambda (function (tuple . args) body)
                    `(-> (tuple ,@args) ,body))
@@ -71,7 +76,7 @@
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    `(function (call ,name ,@argl) ,body))
-   (pattern-lambda (= (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+   (pattern-lambda (= (where callspec . wheres) body)
                    (cons 'function (cdr __)))
 
    ;; anonymous function
@@ -150,14 +155,14 @@
 
    (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    (cons 'varlist (safe-llist-keyword-args (fix-arglist argl))))
-   (pattern-lambda (function (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
-                   (cons 'varlist (safe-llist-keyword-args (fix-arglist argl))))
+   (pattern-lambda (function (where callspec . wheres) body)
+                   `(function ,callspec ,body))
 
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    `(function (call ,name ,@argl) ,body))
-   (pattern-lambda (= (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+   (pattern-lambda (= (where callspec . wheres) body)
                    (cons 'function (cdr __)))
    ))
 

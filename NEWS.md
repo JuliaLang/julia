@@ -14,7 +14,7 @@ New language features
   * Named tuples, with the syntax `(a=1, b=2)`. These behave very similarly to tuples,
     except components can also be accessed by name using dot syntax `t.a` ([#22194]).
 
-  * Keyword argument containers (`kw` in `f(; kw...)`) are now named tuples. Dictionary
+  * Keyword argument containers (`kw` in `f(; kw...)`) are now based on named tuples. Dictionary
     functions like `haskey` and indexing can be used on them, and name-value pairs can be
     iterated using `pairs(kw)`. `kw` can no longer contain multiple entries for the same
     argument name ([#4916]).
@@ -71,6 +71,9 @@ Language changes
 
   * Juxtaposing binary, octal, and hexadecimal literals is deprecated, since it can lead to
     confusing code such as `0xapi == 0xa * pi` ([#16356]).
+
+  * Numeric literal juxtaposition now has slighty lower precedence than unary operators,
+    so for example `√2x` parses as `(√2) * x` ([#27641]).
 
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
@@ -222,6 +225,10 @@ Language changes
 
   * `try` blocks without `catch` or `finally` are no longer allowed. An explicit empty
     `catch` block should be written instead ([#27554]).
+
+  * `AbstractArray` types that use unconventional (not 1-based) indexing can now support
+    `size`, `length`, and `@inbounds`. To optionally enforce conventional indices,
+    you can `@assert !has_offset_axes(A)`.
 
 Breaking changes
 ----------------
@@ -493,8 +500,7 @@ This section lists changes that do not have deprecation warnings.
   * `isequal` for `Ptr`s now compares element types; `==` still compares only addresses
     ([#26858]).
 
-  * `widen` on 8- and 16-bit integer types now widens to the platform word size (`Int`)
-    instead of to a 32-bit type ([#26859]).
+  * `widen` on 8- and 16-bit integer types now widens to 16- and 32-bit types, respectively. ([#28045]).
 
   * `mv`,`cp`, `touch`, `mkdir`, `mkpath`, `chmod` and `chown` now return the path that was created/modified
     rather than `nothing` ([#27071]).
@@ -517,6 +523,11 @@ This section lists changes that do not have deprecation warnings.
 
   * `dot(u, v)` now acts recursively. Instead of `sum(u[i]' * v[i] for i in ...)`, it computes
     `sum(dot(u[i], v[i]) for i in ...)`, similarly to `vecdot` before ([#27401]).
+
+  * `Sys.CPU_CORES` has been renamed to `Sys.CPU_THREADS`; it still gives the number
+    of "logical cores" (including hyperthreading) rather than the number of physical
+    cores present on the CPU. Similarly, the environment variable `JULIA_CPU_CORES` is
+    deprecated in favor of `JULIA_CPU_THREADS` ([#27856]).
 
 Library improvements
 --------------------
@@ -551,6 +562,9 @@ Library improvements
   * `get(io, :color, false)` can now be used to query whether a stream `io` supports
     [ANSI color codes](https://en.wikipedia.org/wiki/ANSI_escape_code) ([#25067]),
     rather than using the undocumented `Base.have_color` global flag.
+
+  * `print_with_color` has been deprecated in favor of
+    `printstyled([io], xs...; bold=false, color=:normal)` for printing styled text ([#25522]).
 
   * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
     If this argument is used they return a string consisting of first/last `nchar`
@@ -646,7 +660,7 @@ Library improvements
     Therefore custom string types may want to define direct `ncodeunits` methods.
 
   * `reverseind(s::AbstractString, i::Integer)` now has an efficient generic fallback, so
-    custom string types do not need to provide their own efficient defintions. The generic
+    custom string types do not need to provide their own efficient definitions. The generic
     definition relies on `ncodeunits` however, so for optimal performance you may need to
     define a custom method for that function.
 
@@ -687,7 +701,7 @@ Library improvements
       Use `unique` to get the old behavior.
 
   * The `linearindices` function has been deprecated in favor of the new
-    `LinearIndices` type, which additionnally provides conversion from
+    `LinearIndices` type, which additionally provides conversion from
     cartesian indices to linear indices using the normal indexing operation.
     ([#24715], [#26775]).
 
@@ -710,6 +724,14 @@ Library improvements
   * Added an optimized method of `vecdot` for taking the Frobenius inner product
     of sparse matrices. ([#27470])
 
+  * Added an optimized method of `kron` for taking the tensor product of two
+    `Diagonal` matrices. ([27581])
+
+  * The initial element `v0` in `reduce(op, v0, itr)` has been replaced with an `init`
+    optional keyword argument, as in `reduce(op, itr; init=v0)`. Similarly for `foldl`,
+    `foldr`, `mapreduce`, `mapfoldl`, `mapfoldr`, `accumulate` and `accumulate!`.
+    ([#27711], [#27859])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -720,7 +742,7 @@ Compiler/Runtime improvements
     call. ([#22210], [#22732])
 
   * Inference recursion-detection heuristics are now more precise,
-    allowing them to be triggered less often, but being more agressive when they
+    allowing them to be triggered less often, but being more aggressive when they
     are triggered to drive the inference computation to a solution ([#23912]).
 
   * Inference now propagates constants inter-procedurally, and can compute
@@ -1215,6 +1237,9 @@ Deprecated or removed
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
 
+  * `randjump`, which produced an array, is deprecated in favor of the
+    scalar version `Future.randjump` used with `accumulate` ([#27746]).
+
   * The `assert` function (and `@assert` macro) have been documented that they are not guaranteed to run under various optimization levels and should therefore not be used to e.g. verify passwords.
 
   * `ObjectIdDict` has been deprecated in favor of `IdDict{Any,Any}` ([#25210]).
@@ -1286,6 +1311,8 @@ Deprecated or removed
   * `clipboard` has been moved to the `InteractiveUtils` standard library package
     (along with other utilities mostly used at the interactive prompt, such as `edit`
     and `less`) ([#27635]).
+
+  * `ndigits(n, b, [pad])` is deprecated in favor of `ndigits(n, base=b, pad=pad)` ([#27908]).
 
 Command-line option changes
 ---------------------------
@@ -1428,7 +1455,6 @@ Command-line option changes
 [#23035]: https://github.com/JuliaLang/julia/issues/23035
 [#23051]: https://github.com/JuliaLang/julia/issues/23051
 [#23054]: https://github.com/JuliaLang/julia/issues/23054
-[#23066]: https://github.com/JuliaLang/julia/issues/23066
 [#23117]: https://github.com/JuliaLang/julia/issues/23117
 [#23120]: https://github.com/JuliaLang/julia/issues/23120
 [#23144]: https://github.com/JuliaLang/julia/issues/23144
@@ -1487,6 +1513,7 @@ Command-line option changes
 [#24278]: https://github.com/JuliaLang/julia/issues/24278
 [#24279]: https://github.com/JuliaLang/julia/issues/24279
 [#24281]: https://github.com/JuliaLang/julia/issues/24281
+[#24282]: https://github.com/JuliaLang/julia/issues/24282
 [#24320]: https://github.com/JuliaLang/julia/issues/24320
 [#24356]: https://github.com/JuliaLang/julia/issues/24356
 [#24362]: https://github.com/JuliaLang/julia/issues/24362
@@ -1511,7 +1538,6 @@ Command-line option changes
 [#24679]: https://github.com/JuliaLang/julia/issues/24679
 [#24684]: https://github.com/JuliaLang/julia/issues/24684
 [#24713]: https://github.com/JuliaLang/julia/issues/24713
-[#24714]: https://github.com/JuliaLang/julia/issues/24714
 [#24715]: https://github.com/JuliaLang/julia/issues/24715
 [#24774]: https://github.com/JuliaLang/julia/issues/24774
 [#24781]: https://github.com/JuliaLang/julia/issues/24781
@@ -1550,6 +1576,7 @@ Command-line option changes
 [#25472]: https://github.com/JuliaLang/julia/issues/25472
 [#25496]: https://github.com/JuliaLang/julia/issues/25496
 [#25501]: https://github.com/JuliaLang/julia/issues/25501
+[#25522]: https://github.com/JuliaLang/julia/issues/25522
 [#25532]: https://github.com/JuliaLang/julia/issues/25532
 [#25545]: https://github.com/JuliaLang/julia/issues/25545
 [#25564]: https://github.com/JuliaLang/julia/issues/25564
@@ -1557,6 +1584,7 @@ Command-line option changes
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
+[#25631]: https://github.com/JuliaLang/julia/issues/25631
 [#25633]: https://github.com/JuliaLang/julia/issues/25633
 [#25634]: https://github.com/JuliaLang/julia/issues/25634
 [#25654]: https://github.com/JuliaLang/julia/issues/25654
@@ -1599,6 +1627,7 @@ Command-line option changes
 [#26347]: https://github.com/JuliaLang/julia/issues/26347
 [#26436]: https://github.com/JuliaLang/julia/issues/26436
 [#26442]: https://github.com/JuliaLang/julia/issues/26442
+[#26486]: https://github.com/JuliaLang/julia/issues/26486
 [#26559]: https://github.com/JuliaLang/julia/issues/26559
 [#26576]: https://github.com/JuliaLang/julia/issues/26576
 [#26600]: https://github.com/JuliaLang/julia/issues/26600
@@ -1623,4 +1652,17 @@ Command-line option changes
 [#27189]: https://github.com/JuliaLang/julia/issues/27189
 [#27212]: https://github.com/JuliaLang/julia/issues/27212
 [#27248]: https://github.com/JuliaLang/julia/issues/27248
+[#27309]: https://github.com/JuliaLang/julia/issues/27309
 [#27401]: https://github.com/JuliaLang/julia/issues/27401
+[#27447]: https://github.com/JuliaLang/julia/issues/27447
+[#27459]: https://github.com/JuliaLang/julia/issues/27459
+[#27470]: https://github.com/JuliaLang/julia/issues/27470
+[#27473]: https://github.com/JuliaLang/julia/issues/27473
+[#27554]: https://github.com/JuliaLang/julia/issues/27554
+[#27616]: https://github.com/JuliaLang/julia/issues/27616
+[#27635]: https://github.com/JuliaLang/julia/issues/27635
+[#27641]: https://github.com/JuliaLang/julia/issues/27641
+[#27711]: https://github.com/JuliaLang/julia/issues/27711
+[#27746]: https://github.com/JuliaLang/julia/issues/27746
+[#27859]: https://github.com/JuliaLang/julia/issues/27859
+[#27908]: https://github.com/JuliaLang/julia/issues/27908

@@ -570,17 +570,23 @@ has_tight_type(p::Pair) =
 
 isdelimited(io::IO, x) = true
 
-isdelimited(io::IO, p::Pair) = !has_tight_type(p)
+# !isdelimited means that the Pair is printed with "=>" (like in "1 => 2"),
+# without its explicit type (like in "Pair{Integer,Integer}(1, 2)")
+isdelimited(io::IO, p::Pair) = !(has_tight_type(p) || get(io, :typeinfo, Any) == typeof(p))
+
+function gettypeinfos(io::IO, p::Pair)
+    typeinfo = get(io, :typeinfo, Any)
+    p isa typeinfo <: Pair ?
+        fieldtype(typeinfo, 1) => fieldtype(typeinfo, 2) :
+        Any => Any
+end
 
 function show(io::IO, p::Pair)
     compact = get(io, :compact, false)
     iocompact = IOContext(io, :compact => get(io, :compact, true))
-    has_tight_type(p) || return show_default(iocompact, p)
+    isdelimited(io, p) && return show_default(iocompact, p)
 
-    typeinfo = get(io, :typeinfo, Any)
-    typeinfos = typeinfo <: Pair && p isa typeinfo ?
-        (fieldtype(typeinfo, 1), fieldtype(typeinfo, 2)) : (Any, Any)
-
+    typeinfos = gettypeinfos(io, p)
     isdelimited(iocompact, p.first) || print(io, "(")
     show(IOContext(iocompact, :typeinfo => typeinfos[1]), p.first)
     isdelimited(iocompact, p.first) || print(io, ")")
@@ -656,7 +662,7 @@ function show(io::IO, src::CodeInfo)
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?
-        ir = Core.Compiler.inflate_ir(src, Core.svec())
+        ir = Core.Compiler.inflate_ir(src)
         IRShow.show_ir(lambda_io, ir, argnames=sourceinfo_slotnames(src))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
@@ -715,8 +721,9 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
             while true
                 x = y[1]
                 y = iterate(itr, y[2])
-                show(IOContext(recur_io, :typeinfo =>
-                               typeinfo <: Tuple ? fieldtype(typeinfo, i1+i0) : typeinfo),
+                show(IOContext(recur_io, :typeinfo => itr isa typeinfo <: Tuple ?
+                                             fieldtype(typeinfo, i1+i0) :
+                                             typeinfo),
                      x)
                 i1 += 1
                 if y === nothing || i1 > n
@@ -862,8 +869,9 @@ julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.opera
 operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_assignment = operator_precedence(:(=))
-const prec_arrow = operator_precedence(:(-->))
+const prec_pair = operator_precedence(:(=>))
 const prec_control_flow = operator_precedence(:(&&))
+const prec_arrow = operator_precedence(:(-->))
 const prec_comparison = operator_precedence(:(>))
 const prec_power = operator_precedence(:(^))
 const prec_decl = operator_precedence(:(::))
@@ -885,7 +893,7 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 ```
 """
 function operator_associativity(s::Symbol)
-    if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_power) ||
+    if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
         (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<|
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
@@ -1603,8 +1611,9 @@ function dump(io::IOContext, @nospecialize(x), n::Int, indent)
                 end
             end
         end
-    else
-        !isa(x, Function) && print(io, " ", x)
+    elseif !isa(x, Function)
+        print(io, " ")
+        show(io, x)
     end
     nothing
 end
@@ -1744,8 +1753,9 @@ end
 
 function alignment(io::IO, x::Pair)
     s = sprint(show, x, context=io, sizehint=0)
-    if has_tight_type(x) # i.e. use "=>" for display
-        iocompact = IOContext(io, :compact => get(io, :compact, true))
+    if !isdelimited(io, x) # i.e. use "=>" for display
+        iocompact = IOContext(io, :compact => get(io, :compact, true),
+                                  :typeinfo => gettypeinfos(io, x)[1])
         left = length(sprint(show, x.first, context=iocompact, sizehint=0))
         left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
         left += !get(io, :compact, false) # spaces are added around "=>"

@@ -5981,6 +5981,13 @@ for U in unboxedunions
     end
 end
 
+# issue #27767
+let A=Vector{Union{Int, Missing}}(undef, 1)
+    resize!(A, 2)
+    @test length(A) == 2
+    @test A[2] === missing
+end
+
 end # module UnionOptimizations
 
 # issue #6614, argument destructuring
@@ -6057,6 +6064,9 @@ g25907b(x) = x[1]::Complex
 
 #issue #26363
 @test eltype(Ref(Float64(1))) === Float64
+@test ndims(Ref(1)) === 0
+@test collect(Ref(1)) == [v for v in Ref(1)] == fill(1)
+@test axes(Ref(1)) === size(Ref(1)) === ()
 
 # issue #23206
 g1_23206(::Tuple{Type{Int}, T}) where T = 0
@@ -6235,3 +6245,57 @@ function f27597(y)
 end
 @test f27597([1]) == [1]
 @test f27597([]) == 1:0
+
+# issue #22291
+wrap22291(ind) = (ind...,)
+@test @inferred(wrap22291(1)) == (1,)
+@test @inferred(wrap22291((1, 2))) == (1, 2)
+
+# Issue 27770
+mutable struct Handle27770
+    ptr::Ptr{Cvoid}
+end
+Handle27770() = Handle27770(Ptr{Cvoid}(UInt(0xfeedface)))
+
+struct Nullable27770
+    hasvalue::Bool
+    value::Handle27770
+    Nullable27770() = new(false)
+    Nullable27770(v::Handle27770) = new(true, Handle27770)
+end
+get27770(n::Nullable27770, v::Handle27770) = n.hasvalue ? n.value : v
+
+foo27770() = get27770(Nullable27770(), Handle27770())
+@test foo27770().ptr == Ptr{Cvoid}(UInt(0xfeedface))
+
+bar27770() = Nullable27770().value
+@test_throws UndefRefError bar27770()
+
+# Issue 27910
+f27910() = ((),)[2]
+@test_throws BoundsError f27910()
+
+# Issue 9765
+f9765(::Bool) = 1
+g9765() = f9765(isa(1, 1))
+@test_throws TypeError g9765()
+
+# Issue 28102
+struct HasPlain28102
+    plain::Int
+    HasPlain28102() = new()
+end
+@noinline function bam28102()
+    x = HasPlain28102()
+    if isdefined(x,:plain)
+        x.plain
+    end
+end
+@test isa(bam28102(), Int)
+
+# Check that the tfunc for fieldtype is correct
+struct FooFieldType; x::Int; end
+f_fieldtype(b) = fieldtype(b ? Int : FooFieldType, 1)
+
+@test @inferred(f_fieldtype(false)) == Int
+@test_throws BoundsError f_fieldtype(true)

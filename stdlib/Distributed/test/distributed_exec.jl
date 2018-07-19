@@ -675,7 +675,7 @@ if Sys.isunix() # aka have ssh
 
     print("\nMixed ssh addprocs with :auto\n")
     new_pids = addprocs_with_testenv(["localhost", ("127.0.0.1", :auto), "localhost"]; sshflags=sshflags)
-    @test length(new_pids) == (2 + Sys.CPU_CORES)
+    @test length(new_pids) == (2 + Sys.CPU_THREADS)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with numeric counts\n")
@@ -1411,7 +1411,7 @@ let
         #rm(tmp_dir, force=true)
     end
 end
-# cookie and comand line option `--worker` tests. remove workers, set cookie and test
+# cookie and command line option `--worker` tests. remove workers, set cookie and test
 struct WorkerArgTester <: ClusterManager
     worker_opt
     write_cookie
@@ -1500,6 +1500,10 @@ if ccall(:jl_has_so_reuseport, Int32, ()) == 1
 else
     @info "SO_REUSEPORT is unsupported, skipping reuseport tests"
 end
+
+# issue #27933
+a27933 = :_not_defined_27933
+@test remotecall_fetch(()->a27933, first(workers())) === a27933
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

@@ -36,7 +36,7 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); verbose_linet
         warntype_type_printer(io, rettype)
         println(io)
         # TODO: static parameter values
-        ir = Core.Compiler.inflate_ir(src, Core.svec())
+        ir = Core.Compiler.inflate_ir(src)
         Base.IRShow.show_ir(io, ir, warntype_type_printer;
                             argnames = Base.sourceinfo_slotnames(src),
                             verbose_linetable = verbose_linetable)

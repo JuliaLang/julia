@@ -44,7 +44,7 @@ check_body!(x) = true
 simd_outer_range(r) = 0:0
 
 # Get trip count for inner loop.
-@inline simd_inner_length(r,j::Int) = Base._length(r)
+@inline simd_inner_length(r,j::Int) = Base.length(r)
 
 # Construct user-level element from original range, outer loop index j, and inner loop index i.
 @inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+firstindex(r)]; ret)
@@ -115,7 +115,7 @@ either case, your inner loop should have the following properties to allow vecto
     * The stride should be unit stride.
 
 !!! note
-    The `@simd` does not assert by default that the loop is completly free of loop-carried
+    The `@simd` does not assert by default that the loop is completely free of loop-carried
     memory dependencies, which is an assumption that can easily be violated in generic code.
     If you are writing non-generic code, you can use `@simd ivdep for ... end` to also assert that:
 

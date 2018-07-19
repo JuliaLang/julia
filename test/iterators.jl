@@ -450,6 +450,7 @@ end
               (a=4.0, b=5.0, c=6.0),
               (),
               NamedTuple(),
+              (a=1.1, b=2.0),
              )
         d = pairs(A)
         @test d === pairs(d)
@@ -468,6 +469,7 @@ end
             @test isempty(d) || haskey(d, :a)
             @test !haskey(d, :abc)
             @test !haskey(d, 1)
+            @test get(A, :key) do; 99; end == 99
         elseif A isa Tuple
             K = Int
             V = isempty(d) ? Union{} : Float64
@@ -538,4 +540,10 @@ end
 	@test isempty(collect(zip(b,a)))
 	@test !isempty(a)
     end
+end
+
+@testset "pair for Svec" begin
+    ps = pairs(Core.svec(:a, :b))
+    @test ps isa Iterators.Pairs
+    @test collect(ps) == [1 => :a, 2 => :b]
 end

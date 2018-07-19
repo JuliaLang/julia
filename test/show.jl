@@ -5,8 +5,8 @@ using LinearAlgebra, SparseArrays
 # For curmod_*
 include("testenv.jl")
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
-showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
+replstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), MIME("text/plain"), x), x)
+showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80), kv...), x), x)
 
 @testset "IOContext" begin
     io = IOBuffer()
@@ -730,8 +730,8 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(x, y)
     push!(y, x)
     push!(y, z)
-    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(Any[Any[#= circular reference @-3 =#]]=>Any[#= circular reference @-2 =#])]"
-    @test repr(z) == "Base.ImmutableDict(Any[Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]]=>Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
+    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict([Any[#= circular reference @-3 =#]]=>[#= circular reference @-2 =#])]"
+    @test repr(z) == "Base.ImmutableDict([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict(#= circular reference @-3 =#)]]=>[Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
           1: Array{Any}((2,))
@@ -819,6 +819,9 @@ let repr = sprint(dump, sin)
 end
 let repr = sprint(dump, Test)
     @test repr == "Module Test\n"
+end
+let repr = sprint(dump, nothing)
+    @test repr == "Nothing nothing\n"
 end
 let a = Vector{Any}(undef, 10000)
     a[2] = "elemA"
@@ -990,8 +993,8 @@ end
     @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
         "2-element Array{Any,1}:\n Dict(1=>2) => (3=>4)\n          1 => 2     "
     # left-alignment when not using the "=>" symbol
-    @test replstr(Pair{Integer,Int64}[1=>2, 33=>4]) ==
-        "2-element Array{Pair{Integer,Int64},1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
+    @test replstr(Any[Pair{Integer,Int64}(1, 2), Pair{Integer,Int64}(33, 4)]) ==
+        "2-element Array{Any,1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
 end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
@@ -1016,6 +1019,25 @@ end
         "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
     @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
         "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
+end
+
+@testset "arrays printing follows the :compact property when specified" begin
+    x = 3.141592653589793
+    @test showstr(x) == "3.141592653589793"
+    @test showstr([x, x]) == showstr([x, x], :compact => true) == "[3.14159, 3.14159]"
+    @test showstr([x, x], :compact => false) == "[3.141592653589793, 3.141592653589793]"
+    @test showstr([x x; x x]) == showstr([x x; x x], :compact => true) ==
+        "[3.14159 3.14159; 3.14159 3.14159]"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
+    @test replstr([x, x]) == replstr([x, x], :compact => false) ==
+        "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
+    @test replstr([x, x], :compact => true) ==
+        "2-element Array{Float64,1}:\n 3.14159\n 3.14159"
+    @test replstr([x x; x x]) == replstr([x x; x x], :compact => true) ==
+        "2×2 Array{Float64,2}:\n 3.14159  3.14159\n 3.14159  3.14159"
+    @test showstr([x x; x x], :compact => false) ==
+        "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
 end
 
 @testset "Array printing with limited rows" begin
@@ -1156,11 +1178,35 @@ end
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 
+    # issue #27680
+    @test replstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+              "Set(Tuple{Float64,Float64}[(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
+              "Set(Tuple{Float64,Float64}[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
+
+    # issue #27747
+    let t = (x = Integer[1, 2],)
+        v = [t, t]
+        @test showstr(v) == "NamedTuple{(:x,),Tuple{Array{Integer,1}}}[(x = [1, 2],), (x = [1, 2],)]"
+        @test replstr(v) == "2-element Array{NamedTuple{(:x,),Tuple{Array{Integer,1}}},1}:\n (x = [1, 2],)\n (x = [1, 2],)"
+    end
+
     # issue #25857
     @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
 
     # issues #25466 & #26256
     @test replstr([:A => [1]]) == "1-element Array{Pair{Symbol,Array{$Int,1}},1}:\n :A => [1]"
+
+    # issue #26881
+    @test showstr([keys(Dict('a' => 'b'))]) == "Base.KeySet{Char,Dict{Char,Char}}[['a']]"
+    @test showstr([values(Dict('a' => 'b'))]) == "Base.ValueIterator{Dict{Char,Char}}[['b']]"
+    @test replstr([keys(Dict('a' => 'b'))]) == "1-element Array{Base.KeySet{Char,Dict{Char,Char}},1}:\n ['a']"
+
+    @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
+    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1=>2]"
+    @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1=>2)"
+
+    # issue #27979 (dislaying arrays of pairs containing arrays as first member)
+    @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1223,16 +1269,18 @@ end
 # Tests for code_typed linetable annotations
 function compute_annotations(f, types)
     src = code_typed(f, types)[1][1]
-    ir = Core.Compiler.inflate_ir(src, Core.svec())
+    ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
     join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
 end
 
-g_line() = leaf() # Deliberately not implemented to end up as a leaf after inlining
+@noinline leaffunc() = print()
+
+@inline g_line() = leaffunc()
 
 # Test that separate instances of the same function do not get merged
-function f_line()
+@inline function f_line()
    g_line()
    g_line()
    g_line()
@@ -1243,3 +1291,13 @@ h_line() = f_line()
     │╻╷ f_line
     ││╻  g_line
     ││╻  g_line""")
+
+# issue #27352
+@test_deprecated print(nothing)
+@test_deprecated print(stdout, nothing)
+@test_deprecated string(nothing)
+@test_deprecated string(1, "", nothing)
+@test_deprecated let x = nothing; "x = $x" end
+@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+@test_deprecated `/bin/foo $nothing`
+@test_deprecated `$nothing`

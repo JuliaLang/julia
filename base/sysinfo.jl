@@ -7,7 +7,7 @@ Provide methods for retrieving information about hardware and the operating syst
 
 export BINDIR,
        STDLIB,
-       CPU_CORES,
+       CPU_THREADS,
        CPU_NAME,
        WORD_SIZE,
        ARCH,
@@ -47,15 +47,17 @@ STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # fo
 
 # helper to avoid triggering precompile warnings
 
-global CPU_CORES
 """
-    Sys.CPU_CORES
+    Sys.CPU_THREADS
 
-The number of logical CPU cores available in the system.
+The number of logical CPU cores available in the system, i.e. the number of threads
+that the CPU can run concurrently. Note that this is not necessarily the number of
+CPU cores, for example, in the presence of
+[hyper-threading](https://en.wikipedia.org/wiki/Hyper-threading).
 
-See the Hwloc.jl package for extended information, including number of physical cores.
+See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-:CPU_CORES
+CPU_THREADS = 1 # for bootstrap, changed on startup
 
 """
     Sys.ARCH
@@ -87,17 +89,24 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 function __init__()
-    env_cores = get(ENV, "JULIA_CPU_CORES", "")
-    global CPU_CORES = if !isempty(env_cores)
-        env_cores = tryparse(Int, env_cores)
-        if !(env_cores isa Int && env_cores > 0)
-            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_CORES` environment variable. Defaulting Sys.CPU_CORES to 1.\n")
-            env_cores = 1
-        end
-        env_cores
-    else
-        Int(ccall(:jl_cpu_cores, Int32, ()))
+    env_threads = nothing
+    if haskey(ENV, "JULIA_CPU_THREADS")
+        env_threads = ENV["JULIA_CPU_THREADS"]
+    elseif haskey(ENV, "JULIA_CPU_CORES") # TODO: delete in 1.0 (deprecation)
+        Core.print("JULIA_CPU_CORES is deprecated, use JULIA_CPU_THREADS instead.\n")
+        env_threads = ENV["JULIA_CPU_CORES"]
     end
+    global CPU_THREADS = if env_threads !== nothing
+        env_threads = tryparse(Int, env_threads)
+        if !(env_threads isa Int && env_threads > 0)
+            env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
+            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
+        end
+        env_threads
+    else
+        Int(ccall(:jl_cpu_threads, Int32, ()))
+    end
+    global CPU_CORES = CPU_THREADS # TODO: delete in 1.0 (deprecation)
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())

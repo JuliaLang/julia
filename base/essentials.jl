@@ -141,31 +141,21 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-# TODO: a better / more infer-able definition would pehaps be
-#   tuple_type_head(T::Type) = fieldtype(T::Type{<:Tuple}, 1)
-tuple_type_head(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
-function tuple_type_head(T::Union)
-    @_pure_meta
-    return Union{tuple_type_head(T.a), tuple_type_head(T.b)}
-end
-function tuple_type_head(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
-    return unwrapva(T.parameters[1])
-end
+tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T::Type{<:Tuple}, 1))
 
-tuple_type_tail(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
-function tuple_type_tail(T::Union)
+function tuple_type_tail(T::Type)
     @_pure_meta
-    return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
-end
-function tuple_type_tail(T::DataType)
-    @_pure_meta
-    T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
-    if isvatuple(T) && length(T.parameters) == 1
-        return T
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_tail(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+    else
+        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+        if isvatuple(T) && length(T.parameters) == 1
+            return T
+        end
+        return Tuple{argtail(T.parameters...)...}
     end
-    return Tuple{argtail(T.parameters...)...}
 end
 
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
@@ -784,8 +774,8 @@ function peek end
 """
     @__LINE__ -> Int
 
-`@__LINE__` expands to the line number of the location of the macrocall.
-Returns `0` if the line number could not be determined.
+Expand to the line number of the location of the macrocall.
+Return `0` if the line number could not be determined.
 """
 macro __LINE__()
     return __source__.line
@@ -804,7 +794,7 @@ This function provides a fast-path hint for iterator completion.
 This is useful for mutable iterators that want to avoid having elements
 consumed, if they are not going to be exposed to the user (e.g. to check
 for done-ness in `isempty` or `zip`). Mutable iterators that want to
-opt into this feature shoud define an isdone method that returns
+opt into this feature should define an isdone method that returns
 true/false depending on whether the iterator is done or not. Stateless
 iterators need not implement this function. If the result is `missing`,
 callers may go ahead and compute `iterate(x, state...) === nothing` to

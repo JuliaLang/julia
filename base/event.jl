@@ -333,7 +333,7 @@ end
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
-Waiting tasks are woken after an intial delay of `delay` seconds, and then repeating with the given
+Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
 `interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
 the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
@@ -437,7 +437,7 @@ end
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
 calls the function `callback`.
 
-Waiting tasks are woken and the function `callback` is called after an intial delay of `delay` seconds,
+Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
 and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
 is only triggered once. The function `callback` is called with a single argument, the timer itself.
 When the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)

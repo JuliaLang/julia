@@ -49,7 +49,7 @@ convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)
 Factorization{T}(F::Factorization{T}) where {T} = F
 inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n)))
 
-Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, 1:nfields(F))
+Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, 1:nfields(F); init=h)
 Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
 Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))::Bool
 
@@ -73,18 +73,21 @@ end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
+    @assert !has_offset_axes(B)
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
     return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))), _ret_size(F, B))
 end
 
 function \(F::Factorization, B::AbstractVecOrMat)
+    @assert !has_offset_axes(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
     copyto!(BB, B)
     ldiv!(F, BB)
 end
 function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
+    @assert !has_offset_axes(B)
     F = adjF.parent
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
@@ -94,6 +97,7 @@ end
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
 function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
+    @assert !has_offset_axes(Y, B)
     m, n = size(A, 1), size(A, 2)
     if m > n
         ldiv!(A, B)

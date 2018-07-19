@@ -29,7 +29,7 @@ There are a few noteworthy high-level features about Julia's strings:
     a string argument, you should declare the type as `AbstractString` in order to accept any string
     type.
   * Like C and Java, but unlike most dynamic languages, Julia has a first-class type for representing
-    a single character, called `AbstractChar`. The built-in `Char` subtype of `AbstractChar`
+    a single character, called [`AbstractChar`](@ref). The built-in [`Char`](@ref) subtype of `AbstractChar`
     is a 32-bit primitive type that can represent any Unicode character (and which is based
     on the UTF-8 encoding).
   * As in Java, strings are immutable: the value of an `AbstractString` object cannot be changed.
@@ -42,7 +42,7 @@ There are a few noteworthy high-level features about Julia's strings:
 
 ## [Characters](@id man-characters)
 
-An `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
+A `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
 representation and appropriate arithmetic behaviors, and which can be converted
 to a numeric value representing a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
@@ -58,7 +58,7 @@ julia> typeof(ans)
 Char
 ```
 
-You can convert a `Char` to its integer value, i.e. code point, easily:
+You can easily convert a `Char` to its integer value, i.e. code point:
 
 ```jldoctest
 julia> Int('x')
@@ -187,7 +187,7 @@ Most indexing in Julia is 1-based: the first element of many integer-indexed obj
 index 1. (As we will see below, this does not necessarily mean that the last element is found
 at index `n`, where `n` is the length of the string.)
 
-You can perform arithmetic and other operations with `end`, just like
+You can perform arithmetic and other operations with [`end`](@ref), just like
 a normal value:
 
 ```jldoctest helloworldstring
@@ -419,8 +419,8 @@ julia> string(greet, ", ", whom, ".\n")
 "Hello, world.\n"
 ```
 
-A situation which is important to be aware of is when invalid UTF-8 strings are concatenated.
-In that case the resulting string may contain different characters than the input strings,
+It's important to be aware of potentially dangerous situations such as concatenation of invalid UTF-8 strings.
+The resulting string may contain different characters than the input strings,
 and its number of characters may be lower than sum of numbers of characters
 of the concatenated strings, e.g.:
 
@@ -447,7 +447,7 @@ julia> length.([a, b, c])
 This situation can happen only for invalid UTF-8 strings. For valid UTF-8 strings
 concatenation preserves all characters in strings and additivity of string lengths.
 
-Julia also provides `*` for string concatenation:
+Julia also provides [`*`](@ref) for string concatenation:
 
 ```jldoctest stringconcat
 julia> greet * ", " * whom * ".\n"
@@ -581,7 +581,7 @@ hello"""
 
 will contain a literal newline at the beginning.
 
-Stripping of the newline is performed after the dedentation for example:
+Stripping of the newline is performed after the dedentation. For example:
 
 ```jldoctest
 julia> """
@@ -732,7 +732,7 @@ julia> match(r"^\s*(?:#|$)", "# a comment")
 RegexMatch("#")
 ```
 
-If the regular expression does not match the given string, [`match`](@ref) returns `nothing`
+If the regular expression does not match the given string, [`match`](@ref) returns [`nothing`](@ref)
 -- a special value that does not print anything at the interactive prompt. Other than not printing,
 it is a completely normal value and you can test for it programmatically:
 
@@ -1037,7 +1037,7 @@ is equivalent to `v"0.2.0"` (with empty pre-release/build annotations), `v"2"` i
 `v"2.0.0"`, and so on.
 
 `VersionNumber` objects are mostly useful to easily and correctly compare two (or more) versions.
-For example, the constant `VERSION` holds Julia version number as a `VersionNumber` object, and
+For example, the constant [`VERSION`](@ref) holds Julia version number as a `VersionNumber` object, and
 therefore one can define some version-specific behavior using simple statements as:
 
 ```julia

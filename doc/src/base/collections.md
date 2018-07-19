@@ -34,8 +34,8 @@ Base.IteratorEltype
 
 Fully implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
@@ -49,6 +49,17 @@ Fully implemented by:
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
 
+## Constructors and Types
+
+```@docs
+Base.AbstractRange
+Base.OrdinalRange
+Base.AbstractUnitRange
+Base.StepRange
+Base.UnitRange
+Base.LinRange
+```
+
 ## General Collections
 
 ```@docs
@@ -59,8 +70,8 @@ Base.length
 
 Fully implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
@@ -82,18 +93,14 @@ Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
-Base.reduce(::Any, ::Any, ::Any)
 Base.reduce(::Any, ::Any)
-Base.foldl(::Any, ::Any, ::Any)
 Base.foldl(::Any, ::Any)
-Base.foldr(::Any, ::Any, ::Any)
 Base.foldr(::Any, ::Any)
 Base.maximum
 Base.maximum!
 Base.minimum
 Base.minimum!
-Base.extrema(::Any)
-Base.extrema(::AbstractArray, ::Any)
+Base.extrema
 Base.argmax
 Base.argmin
 Base.findmax
@@ -116,11 +123,8 @@ Base.all(::Any, ::Any)
 Base.foreach
 Base.map
 Base.map!
-Base.mapreduce(::Any, ::Any, ::Any, ::Any)
 Base.mapreduce(::Any, ::Any, ::Any)
-Base.mapfoldl(::Any, ::Any, ::Any, ::Any)
 Base.mapfoldl(::Any, ::Any, ::Any)
-Base.mapfoldr(::Any, ::Any, ::Any, ::Any)
 Base.mapfoldr(::Any, ::Any, ::Any)
 Base.first
 Base.last
@@ -153,8 +157,8 @@ Fully implemented by:
 
 Partially implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `AbstractString`
   * [`Dict`](@ref)

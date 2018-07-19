@@ -829,14 +829,6 @@ end
     @test length(map(identity, UInt64(1):UInt64(5))) == 5
     @test length(map(identity, UInt128(1):UInt128(5))) == 5
 end
-@testset "mean/median" begin
-    for f in (mean, median)
-        for n = 2:5
-            @test f(2:n) == f([2:n;])
-            @test f(2:0.1:n) ≈ f([2:0.1:n;])
-        end
-    end
-end
 @testset "issue #8531" begin
     smallint = (Int === Int64 ?
                 (Int8,UInt8,Int16,UInt16,Int32,UInt32) :
@@ -1151,6 +1143,15 @@ end
         @test findall(in(2:(length(r) - 1)), r) === 2:(length(r) - 1)
         @test findall(in(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
     end
+    @test convert(Base.OneTo, 1:2) === Base.OneTo{Int}(2)
+    @test_throws ArgumentError("first element must be 1, got 2") convert(Base.OneTo, 2:3)
+    @test_throws ArgumentError("step must be 1, got 2") convert(Base.OneTo, 1:2:5)
+    @test Base.OneTo(1:2) === Base.OneTo{Int}(2)
+    @test Base.OneTo(1:1:2) === Base.OneTo{Int}(2)
+    @test Base.OneTo{Int32}(1:2) === Base.OneTo{Int32}(2)
+    @test Base.OneTo(Int32(1):Int32(2)) === Base.OneTo{Int32}(2)
+    @test Base.OneTo{Int16}(3.0) === Base.OneTo{Int16}(3)
+    @test_throws InexactError(:Int16, Int16, 3.2) Base.OneTo{Int16}(3.2)
 end
 
 @testset "range of other types" begin
@@ -1284,6 +1285,12 @@ end
     x = range(3, stop=3, length=5)
     @test step(x) == 0.0
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+end
+
+@testset "Issue #26608" begin
+    @test_throws BoundsError (Int8(-100):Int8(100))[400]
+    @test_throws BoundsError (-100:100)[typemax(UInt)]
+    @test_throws BoundsError (false:true)[3]
 end
 
 module NonStandardIntegerRangeTest

@@ -16,7 +16,9 @@ export with, GitRepo, GitConfig
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
-const REFCOUNT = Threads.Atomic{UInt}()
+const REFCOUNT = Threads.Atomic{Int}(0)
+
+function ensure_initialized end
 
 include("utils.jl")
 include("consts.jl")
@@ -294,6 +296,8 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
             reject(cred_payload)
+        else
+            Base.shred!(cred_payload)
         end
         rethrow()
     finally
@@ -350,6 +354,8 @@ function push(repo::GitRepo; remote::AbstractString="origin",
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
             reject(cred_payload)
+        else
+            Base.shred!(cred_payload)
         end
         rethrow()
     finally
@@ -584,6 +590,8 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
         catch err
             if isa(err, GitError) && err.code == Error.EAUTH
                 reject(cred_payload)
+            else
+                Base.shred!(cred_payload)
             end
             rethrow()
         end
@@ -957,22 +965,29 @@ function transact(f::Function, repo::GitRepo)
     end
 end
 
-function set_ssl_cert_locations(cert_loc)
-    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_file == C_NULL && cert_dir == C_NULL && return
-    @check ccall((:git_libgit2_opts, :libgit2), Cint,
-          (Cint, Cstring, Cstring),
-          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+## lazy libgit2 initialization
+
+function ensure_initialized()
+    x = Threads.atomic_cas!(REFCOUNT, 0, 1)
+    if x < 0
+        negative_refcount_error(x)::Union{}
+    end
+    if x == 0
+        initialize()
+    end
+    return nothing
 end
 
-function __init__()
+@noinline function negative_refcount_error(x::Int)
+    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
+end
+
+@noinline function initialize()
     @check ccall((:git_libgit2_init, :libgit2), Cint, ())
-    REFCOUNT[] = 1
 
     atexit() do
-        if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
-            # refcount zero, no objects to be finalized
+        # refcount zero, no objects to be finalized
+        if Threads.atomic_sub!(REFCOUNT, 1) >= 1
             ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
         end
     end
@@ -992,5 +1007,13 @@ function __init__()
     end
 end
 
+function set_ssl_cert_locations(cert_loc)
+    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_file == C_NULL && cert_dir == C_NULL && return
+    @check ccall((:git_libgit2_opts, :libgit2), Cint,
+          (Cint, Cstring, Cstring),
+          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+end
 
 end # module

@@ -973,6 +973,7 @@ extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
 extern jl_sym_t *generated_sym;
 extern jl_sym_t *generated_only_sym;
 extern jl_sym_t *throw_undef_if_not_sym;
+extern jl_sym_t *getfield_undefref_sym;
 
 struct _jl_sysimg_fptrs_t;
 

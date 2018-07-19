@@ -8,6 +8,7 @@ import OldPkg
 let ex = quote
     module CompletionFoo
         using Random
+        import Test
 
         mutable struct Test_y
             yy
@@ -102,9 +103,15 @@ function temp_pkg_dir_noinit(fn::Function)
     end
 end
 
-test_complete(s) = completions(s,lastindex(s))
-test_scomplete(s) = shell_completions(s,lastindex(s))
-test_bslashcomplete(s) = bslash_completions(s,lastindex(s))[2]
+function map_completion_text(completions)
+    c, r, res = completions
+    return map(completion_text, c), r, res
+end
+
+test_complete(s) = map_completion_text(completions(s,lastindex(s)))
+test_scomplete(s) =  map_completion_text(shell_completions(s,lastindex(s)))
+test_bslashcomplete(s) =  map_completion_text(bslash_completions(s,lastindex(s))[2])
+test_complete_context(s) =  map_completion_text(completions(s,lastindex(s),Main.CompletionFoo))
 
 let s = ""
     c, r = test_complete(s)
@@ -420,7 +427,7 @@ let s = """CompletionFoo.test4("\\"","""
 end
 
 ########## Test where the current inference logic fails ########
-# Fails due to inferrence fails to determine a concrete type for arg 1
+# Fails due to inference fails to determine a concrete type for arg 1
 # But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
 let s = "CompletionFoo.test5(AbstractArray[[]][1],"
     c, r, res = test_complete(s)
@@ -605,6 +612,7 @@ let s, c, r
     # Issue #8047
     s = "@show \"/dev/nul\""
     c,r = completions(s, 15)
+    c = map(completion_text, c)
     @test "null" in c
     @test r == 13:15
     @test s[r] == "nul"
@@ -853,6 +861,7 @@ function test_dict_completion(dict_name)
     @test c == Any["\"abcd\"]"]
     s = "$dict_name[\"abcd]"  # trailing close bracket
     c, r = completions(s, lastindex(s) - 1)
+    c = map(completion_text, c)
     @test c == Any["\"abcd\""]
     s = "$dict_name[:b"
     c, r = test_complete(s)
@@ -918,3 +927,104 @@ test_dict_completion("test_repl_comp_customdict")
     @test "tϵsτcmδ`" in c
 end
 
+# Test completion in context
+
+# No CompletionFoo.CompletionFoo
+let s = ""
+    c, r = test_complete_context(s)
+    @test !("CompletionFoo" in c)
+end
+
+# Can see `rand()` after `using Random`
+let s = "r"
+    c, r = test_complete_context(s)
+    @test "rand" in c
+    @test r == 1:1
+    @test s[r] == "r"
+end
+
+# Can see `Test.AbstractTestSet` after `import Test`
+let s = "Test.A"
+    c, r = test_complete_context(s)
+    @test "AbstractTestSet" in c
+    @test r == 6:6
+    @test s[r] == "A"
+end
+
+# Can complete relative import
+let s = "import ..M"
+    c, r = test_complete_context(s)
+    @test_broken "Main" in c
+    @test r == 10:10
+    @test s[r] == "M"
+end
+
+let s = ""
+    c, r = test_complete_context(s)
+    @test "bar" in c
+    @test r == 1:0
+    @test s[r] == ""
+end
+
+let s = "f"
+    c, r = test_complete_context(s)
+    @test "foo" in c
+    @test r == 1:1
+    @test s[r] == "f"
+    @test !("foobar" in c)
+end
+
+let s = "@f"
+    c, r = test_complete_context(s)
+    @test "@foobar" in c
+    @test r == 1:2
+    @test s[r] == "@f"
+    @test !("foo" in c)
+end
+
+let s = "type_test.x"
+    c, r = test_complete_context(s)
+    @test "xx" in c
+    @test r == 11:11
+    @test s[r] == "x"
+end
+
+let s = "bar.no_val_available"
+    c, r = test_complete_context(s)
+    @test length(c)==0
+end
+
+let s = "type_test.xx.y"
+    c, r = test_complete_context(s)
+    @test "yy" in c
+    @test r == 14:14
+    @test s[r] == "y"
+end
+
+let s = "Base.return_types(getin"
+    c, r = test_complete_context(s)
+    @test "getindex" in c
+    @test r == 19:23
+    @test s[r] == "getin"
+end
+
+let s = "using Test, Random"
+    c, r = test_complete_context(s)
+    @test !("RandomDevice" in c)
+end
+
+let s = "test(1,1, "
+    c, r, res = test_complete_context(s)
+    @test !res
+    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
+    @test length(c) == 3
+    @test r == 1:4
+    @test s[r] == "test"
+end
+
+let s = "prevind(\"θ\",1,"
+    c, r, res = test_complete_context(s)
+    @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
+    @test r == 1:7
+    @test s[r] == "prevind"
+end

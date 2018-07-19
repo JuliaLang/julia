@@ -135,7 +135,7 @@ function add(lines::Vector{Line}, pkg::AbstractString, versions::VersionSet=Vers
         return true
     end
     length(v) == 1 && v[1] == intersect(v[1],versions) && return copy(lines)
-    versions = reduce(intersect, versions, v)
+    versions = reduce(intersect, v; init=versions)
     push!(filtered, Requirement(pkg, versions))
 end
 

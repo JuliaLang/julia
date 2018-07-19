@@ -446,7 +446,7 @@ function securezero! end
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString) -> `Base.SecretBuffer`
+    Base.getpass(message::AbstractString) -> Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
 object containing the secret.
@@ -458,9 +458,10 @@ graphical interface.
 function getpass end
 
 if Sys.iswindows()
-function getpass(prompt::AbstractString)
-    print(prompt, ": ")
-    flush(stdout)
+function getpass(input::TTY, output::IO, prompt::AbstractString)
+    input === stdin || throw(ArgumentError("getpass only works for stdin"))
+    print(output, prompt, ": ")
+    flush(output)
     s = SecretBuffer()
     plen = 0
     while true
@@ -475,14 +476,19 @@ function getpass(prompt::AbstractString)
             write(s, c)
         end
     end
-    return  s
+    return s
 end
 else
-function getpass(prompt::AbstractString)
+function getpass(input::TTY, output::IO, prompt::AbstractString)
+    (input === stdin && output === stdout) || throw(ArgumentError("getpass only works for stdin"))
     msg = string(prompt, ": ")
     unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
 end
 end
+
+# allow new getpass methods to be defined if stdin has been
+# redirected to some custom stream, e.g. in IJulia.
+getpass(prompt::AbstractString) = getpass(stdin, stdout, prompt)
 
 """
     prompt(message; default="") -> Union{String, Nothing}
@@ -493,15 +499,18 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
 """
-function prompt(message::AbstractString; default::AbstractString="")
+function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
-    print(msg)
-    uinput = readline(keep=true)
+    print(output, msg)
+    uinput = readline(input, keep=true)
     isempty(uinput) && return nothing  # Encountered an EOF
     uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
 end
 
+# allow new prompt methods to be defined if stdin has been
+# redirected to some custom stream, e.g. in IJulia.
+prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, stdout, message, default=default)
 
 # Windows authentication prompt
 if Sys.iswindows()
@@ -621,23 +630,24 @@ _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
 This is a helper macro that automatically defines a keyword-based constructor for the type
 declared in the expression `typedef`, which must be a `struct` or `mutable struct`
 expression. The default argument is supplied by declaring fields of the form `field::T =
-default`. If no default is provided then the default is provided by the `kwdef_val(T)`
-function.
+default` or `field = default`. If no default is provided then the keyword argument becomes
+a required keyword argument in the resulting type constructor.
 
 # Examples
 ```jldoctest
-julia> struct Bar end
-
 julia> Base.@kwdef struct Foo
-           a::Cint            # implied default Cint(0)
-           b::Cint = 1        # specified default
-           z::Cstring         # implied default Cstring(C_NULL)
-           y::Bar             # implied default Bar()
+           a::Int = 1         # specified default
+           b::String          # required keyword
        end
 Foo
 
+julia> Foo(b="hi")
+Foo(1, "hi")
+
 julia> Foo()
-Foo(0, 1, Cstring(0x0000000000000000), Bar())
+ERROR: UndefKeywordError: keyword argument b not assigned
+Stacktrace:
+[...]
 ```
 """
 macro kwdef(expr)
@@ -646,10 +656,15 @@ macro kwdef(expr)
     params_ex = Expr(:parameters)
     call_ex = Expr(:call, T)
     _kwdef!(expr.args[3], params_ex, call_ex)
-    quote
+    ret = quote
         Base.@__doc__($(esc(expr)))
-        $(esc(Expr(:call,T,params_ex))) = $(esc(call_ex))
     end
+    # Only define a constructor if the type has fields, otherwise we'll get a stack
+    # overflow on construction
+    if !isempty(params_ex.args)
+        push!(ret.args, :($(esc(Expr(:call, T, params_ex))) = $(esc(call_ex))))
+    end
+    ret
 end
 
 # @kwdef helper function
@@ -657,11 +672,19 @@ end
 function _kwdef!(blk, params_ex, call_ex)
     for i in eachindex(blk.args)
         ei = blk.args[i]
-        isa(ei, Expr) || continue
-        if ei.head == :(=)
+        if isa(ei, Symbol)
+            push!(params_ex.args, ei)
+            push!(call_ex.args, ei)
+        elseif !isa(ei, Expr)
+            continue
+        elseif ei.head == :(=)
             # var::Typ = defexpr
             dec = ei.args[1]  # var::Typ
-            var = dec.args[1] # var
+            if isa(dec, Expr) && dec.head == :(::)
+                var = dec.args[1]
+            else
+                var = dec
+            end
             def = ei.args[2]  # defexpr
             push!(params_ex.args, Expr(:kw, var, def))
             push!(call_ex.args, var)
@@ -669,9 +692,8 @@ function _kwdef!(blk, params_ex, call_ex)
         elseif ei.head == :(::)
             dec = ei # var::Typ
             var = dec.args[1] # var
-            def = :(Base.kwdef_val($(ei.args[2])))
-            push!(params_ex.args, Expr(:kw, var, def))
-            push!(call_ex.args, dec.args[1])
+            push!(params_ex.args, var)
+            push!(call_ex.args, var)
         elseif ei.head == :block
             # can arise with use of @static inside type decl
             _kwdef!(ei, params_ex, call_ex)
@@ -680,48 +702,10 @@ function _kwdef!(blk, params_ex, call_ex)
     blk
 end
 
-
-
-"""
-    kwdef_val(T)
-
-The default value for a type for use with the `@kwdef` macro. Returns:
-
- - null pointer for pointer types (`Ptr{T}`, `Cstring`, `Cwstring`)
- - zero for integer types
- - no-argument constructor calls (e.g. `T()`) for all other types
-
-# Examples
-```jldoctest
-julia> struct Foo
-           i::Int
-       end
-
-julia> Base.kwdef_val(::Type{Foo}) = Foo(42)
-
-julia> Base.@kwdef struct Bar
-           y::Foo
-       end
-Bar
-
-julia> Bar()
-Bar(Foo(42))
-```
-"""
-function kwdef_val end
-
-kwdef_val(::Type{Ptr{T}}) where {T} = Ptr{T}(C_NULL)
-kwdef_val(::Type{Cstring}) = Cstring(C_NULL)
-kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
-
-kwdef_val(::Type{T}) where {T<:Integer} = zero(T)
-
-kwdef_val(::Type{T}) where {T} = T()
-
 # testing
 
 """
-    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_CORES / 2),
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
@@ -731,7 +715,7 @@ when `exit_on_error == true`.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
+function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error=false,
                   seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
@@ -740,7 +724,7 @@ function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_CORES / 2),
     exit_on_error && push!(tests, "--exit-on-error")
     seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
-    ENV2["JULIA_CPU_CORES"] = "$ncores"
+    ENV2["JULIA_CPU_THREADS"] = "$ncores"
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))

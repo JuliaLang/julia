@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base: SecretBuffer, SecretBuffer!, shred!, isshredded
 using Test
 
@@ -24,6 +26,12 @@ using Test
 
         @test all(iszero, v)
         @test !isshredded(secret_b)
+
+        # TODO: ideally we'd test that the finalizer warns from GC.gc(), but that is harder
+        @test_logs (:warn, r".*SecretBuffer was `shred!`ed by the GC.*") finalize(secret_b)
+        @test isshredded(secret_b)
+        secret_b = nothing
+        GC.gc()
     end
 
     @testset "initializers" begin

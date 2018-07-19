@@ -9,6 +9,7 @@ the file when, and how. `options` controls how to separate the contents of the f
 which commits to probe - see [`BlameOptions`](@ref) for more information.
 """
 function GitBlame(repo::GitRepo, path::AbstractString; options::BlameOptions=BlameOptions())
+    ensure_initialized()
     blame_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_blame_file, :libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Ptr{BlameOptions}),
@@ -25,6 +26,7 @@ a function added to a source file or an inner loop that was optimized out of
 that function later.
 """
 function counthunks(blame::GitBlame)
+    ensure_initialized()
     return ccall((:git_blame_get_hunk_count, :libgit2), Int32, (Ptr{Cvoid},), blame.ptr)
 end
 
@@ -32,6 +34,7 @@ function Base.getindex(blame::GitBlame, i::Integer)
     if !(1 <= i <= counthunks(blame))
         throw(BoundsError(blame, (i,)))
     end
+    ensure_initialized()
     GC.@preserve blame begin
         hunk_ptr = ccall((:git_blame_get_hunk_byindex, :libgit2),
                           Ptr{BlameHunk},

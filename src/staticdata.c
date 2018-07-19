@@ -1600,9 +1600,8 @@ static void jl_init_serializer2(int for_serialize)
                      jl_expr_type, jl_globalref_type, jl_string_type,
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
-                     call_sym, invoke_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
+                     call_sym, invoke_sym, goto_ifnot_sym, return_sym, jl_symbol("tuple"),
                      unreachable_sym,
-                     lambda_sym, jl_symbol("tuple"), assign_sym,
                      jl_linenumbernode_type, jl_lineinfonode_type,
                      jl_gotonode_type, jl_quotenode_type,
                      jl_pinode_type, jl_phinode_type, jl_phicnode_type, jl_upsilonnode_type,
@@ -1637,6 +1636,7 @@ static void jl_init_serializer2(int for_serialize)
                      jl_namedtuple_type, jl_namedtuple_typename,
 
                      jl_int32_type, jl_int64_type, jl_bool_type, jl_uint8_type,
+                     jl_uint32_type, jl_uint64_type,
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"

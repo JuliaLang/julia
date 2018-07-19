@@ -24,7 +24,7 @@ export @testset
 export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
-export guardsrand, TestSetException
+export TestSetException
 
 import Distributed: myid
 
@@ -101,7 +101,7 @@ end
 function Base.show(io::IO, t::Fail)
     printstyled(io, "Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
-    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
+    printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -152,7 +152,7 @@ function Base.show(io::IO, t::Error)
     end
     printstyled(io, "Error During Test"; bold=true, color=Base.error_color())
     print(io, " at ")
-    printstyled(io, t.source.file, ":", t.source.line, "\n"; bold=true, color=:default)
+    printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
@@ -1249,7 +1249,7 @@ end
 """
     get_testset_depth()
 
-Returns the number of active test sets, not including the defaut test set
+Returns the number of active test sets, not including the default test set
 """
 function get_testset_depth()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
@@ -1512,8 +1512,7 @@ struct GenericDict{K,V} <: AbstractDict{K,V}
     s::AbstractDict{K,V}
 end
 
-for (G, A) in ((GenericSet, AbstractSet),
-               (GenericDict, AbstractDict))
+for G in (GenericSet, GenericDict)
     @eval begin
         Base.iterate(s::$G, state...) = iterate(s.s, state...)
     end

@@ -49,15 +49,6 @@ branches:
     - /^v\d+\.\d+\.\d+$/
 notifications:
     email: false
-    irc:
-        channels:
-            - "chat.freenode.net#julia-notifications"
-        on_success: change
-        on_failure: always
-    webhooks:
-        urls:
-          - http://status.julialang.org/put/travis
-          - http://julia.mit.edu:8000/travis-hook
 before_install:
     - make check-whitespace
     - if [ `uname` = "Linux" ]; then
@@ -73,7 +64,7 @@ before_install:
         BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1";
         echo "override ARCH=$ARCH" >> Make.user;
         sudo sh -c "echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6";
-        export JULIA_CPU_CORES=4;
+        export JULIA_CPU_THREADS=4;
         export JULIA_TEST_MAXRSS_MB=1200;
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
@@ -99,7 +90,7 @@ before_install:
         export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$spawn_DYLD_FALLBACK_LIBRARY_PATH\" \$1";
         export BUILDOPTS="$BUILDOPTS spawn=\$(JULIA_MACOS_SPAWN)";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
-        export JULIA_CPU_CORES=2;
+        export JULIA_CPU_THREADS=2;
         export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - echo "override JULIA_CPU_TARGET=generic;native" >> Make.user
@@ -136,8 +127,8 @@ script:
     - FILES_CHANGED=$(git diff --name-only $TRAVIS_COMMIT_RANGE -- || git ls-files)
     - cd .. && mv julia julia2
     # run tests
-    - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
-        /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true'
+    - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true'
+    # - /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true'
     - /tmp/julia/bin/julia -e 'Base.require(Main, :InteractiveUtils).versioninfo()'
     - pushd /tmp/julia/share/julia/test
     # skip tests if only files within the "doc" dir have changed

@@ -97,7 +97,7 @@ aimg  = randn(n,n)/2
             select = abs2.(NS.values) .< 1
             m = sum(select)
             S = ordschur(NS, select)
-            # Make sure that the new factorization stil factors matrix
+            # Make sure that the new factorization still factors matrix
             @test S.Q*S.S*S.Z' ≈ a1_sf
             @test S.Q*S.T*S.Z' ≈ a2_sf
             # Make sure that we have sorted it correctly

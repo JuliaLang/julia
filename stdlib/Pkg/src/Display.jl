@@ -42,11 +42,13 @@ function status(ctx::Context, mode::PackageMode, use_as_api=false)
         end
     end
     if env.git != nothing
-        git_path = LibGit2.path(env.git)
-        project_path = relpath(env.project_file, git_path)
-        manifest_path = relpath(env.manifest_file, git_path)
-        project₀ = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
-        manifest₀ = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
+        LibGit2.with(LibGit2.GitRepo(env.git)) do repo
+            git_path = LibGit2.path(repo)
+            project_path = relpath(env.project_file, git_path)
+            manifest_path = relpath(env.manifest_file, git_path)
+            project₀ = read_project(git_file_stream(repo, "HEAD:$project_path", fakeit=true))
+            manifest₀ = read_manifest(git_file_stream(repo, "HEAD:$manifest_path", fakeit=true))
+        end
     end
     if mode == PKGMODE_PROJECT || mode == PKGMODE_COMBINED
         # TODO: handle project deps missing from manifest
@@ -138,7 +140,9 @@ function print_diff(io::IO, ctx::Context, diff::Vector{DiffEntry}, status=false)
     same = all(x.old == x.new for x in diff)
     some_packages_not_downloaded = false
     for x in diff
-        package_downloaded = Base.locate_package(Base.PkgId(x.uuid, x.name)) !== nothing
+        pkgid = Base.PkgId(x.uuid, x.name)
+        package_downloaded = pkgid in keys(Base.loaded_modules) ||
+                             Base.locate_package(pkgid) !== nothing
         if x.old != nothing && x.new != nothing
             if x.old ≈ x.new
                 verb = ' '

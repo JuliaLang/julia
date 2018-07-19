@@ -26,10 +26,16 @@ function issingletontype(@nospecialize t)
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return all(@nospecialize(p) -> issingletontype(p), t.parameters)
+        return _all(issingletontype, t.parameters)
     end
     return false
 end
+
+# Subtyping currently intentionally answers certain queries incorrectly for kind types. For
+# some of these queries, this check can be used to somewhat protect against making incorrect
+# decisions based on incorrect subtyping. Note that this check, itself, is broken for
+# certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || issingletontype(a.parameters[1]))
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
@@ -52,7 +58,7 @@ end
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
 function typesubtract(@nospecialize(a), @nospecialize(b))
-    if a <: b
+    if a <: b && isnotbrokensubtype(a, b)
         return Bottom
     end
     if isa(a, Union)
@@ -85,7 +91,11 @@ _typename(a::DataType) = Const(a.name)
 function tuple_tail_elem(@nospecialize(init), ct)
     # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
     tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
-    return Vararg{widenconst(foldl(tmerge_maybe_vararg, init, ct))}
+    t = init
+    for x in ct
+        t = tmerge_maybe_vararg(t, x)
+    end
+    return Vararg{widenconst(t)}
 end
 
 function countunionsplit(atypes)
@@ -124,3 +134,20 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
     end
     return tunion
 end
+
+# unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
+# counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
+unioncomplexity(u::Union) = 1 + unioncomplexity(u.a) + unioncomplexity(u.b)
+function unioncomplexity(t::DataType)
+    t.name === Tuple.name || return 0
+    c = 0
+    for ti in t.parameters
+        ci = unioncomplexity(ti)
+        if ci > c
+            c = ci
+        end
+    end
+    return c
+end
+unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
+unioncomplexity(@nospecialize(x)) = 0

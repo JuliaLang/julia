@@ -234,9 +234,8 @@ typedef struct _jl_llvm_functions_t {
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     jl_array_t *code;  // Any array of statements
-    jl_value_t *codelocs; // Int array of indicies into the line table
+    jl_value_t *codelocs; // Int32 array of indicies into the line table
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
-    jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
     jl_value_t *linetable; // Table of locations
     jl_array_t *ssaflags; // flags associated with each statement:
@@ -1068,6 +1067,7 @@ JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t);
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz);
 JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t);
 JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_is_not_broken_subtype(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n);
 JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT int jl_has_empty_intersection(jl_value_t *x, jl_value_t *y);
@@ -1358,7 +1358,7 @@ JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key,
 JL_DLLEXPORT int jl_errno(void);
 JL_DLLEXPORT void jl_set_errno(int e);
 JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf);
-JL_DLLEXPORT int jl_cpu_cores(void);
+JL_DLLEXPORT int jl_cpu_threads(void);
 JL_DLLEXPORT long jl_getpagesize(void);
 JL_DLLEXPORT long jl_getallocationgranularity(void);
 JL_DLLEXPORT int jl_is_debugbuild(void);
@@ -1779,6 +1779,7 @@ typedef struct {
     const char *cpu_target;
     int32_t nprocs;
     const char *machine_file;
+    const char *project;
     int8_t isinteractive;
     int8_t color;
     int8_t historyfile;
@@ -1933,6 +1934,16 @@ typedef struct {
     // parameters: LLVMBasicBlockRef as Ptr{Cvoid}, LLVMValueRef as Ptr{Cvoid}
     // return value: none
     jl_value_t *raise_exception;
+
+    // emit function: start emission of a new function
+    // parameters: MethodInstance, CodeInfo, world age as UInt
+    // return value: none
+    jl_value_t *emit_function;
+
+    // emitted function: end emission of a new function
+    // parameters: MethodInstance, CodeInfo, world age as UInt
+    // return value: none
+    jl_value_t *emitted_function;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 

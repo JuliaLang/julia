@@ -183,8 +183,6 @@ end
             ver = read(buf, String)
             @test startswith(ver, "Julia Version $VERSION")
             @test occursin("Environment:", ver)
-            @test occursin("Package Status:", ver)
-            @test occursin("no packages installed", ver)
             @test isempty(readdir(dir))
         end
     end
@@ -192,7 +190,7 @@ end
         @test !occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
                                                     String[]), String))
         @test  occursin("Environment:", read(setenv(`$exename -e 'using InteractiveUtils; versioninfo()'`,
-                                                    String["JULIA_CPU_CORES=1"]), String))
+                                                    String["JULIA_CPU_THREADS=1"]), String))
     end
 end
 

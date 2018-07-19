@@ -250,7 +250,7 @@ julia> NaN > NaN
 false
 ```
 
-and can cause especial headaches with [Arrays](@ref):
+and can cause especial headaches with [arrays](@ref man-multi-dim-arrays):
 
 ```jldoctest
 julia> [1 NaN] == [1 NaN]
@@ -366,6 +366,7 @@ Julia applies the following order and associativity of operations, from highest 
 | Syntax         | `<\|`                                                                                             | Right                      |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Pair           | `=>`                                                                                              | Right                      |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
 
 [^1]:

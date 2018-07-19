@@ -55,7 +55,7 @@ struct UnionSplit
 end
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::OptimizationState)
-    # Go through the function, perfoming simple ininlingin (e.g. replacing call by constants
+    # Go through the function, performing simple ininlingin (e.g. replacing call by constants
     # and analyzing legality of inlining).
     @timeit "analysis" todo = assemble_inline_todo!(ir, linetable, sv)
     isempty(todo) && return ir
@@ -290,7 +290,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         end
     end
     # If the iterator already moved on to the next basic block,
-    # temorarily re-open in again.
+    # temporarily re-open in again.
     local return_value
     # Special case inlining that maintains the current basic block if there's only one BB in the target
     if item.linear_inline_eligible
@@ -482,9 +482,13 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
     let compact = IncrementalCompact(ir)
         compact.result_bbs = state.new_cfg_blocks
         # This needs to be a minimum and is more of a size hint
-        nnewnodes = length(compact.result) + (sum(todo) do @nospecialize(item)
-            return isa(item, InliningTodo) ? (length(item.ir.stmts) + length(item.ir.new_nodes)) : 0
-        end)
+        nn = 0
+        for item in todo
+            if isa(item, InliningTodo)
+                nn += (length(item.ir.stmts) + length(item.ir.new_nodes))
+            end
+        end
+        nnewnodes = length(compact.result) + nn
         resize!(compact, nnewnodes)
         item = popfirst!(todo)
         inline_idx = item.idx
@@ -553,22 +557,43 @@ function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(
     linfo
 end
 
-function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, sv::OptimizationState)
+function rewrite_apply_exprargs!(ir::IRCode, idx::Int, argexprs::Vector{Any}, atypes::Vector{Any}, sv::OptimizationState)
     new_argexprs = Any[argexprs[2]]
-    # Flatten all tuples
-    for arg in argexprs[3:end]
-        tupT = argextype(arg, ir, sv.sp)
-        t = widenconst(tupT)
-        for i = 1:length(t.parameters)
-            # Insert a getfield call here
-            new_call = Expr(:call, Core.getfield, arg, i)
-            typ = getfield_tfunc(tupT, Const(i))
-            new_arg = insert_node!(ir, idx, typ, new_call)
-            push!(new_argexprs, new_arg)
+    new_atypes = Any[atypes[2]]
+    # loop over original arguments and flatten any known iterators
+    for i in 3:length(argexprs)
+        def = argexprs[i]
+        # As a special case, if we can see the tuple() call, look at it's arguments to find
+        # our types. They can be more precise (e.g. f(Bool, A...) would be lowered as
+        # _apply(f, tuple(Bool)::Tuple{DataType}, A), which might not be precise enough to
+        # get a good method match). This pattern is used in the array code a bunch.
+        if isa(def, SSAValue) && is_tuple_call(ir, ir[def])
+            def_args = ir[def].args
+            def_atypes = Any[argextype(def_args[i], ir, sv.sp) for i in 2:length(def_args)]
+        elseif isa(def, Argument) && def.n === length(ir.argtypes) && !isempty(sv.result_vargs)
+            def_atypes = sv.result_vargs
+        else
+            def_atypes = Any[]
+            for p in widenconst(atypes[i]).parameters
+                if isa(p, DataType) && isdefined(p, :instance)
+                    # replace singleton types with their equivalent Const object
+                    p = Const(p.instance)
+                elseif isconstType(p)
+                    p = Const(p.parameters[1])
+                end
+                push!(def_atypes, p)
+            end
+        end
+        # now push flattened types into new_atypes and getfield exprs into new_argexprs
+        for j in 1:length(def_atypes)
+            def_atype = def_atypes[j]
+            new_call = Expr(:call, Core.getfield, def, j)
+            new_argexpr = insert_node!(ir, idx, def_atype, new_call)
+            push!(new_argexprs, new_argexpr)
+            push!(new_atypes, def_atype)
         end
     end
-    argexprs = new_argexprs
-    return argexprs
+    return new_argexprs, new_atypes
 end
 
 function rewrite_invoke_exprargs!(inserter, argexprs::Vector{Any})
@@ -581,6 +606,8 @@ end
 function singleton_type(@nospecialize(ft))
     if isa(ft, Const)
         return ft.val
+    elseif ft isa DataType && isdefined(ft, :instance)
+        return ft.instance
     end
     return nothing
 end
@@ -652,7 +679,7 @@ function analyze_method!(idx::Int, @nospecialize(f), @nospecialize(ft), @nospeci
     end
 
     @timeit "inline IR inflation" begin
-        ir2, inline_linetable = inflate_ir(src, spvals_from_meth_instance(linfo)), src.linetable
+        ir2, inline_linetable = inflate_ir(src, linfo), src.linetable
     end
     #verify_ir(ir2)
 
@@ -739,7 +766,6 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
 
         ft = argextype(arg1, ir, sv.sp)
         has_free_typevars(ft) && continue
-        isa(ft, Conditional) && (ft = Bool)
         f = singleton_type(ft)
         # TODO: llvmcall can contain other calls as arguments, so this code doesn't work on it
         f === Core.Intrinsics.llvmcall && continue
@@ -775,53 +801,27 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         isapply = isinvoke = false
 
         # Handle _apply
-        isapply = false
         if f === Core._apply
-            new_atypes = Any[]
-            ft = argextype(stmt.args[2], ir, sv.sp)
+            ft = atypes[2]
             has_free_typevars(ft) && continue
-            isa(ft, Conditional) && (ft = Bool)
             f = singleton_type(ft)
-            # Push function type
-            push!(new_atypes, ft)
             # Try to figure out the signature of the function being called
+            # and if rewrite_apply_exprargs can deal with this form
             ok = true
-            for (typ, def) in zip(atypes[3:end], stmt.args[3:end])
-                typ = widenconst(typ)
-                # We don't know what'll be in a SimpleVector, bail out
-                isa(typ, SimpleVector) && (ok = false; break)
+            for i = 3:length(atypes)
+                typ = widenconst(atypes[i])
                 # TODO: We could basically run the iteration protocol here
-                if !isa(typ, DataType) || typ.name !== Tuple.name || isvatuple(typ)
+                if !isa(typ, DataType) || typ.name !== Tuple.name ||
+                    isvatuple(typ) || length(typ.parameters) > sv.params.MAX_TUPLE_SPLAT
                     ok = false
                     break
-                end
-                if length(typ.parameters) > sv.params.MAX_TUPLE_SPLAT
-                    ok = false
-                    break
-                end
-                # As a special case, if we can see the tuple() call, look at it's arguments to find
-                # our types. They can be more precise (e.g. f(Bool, A...) would be lowered as
-                # _apply(f, tuple(Bool)::Tuple{DataType}, A), which might not be precise enough to
-                # get a good method match). This pattern is used in the array code a bunch.
-                if isa(def, SSAValue) && is_tuple_call(ir, ir[def])
-                    for tuparg in ir[def].args[2:end]
-                        push!(new_atypes, argextype(tuparg, ir, sv.sp))
-                    end
-                elseif isa(def, Argument) && def.n === length(ir.argtypes) && !isempty(sv.result_vargs)
-                    append!(new_atypes, sv.result_vargs)
-                else
-                    append!(new_atypes, typ.parameters)
                 end
             end
             ok || continue
-            atypes = new_atypes
             isapply = true
-        end
-
-        # Independent of whether we can inline, the above analysis allows us to rewrite
-        # this apply call to a regular call
-        if isapply
-            stmt.args = rewrite_apply_exprargs!(ir, idx, stmt.args, sv)
+            # Independent of whether we can inline, the above analysis allows us to rewrite
+            # this apply call to a regular call
+            stmt.args, atypes = rewrite_apply_exprargs!(ir, idx, stmt.args, atypes, sv)
         end
 
         if f !== Core.invoke && (isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction || isa(f, Builtin) || ft ⊑ Builtin)
@@ -838,34 +838,27 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         end
         isinvoke = (invoke_data !== nothing)
 
-        atype_unlimited = argtypes_to_type(atypes)
+        atype = argtypes_to_type(atypes)
 
         # In :invoke, make sure that the arguments we're passing are a subtype of the
         # signature we're invoking.
-        (invoke_data === nothing || atype_unlimited <: invoke_data.types0) || continue
+        (invoke_data === nothing || atype <: invoke_data.types0) || continue
 
         # Bail out here if inlining is disabled
         sv.params.inlining || continue
 
         # Special case inliners for regular functions
-        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft)
+        if late_inline_special_case!(ir, idx, stmt, atypes, f, ft) || f === return_type
             continue
-        end
-
-        # Compute the limited type if necessary
-        if length(atype_unlimited.parameters) - 1 > sv.params.MAX_TUPLETYPE_LEN
-            atype = limit_tuple_type(atype_unlimited, sv.params)
-        else
-            atype = atype_unlimited
         end
 
         # Ok, now figure out what method to call
         if invoke_data !== nothing
             method = invoke_data.entry.func
             (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
-                                    atype_unlimited, method.sig)::SimpleVector
+                                    atype, method.sig)::SimpleVector
             methsp = methsp::SimpleVector
-            result = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data,
+            result = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype, isinvoke, isapply, invoke_data,
                                      calltype)
             handle_single_case!(ir, stmt, idx, result, isinvoke, todo, sv)
             continue
@@ -912,7 +905,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
                 if !isdispatchtuple(metharg′)
                     fully_covered = false
                     continue
-                elseif any(x->x === metharg′, split_out_sigs)
+                elseif _any(x->x === metharg′, split_out_sigs)
                     continue
                 end
                 # `meth` is in specificity order, so find the first applicable method
@@ -942,7 +935,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             methsp = meth[1][2]::SimpleVector
             method = meth[1][3]::Method
             fully_covered = true
-            case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype_unlimited, isinvoke, isapply, invoke_data, calltype)
+            case = analyze_method!(idx, f, ft, metharg, methsp, method, stmt, atypes, sv, atype, isinvoke, isapply, invoke_data, calltype)
             case === nothing && continue
             push!(cases, Pair{Any,Any}(metharg, case))
         end
@@ -955,7 +948,7 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
             continue
         end
         length(cases) == 0 && continue
-        push!(todo, UnionSplit(idx, fully_covered, atype_unlimited, isinvoke, cases))
+        push!(todo, UnionSplit(idx, fully_covered, atype, isinvoke, cases))
     end
     todo
 end
@@ -1005,6 +998,14 @@ function compute_invoke_data(@nospecialize(atypes), argexprs::Vector{Any}, sv::O
     return svec(f, ft, atypes, argexprs, invoke_data)
 end
 
+# Check for a number of functions known to be pure
+function ispuretopfunction(@nospecialize(f))
+    return istopfunction(f, :typejoin) ||
+        istopfunction(f, :isbits) ||
+        istopfunction(f, :isbitstype) ||
+        istopfunction(f, :promote_type)
+end
+
 function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector{Any}, sv::OptimizationState,
                                    @nospecialize(etype))
     if (f === typeassert || ft ⊑ typeof(typeassert)) && length(atypes) == 3
@@ -1017,22 +1018,19 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
             return val
         end
     end
-    # special-case inliners for known pure functions that compute types
+
     if sv.params.inlining
         if isa(etype, Const) # || isconstType(etype)
             val = etype.val
-            if (f === apply_type || f === fieldtype || f === typeof || f === (===) ||
-                f === Core.sizeof || f === isdefined ||
-                istopfunction(f, :typejoin) ||
-                istopfunction(f, :isbits) ||
-                istopfunction(f, :isbitstype) ||
-                istopfunction(f, :promote_type) ||
-                (f === Core.kwfunc && length(atypes) == 2) ||
-                (is_inlineable_constant(val) &&
-                 (contains_is(_PURE_BUILTINS, f) ||
-                  (f === getfield && effect_free(e, ir, ir.spvals, false, etype)) ||
-                  (isa(f, IntrinsicFunction) && is_pure_intrinsic_optim(f)))))
+            is_inlineable_constant(val) || return nothing
+            if ispuretopfunction(f) ||
+                    (isa(f, IntrinsicFunction) ? is_pure_intrinsic_optim(f) :
+                    contains_is(_PURE_BUILTINS, f))
                 return quoted(val)
+            elseif contains_is(_PURE_OR_ERROR_BUILTINS, f)
+                if _builtin_nothrow(f, atypes[2:end], etype)
+                    return quoted(val)
+                end
             end
         end
     end

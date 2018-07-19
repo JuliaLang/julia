@@ -34,7 +34,7 @@ macro fail(s...)
     pvar = :pv
     ppvar = :ppv
 
-    # debuging report
+    # debugging report
     dbgexp = if debug
         quote
             println("\nTEST FAIL: ", escape_string($teststr))
@@ -83,7 +83,7 @@ macro success(s...)
     pvar = :pv
     ppvar = :ppv
 
-    # debuging report
+    # debugging report
     dbgexp = if debug
         quote
             println("\nTEST SUCCESS: ", escape_string($teststr))

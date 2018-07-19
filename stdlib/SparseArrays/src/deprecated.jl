@@ -233,6 +233,8 @@ Base.@deprecate_binding blkdiag blockdiag
 
 @deprecate diff(a::SparseMatrixCSC, dim::Integer) diff(a, dims=dim)
 
+@deprecate findnz(A::AbstractMatrix) (I = findall(!iszero, A); (getindex.(I, 1), getindex.(I, 2), A[I]))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

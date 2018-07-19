@@ -97,7 +97,6 @@ DefaultArrayStyle{M}(::Val{N}) where {N,M} = DefaultArrayStyle{N}()
 const DefaultVectorStyle = DefaultArrayStyle{1}
 const DefaultMatrixStyle = DefaultArrayStyle{2}
 BroadcastStyle(::Type{<:AbstractArray{T,N}}) where {T,N} = DefaultArrayStyle{N}()
-BroadcastStyle(::Type{<:Ref}) = DefaultArrayStyle{0}()
 BroadcastStyle(::Type{T}) where {T} = DefaultArrayStyle{ndims(T)}()
 
 # `ArrayConflict` is an internal type signaling that two or more different `AbstractArrayStyle`
@@ -114,7 +113,7 @@ ArrayConflict(::Val) = ArrayConflict()
 
 Indicate how to resolve different `BroadcastStyle`s. For example,
 
-    Broadcast.rule(::Primary, ::Secondary) = Primary()
+    BroadcastStyle(::Primary, ::Secondary) = Primary()
 
 would indicate that style `Primary` has precedence over `Secondary`.
 You do not have to (and generally should not) define both argument orders.
@@ -204,7 +203,6 @@ Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{Bool}) =
 ## Computing the result's axes. Most types probably won't need to specialize this.
 broadcast_axes() = ()
 broadcast_axes(A::Tuple) = (OneTo(length(A)),)
-broadcast_axes(A::Ref) = ()
 @inline broadcast_axes(A) = axes(A)
 """
     Base.broadcast_axes(A)
@@ -227,12 +225,6 @@ BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
 
 argtype(::Type{Broadcasted{Style,Axes,F,Args}}) where {Style,Axes,F,Args} = Args
 argtype(bc::Broadcasted) = argtype(typeof(bc))
-
-const NestedTuple = Tuple{<:Broadcasted,Vararg{Any}}
-not_nested(bc::Broadcasted) = _not_nested(bc.args)
-_not_nested(t::Tuple)       = _not_nested(tail(t))
-_not_nested(::NestedTuple)  = false
-_not_nested(::Tuple{})      = true
 
 @inline Base.eachindex(bc::Broadcasted) = _eachindex(axes(bc))
 _eachindex(t::Tuple{Any}) = t[1]
@@ -301,7 +293,7 @@ This is an optional operation that may make custom implementation of broadcastin
 some cases.
 """
 function flatten(bc::Broadcasted{Style}) where {Style}
-    isflat(bc.args) && return bc
+    isflat(bc) && return bc
     # concatenate the nested arguments into {a, b, c, d}
     args = cat_nested(x->x.args, bc)
     # build a function `makeargs` that takes a "flat" argument list and
@@ -320,9 +312,11 @@ function flatten(bc::Broadcasted{Style}) where {Style}
     end
 end
 
-isflat(args::NestedTuple) = false
-isflat(args::Tuple) = isflat(tail(args))
-isflat(args::Tuple{}) = true
+const NestedTuple = Tuple{<:Broadcasted,Vararg{Any}}
+isflat(bc::Broadcasted) = _isflat(bc.args)
+_isflat(args::NestedTuple) = false
+_isflat(args::Tuple) = _isflat(tail(args))
+_isflat(args::Tuple{}) = true
 
 cat_nested(fieldextractor, bc::Broadcasted) = cat_nested(fieldextractor, fieldextractor(bc), ())
 
@@ -488,7 +482,7 @@ an `Int`.
     tuples may be created by `newindexer(argument)`.
 """
 Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(broadcast_axes(arg), I.I))
-Base.@propagate_inbounds newindex(arg, I::Int) = CartesianIndex(_newindex(broadcast_axes(arg), (I,)))
+Base.@propagate_inbounds newindex(arg, I::Integer) = CartesianIndex(_newindex(broadcast_axes(arg), (I,)))
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(Base.unsafe_length(ax[1])==1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
@@ -496,8 +490,8 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = CartesianIndex(_newindex(I.I, keep, Idefault))
-@inline newindex(i::Int, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
-@inline newindex(i::Int, keep::Tuple{}, idefault) = CartesianIndex(())
+@inline newindex(i::Integer, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
+@inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
 @inline _newindex(I, keep, Idefault) =
     (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
 @inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I
@@ -510,17 +504,17 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 @inline function _newindexer(indsA::Tuple)
     ind1 = indsA[1]
     keep, Idefault = _newindexer(tail(indsA))
-    (Base._length(ind1)!=1, keep...), (first(ind1), Idefault...)
+    (Base.length(ind1)!=1, keep...), (first(ind1), Idefault...)
 end
 
-@inline function Base.getindex(bc::Broadcasted, I::Union{Int,CartesianIndex})
+@inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
 end
-Base.@propagate_inbounds Base.getindex(bc::Broadcasted, i1::Int, i2::Int, I::Int...) = bc[CartesianIndex((i1, i2, I...))]
+Base.@propagate_inbounds Base.getindex(bc::Broadcasted, i1::Integer, i2::Integer, I::Integer...) = bc[CartesianIndex((i1, i2, I...))]
 Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
 
-@inline Base.checkbounds(bc::Broadcasted, I::Union{Int,CartesianIndex}) =
+@inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
 
 
@@ -778,22 +772,17 @@ end
 # This permits specialization on typeof(dest) without introducing ambiguities
 @inline copyto!(dest::AbstractArray, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
 
-# Performance optimization for the Scalar case
+# Performance optimization for the common identity scalar case: dest .= val
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0}})
-    if not_nested(bc)
-        if bc.f === identity && bc.args isa Tuple{Any} # only a single input argument to broadcast!
-            # broadcast!(identity, dest, val) is equivalent to fill!(dest, val)
-            return fill!(dest, bc.args[1][])
-        else
-            args = bc.args
-            @inbounds for I in eachindex(dest)
-                dest[I] = bc.f(map(getindex, args)...)
-            end
-            return dest
-        end
+    # Typically, we must independently execute bc for every storage location in `dest`, but:
+    # IF we're in the common no-op identity case with no nested args (like `dest .= val`),
+    if bc.f === identity && bc.args isa Tuple{Any} && isflat(bc)
+        # THEN we can just extract the argument and `fill!` the destination with it
+        return fill!(dest, bc.args[1][])
+    else
+        # Otherwise, fall back to the default implementation like above
+        return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     end
-    # Fall back to the default implementation
-    return copyto!(dest, instantiate(bc))
 end
 
 # For broadcasted assignments like `broadcast!(f, A, ..., A, ...)`, where `A`
@@ -866,7 +855,7 @@ end
 # We could eventually allow for all broadcasting and other array types, but that
 # requires very careful consideration of all the edge effects.
 const ChunkableOp = Union{typeof(&), typeof(|), typeof(xor), typeof(~), typeof(identity),
-    typeof(!), typeof(*), typeof(==)} # these are convertable to chunkable ops by liftfuncs
+    typeof(!), typeof(*), typeof(==)} # these are convertible to chunkable ops by liftfuncs
 const BroadcastedChunkableOp{Style<:Union{Nothing,BroadcastStyle}, Axes, F<:ChunkableOp, Args<:Tuple} = Broadcasted{Style,Axes,F,Args}
 ischunkedbroadcast(R, bc::BroadcastedChunkableOp) = ischunkedbroadcast(R, bc.args)
 ischunkedbroadcast(R, args) = false

@@ -145,47 +145,6 @@ function version_slug(uuid::UUID, sha1::SHA1, p::Int=4)
     return slug(crc, p)
 end
 
-## load path expansion: turn LOAD_PATH entries into concrete paths ##
-
-function load_path_expand(env::AbstractString)::Union{String, Nothing}
-    # named environment?
-    if startswith(env, '@')
-        # `@` in JULIA_LOAD_PATH is expanded early (at startup time)
-        # if you put a `@` in LOAD_PATH manually, it's expanded late
-        (env == "@" || env == "@@") && return current_env()
-        env == "@stdlib" && return Sys.STDLIB
-        env = replace(env, '#' => VERSION.major, count=1)
-        env = replace(env, '#' => VERSION.minor, count=1)
-        env = replace(env, '#' => VERSION.patch, count=1)
-        name = env[2:end]
-        # look for named env in each depot
-        for depot in DEPOT_PATH
-            path = joinpath(depot, "environments", name)
-            isdir(path) || continue
-            for proj in project_names
-                file = abspath(path, proj)
-                isfile_casesensitive(file) && return file
-            end
-            return path
-        end
-        isempty(DEPOT_PATH) && return nothing
-        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
-    end
-    # otherwise, it's a path
-    path = abspath(env)
-    if isdir(path)
-        # directory with a project file?
-        for proj in project_names
-            file = joinpath(path, proj)
-            isfile_casesensitive(file) && return file
-        end
-    end
-    # package dir or path to project file
-    return path
-end
-
-load_path() = String[env for env in map(load_path_expand, LOAD_PATH) if env ≠ nothing]
-
 ## package identification: determine unique identity of package to be loaded ##
 
 find_package(args...) = locate_package(identify_package(args...))
@@ -1113,6 +1072,25 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
+function load_path_setup_code(load_path::Bool=true)
+    code = """
+    append!(empty!(Base.DEPOT_PATH), $(repr(map(abspath, DEPOT_PATH))))
+    append!(empty!(Base.DL_LOAD_PATH), $(repr(map(abspath, DL_LOAD_PATH))))
+    """
+    if load_path
+        load_path = map(abspath, Base.load_path())
+        path_sep = Sys.iswindows() ? ';' : ':'
+        any(path -> path_sep in path, load_path) &&
+            error("LOAD_PATH entries cannot contain $(repr(path_sep))")
+        code *= """
+        append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
+        ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
+        Base.HOME_PROJECT[] = Base.ACTIVE_PROJECT[] = nothing
+        """
+    end
+    return code
+end
+
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
@@ -1131,13 +1109,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     try
         write(in, """
         begin
-        import OldPkg
-        empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(LOAD_PATH, context=:module=>nothing)))
-        empty!(Base.DEPOT_PATH)
-        append!(Base.DEPOT_PATH, $(repr(DEPOT_PATH)))
-        empty!(Base.DL_LOAD_PATH)
-        append!(Base.DL_LOAD_PATH, $(repr(DL_LOAD_PATH)))
+        $(Base.load_path_setup_code())
         Base._track_dependencies[] = true
         empty!(Base._concrete_dependencies)
         """)
@@ -1341,7 +1313,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         (modules, (includes, requires), required_modules) = parse_cache_header(io)
         modules = Dict{PkgId, UInt64}(modules)
 
-        # Check if transitive dependencies can be fullfilled
+        # Check if transitive dependencies can be fulfilled
         ndeps = length(required_modules)
         depmods = Vector{Any}(undef, ndeps)
         for i in 1:ndeps
@@ -1419,9 +1391,9 @@ end
 """
     @__FILE__ -> AbstractString
 
-`@__FILE__` expands to a string with the path to the file containing the
+Expand to a string with the path to the file containing the
 macrocall, or an empty string if evaluated by `julia -e <expr>`.
-Returns `nothing` if the macro was missing parser source information.
+Return `nothing` if the macro was missing parser source information.
 Alternatively see [`PROGRAM_FILE`](@ref).
 """
 macro __FILE__()
@@ -1432,9 +1404,9 @@ end
 """
     @__DIR__ -> AbstractString
 
-`@__DIR__` expands to a string with the absolute path to the directory of the file
+Expand to a string with the absolute path to the directory of the file
 containing the macrocall.
-Returns the current working directory if run from a REPL or if evaluated by `julia -e <expr>`.
+Return the current working directory if run from a REPL or if evaluated by `julia -e <expr>`.
 """
 macro __DIR__()
     __source__.file === nothing && return nothing

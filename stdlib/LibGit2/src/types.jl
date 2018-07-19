@@ -98,6 +98,7 @@ end
 StrArrayStruct() = StrArrayStruct(C_NULL, 0)
 
 function free(sa_ref::Base.Ref{StrArrayStruct})
+    ensure_initialized()
     ccall((:git_strarray_free, :libgit2), Cvoid, (Ptr{StrArrayStruct},), sa_ref)
 end
 
@@ -124,6 +125,7 @@ end
 Buffer() = Buffer(C_NULL, 0, 0)
 
 function free(buf_ref::Base.Ref{Buffer})
+    ensure_initialized()
     ccall((:git_buf_free, :libgit2), Cvoid, (Ptr{Buffer},), buf_ref)
 end
 
@@ -161,34 +163,34 @@ The fields represent:
   * `perfdata_payload`: Payload for the performance callback.
 """
 @kwdef struct CheckoutOptions
-    version::Cuint = 1
+    version::Cuint               = Cuint(1)
 
-    checkout_strategy::Cuint    = Consts.CHECKOUT_SAFE
+    checkout_strategy::Cuint     = Consts.CHECKOUT_SAFE
 
-    disable_filters::Cint
-    dir_mode::Cuint
-    file_mode::Cuint
-    file_open_flags::Cint
+    disable_filters::Cint        = Cint(0)
+    dir_mode::Cuint              = Cuint(0)
+    file_mode::Cuint             = Cuint(0)
+    file_open_flags::Cint        = Cint(0)
 
-    notify_flags::Cuint         = Consts.CHECKOUT_NOTIFY_NONE
-    notify_cb::Ptr{Cvoid}
-    notify_payload::Ptr{Cvoid}
+    notify_flags::Cuint          = Consts.CHECKOUT_NOTIFY_NONE
+    notify_cb::Ptr{Cvoid}        = C_NULL
+    notify_payload::Ptr{Cvoid}   = C_NULL
 
-    progress_cb::Ptr{Cvoid}
-    progress_payload::Ptr{Cvoid}
+    progress_cb::Ptr{Cvoid}      = C_NULL
+    progress_payload::Ptr{Cvoid} = C_NULL
 
-    paths::StrArrayStruct
+    paths::StrArrayStruct        = StrArrayStruct()
 
-    baseline::Ptr{Cvoid}
-    baseline_index::Ptr{Cvoid}
+    baseline::Ptr{Cvoid}         = C_NULL
+    baseline_index::Ptr{Cvoid}   = C_NULL
 
-    target_directory::Cstring
-    ancestor_label::Cstring
-    our_label::Cstring
-    their_label::Cstring
+    target_directory::Cstring    = Cstring(C_NULL)
+    ancestor_label::Cstring      = Cstring(C_NULL)
+    our_label::Cstring           = Cstring(C_NULL)
+    their_label::Cstring         = Cstring(C_NULL)
 
-    perfdata_cb::Ptr{Cvoid}
-    perfdata_payload::Ptr{Cvoid}
+    perfdata_cb::Ptr{Cvoid}      = C_NULL
+    perfdata_payload::Ptr{Cvoid} = C_NULL
 end
 
 """
@@ -198,29 +200,29 @@ Transfer progress information used by the `transfer_progress` remote callback.
 Matches the [`git_transfer_progress`](https://libgit2.github.com/libgit2/#HEAD/type/git_transfer_progress) struct.
 """
 @kwdef struct TransferProgress
-    total_objects::Cuint
-    indexed_objects::Cuint
-    received_objects::Cuint
-    local_objects::Cuint
-    total_deltas::Cuint
-    indexed_deltas::Cuint
-    received_bytes::Csize_t
+    total_objects::Cuint    = Cuint(0)
+    indexed_objects::Cuint  = Cuint(0)
+    received_objects::Cuint = Cuint(0)
+    local_objects::Cuint    = Cuint(0)
+    total_deltas::Cuint     = Cuint(0)
+    indexed_deltas::Cuint   = Cuint(0)
+    received_bytes::Csize_t = Csize_t(0)
 end
 
 @kwdef struct RemoteCallbacksStruct
-    version::Cuint                    = 1
-    sideband_progress::Ptr{Cvoid}
-    completion::Ptr{Cvoid}
-    credentials::Ptr{Cvoid}
-    certificate_check::Ptr{Cvoid}
-    transfer_progress::Ptr{Cvoid}
-    update_tips::Ptr{Cvoid}
-    pack_progress::Ptr{Cvoid}
-    push_transfer_progress::Ptr{Cvoid}
-    push_update_reference::Ptr{Cvoid}
-    push_negotiation::Ptr{Cvoid}
-    transport::Ptr{Cvoid}
-    payload::Ptr{Cvoid}
+    version::Cuint                     = Cuint(1)
+    sideband_progress::Ptr{Cvoid}      = C_NULL
+    completion::Ptr{Cvoid}             = C_NULL
+    credentials::Ptr{Cvoid}            = C_NULL
+    certificate_check::Ptr{Cvoid}      = C_NULL
+    transfer_progress::Ptr{Cvoid}      = C_NULL
+    update_tips::Ptr{Cvoid}            = C_NULL
+    pack_progress::Ptr{Cvoid}          = C_NULL
+    push_transfer_progress::Ptr{Cvoid} = C_NULL
+    push_update_reference::Ptr{Cvoid}  = C_NULL
+    push_negotiation::Ptr{Cvoid}       = C_NULL
+    transport::Ptr{Cvoid}              = C_NULL
+    payload::Ptr{Cvoid}                = C_NULL
 end
 
 """
@@ -309,25 +311,25 @@ julia> fetch(remote, "master", options=fo)
 ```
 """
 @kwdef struct ProxyOptions
-    version::Cuint               = 1
+    version::Cuint               = Cuint(1)
     proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
-    url::Cstring
-    credential_cb::Ptr{Cvoid}
-    certificate_cb::Ptr{Cvoid}
-    payload::Ptr{Cvoid}
+    url::Cstring                 = Cstring(C_NULL)
+    credential_cb::Ptr{Cvoid}    = C_NULL
+    certificate_cb::Ptr{Cvoid}   = C_NULL
+    payload::Ptr{Cvoid}          = C_NULL
 end
 
 @kwdef struct FetchOptionsStruct
-    version::Cuint                  = 1
-    callbacks::RemoteCallbacksStruct
-    prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
-    update_fetchhead::Cint          = 1
-    download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+    version::Cuint                     = Cuint(1)
+    callbacks::RemoteCallbacksStruct   = RemoteCallbacksStruct()
+    prune::Cint                        = Consts.FETCH_PRUNE_UNSPECIFIED
+    update_fetchhead::Cint             = Cint(1)
+    download_tags::Cint                = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
     @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions
+        proxy_opts::ProxyOptions       = ProxyOptions()
     end
     @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct
+        custom_headers::StrArrayStruct = StrArrayStruct()
     end
 end
 
@@ -360,16 +362,16 @@ end
 
 
 @kwdef struct CloneOptionsStruct
-    version::Cuint                      = 1
-    checkout_opts::CheckoutOptions
-    fetch_opts::FetchOptionsStruct
-    bare::Cint
+    version::Cuint                      = Cuint(1)
+    checkout_opts::CheckoutOptions      = CheckoutOptions()
+    fetch_opts::FetchOptionsStruct      = FetchOptionsStruct()
+    bare::Cint                          = Cint(0)
     localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
-    checkout_branch::Cstring
-    repository_cb::Ptr{Cvoid}
-    repository_cb_payload::Ptr{Cvoid}
-    remote_cb::Ptr{Cvoid}
-    remote_cb_payload::Ptr{Cvoid}
+    checkout_branch::Cstring            = Cstring(C_NULL)
+    repository_cb::Ptr{Cvoid}           = C_NULL
+    repository_cb_payload::Ptr{Cvoid}   = C_NULL
+    remote_cb::Ptr{Cvoid}               = C_NULL
+    remote_cb_payload::Ptr{Cvoid}       = C_NULL
 end
 
 """
@@ -439,20 +441,20 @@ The fields represent:
 
     # options controlling which files are in the diff
     ignore_submodules::GIT_SUBMODULE_IGNORE  = Consts.SUBMODULE_IGNORE_UNSPECIFIED
-    pathspec::StrArrayStruct
-    notify_cb::Ptr{Cvoid}
+    pathspec::StrArrayStruct                 = StrArrayStruct()
+    notify_cb::Ptr{Cvoid}                    = C_NULL
     @static if LibGit2.VERSION >= v"0.24.0"
-        progress_cb::Ptr{Cvoid}
+        progress_cb::Ptr{Cvoid}              = C_NULL
     end
-    payload::Ptr{Cvoid}
+    payload::Ptr{Cvoid}                      = C_NULL
 
     # options controlling how the diff text is generated
     context_lines::UInt32                    = UInt32(3)
-    interhunk_lines::UInt32
+    interhunk_lines::UInt32                  = UInt32(0)
     id_abbrev::UInt16                        = UInt16(7)
     max_size::Int64                          = Int64(512*1024*1024) #512Mb
-    old_prefix::Cstring
-    new_prefix::Cstring
+    old_prefix::Cstring                      = Cstring(C_NULL)
+    new_prefix::Cstring                      = Cstring(C_NULL)
 end
 
 """
@@ -475,13 +477,13 @@ The fields represent:
      commit's [`GitHash`](@ref) instead of throwing an error (the default behavior).
 """
 @kwdef struct DescribeOptions
-    version::Cuint             = 1
-    max_candidates_tags::Cuint = 10
-    describe_strategy::Cuint   = Consts.DESCRIBE_DEFAULT
+    version::Cuint                    = Cuint(1)
+    max_candidates_tags::Cuint        = Cuint(10)
+    describe_strategy::Cuint          = Consts.DESCRIBE_DEFAULT
 
-    pattern::Cstring
-    only_follow_first_parent::Cint
-    show_commit_oid_as_fallback::Cint
+    pattern::Cstring                  = Cstring(C_NULL)
+    only_follow_first_parent::Cint    = Cint(0)
+    show_commit_oid_as_fallback::Cint = Cint(0)
 end
 
 """
@@ -496,10 +498,10 @@ The fields represent:
   * `dirty_suffix`: if set, this will be appended to the end of the description string if the [`workdir`](@ref) is dirty.
 """
 @kwdef struct DescribeFormatOptions
-    version::Cuint          = 1
-    abbreviated_size::Cuint = 7
-    always_use_long_format::Cint
-    dirty_suffix::Cstring
+    version::Cuint               = Cuint(1)
+    abbreviated_size::Cuint      = Cuint(7)
+    always_use_long_format::Cint = Cint(0)
+    dirty_suffix::Cstring        = Cstring(C_NULL)
 end
 
 """
@@ -616,16 +618,16 @@ The fields represent:
   * `file_flags`: guidelines for merging files.
 """
 @kwdef struct MergeOptions
-    version::Cuint                    = 1
-    flags::Cint
-    rename_threshold::Cuint           = 50
-    target_limit::Cuint               = 200
-    metric::Ptr{Cvoid}
+    version::Cuint                    = Cuint(1)
+    flags::Cint                       = Cint(0)
+    rename_threshold::Cuint           = Cuint(50)
+    target_limit::Cuint               = Cuint(200)
+    metric::Ptr{Cvoid}                = C_NULL
     @static if LibGit2.VERSION >= v"0.24.0"
-        recursion_limit::Cuint
+        recursion_limit::Cuint        = Cuint(0)
     end
     @static if LibGit2.VERSION >= v"0.25.0"
-        default_driver::Cstring
+        default_driver::Cstring       = Cstring(C_NULL)
     end
     file_favor::GIT_MERGE_FILE_FAVOR  = Consts.MERGE_FILE_FAVOR_NORMAL
     file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
@@ -651,24 +653,24 @@ The fields represent:
     last line of the file.
 """
 @kwdef struct BlameOptions
-    version::Cuint                    = 1
-    flags::UInt32                     = 0
-    min_match_characters::UInt16      = 20
-    newest_commit::GitHash
-    oldest_commit::GitHash
-    min_line::Csize_t                 = 1
-    max_line::Csize_t                 = 0
+    version::Cuint                    = Cuint(1)
+    flags::UInt32                     = UInt32(0)
+    min_match_characters::UInt16      = UInt16(20)
+    newest_commit::GitHash            = GitHash()
+    oldest_commit::GitHash            = GitHash()
+    min_line::Csize_t                 = Csize_t(1)
+    max_line::Csize_t                 = Csize_t(0)
 end
 
 @kwdef struct PushOptionsStruct
-    version::Cuint                     = 1
-    parallelism::Cint                  = 1
-    callbacks::RemoteCallbacksStruct
+    version::Cuint                     = Cuint(1)
+    parallelism::Cint                  = Cint(1)
+    callbacks::RemoteCallbacksStruct   = RemoteCallbacksStruct()
     @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions
+        proxy_opts::ProxyOptions       = ProxyOptions()
     end
     @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct
+        custom_headers::StrArrayStruct = StrArrayStruct()
     end
 end
 
@@ -712,10 +714,10 @@ The fields represent:
      for more information.
 """
 @kwdef struct CherrypickOptions
-    version::Cuint = 1
-    mainline::Cuint = 0
-    merge_opts::MergeOptions=MergeOptions()
-    checkout_opts::CheckoutOptions=CheckoutOptions()
+    version::Cuint = Cuint(1)
+    mainline::Cuint = Cuint(0)
+    merge_opts::MergeOptions = MergeOptions()
+    checkout_opts::CheckoutOptions = CheckoutOptions()
 end
 
 
@@ -775,16 +777,16 @@ The fields represent:
     through it, and aborting it. See [`CheckoutOptions`](@ref) for more information.
 """
 @kwdef struct RebaseOptions
-    version::Cuint                 = 1
-    quiet::Cint                    = 1
+    version::Cuint                 = Cuint(1)
+    quiet::Cint                    = Cint(1)
     @static if LibGit2.VERSION >= v"0.24.0"
-        inmemory::Cint
+        inmemory::Cint             = Cint(0)
     end
-    rewrite_notes_ref::Cstring
+    rewrite_notes_ref::Cstring     = Cstring(C_NULL)
     @static if LibGit2.VERSION >= v"0.24.0"
-        merge_opts::MergeOptions
+        merge_opts::MergeOptions   = MergeOptions()
     end
-    checkout_opts::CheckoutOptions
+    checkout_opts::CheckoutOptions = CheckoutOptions()
 end
 
 """
@@ -837,15 +839,15 @@ The fields represent:
     index; defaults to HEAD.
 """
 @kwdef struct StatusOptions
-    version::Cuint           = 1
+    version::Cuint           = Cuint(1)
     show::Cint               = Consts.STATUS_SHOW_INDEX_AND_WORKDIR
     flags::Cuint             = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
                                Consts.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
                                Consts.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
                                Consts.STATUS_OPT_SORT_CASE_SENSITIVELY
-    pathspec::StrArrayStruct
+    pathspec::StrArrayStruct = StrArrayStruct()
     @static if LibGit2.VERSION >= v"0.27.0"
-        baseline::Ptr{Cvoid}
+        baseline::Ptr{Cvoid} = C_NULL
     end
 end
 
@@ -909,11 +911,11 @@ end
 Matches the [`git_config_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_config_entry) struct.
 """
 @kwdef struct ConfigEntry
-    name::Cstring
-    value::Cstring
-    level::GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT
-    free::Ptr{Cvoid}
-    payload::Ptr{Cvoid}
+    name::Cstring       = Cstring(C_NULL)
+    value::Cstring      = Cstring(C_NULL)
+    level::GIT_CONFIG   = Consts.CONFIG_LEVEL_DEFAULT
+    free::Ptr{Cvoid}    = C_NULL
+    payload::Ptr{Cvoid} = C_NULL
 end
 
 function Base.show(io::IO, ce::ConfigEntry)
@@ -942,7 +944,7 @@ julia> LibGit2.split_cfg_entry(entry)
 ("credential", "https://example.com", "username", "me")
 ```
 
-Refer to the [git config syntax documenation](https://git-scm.com/docs/git-config#_syntax)
+Refer to the [git config syntax documentation](https://git-scm.com/docs/git-config#_syntax)
 for more details.
 """
 function split_cfg_entry(ce::ConfigEntry)
@@ -999,7 +1001,7 @@ for (typ, owntyp, sup, cname) in [
                 @assert ptr != C_NULL
                 obj = new(ptr)
                 if fin
-                    Threads.atomic_add!(REFCOUNT, UInt(1))
+                    Threads.atomic_add!(REFCOUNT, 1)
                     finalizer(Base.close, obj)
                 end
                 return obj
@@ -1013,7 +1015,7 @@ for (typ, owntyp, sup, cname) in [
                 @assert ptr != C_NULL
                 obj = new(owner, ptr)
                 if fin
-                    Threads.atomic_add!(REFCOUNT, UInt(1))
+                    Threads.atomic_add!(REFCOUNT, 1)
                     finalizer(Base.close, obj)
                 end
                 return obj
@@ -1027,9 +1029,10 @@ for (typ, owntyp, sup, cname) in [
     end
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
+            ensure_initialized()
             ccall(($(string(cname, :_free)), :libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
             obj.ptr = C_NULL
-            if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
+            if Threads.atomic_sub!(REFCOUNT, 1) == 1
                 # will the last finalizer please turn out the lights?
                 ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
             end
@@ -1060,6 +1063,7 @@ mutable struct GitSignature <: AbstractGitObject
 end
 function Base.close(obj::GitSignature)
     if obj.ptr != C_NULL
+        ensure_initialized()
         ccall((:git_signature_free, :libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
         obj.ptr = C_NULL
     end
@@ -1095,18 +1099,18 @@ The fields represent:
        equal to an oldest commit set in `options`).
 """
 @kwdef struct BlameHunk
-    lines_in_hunk::Csize_t
+    lines_in_hunk::Csize_t                = Csize_t(0)
 
-    final_commit_id::GitHash
-    final_start_line_number::Csize_t
-    final_signature::Ptr{SignatureStruct}
+    final_commit_id::GitHash              = GitHash()
+    final_start_line_number::Csize_t      = Csize_t(0)
+    final_signature::Ptr{SignatureStruct} = Ptr{SignatureStruct}(C_NULL)
 
-    orig_commit_id::GitHash
-    orig_path::Cstring
-    orig_start_line_number::Csize_t
-    orig_signature::Ptr{SignatureStruct}
+    orig_commit_id::GitHash               = GitHash()
+    orig_path::Cstring                    = Cstring(C_NULL)
+    orig_start_line_number::Csize_t       = Csize_t(0)
+    orig_signature::Ptr{SignatureStruct}  = Ptr{SignatureStruct}(C_NULL)
 
-    boundary::Char
+    boundary::Char                        = '\0'
 end
 
 """
@@ -1156,8 +1160,10 @@ Consts.OBJECT(::Type{GitTag})           = Consts.OBJ_TAG
 Consts.OBJECT(::Type{GitUnknownObject}) = Consts.OBJ_ANY
 Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
 
-Consts.OBJECT(ptr::Ptr{Cvoid}) =
+function Consts.OBJECT(ptr::Ptr{Cvoid})
+    ensure_initialized()
     ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
+end
 
 """
     objtype(obj_type::Consts.OBJECT)
@@ -1208,6 +1214,14 @@ mutable struct UserPasswordCredential <: AbstractCredential
     UserPasswordCredential(prompt_if_incorrect::Bool) = UserPasswordCredential("","",prompt_if_incorrect)
 end
 
+function Base.setproperty!(cred::UserPasswordCredential, name::Symbol, value)
+    if name == :pass
+        field = getfield(cred, name)
+        Base.shred!(field)
+    end
+    setfield!(cred, name, convert(fieldtype(typeof(cred), name), value))
+end
+
 function Base.shred!(cred::UserPasswordCredential)
     cred.user = ""
     Base.shred!(cred.pass)
@@ -1245,6 +1259,15 @@ mutable struct SSHCredential <: AbstractCredential
     SSHCredential(u::AbstractString, p::AbstractString, prompt_if_incorrect::Bool) = SSHCredential(u,p,"","",prompt_if_incorrect)
     SSHCredential(prompt_if_incorrect::Bool) = SSHCredential("","","","",prompt_if_incorrect)
 end
+
+function Base.setproperty!(cred::SSHCredential, name::Symbol, value)
+    if name == :pass
+        field = getfield(cred, name)
+        Base.shred!(field)
+    end
+    setfield!(cred, name, convert(fieldtype(typeof(cred), name), value))
+end
+
 
 function Base.shred!(cred::SSHCredential)
     cred.user = ""
@@ -1344,6 +1367,12 @@ end
 
 CredentialPayload(p::CredentialPayload) = p
 
+function Base.shred!(p::CredentialPayload)
+    # Note: Avoid shredding the `explicit` or `cache` fields as these are just references
+    # and it is not our responsibility to shred them.
+    p.credential !== nothing && Base.shred!(p.credential)
+    p.credential = nothing
+end
 
 """
     reset!(payload, [config]) -> CredentialPayload
@@ -1378,7 +1407,7 @@ should be destroyed. Should only be set to `false` during testing.
 """
 function approve(p::CredentialPayload; shred::Bool=true)
     cred = p.credential
-    cred === nothing && return  # No credentials were used
+    cred === nothing && return  # No credential was used
 
     if p.cache !== nothing
         approve(p.cache, cred, p.url)
@@ -1388,7 +1417,10 @@ function approve(p::CredentialPayload; shred::Bool=true)
         approve(p.config, cred, p.url)
     end
 
-    shred && Base.shred!(cred)
+    if shred
+        Base.shred!(cred)
+        p.credential = nothing
+    end
     nothing
 end
 
@@ -1403,17 +1435,19 @@ should be destroyed. Should only be set to `false` during testing.
 """
 function reject(p::CredentialPayload; shred::Bool=true)
     cred = p.credential
-    cred === nothing && return  # No credentials were used
+    cred === nothing && return  # No credential was used
 
     if p.cache !== nothing
         reject(p.cache, cred, p.url)
-        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
         reject(p.config, cred, p.url)
     end
 
-    shred && Base.shred!(cred)
+    if shred
+        Base.shred!(cred)
+        p.credential = nothing
+    end
     nothing
 end
 

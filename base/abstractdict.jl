@@ -47,7 +47,7 @@ end
 summary(iter::T) where {T<:Union{KeySet,ValueIterator}} =
     string(T.name, " for a ", summary(iter.dict))
 
-show(io::IO, iter::Union{KeySet,ValueIterator}) = show(io, collect(iter))
+show(io::IO, iter::Union{KeySet,ValueIterator}) = show_vector(io, iter)
 
 length(v::Union{KeySet,ValueIterator}) = length(v.dict)
 isempty(v::Union{KeySet,ValueIterator}) = isempty(v.dict)

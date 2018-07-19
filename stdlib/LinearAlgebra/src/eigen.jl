@@ -210,10 +210,17 @@ julia> eigvals(diag_matrix)
 """
 eigvals(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T =
     eigvals!(copy_oftype(A, eigtype(T)), permute = permute, scale = scale)
-function eigvals(x::T; kwargs...) where T<:Number
-    val = convert(eigtype(T), x)
-    return imag(val) == 0 ? [real(val)] : [val]
-end
+
+"""
+For a scalar input, `eigvals` will return a scalar.
+
+# Example
+```jldoctest
+julia> eigvals(-2)
+-2
+```
+"""
+eigvals(x::Number; kwargs...) = imag(x) == 0 ? real(x) : x
 
 """
     eigmax(A; permute::Bool=true, scale::Bool=true)
@@ -289,7 +296,8 @@ Stacktrace:
 [...]
 ```
 """
-function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+function eigmin(A::Union{Number, AbstractMatrix};
+                permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
     if eltype(v)<:Complex
         throw(DomainError(A, "`A` cannot have complex eigenvalues."))

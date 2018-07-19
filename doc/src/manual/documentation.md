@@ -725,7 +725,7 @@ end
 ````
 
 !!! note
-    "Fenced" code blocks, as shown in the last example, should be prefered over indented code blocks
+    "Fenced" code blocks, as shown in the last example, should be preferred over indented code blocks
     since there is no way to specify what language an indented code block is written in.
 
 #### Block quotes

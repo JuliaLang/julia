@@ -917,7 +917,7 @@ decode_HEX(x::Integer) = decode_hex(x,HEX_symbols)
 
 function decode(b::Int, x::BigInt)
     neg = x.size < 0
-    pt = Base.ndigits(x, abs(b))
+    pt = Base.ndigits(x, base=abs(b))
     digits = DIGITSs[Threads.threadid()]
     length(digits) < pt+1 && resize!(digits, pt+1)
     neg && (x.size = -x.size)

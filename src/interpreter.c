@@ -466,7 +466,11 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         jl_value_t *cond = eval_value(args[1], s);
         assert(jl_is_bool(cond));
         if (cond == jl_false) {
-            jl_undefined_var_error((jl_sym_t*)args[0]);
+            jl_sym_t *var = (jl_sym_t*)args[0];
+            if (var == getfield_undefref_sym)
+                jl_throw(jl_undefref_exception);
+            else
+                jl_undefined_var_error(var);
         }
         return jl_nothing;
     }
@@ -513,7 +517,7 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {
         // The interpreter generally keeps values that were assigned in this scope
-        // rooted. If the interpreter learns to be more agressive here, we may
+        // rooted. If the interpreter learns to be more aggressive here, we may
         // want to explicitly root these values.
         return jl_nothing;
     }

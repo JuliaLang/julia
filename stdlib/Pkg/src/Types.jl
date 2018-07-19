@@ -22,11 +22,12 @@ export UUID, pkgID, SHA1, VersionRange, VersionSpec, empty_versionspec,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, project_deps_resolve!, manifest_resolve!, registry_resolve!, stdlib_resolve!, handle_repos_develop!, handle_repos_add!, ensure_resolved,
     manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
-    read_project, read_manifest, pathrepr, registries,
+    read_project, read_package, read_manifest, pathrepr, registries,
     PackageMode, PKGMODE_MANIFEST, PKGMODE_PROJECT, PKGMODE_COMBINED,
     UpgradeLevel, UPLEVEL_FIXED, UPLEVEL_PATCH, UPLEVEL_MINOR, UPLEVEL_MAJOR,
     PackageSpecialAction, PKGSPEC_NOTHING, PKGSPEC_PINNED, PKGSPEC_FREED, PKGSPEC_DEVELOPED, PKGSPEC_TESTED, PKGSPEC_REPO_ADDED,
-    printpkgstyle
+    printpkgstyle,
+    projectfile_path
 
 
 include("versions.jl")
@@ -169,6 +170,11 @@ PackageSpec(name::AbstractString, version::VersionTypes=VersionSpec()) =
     PackageSpec(name, UUID(zero(UInt128)), version)
 PackageSpec(uuid::UUID, version::VersionTypes=VersionSpec()) =
     PackageSpec("", uuid, version)
+function PackageSpec(repo::GitRepo)
+    pkg = PackageSpec()
+    pkg.repo = repo
+    return pkg
+end
 
 has_name(pkg::PackageSpec) = !isempty(pkg.name)
 has_uuid(pkg::PackageSpec) = pkg.uuid != UUID(zero(UInt128))
@@ -196,19 +202,24 @@ function parse_toml(path::String...; fakeit::Bool=false)
     !fakeit || isfile(p) ? TOML.parsefile(p) : Dict{String,Any}()
 end
 
-const project_names = ["JuliaProject.toml", "Project.toml"]
-const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
-const default_envs = [
-    "v$(VERSION.major).$(VERSION.minor).$(VERSION.patch)",
-    "v$(VERSION.major).$(VERSION.minor)",
-    "v$(VERSION.major)",
-    "default",
-]
+let trynames(names) = begin
+    return root_path::AbstractString -> begin
+        for x in names
+            maybe_file = joinpath(root_path, x)
+            if isfile(maybe_file)
+                return maybe_file
+            end
+        end
+    end
+end # trynames
+    global projectfile_path = trynames(Base.project_names)
+    global manifestfile_path = trynames(Base.manifest_names)
+end # let
 
 mutable struct EnvCache
     # environment info:
     env::Union{Nothing,String}
-    git::Union{Nothing,LibGit2.GitRepo}
+    git::Union{Nothing,String}
 
     # paths for files:
     project_file::String
@@ -227,22 +238,8 @@ mutable struct EnvCache
 
     function EnvCache(env::Union{Nothing,String}=nothing)
         if env isa Nothing
-            project_file = nothing
-            for entry in LOAD_PATH
-                project_file = Base.load_path_expand(entry)
-                project_file isa String && !isdir(project_file) && break
-                project_file = nothing
-            end
-            if project_file == nothing
-                project_dir = nothing
-                for entry in LOAD_PATH
-                    project_dir = Base.load_path_expand(entry)
-                    project_dir isa String && isdir(project_dir) && break
-                    project_dir = nothing
-                end
-                project_dir == nothing && error("No Pkg environment found in LOAD_PATH")
-                project_file = joinpath(project_dir, Base.project_names[end])
-            end
+            project_file = Base.active_project()
+            project_file == nothing && error("no active project")
         elseif startswith(env, '@')
             project_file = Base.load_path_expand(env)
             project_file === nothing && error("package environment does not exist: $env")
@@ -259,7 +256,7 @@ mutable struct EnvCache
             (isfile(project_file) || !ispath(project_file) ||
              isdir(project_file) && isempty(readdir(project_file)))
         project_dir = dirname(project_file)
-        git = ispath(joinpath(project_dir, ".git")) ? LibGit2.GitRepo(project_dir) : nothing
+        git = ispath(joinpath(project_dir, ".git")) ? project_dir : nothing
 
         project = read_project(project_file)
         if any(haskey.((project,), ["name", "uuid", "version"]))
@@ -271,15 +268,13 @@ mutable struct EnvCache
         else
             project_package = nothing
         end
-        if haskey(project, "manifest")
-            manifest_file = abspath(project["manifest"])
-        else
-            dir = abspath(dirname(project_file))
-            for name in manifest_names
-                manifest_file = joinpath(dir, name)
-                isfile(manifest_file) && break
-            end
-        end
+        # determine manifest_file name
+        dir = abspath(dirname(project_file))
+        manifest_file = haskey(project, "manifest") ?
+            abspath(project["manifest"]) :
+            manifestfile_path(dir)
+        # use default name if still not determined
+        (manifest_file === nothing) && (manifest_file = joinpath(dir, "Manifest.toml"))
         write_env_usage(manifest_file)
         manifest = read_manifest(manifest_file)
         uuids = Dict{String,Vector{UUID}}()
@@ -314,8 +309,8 @@ stdlib_path(stdlib::String) = joinpath(stdlib_dir(), stdlib)
 function gather_stdlib_uuids()
     stdlibs = Dict{UUID,String}()
     for stdlib in readdir(stdlib_dir())
-        projfile = joinpath(stdlib_path(stdlib), "Project.toml")
-        if isfile(projfile)
+        projfile = projectfile_path(stdlib_path(stdlib))
+        if nothing !== projfile
             proj = TOML.parsefile(projfile)
             if haskey(proj, "uuid")
                 stdlibs[UUID(proj["uuid"])] = stdlib
@@ -376,6 +371,19 @@ function read_project(file::String)
     isfile(file) ? open(read_project, file) : read_project(devnull)
 end
 
+_throw_package_err(x, f) = cmderror("expected a `$x` entry in project file at $(abspath(f))")
+function read_package(f::String)
+    project = read_project(f)
+    haskey(project, "name") || _throw_package_err("name", f)
+    haskey(project, "uuid") || _throw_package_err("uuid", f)
+    name = project["name"]
+    entry = joinpath(dirname(f), "src", "$name.jl")
+    if !isfile(entry)
+        cmderror("expected the file `src/$name.jl` to exist for package $name at $(dirname(f))")
+    end
+    return project
+end
+
 function read_manifest(io::IO)
     manifest = TOML.parse(io)
     for (name, infos) in manifest, info in infos
@@ -433,36 +441,51 @@ function handle_repos_develop!(ctx::Context, pkgs::AbstractVector{PackageSpec})
                 project_path = pkg.repo.url
                 parse_package!(ctx, pkg, project_path)
             else
-                # We save the repo in case another environement wants to
+                # We save the repo in case another environment wants to
                 # develop from the same repo, this avoids having to reclone it
                 # from scratch.
                 clone_path = joinpath(depots()[1], "clones")
                 mkpath(clone_path)
                 repo_path = joinpath(clone_path, string(hash(pkg.repo.url), "_full"))
-                repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-                    r = GitTools.clone(pkg.repo.url, repo_path)
-                    GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                    r, true
+                repo = nothing
+                try
+                    repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+                        r = GitTools.clone(pkg.repo.url, repo_path)
+                        GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                        r, true
+                    end
+                    if !just_cloned
+                        GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                    end
+                finally
+                    repo isa LibGit2.GitRepo && LibGit2.close(repo)
                 end
-                if !just_cloned
-                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                end
-                close(repo)
 
                 # Copy the repo to a temporary place and check out the rev
                 project_path = mktempdir()
                 cp(repo_path, project_path; force=true)
-                repo = LibGit2.GitRepo(project_path)
-                rev = pkg.repo.rev
-                if isempty(rev)
-                    if LibGit2.isattached(repo)
-                        rev = LibGit2.branch(repo)
-                    else
-                        rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                LibGit2.with(LibGit2.GitRepo(project_path)) do repo
+                    rev = pkg.repo.rev
+                    if isempty(rev)
+                        if LibGit2.isattached(repo)
+                            rev = LibGit2.branch(repo)
+                        else
+                            rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                        end
+                    end
+                    gitobject, isbranch = get_object_branch(repo, rev)
+                    try
+                        LibGit2.transact(repo) do r
+                            if isbranch
+                                LibGit2.branch!(r, rev, track=LibGit2.Consts.REMOTE_ORIGIN)
+                            else
+                                LibGit2.checkout!(r, string(LibGit2.GitHash(gitobject)))
+                            end
+                        end
+                    finally
+                        close(gitobject)
                     end
                 end
-                gitobject, isbranch = checkout_rev!(repo, rev)
-                close(repo); close(gitobject)
 
                 parse_package!(ctx, pkg, project_path)
                 dev_pkg_path = joinpath(Pkg.devdir(), pkg.name)
@@ -496,67 +519,76 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
             clones_dir = joinpath(depots()[1], "clones")
             mkpath(clones_dir)
             repo_path = joinpath(clones_dir, string(hash(pkg.repo.url)))
-            repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
-                r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
-                GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                r, true
-            end
-            info = manifest_info(env, pkg.uuid)
-            pinned = (info != nothing && get(info, "pinned", false))
-            if upgrade_or_add && !pinned && !just_cloned
-                rev = pkg.repo.rev
-                try
-                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
-                catch e
-                    e isa LibGit2.GitError || rethrow(e)
-                    cmderror("failed to fetch from $(pkg.repo.url), error: $e")
-                end
-            end
-            if upgrade_or_add && !pinned
-                rev = pkg.repo.rev
-            else
-                # Not upgrading so the rev should be the current git-tree-sha
-                rev = info["git-tree-sha1"]
-                pkg.version = VersionNumber(info["version"])
-            end
-
-            # see if we can get rev as a branch
-            if isempty(rev)
-                if LibGit2.isattached(repo)
-                    rev = LibGit2.branch(repo)
-                else
-                    rev = string(LibGit2.GitHash(LibGit2.head(repo)))
-                end
-            end
-            gitobject, isbranch = checkout_rev!(repo, rev)
-            if !isbranch
-                # If the user gave a shortened commit SHA, might as well update it to the full one
-                pkg.repo.rev = string(LibGit2.GitHash(gitobject))
-            end
-            git_tree = LibGit2.peel(LibGit2.GitTree, gitobject)
-            @assert git_tree isa LibGit2.GitTree
-            pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
-            version_path = nothing
+            repo = nothing
+            do_nothing_more = false
+            project_path = nothing
             folder_already_downloaded = false
-            if has_uuid(pkg) && has_name(pkg)
-                version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
-                isdir(version_path) && (folder_already_downloaded = true)
-                info = manifest_info(env, pkg.uuid)
-                if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
-                    # Same tree sha and this version already downloaded, nothing left to do
-                    pkg.version = VersionNumber(info["version"])
-                    continue
+            try
+                repo, just_cloned = ispath(repo_path) ? (LibGit2.GitRepo(repo_path), false) : begin
+                    r = GitTools.clone(pkg.repo.url, repo_path, isbare=true, credentials=creds)
+                    GitTools.fetch(r, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                    r, true
                 end
+                info = manifest_info(env, pkg.uuid)
+                pinned = (info != nothing && get(info, "pinned", false))
+                if upgrade_or_add && !pinned && !just_cloned
+                    rev = pkg.repo.rev
+                    GitTools.fetch(repo, pkg.repo.url; refspecs=refspecs, credentials=creds)
+                end
+                upgrading = upgrade_or_add && !pinned
+                if upgrading
+                    rev = pkg.repo.rev
+                else
+                    # Not upgrading so the rev should be the current git-tree-sha
+                    rev = info["git-tree-sha1"]
+                    pkg.version = VersionNumber(info["version"])
+                end
+
+                # see if we can get rev as a branch
+                if isempty(rev)
+                    if LibGit2.isattached(repo)
+                        rev = LibGit2.branch(repo)
+                    else
+                        rev = string(LibGit2.GitHash(LibGit2.head(repo)))
+                    end
+                end
+                gitobject, isbranch = get_object_branch(repo, rev)
+                # If the user gave a shortened commit SHA, might as well update it to the full one
+                try
+                    if upgrading
+                        pkg.repo.rev = isbranch ? rev : string(LibGit2.GitHash(gitobject))
+                    end
+                    LibGit2.with(LibGit2.peel(LibGit2.GitTree, gitobject)) do git_tree
+                        @assert git_tree isa LibGit2.GitTree
+                        pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
+                            version_path = nothing
+                            folder_alreay_downloaded = false
+                        if has_uuid(pkg) && has_name(pkg)
+                            version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
+                            isdir(version_path) && (folder_already_downloaded = true)
+                            info = manifest_info(env, pkg.uuid)
+                            if info != nothing && get(info, "git-tree-sha1", "") == string(pkg.repo.git_tree_sha1) && folder_already_downloaded
+                                # Same tree sha and this version already downloaded, nothing left to do
+                                pkg.version = VersionNumber(info["version"])
+                                do_nothing_more = true
+                            end
+                        end
+                        if folder_already_downloaded
+                            project_path = version_path
+                        else
+                            project_path = mktempdir()
+                            opts = LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE,
+                                target_directory=Base.unsafe_convert(Cstring, project_path))
+                            LibGit2.checkout_tree(repo, git_tree, options=opts)
+                        end
+                    end
+                finally
+                    close(gitobject)
+                end
+            finally
+                repo isa LibGit2.GitRepo && close(repo)
             end
-            if folder_already_downloaded
-                project_path = version_path
-            else
-                project_path = mktempdir()
-                opts = LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE,
-                    target_directory=Base.unsafe_convert(Cstring, project_path))
-                LibGit2.checkout_tree(repo, git_tree, options=opts)
-            end
-            close(repo); close(git_tree); close(gitobject)
+            do_nothing_more && continue
             parse_package!(ctx, pkg, project_path)
             if !folder_already_downloaded
                 version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
@@ -572,24 +604,19 @@ end
 
 function parse_package!(ctx, pkg, project_path)
     env = ctx.env
-    found_project_file = false
-    for projname in project_names
-        if isfile(joinpath(project_path, projname))
-            found_project_file = true
-            project_data = parse_toml(project_path, "Project.toml")
-            pkg.uuid = UUID(project_data["uuid"])
-            pkg.name = project_data["name"]
-            if haskey(project_data, "version")
-                pkg.version = VersionNumber(project_data["version"])
-            else
-                @warn "project file for $(pkg.name) is missing a `version` entry"
-                Pkg.Operations.set_maximum_version_registry!(env, pkg)
-            end
-            break
+    project_file = projectfile_path(project_path)
+    if project_file !== nothing
+        project_data = read_package(project_file)
+        pkg.uuid = UUID(project_data["uuid"])
+        pkg.name = project_data["name"]
+        if haskey(project_data, "version")
+            pkg.version = VersionNumber(project_data["version"])
+        else
+            @warn "project file for $(pkg.name) at $(project_path) is missing a `version` entry"
+            Pkg.Operations.set_maximum_version_registry!(env, pkg)
         end
-    end
-    if !found_project_file
-        @warn "packages will need to have a [Julia]Project.toml file in the future"
+    else
+        @warn "package $(pkg.name) at $(project_path) will need to have a [Julia]Project.toml file in the future"
         if !isempty(ctx.old_pkg2_clone_name) # remove when legacy CI script support is removed
             pkg.name = ctx.old_pkg2_clone_name
         else
@@ -601,9 +628,10 @@ function parse_package!(ctx, pkg, project_path)
         reg_uuids = registered_uuids(env, pkg.name)
         is_registered = !isempty(reg_uuids)
         if !is_registered
-            # This is an unregistered old style package, give it a random UUID and a version
+            # This is an unregistered old style package, give it a UUID and a version
             if !has_uuid(pkg)
-                pkg.uuid = UUIDs.uuid1()
+                uuid_unreg_pkg = UUID(0xa9a2672e746f11e833ef119c5b888869)
+                pkg.uuid = uuid5(uuid_unreg_pkg, pkg.name)
                 @info "Assigning UUID $(pkg.uuid) to $(pkg.name)"
             end
             pkg.version = v"0.0"
@@ -627,7 +655,7 @@ function set_repo_for_pkg!(env, pkg)
     _, pkg.repo.url = Types.registered_info(env, pkg.uuid, "repo")[1]
 end
 
-function checkout_rev!(repo, rev)
+function get_object_branch(repo, rev)
     gitobject = nothing
     isbranch = false
     try
@@ -773,7 +801,7 @@ function ensure_resolved(env::EnvCache,
     cmderror(msg)
 end
 
-const DEFAULT_REGISTRIES = Dict("Uncurated" => "https://github.com/JuliaRegistries/Uncurated.git")
+const DEFAULT_REGISTRIES = Dict("General" => "https://github.com/JuliaRegistries/General.git")
 
 # Return paths of all registries in a depot
 function registries(depot::String)::Vector{String}
@@ -789,15 +817,26 @@ end
 function registries(; clone_default=true)::Vector{String}
     isempty(depots()) && return String[]
     user_regs = abspath(depots()[1], "registries")
+    # TODO: delete the following let block in Julia 1.0
+    let uncurated = joinpath(user_regs, "Uncurated"),
+        general = joinpath(user_regs, "General")
+        if ispath(uncurated) && !ispath(general)
+            mv(uncurated, general)
+            git_config_file = joinpath(general, ".git", "config")
+            cfg = read(git_config_file, String)
+            cfg = replace(cfg, r"\bUncurated\b" => "General")
+            write(git_config_file, cfg)
+        end
+    end
     if clone_default
-        if !ispath(user_regs)
+        if !ispath(user_regs) || isempty(readdir(user_regs))
             mkpath(user_regs)
             Base.shred!(LibGit2.CachedCredentials()) do creds
                 printpkgstyle(stdout, :Cloning, "default registries into $user_regs")
                 for (reg, url) in DEFAULT_REGISTRIES
                     path = joinpath(user_regs, reg)
-                    repo = GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)
-                    close(repo)
+                    LibGit2.with(GitTools.clone(url, path; header = "registry $reg from $(repr(url))", credentials = creds)) do repo
+                    end
                 end
             end
         end

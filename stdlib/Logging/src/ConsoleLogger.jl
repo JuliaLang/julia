@@ -60,8 +60,18 @@ end
 function default_metafmt(level, _module, group, id, file, line)
     color = default_logcolor(level)
     prefix = (level == Warn ? "Warning" : string(level))*':'
-    suffix = (Info <= level < Warn) ? "" : "@ $_module $(basename(file)):$line"
-    color,prefix,suffix
+    suffix = ""
+    Info <= level < Warn && return color, prefix, suffix
+    _module !== nothing && (suffix *= "$(_module)")
+    if file !== nothing
+        _module !== nothing && (suffix *= " ")
+        suffix *= Base.contractuser(file)
+        if line !== nothing
+            suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
+        end
+    end
+    !isempty(suffix) && (suffix = "@ " * suffix)
+    return color, prefix, suffix
 end
 
 # Length of a string as it will appear in the terminal (after ANSI color codes

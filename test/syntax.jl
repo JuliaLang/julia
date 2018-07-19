@@ -711,7 +711,7 @@ end
 """, "another_file.jl")
 m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
 
-# Check the expanded expresion has expected number of matching push/pop
+# Check the expanded expression has expected number of matching push/pop
 # and the return is handled correctly
 # NOTE: we currently only emit push/pop locations for macros from other files
 @test_broken count_meta_loc(m1_exprs) == 1
@@ -1333,15 +1333,33 @@ end
 @test Meta.parse("1 -+(a=1, b=2)") == Expr(:call, :-, 1,
                                            Expr(:call, :+, Expr(:kw, :a, 1), Expr(:kw, :b, 2)))
 
-@test Meta.parse("-(2)(x)") == Expr(:call, :-, Expr(:call, :*, 2, :x))
-@test Meta.parse("-(x)y")   == Expr(:call, :-, Expr(:call, :*, :x, :y))
+@test Meta.parse("-(2)(x)") == Expr(:call, :*, Expr(:call, :-,  2), :x)
+@test Meta.parse("-(x)y")   == Expr(:call, :*, Expr(:call, :-, :x), :y)
 @test Meta.parse("-(x,)y")  == Expr(:call, :*, Expr(:call, :-, :x), :y)
 @test Meta.parse("-(f)(x)") == Expr(:call, :-, Expr(:call, :f, :x))
-@test Meta.parse("-(2)(x)^2") == Expr(:call, :-, Expr(:call, :*, 2, Expr(:call, :^, :x, 2)))
+@test Meta.parse("-(2)(x)^2") == Expr(:call, :*, Expr(:call, :-, 2), Expr(:call, :^, :x, 2))
 @test Meta.parse("Y <- (x->true)(X)") ==
     Expr(:call, :<, :Y,
          Expr(:call, :-, Expr(:call, Expr(:->, :x, Expr(:block, LineNumberNode(1,:none), true)),
                               :X)))
+
+# issue #27641
+@test Meta.parse("√3x")   == Expr(:call, :*, Expr(:call, :√, 3), :x)
+@test Meta.parse("2^√3x") == Expr(:call, :^, 2, Expr(:call, :*, Expr(:call, :√, 3), :x))
+@test Meta.parse("√2^3")  == Expr(:call, :√, Expr(:call, :^, 2, 3))
+@test Meta.parse("-√2")   == Expr(:call, :-, Expr(:call, :√, 2))
+@test Meta.parse("√3x^2") == Expr(:call, :*, Expr(:call, :√, 3), Expr(:call, :^, :x, 2))
+@test Meta.parse("-3x^2") == Expr(:call, :*, -3, Expr(:call, :^, :x, 2))
+@test_throws ParseError Meta.parse("2!3")
+@test_throws ParseError Meta.parse("2√3")
+
+# issue #27914
+@test Meta.parse("2f(x)")        == Expr(:call, :*, 2, Expr(:call, :f, :x))
+@test Meta.parse("f(x)g(x)")     == Expr(:call, :*, Expr(:call, :f, :x), Expr(:call, :g, :x))
+@test Meta.parse("2f(x)g(x)")    == Expr(:call, :*, 2, Expr(:call, :f, :x), Expr(:call, :g, :x))
+@test Meta.parse("f(x)g(x)h(x)") == Expr(:call, :*, Expr(:call, :f, :x), Expr(:call, :g, :x), Expr(:call, :h, :x))
+@test Meta.parse("2(x)")         == Expr(:call, :*, 2, :x)
+@test Meta.parse("2(x)y")        == Expr(:call, :*, 2, :x, :y)
 
 @test_throws ParseError Meta.parse("a.: b")
 @test Meta.parse("a.:end") == Expr(:., :a, QuoteNode(:end))
@@ -1396,6 +1414,30 @@ end
 # issue #15229
 @test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
     Expr(:error, "local variable name \"x\" conflicts with an argument")
+@test Meta.lower(@__MODULE__, :(function f(x); begin; local x; 0; end; end)) ==
+    Expr(:error, "local variable name \"x\" conflicts with an argument")
+
+# issue #27964
+a27964(x) = Any[x for x in []]
+@test a27964(0) == Any[]
+function b27964(x)
+    local y
+    let
+        local x
+        x = 2
+        y = x
+    end
+    return (x, y)
+end
+@test b27964(8) == (8, 2)
+function c27964(x)
+    local y
+    let x = 2
+        y = x
+    end
+    return (x, y)
+end
+@test c27964(8) == (8, 2)
 
 # issue #26739
 @test_throws ErrorException("syntax: invalid syntax \"sin.[1]\"") Core.eval(@__MODULE__, :(sin.[1]))
@@ -1447,3 +1489,84 @@ f27129(x = 1) = (@Base._inline_meta; x)
 for meth in methods(f27129)
     @test ccall(:jl_uncompress_ast, Any, (Any, Any), meth, meth.source).inlineable
 end
+
+# issue #27710
+struct Foo27710{T} end
+function test27710()
+    types(::Foo27710{T}) where T = T
+    T = types(Foo27710{Int64}())
+end
+@test test27710() === Int64
+
+# issue #27268
+function f27268()
+    g(col::AbstractArray{<:Real}) = col
+end
+function f27268_2()
+    g(col::AbstractArray{T} where T<:Real) = col
+end
+@test f27268()([1]) == [1]
+@test f27268_2()([1]) == [1]
+@test_throws MethodError f27268()([""])
+@test_throws MethodError f27268_2()([""])
+
+@test_throws ErrorException("syntax: local variable x cannot be used in closure declaration") @eval begin
+    function g27268()
+        x = 1
+        h(::Val{x}) = 1
+    end
+end
+
+types27268 = (Int64,Int8)
+function h27268()
+    function g(::Union{map(t->Array{t,N},types27268)...} where N)
+    end
+end
+@test first(methods(h27268())).sig == Tuple{typeof(h27268()), Union{Array{Int64,N}, Array{Int8,N}} where N}
+
+let val(::Type{Val{X}}) where {X} = X, f
+    function f()
+        function g(::Val{x->2x})
+        end
+    end
+    @test val(first(methods(f())).sig.parameters[2])(21) == 42
+end
+
+# issue #27807
+module A27807
+macro m()
+    quote
+        function foo(x::T, y::S) where T<:Number where S<:Number
+            return one(T), zero(S)
+        end
+    end
+end
+end
+@test A27807.@m()(1,1.0) === (1, 0.0)
+
+# issue #27896
+let oldstderr = stderr, newstderr, errtxt
+    try
+        newstderr = redirect_stderr()
+        @eval function foo(a::A, b::B) where {A,B}
+            B = eltype(A)
+            return convert(B, b)
+        end
+        errtxt = @async read(newstderr[1], String)
+    finally
+        redirect_stderr(oldstderr)
+        close(newstderr[2])
+    end
+    @test occursin("WARNING: local variable B conflicts with a static parameter", fetch(errtxt))
+end
+
+# issue #28044
+code28044(x) = 10x
+begin
+    function f28044(::Val{code28044}) where code28044
+        code28044(2)
+    end
+    # make sure this assignment to `code28044` doesn't add an implicit-global
+    Val{code28044} where code28044
+end
+@test f28044(Val(identity)) == 2

@@ -7,6 +7,7 @@ using SparseArrays
 using LinearAlgebra
 using Base.Printf: @printf
 using Random
+using Test: guardsrand
 
 @testset "issparse" begin
     @test issparse(sparse(fill(1,5,5)))
@@ -117,6 +118,8 @@ end
 
     @testset "blockdiag concatenation" begin
         @test blockdiag(se33, se33) == sparse(1:6,1:6,fill(1.,6))
+        @test blockdiag() == spzeros(0, 0)
+        @test nnz(blockdiag()) == 0
     end
 
     @testset "concatenation promotion" begin
@@ -601,7 +604,7 @@ end
         @test length(sprb45) == 20
         sprb45nnzs[i] = sum(sprb45)[1]
     end
-    @test 4 <= mean(sprb45nnzs) <= 16
+    @test 4 <= sum(sprb45nnzs)/length(sprb45nnzs) <= 16
 end
 
 @testset "issue #5853, sparse diff" begin
@@ -1097,7 +1100,7 @@ end
     @test iA === iS === nothing
 end
 
-@testset "findmin/findmax/minumum/maximum" begin
+@testset "findmin/findmax/minimum/maximum" begin
     A = sparse([1.0 5.0 6.0;
                 5.0 2.0 4.0])
     for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
@@ -2197,11 +2200,6 @@ end
     @test A[1,1] == 2
 end
 
-@testset "findnz on non-sparse arrays" begin
-    @test findnz([0 1; 0 2]) == ([1, 2], [2, 2], [1, 2])
-    @test findnz(BitArray([false true; false true])) == ([1, 2], [2, 2], trues(2))
-end
-
 # #25943
 @testset "operations on Integer subtypes" begin
     s = sparse(UInt8[1, 2, 3], UInt8[1, 2, 3], UInt8[1, 2, 3])
@@ -2244,6 +2242,14 @@ _length_or_count_or_five(x) = length(x)
         b[[6, 8, 13, 15, 23]] .= false
         @test setindex!(spzeros(5, 5), X, b) == setindex!(zeros(5, 5), X, b)
     end
+end
+
+@testset "sparse transpose adjoint" begin
+    A = sprand(10, 10, 0.75)
+    @test A' == SparseMatrixCSC(A')
+    @test SparseMatrixCSC(A') isa SparseMatrixCSC
+    @test transpose(A) == SparseMatrixCSC(transpose(A))
+    @test SparseMatrixCSC(transpose(A)) isa SparseMatrixCSC
 end
 
 end # module

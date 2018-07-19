@@ -12,7 +12,7 @@ jobs:
       - image: circleci/python:2.7
         environment:
           ARCH: i686
-          JULIA_CPU_CORES: 4
+          JULIA_CPU_THREADS: 4
           JULIA_TEST_MAXRSS_MB: 800
     steps: &steps
       - run: | # install build dependencies
@@ -55,7 +55,7 @@ jobs:
           mv project julia-src &&
           /tmp/julia/bin/julia -e 'Base.require(Main, :InteractiveUtils).versioninfo()' &&
           /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
-          /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true' &&
+          #/tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true' &&
           pushd /tmp/julia/share/julia/test &&
           if [ $(echo "$FILES_CHANGED" | grep -cv '^doc/') -gt 0 ]; then
             /tmp/julia/bin/julia --check-bounds=yes runtests.jl all --skip Sockets | bar -i 30 &&
@@ -81,6 +81,6 @@ jobs:
       - image: circleci/python:2.7
         environment:
           ARCH: x86_64
-          JULIA_CPU_CORES: 4
+          JULIA_CPU_THREADS: 4
           JULIA_TEST_MAXRSS_MB: 800
     steps: *steps

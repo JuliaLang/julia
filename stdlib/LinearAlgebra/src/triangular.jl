@@ -9,14 +9,22 @@ abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
 for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
           :UnitUpperTriangular)
     @eval begin
-        struct $t{T,S<:AbstractMatrix} <: AbstractTriangular{T,S}
+        struct $t{T,S<:AbstractMatrix{T}} <: AbstractTriangular{T,S}
             data::S
+
+            function $t{T,S}(data) where {T,S<:AbstractMatrix{T}}
+                @assert !has_offset_axes(data)
+                checksquare(data)
+                new{T,S}(data)
+            end
         end
         $t(A::$t) = A
         $t{T}(A::$t{T}) where {T} = A
         function $t(A::AbstractMatrix)
-            checksquare(A)
             return $t{eltype(A), typeof(A)}(A)
+        end
+        function $t{T}(A::AbstractMatrix) where T
+            $t(convert(AbstractMatrix{T}, A))
         end
 
         function $t{T}(A::$t) where T
@@ -1138,6 +1146,7 @@ end
 # replacing repeated references to A.data[j,j] with [Ajj = A.data[j,j] and references to Ajj]
 # does not significantly impact performance as of Dec 2015
 function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
+    @assert !has_offset_axes(A, b, x)
     n = size(A, 2)
     if !(n == length(b) == length(x))
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
@@ -1152,6 +1161,7 @@ function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
     x
 end
 function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b)
+    @assert !has_offset_axes(A, b, x)
     n = size(A, 2)
     if !(n == length(b) == length(x))
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
@@ -1165,6 +1175,7 @@ function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector 
     x
 end
 function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    @assert !has_offset_axes(A, b, x)
     n = size(A, 2)
     if !(n == length(b) == length(x))
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
@@ -1179,6 +1190,7 @@ function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
     x
 end
 function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    @assert !has_offset_axes(A, b, x)
     n = size(A, 2)
     if !(n == length(b) == length(x))
         throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
@@ -1194,6 +1206,7 @@ end
 # in the following transpose and conjugate transpose naive substitution variants,
 # accumulating in z rather than b[j] significantly improves performance as of Dec 2015
 function ldiv!(transA::Transpose{<:Any,<:LowerTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(transA, b, x)
     A = transA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1212,6 +1225,7 @@ end
 ldiv!(transA::Transpose{<:Any,<:LowerTriangular}, b::AbstractVector) = ldiv!(transA, b, b)
 
 function ldiv!(transA::Transpose{<:Any,<:UnitLowerTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(transA, b, x)
     A = transA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1229,6 +1243,7 @@ end
 ldiv!(transA::Transpose{<:Any,<:UnitLowerTriangular}, b::AbstractVector) = ldiv!(transA, b, b)
 
 function ldiv!(transA::Transpose{<:Any,<:UpperTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(transA, b, x)
     A = transA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1247,6 +1262,7 @@ end
 ldiv!(transA::Transpose{<:Any,<:UpperTriangular}, b::AbstractVector) = ldiv!(transA, b, b)
 
 function ldiv!(transA::Transpose{<:Any,<:UnitUpperTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(transA, b, x)
     A = transA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1264,6 +1280,7 @@ end
 ldiv!(transA::Transpose{<:Any,<:UnitUpperTriangular}, b::AbstractVector) = ldiv!(transA, b, b)
 
 function ldiv!(adjA::Adjoint{<:Any,<:LowerTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(adjA, b, x)
     A = adjA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1282,6 +1299,7 @@ end
 ldiv!(adjA::Adjoint{<:Any,<:LowerTriangular}, b::AbstractVector) = ldiv!(adjA, b, b)
 
 function ldiv!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(adjA, b, x)
     A = adjA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1299,6 +1317,7 @@ end
 ldiv!(adjA::Adjoint{<:Any,<:UnitLowerTriangular}, b::AbstractVector) = ldiv!(adjA, b, b)
 
 function ldiv!(adjA::Adjoint{<:Any,<:UpperTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(adjA, b, x)
     A = adjA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1317,6 +1336,7 @@ end
 ldiv!(adjA::Adjoint{<:Any,<:UpperTriangular}, b::AbstractVector) = ldiv!(adjA, b, b)
 
 function ldiv!(adjA::Adjoint{<:Any,<:UnitUpperTriangular}, b::AbstractVector, x::AbstractVector)
+    @assert !has_offset_axes(adjA, b, x)
     A = adjA.parent
     n = size(A, 1)
     if !(n == length(b) == length(x))
@@ -1585,7 +1605,7 @@ rdiv!(A::LowerTriangular, transB::Transpose{<:Any,<:Union{UpperTriangular,UnitUp
 ## the element type doesn't have to be stable under division whereas that is
 ## necessary in the general triangular solve problem.
 
-## Some Triangular-Triangular cases. We might want to write taylored methods
+## Some Triangular-Triangular cases. We might want to write tailored methods
 ## for these cases, but I'm not sure it is worth it.
 (*)(A::Union{Tridiagonal,SymTridiagonal}, B::AbstractTriangular) = rmul!(Matrix(A), B)
 
@@ -1783,12 +1803,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Multiplication with triangle to the left and hence rhs cannot be transposed.
     @eval begin
         function *(A::AbstractTriangular, B::$mat)
+            @assert !has_offset_axes(B)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             lmul!(convert(AbstractArray{TAB}, A), BB)
         end
         function *(adjA::Adjoint{<:Any,<:AbstractTriangular}, B::$mat)
+            @assert !has_offset_axes(B)
             A = adjA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
@@ -1796,6 +1818,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             lmul!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function *(transA::Transpose{<:Any,<:AbstractTriangular}, B::$mat)
+            @assert !has_offset_axes(B)
             A = transA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
@@ -1806,12 +1829,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
     @eval begin
         function \(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
+            @assert !has_offset_axes(B)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             ldiv!(convert(AbstractArray{TAB}, A), BB)
         end
         function \(adjA::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, B::$mat)
+            @assert !has_offset_axes(B)
             A = adjA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
@@ -1819,6 +1844,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             ldiv!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function \(transA::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, B::$mat)
+            @assert !has_offset_axes(B)
             A = transA.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
@@ -1829,12 +1855,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
     @eval begin
         function \(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
+            @assert !has_offset_axes(B)
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             ldiv!(convert(AbstractArray{TAB}, A), BB)
         end
         function \(adjA::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}}, B::$mat)
+            @assert !has_offset_axes(B)
             A = adjA.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             BB = similar(B, TAB, size(B))
@@ -1842,6 +1870,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             ldiv!(adjoint(convert(AbstractArray{TAB}, A)), BB)
         end
         function \(transA::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}}, B::$mat)
+            @assert !has_offset_axes(B)
             A = transA.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             BB = similar(B, TAB, size(B))
@@ -1852,12 +1881,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
     @eval begin
         function /(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular})
+            @assert !has_offset_axes(A)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
             rdiv!(AA, convert(AbstractArray{TAB}, B))
         end
         function /(A::$mat, adjB::Adjoint{<:Any,<:Union{UnitUpperTriangular, UnitLowerTriangular}})
+            @assert !has_offset_axes(A)
             B = adjB.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
@@ -1865,6 +1896,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             rdiv!(AA, adjoint(convert(AbstractArray{TAB}, B)))
         end
         function /(A::$mat, transB::Transpose{<:Any,<:Union{UnitUpperTriangular, UnitLowerTriangular}})
+            @assert !has_offset_axes(A)
             B = transB.parent
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
@@ -1875,12 +1907,14 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
     @eval begin
         function /(A::$mat, B::Union{UpperTriangular,LowerTriangular})
+            @assert !has_offset_axes(A)
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
             rdiv!(AA, convert(AbstractArray{TAB}, B))
         end
         function /(A::$mat, adjB::Adjoint{<:Any,<:Union{UpperTriangular,LowerTriangular}})
+            @assert !has_offset_axes(A)
             B = adjB.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             AA = similar(A, TAB, size(A))
@@ -1888,6 +1922,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
             rdiv!(AA, adjoint(convert(AbstractArray{TAB}, B)))
         end
         function /(A::$mat, transB::Transpose{<:Any,<:Union{UpperTriangular,LowerTriangular}})
+            @assert !has_offset_axes(A)
             B = transB.parent
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             AA = similar(A, TAB, size(A))
@@ -1899,12 +1934,14 @@ end
 ### Multiplication with triangle to the right and hence lhs cannot be transposed.
 # Only for AbstractMatrix, hence outside the above loop.
 function *(A::AbstractMatrix, B::AbstractTriangular)
+    @assert !has_offset_axes(A)
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     rmul!(AA, convert(AbstractArray{TAB}, B))
 end
 function *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:AbstractTriangular})
+    @assert !has_offset_axes(A)
     B = adjB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
@@ -1912,6 +1949,7 @@ function *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:AbstractTriangular})
     rmul!(AA, adjoint(convert(AbstractArray{TAB}, B)))
 end
 function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
+    @assert !has_offset_axes(A)
     B = transB.parent
     TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
     AA = similar(A, TAB, size(A))
@@ -2227,6 +2265,7 @@ end
 # Repeatedly compute the square roots of A so that in the end its
 # eigenvalues are close enough to the positive real line
 function invsquaring(A0::UpperTriangular, theta)
+    @assert !has_offset_axes(theta)
     # assumes theta is in ascending order
     maxsqrt = 100
     tmax = size(theta, 1)

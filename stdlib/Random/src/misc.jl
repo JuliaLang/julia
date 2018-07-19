@@ -53,10 +53,10 @@ number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest
 julia> srand(0); randstring()
-"Qgt7sUOP"
+"0IPrGg0J"
 
 julia> randstring(MersenneTwister(0), 'a':'z', 6)
-"oevnou"
+"aszvqk"
 
 julia> randstring("ACGT")
 "TATCGGTC"
@@ -85,6 +85,7 @@ end
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
+    @assert !has_offset_axes(S, A)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
     p == 1 && return copyto!(resize!(S, n), A)
@@ -179,6 +180,7 @@ julia> shuffle!(rng, Vector(1:16))
 ```
 """
 function shuffle!(r::AbstractRNG, a::AbstractArray)
+    @assert !has_offset_axes(a)
     n = length(a)
     @assert n <= Int64(2)^52
     mask = nextpow2(n) - 1

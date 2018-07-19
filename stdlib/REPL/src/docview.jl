@@ -378,7 +378,7 @@ function fuzzyscore(needle, haystack)
     score += (acro ? 2 : 1)*length(is) # Matched characters
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
-    !isempty(is) && (score -= mean(is)/100) # Closer to beginning
+    !isempty(is) && (score -= sum(is)/length(is)/100) # Closer to beginning
     return score
 end
 

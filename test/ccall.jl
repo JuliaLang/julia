@@ -713,7 +713,7 @@ function verify_huge(init, a, b)
     for i = 1:nfields(a)
         @test getfield(init, i) === getfield(a, i)
     end
-    # make sure b was modifed as expected
+    # make sure b was modified as expected
     a1, b1 = getfield(a, 1), getfield(b, 1)
     while isa(a1, Tuple)
         @test a1[2:end] === b1[2:end]

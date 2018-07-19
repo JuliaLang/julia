@@ -15,7 +15,7 @@ export Graph, ResolveLog, add_reqs!, add_fixed!, simplify_graph!, simplify_graph
 # a message for the log.
 #
 # Specialized functions called `log_event_[...]!` are used to store the
-# various events. The events are also recorded in orded in a shared
+# various events. The events are also recorded in order in a shared
 # ResolveJournal, which is used to provide a plain chronological view.
 #
 # The `showlog` functions are used for display, and called to create messages
@@ -41,7 +41,7 @@ end
 
 mutable struct ResolveLog
     # init: used to keep track of all package entries which were created during
-    #       intialization, since the `pool` can be pruned during the resolution
+    #       initialization, since the `pool` can be pruned during the resolution
     #       process.
     init::ResolveLogEntry
 
@@ -89,7 +89,7 @@ mutable struct GraphData
     # states per package: one per version + uninstalled
     spp::Vector{Int}
 
-    # pakage dict: associates an index to each package id
+    # package dict: associates an index to each package id
     pdict::Dict{UUID,Int}
 
     # package versions: for each package, keep the list of the
@@ -772,7 +772,7 @@ function log_event_maxsumsolved!(graph::Graph, p0::Int, s0::Int, p1::Int)
     if s0 == spp[p0] - 1
         msg = "set by the solver to its maximum version: $(pvers[p0][s0]) (installation is required by $other_id)"
     else
-        msg = "set by the solver version: $(pvers[p0][s0]) (version $(pvers[p0][s0+1]) would violate a dependecy relation with $other_id)"
+        msg = "set by the solver version: $(pvers[p0][s0]) (version $(pvers[p0][s0+1]) would violate a dependency relation with $other_id)"
     end
     other_entry = rlog.pool[pkgs[p1]]
     entry = rlog.pool[p]
@@ -1422,7 +1422,7 @@ function prune_graph!(graph::Graph)
 
     # Done
 
-    log_event_global!(graph, "pruned graph — stats (n. of packages, mean connectivity): before = ($np,$(mean(spp))) after = ($new_np,$(mean(new_spp)))")
+    log_event_global!(graph, "pruned graph — stats (n. of packages, mean connectivity): before = ($np,$(sum(spp)/length(spp))) after = ($new_np,$(sum(new_spp)/length(new_spp)))")
 
     # Replace old data with new
     data.pkgs = new_pkgs

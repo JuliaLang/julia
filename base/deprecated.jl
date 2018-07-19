@@ -237,7 +237,7 @@ end
 Get the *dynamically* current `Module`, which is the `Module` code is currently being read
 from. In general, this is not the same as the module containing the call to this function.
 
-DEPRECATED: use @__MODULE__ instead
+DEPRECATED: use `@__MODULE__` instead
 """
 @noinline function current_module()
     depwarn("`current_module()` is deprecated, use `@__MODULE__` instead.", :current_module)
@@ -540,7 +540,7 @@ end
 # issue #14470
 # TODO: More deprecations must be removed in src/cgutils.cpp:emit_array_nd_index()
 # TODO: Re-enable the disabled tests marked PLI
-# On the Julia side, this definition will gracefully supercede the new behavior (already coded)
+# On the Julia side, this definition will gracefully supersede the new behavior (already coded)
 @inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any,Vararg{Any}}, ::Tuple{})
     any(x->unsafe_length(x)==0, IA) && return false
     any(x->unsafe_length(x)!=1, IA) && return _depwarn_for_trailing_indices(IA)
@@ -735,8 +735,9 @@ end
 @deprecate findprev(A, v, i::Integer) something(findprev(isequal(v), A, i), 0)
 @deprecate findlast(A, v)             something(findlast(isequal(v), A), 0)
 # to fix ambiguities introduced by deprecations
-findnext(pred::Function, A, i::Integer) = invoke(findnext, Tuple{Function, Any, Any}, pred, A, i)
-findprev(pred::Function, A, i::Integer) = invoke(findprev, Tuple{Function, Any, Any}, pred, A, i)
+# TODO: also remove find*_internal in array.jl
+findnext(pred::Function, A, i::Integer) = findnext_internal(pred, A, i)
+findprev(pred::Function, A, i::Integer) = findprev_internal(pred, A, i)
 # also remove deprecation warnings in find* functions in array.jl, sparse/sparsematrix.jl,
 # and sparse/sparsevector.jl.
 
@@ -1365,14 +1366,13 @@ export readandwrite
 @deprecate any(f, a::AbstractArray, dims)     any(f, a, dims=dims)
 @deprecate findmax(A::AbstractArray, dims)    findmax(A, dims=dims)
 @deprecate findmin(A::AbstractArray, dims)    findmin(A, dims=dims)
-
-@deprecate mean(A::AbstractArray, dims)                              mean(A, dims=dims)
-@deprecate median(A::AbstractArray, dims; kwargs...)                 median(A; kwargs..., dims=dims)
+@deprecate extrema(A::AbstractArray, dims)    extrema(A, dims=dims)
 
 @deprecate mapreducedim(f, op, A::AbstractArray, dims)     mapreduce(f, op, A, dims=dims)
-@deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, v0, A, dims=dims)
+@deprecate mapreducedim(f, op, A::AbstractArray, dims, v0) mapreduce(f, op, A, init=v0, dims=dims)
 @deprecate reducedim(op, A::AbstractArray, dims)           reduce(op, A, dims=dims)
-@deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, v0, A, dims=dims)
+@deprecate reducedim(op, A::AbstractArray, dims, v0)       reduce(op, A, init=v0, dims=dims)
+@deprecate mapslices(op, A::AbstractArray, dims)           mapslices(op, A, dims=dims)
 
 @deprecate sort(A::AbstractArray, dim::Integer; kwargs...) sort(A; kwargs..., dims=dim)
 
@@ -1441,8 +1441,14 @@ end
 @deprecate countlines(x, eol) countlines(x, eol = eol)
 @deprecate PipeBuffer(data, maxsize) PipeBuffer(data, maxsize = maxsize)
 @deprecate unsafe_wrap(T, pointer, dims, own) unsafe_wrap(T, pointer, dims, own = own)
-@deprecate digits(n, base, pad) digits(n, base = base, pad = pad)
-@deprecate digits(T, n, base, pad) digits(T, n, base = base, pad = pad)
+@deprecate digits(n, base)         digits(n, base = base)
+@deprecate digits(n, base, pad)    digits(n, base = base, pad = pad)
+@deprecate digits(T::Type{<:Integer}, n, base)      digits(T, n, base = base)
+@deprecate digits(T::Type{<:Integer}, n, base, pad) digits(T, n, base = base, pad = pad)
+
+#27908
+@deprecate ndigits(n, base)      ndigits(n, base=base)
+@deprecate ndigits(n, base, pad) ndigits(n, base=base, pad=pad)
 
 @deprecate print_with_color(color, args...; kwargs...) printstyled(args...; kwargs..., color=color)
 
@@ -1569,6 +1575,10 @@ end
     Base.@deprecate log Base.log
 end
 
+# PR 27856
+@eval Base.Sys Base.@deprecate_binding CPU_CORES CPU_THREADS true nothing false
+# TODO: delete deprecation code in sysimg.jl and sysinfo.jl
+
 # PR 26071
 @deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
            collect(m.match for m in eachmatch(r, s, overlap = overlap)))
@@ -1691,12 +1701,6 @@ end
 @deprecate ipermute!(a, p::AbstractVector) invpermute!(a, p)
 
 # #27140, #27152
-@deprecate_moved cor "StatsBase"
-@deprecate_moved cov "StatsBase"
-@deprecate_moved std "StatsBase"
-@deprecate_moved stdm "StatsBase"
-@deprecate_moved var "StatsBase"
-@deprecate_moved varm "StatsBase"
 @deprecate_moved linreg "StatsBase"
 
 # ?? more special functions to SpecialFunctions.jl
@@ -1722,6 +1726,46 @@ end
 
 @deprecate_moved eigs "Arpack"
 @deprecate_moved svds "Arpack"
+
+# PR #27711
+function reduce(op, v0, itr; dims=nothing)
+    if dims === nothing
+        depwarn("`reduce(op, v0, itr)` is deprecated, use `reduce(op, itr; init=v0)` instead", :reduce)
+        return reduce(op, itr, init=v0)
+    else # deprecate the old deprecation
+        depwarn("`reduce(op, v0, itr; dims=dims)` is deprecated, use `reduce(op, itr; init=v0, dims=dims)` instead", :reduce)
+        return reduce(op, itr; init=v0, dims=dims)
+    end
+end
+@deprecate foldl(op, v0, itr) foldl(op, itr; init=v0)
+@deprecate foldr(op, v0, itr) foldr(op, itr; init=v0)
+function mapreduce(f, op, v0, itr; dims=nothing)
+    if dims === nothing
+        depwarn("`mapreduce(f, op, v0, itr)` is deprecated, use `mapreduce(f, op, itr; init=v0)` instead", :mapreduce)
+        return mapreduce(f, op, itr; init=v0)
+    else # deprecate the old deprecation
+        depwarn("`mapreduce(f, op, v0, itr; dims=dims)` is deprecated, use `mapreduce(f, op, itr; init=v0, dims=dims)` instead", :mapreduce)
+        return mapreduce(f, op, itr; init=v0, dims=dims)
+    end
+end
+@deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
+@deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
+
+
+@deprecate startswith(a::Vector{UInt8}, b::Vector{UInt8}) length(a) >= length(b) && view(a, 1:length(b)) == b
+
+# PR #27859
+@deprecate accumulate(op, v0, x::AbstractVector) accumulate(op, x; init=v0)
+@deprecate accumulate!(op, y, v0, x::AbstractVector) accumulate!(op, y, x; init=v0)
+
+# issue 27352
+function print(io::IO, ::Nothing)
+    depwarn("Calling `print` on `nothing` is deprecated; use `show`, `repr`, or custom output instead.", :print)
+    show(io, nothing)
+end
+
+@deprecate indices1 axes1
+@deprecate _length length
 
 # END 0.7 deprecations
 

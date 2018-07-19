@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Dims{N}
+
+An `NTuple` of `N` `Int`s used to represent the dimensions
+of an [`AbstractArray`](@ref).
+"""
 Dims{N} = NTuple{N,Int}
 DimsInteger{N} = NTuple{N,Integer}
 Indices{N} = NTuple{N,AbstractUnitRange}
@@ -179,16 +185,16 @@ function setindex_shape_check(X::AbstractArray, I::Integer...)
 end
 
 setindex_shape_check(X::AbstractArray) =
-    (_length(X)==1 || throw_setindex_mismatch(X,()))
+    (length(X)==1 || throw_setindex_mismatch(X,()))
 
 setindex_shape_check(X::AbstractArray, i::Integer) =
-    (_length(X)==i || throw_setindex_mismatch(X, (i,)))
+    (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
-    (_length(X)==i || throw_setindex_mismatch(X, (i,)))
+    (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
-    (_length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
+    (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
 function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
     if length(X) != i*j
@@ -226,12 +232,13 @@ indexing behaviors. This must return either an `Int` or an `AbstractArray` of
 """
 to_index(i::Integer) = convert(Int,i)::Int
 # TODO: Enable this new definition after the deprecations introduced in 0.7 are removed
-# to_index(i::Bool) = throw(ArgumentError("invalid index: $i"))
+# to_index(i::Bool) = throw(ArgumentError("invalid index: $i of type $(typeof(i))"))
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
-to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) = throw(ArgumentError("invalid index: $I"))
+to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) =
+    throw(ArgumentError("invalid index: $I of type $(typeof(I))"))
 to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
-to_index(i) = throw(ArgumentError("invalid index: $i"))
+to_index(i) = throw(ArgumentError("invalid index: $i of type $(typeof(i))"))
 
 # The general to_indices is mostly defined in multidimensional.jl, but this
 # definition is required for bootstrap:
@@ -281,17 +288,15 @@ end
 Slice(S::Slice) = S
 axes(S::Slice) = (S,)
 unsafe_indices(S::Slice) = (S,)
-indices1(S::Slice) = S
+axes1(S::Slice) = S
 axes(S::Slice{<:OneTo}) = (S.indices,)
 unsafe_indices(S::Slice{<:OneTo}) = (S.indices,)
-indices1(S::Slice{<:OneTo}) = S.indices
+axes1(S::Slice{<:OneTo}) = S.indices
 
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
-errmsg(A) = error("size not supported for arrays with indices $(axes(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
-size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
-length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
-_length(S::Slice) = length(S.indices)
+size(S::Slice) = (length(S.indices),)
+length(S::Slice) = length(S.indices)
 unsafe_length(S::Slice) = unsafe_length(S.indices)
 getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
@@ -358,9 +363,20 @@ LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) whe
     LinearIndices(map(i->first(i):last(i), inds))
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
+promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
+    LinearIndices{N,indices_promote_type(R1,R2)}
+
+function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
+    R = promote_type(R1, R2)
+    Tuple{R,Vararg{R,N}}
+end
+
+convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R} =
+    LinearIndices(convert(R, inds.indices))
+
 # AbstractArray implementation
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
-axes(iter::LinearIndices) = map(indices1, iter.indices)
+axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(unsafe_length, iter.indices)
 function getindex(iter::LinearIndices, i::Int)
     @_inline_meta
@@ -370,7 +386,7 @@ end
 function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(iter, i)
-    @inbounds (first(iter):last(iter))[i]
+    @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
 end
 # More efficient iteration — predominantly for non-vector LinearIndices
 # but one-dimensional LinearIndices must be special-cased to support OffsetArrays

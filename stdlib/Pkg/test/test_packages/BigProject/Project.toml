@@ -1,6 +1,6 @@
-authors = ["Some One <someone@email.com>"]
 name = "BigProject"
 uuid = "da7e1942-2519-11e8-2822-f5508ce758f0"
+authors = ["Some One <someone@email.com>"]
 version = "0.1.0"
 
 [deps]

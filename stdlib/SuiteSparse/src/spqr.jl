@@ -3,6 +3,7 @@
 module SPQR
 
 import Base: \
+using Base: has_offset_axes
 using LinearAlgebra
 
 # ordering options */
@@ -124,6 +125,7 @@ function Base.size(F::QRSparse, i::Integer)
         throw(ArgumentError("second argument must be positive"))
     end
 end
+Base.axes(F::QRSparse) = map(Base.OneTo, size(F))
 
 struct QRSparseQ{Tv<:CHOLMOD.VTypes,Ti<:Integer} <: LinearAlgebra.AbstractQ{Tv}
     factors::SparseMatrixCSC{Tv,Ti}
@@ -131,6 +133,7 @@ struct QRSparseQ{Tv<:CHOLMOD.VTypes,Ti<:Integer} <: LinearAlgebra.AbstractQ{Tv}
 end
 
 Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
+Base.axes(Q::QRSparseQ) = map(Base.OneTo, size(Q))
 
 # From SPQR manual p. 6
 _default_tol(A::SparseMatrixCSC) =
@@ -312,6 +315,11 @@ julia> F.pcol
     end
 end
 
+function Base.propertynames(F::QRSparse, private::Bool=false)
+    public = (:R, :Q, :prow, :pcol)
+    private ? ((public ∪ fieldnames(typeof(F)))...,) : public
+end
+
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::QRSparse)
     println(io, summary(F))
     println(io, "Q factor:")
@@ -341,6 +349,7 @@ function (\)(F::QRSparse{T}, B::VecOrMat{Complex{T}}) where T<:LinearAlgebra.Bla
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
+    @assert !has_offset_axes(F, B)
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = F\c2r
 

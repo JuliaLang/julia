@@ -69,6 +69,26 @@ a2img  = randn(n,n)/2
                 @test svdz.Vt ≈ Matrix{eltya}(I, 0, 0)
             end
         end
+        usv = svd(a')
+        @testset "singular value decomposition of adjoint" begin
+            @test usv.S === svdvals(usv)
+            @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ a'
+            @test convert(Array, usv) ≈ a'
+            @test usv.Vt' ≈ usv.V
+            @test_throws ErrorException usv.Z
+            b = rand(eltya,n)
+            @test usv\b ≈ a'\b
+        end
+        usv = svd(transpose(a))
+        @testset "singular value decomposition of transpose" begin
+            @test usv.S === svdvals(usv)
+            @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ transpose(a)
+            @test convert(Array, usv) ≈ transpose(a)
+            @test usv.Vt' ≈ usv.V
+            @test_throws ErrorException usv.Z
+            b = rand(eltya,n)
+            @test usv\b ≈ transpose(a)\b
+        end
         @testset "Generalized svd" begin
             a_svd = a[1:n1, :]
             gsvd = svd(a,a_svd)

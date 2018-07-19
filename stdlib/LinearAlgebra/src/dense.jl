@@ -169,6 +169,7 @@ julia> triu!(M, 1)
 ```
 """
 function triu!(M::AbstractMatrix, k::Integer)
+    @assert !has_offset_axes(M)
     m, n = size(M)
     if !(-m + 1 <= k <= n + 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
@@ -213,6 +214,7 @@ julia> tril!(M, 2)
 ```
 """
 function tril!(M::AbstractMatrix, k::Integer)
+    @assert !has_offset_axes(M)
     m, n = size(M)
     if !(-m - 1 <= k <= n - 1)
         throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
@@ -236,6 +238,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 Fill the band between diagonals `l` and `u` with the value `x`.
 """
 function fillband!(A::AbstractMatrix{T}, x, l, u) where T
+    @assert !has_offset_axes(A)
     m, n = size(A)
     xT = convert(T, x)
     for j in 1:n
@@ -271,7 +274,10 @@ julia> diagind(A,-1)
 2:4:6
 ```
 """
-diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
+function diagind(A::AbstractMatrix, k::Integer=0)
+    @assert !has_offset_axes(A)
+    diagind(size(A,1), size(A,2), k)
+end
 
 """
     diag(M, k::Integer=0)
@@ -378,6 +384,7 @@ julia> kron(A, B)
 ```
 """
 function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
+    @assert !has_offset_axes(a, b)
     R = Matrix{promote_op(*,T,S)}(undef, size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
     for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
@@ -1241,7 +1248,7 @@ the pseudoinverse by inverting only singular values above a given threshold,
 
 The optimal choice of `tol` varies both with the value of `M` and the intended application
 of the pseudoinverse. The default value of `tol` is
-`eps(real(float(one(eltype(M)))))*minumum(size(M))`, which is essentially machine epsilon
+`eps(real(float(one(eltype(M)))))*minimum(size(M))`, which is essentially machine epsilon
 for the real part of a matrix element multiplied by the larger matrix dimension. For
 inverting dense ill-conditioned matrices in a least-squares sense,
 `tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.

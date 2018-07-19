@@ -42,9 +42,14 @@ srand(1)
             @test Bidiagonal(ubd, :U) == Bidiagonal(Matrix(ubd), :U) == ubd
             @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
         end
+        @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
+        @test isa(Bidiagonal{elty,Vector{elty}}(GenericArray(dv), ev, :U), Bidiagonal{elty,Vector{elty}})
         # enable when deprecations for 0.7 are dropped
         # @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
         # @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
+        BI = Bidiagonal([1,2,3,4], [1,2,3], :U)
+        @test Bidiagonal(BI) === BI
+        @test isa(Bidiagonal{elty}(BI), Bidiagonal{elty})
     end
 
     @testset "getindex, setindex!, size, and similar" begin
@@ -334,7 +339,7 @@ using LinearAlgebra: fillstored!, UnitLowerTriangular
         # not matching the general behavior of fill!, and so have been deprecated.
         # In a future dev cycle, these fill! methods should probably be reintroduced
         # with behavior matching that of fill! for other structured matrix types.
-        # In the interm, equivalently test fillstored! below
+        # In the interim, equivalently test fillstored! below
         @test iszero(fillstored!(Diagonal(fill(1, 3)), 0))
         @test iszero(fillstored!(LowerTriangular(fill(1, 3, 3)), 0))
         @test iszero(fillstored!(UpperTriangular(fill(1, 3, 3)), 0))

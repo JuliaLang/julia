@@ -335,14 +335,26 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) wher
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
     result = tryparse_internal(T, s, startpos, endpos)
     if raise && result === nothing
-        throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
+        _parse_failure(T, s, startpos, endpos)
     end
     return result
 end
+function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool) where T<:Real
+    result = tryparse(T, s)
+    if raise && result === nothing
+        _parse_failure(T, s)
+    end
+    return result
+end
+@noinline _parse_failure(T, s::AbstractString, startpos = firstindex(s), endpos = lastindex(s)) =
+    throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
+
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
-parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
+parse(::Type{T}, s::AbstractString) where T<:Real =
+    convert(T, tryparse_internal(T, s, true))
+parse(::Type{T}, s::AbstractString) where T<:Complex =
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
 
 tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =

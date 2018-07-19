@@ -5,12 +5,12 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, LinearIndices, IndexStyle, viewindexing, IndexLinear, _length, (:),
-    eachindex, axes, first, last, similar, start, next, done, zip, @views, OrdinalRange,
+using .Base: copymutable, LinearIndices, length, (:),
+    eachindex, axes, first, last, similar, start, next, done, zip, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill
+    length, resize!, fill, Missing, has_offset_axes
 
 using .Base: >>>, !==
 
@@ -225,6 +225,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -234,6 +235,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -243,6 +245,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -251,6 +254,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -259,6 +263,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -271,6 +276,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+    has_offset_axes(a) && throw(ArgumentError("range must be indexed starting with 1"))
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -568,7 +574,7 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Number}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
@@ -622,7 +628,7 @@ function sort!(v::AbstractVector;
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = _length(v)
+        n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -780,7 +786,7 @@ function sortperm(v::AbstractVector;
                   order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = _length(v)
+        n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -905,7 +911,7 @@ function sort(A::AbstractArray;
         Base.depwarn("`initialized` keyword argument is deprecated", :sort)
     end
     order = ord(lt,by,rev,order)
-    n = _length(axes(A, dim))
+    n = length(axes(A, dim))
     if dim != 1
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)

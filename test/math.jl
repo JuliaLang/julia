@@ -56,8 +56,11 @@ end
         end
 
         for (a,b) in [(T(12.8),T(0.8)),
-                      (prevfloat(realmin(T)), nextfloat(one(T),-2)),
-                      (nextfloat(zero(T),3), T(0.75)),
+                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(realmin(T)), nextfloat(one(T), -2)),
+                      (nextfloat(zero(T), 3), T(0.75)),
+                      (prevfloat(zero(T), -3), T(0.75)),
                       (nextfloat(zero(T)), T(0.5))]
 
             n = Int(log2(a/b))
@@ -952,3 +955,11 @@ float(x::FloatWrapper) = x
     @test isa(sin(z), Complex)
     @test isa(cos(z), Complex)
 end
+
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using .Main.TestHelpers: Furlong
+@test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
+@test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
+@test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
+@test hypot(Furlong(Inf), Furlong(NaN)) == Furlong(Inf)
+@test hypot(Furlong(Inf), Furlong(Inf)) == Furlong(Inf)

@@ -34,12 +34,19 @@ The object has two fields:
 * `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
 
 """
-struct QR{T,S<:AbstractMatrix} <: Factorization{T}
+struct QR{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    QR{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
+
+    function QR{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+        @assert !has_offset_axes(factors)
+        new{T,S}(factors, τ)
+    end
 end
 QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(factors, τ)
+function QR{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
+    QR(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
+end
 
 # iteration for destructuring into components
 Base.iterate(S::QR) = (S.Q, Val(:R))
@@ -94,12 +101,19 @@ The object has two fields:
 
 [^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](https://doi.org/10.1137/0910005)
 """
-struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
+struct QRCompactWY{S,M<:AbstractMatrix{S}} <: Factorization{S}
     factors::M
     T::Matrix{S}
-    QRCompactWY{S,M}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S,M<:AbstractMatrix} = new(factors, T)
+
+    function QRCompactWY{S,M}(factors, T) where {S,M<:AbstractMatrix{S}}
+        @assert !has_offset_axes(factors)
+        new{S,M}(factors, T)
+    end
 end
-QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
+QRCompactWY(factors::AbstractMatrix{S}, T::Matrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
+function QRCompactWY{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S}
+    QRCompactWY(convert(AbstractMatrix{S}, factors), convert(Matrix{S}, T))
+end
 
 # iteration for destructuring into components
 Base.iterate(S::QRCompactWY) = (S.Q, Val(:R))
@@ -139,15 +153,23 @@ The object has three fields:
 
 * `jpvt` is an integer vector of length `n` corresponding to the permutation ``P``.
 """
-struct QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
+struct QRPivoted{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     τ::Vector{T}
     jpvt::Vector{BlasInt}
-    QRPivoted{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T,S<:AbstractMatrix} =
-        new(factors, τ, jpvt)
+
+    function QRPivoted{T,S}(factors, τ, jpvt) where {T,S<:AbstractMatrix{T}}
+        @assert !has_offset_axes(factors, τ, jpvt)
+        new{T,S}(factors, τ, jpvt)
+    end
 end
 QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T} =
     QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
+function QRPivoted{T}(factors::AbstractMatrix, τ::AbstractVector, jpvt::AbstractVector) where {T}
+    QRPivoted(convert(AbstractMatrix{T}, factors),
+              convert(Vector{T}, τ),
+              convert(Vector{BlasInt}, jpvt))
+end
 
 # iteration for destructuring into components
 Base.iterate(S::QRPivoted) = (S.Q, Val(:R))
@@ -156,6 +178,7 @@ Base.iterate(S::QRPivoted, ::Val{:p}) = (S.p, Val(:done))
 Base.iterate(S::QRPivoted, ::Val{:done}) = nothing
 
 function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
+    @assert !has_offset_axes(A)
     m, n = size(A)
     τ = zeros(T, min(m,n))
     for k = 1:min(m - 1 + !(T<:Real), n)
@@ -332,17 +355,22 @@ true
     compactly rather as two separate dense matrices.
 """
 function qr(A::AbstractMatrix{T}, arg) where T
+    @assert !has_offset_axes(A)
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
     return qr!(AA, arg)
 end
 function qr(A::AbstractMatrix{T}) where T
+    @assert !has_offset_axes(A)
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
     return qr!(AA)
 end
 qr(x::Number) = qr(fill(x,1,1))
-qr(v::AbstractVector) = qr(reshape(v, (length(v), 1)))
+function qr(v::AbstractVector)
+    @assert !has_offset_axes(v)
+    qr(reshape(v, (length(v), 1)))
+end
 
 # Conversions
 QR{T}(A::QR) where {T} = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
@@ -429,12 +457,19 @@ abstract type AbstractQ{T} <: AbstractMatrix{T} end
 The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QR`](@ref) or
 [`QRPivoted`](@ref) format.
 """
-struct QRPackedQ{T,S<:AbstractMatrix} <: AbstractQ{T}
+struct QRPackedQ{T,S<:AbstractMatrix{T}} <: AbstractQ{T}
     factors::S
     τ::Vector{T}
-    QRPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
+
+    function QRPackedQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+        @assert !has_offset_axes(factors)
+        new{T,S}(factors, τ)
+    end
 end
 QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typeof(factors)}(factors, τ)
+function QRPackedQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
+    QRPackedQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
+end
 
 """
     QRCompactWYQ <: AbstractMatrix
@@ -442,12 +477,19 @@ QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typ
 The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QRCompactWY`](@ref)
 format.
 """
-struct QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractQ{S}
+struct QRCompactWYQ{S, M<:AbstractMatrix{S}} <: AbstractQ{S}
     factors::M
     T::Matrix{S}
-    QRCompactWYQ{S,M}(factors::AbstractMatrix{S}, T::Matrix{S}) where {S,M<:AbstractMatrix} = new(factors, T)
+
+    function QRCompactWYQ{S,M}(factors, T) where {S,M<:AbstractMatrix{S}}
+        @assert !has_offset_axes(factors)
+        new{S,M}(factors, T)
+    end
 end
 QRCompactWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) where {S} = QRCompactWYQ{S,typeof(factors)}(factors, T)
+function QRCompactWYQ{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S}
+    QRCompactWYQ(convert(AbstractMatrix{S}, factors), convert(Matrix{S}, T))
+end
 
 QRPackedQ{T}(Q::QRPackedQ) where {T} = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 AbstractMatrix{T}(Q::QRPackedQ{T}) where {T} = Q
@@ -479,6 +521,7 @@ lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:Strid
 lmul!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
     LAPACK.ormqr!('L','N',A.factors,A.τ,B)
 function lmul!(A::QRPackedQ, B::AbstractVecOrMat)
+    @assert !has_offset_axes(B)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
     if mA != mB
@@ -538,6 +581,7 @@ lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:Bl
 lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
     (A = adjA.parent; LAPACK.ormqr!('L','C',A.factors,A.τ,B))
 function lmul!(adjA::Adjoint{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
+    @assert !has_offset_axes(B)
     A = adjA.parent
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
@@ -801,6 +845,7 @@ _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
 function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
+    @assert !has_offset_axes(B)
     S = promote_type(TA,TB)
     m, n = size(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
@@ -821,6 +866,7 @@ _ret_size(A::Factorization, b::AbstractVector) = (max(size(A, 2), length(b)),)
 _ret_size(A::Factorization, B::AbstractMatrix) = (max(size(A, 2), size(B, 1)), size(B, 2))
 
 function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}}) where T<:BlasReal
+    @assert !has_offset_axes(BIn)
     m, n = size(A)
     m == size(BIn, 1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(BIn,1)) rows"))
 

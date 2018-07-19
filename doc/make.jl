@@ -1,8 +1,9 @@
 # Install dependencies needed to build the documentation.
+empty!(LOAD_PATH)
+push!(LOAD_PATH, @__DIR__, "@stdlib")
 using Pkg
 empty!(DEPOT_PATH)
 pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
-pushfirst!(LOAD_PATH, @__DIR__)
 Pkg.instantiate()
 
 using Documenter

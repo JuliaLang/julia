@@ -3,7 +3,8 @@
 module CHOLMOD
 
 import Base: (*), convert, copy, eltype, getindex, getproperty, show, size,
-             IndexStyle, IndexLinear, IndexCartesian, adjoint
+             IndexStyle, IndexLinear, IndexCartesian, adjoint, axes
+using Base: has_offset_axes
 
 using LinearAlgebra
 import LinearAlgebra: (\),
@@ -271,7 +272,7 @@ if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
         minor::Csize_t
         Perm::Ptr{SuiteSparse_long}
         ColCount::Ptr{SuiteSparse_long}
-        IPerm::Ptr{SuiteSparse_long}        # this pointer was added in verison 2.1.0
+        IPerm::Ptr{SuiteSparse_long}        # this pointer was added in version 2.1.0
         nzmax::Csize_t
         p::Ptr{SuiteSparse_long}
         i::Ptr{SuiteSparse_long}
@@ -352,7 +353,7 @@ Base.transpose(F::Factor) = Transpose(F)
 
 # All pointer loads should be checked to make sure that SuiteSparse is not called with
 # a C_NULL pointer which could cause a segfault. Pointers are set to null
-# when serialized so this can happen when mutiple processes are in use.
+# when serialized so this can happen when multiple processes are in use.
 function Base.unsafe_convert(::Type{Ptr{T}}, x::Union{Dense,Sparse,Factor}) where T<:SuiteSparseStruct
     xp = getfield(x, :ptr)
     if xp == C_NULL
@@ -823,7 +824,7 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 # High level interfaces #
 #########################
 
-# Convertion/construction
+# Conversion/construction
 function Dense{T}(A::StridedVecOrMat) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
     s = unsafe_load(pointer(d))
@@ -1026,7 +1027,7 @@ function Sparse(filename::String)
     end
 end
 
-## convertion back to base Julia types
+## conversion back to base Julia types
 function Matrix{T}(D::Dense{T}) where T
     s = unsafe_load(pointer(D))
     a = Matrix{T}(undef, s.nrow, s.ncol)
@@ -1040,6 +1041,7 @@ Base.copyto!(dest::AbstractArray{T,2}, D::Dense{T}) where {T<:VTypes} = _copy!(d
 Base.copyto!(dest::AbstractArray, D::Dense) = _copy!(dest, D)
 
 function _copy!(dest::AbstractArray, D::Dense)
+    @assert !has_offset_axes(dest)
     s = unsafe_load(pointer(D))
     n = s.nrow*s.ncol
     n <= length(dest) || throw(BoundsError(dest, n))
@@ -1237,6 +1239,7 @@ function size(F::Factor, i::Integer)
     return 1
 end
 size(F::Factor) = (size(F, 1), size(F, 2))
+axes(A::Union{Dense,Sparse,Factor}) = map(Base.OneTo, size(A))
 
 IndexStyle(::Dense) = IndexLinear()
 
@@ -1314,7 +1317,7 @@ function *(A::Sparse{Tv}, adjB::Adjoint{Tv,Sparse{Tv}}) where Tv<:VRealTypes
     end
 
     ## The A*A' case is handled by cholmod_aat. This routine requires
-    ## A->stype == 0 (storage of upper and lower parts). If neccesary
+    ## A->stype == 0 (storage of upper and lower parts). If necessary
     ## the matrix A is first converted to stype == 0
     s = unsafe_load(pointer(A))
     if s.stype != 0

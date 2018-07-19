@@ -626,15 +626,6 @@ export
     get_zero_subnormals,
     set_zero_subnormals,
 
-# statistics
-    mean!,
-    mean,
-    median!,
-    median,
-    middle,
-    quantile!,
-    quantile,
-
 # iteration
     done,
     next,

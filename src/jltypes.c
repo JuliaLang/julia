@@ -133,7 +133,7 @@ jl_datatype_t *jl_boundserror_type;
 jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
 
-jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, NULL, NULL, NULL};
+jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, NULL, NULL, NULL, NULL, NULL};
 
 // --- type properties and predicates ---
 
@@ -1657,6 +1657,8 @@ void jl_init_types(void)
     jl_default_cgparams.module_setup = jl_nothing;
     jl_default_cgparams.module_activation = jl_nothing;
     jl_default_cgparams.raise_exception = jl_nothing;
+    jl_default_cgparams.emit_function = jl_nothing;
+    jl_default_cgparams.emitted_function = jl_nothing;
 
     jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
@@ -1855,6 +1857,10 @@ void jl_init_types(void)
                                          jl_any_type, jl_emptysvec, 32);
     jl_int64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int64"), core,
                                          jl_any_type, jl_emptysvec, 64);
+    jl_uint32_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt32"), core,
+                                          jl_any_type, jl_emptysvec, 32);
+    jl_uint64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt64"), core,
+                                          jl_any_type, jl_emptysvec, 64);
     jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
                                          jl_any_type, jl_emptysvec, 8);
 
@@ -2021,11 +2027,10 @@ void jl_init_types(void)
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(13,
+                        jl_perm_symsvec(12,
                             "code",
                             "codelocs",
                             "method_for_inference_limit_heuristics",
-                            "slottypes",
                             "ssavaluetypes",
                             "linetable",
                             "ssaflags",
@@ -2035,9 +2040,8 @@ void jl_init_types(void)
                             "inlineable",
                             "propagate_inbounds",
                             "pure"),
-                        jl_svec(13,
+                        jl_svec(12,
                             jl_array_any_type,
-                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
@@ -2052,7 +2056,7 @@ void jl_init_types(void)
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
-                        0, 1, 13);
+                        0, 1, 12);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,

@@ -23,9 +23,13 @@ for SRC in $ARGS; do
         DESTFILE="$DEST"
     fi
 
-    # Do the chmod dance, and ignore errors on platforms that don't like setting permissions of symlinks
-    # TODO: Test if it's a symlink instead of having to redirect stderr to /dev/null
-    chmod $PERMS $DESTFILE 2>/dev/null
+    # Do the chmod dance.
+    # Symlinks to system libraries are ignored because Julia shouldn't modify
+    # permission of those libraries. If we tried, some platforms would cause
+    # an error.
+    if [ ! -L "$DESTFILE" ]; then
+        chmod $PERMS "$DESTFILE"
+    fi
 done
 
 exit 0

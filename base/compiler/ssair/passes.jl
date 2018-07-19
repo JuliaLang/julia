@@ -10,7 +10,7 @@
     struct. Somewhat counterintuitively, we don't actually need to make sure that the
     struct itself is live (or even allocated) at a ccall site. If there are no other places
     where the struct escapes (and thus e.g. where its address is taken), it need not be
-    allocated. We do however, need to make sure to preserve any elments of this struct.
+    allocated. We do however, need to make sure to preserve any elements of this struct.
 """
 struct SSADefUse
     uses::Vector{Int}
@@ -71,7 +71,12 @@ end
 
 function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks, du, phinodes, fidx, curblock)
     curblock = find_curblock(domtree, allblocks, curblock)
-    def = reduce(max, 0, stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock)
+    def = 0
+    for stmt in du.defs
+        if block_for_inst(ir.cfg, stmt) == curblock
+            def = max(def, stmt)
+        end
+    end
     def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
 end
 
@@ -79,15 +84,21 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks, du, phin
     # Find the first dominating def
     curblock = stmtblock = block_for_inst(ir.cfg, use_idx)
     curblock = find_curblock(domtree, allblocks, curblock)
-    defblockdefs = [stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
+    defblockdefs = Int[stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
     def = 0
     if !isempty(defblockdefs)
         if curblock != stmtblock
             # Find the last def in this block
-            def = maximum(defblockdefs)
+            def = 0
+            for x in defblockdefs
+                def = max(def, x)
+            end
         else
             # Find the last def before our use
-            def = mapreduce(x->x >= use_idx ? 0 : x, max, defblockdefs)
+            def = 0
+            for x in defblockdefs
+                def = max(def, x >= use_idx ? 0 : x)
+            end
         end
     end
     if def == 0
@@ -291,7 +302,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 field === nothing && return nothing
                 if length(def.args) < 1 + field
                     ftyp = fieldtype(typ, field)
-                    if !isbits(ftyp)
+                    if !isbitstype(ftyp)
                         # On this branch, this will be a guaranteed UndefRefError.
                         # We use the regular undef mechanic to lift this to a boolean slot
                         maybe_undef = true
@@ -399,12 +410,13 @@ function lift_comparison!(compact::IncrementalCompact, idx::Int,
     end
 
     lifted_val = perform_lifting!(compact, visited_phinodes, cmp, lifting_cache, Bool, lifted_leaves, val)
+    @assert lifted_val !== nothing
 
     #global assertion_counter
     #assertion_counter::Int += 1
     #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), lifted_val), nothing, 0, true)
     #return
-    compact[idx] = lifted_val
+    compact[idx] = lifted_val.x
 end
 
 struct LiftedPhi
@@ -478,13 +490,12 @@ function perform_lifting!(compact::IncrementalCompact,
     if isa(stmt_val, Union{SSAValue, OldSSAValue})
         stmt_val = simple_walk(compact, stmt_val)
     end
+
     if stmt_val in keys(lifted_leaves)
         stmt_val = lifted_leaves[stmt_val]
-        @assert stmt_val !== nothing
-        stmt_val = stmt_val.x
     else
         isa(stmt_val, Union{SSAValue, OldSSAValue}) && stmt_val in keys(reverse_mapping)
-        stmt_val = lifted_phis[reverse_mapping[stmt_val]].ssa
+        stmt_val = RefValue{Any}(lifted_phis[reverse_mapping[stmt_val]].ssa)
     end
 
     return stmt_val
@@ -661,14 +672,20 @@ function getfield_elim_pass!(ir::IRCode, domtree)
 
         # Insert the undef check if necessary
         if any_undef && !is_unchecked
-            insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, :getfield, val))
+            if val === nothing
+                insert_node!(compact, SSAValue(idx), Nothing, Expr(:throw_undef_if_not, Symbol("##getfield##"), false))
+            else
+                insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, Symbol("##getfield##"), val.x))
+            end
+        else
+            @assert val !== nothing
         end
 
         global assertion_counter
         assertion_counter::Int += 1
         #insert_node_here!(compact, Expr(:assert_egal, Symbol(string("assert_egal_", assertion_counter)), SSAValue(idx), val), nothing, 0, true)
         #continue
-        compact[idx] = val
+        compact[idx] = val === nothing ? nothing : val.x
     end
 
     ir = finish(compact)
@@ -680,7 +697,11 @@ function getfield_elim_pass!(ir::IRCode, domtree)
         # not to include any intermediaries that have dead uses. As a result, missing uses will only ever
         # show up in the nuses_total count.
         nleaves = length(defuse.uses) + length(defuse.defs) + length(defuse.ccall_preserve_uses)
-        nuses_total = compact.used_ssas[idx] + mapreduce(idx->compact.used_ssas[idx], +, 0, intermediaries) - length(intermediaries)
+        nuses = 0
+        for idx in intermediaries
+            nuses += compact.used_ssas[idx]
+        end
+        nuses_total = compact.used_ssas[idx] + nuses - length(intermediaries)
         nleaves == nuses_total || continue
         # Find the type for this allocation
         defexpr = ir[SSAValue(idx)]

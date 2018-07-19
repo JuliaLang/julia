@@ -9,7 +9,7 @@ import Dates
 import LibGit2
 
 import ..depots, ..logdir, ..devdir
-import ..Operations, ..Display, ..GitTools, ..Pkg
+import ..Operations, ..Display, ..GitTools, ..Pkg, ..UPDATED_REGISTRY_THIS_SESSION
 using ..Types, ..TOML
 
 
@@ -17,7 +17,7 @@ preview_info() = printstyled("───── Preview mode ─────\n"; c
 
 include("generate.jl")
 
-parse_package(pkg) = Pkg.REPLMode.parse_package(pkg; context=Pkg.REPLMode.CMD_ADD)
+parse_package(pkg) = Pkg.REPLMode.parse_package(pkg; add_or_develop=true)
 
 add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
 add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([parse_package(pkg) for pkg in pkgs]; kwargs...)
@@ -25,17 +25,29 @@ add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Cont
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, kwargs...)
     Context!(ctx; kwargs...)
+
+    # if julia is passed as a package the solver gets tricked;
+    # this catches the error early on
+    any(pkg->(pkg.name == "julia"), pkgs) &&
+        cmderror("Trying to $mode julia as a package")
+
     ctx.preview && preview_info()
+    if !UPDATED_REGISTRY_THIS_SESSION[]
+        update_registry(ctx)
+    end
     if mode == :develop
         new_git = handle_repos_develop!(ctx, pkgs)
     else
         new_git = handle_repos_add!(ctx, pkgs; upgrade_or_add=true)
-        update_registry(ctx)
     end
     project_deps_resolve!(ctx.env, pkgs)
     registry_resolve!(ctx.env, pkgs)
     stdlib_resolve!(ctx, pkgs)
     ensure_resolved(ctx.env, pkgs, registry=true)
+
+    any(pkg -> Types.collides_with_project(ctx.env, pkg), pkgs) &&
+        cmderror("Cannot $mode package with the same name or uuid as the project")
+
     Operations.add_or_develop(ctx, pkgs; new_git=new_git)
     ctx.preview && preview_info()
     return
@@ -115,6 +127,7 @@ function update_registry(ctx)
         end
         @warn warn_str
     end
+    UPDATED_REGISTRY_THIS_SESSION[] = true
     return
 end
 
@@ -404,18 +417,6 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     return
 end
 
-init(; kwargs...) = init(Context(); kwargs...)
-init(path::String) = init(Context(env=EnvCache(path)), path)
-function init(ctx::Context, path::String=pwd(); kwargs...)
-    Context!(ctx; kwargs...)
-    ctx.preview && preview_info()
-    Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
-    Operations.init(ctx)
-    activate(path)
-    ctx.preview && preview_info()
-    return
-end
-
 #####################################
 # Backwards compatibility with Pkg2 #
 #####################################
@@ -474,13 +475,7 @@ function precompile(ctx::Context)
     code = join(["import " * pkg for pkg in needs_to_be_precompiled], '\n') * "\nexit(0)"
     for (i, pkg) in enumerate(needs_to_be_precompiled)
         code = """
-            import OldPkg
-            empty!(Base.DEPOT_PATH)
-            append!(Base.DEPOT_PATH, $(repr(map(abspath, DEPOT_PATH))))
-            empty!(Base.DL_LOAD_PATH)
-            append!(Base.DL_LOAD_PATH, $(repr(map(abspath, Base.DL_LOAD_PATH))))
-            empty!(Base.LOAD_PATH)
-            append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
+            $(Base.load_path_setup_code())
             import $pkg
         """
         printpkgstyle(ctx, :Precompiling, pkg * " [$i of $(length(needs_to_be_precompiled))]")
@@ -548,31 +543,17 @@ function instantiate(ctx::Context; manifest::Union{Bool, Nothing}=nothing, kwarg
     Operations.build_versions(ctx, union(new_apply, new_git))
 end
 
-const ACTIVE_ENV = Ref{Union{String,Nothing}}(nothing)
-
-function _activate(env::Union{String,Nothing})
-    if env === nothing
-        @warn "Current directory is not in a project, nothing activated."
-    else
-        if !isempty(LOAD_PATH) && ACTIVE_ENV[] === LOAD_PATH[1]
-            LOAD_PATH[1] = env
-        else
-            # TODO: warn if ACTIVE_ENV !== nothing ?
-            pushfirst!(LOAD_PATH, env)
-        end
-        ACTIVE_ENV[] = env
-    end
+function activate(path::Union{String,Nothing}=nothing)
+    Base.ACTIVE_PROJECT[] = Base.load_path_expand(path)
 end
-activate() = _activate(Base.current_env())
-activate(path::String) = _activate(Base.current_env(path))
 
-function deactivate()
-    if !isempty(LOAD_PATH) && ACTIVE_ENV[] === LOAD_PATH[1]
-        popfirst!(LOAD_PATH)
-    else
-        # warn if ACTIVE_ENV !== nothing ?
-    end
-    ACTIVE_ENV[] = nothing
-end
+"""
+    setprotocol!(proto::Union{Nothing, AbstractString}=nothing)
+
+Set the protocol used to access GitHub-hosted packages when `add`ing a url or `develop`ing a package.
+Defaults to delegating the choice to the package developer (`proto == nothing`).
+Other choices for `proto` are `"https` or `git`.
+"""
+setprotocol!(proto::Union{Nothing, AbstractString}=nothing) = GitTools.setprotocol!(proto)
 
 end # module

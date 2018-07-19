@@ -21,7 +21,7 @@ const URL_REGEX = r"""
     :?
 )
 (?<path>
-    # Require path to be preceeded by '/'. Alternatively, ':' when using scp-like syntax.
+    # Require path to be preceded by '/'. Alternatively, ':' when using scp-like syntax.
     (?<=(?(<scheme>)/|:))
     .*
 )?
@@ -111,7 +111,7 @@ provided the URL produced will use the alternative [scp-like syntax](https://git
     provided. Cannot be specified when using the scp-like syntax.
   * `path::AbstractString=""`: the path to use in the output if provided.
 
-!!!warning
+!!! warning
     Avoid using passwords in URLs. Unlike the credential objects, Julia is not able
     to securely zero or destroy the sensitive data after use and the password may
     remain in memory; possibly to be exposed by an uninitialized memory.

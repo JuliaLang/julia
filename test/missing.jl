@@ -361,6 +361,57 @@ end
     @test eltype(x) === Any
     @test collect(x) == [1, 2, 4]
     @test collect(x) isa Vector{Int}
+
+    @testset "mapreduce" begin
+        # Vary size to test splitting blocks with several configurations of missing values
+        for T in (Int, Float64),
+            A in (rand(T, 10), rand(T, 1000), rand(T, 10000))
+            if T === Int
+                @test sum(A) === sum(skipmissing(A)) ===
+                    reduce(+, skipmissing(A)) === mapreduce(identity, +, skipmissing(A))
+            else
+                @test sum(A) ≈ sum(skipmissing(A)) ===
+                    reduce(+, skipmissing(A)) === mapreduce(identity, +, skipmissing(A))
+            end
+            @test mapreduce(cos, *, A) ≈ mapreduce(cos, *, skipmissing(A))
+
+            B = Vector{Union{T,Missing}}(A)
+            replace!(x -> rand(Bool) ? x : missing, B)
+            if T === Int
+                @test sum(collect(skipmissing(B))) === sum(skipmissing(B)) ===
+                    reduce(+, skipmissing(B)) === mapreduce(identity, +, skipmissing(B))
+            else
+                @test sum(collect(skipmissing(B))) ≈ sum(skipmissing(B)) ===
+                    reduce(+, skipmissing(B)) === mapreduce(identity, +, skipmissing(B))
+            end
+            @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
+
+            # Test block full of missing values
+            B[1:length(B)÷2] .= missing
+            if T === Int
+                @test sum(collect(skipmissing(B))) == sum(skipmissing(B)) ==
+                    reduce(+, skipmissing(B)) == mapreduce(identity, +, skipmissing(B))
+            else
+                @test sum(collect(skipmissing(B))) ≈ sum(skipmissing(B)) ==
+                    reduce(+, skipmissing(B)) == mapreduce(identity, +, skipmissing(B))
+            end
+
+            @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
+        end
+
+        # Patterns that exercize code paths for inputs with 1 or 2 non-missing values
+        @test sum(skipmissing([1, missing, missing, missing])) === 1
+        @test sum(skipmissing([missing, missing, missing, 1])) === 1
+        @test sum(skipmissing([1, missing, missing, missing, 2])) === 3
+        @test sum(skipmissing([missing, missing, missing, 1, 2])) === 3
+
+        for n in 0:3
+            itr = skipmissing(Vector{Union{Int,Missing}}(fill(missing, n)))
+            @test sum(itr) == reduce(+, itr) == mapreduce(identity, +, itr) === 0
+            @test_throws ArgumentError reduce(x -> x/2, itr)
+            @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
+        end
+    end
 end
 
 @testset "coalesce" begin

@@ -7,6 +7,7 @@ mutable struct InferenceState
     result::InferenceResult # remember where to put the result
     linfo::MethodInstance # used here for the tuple (specTypes, env, Method) and world-age validity
     sp::SimpleVector     # static parameters
+    slottypes::Vector{Any}
     mod::Module
     currpc::LineNum
 
@@ -61,11 +62,11 @@ mutable struct InferenceState
         argtypes = get_argtypes(result)
         nargs = length(argtypes)
         s_argtypes = VarTable(undef, nslots)
-        src.slottypes = Vector{Any}(undef, nslots)
+        slottypes = Vector{Any}(undef, nslots)
         for i in 1:nslots
             at = (i > nargs) ? Bottom : argtypes[i]
             s_argtypes[i] = VarState(at, i > nargs)
-            src.slottypes[i] = at
+            slottypes[i] = at
         end
         s_types[1] = s_argtypes
 
@@ -95,7 +96,7 @@ mutable struct InferenceState
         end
         frame = new(
             params, result, linfo,
-            sp, inmodule, 0,
+            sp, slottypes, inmodule, 0,
             src, min_valid, max_valid,
             nargs, s_types, s_edges,
             Union{}, W, 1, n,

@@ -80,6 +80,7 @@ pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s)+(i-1)
 
 ncodeunits(s::String) = Core.sizeof(s)
+sizeof(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
@@ -262,12 +263,12 @@ function length(s::String, i::Int, j::Int)
     j < i && return 0
     @inbounds i, k = thisind(s, i), i
     c = j - i + (i == k)
-    _length(s, i, j, c)
+    length(s, i, j, c)
 end
 
-length(s::String) = _length(s, 1, ncodeunits(s), ncodeunits(s))
+length(s::String) = length(s, 1, ncodeunits(s), ncodeunits(s))
 
-@inline function _length(s::String, i::Int, n::Int, c::Int)
+@inline function length(s::String, i::Int, n::Int, c::Int)
     i < n || return c
     @inbounds b = codeunit(s, i)
     @inbounds while true

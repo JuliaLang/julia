@@ -1,12 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
+struct Hessenberg{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    Hessenberg{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} =
-        new(factors, τ)
+
+    function Hessenberg{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+        @assert !has_offset_axes(factors, τ)
+        new{T,S}(factors, τ)
+    end
 end
 Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = Hessenberg{T,typeof(factors)}(factors, τ)
+function Hessenberg{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
+    Hessenberg(convert(AbstractMatrix{T}, factors), convert(Vector{T}, v))
+end
+
 Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 
 # iteration for destructuring into components
@@ -63,7 +70,10 @@ hessenberg(A::StridedMatrix{T}) where T =
 struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
     τ::Vector{T}
-    HessenbergQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
+    function HessenbergQ{T,S}(factors, τ) where {T,S<:AbstractMatrix}
+        @assert !has_offset_axes(factors)
+        new(factors, τ)
+    end
 end
 HessenbergQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = HessenbergQ{T,typeof(factors)}(factors, τ)
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)

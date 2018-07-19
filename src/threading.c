@@ -168,7 +168,7 @@ static jl_ptls_t jl_get_ptls_states_init(void)
     // This 2-step initialization is used to detect calling
     // `jl_set_ptls_states_getter` after the address of the TLS variables
     // are used. Since the address of TLS variables should be constant,
-    // changing the getter address can result in wierd crashes.
+    // changing the getter address can result in weird crashes.
 
     // This is clearly not thread safe but should be fine since we
     // make sure the tls states callback is finalized before adding
@@ -555,7 +555,7 @@ void jl_init_threading(void)
 #endif
 
     // how many threads available, usable
-    int max_threads = jl_cpu_cores();
+    int max_threads = jl_cpu_threads();
     jl_n_threads = JULIA_NUM_THREADS;
     cp = getenv(NUM_THREADS_NAME);
     if (cp) {

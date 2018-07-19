@@ -158,8 +158,8 @@ end
 
 @testset "Check library features" begin
     f = LibGit2.features()
-    @test findfirst(isequal(LibGit2.Consts.FEATURE_SSH), f) > 0
-    @test findfirst(isequal(LibGit2.Consts.FEATURE_HTTPS), f) > 0
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_SSH), f) !== nothing
+    @test findfirst(isequal(LibGit2.Consts.FEATURE_HTTPS), f) !== nothing
 end
 
 @testset "OID" begin
@@ -1064,6 +1064,21 @@ mktempdir() do dir
                 @test tree["$test_dir/"] == tree[test_dir]
                 @test isa(tree[test_file], LibGit2.GitBlob)
                 @test_throws KeyError tree["nonexistent"]
+
+                # test workaround for git_tree_walk issue
+                # https://github.com/libgit2/libgit2/issues/4693
+                ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring),
+                      Cint(LibGit2.Error.Invalid), "previous error")
+                try
+                    # file needs to exist in tree in order to trigger the stop walk condition
+                    tree[test_file]
+                catch err
+                    if isa(err, LibGit2.Error.GitError) && err.class == LibGit2.Error.Invalid
+                        @test false
+                    else
+                        rethrow(err)
+                    end
+                end
             end
         end
 
@@ -1260,8 +1275,8 @@ mktempdir() do dir
             LibGit2.commit(repo, "move file1")
             LibGit2.branch!(repo, "master")
             upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_b")
-            rename_flag = 0
-            rename_flag = LibGit2.toggle(rename_flag, 0) # turns on the find renames opt
+            rename_flag = Cint(0)
+            rename_flag = LibGit2.toggle(rename_flag, Cint(0)) # turns on the find renames opt
             mos = LibGit2.MergeOptions(flags=rename_flag)
             @test_logs (:info,"Review and commit merged changes") LibGit2.merge!(repo, [upst_ann], merge_opts=mos)
         end
@@ -2685,6 +2700,49 @@ mktempdir() do dir
             @test p.credential == valid_cred
 
             Base.shred!(valid_cred)
+        end
+
+        @testset "HTTPS git helper password" begin
+            if GIT_INSTALLED
+                url = "https://github.com/test/package.jl"
+
+                valid_username = "julia"
+                valid_password = randstring(16)
+                valid_cred = LibGit2.UserPasswordCredential(valid_username, valid_password)
+
+                cred_file = joinpath(dir, "test-credentials")
+                config_path = joinpath(dir, config_file)
+                write(config_path, """
+                    [credential]
+                        helper = store --file $cred_file
+                    """)
+
+                # Directly write to the cleartext credential store. Note: we are not using
+                # the LibGit2.approve message to avoid any possibility of the tests
+                # accidentally writing to a user's global store.
+                write(cred_file, "https://$valid_username:$valid_password@github.com")
+
+                https_ex = quote
+                    include($LIBGIT2_HELPER_PATH)
+                    LibGit2.with(LibGit2.GitConfig($config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                        payload = CredentialPayload(nothing,
+                                                    nothing, cfg,
+                                                    allow_git_helpers=true)
+                        credential_loop($valid_cred, $url, nothing, payload, shred=false)
+                    end
+                end
+
+                # Username will be provided by the credential helper
+                challenges = []
+                err, auth_attempts, p = challenge_prompt(https_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 1
+
+                # Verify credential wasn't accidentally zeroed (#24731)
+                @test p.credential == valid_cred
+
+                Base.shred!(valid_cred)
+            end
         end
 
         @testset "Incompatible explicit credentials" begin

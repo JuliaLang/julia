@@ -808,7 +808,7 @@ function process_newnode!(compact, new_idx, new_node_entry, idx, active_bb, do_r
     bb = compact.ir.cfg.blocks[active_bb]
     compact.result_types[old_result_idx] = new_node_entry.typ
     compact.result_lines[old_result_idx] = new_node_entry.line
-    result_idx = process_node!(compact, old_result_idx, new_node_entry.node, new_idx, idx, do_rename_ssa)
+    result_idx = process_node!(compact, old_result_idx, new_node_entry.node, new_idx, idx - 1, do_rename_ssa)
     compact.result_idx = result_idx
     # If this instruction has reverse affinity and we were at the end of a basic block,
     # finish it now.
@@ -871,7 +871,7 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
         effect_free = false
     else
-        effect_free = stmt_effect_free(stmt, compact, compact.ir.spvals)
+        effect_free = stmt_effect_free(stmt, compact.result_types[idx], compact, compact.ir.spvals)
     end
     if effect_free
         for ops in userefs(stmt)

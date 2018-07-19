@@ -16,6 +16,13 @@ end
 print_ssa(io::IO, val::SSAValue, argnames) = Base.print(io, "%$(val.id)")
 print_ssa(io::IO, val::Argument, argnames) = Base.print(io, isempty(argnames) ? "%%$(val.n)" : "%%$(argnames[val.n])")
 print_ssa(io::IO, val::GlobalRef, argnames) = Base.print(io, val)
+function print_ssa(io::IO, val::QuoteNode, argnames)
+    if val.value isa Symbol && Base.isidentifier(val.value)
+        Base.print(io, ":", val.value)
+    else
+        Base.show(io, val)
+    end
+end
 print_ssa(io::IO, @nospecialize(val), argnames) = Base.show(io, val)
 
 
@@ -87,8 +94,10 @@ function print_node(io::IO, idx::Int, @nospecialize(stmt), used, argnames, maxsi
         Base.print(io, "new(")
         Base.print(io, join(String[sprint(io->print_ssa(io, arg, argnames)) for arg in stmt.args], ", "))
         Base.print(io, ")")
-    else
+    elseif isa(stmt, GotoNode)
         Base.print(io, stmt)
+    else
+        Base.show(io, stmt)
     end
 end
 
@@ -150,7 +159,7 @@ example (taken from `@code_typed sin(1.0)`):
 ```
 
 The three annotations are indicated with `*`. The first one is the line number of the
-active function (printed once whenver the outer most line number changes). The second
+active function (printed once whenever the outer most line number changes). The second
 is the inlining indicator. The number of lines indicate the level of nesting, with a
 half-size line (╷) indicating the start of a scope and a full size line (│) indicating
 a continuing scope. The last annotation is the most complicated one. It is a heuristic

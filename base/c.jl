@@ -250,18 +250,24 @@ function transcode end
 
 transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
 transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
-transcode(::Type{T}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}}) where {T<:Union{Int32,UInt32}} =
+transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
+    transcode(T, String(Vector(src)))
+transcode(::Type{T}, src::CodeUnits{UInt8,String}) where {T<:Union{Int32,UInt32}} =
     transcode(T, String(src))
+
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
-    for c in src; print(buf, Char(c)); end
+    for c in src
+        print(buf, Char(c))
+    end
     take!(buf)
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, codeunits(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
-function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,String}})
+function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
+    @assert !has_offset_axes(src)
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -311,7 +317,8 @@ function transcode(::Type{UInt16}, src::Union{Vector{UInt8},CodeUnits{UInt8,Stri
     return dst
 end
 
-function transcode(::Type{UInt8}, src::Vector{UInt16})
+function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
+    @assert !has_offset_axes(src)
     n = length(src)
     n == 0 && return UInt8[]
 

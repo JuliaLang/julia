@@ -601,7 +601,7 @@ static void jl_compilation_sig(
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(tt, i);
         jl_value_t *decl_i = jl_nth_slot_type(decl, i);
-        size_t i_arg = (i <= nargs ? i : nargs);
+        size_t i_arg = (i < nargs - 1 ? i : nargs - 1);
 
         if (jl_is_kind(decl_i)) {
             // if we can prove the match was against the kind (not a Type)
@@ -792,32 +792,32 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
     if (!jl_is_datatype(type) || jl_has_free_typevars((jl_value_t*)type))
         return 0;
 
+    size_t i, np = jl_nparams(type);
+    size_t nargs = definition->nargs; // == jl_field_count(jl_unwrap_unionall(decl));
+    if (np == 0)
+        return nargs == 0;
+    if (jl_is_vararg_type(jl_tparam(type, np - 1))) {
+        if (!definition->isva || np <= nargs)
+            return 0;
+    }
+    else if (definition->isva ? np != nargs : np < nargs) {
+        return 0;
+    }
+
     if (definition->generator) {
         // staged functions aren't optimized
         // so assume the caller was intelligent about calling us
         return type->isdispatchtuple;
     }
 
-    size_t i, np = jl_nparams(type);
-    size_t nargs = definition->nargs; // == jl_field_count(jl_unwrap_unionall(decl));
-    if (definition->isva ? np <= nargs : np != nargs)
-        return 0;
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(type, i);
         jl_value_t *decl_i = jl_nth_slot_type((jl_value_t*)decl, i);
-        size_t i_arg = (i <= nargs ? i : nargs);
+        size_t i_arg = (i < nargs - 1 ? i : nargs - 1);
 
         if (jl_is_vararg_type(elt)) { // varargs are always considered compilable
             if (!jl_has_free_typevars(elt))
                 continue;
-            return 0;
-        }
-
-        if (jl_is_kind(elt)) {
-            // kind slots always get guard entries (checking for subtypes of Type)
-            if (decl_i == elt || jl_subtype((jl_value_t*)jl_type_type, decl_i))
-                continue;
-            // TODO: other code paths that could reach here
             return 0;
         }
 
@@ -834,6 +834,14 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 return 0;
             }
             // TODO: handle @nospecialize with other declared types
+        }
+
+        if (jl_is_kind(elt)) {
+            // kind slots always get guard entries (checking for subtypes of Type)
+            if (decl_i == elt || jl_subtype((jl_value_t*)jl_type_type, decl_i))
+                continue;
+            // TODO: other code paths that could reach here
+            return 0;
         }
 
         if (jl_is_type_type(elt)) {

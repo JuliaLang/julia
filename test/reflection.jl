@@ -235,6 +235,7 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
+@test_throws ErrorException fieldnames(Union{})
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
@@ -584,12 +585,13 @@ end
 @test_throws ErrorException sizeof(Vector{Int})
 @test_throws ErrorException sizeof(Symbol)
 @test_throws ErrorException sizeof(Core.SimpleVector)
+@test_throws ErrorException sizeof(Union{})
 
 @test nfields((1,2)) == 2
 @test nfields(()) == 0
 @test nfields(nothing) == fieldcount(Nothing) == 0
 @test nfields(1) == 0
-@test fieldcount(Union{}) == 0
+@test_throws ErrorException fieldcount(Union{})
 @test fieldcount(Tuple{Any,Any,T} where T) == 3
 @test fieldcount(Complex) == fieldcount(ComplexF32) == 2
 @test fieldcount(Union{ComplexF32,ComplexF64}) == 2

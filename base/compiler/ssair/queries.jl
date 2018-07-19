@@ -3,11 +3,10 @@
 """
 Determine whether a statement is side-effect-free, i.e. may be removed if it has no uses.
 """
-function stmt_effect_free(@nospecialize(stmt), src::IncrementalCompact, spvals::SimpleVector)
+function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, spvals::SimpleVector)
     isa(stmt, Union{PiNode, PhiNode}) && return true
     isa(stmt, Union{ReturnNode, GotoNode, GotoIfNot}) && return false
     isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
-    (isa(stmt, Symbol) || isa(stmt, SSAValue) || isa(stmt, Argument)) && return true
     isa(stmt, Slot) && return false # Slots shouldn't occur in the IR at this point, but let's be defensive here
     if isa(stmt, Expr)
         e = stmt::Expr
@@ -20,17 +19,12 @@ function stmt_effect_free(@nospecialize(stmt), src::IncrementalCompact, spvals::
         ea = e.args
         if head === :call
             f = argextype(ea[1], src, spvals)
-            if isa(f, Const)
-                f = f.val
-            elseif isType(f)
-                f = f.parameters[1]
-            else
-                return false
-            end
+            f = isa(f, Const) ? f.val : isType(f) ? f.parameters[1] : return false
             f === return_type && return true
-            # TODO: This needs significant refinement
-            contains_is(_PURE_BUILTINS, f) || return false
-            return builtin_nothrow(f, Any[argextype(ea[i], src, spvals) for i = 2:length(ea)])
+            contains_is(_PURE_BUILTINS, f) && return true
+            contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
+            rt === Bottom && return false
+            return _builtin_nothrow(f, Any[argextype(ea[i], src, spvals) for i = 2:length(ea)], rt)
         elseif head === :new
             a = ea[1]
             typ = argextype(a, src, spvals)

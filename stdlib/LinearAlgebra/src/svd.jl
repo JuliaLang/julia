@@ -1,14 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Singular Value Decomposition
-struct SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
+struct SVD{T,Tr,M<:AbstractArray{T}} <: Factorization{T}
     U::M
     S::Vector{Tr}
     Vt::M
-    SVD{T,Tr,M}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr,M} =
-        new(U, S, Vt)
+    function SVD{T,Tr,M}(U, S, Vt) where {T,Tr,M<:AbstractArray{T}}
+        @assert !has_offset_axes(U, S, Vt)
+        new{T,Tr,M}(U, S, Vt)
+    end
 end
 SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U)}(U, S, Vt)
+function SVD{T}(U::AbstractArray, S::AbstractVector{Tr}, Vt::AbstractArray) where {T,Tr}
+    SVD(convert(AbstractArray{T}, U),
+        convert(Vector{Tr}, S),
+        convert(AbstractArray{T}, Vt))
+end
 
 # iteration for destructuring into components
 Base.iterate(S::SVD) = (S.U, Val(:S))
@@ -131,6 +138,14 @@ function svd(x::Integer; full::Bool = false, thin::Union{Bool,Nothing} = nothing
         full::Bool = !thin
     end
     return svd(float(x), full = full)
+end
+function svd(A::Adjoint; full::Bool = false)
+    s = svd(A.parent, full = full)
+    return SVD(s.Vt', s.S, s.U')
+end
+function svd(A::Transpose; full::Bool = false)
+    s = svd(A.parent, full = full)
+    return SVD(transpose(s.Vt), s.S, transpose(s.U))
 end
 
 function getproperty(F::SVD, d::Symbol)
