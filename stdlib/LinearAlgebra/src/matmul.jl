@@ -504,6 +504,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
 
     Astride = size(A, 1)
 
+    @inbounds begin
     if tA == 'T'  # fastest case
         for k = 1:mA
             aoffs = (k-1)*Astride
@@ -546,6 +547,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             end
         end
     end
+    end # @inbounds
     C
 end
 
