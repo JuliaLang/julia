@@ -280,7 +280,16 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
     if is_meta_expr_head(head)
         return 0
     elseif head === :call
-        ftyp = argextype(ex.args[1], src, spvals, slottypes)
+        farg = ex.args[1]
+        ftyp = argextype(farg, src, spvals, slottypes)
+        if ftyp === IntrinsicFunction && farg isa SSAValue
+            # if this comes from code that was already inlined into another function,
+            # Consts have been widened. try to recover in simple cases.
+            farg = src.code[farg.id]
+            if isa(farg, GlobalRef) || isa(farg, QuoteNode) || isa(farg, IntrinsicFunction) || isexpr(farg, :static_parameter)
+                ftyp = argextype(farg, src, spvals, slottypes)
+            end
+        end
         f = singleton_type(ftyp)
         if isa(f, IntrinsicFunction)
             iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
