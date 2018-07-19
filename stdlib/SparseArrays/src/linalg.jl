@@ -29,7 +29,9 @@ end
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 
-function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat, α::Number, β::Number)
+for ArrType in (AbstractMatrix, AbstractVector)
+@eval begin
+function mul!(C::$ArrType, A::SparseMatrixCSC, B::$ArrType, α::Number, β::Number)
     A.n == size(B, 1) || throw(DimensionMismatch())
     A.m == size(C, 1) || throw(DimensionMismatch())
     size(B, 2) == size(C, 2) || throw(DimensionMismatch())
@@ -48,38 +50,30 @@ function mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat, α::Nu
     end
     C
 end
-*(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
-*(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (T = promote_type(TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
 
-function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, α::Number, β::Number)
-    A = adjA.parent
-    A.n == size(C, 1) || throw(DimensionMismatch())
-    A.m == size(B, 1) || throw(DimensionMismatch())
-    size(B, 2) == size(C, 2) || throw(DimensionMismatch())
-    nzv = A.nzval
-    rv = A.rowval
-    if β != 1
-        β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
-    end
-    for k = 1:size(C, 2)
-        @inbounds for col = 1:A.n
-            tmp = zero(eltype(C))
-            for j = A.colptr[col]:(A.colptr[col + 1] - 1)
-                tmp += adjoint(nzv[j])*B[rv[j],k]
-            end
-            C[col,k] += α*tmp
+function mul!(C::$ArrType, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::$ArrType, α::Number, β::Number)
+        A = adjA.parent
+        A.n == size(C, 1) || throw(DimensionMismatch())
+        A.m == size(B, 1) || throw(DimensionMismatch())
+        size(B, 2) == size(C, 2) || throw(DimensionMismatch())
+        nzv = A.nzval
+        rv = A.rowval
+        if β != 1
+            β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
         end
+        for k = 1:size(C, 2)
+            @inbounds for col = 1:A.n
+                tmp = zero(eltype(C))
+                for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+                    tmp += adjoint(nzv[j])*B[rv[j],k]
+                end
+                C[col,k] += α*tmp
+            end
+        end
+        C
     end
-    C
-end
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), adjoint(A), x, one(T), zero(T)))
-*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), adjoint(A), B, one(T), zero(T)))
 
-function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat, α::Number, β::Number)
+function mul!(C::$ArrType, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::$ArrType, α::Number, β::Number)
     A = transA.parent
     A.n == size(C, 1) || throw(DimensionMismatch())
     A.m == size(B, 1) || throw(DimensionMismatch())
@@ -100,21 +94,29 @@ function mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B:
     end
     C
 end
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, x::StridedVector{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), transpose(A), x, one(T), zero(T)))
-*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx}) where {TA,S,Tx} =
-    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), transpose(A), B, one(T), zero(T)))
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
-mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) =
+mul!(C::$ArrType, A::SparseMatrixCSC, B::$ArrType) =
     mul!(C, A, B, one(eltype(B)), zero(eltype(C)))
-mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
+mul!(C::$ArrType, adjA::Adjoint{<:Any,<:SparseMatrixCSC}, B::$ArrType) =
     (A = adjA.parent; mul!(C, adjoint(A), B, one(eltype(B)), zero(eltype(C))))
-mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::StridedVecOrMat) =
+mul!(C::$ArrType, transA::Transpose{<:Any,<:SparseMatrixCSC}, B::$ArrType) =
     (A = transA.parent; mul!(C, transpose(A), B, one(eltype(B)), zero(eltype(C))))
+end # @eval
+end # ArrType loop
 
-function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
+*(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx}) where {TA,S,Tx} =
+    (T = promote_type(TA, Tx); mul!(similar(x, T, A.m), A, x, one(T), zero(T)))
+*(A::SparseMatrixCSC{TA,S}, B::AbstractMatrix{Tx}) where {TA,S,Tx} =
+    (T = promote_type(TA, Tx); mul!(similar(B, T, (A.m, size(B, 2))), A, B, one(T), zero(T)))
+
+*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, x::AbstractVector{Tx}) where {TA,S,Tx} =
+    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), adjoint(A), x, one(T), zero(T)))
+*(adjA::Adjoint{<:Any,<:SparseMatrixCSC{TA,S}}, B::AbstractMatrix{Tx}) where {TA,S,Tx} =
+    (A = adjA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), adjoint(A), B, one(T), zero(T)))
+
+function (*)(X::AbstractMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch())
     Y = zeros(promote_type(TX,TvA), mX, A.n)
@@ -125,6 +127,11 @@ function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,Ti
     end
     Y
 end
+
+*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, x::AbstractVector{Tx}) where {TA,S,Tx} =
+    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(x, T, A.n), transpose(A), x, one(T), zero(T)))
+*(transA::Transpose{<:Any,<:SparseMatrixCSC{TA,S}}, B::AbstractMatrix{Tx}) where {TA,S,Tx} =
+    (A = transA.parent; T = promote_type(TA, Tx); mul!(similar(B, T, (A.n, size(B, 2))), transpose(A), B, one(T), zero(T)))
 
 function (*)(D::Diagonal, A::SparseMatrixCSC)
     T = Base.promote_op(*, eltype(D), eltype(A))
