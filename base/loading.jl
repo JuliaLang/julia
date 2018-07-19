@@ -829,21 +829,18 @@ function require(into::Module, mod::Symbol)
             - Otherwise you may need to report an issue with $(where.name)"""
 
             uuidkey = identify_package(PkgId(string(into)), String(mod))
-            # Attempt fall back to toplevel loading
-            if uuidkey === nothing
-                @error s
-            else
-                if !(where in modules_warned_for)
-                    @warn string(
-                        full_warning_showed[] ? "" : s, "\n",
-                        string("Loading $(mod) into $(where.name) from project dependency, ",
-                               "future warnings for $(where.name) are suppressed.")
-                    ) _module = nothing _file = nothing
-                end
+            uuidkey === nothing && throw(ArgumentError(s))
 
+            # fall back to toplevel loading with a warning
+            if !(where in modules_warned_for)
+                @warn string(
+                    full_warning_showed[] ? "" : s, "\n",
+                    string("Loading $(mod) into $(where.name) from project dependency, ",
+                           "future warnings for $(where.name) are suppressed.")
+                ) _module = nothing _file = nothing
                 push!(modules_warned_for, where)
-                full_warning_showed[] = true
             end
+            full_warning_showed[] = true
         end
     end
     if _track_dependencies[]
