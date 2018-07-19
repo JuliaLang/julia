@@ -94,8 +94,22 @@ end
 
 get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
 get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
-get!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get!(wkh.ht, key, default), wkh)
-get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get!(default, wkh.ht, key), wkh)
+function get!(wkh::WeakKeyDict{K}, key, default) where {K}
+    if haskey(wkh, key)
+        return wkh[key]
+    else
+        !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+        return wkh[key] = default
+    end
+end
+function get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
+    if haskey(wkh, key)
+        return wkh[key]
+    else
+        !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+        return wkh[key] = default()
+    end
+end
 pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
 pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
 delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, key), wkh)

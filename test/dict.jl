@@ -830,6 +830,9 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     @test_throws ArgumentError WeakKeyDict([1, 2, 3])
 
+    wkd = WeakKeyDict(A=>1)
+    @test delete!(wkd, A) == empty(wkd)
+
     # issue #26939
     d26939 = WeakKeyDict()
     d26939[big"1.0" + 1.1] = 1
@@ -837,13 +840,16 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # WeakKeyDict does not convert keys on setting
     @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
+    wkd = WeakKeyDict(A=>2)
+    @test_throws ArgumentError get!(wkd, [2.0], 2) # get fails as it cannot set [2.0] as key
 
     # WeakKeyDict does convert on getting
     wkd = WeakKeyDict(A=>2)
     @test keytype(wkd)==Vector{Int}
     @test wkd[[1.0]] == 2
-
-    @show x,y,z
+    @test get!(wkd, [1.0], 2) == 2 # get succeeds
+    @test haskey(wkd, [1.0])
+    @test pop!(wkd, [1.0]) == 2
 end
 
 @testset "issue #19995, hash of dicts" begin
