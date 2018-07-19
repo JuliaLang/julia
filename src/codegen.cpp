@@ -3760,6 +3760,10 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         ctx.builder.CreateCall(prepare_call(jlleave_func),
                            ConstantInt::get(T_int32, jl_unbox_long(args[0])));
     }
+    else if (head == pop_exc_sym) {
+        // FIXME
+        return;
+    }
     else {
         if (!jl_is_method(ctx.linfo->def.method)) {
             // TODO: inference is invalid if this has an effect
@@ -4012,6 +4016,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     }
     else if (head == leave_sym) {
         jl_error("Expr(:leave) in value position");
+    }
+    else if (head == pop_exc_sym) {
+        jl_error("Expr(:pop_exc) in value position");
     }
     else if (head == enter_sym) {
         jl_error("Expr(:enter) in value position");

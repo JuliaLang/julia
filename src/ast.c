@@ -38,6 +38,7 @@ jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *globalref_sym; jl_sym_t *do_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
+jl_sym_t *pop_exc_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
@@ -342,6 +343,7 @@ void jl_init_frontend(void)
     exc_sym = jl_symbol("the_exception");
     enter_sym = jl_symbol("enter");
     leave_sym = jl_symbol("leave");
+    pop_exc_sym = jl_symbol("pop_exc");
     new_sym = jl_symbol("new");
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");

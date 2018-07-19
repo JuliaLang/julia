@@ -318,7 +318,7 @@ function is_relevant_expr(e::Expr)
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
-                      :cfunction, :method,
+                      :cfunction, :method, :pop_exc,
                       #=legacy IR format support=# :gotoifnot, :return)
 end
 

@@ -707,6 +707,9 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                 s->continue_at = next_ip;
                 jl_longjmp(eh->eh_ctx, 1);
             }
+            else if (head == pop_exc_sym) {
+                // FIXME
+            }
             else if (head == const_sym) {
                 jl_sym_t *sym = (jl_sym_t*)jl_exprarg(stmt, 0);
                 jl_module_t *modu = s->module;

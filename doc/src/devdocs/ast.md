@@ -142,17 +142,21 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `the_exception`
 
-    Yields the caught exception inside a `catch` block. This is the value of the run time system variable
-    `jl_exception_in_transit`.
+    Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
 
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
-    error.
+    error.  Yields a token which is consumed by `pop_exc`.
 
   * `leave`
 
     Pop exception handlers. `args[1]` is the number of handlers to pop.
+
+  * `pop_exc`
+
+    Pop the stack of current exceptions back to the state at the associated `enter` when leaving a
+    catch block. `args[1]` contains the token from the associated `enter`.
 
   * `inbounds`
 
