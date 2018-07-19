@@ -18,15 +18,16 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
         elseif ex0.head == :call
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))
-        elseif ex0.head == :ref
-            return Expr(:call, fcn, Base.getindex,
-                        Expr(:call, typesof, map(esc, ex0.args)...))
-        elseif ex0.head == :(.)
-            return Expr(:call, fcn, Base.getproperty,
-                        Expr(:call, typesof, map(esc, ex0.args)...))
         elseif ex0.head == :(=) && length(ex0.args) == 2 && ex0.args[1].head == :(.)
             return Expr(:call, fcn, Base.setproperty!,
                         Expr(:call, typesof, map(esc, [ex0.args[1].args..., ex0.args[2]])...))
+        else
+            for (head, f) in (:ref => Base.getindex, :vcat => Base.vcat, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect)
+                if ex0.head == head
+                    return Expr(:call, fcn, f,
+                                Expr(:call, typesof, map(esc, ex0.args)...))
+                end
+            end
         end
     end
     if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
