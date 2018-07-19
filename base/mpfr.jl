@@ -204,7 +204,7 @@ end
 
 Create a representation of the string `x` as a [`BigFloat`](@ref).
 """
-BigFloat(x::String) = parse(BigFloat, x)
+BigFloat(x::AbstractString) = parse(BigFloat, x)
 
 
 ## BigFloat -> Integer
