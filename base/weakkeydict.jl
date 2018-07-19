@@ -9,7 +9,8 @@
 references to objects, and thus may be garbage collected even when
 referenced in a hash table.
 
-See [`Dict`](@ref) for further help.
+See [`Dict`](@ref) for further help.  Note, unlike [`Dict`](@ref),
+`WeakKeyDict` does not convert keys on insertion.
 """
 mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
     ht::Dict{WeakRef,V}
@@ -75,10 +76,10 @@ lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
 trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 
 function setindex!(wkh::WeakKeyDict{K}, v, key) where K
-    k = convert(K, key)
-    finalizer(wkh.finalizer, k)
+    !isa(key, K) && throw(ArgumentError("$key is not a valid key for type $K"))
+    finalizer(wkh.finalizer, key)
     lock(wkh) do
-        wkh.ht[WeakRef(k)] = v
+        wkh.ht[WeakRef(key)] = v
     end
     return wkh
 end

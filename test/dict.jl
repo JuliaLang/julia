@@ -834,6 +834,16 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     d26939 = WeakKeyDict()
     d26939[big"1.0" + 1.1] = 1
     GC.gc() # make sure this doesn't segfault
+
+    # WeakKeyDict does not convert keys on setting
+    @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
+
+    # WeakKeyDict does convert on getting
+    wkd = WeakKeyDict(A=>2)
+    @test keytype(wkd)==Vector{Int}
+    @test wkd[[1.0]] == 2
+
+    @show x,y,z
 end
 
 @testset "issue #19995, hash of dicts" begin
