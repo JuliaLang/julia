@@ -1,4 +1,7 @@
-# This code is a Julia translation of the C code from ... with the following license:
+# This code is a Julia translation of the C code from Openlibm (http://www.openlibm.org/)
+# with the following licenses:
+
+# For the Float64 Version:
 # ====================================================
 # Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 #
@@ -7,7 +10,17 @@
 # software is freely granted, provided that this notice
 # is preserved.
 # ====================================================
+
+# For the Float32 Version:
 # Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
+# ====================================================
+# Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+#
+# Developed at SunPro, a Sun Microsystems, Inc. business.
+# Permission to use, copy, modify, and distribute this
+# software is freely granted, provided that this notice
+# is preserved.
+# ====================================================
 
 
 # expm1(x)
