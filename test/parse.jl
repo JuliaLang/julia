@@ -241,8 +241,8 @@ end
 @test length(:(@x 1 +
                   1 +
                   1).args) == 3
-@test length(:([x .+
-                y]).args) == 2
+@test :([x .+
+          y]) == :([x .+ y])
 
 # line break in : expression disallowed
 @test_throws ParseError Meta.parse("[1 :\n2] == [1:2]")
