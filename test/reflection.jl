@@ -223,6 +223,7 @@ tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
+@test fieldnames(Complex) === (:re, :im)
 @test_throws BoundsError fieldtype(TLayout, 0)
 @test_throws ArgumentError fieldname(TLayout, 0)
 @test_throws BoundsError fieldoffset(TLayout, 0)
@@ -235,9 +236,31 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
-@test_throws ErrorException fieldnames(Union{})
+@test_throws ArgumentError fieldnames(Union{})
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
+
+@test fieldnames(NamedTuple{(:z,:a)}) === (:z,:a)
+@test fieldname(NamedTuple{(:z,:a)}, 1) === :z
+@test fieldname(NamedTuple{(:z,:a)}, 2) === :a
+@test_throws ArgumentError fieldname(NamedTuple{(:z,:a)}, 3)
+@test_throws ArgumentError fieldnames(NamedTuple)
+@test_throws ArgumentError fieldnames(NamedTuple{T,Tuple{Int,Int}} where T)
+@test_throws ArgumentError fieldnames(Real)
+@test_throws ArgumentError fieldnames(AbstractArray)
+
+@test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 1) === Int
+@test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 2) === String
+@test_throws BoundsError fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 3)
+
+@test fieldtype(NamedTuple, 42) === Any
+@test_throws BoundsError fieldtype(NamedTuple, 0)
+@test_throws BoundsError fieldtype(NamedTuple, -1)
+
+@test fieldtype(NamedTuple{(:a,:b)}, 1) === Any
+@test fieldtype(NamedTuple{(:a,:b)}, 2) === Any
+@test fieldtype((NamedTuple{(:a,:b),T} where T<:Tuple{Vararg{Integer}}), 2) === Integer
+@test_throws BoundsError fieldtype(NamedTuple{(:a,:b)}, 3)
 
 import Base: datatype_alignment, return_types
 @test datatype_alignment(UInt16) == 2
@@ -591,16 +614,16 @@ end
 @test nfields(()) == 0
 @test nfields(nothing) == fieldcount(Nothing) == 0
 @test nfields(1) == 0
-@test_throws ErrorException fieldcount(Union{})
+@test_throws ArgumentError fieldcount(Union{})
 @test fieldcount(Tuple{Any,Any,T} where T) == 3
 @test fieldcount(Complex) == fieldcount(ComplexF32) == 2
 @test fieldcount(Union{ComplexF32,ComplexF64}) == 2
 @test fieldcount(Int) == 0
-@test_throws(ErrorException("type does not have a definite number of fields"),
+@test_throws(ArgumentError("type does not have a definite number of fields"),
              fieldcount(Union{Complex,Pair}))
-@test_throws ErrorException fieldcount(Real)
-@test_throws ErrorException fieldcount(AbstractArray)
-@test_throws ErrorException fieldcount(Tuple{Any,Vararg{Any}})
+@test_throws ArgumentError fieldcount(Real)
+@test_throws ArgumentError fieldcount(AbstractArray)
+@test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
 
 # PR #22979
 
