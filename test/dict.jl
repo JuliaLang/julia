@@ -783,12 +783,6 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     A = [1]
     B = [2]
     C = [3]
-    local x = 0
-    local y = 0
-    local z = 0
-    finalizer(a->(x+=1), A)
-    finalizer(b->(y+=1), B)
-    finalizer(c->(z+=1), C)
 
     # construction
     wkd = WeakKeyDict()
