@@ -10,7 +10,7 @@ length(s::String) = Base.length(s)
 end
 
 import Base: show_unquoted
-using Base: printstyled, with_output_color
+using Base: printstyled, with_output_color, prec_decl
 
 function Base.show(io::IO, cfg::CFG)
     for (idx, block) in enumerate(cfg.blocks)
@@ -20,7 +20,7 @@ function Base.show(io::IO, cfg::CFG)
     end
 end
 
-function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool)
+function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool)
     indent = maxlength_idx + 4
     if idx in used
         pad = " "^(maxlength_idx - length(string(idx)) + 1)
@@ -52,7 +52,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
     else
-        show_unquoted(io, stmt, indent)
+        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
     end
     nothing
 end
@@ -120,14 +120,15 @@ end
 
 function should_print_ssa_type(@nospecialize node)
     if isa(node, Expr)
-        return !(node.head in (:gc_preserve_begin, :gc_preserve_end))
+        return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :gotoifnot, :meta, :return, :enter, :leave))
     end
     return !isa(node, PiNode)   && !isa(node, GotoIfNot) &&
-           !isa(node, GotoNode) && !isa(node, ReturnNode)
+           !isa(node, GotoNode) && !isa(node, ReturnNode) &&
+           !isa(node, QuoteNode)
 end
 
-function default_expr_type_printer(io::IO, @nospecialize typ)
-    printstyled(io, "::", typ, color=:cyan)
+function default_expr_type_printer(io::IO, @nospecialize(typ), used::Bool)
+    printstyled(io, "::", typ, color=(used ? :cyan : :light_black))
     nothing
 end
 
@@ -408,11 +409,12 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             end
             print_sep = true
             floop = false
+            show_type = should_print_ssa_type(new_node.node)
             with_output_color(:yellow, io) do io′
-                print_stmt(io′, node_idx, new_node.node, used, maxlength_idx, false)
+                print_stmt(io′, node_idx, new_node.node, used, maxlength_idx, false, show_type)
             end
-            if should_print_ssa_type(new_node.node) && node_idx in used
-                expr_type_printer(io, new_node.typ)
+            if show_type
+                expr_type_printer(io, new_node.typ, node_idx in used)
             end
             println(io)
         end
@@ -431,13 +433,14 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
         if idx == last(bbrange)
             bb_idx += 1
         end
-        print_stmt(io, idx, stmt, used, maxlength_idx, true)
+        show_type = should_print_ssa_type(stmt)
+        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
         if !isassigned(types, idx)
             # This is an error, but can happen if passes don't update their type information
             printstyled(io, "::#UNDEF", color=:red)
-        elseif should_print_ssa_type(stmt) && idx in used
+        elseif show_type
             typ = types[idx]
-            expr_type_printer(io, typ)
+            expr_type_printer(io, typ, idx in used)
         end
         println(io)
     end
@@ -450,6 +453,25 @@ function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_pri
     types = code.ssavaluetypes
     for stmt in stmts
         scan_ssa_use!(push!, used, stmt)
+        # also add "uses" for labels for visualization
+        if isexpr(stmt, :gotoifnot) && length(stmt.args) == 2
+            let label = stmt.args[2]
+                label isa Int && push!(used, label)
+            end
+        end
+        if isexpr(stmt, :enter) && length(stmt.args) == 1
+            let label = stmt.args[1]
+                label isa Int && push!(used, label)
+            end
+        end
+        if stmt isa GotoNode
+            push!(used, stmt.label)
+        end
+        if stmt isa PhiNode
+            for label in stmt.edges
+                label isa Int && push!(used, label)
+            end
+        end
     end
     cfg = compute_basic_blocks(stmts)
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -537,14 +559,15 @@ function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_pri
         if idx == last(bbrange)
             bb_idx += 1
         end
-        print_stmt(io, idx, stmt, used, maxlength_idx, true)
-        if types isa Vector{Any}
+        show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
+        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
+        if types isa Vector{Any} # ignore types for pre-inference code
             if !isassigned(types, idx)
                 # This is an error, but can happen if passes don't update their type information
                 printstyled(io, "::#UNDEF", color=:red)
-            elseif should_print_ssa_type(stmt) && idx in used
+            elseif show_type
                 typ = types[idx]
-                expr_type_printer(io, typ)
+                expr_type_printer(io, typ, idx in used)
             end
         end
         println(io)
