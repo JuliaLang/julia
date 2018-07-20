@@ -228,24 +228,24 @@ end
 
 # issue #16594
 @test length(:(@test 1 +
-                     1 == 2).args) == 2
+                     1 == 2).args) == 3
 @test [1 +
        1] == [2]
 @test [1 +1] == [1 1]
-@test length(:(@x 1 +1 -1).args) == 4
-@test length(:(@x 1 + 1 -1).args) == 3
-@test length(:(@x 1 + 1 - 1).args) == 2
+@test length(:(@x 1 +1 -1).args) == 5
+@test length(:(@x 1 + 1 -1).args) == 4
+@test length(:(@x 1 + 1 - 1).args) == 3
 @test length(:(@x 1 +
                   1 -
-                  1).args) == 2
+                  1).args) == 3
 @test length(:(@x 1 +
                   1 +
-                  1).args) == 2
+                  1).args) == 3
 @test length(:([x .+
-                y]).args) == 1
+                y]).args) == 2
 
 # line break in : expression disallowed
-@test_throws ParseError Meta.parse("[1 :\n2] == [1:2]""")
+@test_throws ParseError Meta.parse("[1 :\n2] == [1:2]")
 
 @test tryparse(Float64, "1.23") === 1.23
 @test tryparse(Float32, "1.23") === 1.23f0
