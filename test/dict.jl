@@ -841,13 +841,14 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     # WeakKeyDict does not convert keys on setting
     @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
     wkd = WeakKeyDict(A=>2)
-    @test_throws ArgumentError get!(wkd, [2.0], 2) # get fails as it cannot set [2.0] as key
+    @test_throws ArgumentError get!(wkd, [2.0], 2)
+    @test_throws ArgumentError get!(wkd, [1.0], 2) # get! fails even if the key is only
+                                                   # used for getting and not setting
 
     # WeakKeyDict does convert on getting
     wkd = WeakKeyDict(A=>2)
     @test keytype(wkd)==Vector{Int}
     @test wkd[[1.0]] == 2
-    @test get!(wkd, [1.0], 2) == 2 # get succeeds
     @test haskey(wkd, [1.0])
     @test pop!(wkd, [1.0]) == 2
 end
