@@ -211,7 +211,9 @@ julia> splitpath("/home/myuser/example.jl")
 ```
 """
 function splitpath(p::String)
+    drive, p = splitdrive(p)
     out = String[]
+    isempty(p) && (pushfirst!(out,p))  # "" means the current directory.
     while !isempty(p)
         dir, base = splitdir(p)
         dir == p && (pushfirst!(out, dir); break)  # Reached root node.
@@ -219,6 +221,9 @@ function splitpath(p::String)
             pushfirst!(out, base)
         end
         p = dir
+    end
+    if !isempty(drive)  # Tack the drive back on to the first element.
+        out[1] = drive*out[1]  # Note that length(out) is always >= 1.
     end
     return out
 end

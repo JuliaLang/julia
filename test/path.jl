@@ -87,7 +87,7 @@
 
     @testset "splitpath" begin
         @test splitpath(joinpath("a","b","c")) == ["a", "b", "c"]
-        @test splitpath("") == []
+        @test splitpath("") == [""]
 
         @test splitpath(joinpath("cats are", "gr8t")) == ["cats are", "gr8t"]
         @test splitpath(joinpath("  ", " ")) == ["  ", " "]
@@ -106,13 +106,14 @@
             @test splitpath("C:\\\\") == ["C:\\"]
             @test splitpath("J:\\") == ["J:\\"]
             @test splitpath("C:") == ["C:"]
-            @test splitpath("C:a") == ["C:", "a"]
-            @test splitpath("C:a\\b") == ["C:", "a", "b"]
+            @test splitpath("C:a") == ["C:a"]
+            @test splitpath("C:a\\b") == ["C:a", "b"]
 
             @test splitpath("a\\") == ["a"]
             @test splitpath("a\\\\b\\\\") == ["a","b"]
             @test splitpath("a.dir\\b.txt") == ["a.dir", "b.txt"]
             @test splitpath("\\a\\b\\") == ["\\", "a","b"]
+            @test splitpath("\\\\a\\b") == ["\\", "a","b"]
 
             @test splitpath("/a/b\\c/d\\\\e") == ["/", "a", "b", "c", "d", "e"]
             @test splitpath("/\\/\\") == ["/"]
