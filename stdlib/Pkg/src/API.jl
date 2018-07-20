@@ -96,7 +96,7 @@ function update_registry(ctx)
                     try
                         GitTools.fetch(repo; refspecs=["+refs/heads/$branch:refs/remotes/origin/$branch"])
                     catch e
-                        e isa LibGit2.GitError || rethrow(e)
+                        e isa CommandError || rethrow(e)
                         push!(errors, (reg, "failed to fetch from repo"))
                         return
                     end
