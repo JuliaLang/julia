@@ -450,6 +450,7 @@ typedef struct _jl_module_t {
     jl_uuid_t uuid;
     size_t primary_world;
     uint32_t counter;
+    int32_t nospecialize;  // global bit flags: initialization for new methods
     uint8_t istopmod;
 } jl_module_t;
 
@@ -1312,6 +1313,7 @@ extern JL_DLLEXPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
+JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);

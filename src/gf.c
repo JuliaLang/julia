@@ -17,7 +17,7 @@
 #endif
 #include "julia_assert.h"
 
-// @nospecialize has no effect if the number of overlapping methods is greater than this
+// The compilation signature is not used to cache the method if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32
 
 #ifdef __cplusplus
@@ -202,7 +202,8 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *typ
 
 // ----- MethodInstance specialization instantiation ----- //
 
-JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void);
+JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*);
+
 void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr)
 {
     jl_sym_t *sname = jl_symbol(name);
@@ -219,7 +220,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr
     li->max_world = ~(size_t)0;
 
     JL_GC_PUSH1(&li);
-    jl_method_t *m = jl_new_method_uninit();
+    jl_method_t *m = jl_new_method_uninit(jl_core_module);
     li->def.method = m;
     jl_gc_wb(li, m);
     m->name = sname;
@@ -632,17 +633,13 @@ static void jl_compilation_sig(
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
                 (definition->nospecialize & (1 << (i_arg - 1)))) {
-            if (decl_i == (jl_value_t*)jl_any_type) {
-                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-                jl_svecset(*newparams, i, (jl_value_t*)jl_any_type);
+            if (!jl_has_free_typevars(decl_i) && !jl_is_kind(decl_i)) {
+                if (decl_i != elt) {
+                    if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                    jl_svecset(*newparams, i, (jl_value_t*)decl_i);
+                }
                 continue;
             }
-            if (decl_i == (jl_value_t*)jl_tuple_type) {
-                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-                jl_svecset(*newparams, i, (jl_value_t*)jl_tuple_type);
-                continue;
-            }
-            // TODO: handle @nospecialize with other declared types
         }
 
         if (jl_is_type_type(elt)) {
@@ -823,17 +820,11 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
                 (definition->nospecialize & (1 << (i_arg - 1)))) {
-            if (decl_i == (jl_value_t*)jl_any_type) {
-                if (elt == (jl_value_t*)jl_any_type)
+            if (!jl_has_free_typevars(decl_i) && !jl_is_kind(decl_i)) {
+                if (jl_egal(elt, decl_i))
                     continue;
                 return 0;
             }
-            if (decl_i == (jl_value_t*)jl_tuple_type) {
-                if (elt == (jl_value_t*)jl_tuple_type)
-                    continue;
-                return 0;
-            }
-            // TODO: handle @nospecialize with other declared types
         }
 
         if (jl_is_kind(elt)) {
@@ -1049,7 +1040,7 @@ static jl_method_instance_t *cache_method(
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);
             jl_svecset(newparams, i, kind);
         }
-        else if (!jl_is_concrete_type(elt)) { // currently just jl_function_type and jl_tuple_type
+        else if (!jl_is_concrete_type(elt)) { // for example, jl_function_type or jl_tuple_type
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);
             jl_svecset(newparams, i, jl_any_type);
         }
@@ -1934,6 +1925,21 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
                         jl_compile_linfo(&li, NULL, world, &jl_default_cgparams);
                 }
             }
+        }
+        // In addition to full compilation of the compilation-signature, if `types` is more specific (e.g. due to nospecialize),
+        // also run inference now on the original `types`, since that may help us guide inference to find
+        // additional useful methods that should be compiled
+        //ALT: if (jl_is_datatype(types) && ((jl_datatype_t*)types)->isdispatchtuple && !jl_egal(li->specTypes, types))
+        //ALT: if (jl_subtype(types, li->specTypes))
+        if (!jl_subtype(li->specTypes, (jl_value_t*)types)) {
+            jl_svec_t *tpenv2 = jl_emptysvec;
+            jl_value_t *types2 = NULL;
+            JL_GC_PUSH2(&tpenv2, &types2);
+            types2 = jl_type_intersection_env((jl_value_t*)types, (jl_value_t*)li->def.method->sig, &tpenv2);
+            jl_method_instance_t *li2 = jl_specializations_get_linfo(li->def.method, (jl_value_t*)types2, tpenv2, world);
+            JL_GC_POP();
+            if (!jl_is_rettype_inferred(li2))
+                (void)jl_type_infer(&li2, world, 0);
         }
     }
     else {

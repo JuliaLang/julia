@@ -78,6 +78,9 @@ Language changes
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
+    This can also be used in global scope, to apply to all subsequent method definitions
+    in the module (until `@specialize`). ([#28065])
+
   * Keyword argument default values are now evaluated in successive scopes ---
     the scope for each expression includes only previous keyword arguments, in
     left-to-right order ([#17240]).
