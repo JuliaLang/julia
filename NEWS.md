@@ -517,9 +517,9 @@ This section lists changes that do not have deprecation warnings.
     This change makes `@schedule` redundant with `@async`, so `@schedule` has been
     deprecated ([#27164]).
 
- * `norm(A::AbstractMatrix, p=2)` computes no longer the operator/matrix norm but the `norm` of `A`
-   as for other iterables, i.e. as if it were a vector. Especially, `norm(A::AbstractMatrix)` is the
-   Frobenius norm. To compute the operator/matrix norm, use the new function `opnorm` ([#27401]).
+  * `norm(A::AbstractMatrix, p=2)` computes no longer the operator/matrix norm but the `norm` of `A`
+    as for other iterables, i.e. as if it were a vector. Especially, `norm(A::AbstractMatrix)` is the
+    Frobenius norm. To compute the operator/matrix norm, use the new function `opnorm` ([#27401]).
 
   * `dot(u, v)` now acts recursively. Instead of `sum(u[i]' * v[i] for i in ...)`, it computes
     `sum(dot(u[i], v[i]) for i in ...)`, similarly to `vecdot` before ([#27401]).
@@ -528,6 +528,8 @@ This section lists changes that do not have deprecation warnings.
     of "logical cores" (including hyperthreading) rather than the number of physical
     cores present on the CPU. Similarly, the environment variable `JULIA_CPU_CORES` is
     deprecated in favor of `JULIA_CPU_THREADS` ([#27856]).
+
+  * `WeakKeyDict` does not convert keys on insertion anymore (#24941).
 
 Library improvements
 --------------------
