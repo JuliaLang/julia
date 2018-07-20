@@ -111,7 +111,7 @@ module MPZ
 # - a method modifying its input has a "!" appendend to its name, according to Julia's conventions
 # - some convenient methods are added (in addition to the pure MPZ ones), e.g. `add(a, b) = add!(BigInt(), a, b)`
 #   and `add!(x, a) = add!(x, x, a)`.
-using .Base.GMP: BigInt, Limb
+using ..GMP: BigInt, Limb
 
 const mpz_t = Ref{BigInt}
 const bitcnt_t = Culong
@@ -660,6 +660,20 @@ function Base.deepcopy_internal(x::BigInt, stackdict::IdDict)
     y = MPZ.set(x)
     stackdict[x] = y
     return y
+end
+
+@noinline function _reinit!(d::BigInt, s::String)
+    if d.d == C_NULL
+        d′ = parse(BigInt, s, base = 62)
+        # move the result from d′ to d
+        d.alloc = d′.alloc
+        d.size = d′.size
+        d_d = d′.d
+        MPZ.init!(d′) # destroy d′ (drops ownership of .d field)
+        d.d = d_d
+        finalizer(cglobal((:__gmpz_clear, :libgmp)), d)
+    end
+    return d
 end
 
 end # module
