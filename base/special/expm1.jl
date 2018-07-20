@@ -1,3 +1,4 @@
+# This code is a Julia translation of the C code from ... with the following license:
 # ====================================================
 # Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 #
