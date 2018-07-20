@@ -119,7 +119,6 @@ function compute_basic_blocks(stmts::Vector{Any})
             if block′ == num + 1
                 # This GotoIfNot acts like a noop - treat it as such.
                 # We will drop it during SSA renaming
-                @Base.show block′
             else
                 push!(blocks[block′].preds, num)
                 push!(b.succs, block′)
@@ -448,7 +447,7 @@ mutable struct IncrementalCompact
     active_result_bb::Int
     renamed_new_nodes::Bool
     allow_cfg_transforms::Bool
-    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
+    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=true)
         # Sort by position with attach after nodes affter regular ones
         perm = my_sortperm(Int[(code.new_nodes[i].pos*2 + Int(code.new_nodes[i].attach_after)) for i in 1:length(code.new_nodes)])
         new_len = length(code.stmts) + length(code.new_nodes)
@@ -851,7 +850,7 @@ function process_node!(compact::IncrementalCompact, result::Vector{Any},
         else
             result[result_idx] = stmt
             cond = stmt.cond
-            if isa(cond, Bool)
+            if false #isa(cond, Bool)
                 if cond
                     result[result_idx] = nothing
                     kill_edge!(compact, active_bb, active_bb, stmt.dest)
