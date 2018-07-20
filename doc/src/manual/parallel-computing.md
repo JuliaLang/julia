@@ -1797,5 +1797,5 @@ mpirun -np 4 ./julia example.jl
     (rma). the motivation for adding rma to the mpi standard was to facilitate one-sided communication
     patterns. for additional information on the latest mpi standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).
 
- [^2]:
+[^2]:
     [Julia GPU man pages](http://juliagpu.github.io/CUDAnative.jl/stable/man/usage.html#Julia-support-1)
