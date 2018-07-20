@@ -24,7 +24,13 @@ else
 UV_FLAGS := --disable-shared $(UV_MFLAGS)
 endif
 
-$(BUILDDIR)/$(LIBUV_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
+$(SRCCACHE)/$(LIBUV_SRC_DIR)/libuv-unix-signal.patch-applied: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
+	cd $(SRCCACHE)/$(LIBUV_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/libuv-unix-signal.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBUV_SRC_DIR)/build-configured: \
+    $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted $(SRCCACHE)/$(LIBUV_SRC_DIR)/libuv-unix-signal.patch-applied
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/aclocal.m4 # touch a few files to prevent autogen from getting called
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/Makefile.in
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/configure
