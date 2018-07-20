@@ -208,11 +208,11 @@ macro _sourceinfo()
     end)
 end
 
-macro logmsg(level, message, exs...) logmsg_code((@_sourceinfo)..., esc(level), message, exs...) end
-macro debug(message, exs...) logmsg_code((@_sourceinfo)..., :Debug, message, exs...) end
-macro  info(message, exs...) logmsg_code((@_sourceinfo)..., :Info,  message, exs...) end
-macro  warn(message, exs...) logmsg_code((@_sourceinfo)..., :Warn,  message, exs...) end
-macro error(message, exs...) logmsg_code((@_sourceinfo)..., :Error, message, exs...) end
+macro logmsg(level, exs...) logmsg_code((@_sourceinfo)..., esc(level), exs...) end
+macro debug(exs...) logmsg_code((@_sourceinfo)..., :Debug, exs...) end
+macro  info(exs...) logmsg_code((@_sourceinfo)..., :Info,  exs...) end
+macro  warn(exs...) logmsg_code((@_sourceinfo)..., :Warn,  exs...) end
+macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 
 # Logging macros share documentation
 @eval @doc $_logmsg_docs :(@logmsg)
