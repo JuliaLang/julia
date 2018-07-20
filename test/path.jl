@@ -113,7 +113,7 @@
             @test splitpath("a\\\\b\\\\") == ["a","b"]
             @test splitpath("a.dir\\b.txt") == ["a.dir", "b.txt"]
             @test splitpath("\\a\\b\\") == ["\\", "a","b"]
-            @test splitpath("\\\\a\\b") == ["\\", "a","b"]
+            @test splitpath("\\\\a\\b") == ["\\\\a\\b"]  # This is actually a valid drive name in windows.
 
             @test splitpath("/a/b\\c/d\\\\e") == ["/", "a", "b", "c", "d", "e"]
             @test splitpath("/\\/\\") == ["/"]
