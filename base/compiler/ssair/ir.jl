@@ -116,8 +116,14 @@ function compute_basic_blocks(stmts::Vector{Any})
         # Conditional Branch
         if isa(terminator, GotoIfNot)
             block′ = block_for_inst(basic_block_index, terminator.dest)
-            push!(blocks[block′].preds, num)
-            push!(b.succs, block′)
+            if block′ == num + 1
+                # This GotoIfNot acts like a noop - treat it as such.
+                # We will drop it during SSA renaming
+                @Base.show block′
+            else
+                push!(blocks[block′].preds, num)
+                push!(b.succs, block′)
+            end
         end
         if isa(terminator, GotoNode)
             block′ = block_for_inst(basic_block_index, terminator.label)
