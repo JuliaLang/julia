@@ -640,6 +640,39 @@ function show(io::IO, l::Core.MethodInstance)
     end
 end
 
+module IRShow
+    const Compiler = Core.Compiler
+    using Core.IR
+    import ..Base
+    import .Base: IdSet
+    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr
+    Base.size(r::Compiler.StmtRange) = Compiler.size(r)
+    Base.show(io::IO, r::Compiler.StmtRange) = print(io, Compiler.first(r):Compiler.last(r))
+    include("compiler/ssair/show.jl")
+end
+
+function show(io::IO, src::CodeInfo)
+    # Fix slot names and types in function body
+    print(io, "CodeInfo(")
+    lambda_io = io
+    if src.slotnames !== nothing
+        lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
+    end
+    @assert src.codelocs !== nothing
+    if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
+        println(io)
+        # TODO: static parameter values?
+        ir = Core.Compiler.inflate_ir(src)
+        IRShow.show_ir(lambda_io, ir, argnames=sourceinfo_slotnames(src))
+    else
+        # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
+        body = Expr(:body)
+        body.args = src.code
+        show(lambda_io, body)
+    end
+    print(io, ")")
+end
+
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
                           delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
@@ -881,9 +914,6 @@ unquoted(ex::Expr)       = ex.args[1]
 
 ## AST printing helpers ##
 
-function printstyled end
-function with_output_color end
-
 const indent_width = 4
 
 is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
@@ -978,7 +1008,6 @@ end
 
 ## AST printing ##
 
-show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)      = print(io, "%", val.id)
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
@@ -986,16 +1015,15 @@ function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
     print(io, ex.mod)
     print(io, '.')
     quoted = !isidentifier(ex.name)
-    parens = quoted && (!isoperator(ex.name) || (ex.name in quoted_syms))
+    parens = quoted && !isoperator(ex.name)
     quoted && print(io, ':')
     parens && print(io, '(')
     print(io, ex.name)
     parens && print(io, ')')
-    nothing
 end
 
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
-    typ = isa(ex, TypedSlot) ? ex.typ : Any
+    typ = isa(ex,TypedSlot) ? ex.typ : Any
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
     if (isa(slotnames, Vector{String}) &&
@@ -1004,7 +1032,7 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     else
         print(io, "_", slotid)
     end
-    if typ !== Any && isa(ex, TypedSlot)
+    if typ !== Any && isa(ex,TypedSlot)
         print(io, "::", typ)
     end
 end
@@ -1019,7 +1047,7 @@ function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
     end
 end
 
-function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int)
+function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
         s = string(value)
         if isidentifier(s) || isoperator(value)
@@ -1103,7 +1131,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             # .
             print(io, '.')
             # item
-            parens = !(field isa Symbol) || (field in quoted_syms)
+            parens = !(field isa Symbol)
             quoted = parens || isoperator(field)
             quoted && print(io, ':')
             parens && print(io, '(')
@@ -1147,7 +1175,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # function call
     elseif head === :call && nargs >= 1
         func = args[1]
-        fname = isa(func, GlobalRef) ? func.name : func
+        fname = isa(func,GlobalRef) ? func.name : func
         func_prec = operator_precedence(fname)
         if func_prec > 0 || fname in uni_ops
             func = fname
@@ -1201,14 +1229,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_call(io, head, func, func_args, indent)
         end
 
-    # new expr
-    elseif head === :new
-        show_enclosed_list(io, "%new(", args, ", ", ")", indent)
-
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
-        funcargslike = head == :(.) ? args[2].args : args[2:end]
-        show_call(io, head, args[1], funcargslike, indent)
+        funcargslike = head == :(.) ? ex.args[2].args : ex.args[2:end]
+        show_call(io, head, ex.args[1], funcargslike, indent)
 
     # comprehensions
     elseif head === :typed_comprehension && length(args) == 2
@@ -1347,8 +1371,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "end")
 
     elseif head === :block || head === :body
-        show_block(io, "begin", ex, indent)
-        print(io, "end")
+        show_block(io, "begin", ex, indent); print(io, "end")
 
     elseif head === :quote && nargs == 1 && isa(args[1],Symbol)
         show_unquoted_quote_expr(io, args[1], indent, 0)
@@ -1456,11 +1479,11 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
     color = get(io, :color, false) && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
     if sig === Tuple
-        printstyled(io, name, "(...)", color=color)
+        Base.printstyled(io, name, "(...)", color=color)
         return
     end
     sig = unwrap_unionall(sig).parameters
-    with_output_color(color, io) do io
+    Base.with_output_color(color, io) do io
         ft = sig[1]
         uw = unwrap_unionall(ft)
         if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
@@ -1545,38 +1568,6 @@ function show(io::IO, tv::TypeVar)
     end
     nothing
 end
-
-module IRShow
-    const Compiler = Core.Compiler
-    using Core.IR
-    import ..Base
-    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr, compute_basic_blocks
-    Base.size(r::Compiler.StmtRange) = Compiler.size(r)
-    Base.show(io::IO, r::Compiler.StmtRange) = print(io, Compiler.first(r):Compiler.last(r))
-    include("compiler/ssair/show.jl")
-end
-
-function show(io::IO, src::CodeInfo)
-    # Fix slot names and types in function body
-    print(io, "CodeInfo(")
-    lambda_io::IOContext = io
-    if src.slotnames !== nothing
-        lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
-    end
-    @assert src.codelocs !== nothing
-    if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
-        println(io)
-        # TODO: static parameter values?
-        IRShow.show_ir(lambda_io, src)
-    else
-        # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
-        body = Expr(:body)
-        body.args = src.code
-        show(lambda_io, body)
-    end
-    print(io, ")")
-end
-
 
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)
