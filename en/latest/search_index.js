@@ -7437,7 +7437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -20701,7 +20701,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Test.@inferred",
     "category": "macro",
-    "text": "@inferred f(x)\n\nTests that the call expression f(x) returns a value of the same type inferred by the compiler. It is useful to check for type stability.\n\nf(x) can be any call expression. Returns the result of f(x) if the types match, and an Error Result if it finds different types.\n\njulia> f(a, b, c) = b > 1 ? 1 : 1.0\nf (generic function with 1 method)\n\njulia> typeof(f(1, 2, 3))\nInt64\n\njulia> @code_warntype f(1, 2, 3)\nBody::UNION{FLOAT64, INT64}\n1 1 ─ %1 = (Base.slt_int)(1, b)::Bool\n  └──      unless %1 goto 4\n  2 ─      return 1\n  3 ─ %4 = return 1.0\n\njulia> @inferred f(1, 2, 3)\nERROR: return type Int64 does not match inferred return type Union{Float64, Int64}\nStacktrace:\n[...]\n\njulia> @inferred max(1, 2)\n2\n\n\n\n\n\n"
+    "text": "@inferred f(x)\n\nTests that the call expression f(x) returns a value of the same type inferred by the compiler. It is useful to check for type stability.\n\nf(x) can be any call expression. Returns the result of f(x) if the types match, and an Error Result if it finds different types.\n\njulia> f(a,b,c) = b > 1 ? 1 : 1.0\nf (generic function with 1 method)\n\njulia> typeof(f(1,2,3))\nInt64\n\njulia> @code_warntype f(1,2,3)\nBody::UNION{FLOAT64, INT64}\n1 1 ─ %1 = Base.slt_int(1, %%b)::Bool\n  └──      goto 3 if not %1\n  2 ─      return 1\n  3 ─      return 1.0\n\njulia> @inferred f(1,2,3)\nERROR: return type Int64 does not match inferred return type Union{Float64, Int64}\nStacktrace:\n[...]\n\njulia> @inferred max(1,2)\n2\n\n\n\n\n\n"
 },
 
 {
@@ -20949,7 +20949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Reflection and introspection",
     "title": "Expansion and lowering",
     "category": "section",
-    "text": "As discussed in the Metaprogramming section, the macroexpand function gives the unquoted and interpolated expression (Expr) form for a given macro. To use macroexpand, quote the expression block itself (otherwise, the macro will be evaluated and the result will be passed instead!). For example:julia> macroexpand(@__MODULE__, :(@edit println(\"\")) )\n:((InteractiveUtils.edit)(println, (Base.typesof)(\"\")))The functions Base.Meta.show_sexpr and dump are used to display S-expr style views and depth-nested detail views for any expression.Finally, the Meta.lower function gives the lowered form of any expression and is of particular interest for understanding how language constructs map to primitive operations such as assignments, branches, and calls:julia> Meta.lower(@__MODULE__, :([1+2, sin(0.5)]) )\n:($(Expr(:thunk, CodeInfo(\n 1 ─ %1 = 1 + 2\n │   %2 = sin(0.5)\n │   %3 = (Base.vect)(%1, %2)\n └──      return %3\n))))"
+    "text": "As discussed in the Metaprogramming section, the macroexpand function gives the unquoted and interpolated expression (Expr) form for a given macro. To use macroexpand, quote the expression block itself (otherwise, the macro will be evaluated and the result will be passed instead!). For example:julia> macroexpand(@__MODULE__, :(@edit println(\"\")) )\n:((InteractiveUtils.edit)(println, (Base.typesof)(\"\")))The functions Base.Meta.show_sexpr and dump are used to display S-expr style views and depth-nested detail views for any expression.Finally, the Meta.lower function gives the lowered form of any expression and is of particular interest for understanding how language constructs map to primitive operations such as assignments, branches, and calls:julia> Meta.lower(@__MODULE__, :([1+2, sin(0.5)]) )\n:($(Expr(:thunk, CodeInfo(\n 1 ─ %1 = :+(1, 2)::Any\n │   %2 = :sin(0.5)::Any\n │   %3 = Base.vect(%1, %2)::Any\n └──      return %3\n))))"
 },
 
 {
