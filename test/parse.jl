@@ -245,7 +245,7 @@ end
           y]) == :([x .+ y])
 
 # line break in : expression disallowed
-@test_throws ParseError Meta.parse("[1 :\n2] == [1:2]")
+@test_throws Meta.ParseError Meta.parse("[1 :\n2] == [1:2]")
 
 @test tryparse(Float64, "1.23") === 1.23
 @test tryparse(Float32, "1.23") === 1.23f0
