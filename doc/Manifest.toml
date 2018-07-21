@@ -24,9 +24,9 @@ version = "0.4.5"
 
 [[Documenter]]
 deps = ["Compat", "DocStringExtensions", "Logging", "REPL"]
-git-tree-sha1 = "8591d5cc4c7dcf23e0e38d664fb696e1f1ea4577"
+git-tree-sha1 = "db9efaced47fd05e8fa5f6ec3f6925dc2f1425aa"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "0.19.0"
+version = "0.19.1"
 
 [[InteractiveUtils]]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
