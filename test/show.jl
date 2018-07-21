@@ -866,10 +866,17 @@ test_repr("(!).:~")
 test_repr("a.:(begin
         #= none:3 =#
     end)")
+test_repr("a.:(=)")
+test_repr("a.:(:)")
+test_repr("(:).a")
 @test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
 @test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
 @test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"
 @test repr(Expr(:.)) == ":(\$(Expr(:.)))"
+@test repr(GlobalRef(Main, :a)) == ":(Main.a)"
+@test repr(GlobalRef(Main, :in)) == ":(Main.in)"
+@test repr(GlobalRef(Main, :+)) == ":(Main.:+)"
+@test repr(GlobalRef(Main, :(:))) == ":(Main.:(:))"
 
 # Test compact printing of homogeneous tuples
 @test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"
@@ -1275,7 +1282,7 @@ function compute_annotations(f, types)
     ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
-    join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
+    return join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
 end
 
 @noinline leaffunc() = print()
@@ -1294,6 +1301,60 @@ h_line() = f_line()
     │╻╷ f_line
     ││╻  g_line
     ││╻  g_line""")
+
+# Tests for printing Core.Compiler internal objects
+@test sprint(Base.show_unquoted, Core.Compiler.SSAValue(23)) == "%23"
+@test sprint(Base.show_unquoted, Core.Compiler.SSAValue(-2)) == "%-2"
+@test sprint(Base.show_unquoted, Core.Compiler.ReturnNode(23)) == "return 23"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(23)) == "_23"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
+@test sprint(Base.show_unquoted, Core.Compiler.ReturnNode(23)) == "return 23"
+@test sprint(Base.show_unquoted, Core.Compiler.ReturnNode()) == "unreachable"
+@test sprint(Base.show_unquoted, Core.Compiler.GotoIfNot(true, 4)) == "goto 4 if not true"
+
+eval(Meta.parse("""function my_fun28173(x)
+    y = if x == 1
+            "HI"
+        elseif x == 2
+            "BYE"
+        else
+            "three"
+        end
+    return y
+end""")) # use parse to control the line numbers
+let src = code_typed(my_fun28173, (Int,))[1][1]
+    ir = Core.Compiler.inflate_ir(src)
+    ## TODO: should this work? currently, `src` is labeled by statement,
+    ##       and `ir` is labeled by basic-block
+    # source_slotnames = String["my_fun28173", "x"]
+    # irshow = sprint(show, ir, context = :SOURCE_SLOTNAMES=>source_slotnames)
+    # @test repr(src) == "CodeInfo(\n" * irshow * ")"
+    lines1 = split(repr(ir), '\n')
+    @test isempty(pop!(lines1))
+    Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1), false)
+    Core.Compiler.insert_node!(ir, 1, Val{2}, QuoteNode(2), true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{3}, QuoteNode(3), false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4), true)
+    lines2 = split(repr(ir), '\n')
+    @test isempty(pop!(lines2))
+    @test popfirst!(lines2) == "2 1 ─      $(QuoteNode(1))"
+    @test popfirst!(lines2) == "  │        $(QuoteNode(2))" # TODO: this should print after the next statement
+    let line1 = popfirst!(lines1)
+        line2 = popfirst!(lines2)
+        @test startswith(line1, "2 1 ─ ")
+        @test startswith(line2, "  │   ")
+        @test line1[9:end] == line2[9:end]
+    end
+    let line1 = pop!(lines1)
+        line2 = pop!(lines2)
+        @test startswith(line1, "9 ")
+        @test startswith(line2, "  ")
+        @test line1[2:end] == line2[2:end]
+    end
+    @test pop!(lines2) == "  │        \$(QuoteNode(4))"
+    @test pop!(lines2) == "9 │        \$(QuoteNode(3))" # TODO: this should print after the next statement
+    @test lines1 == lines2
+end
 
 # issue #27352
 @test_deprecated print(nothing)
