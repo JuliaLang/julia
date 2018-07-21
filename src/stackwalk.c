@@ -139,23 +139,23 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
     return bt;
 }
 
-JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
+void decode_backtrace(uintptr_t *bt_data, size_t bt_size,
+                      jl_array_t **btout, jl_array_t **bt2out)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_array_t *bt = NULL;
     jl_array_t *bt2 = NULL;
     JL_GC_PUSH2(&bt, &bt2);
     if (array_ptr_void_type == NULL) {
         array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
-    bt = jl_alloc_array_1d(array_ptr_void_type, ptls->bt_size);
-    memcpy(bt->data, ptls->bt_data, ptls->bt_size * sizeof(void*));
+    bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
+    memcpy(bt->data, bt_data, bt_size * sizeof(void*));
     bt2 = jl_alloc_array_1d(jl_array_any_type, 0);
     // Scan the stack for any interpreter frames
     size_t n = 0;
-    while (n < ptls->bt_size) {
-        if (ptls->bt_data[n] == (uintptr_t)-1) {
-            jl_array_ptr_1d_push(bt2, (jl_value_t*)ptls->bt_data[n+1]);
+    while (n < bt_size) {
+        if (bt_data[n] == (uintptr_t)-1) {
+            jl_array_ptr_1d_push(bt2, (jl_value_t*)bt_data[n+1]);
             n += 2;
         }
         n++;
@@ -165,6 +165,17 @@ JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
     JL_GC_POP();
 }
 
+JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
+{
+    jl_exc_stack_t *s = jl_get_ptls_states()->current_task->exc_stack;
+    uintptr_t *bt_data = NULL;
+    size_t bt_size = 0;
+    if (s && s->top) {
+        bt_data = jl_exc_stack_bt_data(s, s->top);
+        bt_size = jl_exc_stack_bt_size(s, s->top);
+    }
+    decode_backtrace(bt_data, bt_size, btout, bt2out);
+}
 
 #if defined(_OS_WINDOWS_)
 #ifdef _CPU_X86_64_
@@ -474,10 +485,13 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
 
 JL_DLLEXPORT void jlbacktrace(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    size_t i, n = ptls->bt_size; // ptls->bt_size > 400 ? 400 : ptls->bt_size;
-    for (i = 0; i < n; i++)
-        jl_gdblookup(ptls->bt_data[i] - 1);
+    jl_exc_stack_t *s = jl_get_ptls_states()->current_task->exc_stack;
+    if (!s)
+        return;
+    size_t bt_size = jl_exc_stack_bt_size(s, s->top);
+    uintptr_t *bt_data = jl_exc_stack_bt_data(s, s->top);
+    for (size_t i = 0; i < bt_size; i++)
+        jl_gdblookup(bt_data[i] - 1);
 }
 
 #ifdef __cplusplus

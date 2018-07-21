@@ -80,6 +80,8 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #endif
 }
 
+// Modify signal context `_ctx` so that `fptr` will execute when the signal
+// returns. `fptr` will execute on the signal stack, and must not return.
 static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
 {
     // Modifying the ucontext should work but there is concern that
@@ -174,8 +176,8 @@ static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
                                           jl_to_bt_context(sigctx));
-    ptls->exception_in_transit = e;
-    jl_call_in_ctx(ptls, &jl_rethrow, sig, sigctx);
+    ptls->sig_exception = e;
+    jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }
 
 static pthread_t signals_thread;

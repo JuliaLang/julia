@@ -136,16 +136,16 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
             error_ctx = ctxThread;
             jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
         }
-        jl_exception_in_transit = excpt;
+        ptls->sig_exception = excpt;
     }
 #if defined(_CPU_X86_64_)
     *(DWORD64*)Rsp = 0;
     ctxThread->Rsp = Rsp;
-    ctxThread->Rip = (DWORD64)&jl_rethrow;
+    ctxThread->Rip = (DWORD64)&jl_sig_throw;
 #elif defined(_CPU_X86_)
     *(DWORD32*)Esp = 0;
     ctxThread->Esp = Esp;
-    ctxThread->Eip = (DWORD)&jl_rethrow;
+    ctxThread->Eip = (DWORD)&jl_sig_throw;
 #endif
 }
 

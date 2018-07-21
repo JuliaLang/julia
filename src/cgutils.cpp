@@ -2568,14 +2568,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
     }
 }
 
-static Value *emit_exc_in_transit(jl_codectx_t &ctx)
-{
-    Value *pexc_in_transit = emit_bitcast(ctx, ctx.ptlsStates, T_pprjlvalue);
-    Constant *offset = ConstantInt::getSigned(T_int32,
-        offsetof(jl_tls_states_t, exception_in_transit) / sizeof(void*));
-    return ctx.builder.CreateInBoundsGEP(pexc_in_transit, ArrayRef<Value*>(offset), "jl_exception_in_transit");
-}
-
 static void emit_signal_fence(jl_codectx_t &ctx)
 {
 #if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)

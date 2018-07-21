@@ -889,7 +889,9 @@ jl_value_t *jl_parse_eval_all(const char *fname,
         form = jl_pchar_to_string(fname, len);
         result = jl_box_long(jl_lineno);
         err = 1;
+        goto finally; // skip jl_restore_exc_stack
     }
+finally:
     jl_get_ptls_states()->world_age = last_age;
     jl_lineno = last_lineno;
     jl_filename = last_filename;
@@ -901,7 +903,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
             jl_rethrow();
         else
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, form, result,
-                                           ptls->exception_in_transit));
+                                           jl_current_exception()));
     }
     JL_GC_POP();
     return result;
@@ -1044,7 +1046,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
                 margs[0] = jl_cstr_to_string("<macrocall>");
             margs[1] = jl_fieldref(lno, 0); // extract and allocate line number
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
-                                           ptls->exception_in_transit));
+                                           jl_current_exception()));
         }
     }
     ptls->world_age = last_age;

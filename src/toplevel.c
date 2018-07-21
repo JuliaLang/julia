@@ -78,7 +78,7 @@ void jl_module_run_initializer(jl_module_t *m)
         }
         else {
             jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
-                                           jl_exception_in_transit));
+                                           jl_current_exception()));
         }
     }
 }

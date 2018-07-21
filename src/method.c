@@ -60,7 +60,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -72,7 +72,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -96,7 +96,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -108,7 +108,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();

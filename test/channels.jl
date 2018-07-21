@@ -208,7 +208,10 @@ using Dates
 end
 
 @testset "yield/wait/event failures" begin
-    @noinline garbage_finalizer(f) = finalizer(f, "gar" * "bage")
+    # garbage_finalizer returns `nothing` rather than the garbage object so
+    # that the interpreter doesn't accidentally root the garbage when
+    # interpreting the calling function.
+    @noinline garbage_finalizer(f) = (finalizer(f, "gar" * "bage"); nothing)
     run = Ref(0)
     GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch

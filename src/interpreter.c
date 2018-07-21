@@ -483,7 +483,7 @@ SECT_INTERP static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_copy_ast(eval_value(args[0], s));
     }
     else if (head == exc_sym) {
-        return jl_get_ptls_states()->exception_in_transit;
+        return jl_current_exception();
     }
     else if (head == boundscheck_sym) {
         return jl_true;
@@ -681,6 +681,8 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
                     s->locals[jl_source_nslots(s->src) + catch_ip] = NULL;
                     catch_ip += 1;
                 }
+                // store current top of exception stack for restore in pop_exc.
+                s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_exc_stack_state());
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
                     return eval_body(stmts, s, next_ip, toplevel);
                 }
@@ -697,18 +699,20 @@ SECT_INTERP static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s
             else if (head == leave_sym) {
                 int hand_n_leave = jl_unbox_long(jl_exprarg(stmt, 0));
                 assert(hand_n_leave > 0);
-                // equivalent to jl_pop_handler(hand_n_leave) :
+                // equivalent to jl_pop_handler(hand_n_leave), but retaining eh for longjmp:
                 jl_ptls_t ptls = jl_get_ptls_states();
                 jl_handler_t *eh = ptls->current_task->eh;
                 while (--hand_n_leave > 0)
                     eh = eh->prev;
                 jl_eh_restore_state(eh);
-                // pop jmp_bufs from stack
+                // leave happens during normal control flow, but we must
+                // longjmp to pop the eval_body call for each enter.
                 s->continue_at = next_ip;
                 jl_longjmp(eh->eh_ctx, 1);
             }
             else if (head == pop_exc_sym) {
-                // FIXME
+                size_t prev_state = jl_unbox_ulong(eval_value(jl_exprarg(stmt, 0), s));
+                jl_restore_exc_stack(prev_state);
             }
             else if (head == const_sym) {
                 jl_sym_t *sym = (jl_sym_t*)jl_exprarg(stmt, 0);

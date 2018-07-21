@@ -282,6 +282,7 @@ static void ti_initthread(int16_t tid)
     }
     memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
     ptls->bt_data = (uintptr_t*)bt_data;
+    ptls->sig_exception = NULL;
 #ifdef _OS_WINDOWS_
     ptls->needs_resetstkoflw = 0;
 #endif
@@ -323,7 +324,7 @@ static jl_value_t *ti_run_fun(jl_callptr_t fptr, jl_method_instance_t *mfunc,
             ptls->safe_restore = &buf;
             jl_printf(JL_STDERR, "\nError thrown in threaded loop on thread %d: ",
                       (int)ptls->tid);
-            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+            jl_static_show(JL_STDERR, jl_current_exception());
         }
         ptls->safe_restore = old_buf;
         JL_UNLOCK_NOGC(&lock);

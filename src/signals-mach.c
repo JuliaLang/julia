@@ -147,9 +147,9 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
         assert(exception);
         ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
                                            (bt_context_t*)&state);
-        ptls2->exception_in_transit = exception;
+        ptls2->sig_exception = exception;
     }
-    jl_call_in_state(ptls2, &state, &jl_rethrow);
+    jl_call_in_state(ptls2, &state, &jl_sig_throw);
     ret = thread_set_state(thread, x86_THREAD_STATE64,
                            (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state",ret);
