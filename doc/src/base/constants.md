@@ -13,6 +13,7 @@ Base.Sys.WORD_SIZE
 Base.Sys.KERNEL
 Base.Sys.ARCH
 Base.Sys.MACHINE
+Base.Sys.LIBC
 ```
 
 See also:

@@ -267,6 +267,8 @@ Base.Sys.islinux
 Base.Sys.isbsd
 Base.Sys.iswindows
 Base.Sys.windows_version
+Base.Sys.glibc_version
+Base.Sys.isglibc
 Base.@static
 ```
 

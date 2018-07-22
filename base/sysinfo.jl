@@ -13,6 +13,7 @@ export BINDIR,
        ARCH,
        MACHINE,
        KERNEL,
+       LIBC,
        JIT,
        cpu_info,
        cpu_summary,
@@ -26,7 +27,9 @@ export BINDIR,
        isunix,
        iswindows,
        isexecutable,
-       which
+       which,
+       glibc_version,
+       isglibc
 
 import ..Base: show
 
@@ -73,6 +76,13 @@ const ARCH = ccall(:jl_get_ARCH, Any, ())
 A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
 """
 const KERNEL = ccall(:jl_get_UNAME, Any, ())
+
+"""
+    Sys.LIBC
+
+A symbol representing the name of the system's C runtime library that's linked to Julia.
+"""
+const LIBC = Base.LIBC
 
 """
     Sys.MACHINE
@@ -343,6 +353,41 @@ i.e. `v"major.minor.build"`, or `v"0.0.0"` if this is not running on Windows.
 windows_version
 
 const WINDOWS_VISTA_VER = v"6.0"
+
+if islinux()
+    function glibc_version()
+        # Proxy for a pointer to libc, since libc is linked into Julia
+        libc = ccall(:jl_dlopen, Ptr{Cvoid}, (Ptr{Cvoid}, Cuint), C_NULL, 0x0)
+        @assert libc != C_NULL # We have bigger problems if this is not the case
+        vers_ptr = ccall(:jl_dlsym_e, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring),
+                         libc, "gnu_get_libc_version")
+        vers_ptr == C_NULL && return v"0.0.0" # non-glibc
+        vers_str = unsafe_string(ccall(vers_ptr, Ptr{UInt8}, ()))
+        occursin(Base.VERSION_REGEX, vers_str) ? VersionNumber(vers_str) : v"0.0.0"
+    end
+
+    isglibc() = glibc_version() > v"0.0.0"
+else
+    glibc_version() = v"0.0.0"
+    isglibc() = false
+end
+
+"""
+    Sys.glibc_version()
+
+Return the version of glibc linked to Julia on Linux. This is `v"0.0.0"` on
+other systems as well as Linux systems which use a libc other than glibc
+(e.g. musl).
+"""
+glibc_version
+
+"""
+    Sys.isglibc()
+
+Determine whether Julia links to glibc on the current system. This is `false`
+on systems other than Linux as well as for Linux systems which do not use glibc.
+"""
+isglibc
 
 """
     Sys.isexecutable(path::String)

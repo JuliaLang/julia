@@ -11,9 +11,16 @@ if Sys.iswindows()
 end
 ```
 
-Note that `islinux` and `isapple` are mutually exclusive subsets of `isunix`. Additionally,
-there is a macro `@static` which makes it possible to use these functions to conditionally hide
-invalid code, as demonstrated in the following examples.
+Note that `islinux` and `isapple` are mutually exclusive subsets of `isunix`.
+
+The `Sys` module also provides functionality for determining the version of glibc, the GNU
+C library, on Linux. This is useful for code that relies on a particular version of glibc.
+Further, the function `isglibc` reports whether glibc is linked to Julia, which can be
+helpful for situations such as determining whether the current system is Alpine Linux, which
+uses musl rather than glibc.
+
+Additionally, there is a macro `@static` which makes it possible to use these functions to
+conditionally hide invalid code, as demonstrated in the following examples.
 
 Simple blocks:
 

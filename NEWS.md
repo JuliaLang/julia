@@ -737,6 +737,10 @@ Library improvements
     `foldr`, `mapreduce`, `mapfoldl`, `mapfoldr`, `accumulate` and `accumulate!`.
     ([#27711], [#27859])
 
+  * `Sys.glibc()` determines whether glibc is linked to Julia, and `Sys.glibc_version()`
+    returns the version of the linked glibc if applicable. ([#27223])
+
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -1656,6 +1660,7 @@ Command-line option changes
 [#27164]: https://github.com/JuliaLang/julia/issues/27164
 [#27189]: https://github.com/JuliaLang/julia/issues/27189
 [#27212]: https://github.com/JuliaLang/julia/issues/27212
+[#27223]: https://github.com/JuliaLang/julia/issues/27223
 [#27248]: https://github.com/JuliaLang/julia/issues/27248
 [#27309]: https://github.com/JuliaLang/julia/issues/27309
 [#27401]: https://github.com/JuliaLang/julia/issues/27401
