@@ -1343,11 +1343,15 @@ let src = code_typed(my_fun28173, (Int,))[1][1]
 end
 
 # issue #27352
-@test_deprecated print(nothing)
-@test_deprecated print(stdout, nothing)
-@test_deprecated string(nothing)
-@test_deprecated string(1, "", nothing)
-@test_deprecated let x = nothing; "x = $x" end
-@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
-@test_deprecated `/bin/foo $nothing`
-@test_deprecated `$nothing`
+mktemp() do fname, io
+    redirect_stdout(io) do
+        @test_deprecated print(nothing)
+        @test_deprecated print(stdout, nothing)
+        @test_deprecated string(nothing)
+        @test_deprecated string(1, "", nothing)
+        @test_deprecated let x = nothing; "x = $x" end
+        @test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+        @test_deprecated `/bin/foo $nothing`
+        @test_deprecated `$nothing`
+    end
+end

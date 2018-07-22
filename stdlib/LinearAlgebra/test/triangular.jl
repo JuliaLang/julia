@@ -99,9 +99,17 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         if uplo1 == :L
             @test istril(A1)
             @test !istriu(A1)
+            @test istriu(A1')
+            @test istriu(transpose(A1))
+            @test !istril(A1')
+            @test !istril(transpose(A1))
         else
             @test istriu(A1)
             @test !istril(A1)
+            @test istril(A1')
+            @test istril(transpose(A1))
+            @test !istriu(A1')
+            @test !istriu(transpose(A1))
         end
 
         #tril/triu
