@@ -15,6 +15,7 @@ export
     @logmsg,
     with_logger,
     current_logger,
+    loggerstream,
     global_logger,
     disable_logging,
     SimpleLogger
@@ -83,6 +84,7 @@ min_enabled_level(::NullLogger) = AboveMaxLevel
 shouldlog(::NullLogger, args...) = false
 handle_message(::NullLogger, args...; kwargs...) =
     error("Null logger handle_message() should not be called")
+loggerstream(::NullLogger) = devnull
 
 
 #-------------------------------------------------------------------------------
@@ -488,6 +490,20 @@ is attached to the task.
 """
 current_logger() = current_logstate().logger
 
+"""
+    loggerstream()
+
+Return the underlying IO stream of the current logger.
+"""
+loggerstream() = loggerstream(current_logger())
+
+"""
+    loggerstream(logger::AbstractLogger)
+
+Return the IO stream of `logger`.
+"""
+loggerstream(::AbstractLogger)
+
 
 #-------------------------------------------------------------------------------
 # SimpleLogger
@@ -503,6 +519,7 @@ struct SimpleLogger <: AbstractLogger
     message_limits::Dict{Any,Int}
 end
 SimpleLogger(stream::IO=stderr, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
+loggerstream(logger::SimpleLogger) = logger.stream
 
 shouldlog(logger::SimpleLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0

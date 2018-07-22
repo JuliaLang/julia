@@ -37,6 +37,8 @@ function ConsoleLogger(stream::IO=stderr, min_level=Info;
                   show_limited, right_justify, Dict{Any,Int}())
 end
 
+loggerstream(logger::ConsoleLogger) = logger.stream
+
 shouldlog(logger::ConsoleLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
 

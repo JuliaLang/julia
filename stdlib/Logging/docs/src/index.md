@@ -215,6 +215,7 @@ Event processing is controlled by overriding functions associated with
 | [`Logging.min_enabled_level`](@ref) |                        | Lower bound for log level of accepted events |
 | **Optional methods**                | **Default definition** | **Brief description**                    |
 | [`Logging.catch_exceptions`](@ref)  | `true`                 | Catch exceptions during event evaluation |
+| [`Logging.loggerstream`](@ref)      |                        | Return the IO stream of the logger       |
 
 
 ```@docs
@@ -224,6 +225,7 @@ Logging.shouldlog
 Logging.min_enabled_level
 Logging.catch_exceptions
 Logging.disable_logging
+Logging.loggerstream
 ```
 
 ### Using Loggers

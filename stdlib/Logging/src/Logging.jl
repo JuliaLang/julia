@@ -22,6 +22,7 @@ import Base.CoreLogging:
     @logmsg,
     with_logger,
     current_logger,
+    loggerstream,
     global_logger,
     disable_logging,
     SimpleLogger
@@ -37,6 +38,7 @@ export
     @logmsg,
     with_logger,
     current_logger,
+    loggerstream,
     global_logger,
     disable_logging,
     SimpleLogger,

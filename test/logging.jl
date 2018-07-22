@@ -312,6 +312,24 @@ end
     """
 end
 
+@testset "loggerstream" begin
+    # NullLogger
+    logger = NullLogger()
+    @test loggerstream(logger) == devnull
+    with_logger(logger) do
+        @test loggerstream() == devnull
+    end
+
+    # SimpleLogger
+    io = IOBuffer()
+    logger = SimpleLogger(io)
+    with_logger(logger) do
+        print(loggerstream(), "Hello,")
+        print(loggerstream(logger), " world!")
+    end
+    @test String(take!(io)) == "Hello, world!"
+end
+
 # Issue #26273
 let m = Module(:Bare26273i, false)
     Core.eval(m, :(import Base: @error))

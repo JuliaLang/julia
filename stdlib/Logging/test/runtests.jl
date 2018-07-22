@@ -227,6 +227,15 @@ import Logging: min_enabled_level, shouldlog, handle_message
     \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
     """
 
+    # loggerstream
+    io = IOBuffer()
+    logger = ConsoleLogger(io)
+    with_logger(logger) do
+        print(loggerstream(), "Hello,")
+        print(loggerstream(logger), " world!")
+    end
+    @test String(take!(io)) == "Hello, world!"
+
 end
 
 end
