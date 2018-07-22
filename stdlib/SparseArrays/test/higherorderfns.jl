@@ -628,5 +628,8 @@ end
     @test Diagonal(spzeros(5)) \ view(rand(10), 1:5) == [Inf,Inf,Inf,Inf,Inf]
 end
 
+@testset "Issue #27836" begin
+    @test minimum(sparse([1, 2], [1, 2], ones(Int32, 2)), dims = 1) isa Matrix
+end
 
 end # module

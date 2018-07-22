@@ -302,10 +302,10 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
     if n == 0
         return mapreduce_empty(f, op, T)
     elseif n == 1
-        @inbounds a1 = A[inds[1]]
+        @inbounds a1 = A[first(inds)]
         return mapreduce_first(f, op, a1)
     elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
-        @inbounds i = inds[1]
+        @inbounds i = first(inds)
         @inbounds a1 = A[i]
         @inbounds a2 = A[i+=1]
         s = op(f(a1), f(a2))

@@ -302,7 +302,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 field === nothing && return nothing
                 if length(def.args) < 1 + field
                     ftyp = fieldtype(typ, field)
-                    if !isbits(ftyp)
+                    if !isbitstype(ftyp)
                         # On this branch, this will be a guaranteed UndefRefError.
                         # We use the regular undef mechanic to lift this to a boolean slot
                         maybe_undef = true

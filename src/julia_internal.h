@@ -473,6 +473,9 @@ extern char jl_using_intel_jitevents;
 #ifdef JL_USE_OPROFILE_JITEVENTS
 extern char jl_using_oprofile_jitevents;
 #endif
+#ifdef JL_USE_PERF_JITEVENTS
+extern char jl_using_perf_jitevents;
+#endif
 extern size_t jl_arr_xtralloc_limit;
 
 void jl_init_types(void);
@@ -967,11 +970,10 @@ extern jl_sym_t *inline_sym;  extern jl_sym_t *noinline_sym;
 extern jl_sym_t *polly_sym;
 extern jl_sym_t *propagate_inbounds_sym;
 extern jl_sym_t *isdefined_sym;
-extern jl_sym_t *nospecialize_sym;
+extern jl_sym_t *nospecialize_sym; extern jl_sym_t *specialize_sym;
 extern jl_sym_t *boundscheck_sym;
 extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
-extern jl_sym_t *generated_sym;
-extern jl_sym_t *generated_only_sym;
+extern jl_sym_t *generated_sym; extern jl_sym_t *generated_only_sym;
 extern jl_sym_t *throw_undef_if_not_sym;
 extern jl_sym_t *getfield_undefref_sym;
 

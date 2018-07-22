@@ -3,28 +3,41 @@
 ## Functions to compute the reduced shape
 
 # for reductions that expand 0 dims to 1
+reduced_index(i::OneTo) = OneTo(1)
+reduced_index(i::Slice) = first(i):first(i)
+reduced_index(i::AbstractUnitRange) =
+    throw(ArgumentError(
+"""
+No method is implemented for reducing index range of type $typeof(i). Please implement
+reduced_index for this index type or report this as an issue.
+"""
+    ))
 reduced_indices(a::AbstractArray, region) = reduced_indices(axes(a), region)
 
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
-function reduced_indices(inds::Indices{N}, d::Int, rd::AbstractUnitRange) where N
+function reduced_indices(inds::Indices{N}, d::Int) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d == 1
-        return (oftype(inds[1], rd), tail(inds)...)
+        return (reduced_index(inds[1]), tail(inds)...)
     elseif 1 < d <= N
-        return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
+        return tuple(inds[1:d-1]..., oftype(inds[d], reduced_index(inds[d])), inds[d+1:N]...)::typeof(inds)
     else
         return inds
     end
 end
-reduced_indices(inds::Indices, d::Int) = reduced_indices(inds, d, OneTo(1))
 
 function reduced_indices0(inds::Indices{N}, d::Int) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d <= N
         ind = inds[d]
-        return reduced_indices(inds, d, (isempty(ind) ? ind : OneTo(1)))
+        rd = isempty(ind) ? ind : reduced_index(inds[d])
+        if d == 1
+            return (rd, tail(inds)...)
+        else
+            return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
+        end
     else
         return inds
     end
@@ -38,7 +51,7 @@ function reduced_indices(inds::Indices{N}, region) where N
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
-            rinds[d] = oftype(rinds[d], OneTo(1))
+            rinds[d] = reduced_index(rinds[d])
         end
     end
     tuple(rinds...)::typeof(inds)
@@ -53,7 +66,7 @@ function reduced_indices0(inds::Indices{N}, region) where N
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
             rind = rinds[d]
-            rinds[d] = oftype(rind, (isempty(rind) ? rind : OneTo(1)))
+            rinds[d] = isempty(rind) ? rind : reduced_index(rind)
         end
     end
     tuple(rinds...)::typeof(inds)
@@ -79,25 +92,6 @@ end
 reducedim_initarray(A::AbstractArray, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
 reducedim_initarray(A::AbstractArray, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
 
-function reducedim_initarray0(A::AbstractArray{T}, region, f, ops) where T
-    ri = reduced_indices0(A, region)
-    if isempty(A)
-        if prod(length, reduced_indices(A, region)) != 0
-            reducedim_initarray0_empty(A, region, f, ops) # ops over empty slice of A
-        else
-            R = f == identity ? T : Core.Compiler.return_type(f, (T,))
-            similar(A, R, ri)
-        end
-    else
-        R = f == identity ? T : typeof(f(first(A)))
-        si = similar(A, R, ri)
-        mapfirst!(f, si, A)
-    end
-end
-
-reducedim_initarray0_empty(A::AbstractArray, region, f, ops) = mapslices(x->ops(f.(x)), A, dims = region)
-reducedim_initarray0_empty(A::AbstractArray, region,::typeof(identity), ops) = mapslices(ops, A, dims = region)
-
 # TODO: better way to handle reducedim initialization
 #
 # The current scheme is basically following Steven G. Johnson's original implementation
@@ -116,7 +110,7 @@ function _reducedim_init(f, op, fv, fop, A, region)
     if T !== Any && applicable(zero, T)
         x = f(zero(T))
         z = op(fv(x), fv(x))
-        Tr = typeof(z) == typeof(x) && !isbitstype(T) ? T : typeof(z)
+        Tr = z isa T ? T : typeof(z)
     else
         z = fv(fop(f, A))
         Tr = typeof(z)
@@ -124,8 +118,33 @@ function _reducedim_init(f, op, fv, fop, A, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-reducedim_init(f, op::typeof(max), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, maximum)
-reducedim_init(f, op::typeof(min), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, minimum)
+# initialization when computing minima and maxima requires a little care
+for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
+    @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
+        # First compute the reduce indices. This will throw an ArgumentError
+        # if any region is invalid
+        ri = reduced_indices(A, region)
+
+        # Next, throw if reduction is over a region with length zero
+        any(i -> isempty(axes(A, i)), region) && _empty_reduce_error()
+
+        # Make a view of the first slice of the region
+        A1 = view(A, ri...)
+
+        if isempty(A1)
+            # If the slice is empty just return non-view version as the initial array
+            return copy(A1)
+        else
+            # otherwise use the min/max of the first slice as initial value
+            v0 = mapreduce(f, $f2, A1)
+
+            # but NaNs need to be avoided as intial values
+            v0 = v0 != v0 ? typeof(v0)($initval) : v0
+
+            return reducedim_initarray(A, region, v0)
+        end
+    end
+end
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
@@ -169,7 +188,7 @@ function check_reducedims(R, A)
     had_nonreduc = false
     for i = 1:ndims(A)
         Ri, Ai = axes(R, i), axes(A, i)
-        sRi, sAi = _length(Ri), _length(Ai)
+        sRi, sAi = length(Ri), length(Ai)
         if sRi == 1
             if sAi > 1
                 if had_nonreduc
@@ -209,7 +228,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
 
     if has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
-        nslices = div(_length(A), lsiz)
+        nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i = 1:nslices
             @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
@@ -221,7 +240,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     keep, Idefault = Broadcast.shapeindexer(indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
-        i1 = first(indices1(R))
+        i1 = first(axes1(R))
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
@@ -663,7 +682,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     y = iterate(ks)
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
-        i1 = first(indices1(Rval))
+        i1 = first(axes1(Rval))
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             tmpRv = Rval[i1,IR]
@@ -795,7 +814,7 @@ function _findmax(A, region)
     end
 end
 
-reducedim1(R, A) = _length(indices1(R)) == 1
+reducedim1(R, A) = length(axes1(R)) == 1
 
 """
     argmin(A; dims) -> indices

@@ -43,6 +43,15 @@
                                       tab)))
                 ((lambda)       tab)
                 ((local)        tab)
+                ((scope-block)
+                 ;; TODO: when deprecation for implicit global assignment inside loops
+                 ;; is removed, remove this code and just return `tab` in this case
+                 (let ((tab2 (table)))
+                   (find-possible-globals- (cadr e) tab2)
+                   (for-each (lambda (v) (if (has? tab2 v) (del! tab2 v)))
+                             (append (find-local-decls (cadr e)) (find-local-def-decls (cadr e))))
+                   (for-each (lambda (v) (put! tab v #t))
+                             (table.keys tab2))))
                 ((break-block)  (find-possible-globals- (caddr e) tab))
                 ((module toplevel) '())
                 (else

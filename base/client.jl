@@ -332,8 +332,16 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                 Core.eval(Main, :(using .InteractiveUtils))
             end
         catch ex
-            @warn "Failed to insert InteractiveUtils into module Main" exception=(ex, catch_backtrace())
+            @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
         end
+    end
+    try
+        let Pkg = require(PkgId(UUID(0x44cfe95a_1eb2_52ea_b672_e2afdf69b78f), "Pkg"))
+            Core.eval(Main, :(const Pkg = $Pkg))
+            Core.eval(Main, :(using .Pkg))
+        end
+    catch ex
+        @warn "Failed to import Pkg into module Main" exception=(ex, catch_backtrace())
     end
 
     if interactive && isassigned(REPL_MODULE_REF)
@@ -341,7 +349,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             color_set || (global have_color = REPL.Terminals.hascolor(term))
-            banner && REPL.banner(term, term)
+            banner && Base.banner(term)
             if term.term_type == "dumb"
                 active_repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"

@@ -2,12 +2,19 @@
 
 # LQ Factorizations
 
-struct LQ{T,S<:AbstractMatrix} <: Factorization{T}
+struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    LQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
+
+    function LQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+        @assert !has_offset_axes(factors)
+        new{T,S}(factors, τ)
+    end
 end
 LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
+function LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
+    LQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
+end
 
 # iteration for destructuring into components
 Base.iterate(S::LQ) = (S.L, Val(:Q))
@@ -277,6 +284,7 @@ end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
+    @assert !has_offset_axes(B)
     c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
     x = ldiv!(F, c2r)
     return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))),

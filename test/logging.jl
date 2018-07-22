@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.CoreLogging
+using Test, Base.CoreLogging
 import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
     handle_message, shouldlog, min_enabled_level, catch_exceptions
 
@@ -109,6 +109,17 @@ end
     @test record._module == logger.shouldlog_args[2]
     @test record.group   == logger.shouldlog_args[3]
     @test record.id      == logger.shouldlog_args[4]
+
+    # handling of nothing
+    logger = TestLogger()
+    with_logger(logger) do
+        @info "foo" _module = nothing _file = nothing _line = nothing
+    end
+    @test length(logger.logs) == 1
+    record = logger.logs[1]
+    @test record._module == nothing
+    @test record.file == nothing
+    @test record.line == nothing
 end
 
 
@@ -292,6 +303,13 @@ end
     │   b = asdf
     └ @ Base other.jl:101
     """
+
+    # nothing values
+    @test genmsg(Warn, "msg", nothing, nothing, nothing) ==
+    """
+    ┌ Warning: msg
+    └ @ nothing nothing:nothing
+    """
 end
 
 # Issue #26273
@@ -300,6 +318,12 @@ let m = Module(:Bare26273i, false)
     @test_logs (:error, "Hello") Core.eval(m, quote
         @error "Hello"
     end)
+end
+
+@testset "#26335: _module and _file kwargs" begin
+    ignored = Test.Ignored()
+    @test_logs (:warn, "a", ignored, ignored, ignored, "foo.jl") (@warn "a" _file="foo.jl")
+    @test_logs (:warn, "a", Base) (@warn "a" _module=Base)
 end
 
 end

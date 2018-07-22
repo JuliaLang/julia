@@ -274,11 +274,11 @@ static void schedule_all_finalizers(arraylist_t *flist)
 
 void jl_gc_run_all_finalizers(jl_ptls_t ptls)
 {
+    schedule_all_finalizers(&finalizer_list_marked);
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         schedule_all_finalizers(&ptls2->finalizers);
     }
-    schedule_all_finalizers(&finalizer_list_marked);
     run_finalizers(ptls);
 }
 
@@ -2718,7 +2718,7 @@ void jl_gc_init(void)
 
 #ifdef _P64
     // on a big memory machine, set max_collect_interval to totalmem * nthreads / ncores / 2
-    size_t maxmem = (uv_get_total_memory() * jl_n_threads) / jl_cpu_cores() / 2;
+    size_t maxmem = (uv_get_total_memory() * jl_n_threads) / jl_cpu_threads() / 2;
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif

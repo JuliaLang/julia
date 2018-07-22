@@ -787,6 +787,9 @@ end
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
+const full_warning_showed = Ref(false)
+const modules_warned_for = Set{PkgId}()
+
 """
     require(module::Symbol)
 
@@ -815,16 +818,29 @@ function require(into::Module, mod::Symbol)
         if where.uuid === nothing
             throw(ArgumentError("""
                 Package $mod not found in current path:
-                 - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
+                - Run `Pkg.add($(repr(String(mod))))` to install the $mod package.
                 """))
         else
-            throw(ArgumentError("""
-                Package $(where.name) does not have $mod in its dependencies:
-                 - If you have $(where.name) checked out for development and have
-                   added $mod as a dependency but haven't updated your primary
-                   environment's manifest file, try `Pkg.resolve()`.
-                 - Otherwise you may need to report an issue with $(where.name).
-                """))
+            s = """
+            Package $(where.name) does not have $mod in its dependencies:
+            - If you have $(where.name) checked out for development and have
+              added $mod as a dependency but haven't updated your primary
+              environment's manifest file, try `Pkg.resolve()`.
+            - Otherwise you may need to report an issue with $(where.name)"""
+
+            uuidkey = identify_package(PkgId(string(into)), String(mod))
+            uuidkey === nothing && throw(ArgumentError(s))
+
+            # fall back to toplevel loading with a warning
+            if !(where in modules_warned_for)
+                @warn string(
+                    full_warning_showed[] ? "" : s, "\n",
+                    string("Loading $(mod) into $(where.name) from project dependency, ",
+                           "future warnings for $(where.name) are suppressed.")
+                ) _module = nothing _file = nothing
+                push!(modules_warned_for, where)
+            end
+            full_warning_showed[] = true
         end
     end
     if _track_dependencies[]
@@ -1078,8 +1094,13 @@ function load_path_setup_code(load_path::Bool=true)
     append!(empty!(Base.DL_LOAD_PATH), $(repr(map(abspath, DL_LOAD_PATH))))
     """
     if load_path
+        load_path = map(abspath, Base.load_path())
+        path_sep = Sys.iswindows() ? ';' : ':'
+        any(path -> path_sep in path, load_path) &&
+            error("LOAD_PATH entries cannot contain $(repr(path_sep))")
         code *= """
-        append!(empty!(Base.LOAD_PATH), $(repr(map(abspath, Base.load_path()))))
+        append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
+        ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
         Base.HOME_PROJECT[] = Base.ACTIVE_PROJECT[] = nothing
         """
     end
@@ -1104,7 +1125,6 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     try
         write(in, """
         begin
-        import OldPkg
         $(Base.load_path_setup_code())
         Base._track_dependencies[] = true
         empty!(Base._concrete_dependencies)
@@ -1387,9 +1407,9 @@ end
 """
     @__FILE__ -> AbstractString
 
-`@__FILE__` expands to a string with the path to the file containing the
+Expand to a string with the path to the file containing the
 macrocall, or an empty string if evaluated by `julia -e <expr>`.
-Returns `nothing` if the macro was missing parser source information.
+Return `nothing` if the macro was missing parser source information.
 Alternatively see [`PROGRAM_FILE`](@ref).
 """
 macro __FILE__()
@@ -1400,9 +1420,9 @@ end
 """
     @__DIR__ -> AbstractString
 
-`@__DIR__` expands to a string with the absolute path to the directory of the file
+Expand to a string with the absolute path to the directory of the file
 containing the macrocall.
-Returns the current working directory if run from a REPL or if evaluated by `julia -e <expr>`.
+Return the current working directory if run from a REPL or if evaluated by `julia -e <expr>`.
 """
 macro __DIR__()
     __source__.file === nothing && return nothing

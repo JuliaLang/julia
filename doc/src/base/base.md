@@ -213,6 +213,7 @@ Base.@boundscheck
 Base.@inline
 Base.@noinline
 Base.@nospecialize
+Base.@specialize
 Base.gensym
 Base.@gensym
 Base.@goto
@@ -288,6 +289,7 @@ Base.@assert
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError
+Base.CompositeException
 Base.DimensionMismatch
 Core.DivideError
 Core.DomainError

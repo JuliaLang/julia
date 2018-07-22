@@ -820,6 +820,9 @@ end
 let repr = sprint(dump, Test)
     @test repr == "Module Test\n"
 end
+let repr = sprint(dump, nothing)
+    @test repr == "Nothing nothing\n"
+end
 let a = Vector{Any}(undef, 10000)
     a[2] = "elemA"
     a[4] = "elemB"
@@ -1201,6 +1204,12 @@ end
     @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
     @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1=>2]"
     @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1=>2)"
+
+    # issue #27979 (dislaying arrays of pairs containing arrays as first member)
+    @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
+
+    # issue #28159
+    @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Array{NamedTuple{names,Tuple{$Int,$Int}} where names,1}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1287,11 +1296,11 @@ h_line() = f_line()
     ││╻  g_line""")
 
 # issue #27352
-@test_throws ArgumentError print(nothing)
-@test_throws ArgumentError print(stdout, nothing)
-@test_throws ArgumentError string(nothing)
-@test_throws ArgumentError string(1, "", nothing)
-@test_throws ArgumentError let x = nothing; "x = $x" end
+@test_deprecated print(nothing)
+@test_deprecated print(stdout, nothing)
+@test_deprecated string(nothing)
+@test_deprecated string(1, "", nothing)
+@test_deprecated let x = nothing; "x = $x" end
 @test let x = nothing; "x = $(repr(x))" end == "x = nothing"
-@test_throws ArgumentError `/bin/foo $nothing`
-@test_throws ArgumentError `$nothing`
+@test_deprecated `/bin/foo $nothing`
+@test_deprecated `$nothing`

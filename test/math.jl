@@ -56,8 +56,11 @@ end
         end
 
         for (a,b) in [(T(12.8),T(0.8)),
-                      (prevfloat(realmin(T)), nextfloat(one(T),-2)),
-                      (nextfloat(zero(T),3), T(0.75)),
+                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(realmin(T)), prevfloat(one(T), 2)),
+                      (prevfloat(realmin(T)), nextfloat(one(T), -2)),
+                      (nextfloat(zero(T), 3), T(0.75)),
+                      (prevfloat(zero(T), -3), T(0.75)),
                       (nextfloat(zero(T)), T(0.5))]
 
             n = Int(log2(a/b))
@@ -951,6 +954,28 @@ float(x::FloatWrapper) = x
     @test isa(exp(z), Complex)
     @test isa(sin(z), Complex)
     @test isa(cos(z), Complex)
+end
+
+@testset "cbrt" begin
+    for T in (Float32, Float64)
+        @test cbrt(zero(T)) === zero(T)
+        @test cbrt(-zero(T)) === -zero(T)
+        @test cbrt(one(T)) === one(T)
+        @test cbrt(-one(T)) === -one(T)
+        @test cbrt(T(Inf)) === T(Inf)
+        @test cbrt(-T(Inf)) === -T(Inf)
+        @test isnan_type(T, cbrt(T(NaN)))
+        for x in (pcnfloat(nextfloat(nextfloat(zero(T))))...,
+                  pcnfloat(prevfloat(prevfloat(zero(T))))...,
+                  0.45, 0.6, 0.98,
+                  map(x->x^3, 1.0:1.0:1024.0)...,
+                  nextfloat(-T(Inf)), prevfloat(T(Inf)))
+            by = cbrt(big(T(x)))
+            @test cbrt(T(x)) ≈ by rtol=eps(T)
+            bym = cbrt(big(T(-x)))
+            @test cbrt(T(-x)) ≈ bym rtol=eps(T)
+        end
+    end
 end
 
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")

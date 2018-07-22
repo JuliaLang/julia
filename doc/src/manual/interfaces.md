@@ -9,18 +9,18 @@ to generically build upon those behaviors.
 
 | Required methods               |                        | Brief description                                                                     |
 |:------------------------------ |:---------------------- |:------------------------------------------------------------------------------------- |
-| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or `nothing` if empty        |
+| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty        |
 | `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
 | `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
 | `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
-| `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                                            |
+| `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                      |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim...])`         | (*undefined*)          | The number of items in each dimension, if known                                       |
 
 | Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
-| `HasLength()`                              | `length(iter)`                             |
+| `HasLength()`                              | [`length(iter)`](@ref)                     |
 | `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim...])` |
 | `IsInfinite()`                             | (*none*)                                   |
 | `SizeUnknown()`                            | (*none*)                                   |
@@ -38,7 +38,7 @@ The state object will be passed back to the iterate function on the next iterati
 and is generally considered an implementation detail private to the iterable object.
 
 Any object that defines this function is iterable and can be used in the [many functions that rely upon iteration](@ref lib-collections-iteration).
-It can also be used directly in a `for` loop since the syntax:
+It can also be used directly in a [`for`](@ref) loop since the syntax:
 
 ```julia
 for i in iter   # or  "for i = iter"
@@ -258,7 +258,7 @@ efficiently converts the indices into one linear index and then calls the above 
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
 `ndims(A)` `Int` indices. For example, [`SparseMatrixCSC`](@ref) from the `SparseArrays` standard
 library module, only supports two dimensions, so it just defines
-`getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for `setindex!`.
+`getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for [`setindex!`](@ref).
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
 `AbstractArray{Int, 1}`:
@@ -396,7 +396,7 @@ julia> sum(A)
 ```
 
 If you are defining an array type that allows non-traditional indexing (indices that start at
-something other than 1), you should specialize `axes`. You should also specialize [`similar`](@ref)
+something other than 1), you should specialize [`axes`](@ref). You should also specialize [`similar`](@ref)
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see
 [Arrays with custom indices](@ref man-custom-indices).
@@ -463,13 +463,13 @@ The [`Base.broadcastable`](@ref) function is called on each argument to broadcas
 it to return something different that supports `axes` and indexing. By
 default, this is the identity function for all `AbstractArray`s and `Number`s — they already
 support `axes` and indexing. For a handful of other types (including but not limited to
-types themselves, functions, special singletons like `missing` and `nothing`, and dates),
+types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates),
 `Base.broadcastable` returns the argument wrapped in a `Ref` to act as a 0-dimensional
 "scalar" for the purposes of broadcasting. Custom types can similarly specialize
 `Base.broadcastable` to define their shape, but they should follow the convention that
 `collect(Base.broadcastable(x)) == collect(x)`. A notable exception is `AbstractString`;
 strings are special-cased to behave as scalars for the purposes of broadcast even though
-they are iterable collections of their characters.
+they are iterable collections of their characters (see [Strings](@ref) for more).
 
 The next two steps (selecting the output array and implementation) are dependent upon
 determining a single answer for a given set of arguments. Broadcast must take all the varied

@@ -568,3 +568,6 @@ let p = Pipe()
     @test length(s) == 660_000 + typemax(UInt16)
     @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
 end
+
+# issue #26419
+@test Base.return_types(read, (String, Type{String})) == Any[String]

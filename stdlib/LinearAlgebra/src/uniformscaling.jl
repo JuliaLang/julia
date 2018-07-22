@@ -50,6 +50,7 @@ const I = UniformScaling(true)
 
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
+Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
 function show(io::IO, J::UniformScaling)
@@ -172,6 +173,7 @@ Broadcast.broadcasted(::typeof(/), J::UniformScaling,x::Number) = UniformScaling
 ## equality comparison with UniformScaling
 ==(J::UniformScaling, A::AbstractMatrix) = A == J
 function ==(A::AbstractMatrix, J::UniformScaling)
+    @assert !has_offset_axes(A)
     size(A, 1) == size(A, 2) || return false
     iszero(J.λ) && return iszero(A)
     isone(J.λ) && return isone(A)
@@ -204,6 +206,7 @@ end
 isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
 function copyto!(A::AbstractMatrix, J::UniformScaling)
+    @assert !has_offset_axes(A)
     size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
     fill!(A, 0)
     λ = J.λ
@@ -240,6 +243,7 @@ for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
             n = 0
             for a in A
                 if !isa(a, UniformScaling)
+                    @assert !has_offset_axes(a)
                     na = size(a,$dim)
                     n > 0 && n != na &&
                         throw(DimensionMismatch(string("number of ", $name,
@@ -255,6 +259,7 @@ end
 
 
 function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...)
+    @assert !has_offset_axes(A...)
     nr = length(rows)
     sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
     n = zeros(Int, length(A))

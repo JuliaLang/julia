@@ -34,8 +34,8 @@ Base.IteratorEltype
 
 Fully implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
@@ -49,6 +49,17 @@ Fully implemented by:
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
 
+## Constructors and Types
+
+```@docs
+Base.AbstractRange
+Base.OrdinalRange
+Base.AbstractUnitRange
+Base.StepRange
+Base.UnitRange
+Base.LinRange
+```
+
 ## General Collections
 
 ```@docs
@@ -59,8 +70,8 @@ Base.length
 
 Fully implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
@@ -146,8 +157,8 @@ Fully implemented by:
 
 Partially implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `AbstractString`
   * [`Dict`](@ref)

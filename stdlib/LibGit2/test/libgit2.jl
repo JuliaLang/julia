@@ -1275,8 +1275,8 @@ mktempdir() do dir
             LibGit2.commit(repo, "move file1")
             LibGit2.branch!(repo, "master")
             upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_b")
-            rename_flag = 0
-            rename_flag = LibGit2.toggle(rename_flag, 0) # turns on the find renames opt
+            rename_flag = Cint(0)
+            rename_flag = LibGit2.toggle(rename_flag, Cint(0)) # turns on the find renames opt
             mos = LibGit2.MergeOptions(flags=rename_flag)
             @test_logs (:info,"Review and commit merged changes") LibGit2.merge!(repo, [upst_ann], merge_opts=mos)
         end

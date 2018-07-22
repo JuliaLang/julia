@@ -417,18 +417,6 @@ function build(ctx::Context, pkgs::Vector{PackageSpec}; kwargs...)
     return
 end
 
-init(; kwargs...) = init(Context(); kwargs...)
-init(path::String) = init(Context(env=EnvCache(path)), path)
-function init(ctx::Context, path::String=pwd(); kwargs...)
-    Context!(ctx; kwargs...)
-    ctx.preview && preview_info()
-    Context!(ctx; env = EnvCache(joinpath(path, "Project.toml")))
-    Operations.init(ctx)
-    activate(path)
-    ctx.preview && preview_info()
-    return
-end
-
 #####################################
 # Backwards compatibility with Pkg2 #
 #####################################
@@ -487,7 +475,6 @@ function precompile(ctx::Context)
     code = join(["import " * pkg for pkg in needs_to_be_precompiled], '\n') * "\nexit(0)"
     for (i, pkg) in enumerate(needs_to_be_precompiled)
         code = """
-            import OldPkg
             $(Base.load_path_setup_code())
             import $pkg
         """
@@ -564,7 +551,8 @@ end
     setprotocol!(proto::Union{Nothing, AbstractString}=nothing)
 
 Set the protocol used to access GitHub-hosted packages when `add`ing a url or `develop`ing a package.
-Defaults to 'https', with `proto == nothing` delegating the choice to the package developer.
+Defaults to delegating the choice to the package developer (`proto == nothing`).
+Other choices for `proto` are `"https` or `git`.
 """
 setprotocol!(proto::Union{Nothing, AbstractString}=nothing) = GitTools.setprotocol!(proto)
 

@@ -518,7 +518,7 @@ end
     # test PRNG jump
 
     function randjumpvec(m, steps, len) # old version of randjump
-        mts = accumulate(Future.randjump, m, fill(steps, len-1))
+        mts = accumulate(Future.randjump, fill(steps, len-1); init=m)
         pushfirst!(mts, m)
         mts
     end
@@ -681,8 +681,8 @@ end
     end
 end
 
-@testset "eltype for UniformBits" begin
-    @test eltype(Random.UInt52()) == UInt64
-    @test eltype(Random.UInt52(UInt128)) == UInt128
-    @test eltype(Random.UInt104()) == UInt128
+@testset "gentype for UniformBits" begin
+    @test Random.gentype(Random.UInt52()) == UInt64
+    @test Random.gentype(Random.UInt52(UInt128)) == UInt128
+    @test Random.gentype(Random.UInt104()) == UInt128
 end

@@ -103,7 +103,6 @@ include("precompile.jl")
 @deprecate pmap(p::AbstractWorkerPool, f, c1, c...; kwargs...) pmap(f, p, c1, c...; kwargs...)
 
 function __init__()
-    push!(Base.package_callbacks, _require_callback)
     init_parallel()
 end
 

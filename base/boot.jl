@@ -196,9 +196,9 @@ primitive type Int8    <: Signed   8 end
 primitive type Int16   <: Signed   16 end
 primitive type UInt16  <: Unsigned 16 end
 #primitive type Int32   <: Signed   32 end
-primitive type UInt32  <: Unsigned 32 end
+#primitive type UInt32  <: Unsigned 32 end
 #primitive type Int64   <: Signed   64 end
-primitive type UInt64  <: Unsigned 64 end
+#primitive type UInt64  <: Unsigned 64 end
 primitive type Int128  <: Signed   128 end
 primitive type UInt128 <: Unsigned 128 end
 
@@ -264,7 +264,7 @@ struct TypeError <: Exception
 end
 struct InexactError <: Exception
     func::Symbol
-    T::Type
+    T  # Type
     val
     InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
 end
@@ -564,7 +564,7 @@ end
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, T::Type, @nospecialize(val)) = (@_noinline_meta; throw(InexactError(f, T, val)))
+throw_inexacterror(f::Symbol, @nospecialize(T), val) = (@_noinline_meta; throw(InexactError(f, T, val)))
 
 function is_top_bit_set(x)
     @_inline_meta

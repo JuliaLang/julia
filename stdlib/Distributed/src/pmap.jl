@@ -187,7 +187,7 @@ function wrap_batch(f, p, handle_errors)
             remotecall_fetch(f, p, batch)
         catch e
             if handle_errors
-                return Any[BatchProcessingError(batch[i], e) for i in 1:length(batch)]
+                return Any[BatchProcessingError(b, e) for b in batch]
             else
                 rethrow(e)
             end

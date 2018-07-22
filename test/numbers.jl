@@ -2026,7 +2026,7 @@ end
 @testset "widen and widemul" begin
     @test widen(1.5f0) === 1.5
     @test widen(Int32(42)) === Int64(42)
-    @test widen(Int8) === Int
+    @test widen(Int8) === Int16
     @test widen(Int64) === Int128
     @test widen(Float32) === Float64
     @test widen(Float16) === Float32

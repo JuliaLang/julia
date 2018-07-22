@@ -4,7 +4,15 @@
 
 struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     diag::V
+
+    function Diagonal{T,V}(diag) where {T,V<:AbstractVector{T}}
+        @assert !has_offset_axes(diag)
+        new{T,V}(diag)
+    end
 end
+Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
+Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
+
 """
     Diagonal(A::AbstractMatrix)
 
@@ -47,11 +55,10 @@ julia> Diagonal(V)
 """
 Diagonal(V::AbstractVector)
 
-Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
-Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
-
+Diagonal(D::Diagonal) = D
 Diagonal{T}(D::Diagonal{T}) where {T} = D
-Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
+Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
+
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal) = diagm(0 => D.diag)
 Array(D::Diagonal) = Matrix(D)
@@ -160,11 +167,13 @@ end
     lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
+    @assert !has_offset_axes(A)
     A .= A .* transpose(D.diag)
     return A
 end
 
 function lmul!(D::Diagonal, B::AbstractMatrix)
+    @assert !has_offset_axes(B)
     B .= D.diag .* B
     return B
 end
@@ -304,6 +313,7 @@ function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     v
 end
 function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
+    @assert !has_offset_axes(V)
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
@@ -325,7 +335,13 @@ ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
 ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
     (D = transD.parent; ldiv!(D, B))
 
+function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
+    broadcast!(\, parent(A), D.diag, parent(A))
+    A
+end
+
 function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+    @assert !has_offset_axes(A)
     dd = D.diag
     m, n = size(A)
     if (k = length(dd)) ≠ n
@@ -343,11 +359,18 @@ function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
     A
 end
 
+function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
+    broadcast!(/, parent(A), parent(A), permutedims(D.diag))
+    A
+end
 
 rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
     (D = adjD.parent; rdiv!(A, conj(D)))
 rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     (D = transD.parent; rdiv!(A, D))
+
+(/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
+    rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
 
 (\)(F::Factorization, D::Diagonal) =
     ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
@@ -419,7 +442,9 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-(\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
+(\)(D::Diagonal, A::AbstractMatrix) =
+    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
+
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 

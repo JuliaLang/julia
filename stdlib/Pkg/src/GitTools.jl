@@ -7,7 +7,7 @@ import LibGit2
 using Printf
 
 Base.@kwdef mutable struct MiniProgressBar
-    max::Float64 = 1
+    max::Float64 = 1.0
     header::String = ""
     color::Symbol = :white
     width::Int = 40
@@ -68,7 +68,7 @@ end
 
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
-const GIT_PROTOCOL = Ref{Union{String, Nothing}}("https")
+const GIT_PROTOCOL = Ref{Union{String, Nothing}}(nothing)
 
 setprotocol!(proto::Union{Nothing, AbstractString}=nothing) = GIT_PROTOCOL[] = proto
 

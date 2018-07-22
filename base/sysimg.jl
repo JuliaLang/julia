@@ -222,6 +222,7 @@ include("set.jl")
 include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
+include("strings/substring.jl")
 
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
@@ -457,12 +458,15 @@ function __init__()
     end
     # And try to prevent openblas from starting too many threads, unless/until specifically requested
     if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
-        cpu_cores = Sys.CPU_CORES::Int
-        if cpu_cores > 8 # always at most 8
+        cpu_threads = Sys.CPU_THREADS::Int
+        if cpu_threads > 8 # always at most 8
             ENV["OPENBLAS_NUM_THREADS"] = "8"
-        elseif haskey(ENV, "JULIA_CPU_CORES") # or exactly as specified
-            ENV["OPENBLAS_NUM_THREADS"] = cpu_cores
-        end # otherwise, trust that openblas will pick CPU_CORES anyways, without any intervention
+        elseif haskey(ENV, "JULIA_CPU_THREADS") # or exactly as specified
+            ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
+        elseif haskey(ENV, "JULIA_CPU_CORES") # TODO: delete in 1.0 (deprecation)
+            Core.print("JULIA_CPU_CORES is deprecated, use JULIA_CPU_THREADS instead.\n")
+            ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
+        end # otherwise, trust that openblas will pick CPU_THREADS anyways, without any intervention
     end
     # for the few uses of Libc.rand in Base:
     Libc.srand()
@@ -516,8 +520,8 @@ let
             :LinearAlgebra,
             :SparseArrays,
             :SuiteSparse,
-            :SharedArrays,
             :Distributed,
+            :SharedArrays,
             :Pkg,
             :Test,
             :REPL,

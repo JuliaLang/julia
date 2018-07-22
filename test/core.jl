@@ -6279,3 +6279,23 @@ f27910() = ((),)[2]
 f9765(::Bool) = 1
 g9765() = f9765(isa(1, 1))
 @test_throws TypeError g9765()
+
+# Issue 28102
+struct HasPlain28102
+    plain::Int
+    HasPlain28102() = new()
+end
+@noinline function bam28102()
+    x = HasPlain28102()
+    if isdefined(x,:plain)
+        x.plain
+    end
+end
+@test isa(bam28102(), Int)
+
+# Check that the tfunc for fieldtype is correct
+struct FooFieldType; x::Int; end
+f_fieldtype(b) = fieldtype(b ? Int : FooFieldType, 1)
+
+@test @inferred(f_fieldtype(false)) == Int
+@test_throws BoundsError f_fieldtype(true)

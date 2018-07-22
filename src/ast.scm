@@ -465,7 +465,7 @@
 
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))
-       (eq? (car e) 'meta) (eq? (cadr e) 'nospecialize)))
+       (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
 
 (define (if-generated? e)
   (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))

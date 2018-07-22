@@ -60,12 +60,13 @@ jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
 jl_sym_t *inline_sym; jl_sym_t *noinline_sym;
 jl_sym_t *polly_sym;
-jl_sym_t *propagate_inbounds_sym; jl_sym_t *generated_sym;
-jl_sym_t *generated_only_sym;
-jl_sym_t *isdefined_sym; jl_sym_t *nospecialize_sym;
-jl_sym_t *macrocall_sym; jl_sym_t *colon_sym;
-jl_sym_t *hygienicscope_sym;
-jl_sym_t *escape_sym;
+jl_sym_t *propagate_inbounds_sym;
+jl_sym_t *generated_sym; jl_sym_t *generated_only_sym;
+jl_sym_t *isdefined_sym;
+jl_sym_t *specialize_sym; jl_sym_t *nospecialize_sym;
+jl_sym_t *macrocall_sym;
+jl_sym_t *colon_sym;
+jl_sym_t *hygienicscope_sym; jl_sym_t *escape_sym;
 jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
 jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
 
@@ -384,6 +385,7 @@ void jl_init_frontend(void)
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
     isdefined_sym = jl_symbol("isdefined");
     nospecialize_sym = jl_symbol("nospecialize");
+    specialize_sym = jl_symbol("specialize");
     macrocall_sym = jl_symbol("macrocall");
     escape_sym = jl_symbol("escape");
     hygienicscope_sym = jl_symbol("hygienic-scope");

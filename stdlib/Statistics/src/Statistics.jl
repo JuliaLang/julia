@@ -9,6 +9,8 @@ module Statistics
 
 using LinearAlgebra, SparseArrays
 
+using Base: has_offset_axes
+
 export cor, cov, std, stdm, var, varm, mean!, mean,
     median!, median, middle, quantile!, quantile
 
@@ -70,7 +72,7 @@ function mean(f::Base.Callable, itr)
     end
     return total/count
 end
-mean(f::Base.Callable, A::AbstractArray) = sum(f, A) / Base._length(A)
+mean(f::Base.Callable, A::AbstractArray) = sum(f, A) / length(A)
 
 """
     mean!(r, v)
@@ -96,7 +98,7 @@ julia> mean!([1. 1.], v)
 """
 function mean!(R::AbstractArray, A::AbstractArray)
     sum!(R, A; init=true)
-    x = max(1, Base._length(R)) // Base._length(A)
+    x = max(1, length(R)) // length(A)
     R .= R .* x
     return R
 end
@@ -126,7 +128,7 @@ julia> mean(A, dims=2)
 mean(A::AbstractArray; dims=:) = _mean(A, dims)
 
 _mean(A::AbstractArray{T}, region) where {T} = mean!(Base.reducedim_init(t -> t/2, +, A, region), A)
-_mean(A::AbstractArray, ::Colon) = sum(A) / Base._length(A)
+_mean(A::AbstractArray, ::Colon) = sum(A) / length(A)
 
 function mean(r::AbstractRange{<:Real})
     isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
@@ -196,8 +198,8 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
     isempty(R) || fill!(R, zero(S))
     isempty(A) && return R
 
-    if Base.has_fast_linear_indexing(A) && lsiz > 16
-        nslices = div(Base._length(A), lsiz)
+    if Base.has_fast_linear_indexing(A) && lsiz > 16 && !has_offset_axes(R, means)
+        nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i = 1:nslices
             @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
@@ -208,7 +210,7 @@ function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::Abstr
     indsAt, indsRt = Base.safe_tail(axes(A)), Base.safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsRt)
     if Base.reducedim1(R, A)
-        i1 = first(Base.indices1(R))
+        i1 = first(Base.axes1(R))
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
@@ -233,7 +235,7 @@ function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; correcte
     if isempty(A)
         fill!(R, convert(S, NaN))
     else
-        rn = div(Base._length(A), Base._length(R)) - Int(corrected)
+        rn = div(length(A), length(R)) - Int(corrected)
         centralize_sumabs2!(R, A, m)
         R .= R .* (1 // rn)
     end
@@ -262,7 +264,7 @@ _varm(A::AbstractArray{T}, m, corrected::Bool, region) where {T} =
 varm(A::AbstractArray, m; corrected::Bool=true) = _varm(A, m, corrected, :)
 
 function _varm(A::AbstractArray{T}, m, corrected::Bool, ::Colon) where T
-    n = Base._length(A)
+    n = length(A)
     n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
@@ -393,7 +395,7 @@ stdm(iterable, m; corrected::Bool=true) =
 _conj(x::AbstractArray{<:Real}) = x
 _conj(x::AbstractArray) = conj(x)
 
-_getnobs(x::AbstractVector, vardim::Int) = Base._length(x)
+_getnobs(x::AbstractVector, vardim::Int) = length(x)
 _getnobs(x::AbstractMatrix, vardim::Int) = size(x, vardim)
 
 function _getnobs(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int)
@@ -421,7 +423,7 @@ unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
 
 # covzm (with centered data)
 
-covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x) / (Base._length(x) - Int(corrected))
+covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x) / (length(x) - Int(corrected))
 function covzm(x::AbstractMatrix, vardim::Int=1; corrected::Bool=true)
     C = unscaled_covzm(x, vardim)
     T = promote_type(typeof(first(C) / 1), eltype(C))
@@ -431,7 +433,7 @@ function covzm(x::AbstractMatrix, vardim::Int=1; corrected::Bool=true)
     return A
 end
 covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
-    unscaled_covzm(x, y) / (Base._length(x) - Int(corrected))
+    unscaled_covzm(x, y) / (length(x) - Int(corrected))
 function covzm(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1; corrected::Bool=true)
     C = unscaled_covzm(x, y, vardim)
     T = promote_type(typeof(first(C) / 1), eltype(C))
@@ -506,6 +508,7 @@ clampcor(x) = x
 # cov2cor!
 
 function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
+    @assert !has_offset_axes(C, xsd)
     nx = length(xsd)
     size(C) == (nx, nx) || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:nx
@@ -520,6 +523,7 @@ function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
     return C
 end
 function cov2cor!(C::AbstractMatrix, xsd, ysd::AbstractArray)
+    @assert !has_offset_axes(C, ysd)
     nx, ny = size(C)
     length(ysd) == ny || throw(DimensionMismatch("inconsistent dimensions"))
     for (j, y) in enumerate(ysd)   # fixme (iter): here and in all `cov2cor!` we assume that `C` is efficiently indexed by integers
@@ -530,6 +534,7 @@ function cov2cor!(C::AbstractMatrix, xsd, ysd::AbstractArray)
     return C
 end
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd)
+    @assert !has_offset_axes(C, xsd)
     nx, ny = size(C)
     length(xsd) == nx || throw(DimensionMismatch("inconsistent dimensions"))
     for j in 1:ny
@@ -540,6 +545,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd)
     return C
 end
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
+    @assert !has_offset_axes(C, xsd, ysd)
     nx, ny = size(C)
     (length(xsd) == nx && length(ysd) == ny) ||
         throw(DimensionMismatch("inconsistent dimensions"))
@@ -570,6 +576,7 @@ corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
 corm(x::AbstractVector{T}, xmean) where {T} = one(real(T))
 corm(x::AbstractMatrix, xmean, vardim::Int=1) = corzm(x .- xmean, vardim)
 function corm(x::AbstractVector, mx, y::AbstractVector, my)
+    @assert !has_offset_axes(x, y)
     n = length(x)
     length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
     n > 0 || throw(ArgumentError("correlation only defined for non-empty vectors"))
@@ -687,7 +694,7 @@ function median!(v::AbstractVector)
     eltype(v)>:Missing && any(ismissing, v) && return missing
     (eltype(v)<:AbstractFloat || eltype(v)>:AbstractFloat) && any(isnan, v) && return NaN
     inds = axes(v, 1)
-    n = Base._length(inds)
+    n = length(inds)
     mid = div(first(inds)+last(inds),2)
     if isodd(n)
         return middle(partialsort!(v,mid))
@@ -744,7 +751,7 @@ median(v::AbstractArray; dims=:) = _median(v, dims)
 
 _median(v::AbstractArray, dims) = mapslices(median!, v, dims = dims)
 
-_median(v::AbstractArray{T}, ::Colon) where {T} = median!(copyto!(Array{T,1}(undef, Base._length(v)), v))
+_median(v::AbstractArray{T}, ::Colon) where {T} = median!(copyto!(Array{T,1}(undef, length(v)), v))
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
@@ -794,6 +801,7 @@ julia> y
 """
 function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
                    sorted::Bool=false)
+    @assert !has_offset_axes(q, v, p)
     if size(p) != size(q)
         throw(DimensionMismatch("size of p, $(size(p)), must equal size of q, $(size(q))"))
     end
@@ -824,6 +832,7 @@ end
 # Function to perform partial sort of v for quantiles in given range
 function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
     isempty(v) && throw(ArgumentError("empty data vector"))
+    @assert !has_offset_axes(v)
 
     if !sorted
         lv = length(v)
@@ -841,6 +850,7 @@ end
 # Core quantile lookup function: assumes `v` sorted
 @inline function _quantile(v::AbstractVector, p::Real)
     0 <= p <= 1 || throw(ArgumentError("input probability out of [0,1] range"))
+    @assert !has_offset_axes(v)
 
     lv = length(v)
     f0 = (lv - 1)*p # 0-based interpolated index
@@ -932,6 +942,7 @@ end
 
 # This is the function that does the reduction underlying var/std
 function centralize_sumabs2!(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, means::AbstractArray) where {S,Tv,Ti}
+    @assert !has_offset_axes(R, A, means)
     lsiz = Base.check_reducedims(R,A)
     size(means) == size(R) || error("size of means must match size of R")
     isempty(R) || fill!(R, zero(S))
