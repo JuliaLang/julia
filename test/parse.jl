@@ -227,20 +227,25 @@ end
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
 
 # issue #16594
-@test length(:(@test 1 +
-                     1 == 2).args) == 3
+@test Meta.parse("@x a + \nb") == Meta.parse("@x a +\nb")
 @test [1 +
        1] == [2]
 @test [1 +1] == [1 1]
-@test length(:(@x 1 +1 -1).args) == 5
-@test length(:(@x 1 + 1 -1).args) == 4
-@test length(:(@x 1 + 1 - 1).args) == 3
-@test length(:(@x 1 +
-                  1 -
-                  1).args) == 3
-@test length(:(@x 1 +
-                  1 +
-                  1).args) == 3
+
+# issue #16594, note for the macro tests, order is important
+# because the line number is included as part of the expression
+# (i.e. both macros must start on the same line)
+@test :(@test((1+1) == 2)) == :(@test 1 +
+                                      1 == 2)
+@test :(@x 1 +1 -1) == :(@x(1, +1, -1))
+@test :(@x 1 + 1 -1) == :(@x(1+1, -1))
+@test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
+@test :(@x(1 + 1 - 1)) == :(@x 1 +
+                               1 -
+                               1)
+@test :(@x(1 + 1 + 1)) == :(@x 1 +
+                               1 +
+                               1)
 @test :([x .+
           y]) == :([x .+ y])
 
