@@ -278,14 +278,6 @@ Accurately compute ``e^x-1``.
 """
 expm1(x)
 
-for f in (:exp2,)
-    @eval begin
-        ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        ($f)(x::Real) = ($f)(float(x))
-    end
-end
-
 """
     exp2(x)
 
@@ -298,6 +290,10 @@ julia> exp2(5)
 ```
 """
 exp2(x::AbstractFloat) = 2^x
+
+exp2(x::Float64) = ccall(("exp2",libm), Float64, (Float64,), x)
+exp2(x::Float32) = ccall(("exp2",libm), Float32, (Float32,), x)
+exp2(x::Real) = exp2(float(x))
 
 """
     exp10(x)
