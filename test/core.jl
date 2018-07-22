@@ -6299,3 +6299,16 @@ f_fieldtype(b) = fieldtype(b ? Int : FooFieldType, 1)
 
 @test @inferred(f_fieldtype(false)) == Int
 @test_throws BoundsError f_fieldtype(true)
+
+# Issue #28224
+@noinline make_error28224(n) = n == 5 ? error() : true
+function foo28224()
+    z = 0
+    try
+        while make_error28224(z)
+            z+=1
+        end
+    catch end
+    return z
+end
+@test foo28224() == 5

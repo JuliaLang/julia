@@ -725,8 +725,8 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                 unode = ivalundef ? UpsilonNode() : UpsilonNode(incoming_vals[slot_id(slot)])
                 typ = ivalundef ? MaybeUndef(Union{}) : slottypes[slot_id(slot)]
                 push!(node.values,
-                    NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item)+1,
-                                 typ, unode).id - length(ir.stmts)))
+                    NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item),
+                                 typ, unode, true).id - length(ir.stmts)))
             end
         end
         push!(visited, item)
