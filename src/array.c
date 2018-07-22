@@ -922,7 +922,11 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
         oldnbytes += a->maxsize;
     }
 
-    char *originalptr = ((char*) a->data) - a->offset;
+    if (elsz == 1 && !isbitsunion) {
+        newbytes++;
+        oldnbytes++;
+    }
+    char *originalptr = ((char*) a->data) - a->offset * a->elsize;
     if (a->flags.how == 1) {
         //this is a julia-allocated buffer that needs to be marked
     }
@@ -936,7 +940,7 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
         }
         size_t oldoffsnb = a->offset * elsz;
         a->data = ((char*) jl_gc_managed_realloc(originalptr, newbytes, oldnbytes,
-                                        a->flags.isaligned, (jl_value_t*) a));
+                                        a->flags.isaligned, (jl_value_t*) a)) + oldoffsnb;
         a->maxsize -= dec;
         if (isbitsunion) {
             newtypetagdata = jl_array_typetagdata(a);
