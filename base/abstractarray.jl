@@ -653,7 +653,7 @@ function copyto!(dest::AbstractArray, src)
     y = iterate(destiter)
     for x in src
         y === nothing &&
-            throw(ArgumentError(string("source has fewer elements than required")))
+            throw(ArgumentError(string("destination has fewer elements than required")))
         dest[y[1]] = x
         y = iterate(destiter, y[2])
     end
