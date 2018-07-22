@@ -65,14 +65,17 @@ isequal(::Any, ::Missing) = false
 isless(::Missing, ::Missing) = false
 isless(::Missing, ::Any) = false
 isless(::Any, ::Missing) = true
+isapprox(::Missing, ::Missing; kwargs...) = missing
+isapprox(::Missing, ::Any; kwargs...) = missing
+isapprox(::Any, ::Missing; kwargs...) = missing
 
 # Unary operators/functions
 for f in (:(!), :(~), :(+), :(-), :(identity), :(zero), :(one), :(oneunit),
           :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan),
           :(iszero), :(transpose), :(adjoint), :(float), :(conj),
-	  :(abs), :(abs2), :(iseven), :(ispow2),
-	  :(real), :(imag), :(sign))
+          :(abs), :(abs2), :(iseven), :(ispow2),
+          :(real), :(imag), :(sign))
     @eval ($f)(::Missing) = missing
 end
 for f in (:(Base.zero), :(Base.one), :(Base.oneunit))

@@ -369,4 +369,8 @@ end
     end
 end
 
+@testset "missing values" begin
+    @test ismissing(norm(missing))
+end
+
 end # module TestGeneric
