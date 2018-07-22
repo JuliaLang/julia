@@ -114,7 +114,7 @@ julia> Meta.parse("x = 3, y = 5", 5)
 (:((3, y) = 5), 13)
 ```
 """
-function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true,
+function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
                depwarn::Bool=true)
     # pos is one based byte offset.
     # returns (expr, end_pos). expr is () in case of parse error.

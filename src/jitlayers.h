@@ -142,6 +142,9 @@ public:
 
     JuliaOJIT(TargetMachine &TM);
 
+    void RegisterJITEventListener(JITEventListener *L);
+    std::vector<JITEventListener *> EventListeners;
+    void NotifyFinalizer(const object::ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addGlobalMapping(const GlobalValue *GV, void *Addr);
     void *getPointerToGlobalIfAvailable(StringRef S);
@@ -153,7 +156,6 @@ public:
     uint64_t getGlobalValueAddress(const std::string &Name);
     uint64_t getFunctionAddress(const std::string &Name);
     Function *FindFunctionNamed(const std::string &Name);
-    void RegisterJITEventListener(JITEventListener *L);
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;
 private:

@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+using .Main.TestHelpers.OAs
 
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
@@ -415,3 +417,11 @@ test18695(r) = sum( t^2 for t in r )
         @test typeof(X) === typeof(Y)
     end
 end
+
+# offset axes
+i = Base.Slice(-3:3)
+x = [j^2 for j in i]
+@test sum(x) == sum(x.parent) == 28
+i = Base.Slice(0:0)
+x = [j+7 for j in i]
+@test sum(x) == 7

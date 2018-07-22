@@ -12,10 +12,7 @@ struct CapturedException <: Exception
         # Typically the result of a catch_backtrace()
 
         # Process bt_raw so that it can be safely serialized
-        bt_lines = Any[]
-        process_func(args...) = push!(bt_lines, args)
-        process_backtrace(process_func, bt_raw, 100) # Limiting this to 100 lines.
-
+        bt_lines = process_backtrace(bt_raw, 100) # Limiting this to 100 lines.
         CapturedException(ex, bt_lines)
     end
 
@@ -26,6 +23,14 @@ function showerror(io::IO, ce::CapturedException)
     showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 end
 
+"""
+    CompositeException
+
+Wrap a `Vector` of exceptions thrown by a [`Task`](@ref) (e.g. generated from a remote worker over a channel
+or an asynchronously executing local I/O write or a remote worker under `pmap`) with information about the series of exceptions.
+For example, if a group of workers are executing several tasks, and multiple workers fail, the resulting `CompositeException` will
+contain a "bundle" of information from each worker indicating where and why the exception(s) occurred.
+"""
 struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])

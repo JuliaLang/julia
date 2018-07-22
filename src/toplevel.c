@@ -797,7 +797,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
 
     jl_value_t *result;
     if (has_intrinsics || (!has_defs && fast && has_loops &&
-                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF)) {
+                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
+                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         li = method_instance_for_thunk(thk, m);
         jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);

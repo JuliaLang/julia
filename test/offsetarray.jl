@@ -15,15 +15,15 @@ v0 = rand(4)
 v = OffsetArray(v0, (-3,))
 h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test axes(v) == (-2:1,)
-@test_throws ErrorException size(v)
-@test_throws ErrorException size(v, 1)
+@test size(v) == (4,)
+@test size(v, 1) == 4
 
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # IndexLinear
 S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
 @test axes(A) == axes(S) == (0:1, 3:4)
-@test_throws ErrorException size(A)
-@test_throws ErrorException size(A, 1)
+@test size(A) == (2,2)
+@test size(A, 1) == 2
 
 # Scalar indexing
 @test A[0,3] == A[1] == A[0,3,1] == S[0,3] == S[1] == S[0,3,1] == 1
@@ -82,6 +82,29 @@ for i = 1:9 @test A_3_3[i] == i end
 @test_throws BoundsError S[CartesianIndex(1,1)]
 @test eachindex(A) == 1:4
 @test eachindex(S) == CartesianIndices(axes(S)) == CartesianIndices(map(Base.Slice, (0:1,3:4)))
+
+# LinearIndices
+# issue 27986
+let a1 = [11,12,13], a2 = [1 2; 3 4]
+    b1 = OffsetArray(a1, (-3,))
+    i1 = LinearIndices(b1)
+    @test i1[-2] == -2
+    @test_throws BoundsError i1[-3]
+    @test_throws BoundsError i1[1]
+    @test i1[-2:end] === -2:0
+    @test @inferred(i1[-2:0]) === -2:0
+    @test_throws BoundsError i1[-3:end]
+    @test_throws BoundsError i1[-2:1]
+    b2 = OffsetArray(a2, (-3,5))
+    i2 = LinearIndices(b2)
+    @test i2[3] == 3
+    @test_throws BoundsError i2[0]
+    @test_throws BoundsError i2[5]
+    @test @inferred(i2[2:3])   === 2:3
+    @test @inferred(i2[1:2:4]) === 1:2:3
+    @test_throws BoundsError i2[1:5]
+    @test_throws BoundsError i2[1:2:5]
+end
 
 # logical indexing
 @test A[A .> 2] == [3,4]
@@ -167,8 +190,8 @@ show(io, parent(v))
 smry = summary(v)
 @test occursin("OffsetArray{Float64,1", smry)
 @test occursin("with indices -1:1", smry)
-function cmp_showf(printfunc, io, A)
-    ioc = IOContext(io, :limit => true, :compact => true)
+function cmp_showf(printfunc, io, A; options = ())
+    ioc = IOContext(io, :limit => true, :compact => true, options...)
     printfunc(ioc, A)
     str1 = String(take!(io))
     printfunc(ioc, parent(A))
@@ -179,7 +202,7 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)))       # rows&c
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # columns fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
-cmp_showf(Base.show, io, OffsetArray(rand(1,1,10^3,1), (1,2,3,4)))      # issue in #24393
+cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop=2/11, length=3*29), 3, 29), (-2, -15)); options=(:displaysize=>(53,210),))
 targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
             "$OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
             "$OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
@@ -190,7 +213,7 @@ targets2 = ["(1.0, 1.0)",
             "([1.0], [1.0])",
             "([1.0], [1.0])",
             "([1.0], [1.0])"]
-for n = 0:4
+@testset "printing of OffsetArray with n=$n" for n = 0:4
     a = OffsetArray(fill(1.,ntuple(d->1,n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
@@ -339,9 +362,9 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
-@test maximum(A, dims=1) == OffsetArray(maximum(parent(A), dims=1), (0,A.offsets[2]))
-@test maximum(A, dims=2) == OffsetArray(maximum(parent(A), dims=2), (A.offsets[1],0))
-@test maximum(A, dims=1:2) == maximum(parent(A), dims=1:2)
+@test maximum(A, dims=1) == OffsetArray(maximum(parent(A), dims=1), A.offsets)
+@test maximum(A, dims=2) == OffsetArray(maximum(parent(A), dims=2), A.offsets)
+@test maximum(A, dims=1:2) == OffsetArray(maximum(parent(A), dims=1:2), A.offsets)
 C = similar(A)
 cumsum!(C, A, dims=1)
 @test parent(C) == cumsum(parent(A), dims=1)
@@ -373,11 +396,11 @@ I = findall(!iszero, z)
 @test findall(x->x==0, h) == [2]
 @test mean(A_3_3) == median(A_3_3) == 5
 @test mean(x->2x, A_3_3) == 10
-@test mean(A_3_3, dims=1) == median(A_3_3, dims=1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
-@test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
+@test mean(A_3_3, dims=1) == median(A_3_3, dims=1) == OffsetArray([2 5 8], A_3_3.offsets)
+@test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), A_3_3.offsets)
 @test var(A_3_3) == 7.5
-@test std(A_3_3, dims=1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
-@test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
+@test std(A_3_3, dims=1) == OffsetArray([1 1 1], A_3_3.offsets)
+@test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), A_3_3.offsets)
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
 @test norm(v) ≈ norm(parent(v))
@@ -460,4 +483,9 @@ module SimilarUR
     @test_throws MethodError similar(a, Float64, ur)
     @test_throws MethodError similar(a, Float64, (ur,))
     @test_throws MethodError similar(a, (2.0,3.0))
+end
+
+@testset "Issue 28101" begin
+    A = OffsetArray(reshape(16:-1:1, (4, 4)), (-3,5))
+    @test maximum(A, dims=1) == OffsetArray(maximum(parent(A), dims=1), A.offsets)
 end

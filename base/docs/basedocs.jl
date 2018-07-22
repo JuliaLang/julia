@@ -2,10 +2,14 @@
 
 module BaseDocs
 
+@nospecialize # don't specialize on any arguments of the methods declared herein
+
 struct Keyword
-    name :: Symbol
+    name::Symbol
 end
-macro kw_str(text) Keyword(Symbol(text)) end
+macro kw_str(text)
+    return Keyword(Symbol(text))
+end
 
 """
 **Welcome to Julia $(string(VERSION)).** The full manual is available at

@@ -81,7 +81,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
         if isa(x, Expr)
             if x.head === :call || x.head === :invoke
                 f = x.args[1]
-                if f isa GlobalRef && (f.name === :llvmcall || f.name === :cglobal) && x.head === :call
+                if f isa GlobalRef && (f.name === :cglobal) && x.head === :call
                     # TODO: these are not yet linearized
                 else
                     for arg in x.args

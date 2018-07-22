@@ -722,11 +722,29 @@ let X = zeros(2, 3)
     @test X == [1 1 1; 2 2 2]
 end
 
+# issue #27988: inference of Broadcast.flatten
+using .Broadcast: Broadcasted
+let
+    bc = Broadcasted(+, (Broadcasted(*, (1, 2)), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
+    @test @inferred(Broadcast.cat_nested(bc)) == (1,2,3,4,5)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 62
+    bc = Broadcasted(+, (Broadcasted(*, (1, Broadcasted(/, (2.0, 2.5)))), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
+    @test @inferred(Broadcast.cat_nested(bc)) == (1,2.0,2.5,3,4,5)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
+end
+
 # Issue #26127: multiple splats in a fused dot-expression
 let f(args...) = *(args...)
     x, y, z = (1,2), 3, (4, 5)
     @test f.(x..., y, z...) == broadcast(f, x..., y, z...) == 120
     @test f.(x..., f.(x..., y, z...), y, z...) == broadcast(f, x..., broadcast(f, x..., y, z...), y, z...) == 120*120
+end
+
+@testset "Issue #27911: Broadcasting over collections with big indices" begin
+    @test iszero.(Int128(0):Int128(2)) == [true, false, false]
+    @test iszero.((Int128(0):Int128(2)) .- 1) == [false, true, false]
+    @test iszero.(big(0):big(2)) == [true, false, false]
+    @test iszero.((big(0):big(2)) .- 1) == [false, true, false]
 end
 
 @testset "Issue #27775: Broadcast!ing over nested scalar operations" begin

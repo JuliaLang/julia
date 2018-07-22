@@ -118,7 +118,7 @@ end
 
 temp_pkg_dir() do project_path
     @testset "simple add and remove with preview" begin
-        Pkg.init(project_path)
+        Pkg.activate(project_path)
         Pkg.add(TEST_PKG.name; preview = true)
         @test !isinstalled(TEST_PKG)
         Pkg.add(TEST_PKG.name)
@@ -239,7 +239,7 @@ temp_pkg_dir() do project_path
                     Pkg.setprotocol!("notarealprotocol")
                     # Pkg.develop is broken, update to use when fixed
                     @test_throws CommandError pkg"develop Example"
-                    Pkg.setprotocol!()
+                    Pkg.setprotocol!("https")
                     pkg"develop Example"
                     @test isinstalled(TEST_PKG)
                 finally
@@ -331,6 +331,7 @@ temp_pkg_dir() do project_path
     end
 end
 
+#=
 temp_pkg_dir() do project_path
     @testset "valid project file names" begin
         extract_uuid(toml_path) = begin
@@ -370,6 +371,7 @@ temp_pkg_dir() do project_path
         end # cd project_path
     end # @testset
 end
+=#
 
 temp_pkg_dir() do project_path
     @testset "invalid repo url" begin
@@ -383,28 +385,11 @@ temp_pkg_dir() do project_path
     end
 end
 
+
 temp_pkg_dir() do project_path
-    function with_dummy_env(f)
-        TEST_SIG = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time()), 0)
-        env_path = joinpath(mktempdir(), "Dummy")
-        withenv("USER" => "Test User") do
-            Pkg.generate(env_path)
-        end
-        repo = LibGit2.init(env_path)
-        LibGit2.with(LibGit2.init(env_path)) do repo
-            LibGit2.add!(repo, "*")
-            LibGit2.commit(repo, "initial commit"; author=TEST_SIG, committer=TEST_SIG)
-        end
-        Pkg.activate(env_path)
-        try
-            f()
-        finally
-            Pkg.activate()
-        end
-    end
     # pkg assumes `Example.jl` is still a git repo, it will try to fetch on `update`
     # `fetch` should warn that it is no longer a git repo
-    with_dummy_env() do
+    with_temp_env() do
         @testset "inconsistent repo state" begin
             package_path = joinpath(project_path, "Example")
             LibGit2.with(LibGit2.clone("https://github.com/JuliaLang/Example.jl", package_path)) do repo

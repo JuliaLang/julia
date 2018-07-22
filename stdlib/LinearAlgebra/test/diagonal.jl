@@ -27,6 +27,11 @@ srand(1)
             @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
             @test Diagonal{elty}(x).diag === x
         end
+        @test eltype(Diagonal{elty}([1,2,3,4])) == elty
+        @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
+        DI = Diagonal([1,2,3,4])
+        @test Diagonal(DI) === DI
+        @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
     end
@@ -453,6 +458,19 @@ end
     D = Diagonal(rand(5))
     @test x'*D*x == (x'*D)*x == (x'*Array(D))*x
     @test Transpose(x)*D*x == (Transpose(x)*D)*x == (Transpose(x)*Array(D))*x
+end
+
+@testset "Triangular division by Diagonal #27989" begin
+    K = 5
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        U = UpperTriangular(randn(elty, K, K))
+        L = LowerTriangular(randn(elty, K, K))
+        D = Diagonal(randn(elty, K))
+        @test (U / D)::UpperTriangular{elty} == UpperTriangular(Matrix(U) / Matrix(D))
+        @test (L / D)::LowerTriangular{elty} == LowerTriangular(Matrix(L) / Matrix(D))
+        @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
+        @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
+    end
 end
 
 end # module TestDiagonal

@@ -35,6 +35,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
         m->build_id++; // build id 0 is invalid
     m->primary_world = 0;
     m->counter = 0;
+    m->nospecialize = 0;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
@@ -61,6 +62,11 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
     if (std_imports) jl_add_standard_imports(m);
     JL_GC_POP();
     return (jl_value_t*)m;
+}
+
+JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on)
+{
+    self->nospecialize = (on ? -1 : 0);
 }
 
 JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)

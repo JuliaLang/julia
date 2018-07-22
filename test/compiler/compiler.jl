@@ -1147,6 +1147,7 @@ test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
 test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
+test_const_return(()->fieldtype(Dict{Int64,Nothing}, :age), Tuple{}, UInt)
 @eval test_const_return(()->Core.sizeof($(Array{Int,0}(undef))), Tuple{}, sizeof(Int))
 @eval test_const_return(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2))), Tuple{}, 4 * 2 * 2)
 
@@ -1189,7 +1190,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false) # any result is ok
     @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Const(false)
-    @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
+    @test isa_tfunc(typeof(Union{}), Union{}) === Union{}
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
     let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
@@ -1204,7 +1205,7 @@ let isa_tfunc = Core.Compiler.T_FFUNC_VAL[
     @test isa_tfunc(Val{1}, Type{Val{T}} where T) === Bool
     @test isa_tfunc(Val{1}, DataType) === Bool
     @test isa_tfunc(Any, Const(Any)) === Const(true)
-    @test isa_tfunc(Any, Union{}) === Union{} # any result is ok
+    @test isa_tfunc(Any, Union{}) === Union{}
     @test isa_tfunc(Any, Type{Union{}}) === Const(false)
     @test isa_tfunc(Union{Int64, Float64}, Type{Real}) === Const(true)
     @test isa_tfunc(Union{Int64, Float64}, Type{Integer}) === Bool
@@ -1468,6 +1469,19 @@ result = f24852_kernel(x, y)
 # TODO: test that `expand_early = true` + inflated `method_for_inference_limit_heuristics`
 # can be used to tighten up some inference result.
 
+f26339(T) = T === Union{} ? 1 : ""
+g26339(T) = T === Int ? 1 : ""
+@test Base.return_types(f26339, (Int,)) == Any[String]
+@test Base.return_types(g26339, (Int,)) == Any[String]
+@test Base.return_types(f26339, (Type{Int},)) == Any[String]
+@test Base.return_types(g26339, (Type{Int},)) == Any[Int]
+@test Base.return_types(f26339, (Type{Union{}},)) == Any[Int]
+@test Base.return_types(g26339, (Type{Union{}},)) == Any[String]
+@test Base.return_types(f26339, (typeof(Union{}),)) == Any[Int]
+@test Base.return_types(g26339, (typeof(Union{}),)) == Any[String]
+@test Base.return_types(f26339, (Type,)) == Any[Union{Int, String}]
+@test Base.return_types(g26339, (Type,)) == Any[Union{Int, String}]
+
 # Test that Conditional doesn't get widened to Bool too quickly
 f25261() = (1, 1)
 f25261(s) = i == 1 ? (1, 2) : nothing
@@ -1722,3 +1736,16 @@ Base.iterate(::Iterator27434, ::Any) = nothing
 f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
 T27078 = Vector{Vector{T}} where T
 @test f27078(T27078) === T27078.body
+
+# issue #28070
+g28070(f, args...) = f(args...)
+@test @inferred g28070(Core._apply, Base.:/, (1.0, 1.0)) == 1.0
+
+# issue #28079
+struct Foo28079 end
+@inline h28079(x, args...) = g28079(x, args...)
+@inline g28079(::Any, f, args...) = f(args...)
+test28079(p, n, m) = h28079(Foo28079(), Base.pointerref, p, n, m)
+cinfo_unoptimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=false)[].first
+cinfo_optimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=true)[].first
+@test cinfo_unoptimized.ssavaluetypes[end-1] === cinfo_optimized.ssavaluetypes[end-1] === Float32

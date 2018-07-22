@@ -49,7 +49,7 @@ to as "workers". When there is only one process, process 1 is considered a worke
 workers are considered to be all processes other than process 1.
 
 Let's try this out. Starting with `julia -p n` provides `n` worker processes on the local machine.
-Generally it makes sense for `n` to equal the number of CPU cores on the machine. Note that the `-p`
+Generally it makes sense for `n` to equal the number of CPU threads (logical cores) on the machine. Note that the `-p`
 argument implicitly loads module `Distributed`.
 
 
@@ -164,34 +164,47 @@ println("loaded")
 end
 ```
 
-Starting Julia with `julia -p 2`, you can use this to verify the following:
-
-  * `include("DummyModule.jl")` loads the file on just a single process
-    (whichever one executes the statement).
-  * `using DummyModule` causes the module to be loaded on all processes; however, the module is brought
-    into scope only on the one executing the statement.
-  * As long as `DummyModule` is loaded on process 2, commands like
-
-    ```julia
-    rr = RemoteChannel(2)
-    put!(rr, MyType(7))
-    ```
-
-    allow you to store an object of type `MyType` on process 2 even if `DummyModule` is not in scope
-    on process 2.
-
-You can force a command to run on all processes using the [`@everywhere`](@ref) macro. For example, `@everywhere`
-can also be used to directly define a function on all processes:
+In order to refer to `MyType` across all processes, `DummyModule.jl` needs to be loaded on
+every process.  Calling `include("DummyModule.jl")` loads it only on a single process.  To
+load it on every process, use the [`@everywhere`](@ref) macro (starting Julia with `julia -p
+2`):
 
 ```julia-repl
-julia> @everywhere id = myid()
-
-julia> remotecall_fetch(()->id, 2)
-2
+julia> @everywhere include("DummyModule.jl")
+loaded
+      From worker 3:    loaded
+      From worker 2:    loaded
 ```
 
-A file can also be preloaded on multiple processes at startup, and a driver script can be used
-to drive the computation:
+As usual, this does not bring `DummyModule` into scope on any of the process, which requires
+`using` or `import`.  Moreover, when `DummyModule` is brought into scope on one process, it
+is not on any other:
+
+```julia-repl
+julia> using .DummyModule
+
+julia> MyType(7)
+MyType(7)
+
+julia> fetch(@spawnat 2 MyType(7))
+ERROR: On worker 2:
+UndefVarError: MyType not defined
+⋮
+
+julia> fetch(@spawnat 2 DummyModule.MyType(7))
+MyType(7)
+```
+
+However, it's still possible, for instance, to send a `MyType` to a process which has loaded
+`DummyModule` even if it's not in scope:
+
+```julia-repl
+julia> put!(RemoteChannel(2), MyType(7))
+RemoteChannel{Channel{Any}}(2, 1, 13)
+```
+
+A file can also be preloaded on multiple processes at startup with the `-L` flag, and a
+driver script can be used to drive the computation:
 
 ```
 julia -p <n> -L file1.jl -L file2.jl driver.jl
@@ -199,6 +212,12 @@ julia -p <n> -L file1.jl -L file2.jl driver.jl
 
 The Julia process running the driver script in the example above has an `id` equal to 1, just
 like a process providing an interactive prompt.
+
+Finally, if `DummyModule.jl` is not a standalone file but a package, then `using
+DummyModule` will _load_ `DummyModule.jl` on all processes, but only bring it into scope on
+the process where `using` was called.
+
+## Starting and managing worker processes
 
 The base Julia installation has in-built support for two types of clusters:
 
@@ -1143,7 +1162,7 @@ Newly launched workers are connected to each other and the master process in an 
 Specifying the command line argument `--worker[=<cookie>]` results in the launched processes
 initializing themselves as workers and connections being set up via TCP/IP sockets.
 
-All workers in a cluster share the same [cookie](#cluster-cookie) as the master. When the cookie is
+All workers in a cluster share the same [cookie](@ref man-cluster-cookie) as the master. When the cookie is
 unspecified, i.e, with the `--worker` option, the worker tries to read it from its standard input.
  `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
  standard inputs.
@@ -1200,7 +1219,7 @@ would typically specify only `io` or `host` / `port`:
     workers.
 
       * `count` with an integer value `n` will launch a total of `n` workers.
-      * `count` with a value of `:auto` will launch as many workers as the number of cores on that machine.
+      * `count` with a value of `:auto` will launch as many workers as the number of CPU threads (logical cores) on that machine.
       * `exename` is the name of the `julia` executable including the full path.
       * `exeflags` should be set to the required command line arguments for new workers.
   * `tunnel`, `bind_addr`, `sshflags` and `max_parallel` are used when a ssh tunnel is required to
@@ -1306,7 +1325,7 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom `ClusterManager`.
 
-## Cluster Cookie
+## [Cluster Cookie](@id man-cluster-cookie)
 
 All processes in a cluster share the same cookie which, by default, is a randomly generated string
 on the master process:

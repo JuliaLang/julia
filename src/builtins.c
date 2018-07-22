@@ -816,6 +816,20 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
     int field_index;
     if (jl_is_long(f)) {
         field_index = jl_unbox_long(f) - 1;
+        if (st->name == jl_namedtuple_typename) {
+            jl_value_t *nm = jl_tparam0(st);
+            if (jl_is_tuple(nm)) {
+                int nf = jl_nfields(nm);
+                if (field_index < 0 || field_index >= nf)
+                    jl_bounds_error(t, f);
+            }
+            jl_value_t *tt = jl_tparam1(st);
+            while (jl_is_typevar(tt))
+                tt = ((jl_tvar_t*)tt)->ub;
+            if (tt == (jl_value_t*)jl_any_type)
+                return (jl_value_t*)jl_any_type;
+            return get_fieldtype(tt, f);
+        }
         int nf = jl_field_count(st);
         if (nf > 0 && field_index >= nf-1 && st->name == jl_tuple_typename) {
             jl_value_t *ft = jl_field_type(st, nf-1);
@@ -1304,6 +1318,8 @@ void jl_init_primitives(void)
     add_builtin("UInt8", (jl_value_t*)jl_uint8_type);
     add_builtin("Int32", (jl_value_t*)jl_int32_type);
     add_builtin("Int64", (jl_value_t*)jl_int64_type);
+    add_builtin("UInt32", (jl_value_t*)jl_uint32_type);
+    add_builtin("UInt64", (jl_value_t*)jl_uint64_type);
 #ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);
 #else

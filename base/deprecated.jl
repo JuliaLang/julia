@@ -1575,6 +1575,10 @@ end
     Base.@deprecate log Base.log
 end
 
+# PR 27856
+@eval Base.Sys Base.@deprecate_binding CPU_CORES CPU_THREADS true nothing false
+# TODO: delete deprecation code in sysimg.jl and sysinfo.jl
+
 # PR 26071
 @deprecate(matchall(r::Regex, s::AbstractString; overlap::Bool = false),
            collect(m.match for m in eachmatch(r, s, overlap = overlap)))
@@ -1747,7 +1751,21 @@ end
 @deprecate mapfoldl(f, op, v0, itr) mapfoldl(f, op, itr; init=v0)
 @deprecate mapfoldr(f, op, v0, itr) mapfoldr(f, op, itr; init=v0)
 
+
 @deprecate startswith(a::Vector{UInt8}, b::Vector{UInt8}) length(a) >= length(b) && view(a, 1:length(b)) == b
+
+# PR #27859
+@deprecate accumulate(op, v0, x::AbstractVector) accumulate(op, x; init=v0)
+@deprecate accumulate!(op, y, v0, x::AbstractVector) accumulate!(op, y, x; init=v0)
+
+# issue 27352
+function print(io::IO, ::Nothing)
+    depwarn("Calling `print` on `nothing` is deprecated; use `show`, `repr`, or custom output instead.", :print)
+    show(io, nothing)
+end
+
+@deprecate indices1 axes1
+@deprecate _length length
 
 # END 0.7 deprecations
 

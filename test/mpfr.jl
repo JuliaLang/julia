@@ -12,7 +12,7 @@ import Base.MPFR
     @test x == BigFloat(x) == BigFloat(0xc) == BigFloat(12.) ==
           BigFloat(BigInt(12)) == BigFloat(BigFloat(12)) == parse(BigFloat,"12") ==
           parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
-          BigFloat(Float32(12.)) == BigFloat(12//1)
+          BigFloat(Float32(12.)) == BigFloat(12//1) == BigFloat(SubString("12"))
 
     @test typeof(BigFloat(typemax(Int8))) == BigFloat
     @test typeof(BigFloat(typemax(Int16))) == BigFloat

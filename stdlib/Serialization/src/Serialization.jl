@@ -11,7 +11,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall
+using Base: unaliascopy, unwrap_unionall, has_offset_axes
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -230,6 +230,7 @@ function serialize(s::AbstractSerializer, x::Symbol)
 end
 
 function serialize_array_data(s::IO, a)
+    @assert !has_offset_axes(a)
     isempty(a) && return 0
     if eltype(a) === Bool
         last = a[1]

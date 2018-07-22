@@ -494,6 +494,20 @@ end
         "\r\e[2Cend\r\e[5C"
 end
 
+@testset "shift selection" begin
+    s = new_state()
+    edit_insert(s, "αä🐨") # for issue #28183
+    s.current_action = :unknown
+    LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+    @test LineEdit.region(s) == (5=>9)
+    LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+    @test LineEdit.region(s) == (2=>9)
+    LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+    @test LineEdit.region(s) == (0=>9)
+    LineEdit.edit_shift_move(s, LineEdit.edit_move_right)
+    @test LineEdit.region(s) == (2=>9)
+end
+
 @testset "tab/backspace alignment feature" begin
     s = new_state()
     move_left(s, n) = for x = 1:n

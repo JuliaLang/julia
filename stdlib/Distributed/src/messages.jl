@@ -71,7 +71,7 @@ struct JoinPGRPMsg <: AbstractMsg
     lazy::Bool
 end
 struct JoinCompleteMsg <: AbstractMsg
-    cpu_cores::Int
+    cpu_threads::Int
     ospid::Int
 end
 
