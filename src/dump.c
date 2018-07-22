@@ -649,9 +649,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         jl_serialize_value(s, jl_typeof(ar));
         if (!ar->flags.ptrarray) {
-            size_t extra = jl_is_uniontype(jl_tparam0(jl_typeof(ar))) ? jl_array_len(ar) : 0;
-            size_t tot = jl_array_len(ar) * ar->elsize + extra;
-            ios_write(s->s, (char*)jl_array_data(ar), tot);
+            ios_write(s->s, (char*)jl_array_data(ar), jl_array_len(ar) * ar->elsize);
+            if (jl_array_isbitsunion(ar))
+                ios_write(s->s, jl_array_typetagdata(ar), jl_array_len(ar));
         }
         else {
             for (i = 0; i < jl_array_len(ar); i++) {
@@ -1508,7 +1508,7 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
     jl_value_t *aty = jl_deserialize_value(s, &jl_astaggedvalue(a)->type);
     jl_set_typeof(a, aty);
     if (!a->flags.ptrarray) {
-        size_t extra = jl_is_uniontype(jl_tparam0(aty)) ? jl_array_len(a) : 0;
+        size_t extra = jl_array_isbitsunion(a) ? jl_array_len(a) : 0;
         size_t tot = jl_array_len(a) * a->elsize + extra;
         ios_read(s->s, (char*)jl_array_data(a), tot);
     }

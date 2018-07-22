@@ -1664,6 +1664,11 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int dim
     return emit_arraysize(ctx, tinfo, ConstantInt::get(T_int32, dim));
 }
 
+static Value *emit_vectormaxsize(jl_codectx_t &ctx, const jl_cgval_t &ary)
+{
+    return emit_arraysize(ctx, ary, 2); // maxsize aliases ncols in memory layout for vector
+}
+
 static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
     Value *t = boxed(ctx, tinfo);
@@ -1695,7 +1700,7 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 #endif
 }
 
-static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo, jl_value_t *ex)
+static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
     return emit_arraylen_prim(ctx, tinfo);
 }
@@ -1743,6 +1748,15 @@ static Value *emit_arrayflags(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     return tbaa_decorate(tbaa_arrayflags, ctx.builder.CreateLoad(addr));
 }
 
+static Value *emit_arrayndims(jl_codectx_t &ctx, const jl_cgval_t &ary)
+{
+    Value *flags = emit_arrayflags(ctx, ary);
+    cast<LoadInst>(flags)->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(jl_LLVMContext, None));
+    flags = ctx.builder.CreateLShr(flags, 2);
+    flags = ctx.builder.CreateAnd(flags, 0x3FF); // (1<<10) - 1
+    return flags;
+}
+
 static Value *emit_arrayelsize(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
     Value *t = boxed(ctx, tinfo);
@@ -1755,6 +1769,23 @@ static Value *emit_arrayelsize(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
                                           emit_bitcast(ctx, decay_derived(t), jl_parray_llvmt),
                                           elsize_field);
     return tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(addr));
+}
+
+static Value *emit_arrayoffset(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int nd)
+{
+    if (nd != -1 && nd != 1) // only Vector can have an offset
+        return ConstantInt::get(T_int32, 0);
+    Value *t = boxed(ctx, tinfo);
+#ifdef STORE_ARRAY_LEN
+    int offset_field = 4;
+#else
+    int offset_field = 3;
+#endif
+
+    Value *addr = ctx.builder.CreateStructGEP(jl_array_llvmt,
+                                              emit_bitcast(ctx, decay_derived(t), jl_parray_llvmt),
+                                              offset_field);
+    return tbaa_decorate(tbaa_arrayoffset, ctx.builder.CreateLoad(addr));
 }
 
 // Returns the size of the array represented by `tinfo` for the given dimension `dim` if
@@ -1810,7 +1841,7 @@ static Value *emit_array_nd_index(
         // the last one which we therefore have to do here.
         if (nidxs == 1) {
             // Linear indexing: Check against the entire linear span of the array
-            Value *alen = emit_arraylen(ctx, ainfo, ex);
+            Value *alen = emit_arraylen(ctx, ainfo);
             ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, alen), endBB, failBB);
         } else if (nidxs >= (size_t)nd){
             // No dimensions were omitted; just check the last remaining index
@@ -1844,7 +1875,7 @@ static Value *emit_array_nd_index(
             // Remove after 0.7: Ensure no dimensions were 0 and depwarn
             ctx.f->getBasicBlockList().push_back(depfailBB);
             ctx.builder.SetInsertPoint(depfailBB);
-            Value *total_length = emit_arraylen(ctx, ainfo, ex);
+            Value *total_length = emit_arraylen(ctx, ainfo);
             ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, total_length), depwarnBB, failBB);
 
             ctx.f->getBasicBlockList().push_back(depwarnBB);
