@@ -44,6 +44,7 @@ let iobuf = IOBuffer()
     @test !isempty(String(take!(iobuf)))
     Profile.clear()
     @test isempty(Profile.fetch())
+    @test Profile.callers("\\") !== nothing
 end
 
 # issue #13229
