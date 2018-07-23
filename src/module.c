@@ -41,7 +41,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
         jl_module_using(m, jl_core_module);
     }
     // export own name, so "using Foo" makes "Foo" itself visible
-    jl_set_const(m, name, (jl_value_t*)m);
+    jl_define_const(m, name, (jl_value_t*)m);
     jl_module_export(m, name);
     JL_GC_POP();
     return m;
@@ -486,22 +486,20 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
         bp->value = val;
         jl_gc_wb(m, val);
     } else {
-        jl_errorf("Cannot create global %s; it is already a global const. To "
-                  "change its value, use jl_checked_assignment",
-                  jl_symbol_name(bp->name));
+        jl_errorf("Can't modify global const %s; consider jl_checked_assignment"
+                  "to change its value.", jl_symbol_name(bp->name));
     }
 }
 
-JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
+JL_DLLEXPORT void jl_define_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    if (!bp->constp) {
+    if (!bp) {
         bp->value = val;
         bp->constp = 1;
         jl_gc_wb(m, val);
     } else {
-        jl_errorf("Cannot create const %s; it is already a global const. To "
-                  "change its value, use jl_checked_assignment",
+        jl_errorf("Cannot create const %s; variable already exists.",
                   jl_symbol_name(bp->name));
     }
 }

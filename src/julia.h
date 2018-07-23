@@ -1328,7 +1328,7 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT,
                                 jl_sym_t *var,
                                 jl_value_t *val JL_ROOTED_ARGUMENT);
-JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT,
+JL_DLLEXPORT void jl_define_const(jl_module_t *m JL_ROOTING_ARGUMENT,
                                jl_sym_t *var,
                                jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);

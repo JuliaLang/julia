@@ -208,7 +208,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr
     jl_sym_t *sname = jl_symbol(name);
     if (dt == NULL) {
         jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
-        jl_set_const(jl_core_module, sname, f);
+        jl_define_const(jl_core_module, sname, f);
         dt = (jl_datatype_t*)jl_typeof(f);
     }
     jl_method_instance_t *li = jl_new_method_instance_uninit();
@@ -2302,7 +2302,7 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     JL_GC_PUSH1(&ftype);
     ftype->name->mt->name = name;
     jl_gc_wb(ftype->name->mt, name);
-    jl_set_const(module, tname, (jl_value_t*)ftype);
+    jl_define_const(module, tname, (jl_value_t*)ftype);
     jl_value_t *f = jl_new_struct(ftype);
     ftype->instance = f; jl_gc_wb(ftype, f);
     JL_GC_POP();

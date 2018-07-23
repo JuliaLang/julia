@@ -1160,7 +1160,7 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
 {
     jl_value_t *i = jl_permbox32(jl_intrinsic_type, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
-    jl_set_const(inm, sym, i);
+    jl_define_const(inm, sym, i);
     jl_module_export(inm, sym);
 }
 
@@ -1179,7 +1179,7 @@ void jl_init_intrinsic_functions(void)
 {
     jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
     inm->parent = jl_core_module;
-    jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
+    jl_define_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
     jl_mk_builtin_func(jl_intrinsic_type, "IntrinsicFunction", jl_f_intrinsic_call);
 
 #define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
@@ -1193,7 +1193,7 @@ void jl_init_intrinsic_functions(void)
 
 static void add_builtin(const char *name, jl_value_t *v)
 {
-    jl_set_const(jl_core_module, jl_symbol(name), v);
+    jl_define_const(jl_core_module, jl_symbol(name), v);
 }
 
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)

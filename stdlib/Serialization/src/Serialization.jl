@@ -1010,7 +1010,7 @@ function deserialize_typename(s::AbstractSerializer, number)
                     tn, tn.module, super, parameters, names, types,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
-        ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
+        ccall(:jl_define_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
         if has_instance && !isdefined(ty, :instance)
             # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty

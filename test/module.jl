@@ -6,7 +6,7 @@ ccall(:jl_set_global, Void, (Ref{Module},Ref{Symbol},Any),
         Ref(Base), Ref(:testGlobal1), 10)
 @test 10 == Base.testGlobal1
 
-ccall(:jl_set_const, Void, (Ref{Module},Ref{Symbol},Any),
+ccall(:jl_define_const, Void, (Ref{Module},Ref{Symbol},Any),
         Ref(Core), Ref(:testConst1), "Hello World")
 @test "Hello World" == Core.testConst1
 
@@ -17,28 +17,27 @@ ccall(:jl_set_global, Void, (Ref{Module},Ref{Symbol},Any),
         Ref(Base), Ref(:testGlobal2), 2)
 @test 2 == Base.testGlobal2
 ccall(:jl_set_global, Void, (Ref{Module},Ref{Symbol},Any),
-        Ref(Base), Ref(:testGlobal2), "hi")
+        Ref(Base), Ref(:testGlobal2), "hi")  # Change type
 @test "hi" == Base.testGlobal2
 
-# Okay to turn a non-const into a const.
+# Cannot define a new const when a variable already exists.
 ccall(:jl_set_global, Void, (Ref{Module},Ref{Symbol},Any),
         Ref(Base), Ref(:testGlobalConst), "global")
-ccall(:jl_set_const, Void, (Ref{Module},Ref{Symbol},Any),
-        Ref(Base), Ref(:testGlobalConst), "const")
-@test "const" == Base.testGlobalConst
+@test_throws ErrorException ccall(:jl_define_const, Void, (Ref{Module},Ref{Symbol},Any),
+                   Ref(Base), Ref(:testGlobalConst), "const")
+@test "global" == Base.testGlobalConst
 
-# Can't overwrite a const with a value of a new type.
-ccall(:jl_set_const, Void, (Ref{Module},Ref{Symbol},Any),
+# Can't define a new const when a _const_ variable already exists.
+ccall(:jl_define_const, Void, (Ref{Module},Ref{Symbol},Any),
         Ref(Base), Ref(:testConst2), 10)
-@test_throws ErrorException ccall(:jl_set_const, Void,
+@test_throws ErrorException ccall(:jl_define_const, Void,  # Same type
+             (Ref{Module},Ref{Symbol},Any), Ref(Base), Ref(:testConst2), 20)
+@test_throws ErrorException ccall(:jl_define_const, Void,  # Different type
              (Ref{Module},Ref{Symbol},Any), Ref(Base), Ref(:testConst2), "hi")
 @test Base.testConst2 == 10
 
-# Can't overwrite a const even if it's the same type.
-ccall(:jl_set_const, Void, (Ref{Module},Ref{Symbol},Any),
+# jl_set_global can't change value of a const even if it's the same type.
+ccall(:jl_define_const, Void, (Ref{Module},Ref{Symbol},Any),
         Ref(Base), Ref(:testConst3), "initial")
-@test_throws ErrorException ccall(:jl_set_const, Void,
-         (Ref{Module},Ref{Symbol},Any), Ref(Base), Ref(:testConst3), "modified")
-
 @test_throws ErrorException ccall(:jl_set_global, Void,
          (Ref{Module},Ref{Symbol},Any), Ref(Base), Ref(:testConst3), "modified")
