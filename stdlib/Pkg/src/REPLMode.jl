@@ -8,7 +8,7 @@ using UUIDs
 import REPL
 import REPL: LineEdit, REPLCompletions
 
-import ..devdir, ..Types.casesensitive_isdir
+import ..devdir, ..Types.casesensitive_isdir, ..TOML
 using ..Types, ..Display, ..Operations, ..API
 
 ############
@@ -896,18 +896,30 @@ function complete_installed_package(s, i1, i2, project_opt)
 end
 
 function complete_remote_package(s, i1, i2)
-    cmp = filter(cmd -> startswith(cmd, s), collect_package_names())
-    return cmp, i1:i2, !isempty(cmp)
-end
-
-function collect_package_names()
-    r = r"name = \"(.*?)\""
-    names = String[]
+    cmp = String[]
+    julia_version = VERSION
     for reg in Types.registries(;clone_default=false)
-        regcontent = read(joinpath(reg, "Registry.toml"), String)
-        append!(names, collect(match.captures[1] for match in eachmatch(r, regcontent)))
+        data = TOML.parsefile(joinpath(reg, "Registry.toml"))
+        for (uuid, pkginfo) in data["packages"]
+            name = pkginfo["name"]
+            if startswith(name, s)
+                compat_data = Operations.load_package_data_raw(
+                    VersionSpec, joinpath(reg, pkginfo["path"], "Compat.toml"))
+                supported_julia_versions = VersionSpec(VersionRange[])
+                for (ver_range, compats) in compat_data
+                    for (compat, v) in compats
+                        if compat == "julia"
+                            union!(supported_julia_versions, VersionSpec(v))
+                        end
+                    end
+                end
+                if VERSION in supported_julia_versions
+                    push!(cmp, name)
+                end
+            end
+        end
     end
-    return sort!(names)
+    return cmp, i1:i2, !isempty(cmp)
 end
 
 function completions(full, index)

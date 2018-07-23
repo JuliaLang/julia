@@ -310,6 +310,10 @@ temp_pkg_dir() do project_path; cd(project_path) do
     c, r = test_complete("help r")
     @test "remove" in c
     @test !("rm" in c)
+
+    c, r = test_complete("add REPL")
+    # Filtered by version
+    @test !("REPL" in c)
 end end
 
 temp_pkg_dir() do project_path; cd(project_path) do
