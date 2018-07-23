@@ -563,7 +563,7 @@ function handle_repos_add!(ctx::Context, pkgs::AbstractVector{PackageSpec}; upgr
                         @assert git_tree isa LibGit2.GitTree
                         pkg.repo.git_tree_sha1 = SHA1(string(LibGit2.GitHash(git_tree)))
                             version_path = nothing
-                            folder_alreay_downloaded = false
+                            folder_already_downloaded = false
                         if has_uuid(pkg) && has_name(pkg)
                             version_path = Pkg.Operations.find_installed(pkg.name, pkg.uuid, pkg.repo.git_tree_sha1)
                             isdir(version_path) && (folder_already_downloaded = true)
