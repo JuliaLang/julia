@@ -1840,7 +1840,8 @@
           `(generator ,first ,@iters)))))
 
 (define (parse-comprehension s first closer)
-  (with-whitespace-newline
+  (with-bindings ((whitespace-newline #t)
+                  (space-sensitive #f))
    (let ((gen (parse-generator s first)))
      (if (not (eqv? (require-token s) closer))
          (error (string "expected \"" closer "\""))
