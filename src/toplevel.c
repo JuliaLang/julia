@@ -533,7 +533,7 @@ static void import_module(jl_module_t *m, jl_module_t *import)
     jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
         b = jl_get_binding(m, name);
-        if (b->owner != m || (b->value && b->value != (jl_value_t*)import)) {
+        if ((!b->constp && b->owner != m) || (b->value && b->value != (jl_value_t*)import)) {
             jl_errorf("importing %s into %s conflicts with an existing identifier",
                       jl_symbol_name(name), jl_symbol_name(m->name));
         }
