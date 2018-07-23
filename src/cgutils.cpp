@@ -238,6 +238,17 @@ static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxe
     return (llvm::DIType*)jdt->ditype;
 }
 
+static Value *emit_pointer_from_objref_internal(jl_codectx_t &ctx, Value *V)
+{
+    CallInst *Call = ctx.builder.CreateCall(prepare_call(pointer_from_objref_func), V);
+#if JL_LLVM_VERSION >= 50000
+    Call->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
+#else
+    Call->addAttribute(AttributeSet::FunctionIndex, Attribute::ReadNone);
+#endif
+    return Call;
+}
+
 static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 {
     unsigned AS = cast<PointerType>(V->getType())->getAddressSpace();
@@ -245,13 +256,10 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
         return ctx.builder.CreatePtrToInt(V, T_size);
     V = ctx.builder.CreateBitCast(decay_derived(V),
             PointerType::get(T_jlvalue, AddressSpace::Derived));
-    CallInst *Call = ctx.builder.CreateCall(prepare_call(pointer_from_objref_func), V);
-#if JL_LLVM_VERSION >= 50000
-    Call->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
-#else
-    Call->addAttribute(AttributeSet::FunctionIndex, Attribute::ReadNone);
-#endif
-    return ctx.builder.CreatePtrToInt(Call, T_size);
+
+    return ctx.builder.CreatePtrToInt(
+        emit_pointer_from_objref_internal(ctx, V),
+        T_size);
 }
 
 // --- emitting pointers directly into code ---
@@ -1705,22 +1713,42 @@ static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     return emit_arraylen_prim(ctx, tinfo);
 }
 
-static Value *emit_arrayptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, bool isboxed = false)
+static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *t, unsigned AS, bool isboxed)
 {
-    Value *t = boxed(ctx, tinfo);
-    Value *addr = ctx.builder.CreateStructGEP(jl_array_llvmt,
-                                          emit_bitcast(ctx, decay_derived(t), jl_parray_llvmt),
-                                          0); //index (not offset) of data field in jl_parray_llvmt
-
+    Value *addr =
+        ctx.builder.CreateStructGEP(jl_array_llvmt,
+            emit_bitcast(ctx, t, jl_parray_llvmt),
+            0); // index (not offset) of data field in jl_parray_llvmt
     MDNode *tbaa = arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arrayptr;
+    PointerType *PT = cast<PointerType>(addr->getType());
+    PointerType *PPT = cast<PointerType>(PT->getElementType());
     if (isboxed) {
         addr = ctx.builder.CreateBitCast(addr,
-            PointerType::get(T_pprjlvalue, cast<PointerType>(addr->getType())->getAddressSpace()));
+            PointerType::get(PointerType::get(T_prjlvalue, AS),
+            PT->getAddressSpace()));
+    } else if (AS != PPT->getAddressSpace()) {
+        addr = ctx.builder.CreateBitCast(addr,
+            PointerType::get(
+                PointerType::get(PPT->getElementType(), AS),
+                PT->getAddressSpace()));
     }
     auto LI = ctx.builder.CreateLoad(addr);
     LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(jl_LLVMContext, None));
     tbaa_decorate(tbaa, LI);
     return LI;
+}
+
+static Value *emit_arrayptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, bool isboxed = false)
+{
+    Value *t = boxed(ctx, tinfo);
+    return emit_arrayptr_internal(ctx, tinfo, decay_derived(t), AddressSpace::Loaded, isboxed);
+}
+
+static Value *emit_unsafe_arrayptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, bool isboxed = false)
+{
+    Value *t = boxed(ctx, tinfo);
+    t = emit_pointer_from_objref_internal(ctx, decay_derived(t));
+    return emit_arrayptr_internal(ctx, tinfo, t, 0, isboxed);
 }
 
 static Value *emit_arrayptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, jl_value_t *ex, bool isboxed = false)
