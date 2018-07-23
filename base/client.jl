@@ -335,14 +335,6 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
         end
     end
-    try
-        let Pkg = require(PkgId(UUID(0x44cfe95a_1eb2_52ea_b672_e2afdf69b78f), "Pkg"))
-            Core.eval(Main, :(const Pkg = $Pkg))
-            Core.eval(Main, :(using .Pkg))
-        end
-    catch ex
-        @warn "Failed to import Pkg into module Main" exception=(ex, catch_backtrace())
-    end
 
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
