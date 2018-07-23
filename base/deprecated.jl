@@ -1767,6 +1767,9 @@ end
 @deprecate indices1 axes1
 @deprecate _length length
 
+# PR #28223
+@deprecate code_llvm_raw(f, types=Tuple) code_llvm(f, types; raw=true)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
