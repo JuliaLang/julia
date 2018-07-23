@@ -44,7 +44,7 @@ function lift_defuse(cfg::CFG, defuse)
 end
 
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
-function scan_slot_def_use(nargs, ci::CodeInfo, code)
+function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     nslots = length(ci.slotnames)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
     # Set defs for arguments

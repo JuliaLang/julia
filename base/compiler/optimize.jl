@@ -145,7 +145,7 @@ end
 # These affect control flow within the function (so may not be removed
 # if there is no usage within the function), but don't affect the purity
 # of the function as a whole.
-function stmt_affects_purity(stmt)
+function stmt_affects_purity(@nospecialize stmt)
     if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
         return false
     end
@@ -270,7 +270,7 @@ end
 ## Computing the cost of a function body
 
 # saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
-plus_saturate(x, y) = max(x, y, x+y)
+plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 
 # known return type
 isknowntype(@nospecialize T) = (T == Union{}) || isconcretetype(T)
