@@ -102,12 +102,14 @@ end
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
 
-All metadata and dbg.* calls are removed from the printed bitcode. Use `code_llvm_raw` for the full IR.
+If the `optimize` keyword is unset, the code will be shown before LLVM optimizations.
+All metadata and dbg.* calls are removed from the printed bitcode. Set the `raw` keyword for the full IR.
+To dump the entire module that encapsulates the function, with debug info and metadata, set the `dump_module` keyword.
 """
-code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false) =
-    print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
-code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(stdout, f, types)
-code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(stdout, f, types, false)
+code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false, optimize=true) =
+    print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module, :att, optimize))
+code_llvm(@nospecialize(f), @nospecialize(types=Tuple); raw=false, dump_module=false, optimize=true) =
+    code_llvm(stdout, f, types, !raw, dump_module, optimize)
 
 """
     code_native([io=stdout,], f, types; syntax = :att)
