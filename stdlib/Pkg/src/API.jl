@@ -280,22 +280,20 @@ function gc(ctx::Context=Context(); kwargs...)
     for (manifestfile, date) in manifest_date
         !isfile(manifestfile) && continue
         println("        `$manifestfile`")
-        infos = try
+        manifest = try
             read_manifest(manifestfile)
         catch e
             @warn "Reading manifest file at $manifestfile failed with error" exception = e
             nothing
         end
-        infos == nothing && continue
+        manifest == nothing && continue
         new_usage[manifestfile] = [Dict("time" => date)]
-        for entry in infos
-            entry isa Pair || continue
-            name, _stanzas = entry
-            @assert length(_stanzas) == 1
-            stanzas = _stanzas[1]
-            if stanzas isa Dict && haskey(stanzas, "uuid") && haskey(stanzas, "git-tree-sha1")
-                push!(paths_to_keep,
-                      Operations.find_installed(name, UUID(stanzas["uuid"]), SHA1(stanzas["git-tree-sha1"])))
+        for (name, infos) in manifest
+            for info in infos
+                if haskey(info, "uuid") && haskey(info, "git-tree-sha1")
+                    push!(paths_to_keep,
+                          Operations.find_installed(name, UUID(info["uuid"]), SHA1(info["git-tree-sha1"])))
+                end
             end
         end
     end
