@@ -827,6 +827,12 @@ Stacktrace:
 julia> factorial(big(21))
 51090942171709440000
 ```
+
+# See also
+* [`binomial`](@ref)
+
+# External links
+* [Factorial](https://en.wikipedia.org/wiki/Factorial) on Wikipedia.
 """
 function factorial(n::Integer)
     n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
@@ -838,9 +844,21 @@ function factorial(n::Integer)
 end
 
 """
-    binomial(n, k)
+    binomial(n::Integer, k::Integer)
 
-Number of ways to choose `k` out of `n` items.
+The _binomial coefficient_ ``\binom{n}{k}``, being the coefficient of the ``k``th term in
+the polynomial expansion of ``(1+x)^n``.
+
+If ``n`` is non-negative, then it is the number of ways to choose `k` out of `n` items:
+```math
+\binom{n}{k} = \frac{n!}{k! (n-k)!}
+```
+where ``n!`` is the [`factorial`](@ref) function.
+
+If ``n`` is negative, then it is defined in terms of the identity
+```math
+\binom{n}{k} = (-1)^k \binom{k-n-1}{k}
+```
 
 # Examples
 ```jldoctest
@@ -849,7 +867,16 @@ julia> binomial(5, 3)
 
 julia> factorial(5) ÷ (factorial(5-3) * factorial(3))
 10
+
+julia> binomial(-5, 3)
+-35
 ```
+
+# See also
+* [`factorial`](@ref)
+
+# External links
+* [Binomial coeffient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
 function binomial(n::T, k::T) where T<:Integer
     n0, k0 = n, k
