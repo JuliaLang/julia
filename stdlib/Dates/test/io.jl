@@ -493,4 +493,13 @@ end
     end
 end
 
+@testset "midnight" begin
+    # issue #28203: 24:00 is a valid ISO 8601 time
+    @test DateTime("2018-01-01 24:00","yyyy-mm-dd HH:MM") == DateTime("2018-01-02T00:00:00") ==
+          DateTime(2018, 1, 1, 24) == DateTime(2018, 1, 2)
+    @test_throws ArgumentError DateTime("2018-01-01 24:01","yyyy-mm-dd HH:MM")
+    @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 1)
+    @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 0, 1)
+end
+
 end
