@@ -247,8 +247,8 @@ function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
               pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
         # copy selector bytes
         ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-              convert(Ptr{UInt8}, pointer(dest)) + length(dest) * Base.bitsunionsize(T) + doffs - 1,
-              convert(Ptr{UInt8}, pointer(src)) + length(src) * Base.bitsunionsize(T) + soffs - 1,
+              ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), dest) + doffs - 1,
+              ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), src) + soffs - 1,
               n)
     else
         ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
@@ -1539,7 +1539,7 @@ function vcat(arrays::Vector{T}...) where T
         elsz = Core.sizeof(T)
     elseif isbitsunion(T)
         elsz = bitsunionsize(T)
-        selptr = convert(Ptr{UInt8}, ptr) + n * elsz
+        selptr = ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), arr)
     else
         elsz = Core.sizeof(Ptr{Cvoid})
     end
@@ -1555,7 +1555,7 @@ function vcat(arrays::Vector{T}...) where T
                   ptr, a, nba)
             # copy selector bytes
             ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt),
-                  selptr, convert(Ptr{UInt8}, pointer(a)) + nba, na)
+                  selptr, ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), a), na)
             selptr += na
         else
             ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
