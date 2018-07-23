@@ -154,9 +154,14 @@ end
 
 function parse_input_line(s::String; filename::String="none", depwarn=true)
     # For now, assume all parser warnings are depwarns
-    ex = with_logger(depwarn ? current_logger() : NullLogger()) do
+    ex = if depwarn
         ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
               s, sizeof(s), filename, sizeof(filename))
+    else
+        with_logger(NullLogger()) do
+            ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+                  s, sizeof(s), filename, sizeof(filename))
+        end
     end
     if ex isa Symbol && all(isequal('_'), string(ex))
         # remove with 0.7 deprecation
