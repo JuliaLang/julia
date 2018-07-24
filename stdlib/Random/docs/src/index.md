@@ -88,48 +88,51 @@ In order to define random generation of values of type `T`, the following method
 Let's take the following example: we implement a `Die` type, with a variable number `n` of sides, numbered from `1` to `n`.
 We want `rand(Die)` to produce a die with a random number of up to 20 sides (and at least 4):
 
-```julia
+```jldoctest Die
 struct Die
     nsides::Int # number of sides
 end
 
 Random.rand(rng::AbstractRNG, ::Random.SamplerType{Die}) = Die(rand(rng, 4:20))
+
+# output
+
 ```
 
 Scalar and array methods for `Die` now work as expected:
 
-```julia-repl
+```jldoctest Die; setup = :(srand(1))
 julia> rand(Die)
-Die(13)
+Die(18)
 
 julia> rand(MersenneTwister(0), Die)
 Die(4)
 
 julia> rand(Die, 3)
 3-element Array{Die,1}:
- Die(7)
- Die(18)
+ Die(6)
  Die(11)
+ Die(5)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
 3-element Array{Die,1}:
- Die(3)
- Die(5)
- Die(17)
+ Die(18)
+ Die(6)
+ Die(8)
 ```
 
 #### Generating values from a collection
 
-Given a collection type `T`, it's currently assumed that if `rand(::T)` is defined, an object of type `eltype(T)` will be produced.
-In order to define random generation out of objects of type `T`, the following method can be defined:
-`rand(rng::AbstractRNG, sp::Random.SamplerTrivial{T})`. Here, `sp` simply wraps an object of type `T`, which can be accessed via `sp[]`.
+Given a collection type `S`, it's currently assumed that if `rand(::S)` is defined, an object of type `eltype(S)` will be produced.
+In order to define random generation out of objects of type `S`, the following method can be defined:
+`rand(rng::AbstractRNG, sp::Random.SamplerTrivial{S})`. Here, `sp` simply wraps an object of type `S`, which can be accessed via `sp[]`.
 Continuing the `Die` example, we want now to define `rand(d::Die)` to produce an `Int` corresponding to one of `d`'s sides:
 
-```julia-repl
+```jldoctest Die; setup = :(srand(1))
 julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
 
 julia> rand(Die(4))
-2
+3
 
 julia> rand(Die(4), 3)
 3-element Array{Any,1}:
@@ -270,5 +273,5 @@ Instead of `AbstractArray`, it's possible to implement the functionality only fo
 The non-mutating array method of `rand` will automatically call this specialization internally.
 
 ```@meta
-DocTestSetup = :(using Random)
+DocTestSetup = nothing
 ```
