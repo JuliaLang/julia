@@ -183,7 +183,7 @@ other iterables, including strings and dictionaries, return an iterator object
 supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
-iterable object that is fast for all arguments (a `UnitRange`
+iterable object that is fast for all arguments (a [`UnitRange`](@ref)
 if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` will return an
@@ -281,7 +281,7 @@ first(a::AbstractArray) = a[first(eachindex(a))]
     first(coll)
 
 Get the first element of an iterable collection. Return the start point of an
-`AbstractRange` even if it is empty.
+[`AbstractRange`](@ref) even if it is empty.
 
 # Examples
 ```jldoctest
@@ -303,7 +303,7 @@ end
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
 accomplished by calling [`lastindex`](@ref) to get the last index. Return the end
-point of an `AbstractRange` even if it is empty.
+point of an [`AbstractRange`](@ref) even if it is empty.
 
 # Examples
 ```jldoctest
@@ -653,7 +653,7 @@ function copyto!(dest::AbstractArray, src)
     y = iterate(destiter)
     for x in src
         y === nothing &&
-            throw(ArgumentError(string("source has fewer elements than required")))
+            throw(ArgumentError(string("destination has fewer elements than required")))
         dest[y[1]] = x
         y = iterate(destiter, y[2])
     end
@@ -733,7 +733,7 @@ copyto!(dest::AbstractArray, src::AbstractArray) =
 
 function copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) ||
+    isempty(srcinds) || (checkbounds(Bool, destinds, first(srcinds)) && checkbounds(Bool, destinds, last(srcinds))) ||
         throw(BoundsError(dest, srcinds))
     @inbounds for i in srcinds
         dest[i] = src[i]
@@ -743,7 +743,7 @@ end
 
 function copyto!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) ||
+    isempty(srcinds) || (checkbounds(Bool, destinds, first(srcinds)) && checkbounds(Bool, destinds, last(srcinds))) ||
         throw(BoundsError(dest, srcinds))
     i = 0
     @inbounds for a in src
@@ -758,7 +758,7 @@ end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
     srcinds = LinearIndices(src)
-    sstart ∈ srcinds || throw(BoundsError(src, sstart))
+    checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
@@ -768,8 +768,8 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     n == 0 && return dest
     n < 0 && throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (dstart ∈ destinds && dstart+n-1 ∈ destinds) || throw(BoundsError(dest, dstart:dstart+n-1))
-    (sstart ∈ srcinds  && sstart+n-1 ∈ srcinds)  || throw(BoundsError(src,  sstart:sstart+n-1))
+    (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
+    (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
     @inbounds for i = 0:(n-1)
         dest[dstart+i] = src[sstart+i]
     end
@@ -882,7 +882,7 @@ end
     getindex(A, inds...)
 
 Return a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, an `AbstractRange`, or a [`Vector`](@ref). See the manual section on
+`Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref). See the manual section on
 [array indexing](@ref man-array-indexing) for details.
 
 # Examples
@@ -1926,7 +1926,12 @@ function mapslices(f, A::AbstractArray; dims)
     Rsize = copy(dimsA)
     # TODO: maybe support removing dimensions
     if !isa(r1, AbstractArray) || ndims(r1) == 0
-        r1 = [r1]
+        # If the result of f on a single slice is a scalar then we add singleton
+        # dimensions. When adding the dimensions, we have to respect the
+        # index type of the input array (e.g. in the case of OffsetArrays)
+        tmp = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
+        tmp[firstindex(tmp)] = r1
+        r1 = tmp
     end
     nextra = max(0, length(dims)-ndims(r1))
     if eltype(Rsize) == Int

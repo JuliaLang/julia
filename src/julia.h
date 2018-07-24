@@ -450,6 +450,7 @@ typedef struct _jl_module_t {
     jl_uuid_t uuid;
     size_t primary_world;
     uint32_t counter;
+    int32_t nospecialize;  // global bit flags: initialization for new methods
     uint8_t istopmod;
 } jl_module_t;
 
@@ -777,6 +778,8 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 #define jl_array_data_owner_offset(ndims) (offsetof(jl_array_t,ncols) + sizeof(size_t)*(1+jl_array_ndimwords(ndims))) // in bytes
 #define jl_array_data_owner(a) (*((jl_value_t**)((char*)a + jl_array_data_owner_offset(jl_array_ndims(a)))))
 
+JL_DLLEXPORT char *jl_array_typetagdata(jl_array_t *a);
+
 STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a, size_t i) JL_NOTSAFEPOINT
 {
     assert(i < jl_array_len(a));
@@ -963,6 +966,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_intrinsic(v)   jl_typeis(v,jl_intrinsic_type)
+#define jl_array_isbitsunion(a) (!(((jl_array_t*)(a))->flags.ptrarray) && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 
@@ -1312,6 +1316,7 @@ extern JL_DLLEXPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
+JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);

@@ -1147,6 +1147,7 @@ test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
 test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
+test_const_return(()->fieldtype(Dict{Int64,Nothing}, :age), Tuple{}, UInt)
 @eval test_const_return(()->Core.sizeof($(Array{Int,0}(undef))), Tuple{}, sizeof(Int))
 @eval test_const_return(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2))), Tuple{}, 4 * 2 * 2)
 
@@ -1692,6 +1693,49 @@ struct Foo19668
     Foo19668(; kwargs...) = new()
 end
 @test Base.return_types(Foo19668, ()) == [Foo19668]
+
+# this `if` statement is necessary; make sure front-end var promotion isn't fooled
+# by simple control flow.
+if true
+    struct Bar19668
+        x
+        Bar19668(; x=true) = new(x)
+    end
+end
+@test Base.return_types(Bar19668, ()) == [Bar19668]
+
+if false
+    struct RD19668
+        x
+        RD19668() = new(0)
+    end
+else
+    struct RD19668
+        x
+        RD19668(; x = true) = new(x)
+    end
+end
+@test Base.return_types(RD19668, ()) == [RD19668]
+
+# issue #15276
+function f15276(x)
+    if x > 1
+    else
+        y = 2
+        z->y
+    end
+end
+@test Base.return_types(f15276(1), (Int,)) == [Int]
+
+function g15276()
+    spp = Int[0]
+    sol = [spp[i] for i=1:0]
+    if false
+        spp[1]
+    end
+    sol
+end
+@test g15276() isa Vector{Int}
 
 # issue #27316 - inference shouldn't hang on these
 f27316(::Vector) = nothing

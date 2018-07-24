@@ -69,6 +69,9 @@ end
     @test !isless(missing, missing)
     @test !isless(missing, 1)
     @test isless(1, missing)
+    @test (missing ≈ missing) === missing
+    @test isapprox(missing, 1.0, atol=1e-6) === missing
+    @test isapprox(1.0, missing, rtol=1e-6) === missing
 
     @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
 end

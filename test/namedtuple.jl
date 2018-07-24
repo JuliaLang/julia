@@ -12,8 +12,8 @@
 
 @test fieldcount(NamedTuple{(:a,:b,:c)}) == 3
 @test fieldcount(NamedTuple{<:Any,Tuple{Int,Int}}) == 2
-@test_throws ErrorException fieldcount(NamedTuple)
-@test_throws ErrorException fieldcount(NamedTuple{<:Any,<:Tuple{Int,Vararg{Int}}})
+@test_throws ArgumentError fieldcount(NamedTuple)
+@test_throws ArgumentError fieldcount(NamedTuple{<:Any,<:Tuple{Int,Vararg{Int}}})
 
 @test (a=1,).a == 1
 @test (a=2,)[1] == 2

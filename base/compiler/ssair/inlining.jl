@@ -767,7 +767,6 @@ function assemble_inline_todo!(ir::IRCode, linetable::Vector{LineInfoNode}, sv::
         ft = argextype(arg1, ir, sv.sp)
         has_free_typevars(ft) && continue
         f = singleton_type(ft)
-        # TODO: llvmcall can contain other calls as arguments, so this code doesn't work on it
         f === Core.Intrinsics.llvmcall && continue
         f === Core.Intrinsics.cglobal && continue
 
@@ -998,6 +997,14 @@ function compute_invoke_data(@nospecialize(atypes), argexprs::Vector{Any}, sv::O
     return svec(f, ft, atypes, argexprs, invoke_data)
 end
 
+# Check for a number of functions known to be pure
+function ispuretopfunction(@nospecialize(f))
+    return istopfunction(f, :typejoin) ||
+        istopfunction(f, :isbits) ||
+        istopfunction(f, :isbitstype) ||
+        istopfunction(f, :promote_type)
+end
+
 function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector{Any}, sv::OptimizationState,
                                    @nospecialize(etype))
     if (f === typeassert || ft ⊑ typeof(typeassert)) && length(atypes) == 3
@@ -1010,22 +1017,19 @@ function early_inline_special_case(ir::IRCode, @nospecialize(f), @nospecialize(f
             return val
         end
     end
-    # special-case inliners for known pure functions that compute types
+
     if sv.params.inlining
         if isa(etype, Const) # || isconstType(etype)
             val = etype.val
-            if (f === apply_type || f === fieldtype || f === typeof || f === (===) ||
-                f === Core.sizeof || f === isdefined ||
-                istopfunction(f, :typejoin) ||
-                istopfunction(f, :isbits) ||
-                istopfunction(f, :isbitstype) ||
-                istopfunction(f, :promote_type) ||
-                (f === Core.kwfunc && length(atypes) == 2) ||
-                (is_inlineable_constant(val) &&
-                 (contains_is(_PURE_BUILTINS, f) ||
-                  (f === getfield && stmt_effect_free(e, ir, ir.spvals)) ||
-                  (isa(f, IntrinsicFunction) && is_pure_intrinsic_optim(f)))))
+            is_inlineable_constant(val) || return nothing
+            if ispuretopfunction(f) ||
+                    (isa(f, IntrinsicFunction) ? is_pure_intrinsic_optim(f) :
+                    contains_is(_PURE_BUILTINS, f))
                 return quoted(val)
+            elseif contains_is(_PURE_OR_ERROR_BUILTINS, f)
+                if _builtin_nothrow(f, atypes[2:end], etype)
+                    return quoted(val)
+                end
             end
         end
     end

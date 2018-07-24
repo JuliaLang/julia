@@ -725,8 +725,8 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
                 unode = ivalundef ? UpsilonNode() : UpsilonNode(incoming_vals[slot_id(slot)])
                 typ = ivalundef ? MaybeUndef(Union{}) : slottypes[slot_id(slot)]
                 push!(node.values,
-                    NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item)+1,
-                                 typ, unode).id - length(ir.stmts)))
+                    NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item),
+                                 typ, unode, true).id - length(ir.stmts)))
             end
         end
         push!(visited, item)
@@ -791,12 +791,19 @@ function construct_ssa!(ci::CodeInfo, code::Vector{Any}, ir::IRCode, domtree::Do
     ssavalmap = Any[SSAValue(-1) for _ in 1:(length(ci.ssavaluetypes)+1)]
     result_types = Any[Any for _ in 1:length(new_code)]
     # Detect statement positions for assignments and construct array
-    for (idx, stmt) in Iterators.enumerate(code)
+    for (bb, idx) in bbidxiter(ir)
+        stmt = code[idx]
         # Convert GotoNode/GotoIfNot/PhiNode to BB addressing
         if isa(stmt, GotoNode)
             new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
-            new_code[idx] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+            new_dest = block_for_inst(cfg, stmt.dest)
+            if new_dest == bb+1
+                # Drop this node - it's a noop
+                new_code[idx] = stmt.cond
+            else
+                new_code[idx] = GotoIfNot(stmt.cond, new_dest)
+            end
         elseif isexpr(stmt, :enter)
             new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]))
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isexpr(stmt, :return) ||

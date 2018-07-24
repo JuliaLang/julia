@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+@nospecialize
+
 if Pair != Base.Pair
 import Base: Base, IOContext, string, join, sprint
 IOContext(io::IO, KV::Pair) = IOContext(io, Base.Pair(KV[1], KV[2]))
@@ -26,7 +28,7 @@ end
 print_ssa(io::IO, @nospecialize(val), argnames) = Base.show(io, val)
 
 
-function print_node(io::IO, idx::Int, @nospecialize(stmt), used, argnames, maxsize; color = true, print_typ=true)
+function print_node(io::IO, idx::Int, @nospecialize(stmt), used, argnames, maxsize; color::Bool=true, print_typ::Bool=true)
     if idx in used
         pad = " "^(maxsize-length(string(idx)))
         Base.print(io, "%$idx $pad= ")
@@ -382,9 +384,12 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             node_idx = popfirst!(new_nodes_perm)
             new_node = new_nodes[node_idx]
             node_idx += length(code.stmts)
+            if !floop && !verbose_linetable
+                print(io, " "^(max_lineno_width + 1))
+            end
             if print_sep
-                if floop
-                    Base.print(io, bb_start_str)
+                if idx == first(bbrange) && floop
+                    print(io, bb_start_str)
                 else
                     Base.print(io, "│  "," "^max_bb_idx_size)
                 end
@@ -398,6 +403,9 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
                 expr_type_printer(io, new_node.typ)
             end
             Base.println(io)
+        end
+        if !floop && !verbose_linetable
+            print(io, " "^(max_lineno_width + 1))
         end
         if print_sep
             if idx == first(bbrange) && floop
@@ -428,3 +436,5 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
         println(io)
     end
 end
+
+@specialize

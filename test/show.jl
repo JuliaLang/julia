@@ -866,10 +866,17 @@ test_repr("(!).:~")
 test_repr("a.:(begin
         #= none:3 =#
     end)")
+test_repr("a.:(=)")
+test_repr("a.:(:)")
+test_repr("(:).a")
 @test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
 @test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
 @test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"
 @test repr(Expr(:.)) == ":(\$(Expr(:.)))"
+@test repr(GlobalRef(Main, :a)) == ":(Main.a)"
+@test repr(GlobalRef(Main, :in)) == ":(Main.in)"
+@test repr(GlobalRef(Main, :+)) == ":(Main.:+)"
+@test repr(GlobalRef(Main, :(:))) == ":(Main.:(:))"
 
 # Test compact printing of homogeneous tuples
 @test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"
@@ -1207,6 +1214,9 @@ end
 
     # issue #27979 (dislaying arrays of pairs containing arrays as first member)
     @test replstr([[1.0]=>1.0]) == "1-element Array{Pair{Array{Float64,1},Float64},1}:\n [1.0] => 1.0"
+
+    # issue #28159
+    @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Array{NamedTuple{names,Tuple{$Int,$Int}} where names,1}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1272,7 +1282,7 @@ function compute_annotations(f, types)
     ir = Core.Compiler.inflate_ir(src)
     la, lb, ll = Base.IRShow.compute_ir_line_annotations(ir)
     max_loc_method = maximum(length(s) for s in la)
-    join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
+    return join((strip(string(a, " "^(max_loc_method-length(a)), b)) for (a, b) in zip(la, lb)), '\n')
 end
 
 @noinline leaffunc() = print()
@@ -1292,12 +1302,56 @@ h_line() = f_line()
     ││╻  g_line
     ││╻  g_line""")
 
+eval(Meta.parse("""function my_fun28173(x)
+    y = if x == 1
+            "HI"
+        elseif x == 2
+            "BYE"
+        else
+            "three"
+        end
+    return y
+end""")) # use parse to control the line numbers
+let src = code_typed(my_fun28173, (Int,))[1][1]
+    ir = Core.Compiler.inflate_ir(src)
+    # @test repr(src) == "CodeInfo(\n" * irshow * ")"
+    lines1 = split(repr(ir), '\n')
+    @test isempty(pop!(lines1))
+    Core.Compiler.insert_node!(ir, 1, Val{1}, QuoteNode(1), false)
+    Core.Compiler.insert_node!(ir, 1, Val{2}, QuoteNode(2), true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{3}, QuoteNode(3), false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts), Val{4}, QuoteNode(4), true)
+    lines2 = split(repr(ir), '\n')
+    @test isempty(pop!(lines2))
+    @test popfirst!(lines2) == "2 1 ─      :(\$(QuoteNode(1)))"
+    @test popfirst!(lines2) == "  │        :(\$(QuoteNode(2)))" # TODO: this should print after the next statement
+    let line1 = popfirst!(lines1)
+        line2 = popfirst!(lines2)
+        @test startswith(line1, "2 1 ─ ")
+        @test startswith(line2, "  │   ")
+        @test line1[9:end] == line2[9:end]
+    end
+    let line1 = pop!(lines1)
+        line2 = pop!(lines2)
+        @test startswith(line1, "9 ")
+        @test startswith(line2, "  ")
+        @test line1[2:end] == line2[2:end]
+    end
+    @test pop!(lines2) == "  │        :(\$(QuoteNode(4)))"
+    @test pop!(lines2) == "9 │        :(\$(QuoteNode(3)))" # TODO: this should print after the next statement
+    @test lines1 == lines2
+end
+
 # issue #27352
-@test_deprecated print(nothing)
-@test_deprecated print(stdout, nothing)
-@test_deprecated string(nothing)
-@test_deprecated string(1, "", nothing)
-@test_deprecated let x = nothing; "x = $x" end
-@test let x = nothing; "x = $(repr(x))" end == "x = nothing"
-@test_deprecated `/bin/foo $nothing`
-@test_deprecated `$nothing`
+mktemp() do fname, io
+    redirect_stdout(io) do
+        @test_deprecated print(nothing)
+        @test_deprecated print(stdout, nothing)
+        @test_deprecated string(nothing)
+        @test_deprecated string(1, "", nothing)
+        @test_deprecated let x = nothing; "x = $x" end
+        @test let x = nothing; "x = $(repr(x))" end == "x = nothing"
+        @test_deprecated `/bin/foo $nothing`
+        @test_deprecated `$nothing`
+    end
+end

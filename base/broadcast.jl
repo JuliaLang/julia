@@ -295,7 +295,7 @@ some cases.
 function flatten(bc::Broadcasted{Style}) where {Style}
     isflat(bc) && return bc
     # concatenate the nested arguments into {a, b, c, d}
-    args = cat_nested(x->x.args, bc)
+    args = cat_nested(bc)
     # build a function `makeargs` that takes a "flat" argument list and
     # and creates the appropriate input arguments for `f`, e.g.,
     #          makeargs = (w, x, y, z) -> (w, g(x, y), z)
@@ -318,14 +318,9 @@ _isflat(args::NestedTuple) = false
 _isflat(args::Tuple) = _isflat(tail(args))
 _isflat(args::Tuple{}) = true
 
-cat_nested(fieldextractor, bc::Broadcasted) = cat_nested(fieldextractor, fieldextractor(bc), ())
-
-cat_nested(fieldextractor, t::Tuple, rest) =
-    (t[1], cat_nested(fieldextractor, tail(t), rest)...)
-cat_nested(fieldextractor, t::Tuple{<:Broadcasted,Vararg{Any}}, rest) =
-    cat_nested(fieldextractor, cat_nested(fieldextractor, fieldextractor(t[1]), tail(t)), rest)
-cat_nested(fieldextractor, t::Tuple{}, tail) = cat_nested(fieldextractor, tail, ())
-cat_nested(fieldextractor, t::Tuple{}, tail::Tuple{}) = ()
+cat_nested(t::Broadcasted, rest...) = (cat_nested(t.args...)..., cat_nested(rest...)...)
+cat_nested(t::Any, rest...) = (t, cat_nested(rest...)...)
+cat_nested() = ()
 
 make_makeargs(bc::Broadcasted) = make_makeargs(()->(), bc.args)
 @inline function make_makeargs(makeargs, t::Tuple)

@@ -960,10 +960,25 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 {
     JL_NARGSV(llvmcall, 3);
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
+    jl_value_t *ir_arg = args[1];
     JL_GC_PUSH4(&ir, &rt, &at, &decl);
-    at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
-    rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type");
-    ir = try_eval(ctx, args[1], "error statically evaluating llvm IR argument");
+    if (jl_is_ssavalue(ir_arg))
+        ir_arg = jl_arrayref((jl_array_t*)ctx.source->code, ((jl_ssavalue_t*)ir_arg)->id - 1);
+    ir = try_eval(ctx, ir_arg, "error statically evaluating llvm IR argument");
+    if (jl_is_ssavalue(args[2])) {
+        jl_value_t *rtt = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[2])->id - 1);
+        if (jl_is_type_type(rtt))
+            rt = jl_tparam0(rtt);
+    }
+    if (rt == NULL)
+        rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type");
+    if (jl_is_ssavalue(args[3])) {
+        jl_value_t *att = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[3])->id - 1);
+        if (jl_is_type_type(att))
+            at = jl_tparam0(att);
+    }
+    if (at == NULL)
+        at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
     int i = 1;
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (declarations, ir)

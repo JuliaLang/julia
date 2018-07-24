@@ -44,23 +44,6 @@ const INV_2PI = UInt64[
     0x9afe_d7ec_47e3_5742,
     0x1580_cc11_bf1e_daea]
 
-"""
-    highword(x)
-
-Return the high word of `x` as a `UInt32`.
-"""
-@inline highword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)
-@inline highword(x::Float64) = highword(reinterpret(UInt64, x))
-
-"""
-    poshighword(x)
-
-Return positive part of the high word of `x` as a `UInt32`.
-"""
-@inline poshighword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)&0x7fffffff
-@inline poshighword(x::Float32) = reinterpret(UInt32, x)&0x7fffffff
-@inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
-
 @inline function cody_waite_2c_pio2(x::Float64, fn, n)
     pio2_1 = 1.57079632673412561417e+00
     pio2_1t = 6.07710050650619224932e-11

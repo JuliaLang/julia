@@ -82,8 +82,15 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 const IR_FLAG_INBOUNDS = 0x01
 
-# known affect-free calls (also effect-free)
-const _PURE_BUILTINS = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
+# known to be always effect-free (in particular nothrow)
+const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
+
+# known to be effect-free if the are nothrow
+const _PURE_OR_ERROR_BUILTINS = [
+    fieldtype, apply_type, isa, UnionAll,
+    getfield, arrayref, isdefined, Core.sizeof,
+    Core.kwfunc
+]
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -135,6 +142,19 @@ function isinlineable(m::Method, me::OptimizationState, bonus::Int=0)
     return inlineable
 end
 
+# These affect control flow within the function (so may not be removed
+# if there is no usage within the function), but don't affect the purity
+# of the function as a whole.
+function stmt_affects_purity(stmt)
+    if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
+        return false
+    end
+    if isa(stmt, Expr)
+        return stmt.head != :simdloop && stmt.head != :enter
+    end
+    return true
+end
+
 # run the optimization work
 function optimize(opt::OptimizationState, @nospecialize(result))
     def = opt.linfo.def
@@ -153,13 +173,7 @@ function optimize(opt::OptimizationState, @nospecialize(result))
             proven_pure = true
             for i in 1:length(ir.stmts)
                 stmt = ir.stmts[i]
-                # These affect control flow within the function (so may not be removed
-                # if there is no usage within the function), but don't affect the purity
-                # of the function as a whole.
-                if isa(stmt, GotoIfNot) || isa(stmt, GotoNode) || isa(stmt, ReturnNode)
-                    continue
-                end
-                if !stmt_effect_free(stmt, ir, ir.spvals)
+                if stmt_affects_purity(stmt) && !stmt_effect_free(stmt, ir.types[i], ir, ir.spvals)
                     proven_pure = false
                     break
                 end
@@ -266,7 +280,16 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, spvals::SimpleVector
     if is_meta_expr_head(head)
         return 0
     elseif head === :call
-        ftyp = argextype(ex.args[1], src, spvals, slottypes)
+        farg = ex.args[1]
+        ftyp = argextype(farg, src, spvals, slottypes)
+        if ftyp === IntrinsicFunction && farg isa SSAValue
+            # if this comes from code that was already inlined into another function,
+            # Consts have been widened. try to recover in simple cases.
+            farg = src.code[farg.id]
+            if isa(farg, GlobalRef) || isa(farg, QuoteNode) || isa(farg, IntrinsicFunction) || isexpr(farg, :static_parameter)
+                ftyp = argextype(farg, src, spvals, slottypes)
+            end
+        end
         f = singleton_type(ftyp)
         if isa(f, IntrinsicFunction)
             iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1

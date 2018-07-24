@@ -443,6 +443,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint64(s->s, m->uuid.lo);
     write_uint64(s->s, m->build_id);
     write_int32(s->s, m->counter);
+    write_int32(s->s, m->nospecialize);
 }
 
 static int is_ast_node(jl_value_t *v)
@@ -648,9 +649,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         jl_serialize_value(s, jl_typeof(ar));
         if (!ar->flags.ptrarray) {
-            size_t extra = jl_is_uniontype(jl_tparam0(jl_typeof(ar))) ? jl_array_len(ar) : 0;
-            size_t tot = jl_array_len(ar) * ar->elsize + extra;
-            ios_write(s->s, (char*)jl_array_data(ar), tot);
+            ios_write(s->s, (char*)jl_array_data(ar), jl_array_len(ar) * ar->elsize);
+            if (jl_array_isbitsunion(ar))
+                ios_write(s->s, jl_array_typetagdata(ar), jl_array_len(ar));
         }
         else {
             for (i = 0; i < jl_array_len(ar); i++) {
@@ -1507,7 +1508,7 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
     jl_value_t *aty = jl_deserialize_value(s, &jl_astaggedvalue(a)->type);
     jl_set_typeof(a, aty);
     if (!a->flags.ptrarray) {
-        size_t extra = jl_is_uniontype(jl_tparam0(aty)) ? jl_array_len(a) : 0;
+        size_t extra = jl_array_isbitsunion(a) ? jl_array_len(a) : 0;
         size_t tot = jl_array_len(a) * a->elsize + extra;
         ios_read(s->s, (char*)jl_array_data(a), tot);
     }
@@ -1781,8 +1782,9 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s)
     m->uuid.hi = read_uint64(s->s);
     m->uuid.lo = read_uint64(s->s);
     m->build_id = read_uint64(s->s);
-    m->primary_world = jl_world_counter;
     m->counter = read_int32(s->s);
+    m->nospecialize = read_int32(s->s);
+    m->primary_world = jl_world_counter;
     return (jl_value_t*)m;
 }
 
@@ -1881,8 +1883,7 @@ static jl_value_t *jl_deserialize_typemap_entry(jl_serializer_state *s)
         jl_deserialize_struct(s, v, 1);
 #ifndef NDEBUG
         if (te->func.value && jl_typeis(te->func.value, jl_method_instance_type)) {
-            assert(((te->func.linfo->max_world == 0 &&
-                    te->func.linfo->min_world == 1) ||
+            assert(((te->max_world == 0 && te->min_world == 1) ||
                     (te->func.linfo->max_world >= te->max_world &&
                      te->func.linfo->min_world <= te->min_world)) &&
                    "corrupt typemap entry structure");

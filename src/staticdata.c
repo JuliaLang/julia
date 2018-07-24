@@ -566,8 +566,7 @@ static void jl_write_values(jl_serializer_state *s)
             // make some header modifications in-place
             jl_array_t *newa = (jl_array_t*)&s->s->buf[reloc_offset];
             size_t alen = jl_array_len(ar);
-            size_t extra = (!ar->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(ar)))) ? alen : 0;
-            size_t tot = alen * ar->elsize + extra;
+            size_t tot = alen * ar->elsize;
             if (newa->flags.ndims == 1)
                 newa->maxsize = alen;
             newa->offset = 0;
@@ -586,9 +585,12 @@ static void jl_write_values(jl_serializer_state *s)
                 assert(data < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to constant data too large");
                 arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_array_t, data))); // relocation location
                 arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + data)); // relocation target
-                if (ar->elsize == 1)
+                int isbitsunion = jl_array_isbitsunion(ar);
+                if (ar->elsize == 1 && !isbitsunion)
                     tot += 1;
                 ios_write(s->const_data, (char*)jl_array_data(ar), tot);
+                if (isbitsunion)
+                    ios_write(s->const_data, jl_array_typetagdata(ar), alen);
             }
             else {
                 newa->data = (void*)tsz; // relocation offset

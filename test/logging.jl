@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.CoreLogging
+using Test, Base.CoreLogging
 import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
     handle_message, shouldlog, min_enabled_level, catch_exceptions
 
@@ -109,6 +109,17 @@ end
     @test record._module == logger.shouldlog_args[2]
     @test record.group   == logger.shouldlog_args[3]
     @test record.id      == logger.shouldlog_args[4]
+
+    # handling of nothing
+    logger = TestLogger()
+    with_logger(logger) do
+        @info "foo" _module = nothing _file = nothing _line = nothing
+    end
+    @test length(logger.logs) == 1
+    record = logger.logs[1]
+    @test record._module == nothing
+    @test record.file == nothing
+    @test record.line == nothing
 end
 
 
@@ -291,6 +302,13 @@ end
     │   a = 1
     │   b = asdf
     └ @ Base other.jl:101
+    """
+
+    # nothing values
+    @test genmsg(Warn, "msg", nothing, nothing, nothing) ==
+    """
+    ┌ Warning: msg
+    └ @ nothing nothing:nothing
     """
 end
 

@@ -11,6 +11,8 @@ information.
 """
 module Docs
 
+@nospecialize # don't specialize on any arguments of the methods declared herein
+
 """
 # Documentation
 
