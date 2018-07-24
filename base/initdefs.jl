@@ -109,16 +109,17 @@ end
 function parse_load_path(str::String)
     envs = String[]
     isempty(str) && return envs
-    first_empty = true
     for env in split(str, Sys.iswindows() ? ';' : ':')
         if isempty(env)
-            first_empty && append!(envs, DEFAULT_LOAD_PATH)
-            first_empty = false
-        elseif env == "@."
-            dir = current_project()
-            dir !== nothing && push!(envs, dir)
+            for env′ in DEFAULT_LOAD_PATH
+                env′ in envs || push!(envs, env′)
+            end
         else
-            push!(envs, env)
+            if env == "@."
+                env = current_project()
+                env === nothing && continue
+            end
+            env in envs || push!(envs, env)
         end
     end
     return envs
