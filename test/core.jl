@@ -6319,6 +6319,16 @@ let A=Vector{Union{UInt8, Missing}}(undef, 1048577)
     @test Base.arrayref(true, A, 5) === 0x05
 end
 
+# copyto!/vcat w/ internal padding
+let A=[0, missing], B=[missing, 0], C=Vector{Union{Int, Missing}}(undef, 6)
+    push!(A, missing)
+    push!(B, missing)
+    @test isequal(vcat(A, B), [0, missing, missing, missing, 0, missing])
+    copyto!(C, 1, A)
+    copyto!(C, 4, B)
+    @test isequal(C, [0, missing, missing, missing, 0, missing])
+end
+
 end # module UnionOptimizations
 
 # issue #6614, argument destructuring
