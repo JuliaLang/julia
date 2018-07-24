@@ -330,7 +330,12 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
     if (head == toplevel_sym || head == thunk_sym) {
         return;
     }
-    else if (head == global_sym || head == const_sym || head == copyast_sym) {
+    else if (head == global_sym) {
+        // this could be considered has_defs, but loops that assign to globals
+        // might still need to be optimized.
+        return;
+    }
+    else if (head == const_sym || head == copyast_sym) {
         // Note: `copyast` is included here since it indicates the presence of
         // `quote` and probably `eval`.
         *has_defs = 1;
