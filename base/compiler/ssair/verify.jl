@@ -63,6 +63,11 @@ function verify_ir(ir::IRCode)
         end
         last_end = last(block.stmts)
         terminator = ir.stmts[last_end]
+        # As a special case, we allow extra statements in the BB of an :enter
+        # statement, until we can do proper CFG manipulations during compaction.
+        if isexpr(ir.stmts[first(block.stmts)], :enter)
+            terminator = ir.stmts[first(block.stmts)]
+        end
         for p in block.preds
             p == 0 && continue
             c = count_int(idx, ir.cfg.blocks[p].succs)
