@@ -256,6 +256,8 @@ function callers(funcname::String, bt::Vector, lidict::LineInfoFlatDict; filenam
     end
 end
 
+callers(funcname::String, bt::Vector, lidict::LineInfoDict; kwargs...) =
+    callers(funcname, flatten(bt, lidict)...; kwargs...)
 callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
 callers(func::Function, bt::Vector, lidict::LineInfoFlatDict; kwargs...) =
     callers(string(func), bt, lidict; kwargs...)
