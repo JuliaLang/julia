@@ -374,7 +374,7 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
 // in many cases, we need to over-estimate this by returning `b`.
 static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b)
 {
-    if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type)
+    if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type || obviously_egal(a,b))
         return b;
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type)
         return a;
