@@ -1325,3 +1325,11 @@ g26453(x::T,y::T) where {S,T>:S} = T
 @test typeintersect(Tuple{Ref{T},Union{Val{N}, Array{Float32,N}}} where {T,N},
                     Tuple{Ref{Int},Any}) ==
                     Tuple{Ref{Int},Union{Val{N}, Array{Float32,N}}} where N
+
+# issue #28256
+@test Pair{(:a,), Pair{(:a,),Tuple{Int}}} isa Type{Pair{names,T}} where {names, T<:Pair{names,<:Tuple}}
+@test Type{Pair{(:a,), Pair{(:a,),Tuple{Int}}}} <: Type{Pair{names,T}} where {names, T<:Pair{names,<:Tuple}}
+struct A28256{names, T<:NamedTuple{names, <:Tuple}}
+    x::T
+end
+@test A28256{(:a,), NamedTuple{(:a,),Tuple{Int}}}((a=1,)) isa A28256
