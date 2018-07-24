@@ -489,8 +489,11 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 
 JL_DLLEXPORT void jl_define_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
-    jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
+    // Assert that it doesn't already exist.
+    jl_binding_t *bp = jl_get_binding(m, var);
     assert(!bp && "Can't create new const; var already exists.");
+    // Create it.
+    bp = jl_get_binding_wr(m, var, 1);
     bp->value = val;
     bp->constp = 1;
     jl_gc_wb(m, val);
