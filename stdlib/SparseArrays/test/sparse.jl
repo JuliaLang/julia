@@ -523,8 +523,9 @@ end
 
 @testset "reductions" begin
     pA = sparse(rand(3, 7))
+    p28227 = sparse(Real[0 0.5])
 
-    for arr in (se33, sA, pA)
+    for arr in (se33, sA, pA, p28227)
         for f in (sum, prod, minimum, maximum)
             farr = Array(arr)
             @test f(arr) ≈ f(farr)

@@ -1613,9 +1613,10 @@ end
 
 # In general, output of sparse matrix reductions will not be sparse,
 # and computing reductions along columns into SparseMatrixCSC is
-# non-trivial, so use Arrays for output
-Base.reducedim_initarray(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R} =
-    fill(v0, Base.reduced_indices(A,region))
+# non-trivial, so use Arrays for output. Array element type is given by `R`.
+function Base.reducedim_initarray(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R}
+    fill!(Array{R}(undef, Base.to_shape(Base.reduced_indices(A, region))), v0)
+end
 
 # General mapreduce
 function _mapreducezeros(f, op, ::Type{T}, nzeros::Int, v0) where T

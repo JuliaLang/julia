@@ -141,7 +141,9 @@ for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
             # but NaNs need to be avoided as intial values
             v0 = v0 != v0 ? typeof(v0)($initval) : v0
 
-            return reducedim_initarray(A, region, v0)
+            T = promote_union(eltype(A))
+            Tr = v0 isa T ? T : typeof(v0)
+            return reducedim_initarray(A, region, v0, Tr)
         end
     end
 end
