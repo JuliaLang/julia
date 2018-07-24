@@ -899,7 +899,7 @@ function complete_remote_package(s, i1, i2)
     cmp = String[]
     julia_version = VERSION
     for reg in Types.registries(;clone_default=false)
-        data = TOML.parsefile(joinpath(reg, "Registry.toml"))
+        data = Types.read_registry(joinpath(reg, "Registry.toml"))
         for (uuid, pkginfo) in data["packages"]
             name = pkginfo["name"]
             if startswith(name, s)
