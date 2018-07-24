@@ -35,10 +35,10 @@ end
     # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
     # Allow parsing of strings which are not representable as a TimeType
-    str = "02/15/1996 24:00"
+    str = "02/15/1996 25:00"
     df = Dates.DateFormat("mm/dd/yyyy HH:MM")
     parsed = Any[
-        Dates.Month(2), Dates.Day(15), Dates.Year(1996), Dates.Hour(24), Dates.Minute(0)
+        Dates.Month(2), Dates.Day(15), Dates.Year(1996), Dates.Hour(25), Dates.Minute(0)
     ]
     @test Dates.parse_components(str, df) == parsed
     @test_throws ArgumentError Dates.parse(DateTime, str, df)
