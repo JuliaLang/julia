@@ -482,26 +482,18 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    if (!bp->constp) {
-        bp->value = val;
-        jl_gc_wb(m, val);
-    } else {
-        jl_errorf("Can't modify global const %s; consider jl_checked_assignment"
-                  "to change its value.", jl_symbol_name(bp->name));
-    }
+    assert(!bp->constp && "Can't modify const; consider jl_checked_assignment");
+    bp->value = val;
+    jl_gc_wb(m, val);
 }
 
 JL_DLLEXPORT void jl_define_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    if (!bp) {
-        bp->value = val;
-        bp->constp = 1;
-        jl_gc_wb(m, val);
-    } else {
-        jl_errorf("Cannot create const %s; variable already exists.",
-                  jl_symbol_name(bp->name));
-    }
+    assert(!bp && "Can't create new const; var already exists.");
+    bp->value = val;
+    bp->constp = 1;
+    jl_gc_wb(m, val);
 }
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
