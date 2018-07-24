@@ -3764,7 +3764,7 @@ let
 end
 
 # issue #14323
-@test eval(Expr(:body, :(1))) === 1
+@test eval(Expr(:block, :(1))) === 1
 
 # issue #14339
 f14339(x::T, y::T) where {T<:Union{}} = 0

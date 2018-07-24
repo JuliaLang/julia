@@ -329,7 +329,7 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    if ex.head === :body || ex.head === :block || ex.head === :quote
+    if ex.head === :block || ex.head === :quote
         # remove line number expressions from metadata (not argument literal or inert) position
         filter!(ex.args) do x
             isa(x, Expr) && x.head === :line && return false

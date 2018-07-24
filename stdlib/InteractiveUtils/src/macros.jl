@@ -52,15 +52,6 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
             exret = Expr(:call, fcn, esc(ex.args[1]),
                          Expr(:call, typesof, map(esc, ex.args[2:end])...))
         end
-    elseif ex.head == :body
-        a1 = ex.args[1]
-        if isa(a1, Expr) && a1.head == :call
-            a11 = a1.args[1]
-            if a11 == :setindex!
-                exret = Expr(:call, fcn, a11,
-                             Expr(:call, typesof, map(esc, a1.args[2:end])...))
-            end
-        end
     end
     if ex.head == :thunk || exret.head == :none
         exret = Expr(:call, :error, "expression is not a function call, "
