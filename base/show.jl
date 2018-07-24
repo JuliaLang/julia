@@ -736,8 +736,9 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 #   eval(Meta.parse("Set{Int64}([2,3,1])”) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
-const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode,
-                       GotoNode, GlobalRef}
+const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode, SSAValue,
+                       GotoNode, GlobalRef, PhiNode, PhiCNode, UpsilonNode,
+                       Core.Compiler.GotoIfNot, Core.Compiler.ReturnNode}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
 # methods use a precedence of -1 to specially allow space-separated macro syntax
@@ -981,7 +982,7 @@ end
 show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)      = print(io, "%", val.id)
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
-show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
+show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
 function show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)
     print(io, ex.mod)
     print(io, '.')
@@ -1350,12 +1351,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_block(io, "begin", ex, indent)
         print(io, "end")
 
-    elseif head === :quote && nargs == 1 && isa(args[1],Symbol)
-        show_unquoted_quote_expr(io, args[1], indent, 0)
+    elseif head === :quote && nargs == 1 && isa(args[1], Symbol)
+        show_unquoted_quote_expr(io, args[1]::Symbol, indent, 0)
 
-    elseif head === :gotoifnot && nargs == 2
+    elseif head === :gotoifnot && nargs == 2 && isa(args[2], Int)
         print(io, "unless ")
-        show_list(io, args, " goto ", indent)
+        show_unquoted(io, args[1], indent, 0)
+        print(io, " goto %")
+        print(io, args[2]::Int)
 
     elseif head === :string && nargs == 1 && isa(args[1], AbstractString)
         show(io, args[1])
@@ -1363,7 +1366,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif head === :null
         print(io, "nothing")
 
-    elseif head === :kw && length(args)==2
+    elseif head === :kw && nargs == 2
         show_unquoted(io, args[1], indent+indent_width)
         print(io, '=')
         show_unquoted(io, args[2], indent+indent_width)
@@ -1550,7 +1553,7 @@ module IRShow
     const Compiler = Core.Compiler
     using Core.IR
     import ..Base
-    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr, compute_basic_blocks
+    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr, compute_basic_blocks, block_for_inst
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.show(io::IO, r::Compiler.StmtRange) = print(io, Compiler.first(r):Compiler.last(r))
     include("compiler/ssair/show.jl")

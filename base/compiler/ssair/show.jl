@@ -29,6 +29,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         print(io, " "^indent)
     end
     if !color && stmt isa PiNode
+        # when the outer context is already colored (yellow, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
         show_unquoted(io, stmt.val, indent)
         print(io, ", ")
@@ -51,6 +52,16 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         end
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
+    # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
+    elseif isexpr(stmt, :enter) && length(stmt.args) == 1 && stmt.args[1] isa Int
+        print(io, "\$(Expr(:enter, #", stmt.args[1]::Int, "))")
+    elseif stmt isa GotoNode
+        print(io, "goto #", stmt.label)
+    elseif stmt isa PhiNode
+        show_unquoted_phinode(io, stmt, indent, "#")
+    elseif stmt isa GotoIfNot
+        show_unquoted_gotoifnot(io, stmt, indent, "#")
+    # everything else in the IR, defer to the generic AST printer
     else
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
     end
@@ -59,25 +70,32 @@ end
 
 show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io, Core.SlotNumber(val.n), indent, prec)
 
-function show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int)
+show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
+function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String)
     args = map(1:length(stmt.edges)) do i
         e = stmt.edges[i]
         v = !isassigned(stmt.values, i) ? "#undef" :
             sprint() do io′
                 show_unquoted(io′, stmt.values[i], indent)
             end
-        return "$e => $v"
+        return "$prefix$e => $v"
     end
     print(io, "φ ", '(')
     join(io, args, ", ")
     print(io, ')')
 end
 
-function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, prec::Int)
-    show_enclosed_list(io, "φᶜ (", stmt.values, ", ", ")", indent)
+function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, ::Int)
+    print(io, "φᶜ (")
+    first = true
+    for v in stmt.values
+        first ? (first = false) : print(io, ", ")
+        show_unquoted(io, v, indent)
+    end
+    print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::PiNode, indent::Int, prec::Int)
+function show_unquoted(io::IO, stmt::PiNode, indent::Int, ::Int)
     print(io, "π (")
     show_unquoted(io, stmt.val, indent)
     print(io, ", ")
@@ -102,8 +120,9 @@ function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, ::Int)
     end
 end
 
-function show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int)
-    print(io, "goto ", stmt.dest, " if not ")
+show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int) = show_unquoted_gotoifnot(io, stmt, indent, "%")
+function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String)
+    print(io, "goto ", prefix, stmt.dest, " if not ")
     show_unquoted(io, stmt.cond, indent)
 end
 
@@ -120,7 +139,7 @@ end
 
 function should_print_ssa_type(@nospecialize node)
     if isa(node, Expr)
-        return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :gotoifnot, :meta, :return, :enter, :leave))
+        return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :meta, :return, :enter, :leave))
     end
     return !isa(node, PiNode)   && !isa(node, GotoIfNot) &&
            !isa(node, GotoNode) && !isa(node, ReturnNode) &&
@@ -300,11 +319,11 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
     used = BitSet()
     stmts = code.stmts
     types = code.types
+    cfg = code.cfg
+    max_bb_idx_size = length(string(length(cfg.blocks)))
     for stmt in stmts
         scan_ssa_use!(push!, used, stmt)
     end
-    cfg = code.cfg
-    max_bb_idx_size = length(string(length(cfg.blocks)))
     bb_idx = 1
     new_nodes = code.new_nodes
     if any(i -> !isassigned(code.new_nodes, i), 1:length(code.new_nodes))
@@ -451,30 +470,11 @@ function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_pri
     used = BitSet()
     stmts = code.code
     types = code.ssavaluetypes
-    for stmt in stmts
-        scan_ssa_use!(push!, used, stmt)
-        # also add "uses" for labels for visualization
-        if isexpr(stmt, :gotoifnot) && length(stmt.args) == 2
-            let label = stmt.args[2]
-                label isa Int && push!(used, label)
-            end
-        end
-        if isexpr(stmt, :enter) && length(stmt.args) == 1
-            let label = stmt.args[1]
-                label isa Int && push!(used, label)
-            end
-        end
-        if stmt isa GotoNode
-            push!(used, stmt.label)
-        end
-        if stmt isa PhiNode
-            for label in stmt.edges
-                label isa Int && push!(used, label)
-            end
-        end
-    end
     cfg = compute_basic_blocks(stmts)
     max_bb_idx_size = length(string(length(cfg.blocks)))
+    for stmt in stmts
+        scan_ssa_use!(push!, used, stmt)
+    end
     bb_idx = 1
 
     if isempty(used)
@@ -558,6 +558,21 @@ function show_ir(io::IO, code::CodeInfo, expr_type_printer=default_expr_type_pri
         end
         if idx == last(bbrange)
             bb_idx += 1
+        end
+        # convert statement index to labels, as expected by print_stmt
+        if stmt isa Expr
+            if stmt.head === :gotoifnot && length(stmt.args) == 2 && stmt.args[2] isa Int
+                stmt = GotoIfNot(stmt.args[1], block_for_inst(cfg, stmt.args[2]::Int))
+            elseif stmt.head === :enter && length(stmt.args) == 1 && stmt.args[1] isa Int
+                stmt = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
+            end
+        elseif isa(stmt, GotoIfNot)
+            stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+        elseif stmt isa GotoNode
+            stmt = GotoNode(block_for_inst(cfg, stmt.label))
+        elseif stmt isa PhiNode
+            e = stmt.edges
+            stmt = PhiNode(Any[block_for_inst(cfg, e[i]) for i in 1:length(e)], stmt.values)
         end
         show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
         print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
