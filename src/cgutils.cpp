@@ -2289,7 +2289,8 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
         Value *tindex = ctx.builder.CreateAnd(src.TIndex, ConstantInt::get(T_int8, 0x7f));
         if (skip)
             tindex = ctx.builder.CreateSelect(skip, ConstantInt::get(T_int8, 0), tindex);
-        Value *src_ptr = maybe_bitcast(ctx, data_pointer(ctx, src), T_pint8);
+        Value *src_ptr = data_pointer(ctx, src);
+        src_ptr = src_ptr ? maybe_bitcast(ctx, src_ptr, T_pint8) : src_ptr;
         dest = maybe_bitcast(ctx, dest, T_pint8);
         BasicBlock *defaultBB = BasicBlock::Create(jl_LLVMContext, "union_move_skip", ctx.f);
         SwitchInst *switchInst = ctx.builder.CreateSwitch(tindex, defaultBB);
@@ -2302,8 +2303,18 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
                     BasicBlock *tempBB = BasicBlock::Create(jl_LLVMContext, "union_move", ctx.f);
                     ctx.builder.SetInsertPoint(tempBB);
                     switchInst->addCase(ConstantInt::get(T_int8, idx), tempBB);
-                    if (nb > 0)
-                        emit_memcpy(ctx, dest, tbaa_dst, src_ptr, src.tbaa, nb, alignment, isVolatile);
+                    if (nb > 0) {
+                        if (!src_ptr) {
+                            Function *trap_func =
+                                Intrinsic::getDeclaration(ctx.f->getParent(), Intrinsic::trap);
+                            ctx.builder.CreateCall(trap_func);
+                            ctx.builder.CreateUnreachable();
+                            return;
+                        } else {
+                            emit_memcpy(ctx, dest, tbaa_dst, src_ptr,
+                                        src.tbaa, nb, alignment, isVolatile);
+                        }
+                    }
                     ctx.builder.CreateBr(postBB);
                 },
                 src.typ,

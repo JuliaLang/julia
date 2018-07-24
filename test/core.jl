@@ -6653,3 +6653,20 @@ function foo28224()
     return z
 end
 @test foo28224() == 5
+
+# Issue #28208
+@noinline function foo28208(a::Bool, b::Bool)
+    x = (1, 2)
+    if a
+        if b
+            y = nothing
+        else
+            y = missing
+        end
+        x = y
+    end
+    x
+end
+@test isa(foo28208(false, true), Tuple)
+@test foo28208(true, false) === missing
+@test foo28208(true, true) === nothing
