@@ -540,7 +540,7 @@ Library improvements
   * The function `thisind(s::AbstractString, i::Integer)` returns the largest valid index
     less or equal than `i` in the string `s` or `0` if no such index exists ([#24414]).
 
-  * Support for Unicode 11.
+  * Support for Unicode 11 ([#28266]).
 
   * `Char` is now a subtype of `AbstractChar`, and most of the functions that
     take character arguments now accept any `AbstractChar` ([#26286]).
