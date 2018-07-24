@@ -196,4 +196,16 @@ Base.convert(::Type{PhysQuantity{0,T}}, x::Int) where T = PhysQuantity{0}(conver
 Base.convert(::Type{P}, ::Int) where P<:PhysQuantity =
     error("Int is incommensurate with PhysQuantity")
 
+export @macrocall
+
+macro macrocall(ex)
+    @assert Meta.isexpr(ex, :macrocall)
+    ex.head = :call
+    for i in 2:length(ex.args)
+        ex.args[i] = QuoteNode(ex.args[i])
+    end
+    insert!(ex.args, 3, __module__)
+    return esc(ex)
+end
+
 end

@@ -5,17 +5,10 @@ include("testenv.jl")
 
 using Test, Serialization
 
-@test_throws MethodError convert(Enum, 1.0)
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using Main.TestHelpers
 
-macro macrocall(ex)
-    @assert Meta.isexpr(ex, :macrocall)
-    ex.head = :call
-    for i in 2:length(ex.args)
-        ex.args[i] = QuoteNode(ex.args[i])
-    end
-    insert!(ex.args, 3, __module__)
-    return esc(ex)
-end
+@test_throws MethodError convert(Enum, 1.0)
 
 @test_throws ArgumentError("no arguments given for Enum Foo") @macrocall(@enum Foo)
 @test_throws ArgumentError("invalid base type for Enum Foo2, Foo2::Float64=::Float64; base type must be an integer primitive type") @macrocall(@enum Foo2::Float64 apple=1.)
