@@ -5294,6 +5294,11 @@ static std::unique_ptr<Module> emit_function(
         if (lam->def.method->file != empty_sym)
             filename = jl_symbol_name(lam->def.method->file);
     }
+    else if (jl_array_len(src->linetable) > 0) {
+        jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, 0);
+        filename = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
+        toplineno = jl_unbox_long(jl_fieldref(locinfo, 3));
+    }
     ctx.file = filename;
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
     //           jl_symbol_name(ctx.name), filename.str().c_str(), toplineno);
