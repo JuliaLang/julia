@@ -1570,3 +1570,12 @@ begin
     Val{code28044} where code28044
 end
 @test f28044(Val(identity)) == 2
+
+# issue #28244
+macro foo28244(sym)
+    x = :(bar())
+    push!(x.args, Expr(sym))
+    x
+end
+@test (@macroexpand @foo28244(kw)) == Expr(:call, GlobalRef(@__MODULE__,:bar), Expr(:kw))
+@test eval(:(@macroexpand @foo28244($(Symbol("let"))))) == Expr(:error, "malformed expression")

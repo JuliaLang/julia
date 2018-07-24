@@ -353,19 +353,22 @@
                                   (cdr e)))))
 
            ((kw)
-            (if (and (pair? (cadr e))
-                     (eq? (caadr e) '|::|))
-                `(kw (|::|
-                      ,(if inarg
-                           (resolve-expansion-vars- (cadr (cadr e)) env m parent-scope inarg)
-                           ;; in keyword arg A=B, don't transform "A"
-                           (unescape (cadr (cadr e))))
-                      ,(resolve-expansion-vars- (caddr (cadr e)) env m parent-scope inarg))
-                     ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg))
-                `(kw ,(if inarg
-                          (resolve-expansion-vars- (cadr e) env m parent-scope inarg)
-                          (unescape (cadr e)))
-                     ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg))))
+            (cond
+             ((not (length> e 2)) e)
+             ((and (pair? (cadr e))
+                   (eq? (caadr e) '|::|))
+              `(kw (|::|
+                    ,(if inarg
+                         (resolve-expansion-vars- (cadr (cadr e)) env m parent-scope inarg)
+                         ;; in keyword arg A=B, don't transform "A"
+                         (unescape (cadr (cadr e))))
+                    ,(resolve-expansion-vars- (caddr (cadr e)) env m parent-scope inarg))
+                   ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)))
+             (else
+              `(kw ,(if inarg
+                        (resolve-expansion-vars- (cadr e) env m parent-scope inarg)
+                        (unescape (cadr e)))
+                   ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)))))
 
            ((let)
             (let* ((newenv (new-expansion-env-for e env))
@@ -505,12 +508,12 @@
   (cond
    ((or (not (pair? e)) (quoted? e)) e)
    ((eq? (car e) 'hygienic-scope)
-     (let ((parent-scope (list relabels parent-scope))
-           (body (cadr e))
-           (m (caddr e)))
-     `(hygienic-scope ,(rename-symbolic-labels- (cadr e) (table) parent-scope) ,m)))
+    (let ((parent-scope (list relabels parent-scope))
+          (body (cadr e))
+          (m (caddr e)))
+      `(hygienic-scope ,(rename-symbolic-labels- (cadr e) (table) parent-scope) ,m)))
    ((and (eq? (car e) 'escape) (not (null? parent-scope)))
-     `(escape ,(apply rename-symbolic-labels- (cadr e) parent-scope)))
+    `(escape ,(apply rename-symbolic-labels- (cadr e) parent-scope)))
    ((or (eq? (car e) 'symbolicgoto) (eq? (car e) 'symboliclabel))
     (let* ((s (cadr e))
            (havelabel (if (or (null? parent-scope) (not (symbol? s))) s (get relabels s #f)))
@@ -518,9 +521,9 @@
       (if (not havelabel) (put! relabels s newlabel))
       `(,(car e) ,newlabel)))
    (else
-     (cons (car e)
-           (map (lambda (x) (rename-symbolic-labels- x relabels parent-scope))
-                (cdr e))))))
+    (cons (car e)
+          (map (lambda (x) (rename-symbolic-labels- x relabels parent-scope))
+               (cdr e))))))
 
 (define (rename-symbolic-labels e)
   (rename-symbolic-labels- e (table) '()))
@@ -530,12 +533,12 @@
 ;; TODO: delete this file and fold this operation into resolve-scopes
 (define (julia-expand-macroscope e)
   (julia-expand-macroscopes-
-    (rename-symbolic-labels
-      (julia-expand-quotes e))))
+   (rename-symbolic-labels
+    (julia-expand-quotes e))))
 
 (define (contains-macrocall e)
   (and (pair? e)
-    (contains (lambda (e) (and (pair? e) (eq? (car e) 'macrocall))) e)))
+       (contains (lambda (e) (and (pair? e) (eq? (car e) 'macrocall))) e)))
 
 (define (julia-bq-macro x)
   (julia-bq-expand x 0))
