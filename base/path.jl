@@ -213,7 +213,11 @@ the path, including the root directory if present.
 # Examples
 ```jldoctest
 julia> splitpath("/home/myuser/example.jl")
-["/", "home", "myuser", "example.jl"]
+4-element Array{String,1}:
+ "/"
+ "home"
+ "myuser"
+ "example.jl"
 ```
 """
 function splitpath(p::String)
