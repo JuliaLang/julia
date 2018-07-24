@@ -1331,8 +1331,8 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT,
                                 jl_value_t *val JL_ROOTED_ARGUMENT);
 // Define a new const global variable. NOTE: var must not already exist.
 JL_DLLEXPORT void jl_define_const(jl_module_t *m JL_ROOTING_ARGUMENT,
-                               jl_sym_t *var,
-                               jl_value_t *val JL_ROOTED_ARGUMENT);
+                                  jl_sym_t *var,
+                                  jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
