@@ -4,6 +4,8 @@
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using .Main.TestHelpers.OAs
 
+using Dates
+
 @testset "Construction, collect" begin
     @test Set([1,2,3]) isa Set{Int}
     @test Set{Int}([3]) isa Set{Int}
@@ -392,6 +394,8 @@ end
     @test allunique(4.0:0.3:7.0)
     @test allunique(4:-1:5)       # empty range
     @test allunique(7:-1:1)       # negative step
+    @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
+    @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
 end
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
