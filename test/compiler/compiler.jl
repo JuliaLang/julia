@@ -1772,7 +1772,8 @@ Base.iterate(i::Iterator27434) = i.x, Val(1)
 Base.iterate(i::Iterator27434, ::Val{1}) = i.y, Val(2)
 Base.iterate(i::Iterator27434, ::Val{2}) = i.z, Val(3)
 Base.iterate(::Iterator27434, ::Any) = nothing
-@test @inferred splat27434(Iterator27434(1, 2, 3)) == (1, 2, 3)
+@test @inferred(splat27434(Iterator27434(1, 2, 3))) == (1, 2, 3)
+@test @inferred((1, 2, 3) == (1, 2, 3))
 @test Core.Compiler.return_type(splat27434, Tuple{typeof(Iterators.repeated(1))}) == Union{}
 
 # issue #27078
@@ -1792,3 +1793,16 @@ test28079(p, n, m) = h28079(Foo28079(), Base.pointerref, p, n, m)
 cinfo_unoptimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=false)[].first
 cinfo_optimized = code_typed(test28079, (Ptr{Float32}, Int, Int); optimize=true)[].first
 @test cinfo_unoptimized.ssavaluetypes[end-1] === cinfo_optimized.ssavaluetypes[end-1] === Float32
+
+# issue #27907
+ig27907(T::Type, N::Integer, offsets...) = ig27907(T, T, N, offsets...)
+
+function ig27907(::Type{T}, ::Type, N::Integer, offsets...) where {T}
+    if length(offsets) < N
+        return typeof(ig27907(T, N, offsets..., 0))
+    else
+        return 0
+    end
+end
+
+@test ig27907(Int, Int, 1, 0) == 0

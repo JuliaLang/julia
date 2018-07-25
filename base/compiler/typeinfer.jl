@@ -486,7 +486,7 @@ function typeinf_edge(method::Method, @nospecialize(atypes), sparams::SimpleVect
             code.inInference = false
             return Any, nothing
         end
-        if caller.cached # don't involve uncached functions in cycle resolution
+        if caller.cached || caller.limited # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
         typeinf(frame)
