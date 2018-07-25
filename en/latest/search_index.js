@@ -5513,11 +5513,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/base/#Base.@generated",
+    "page": "Essentials",
+    "title": "Base.@generated",
+    "category": "macro",
+    "text": "@generated f\n@generated(f)\n\n@generated is used to annotate a function which will be generated. In the body of the generated function, only types of arguments can be read (not the values). The function returns a quoted expression evaluated when the function is called. The @generated macro should not be used on functions mutating the global scope or depending on mutable elements.\n\nSee Metaprogramming for further details.\n\nExample:\n\njulia> @generated function bar(x)\n           if x <: Integer\n               return :(x ^ 2)\n           else\n               return :(x)\n           end\n       end\nbar (generic function with 1 method)\n\njulia> bar(4)\n16\n\njulia> bar(\"baz\")\n\"baz\"\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/base/#Base.@pure",
+    "page": "Essentials",
+    "title": "Base.@pure",
+    "category": "macro",
+    "text": "@pure ex\n@pure(ex)\n\n@pure gives the compiler a hint for the definition of a pure function, helping for type inference.\n\nA pure function can only depend on immutable information. This also means a @pure function cannot use any global mutable state, including generic functions. Calls to generic functions depend on method tables which are mutable global state. Use with caution, incorrect @pure annotation of a function may introduce hard to identify bugs. Double check for calls to generic functions.\n\n\n\n\n\n"
+},
+
+{
     "location": "base/base/#Syntax-1",
     "page": "Essentials",
     "title": "Syntax",
     "category": "section",
-    "text": "Core.eval\nBase.MainInclude.eval\nBase.@eval\nBase.evalfile\nBase.esc\nBase.@inbounds\nBase.@boundscheck\nBase.@inline\nBase.@noinline\nBase.@nospecialize\nBase.@specialize\nBase.gensym\nBase.@gensym\nBase.@goto\nBase.@label\nBase.@simd\nBase.@polly"
+    "text": "Core.eval\nBase.MainInclude.eval\nBase.@eval\nBase.evalfile\nBase.esc\nBase.@inbounds\nBase.@boundscheck\nBase.@inline\nBase.@noinline\nBase.@nospecialize\nBase.@specialize\nBase.gensym\nBase.@gensym\nBase.@goto\nBase.@label\nBase.@simd\nBase.@polly\nBase.@generated\nBase.@pure"
 },
 
 {
@@ -7117,7 +7133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nMutation of the bounds of the underlying array will invalidate this iterator.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, axes.\n\n\n\n\n\n"
 },
 
 {
@@ -7437,7 +7453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\nExamples\n\njulia> 1 + 20 + 4\n25\n\njulia> +(1, 20, 4)\n25\n\n\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n\n\n"
 },
 
 {
@@ -9513,11 +9529,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/numbers/#Base.@int128_str",
+    "page": "Numbers",
+    "title": "Base.@int128_str",
+    "category": "macro",
+    "text": "@int128_str str\n@int128_str(str)\n\n@int128_str parses a string into a Int128 Throws an ArgumentError if the string is not a valid integer\n\n\n\n\n\n"
+},
+
+{
+    "location": "base/numbers/#Base.@uint128_str",
+    "page": "Numbers",
+    "title": "Base.@uint128_str",
+    "category": "macro",
+    "text": "@uint128_str str\n@uint128_str(str)\n\n@uint128_str parses a string into a UInt128 Throws an ArgumentError if the string is not a valid integer\n\n\n\n\n\n"
+},
+
+{
     "location": "base/numbers/#Integers-1",
     "page": "Numbers",
     "title": "Integers",
     "category": "section",
-    "text": "Base.count_ones\nBase.count_zeros\nBase.leading_zeros\nBase.leading_ones\nBase.trailing_zeros\nBase.trailing_ones\nBase.isodd\nBase.iseven"
+    "text": "Base.count_ones\nBase.count_zeros\nBase.leading_zeros\nBase.leading_ones\nBase.trailing_zeros\nBase.trailing_ones\nBase.isodd\nBase.iseven\nBase.@int128_str\nBase.@uint128_str"
 },
 
 {
@@ -9577,11 +9609,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "base/numbers/#Base.@big_str",
+    "page": "Numbers",
+    "title": "Base.@big_str",
+    "category": "macro",
+    "text": "@big_str str\n@big_str(str)\n\n@big_str parses a string into a BigInt Throws an ArgumentError if the string is not a valid integer Removes all underscores _ from the string\n\n\n\n\n\n"
+},
+
+{
     "location": "base/numbers/#BigFloats-1",
     "page": "Numbers",
     "title": "BigFloats",
     "category": "section",
-    "text": "The BigFloat type implements arbitrary-precision floating-point arithmetic using the GNU MPFR library.Base.precision\nBase.MPFR.precision(::Type{BigFloat})\nBase.MPFR.setprecision\nBase.MPFR.BigFloat(x, prec::Int)\nBigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)\nBase.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)\nBase.MPFR.BigFloat(x::String)"
+    "text": "The BigFloat type implements arbitrary-precision floating-point arithmetic using the GNU MPFR library.Base.precision\nBase.MPFR.precision(::Type{BigFloat})\nBase.MPFR.setprecision\nBase.MPFR.BigFloat(x, prec::Int)\nBigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)\nBase.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)\nBase.MPFR.BigFloat(x::String)\nBase.@big_str"
 },
 
 {
