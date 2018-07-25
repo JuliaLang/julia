@@ -62,8 +62,7 @@ if !Sys.iswindows()
 end
 
 # issue #22566
-# issue #24037 (disabling on FreeBSD)
-if !Sys.iswindows() && !(Sys.isbsd() && !Sys.isapple())
+if !Sys.iswindows()
     function test_22566()
         fn = tempname()
         run(`mkfifo $fn`)
