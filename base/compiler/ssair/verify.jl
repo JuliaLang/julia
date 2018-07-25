@@ -2,8 +2,9 @@
 
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
-        arg isa String && return esc(:(println($arg)))
-        arg isa Expr && arg.head === :string || error()
+        arg isa String && return esc(:(println(stderr, $arg)))
+        (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
+        pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
         arg.head = :call
         return esc(arg)

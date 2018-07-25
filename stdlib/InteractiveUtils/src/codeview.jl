@@ -2,7 +2,8 @@
 
 # displaying type warnings
 
-function warntype_type_printer(io::IO, @nospecialize(ty))
+function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
+    used || return
     if ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
         if ty isa Union && Base.is_expected_union(ty)
             Base.emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
@@ -10,7 +11,7 @@ function warntype_type_printer(io::IO, @nospecialize(ty))
             Base.emphasize(io, "::$ty")
         end
     else
-        Base.printstyled(io, "::$ty", color=:cyan)
+        Base.printstyled(io, "::$ty", color=:cyan) # show the "good" type
     end
     nothing
 end
@@ -32,13 +33,15 @@ See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); verbose_linetable=false)
     for (src, rettype) in code_typed(f, t)
+        lambda_io::IOContext = io
+        if src.slotnames !== nothing
+            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => Base.sourceinfo_slotnames(src))
+        end
         print(io, "Body")
-        warntype_type_printer(io, rettype)
+        warntype_type_printer(io, rettype, true)
         println(io)
         # TODO: static parameter values
-        ir = Core.Compiler.inflate_ir(src)
-        Base.IRShow.show_ir(io, ir, warntype_type_printer;
-                            argnames = Base.sourceinfo_slotnames(src),
+        Base.IRShow.show_ir(lambda_io, src, warntype_type_printer;
                             verbose_linetable = verbose_linetable)
     end
     nothing
