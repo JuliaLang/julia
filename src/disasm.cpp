@@ -75,14 +75,25 @@ using namespace llvm;
 // helper class for tracking inlining context while printing debug info
 class DILineInfoPrinter {
     std::vector<DILineInfo> context;
-    char LineStart;
+    const char* LineStart;
     bool bracket_outer;
 public:
-    DILineInfoPrinter(char LineStart, bool bracket_outer)
+    DILineInfoPrinter(const char *LineStart, bool bracket_outer)
         : LineStart(LineStart),
           bracket_outer(bracket_outer) {};
     void emit_finish(raw_ostream &Out);
     void emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI);
+
+    struct repeat {
+        size_t times;
+        const char *c;
+    };
+    struct repeat inlining_indent(const char *c)
+    {
+        return repeat{
+            std::max(context.size() + bracket_outer, (size_t)1) - 1,
+            c };
+    }
 
     template<class T>
     void emit_lineinfo(std::string &Out, T &DI)
@@ -115,18 +126,21 @@ public:
     }
 };
 
+static raw_ostream &operator<<(raw_ostream &Out, struct DILineInfoPrinter::repeat i)
+{
+    while (i.times-- > 0)
+        Out << i.c;
+    return Out;
+}
+
 void DILineInfoPrinter::emit_finish(raw_ostream &Out)
 {
     uint32_t npops = context.size();
+    context.clear();
     if (!bracket_outer && npops > 0)
         npops--;
-    if (npops) {
-        Out << LineStart;
-        while (npops--)
-            Out << '}';
-        Out << '\n';
-    }
-    context.clear();
+    if (npops)
+        Out << LineStart << repeat{npops, "┘"} << '\n';
 }
 
 void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI)
@@ -136,6 +150,7 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
     uint32_t nframes = DI.size();
     if (nframes == 0)
         return; // just skip over lines with no debug info at all
+    // look for a matching prefix in the inlining information stack
     if (nctx > nframes)
         context.resize(nframes);
     for (uint32_t i = 0; i < nctx && i < nframes; i++) {
@@ -152,27 +167,32 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
     }
     uint32_t npops = nctx - context.size() - update_line_only;
     if (npops) {
-        Out << LineStart;
-        while (npops--)
-            Out << '}';
-        Out << '\n';
+        Out << LineStart << inlining_indent("│");
+        if (update_line_only)
+            Out << "│";
+        Out << repeat{npops, "┘"} << '\n';
     }
     if (update_line_only) {
         DILineInfo frame = DI.at(nframes - 1 - context.size());
-        if (frame.Line != UINT_MAX && frame.Line != 0)
-            Out << LineStart << " Location: " << frame.FileName << ":" << frame.Line << '\n';
         context.push_back(frame);
+        if (frame.Line != UINT_MAX && frame.Line != 0)
+            Out << LineStart << inlining_indent("│")
+                << " @ " << frame.FileName
+                << ":" << frame.Line
+                << " within `" << StringRef(frame.FunctionName).rtrim(';')
+                << "'\n";
     }
     for (uint32_t i = context.size(); i < nframes; i++) {
         DILineInfo frame = DI.at(nframes - 1 - i);
+        Out << LineStart << inlining_indent("│");
         context.push_back(frame);
-        Out << LineStart << " Function " << frame.FunctionName;
         if (bracket_outer || i != 0)
-            Out << " {";
-        Out << "\n" << LineStart << " Location: " << frame.FileName;
+            Out << "┌";
+        Out << " @ " << frame.FileName;
         if (frame.Line != UINT_MAX && frame.Line != 0)
             Out << ":" << frame.Line;
-        Out << "\n";
+        Out << " within `" << StringRef(frame.FunctionName).rtrim(';');
+        Out << "'\n";
     }
 }
 
@@ -180,7 +200,7 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
 // adaptor class for printing line numbers before llvm IR lines
 class LineNumberAnnotatedWriter : public AssemblyAnnotationWriter {
     DILocation *InstrLoc = nullptr;
-    DILineInfoPrinter LinePrinter{';', false};
+    DILineInfoPrinter LinePrinter{"; ", false};
     DenseMap<const Instruction *, DILocation *> DebugLoc;
     DenseMap<const Function *, DISubprogram *> Subprogram;
 public:
@@ -211,14 +231,14 @@ void LineNumberAnnotatedWriter::emitFunctionAnnot(
         if (SP != Subprogram.end())
             FuncLoc = SP->second;
     }
-    if (!FuncLoc)
-        return;
-    std::vector<DILineInfo> DIvec(1);
-    DILineInfo &DI = DIvec.back();
-    DI.FunctionName = FuncLoc->getName();
-    DI.FileName = FuncLoc->getFilename();
-    DI.Line = FuncLoc->getLine();
-    LinePrinter.emit_lineinfo(Out, DIvec);
+    if (FuncLoc) {
+        std::vector<DILineInfo> DIvec(1);
+        DILineInfo &DI = DIvec.back();
+        DI.FunctionName = FuncLoc->getName();
+        DI.FileName = FuncLoc->getFilename();
+        DI.Line = FuncLoc->getLine();
+        LinePrinter.emit_lineinfo(Out, DIvec);
+    }
 }
 
 void LineNumberAnnotatedWriter::emitInstructionAnnot(
@@ -230,21 +250,22 @@ void LineNumberAnnotatedWriter::emitInstructionAnnot(
         if (Loc != DebugLoc.end())
             NewInstrLoc = Loc->second;
     }
-    if (!NewInstrLoc || NewInstrLoc == InstrLoc)
-        return;
-    InstrLoc = NewInstrLoc;
-    std::vector<DILineInfo> DIvec;
-    do {
-        DIvec.emplace_back();
-        DILineInfo &DI = DIvec.back();
-        DIScope *scope = NewInstrLoc->getScope();
-        if (scope)
-            DI.FunctionName = scope->getName();
-        DI.FileName = NewInstrLoc->getFilename();
-        DI.Line = NewInstrLoc->getLine();
-        NewInstrLoc = NewInstrLoc->getInlinedAt();
-    } while (NewInstrLoc);
-    LinePrinter.emit_lineinfo(Out, DIvec);
+    if (NewInstrLoc && NewInstrLoc != InstrLoc) {
+        InstrLoc = NewInstrLoc;
+        std::vector<DILineInfo> DIvec;
+        do {
+            DIvec.emplace_back();
+            DILineInfo &DI = DIvec.back();
+            DIScope *scope = NewInstrLoc->getScope();
+            if (scope)
+                DI.FunctionName = scope->getName();
+            DI.FileName = NewInstrLoc->getFilename();
+            DI.Line = NewInstrLoc->getLine();
+            NewInstrLoc = NewInstrLoc->getInlinedAt();
+        } while (NewInstrLoc);
+        LinePrinter.emit_lineinfo(Out, DIvec);
+    }
+    Out << LinePrinter.inlining_indent(" ");
 }
 
 void LineNumberAnnotatedWriter::emitBasicBlockEndAnnot(
@@ -736,7 +757,7 @@ static void jl_dump_asm_internal(
         uint64_t nextLineAddr = -1;
         DILineInfoTable::iterator di_lineIter = di_lineinfo.begin();
         DILineInfoTable::iterator di_lineEnd = di_lineinfo.end();
-        DILineInfoPrinter dbgctx{';', true};
+        DILineInfoPrinter dbgctx{"; ", true};
         if (pass != 0) {
             if (di_ctx && di_lineIter != di_lineEnd) {
                 // Set up the line info
