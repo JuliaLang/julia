@@ -252,7 +252,7 @@ function abstract_call_method(method::Method, @nospecialize(sig), sparams::Simpl
                         parent = parent::InferenceState
                         parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
                         parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                        if parent.cached && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+                        if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                             topmost = infstate
                             edgecycle = true
                         end

@@ -277,17 +277,29 @@ function _isequal(t1::Any16, t2::Any16)
     return true
 end
 
-==(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _eq(t1, t2, false)
-_eq(t1::Tuple{}, t2::Tuple{}, anymissing) = anymissing ? missing : true
-function _eq(t1::Tuple, t2::Tuple, anymissing)
+==(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _eq(t1, t2)
+_eq(t1::Tuple{}, t2::Tuple{}) = true
+_eq_missing(t1::Tuple{}, t2::Tuple{}) = missing
+function _eq(t1::Tuple, t2::Tuple)
+    eq = t1[1] == t2[1]
+    if eq === false
+        return false
+    elseif ismissing(eq)
+        return _eq_missing(tail(t1), tail(t2))
+    else
+        return _eq(tail(t1), tail(t2))
+    end
+end
+function _eq_missing(t1::Tuple, t2::Tuple)
     eq = t1[1] == t2[1]
     if eq === false
         return false
     else
-        return _eq(tail(t1), tail(t2), anymissing | ismissing(eq))
+        return _eq_missing(tail(t1), tail(t2))
     end
 end
-function _eq(t1::Any16, t2::Any16, anymissing)
+function _eq(t1::Any16, t2::Any16)
+    anymissing = false
     for i = 1:length(t1)
         eq = (t1[i] == t2[i])
         if ismissing(eq)
