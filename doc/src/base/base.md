@@ -220,6 +220,8 @@ Base.@goto
 Base.@label
 Base.@simd
 Base.@polly
+Base.@generated
+Base.@pure
 ```
 
 ## Missing Values

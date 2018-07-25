@@ -89,7 +89,10 @@ function clamp!(x::AbstractArray, lo, hi)
     x
 end
 
-# evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+"""
+    @horner(x, p...)
+    Evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+"""
 macro horner(x, p...)
     ex = esc(p[end])
     for i = length(p)-1:-1:1
