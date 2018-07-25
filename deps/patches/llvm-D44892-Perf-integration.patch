@@ -87,7 +87,7 @@ index ff7840f00a4..1cc2c423a8b 100644
    }
  #endif // USE_OPROFILE
 
-+#if LLVM_USE_PERF
++#ifdef LLVM_USE_PERF
 +  static JITEventListener *createPerfJITEventListener();
 +#else
 +  static JITEventListener *createPerfJITEventListener()
