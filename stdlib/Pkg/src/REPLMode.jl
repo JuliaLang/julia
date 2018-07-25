@@ -323,7 +323,11 @@ function do_cmd!(tokens::Vector{Token}, repl)
             cmderror("misplaced token: ", token)
         end
     end
-    cmd.kind == CMD_ACTIVATE && return Base.invokelatest(do_activate!, tokens)
+
+    if cmd.kind == CMD_ACTIVATE
+        return Base.invokelatest(do_activate!, Base.active_project() === nothing ?
+            nothing : EnvCache(env_opt), tokens)
+    end
 
     ctx = Context(env = EnvCache(env_opt))
     if cmd.kind == CMD_PREVIEW
@@ -812,15 +816,31 @@ function do_resolve!(ctx::Context, tokens::Vector{Token})
     API.resolve(ctx)
 end
 
-function do_activate!(tokens::Vector{Token})
+function do_activate!(env::Union{EnvCache,Nothing}, tokens::Vector{Token})
     if isempty(tokens)
         return API.activate()
     else
-        token = popfirst!(tokens)
-        if !isempty(tokens) || !(token isa String)
+        path = popfirst!(tokens)
+        if !isempty(tokens) || !(path isa String)
             cmderror("`activate` takes an optional path to the env to activate")
         end
-        return API.activate(abspath(token))
+        devpath = nothing
+        if env !== nothing && haskey(env.project["deps"], path)
+            uuid = UUID(env.project["deps"][path])
+            info = manifest_info(env, uuid)
+            devpath = haskey(info, "path") ? info["path"] : nothing
+        end
+        # `pkg> activate path` does the following
+        # 1. if path exists, activate that
+        # 2. if path exists in deps, and the dep is deved, activate that path (`devpath` above)
+        # 3. activate the non-existing directory (e.g. as in `pkg> activate .` for initing a new env)
+        if Types.isdir_windows_workaround(path)
+            API.activate(abspath(path))
+        elseif devpath !== nothing
+            API.activate(abspath(devpath))
+        else
+            API.activate(abspath(path))
+        end
     end
 end
 

@@ -247,6 +247,32 @@ temp_pkg_dir() do project_path; cd(project_path) do
 end # cd
 end # temp_pkg_dir
 
+# activate
+cd(mktempdir()) do
+    path = pwd()
+    pkg"activate ."
+    mkdir("Foo")
+    cd(mkdir("modules")) do
+        pkg"generate Foo"
+    end
+    pkg"develop modules/Foo"
+    pkg"activate Foo" # activate path Foo over deps Foo
+    @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
+    pkg"activate ."
+    rm("Foo"; force=true, recursive=true)
+    pkg"activate Foo" # activate path from developed Foo
+    @test Base.active_project() == joinpath(path, "modules", "Foo", "Project.toml")
+    pkg"activate ."
+    pkg"activate ./Foo" # activate empty directory Foo (sidestep the developed Foo)
+    @test Base.active_project() == joinpath(path, "Foo", "Project.toml")
+    pkg"activate ."
+    pkg"activate Bar" # activate empty directory Bar
+    @test Base.active_project() == joinpath(path, "Bar", "Project.toml")
+    pkg"activate ."
+    pkg"add Example" # non-deved deps should not be activated
+    pkg"activate Example"
+    @test Base.active_project() == joinpath(path, "Example", "Project.toml")
+end
 
 test_complete(s) = Pkg.REPLMode.completions(s,lastindex(s))
 apply_completion(str) = begin
