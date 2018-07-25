@@ -564,7 +564,23 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     end
 end
 
+const _os = ccall(:jl_get_UNAME, Any, ())
+
 function write(io::IO, c::Char)
+@static if _os === :Windows || _os === :NT
+    v = reinterpret(UInt32, c)
+    n = max(1, 4 - (trailing_zeros(v) >>> 3))
+    if n == 1
+        return write(io, UInt8(v >>> 24))
+    end
+    # TODO: replace this with a Ref when stack copying is turned off, or with buffering inside libuv.
+    buf = fill(hton(v))
+    GC.@preserve buf begin
+        p = unsafe_convert(Ptr{Cvoid}, buf)
+        unsafe_write(io, p, n)
+    end
+    return n
+else
     u = bswap(reinterpret(UInt32, c))
     n = 1
     while true
@@ -573,6 +589,8 @@ function write(io::IO, c::Char)
         n += 1
     end
 end
+end
+
 # write(io, ::AbstractChar) is not defined: implementations
 # must provide their own encoding-specific method.
 
