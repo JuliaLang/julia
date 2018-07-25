@@ -90,17 +90,39 @@ This regex has the first three flags enabled.
 """
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
+function print_rawstring(io::IO, s::String)
+    # the inverse algorithm of parsing a raw string
+    # this doubles the number of slashes printed
+    # if followed by " character (including the end of the string)
+    print(io, '"')
+    ns = 0
+    for c in s
+        if c == '\\'
+            ns += 1
+        else
+            if ns > 0
+                c == '"' && (ns *= 2)
+                print(io, "\\"^ns)
+                ns = 0
+            end
+            print(io, c)
+        end
+    end
+    ns > 0 && print(io, "\\"^(ns * 2))
+    print(io, '"')
+end
+
 function show(io::IO, re::Regex)
     imsxa = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED|PCRE.UCP
     opts = re.compile_options
     if (opts & ~imsxa) == (DEFAULT_COMPILER_OPTS & ~imsxa)
         print(io, 'r')
-        print_quoted_literal(io, re.pattern)
-        if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
-        if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
-        if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
-        if (opts & PCRE.EXTENDED ) != 0; print(io, 'x'); end
-        if (opts & PCRE.UCP      ) == 0; print(io, 'a'); end
+        print_rawstring(io, re.pattern)
+        (opts & PCRE.CASELESS ) != 0 && print(io, 'i')
+        (opts & PCRE.MULTILINE) != 0 && print(io, 'm')
+        (opts & PCRE.DOTALL   ) != 0 && print(io, 's')
+        (opts & PCRE.EXTENDED ) != 0 && print(io, 'x')
+        (opts & PCRE.UCP      ) == 0 && print(io, 'a')
     else
         print(io, "Regex(")
         show(io, re.pattern)
@@ -108,6 +130,7 @@ function show(io::IO, re::Regex)
         show(io, opts)
         print(io, ')')
     end
+    nothing
 end
 
 # TODO: map offsets into strings in other encodings back to original indices.

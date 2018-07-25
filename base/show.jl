@@ -605,7 +605,7 @@ function show(io::IO, m::Module)
     if is_root_module(m)
         print(io, nameof(m))
     else
-        print(io, join(fullname(m),"."))
+        join(io, fullname(m), ".")
     end
 end
 
@@ -616,13 +616,17 @@ function sourceinfo_slotnames(src::CodeInfo)
     printnames = Vector{String}(undef, length(slotnames))
     for i in eachindex(slotnames)
         name = string(slotnames[i])
-        idx = get!(names, name, i)
-        if idx != i
-            printname = "$name@_$i"
-            idx > 0 && (printnames[idx] = "$name@_$idx")
-            names[name] = 0
+        if isempty(name)
+            printname = "@_$i" # code lowering inserts these sometimes
         else
-            printname = name
+            idx = get!(names, name, i)
+            if idx != i
+                printname = "$name@_$i"
+                idx > 0 && (printnames[idx] = "$name@_$idx")
+                names[name] = 0
+            else
+                printname = name
+            end
         end
         printnames[i] = printname
     end

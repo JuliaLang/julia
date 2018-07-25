@@ -155,14 +155,6 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 ## printing literal quoted string data ##
 
-# this is the inverse of print_unescaped_chars(io, s, "\\\")
-
-function print_quoted_literal(io, s::AbstractString)
-    print(io, '"')
-    for c = s; c == '"' ? print(io, "\\\"") : print(io, c); end
-    print(io, '"')
-end
-
 """
     repr(x; context=nothing)
 

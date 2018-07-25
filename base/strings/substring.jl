@@ -142,7 +142,7 @@ function reverse(s::Union{String,SubString{String}})::String
     end
 end
 
-function string(a::Union{String, SubString{String}}...)
+@noinline function string(a::Union{String, SubString{String}}...)
     if length(a) == 1
         return String(a[1])
     end
@@ -152,8 +152,8 @@ function string(a::Union{String, SubString{String}}...)
     end
     out = _string_n(n)
     offs = 1
-    for str in a
-        unsafe_copyto!(pointer(out,offs), pointer(str), sizeof(str))
+    @GC.preserve out for str in a
+        unsafe_copyto!(pointer(out, offs), pointer(str), sizeof(str))
         offs += sizeof(str)
     end
     return out

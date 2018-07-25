@@ -370,14 +370,14 @@ function readline(s::IO=stdin; chomp=nothing, keep::Bool=false)
         keep = !chomp
         depwarn("The `chomp=$chomp` argument to `readline` is deprecated in favor of `keep=$keep`.", :readline)
     end
-    line = readuntil(s, 0x0a, keep=true)
+    line = readuntil(s, 0x0a, keep=true)::Vector{UInt8}
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
         return String(line)
     elseif i < 2 || line[i-1] != 0x0d
-        return String(resize!(line,i-1))
+        return String(resize!(line, i-1))
     else
-        return String(resize!(line,i-2))
+        return String(resize!(line, i-2))
     end
 end
 
