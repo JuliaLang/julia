@@ -7475,11 +7475,6 @@ extern "C" void *jl_init_llvm(void)
     jl_data_layout.reset(DL);
 #endif
 
-    // Now that the execution engine exists, initialize all modules
-    jl_setup_module(engine_module);
-    jl_setup_module(m);
-    return (void*)m;
-
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createIntelJITEventListener());
@@ -7495,6 +7490,11 @@ extern "C" void *jl_init_llvm(void)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
     }
 #endif
+
+    // Now that the execution engine exists, initialize all modules
+    jl_setup_module(engine_module);
+    jl_setup_module(m);
+    return (void*)m;
 }
 
 extern "C" void jl_init_codegen(void)
