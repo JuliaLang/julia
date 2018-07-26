@@ -1818,9 +1818,14 @@ static jl_value_t *jl_deserialize_value_singleton(jl_serializer_state *s, jl_val
     if (s->mode == MODE_MODULE) {
         // TODO: optimize the case where the value can easily be obtained
         // from an external module (tag == 6) as dt->instance
-        assert(loc != NULL && loc != HT_NOTFOUND);
-        arraylist_push(&flagref_list, loc);
-        arraylist_push(&flagref_list, (void*)pos);
+        assert(loc != HT_NOTFOUND);
+        // if loc == NULL, then the caller can't provide the address where the instance will be
+        // stored. this happens if a field might store a 0-size value, but the field itself is
+        // not 0 size, e.g. `::Union{Int,Nothing}`
+        if (loc != NULL) {
+            arraylist_push(&flagref_list, loc);
+            arraylist_push(&flagref_list, (void*)pos);
+        }
     }
     jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)HT_NOTFOUND); // no loc, since if dt is replaced, then dt->instance would be also
     jl_set_typeof(v, dt);
@@ -1957,9 +1962,12 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
         jl_value_t *bp = (jl_value_t*)backref_list.items[offs];
         assert(bp);
         if (isflagref && loc != HT_NOTFOUND) {
-            assert(loc != NULL);
-            arraylist_push(&flagref_list, loc);
-            arraylist_push(&flagref_list, (void*)(uintptr_t)-1);
+            if (loc != NULL) {
+                // as in jl_deserialize_value_singleton, the caller won't have a place to
+                // store this reference given a field type like Union{Int,Nothing}
+                arraylist_push(&flagref_list, loc);
+                arraylist_push(&flagref_list, (void*)(uintptr_t)-1);
+            }
         }
         return (jl_value_t*)bp;
     case TAG_METHODROOT:
